@@ -3320,9 +3320,160 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
     ui.updateCardIcon(record.id);
 
+    // DEBUG: Log modal overlay state before activation
+    console.log('[Modal DEBUG] Before activation:', {
+        overlayId: modalOverlay.id,
+        overlayClasses: modalOverlay.className,
+        computedDisplay: window.getComputedStyle(modalOverlay).display,
+        computedOpacity: window.getComputedStyle(modalOverlay).opacity,
+        computedBgColor: window.getComputedStyle(modalOverlay).backgroundColor,
+        computedPosition: window.getComputedStyle(modalOverlay).position,
+        computedZIndex: window.getComputedStyle(modalOverlay).zIndex,
+        deferredCssLoaded: !!document.querySelector('link[href*="deferred.css"][rel="stylesheet"]'),
+        criticalCssExists: !!document.querySelector('style')
+    });
+
     modalOverlay.classList.add('active');
-    modalOverlay.style.display = 'flex';
+
+    // CRITICAL FIX: Apply essential overlay styles inline to ensure they work
+    // even if CSS hasn't fully loaded (direct URL access scenario)
+    // These styles must match what's defined in critical.css for consistency
+    modalOverlay.style.cssText = `
+        display: flex;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.6);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+        opacity: 1;
+        pointer-events: auto;
+    `;
+
+    // Also ensure modal-content has critical styles applied
+    const modalContentEl = modalOverlay.querySelector('.modal-content');
+    if (modalContentEl) {
+        // Check if we're on mobile for responsive styles
+        const isMobile = window.innerWidth <= 768;
+
+        // Apply critical modal content styles inline
+        if (isMobile) {
+            modalContentEl.style.cssText = `
+                background: #fff;
+                border-radius: 12px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                width: 90%;
+                max-width: 1100px;
+                height: auto;
+                max-height: 95vh;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                position: relative;
+                color: #333;
+                transform: scale(1);
+                opacity: 1;
+                pointer-events: auto;
+            `;
+        } else {
+            modalContentEl.style.cssText = `
+                background: #fff;
+                border-radius: 12px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                width: 90%;
+                max-width: 1100px;
+                height: 90vh;
+                max-height: 700px;
+                display: flex;
+                overflow: hidden;
+                position: relative;
+                color: #333;
+                transform: scale(1);
+                opacity: 1;
+                pointer-events: auto;
+            `;
+        }
+
+        // Apply critical styles to modal columns
+        const modalMainColumn = modalContentEl.querySelector('.modal-main-column');
+        if (modalMainColumn) {
+            if (isMobile) {
+                modalMainColumn.style.cssText = `
+                    flex: none;
+                    height: 250px;
+                    display: flex;
+                    flex-direction: column;
+                    min-width: 0;
+                `;
+            } else {
+                modalMainColumn.style.cssText = `
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    min-width: 0;
+                `;
+            }
+        }
+
+        const modalSidebarColumn = modalContentEl.querySelector('.modal-sidebar-column');
+        if (modalSidebarColumn) {
+            if (isMobile) {
+                modalSidebarColumn.style.cssText = `
+                    flex: 1;
+                    padding: 20px;
+                    overflow-y: auto;
+                    display: flex;
+                    flex-direction: column;
+                    min-width: 0;
+                `;
+            } else {
+                modalSidebarColumn.style.cssText = `
+                    flex: 1;
+                    padding: 30px;
+                    overflow-y: auto;
+                    display: flex;
+                    flex-direction: column;
+                    min-width: 0;
+                `;
+            }
+        }
+    }
+
     document.body.classList.add('modal-open');
+
+    // DEBUG: Log modal overlay state after activation
+    requestAnimationFrame(() => {
+        console.log('[Modal DEBUG] After activation (next frame):', {
+            overlayClasses: modalOverlay.className,
+            computedDisplay: window.getComputedStyle(modalOverlay).display,
+            computedOpacity: window.getComputedStyle(modalOverlay).opacity,
+            computedBgColor: window.getComputedStyle(modalOverlay).backgroundColor,
+            computedPosition: window.getComputedStyle(modalOverlay).position,
+            computedZIndex: window.getComputedStyle(modalOverlay).zIndex,
+            computedWidth: window.getComputedStyle(modalOverlay).width,
+            computedHeight: window.getComputedStyle(modalOverlay).height,
+            inlineStyles: modalOverlay.style.cssText
+        });
+
+        // Check if modal-content is rendered correctly
+        const modalContent = modalOverlay.querySelector('.modal-content');
+        if (modalContent) {
+            console.log('[Modal DEBUG] Modal content styles:', {
+                computedBgColor: window.getComputedStyle(modalContent).backgroundColor,
+                computedTransform: window.getComputedStyle(modalContent).transform,
+                computedOpacity: window.getComputedStyle(modalContent).opacity
+            });
+        }
+
+        // Additional debug: Check if background-color is actually being rendered
+        const overlayBgColor = window.getComputedStyle(modalOverlay).backgroundColor;
+        if (overlayBgColor === 'rgba(0, 0, 0, 0)' || overlayBgColor === 'transparent') {
+            console.error('[Modal DEBUG] WARNING: Overlay background is transparent! This should not happen.');
+        }
+    });
 
     // Reset the rendering guard after modal is fully displayed
     isModalRendering = false;
@@ -3348,7 +3499,26 @@ export function hideDetailModal() {
     if (modalOverlay) {
         modalOverlay.classList.remove('active');
         setTimeout(() => {
+            // Clear inline styles that were set for the direct URL access fix
+            modalOverlay.style.cssText = '';
             modalOverlay.style.display = 'none';
+
+            // Also clear modal-content and column inline styles
+            const modalContentEl = modalOverlay.querySelector('.modal-content');
+            if (modalContentEl) {
+                modalContentEl.style.cssText = '';
+
+                const modalMainColumn = modalContentEl.querySelector('.modal-main-column');
+                if (modalMainColumn) {
+                    modalMainColumn.style.cssText = '';
+                }
+
+                const modalSidebarColumn = modalContentEl.querySelector('.modal-sidebar-column');
+                if (modalSidebarColumn) {
+                    modalSidebarColumn.style.cssText = '';
+                }
+            }
+
             resetModalState();
         }, 300);
         document.body.classList.remove('modal-open');
