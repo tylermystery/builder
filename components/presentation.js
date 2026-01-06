@@ -1790,6 +1790,11 @@ function showTaskDetailPopup(elementType, elementId, elementName) {
         </div>
     ` : '';
 
+    // Map elementType to componentType for comments
+    // Items use 'item' component type, details (goals, date) use 'header' type
+    const componentType = elementType === 'item' ? api.COMPONENT_TYPES.ITEM : api.COMPONENT_TYPES.HEADER;
+    console.log('[TaskStatus DEBUG] componentType for comments:', componentType);
+
     // Create modal HTML
     const modalHTML = `
         <div id="task-detail-modal-overlay" class="task-detail-modal-overlay">
@@ -1819,6 +1824,26 @@ function showTaskDetailPopup(elementType, elementId, elementName) {
                     </div>
 
                     ${affiliatableTasksHTML}
+
+                    <div class="task-detail-section task-detail-comments-section">
+                        <label>💬 Comments</label>
+                        <div class="task-detail-comments-list" id="task-detail-comments-list">
+                            <div class="comments-loading">Loading comments...</div>
+                        </div>
+                        <div class="task-detail-comment-input-wrapper">
+                            <input type="text"
+                                   class="task-detail-comment-input"
+                                   id="task-detail-comment-input"
+                                   placeholder="Add a comment..."
+                                   ${!canUserEdit ? 'disabled' : ''} />
+                            <button class="task-detail-comment-submit"
+                                    id="task-detail-comment-submit"
+                                    title="Post comment"
+                                    ${!canUserEdit ? 'disabled' : ''}>
+                                <span>→</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <div class="task-detail-modal-footer">
                     <button class="task-detail-done-btn" id="task-detail-done-btn">Done</button>
@@ -1860,10 +1885,149 @@ function showTaskDetailPopup(elementType, elementId, elementName) {
         });
     });
 
+    // Handle comment submission
+    const commentInput = document.getElementById('task-detail-comment-input');
+    const commentSubmitBtn = document.getElementById('task-detail-comment-submit');
+
+    const submitPopupComment = async () => {
+        if (!canUserEdit) return;
+
+        const content = commentInput.value.trim();
+        if (!content) return;
+
+        const currentUser = getCurrentUser();
+        if (!currentUser) {
+            showToast('Please sign in to comment', 3000);
+            return;
+        }
+
+        console.log('[TaskStatus DEBUG] Submitting popup comment:', { content, componentType, elementId });
+
+        // Disable input while submitting
+        commentInput.disabled = true;
+        commentSubmitBtn.disabled = true;
+
+        try {
+            const sessionId = state.session.id;
+            const result = await api.postComponentComment(
+                sessionId,
+                componentType,
+                elementId,
+                currentUser.id,
+                currentUser.name || currentUser.email || 'Anonymous',
+                content
+            );
+
+            if (result) {
+                console.log('[TaskStatus DEBUG] Comment posted successfully:', result.id);
+                commentInput.value = '';
+                // Reload comments in the popup
+                await loadTaskDetailComments(overlay, componentType, elementId);
+            } else {
+                console.log('[TaskStatus DEBUG] Failed to post comment');
+                showToast('Failed to post comment', 3000);
+            }
+        } catch (error) {
+            console.log('[TaskStatus DEBUG] Error posting comment:', error);
+            showToast('Failed to post comment', 3000);
+        } finally {
+            if (canUserEdit) {
+                commentInput.disabled = false;
+                commentSubmitBtn.disabled = false;
+            }
+            commentInput.focus();
+        }
+    };
+
+    commentSubmitBtn.addEventListener('click', submitPopupComment);
+    commentInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            submitPopupComment();
+        }
+    });
+
+    // Load comments for this element
+    loadTaskDetailComments(overlay, componentType, elementId);
+
     // Show modal with animation
     requestAnimationFrame(() => {
         overlay.classList.add('active');
     });
+}
+
+/**
+ * Load and render comments in the task detail popup
+ * @param {HTMLElement} overlay - The modal overlay element
+ * @param {string} componentType - The component type (item or header)
+ * @param {string} elementId - The element ID
+ */
+async function loadTaskDetailComments(overlay, componentType, elementId) {
+    console.log('[TaskStatus DEBUG] loadTaskDetailComments called:', { componentType, elementId });
+
+    const commentsList = overlay.querySelector('#task-detail-comments-list');
+    if (!commentsList) {
+        console.log('[TaskStatus DEBUG] No commentsList element found');
+        return;
+    }
+
+    const sessionId = state.session.id;
+    if (!sessionId) {
+        commentsList.innerHTML = '<div class="comments-empty">No session loaded</div>';
+        return;
+    }
+
+    commentsList.innerHTML = '<div class="comments-loading">Loading comments...</div>';
+
+    try {
+        const comments = await api.fetchComponentComments(sessionId, componentType, elementId);
+        console.log('[TaskStatus DEBUG] Fetched comments for popup:', comments?.length);
+
+        if (!comments || comments.length === 0) {
+            commentsList.innerHTML = '<div class="comments-empty">No comments yet. Be the first to comment!</div>';
+            return;
+        }
+
+        const currentUser = getCurrentUser();
+
+        const commentsHTML = comments.map(comment => {
+            const fields = comment.fields;
+            const isOwn = fields.SenderID === currentUser?.id;
+            const isDeleted = fields.IsDeleted;
+            const isEdited = fields.IsEdited;
+            const timestamp = new Date(comment.createdTime || fields.Timestamp || Date.now());
+            const timeAgo = getTimeAgo(timestamp);
+
+            // Strip out [PLAN_COMMENT:xxx] prefix from display content
+            let displayContent = fields.Content || '';
+            displayContent = displayContent.replace(/^\[PLAN_COMMENT:\w+\]\s*/i, '');
+
+            if (isDeleted) {
+                return `
+                    <div class="task-detail-comment deleted" data-comment-id="${comment.id}">
+                        <em class="deleted-comment-text">This comment was deleted</em>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="task-detail-comment ${isOwn ? 'own-comment' : ''}" data-comment-id="${comment.id}">
+                    <div class="comment-header">
+                        <span class="comment-author">${escapeHtml(fields.SenderName)}${isOwn ? ' (You)' : ''}</span>
+                        <span class="comment-time" title="${timestamp.toLocaleString()}">${timeAgo}</span>
+                        ${isEdited ? '<span class="comment-edited">(edited)</span>' : ''}
+                    </div>
+                    <div class="comment-content">${escapeHtml(displayContent)}</div>
+                </div>
+            `;
+        }).join('');
+
+        commentsList.innerHTML = commentsHTML;
+        console.log('[TaskStatus DEBUG] Rendered', comments.length, 'comments in popup');
+    } catch (error) {
+        console.log('[TaskStatus DEBUG] Error loading popup comments:', error);
+        commentsList.innerHTML = '<div class="comments-error">Failed to load comments</div>';
+    }
 }
 
 /**

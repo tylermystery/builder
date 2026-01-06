@@ -8675,6 +8675,145 @@ hr.total-divider {
     background: rgba(255, 255, 255, 0.2);
 }
 
+/* Task Detail Popup - Comments Section */
+.task-detail-comments-section {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.task-detail-comments-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    padding-right: 4px;
+}
+
+.task-detail-comments-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.task-detail-comments-list::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 2px;
+}
+
+.task-detail-comments-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+}
+
+.task-detail-comments-list .comments-loading,
+.task-detail-comments-list .comments-empty,
+.task-detail-comments-list .comments-error {
+    padding: 16px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+}
+
+.task-detail-comment {
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border-left: 3px solid transparent;
+}
+
+.task-detail-comment.own-comment {
+    border-left-color: rgba(74, 222, 128, 0.6);
+}
+
+.task-detail-comment.deleted {
+    opacity: 0.5;
+}
+
+.task-detail-comment .comment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    gap: 8px;
+}
+
+.task-detail-comment .comment-author {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.task-detail-comment .comment-time {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.task-detail-comment .comment-edited {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.3);
+    font-style: italic;
+}
+
+.task-detail-comment .comment-content {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.task-detail-comment .deleted-comment-text {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.task-detail-comment-input-wrapper {
+    display: flex;
+    gap: 8px;
+}
+
+.task-detail-comment-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    color: #fff;
+    font-size: 13px;
+}
+
+.task-detail-comment-input:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.task-detail-comment-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.task-detail-comment-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.task-detail-comment-submit {
+    padding: 10px 14px;
+    background: rgba(74, 222, 128, 0.2);
+    border: 1px solid rgba(74, 222, 128, 0.4);
+    border-radius: 8px;
+    color: #4ade80;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.15s ease;
+}
+
+.task-detail-comment-submit:hover:not(:disabled) {
+    background: rgba(74, 222, 128, 0.3);
+}
+
+.task-detail-comment-submit:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 /* Create Task Button in Comment Actions */
 .comment-task-btn {
     color: rgba(255, 255, 255, 0.7);
