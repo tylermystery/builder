@@ -1752,8 +1752,12 @@ function showTaskStatusPicker(button) {
  * @param {string} elementName - Display name of the element
  */
 function showTaskDetailPopup(elementType, elementId, elementName) {
+    console.log('[TaskStatus DEBUG] showTaskDetailPopup called:', { elementType, elementId, elementName });
+
     const currentStatus = getElementTaskStatus(elementType, elementId);
     const config = TASK_STATUS_CONFIG[currentStatus];
+
+    console.log('[TaskStatus DEBUG] Current status:', currentStatus, 'config:', config);
 
     // Check if user can edit
     const currentRole = state.permissions?.currentRole;
@@ -3221,13 +3225,53 @@ function handleItemAccordionClick(e) {
 
 // Handle task status button clicks
 function handleTaskStatusClick(e) {
+    console.log('[TaskStatus DEBUG] handleTaskStatusClick called, target:', e.target);
+
     const taskStatusBtn = e.target.closest('.task-status-btn');
-    if (!taskStatusBtn) return;
+    console.log('[TaskStatus DEBUG] taskStatusBtn found:', taskStatusBtn);
+
+    if (!taskStatusBtn) {
+        console.log('[TaskStatus DEBUG] No task-status-btn found, returning');
+        return;
+    }
 
     e.stopPropagation(); // Prevent triggering other click handlers
 
-    // Show task status picker on click
-    showTaskStatusPicker(taskStatusBtn);
+    const elementType = taskStatusBtn.dataset.elementType;
+    const elementId = taskStatusBtn.dataset.elementId;
+
+    console.log('[TaskStatus DEBUG] Button data:', { elementType, elementId });
+
+    // Get the element name for the popup
+    let elementName = '';
+    if (elementType === 'item') {
+        // For items, find the item name from the accordion or state
+        const itemAccordion = taskStatusBtn.closest('.itinerary-item');
+        if (itemAccordion) {
+            elementName = itemAccordion.dataset.itemName || '';
+            console.log('[TaskStatus DEBUG] Item name from accordion:', elementName);
+        }
+        // Fallback: get from locked items state
+        if (!elementName) {
+            const lockedItem = state.cart.lockedItems.get(elementId);
+            elementName = lockedItem?.fields?.Name || elementId;
+            console.log('[TaskStatus DEBUG] Item name from state:', elementName);
+        }
+    } else if (elementType === 'detail') {
+        // For details, use a friendly name based on the detail type
+        const detailNames = {
+            'goals': 'Goals/Notes',
+            'date': 'Event Date',
+            'eventName': 'Event Name'
+        };
+        elementName = detailNames[elementId] || elementId;
+        console.log('[TaskStatus DEBUG] Detail name:', elementName);
+    }
+
+    console.log('[TaskStatus DEBUG] Calling showTaskDetailPopup with:', { elementType, elementId, elementName });
+
+    // Show task detail popup instead of simple picker
+    showTaskDetailPopup(elementType, elementId, elementName);
 }
 
 // Initialize accordion states and update UI
@@ -4532,10 +4576,12 @@ export function setupPresentationEventListeners() {
     itineraryItemsListEl.addEventListener('keydown', handleComponentCommentsKeydown);
 
     // Handle task status button clicks on items
+    console.log('[Events DEBUG] Adding handleTaskStatusClick listener to itineraryItemsListEl:', itineraryItemsListEl);
     itineraryItemsListEl.addEventListener('click', handleTaskStatusClick);
 
     // Handle task status button clicks on event details (date, goals, etc.)
     const headerAccordionContent = modal.querySelector('.itinerary-header .itinerary-accordion-content');
+    console.log('[Events DEBUG] Adding handleTaskStatusClick listener to headerAccordionContent:', headerAccordionContent);
     if (headerAccordionContent) {
         headerAccordionContent.addEventListener('click', handleTaskStatusClick);
     }
