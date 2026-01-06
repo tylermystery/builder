@@ -3528,7 +3528,9 @@ export async function createTask(projectId, taskData) {
     if (taskData.Order !== undefined) {
         fields.Order = taskData.Order;
     }
-    if (taskData.LinkedItem) {
+    // Only set LinkedItem if it's a valid Airtable record ID (starts with 'rec')
+    // This prevents temporary AI-generated IDs from causing Airtable API errors
+    if (taskData.LinkedItem && taskData.LinkedItem.startsWith('rec')) {
         fields.LinkedItem = [taskData.LinkedItem]; // Link to catalog item
     }
     // New affiliation fields
@@ -3538,7 +3540,9 @@ export async function createTask(projectId, taskData) {
     if (taskData.SourceCommentId) {
         fields.SourceCommentId = taskData.SourceCommentId; // Comment record ID
     }
-    if (taskData.LinkedPlanItemId) {
+    // Only set LinkedPlanItemId if it's a valid Airtable record ID (starts with 'rec')
+    // This prevents temporary AI-generated IDs from causing Airtable API errors
+    if (taskData.LinkedPlanItemId && taskData.LinkedPlanItemId.startsWith('rec')) {
         fields.LinkedPlanItemId = taskData.LinkedPlanItemId; // Plan item ID (e.g., locked item)
     }
     if (taskData.AffiliatedTaskId) {
@@ -3613,8 +3617,12 @@ export async function updateTask(taskId, taskData) {
     if (taskData.Order !== undefined) {
         fields.Order = taskData.Order;
     }
+    // Only set LinkedItem if null (to clear) or a valid Airtable record ID (starts with 'rec')
+    // This prevents temporary AI-generated IDs from causing Airtable API errors
     if (taskData.LinkedItem !== undefined) {
-        fields.LinkedItem = taskData.LinkedItem ? [taskData.LinkedItem] : null;
+        if (taskData.LinkedItem === null || taskData.LinkedItem.startsWith('rec')) {
+            fields.LinkedItem = taskData.LinkedItem ? [taskData.LinkedItem] : null;
+        }
     }
     // New affiliation fields
     if (taskData.SourceType !== undefined) {
@@ -3623,8 +3631,12 @@ export async function updateTask(taskId, taskData) {
     if (taskData.SourceCommentId !== undefined) {
         fields.SourceCommentId = taskData.SourceCommentId || null;
     }
+    // Only set LinkedPlanItemId if null (to clear) or a valid Airtable record ID (starts with 'rec')
+    // This prevents temporary AI-generated IDs from causing Airtable API errors
     if (taskData.LinkedPlanItemId !== undefined) {
-        fields.LinkedPlanItemId = taskData.LinkedPlanItemId || null;
+        if (taskData.LinkedPlanItemId === null || taskData.LinkedPlanItemId.startsWith('rec')) {
+            fields.LinkedPlanItemId = taskData.LinkedPlanItemId || null;
+        }
     }
     if (taskData.AffiliatedTaskId !== undefined) {
         fields.AffiliatedTaskId = taskData.AffiliatedTaskId ? [taskData.AffiliatedTaskId] : null;

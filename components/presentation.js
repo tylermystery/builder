@@ -1919,9 +1919,20 @@ async function createTaskFromComment(commentId, commentContent, componentId = nu
     };
 
     // Auto-affiliate with plan item if comment is on a component
-    if (componentId) {
+    // Only set LinkedPlanItemId/LinkedItem if it's a valid Airtable record ID (starts with 'rec')
+    // AI-generated items have temporary IDs like 'ai-child-*', 'ai-search-*', etc.
+    if (componentId && componentId.startsWith('rec')) {
         taskData.LinkedPlanItemId = componentId;
         taskData.LinkedItem = componentId;
+    } else if (componentId) {
+        // For AI-generated items, store the item name in the task name/description instead
+        const itemRecord = state.records.all.find(r => r.id === componentId);
+        if (itemRecord) {
+            const itemName = itemRecord.fields?.Name || itemRecord.fields?.['Item Name'] || 'AI Item';
+            // Prefix the task name with the item name for context
+            taskData.Name = `[${itemName}] ${taskData.Name}`;
+            console.log('[Presentation DEBUG] Task created from AI item - storing item name in task title:', itemName);
+        }
     }
 
     try {
