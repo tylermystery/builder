@@ -5139,6 +5139,30 @@ export async function showPresentationView(listType, startRecordId = null) {
     registerSyncCallback('presentation', handlePlanSyncUpdate);
     // console.log('[Presentation DEBUG] Registered plan sync callback');
 
+    // Fetch tasks for this project if not already loaded (critical for comment-task linking)
+    // This ensures comment-created tasks are visible when page is refreshed or link is shared
+    const projectId = state.session.id;
+    if (projectId && !state.tasks.byProject.has(projectId)) {
+        console.log('[Presentation DEBUG] Tasks not loaded for project, fetching...');
+        try {
+            const tasks = await api.fetchTasks(projectId);
+            if (Array.isArray(tasks)) {
+                // Update tasks.all map
+                tasks.forEach(task => {
+                    state.tasks.all.set(task.id, task);
+                });
+                // Update tasks.byProject map
+                state.tasks.byProject.set(projectId, tasks);
+                console.log(`[Presentation DEBUG] Loaded ${tasks.length} tasks for project ${projectId}`);
+            }
+        } catch (error) {
+            console.error('[Presentation DEBUG] Error fetching tasks:', error);
+            // Non-blocking - comments will still render, just without task links
+        }
+    } else {
+        console.log('[Presentation DEBUG] Tasks already loaded for project:', projectId);
+    }
+
     // Mark that catalog will need rendering when exiting presentation view
     // (since we skip catalog rendering while in presentation view)
     catalogNeedsRender = true;
