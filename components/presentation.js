@@ -1913,16 +1913,13 @@ async function createTaskFromComment(commentId, commentContent, componentId = nu
         Name: commentContent.substring(0, 100) + (commentContent.length > 100 ? '...' : ''),
         Description: commentContent,
         Status: api.TASK_STATUS.PENDING,
-        Order: maxOrder + 1,
-        SourceType: 'comment',
-        SourceCommentId: commentId
+        Order: maxOrder + 1
     };
 
     // Auto-affiliate with plan item if comment is on a component
-    // Only set LinkedPlanItemId/LinkedItem if it's a valid Airtable record ID (starts with 'rec')
+    // Only set LinkedItem if it's a valid Airtable record ID (starts with 'rec')
     // AI-generated items have temporary IDs like 'ai-child-*', 'ai-search-*', etc.
     if (componentId && componentId.startsWith('rec')) {
-        taskData.LinkedPlanItemId = componentId;
         taskData.LinkedItem = componentId;
     } else if (componentId) {
         // For AI-generated items, store the item name in the task name/description instead

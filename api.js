@@ -3533,21 +3533,6 @@ export async function createTask(projectId, taskData) {
     if (taskData.LinkedItem && taskData.LinkedItem.startsWith('rec')) {
         fields.LinkedItem = [taskData.LinkedItem]; // Link to catalog item
     }
-    // New affiliation fields
-    if (taskData.SourceType) {
-        fields.SourceType = taskData.SourceType; // 'manual' | 'item' | 'comment' | 'detail'
-    }
-    if (taskData.SourceCommentId) {
-        fields.SourceCommentId = taskData.SourceCommentId; // Comment record ID
-    }
-    // Only set LinkedPlanItemId if it's a valid Airtable record ID (starts with 'rec')
-    // This prevents temporary AI-generated IDs from causing Airtable API errors
-    if (taskData.LinkedPlanItemId && taskData.LinkedPlanItemId.startsWith('rec')) {
-        fields.LinkedPlanItemId = taskData.LinkedPlanItemId; // Plan item ID (e.g., locked item)
-    }
-    if (taskData.AffiliatedTaskId) {
-        fields.AffiliatedTaskId = [taskData.AffiliatedTaskId]; // Link to another task
-    }
 
     try {
         const response = await fetch(url, {
@@ -3623,23 +3608,6 @@ export async function updateTask(taskId, taskData) {
         if (taskData.LinkedItem === null || taskData.LinkedItem.startsWith('rec')) {
             fields.LinkedItem = taskData.LinkedItem ? [taskData.LinkedItem] : null;
         }
-    }
-    // New affiliation fields
-    if (taskData.SourceType !== undefined) {
-        fields.SourceType = taskData.SourceType || null;
-    }
-    if (taskData.SourceCommentId !== undefined) {
-        fields.SourceCommentId = taskData.SourceCommentId || null;
-    }
-    // Only set LinkedPlanItemId if null (to clear) or a valid Airtable record ID (starts with 'rec')
-    // This prevents temporary AI-generated IDs from causing Airtable API errors
-    if (taskData.LinkedPlanItemId !== undefined) {
-        if (taskData.LinkedPlanItemId === null || taskData.LinkedPlanItemId.startsWith('rec')) {
-            fields.LinkedPlanItemId = taskData.LinkedPlanItemId || null;
-        }
-    }
-    if (taskData.AffiliatedTaskId !== undefined) {
-        fields.AffiliatedTaskId = taskData.AffiliatedTaskId ? [taskData.AffiliatedTaskId] : null;
     }
 
     try {
