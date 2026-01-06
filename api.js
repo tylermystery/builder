@@ -3540,10 +3540,8 @@ export async function createTask(projectId, taskData) {
     if (taskData.LinkedItem && taskData.LinkedItem.startsWith('rec')) {
         fields.LinkedItem = [taskData.LinkedItem]; // Link to catalog item
     }
-    // Track source comment if task was created from a comment
-    if (taskData.SourceCommentId && taskData.SourceCommentId.startsWith('rec')) {
-        fields.SourceCommentId = taskData.SourceCommentId;
-    }
+    // Note: SourceCommentId tracking is handled client-side only
+    // The Tasks table in Airtable does not have this field
 
     try {
         const response = await fetch(url, {

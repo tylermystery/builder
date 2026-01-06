@@ -147,6 +147,14 @@ const accordionState = {
 let presentationPusher = null;
 let presentationChatChannel = null;
 
+// Chat elements (may not exist in all presentation contexts)
+let chatMessagesEl = null;
+let presentationMessageInput = null;
+let presentationMessageForm = null;
+let presentationUserNameInput = null;
+let presentationWhosHereCount = null;
+let presentationWhosHereList = null;
+
 // Search modal elements
 let presentationAddBtn = null;
 let presentationSearchModal = null;
