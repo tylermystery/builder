@@ -1,4 +1,4 @@
-import { state } from '../state.js';
+import { state, setState } from '../state.js';
 import * as api from '../api.js';
 import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, REACTION_SCORES } from '../config.js';
 import { updateUrl, getRecordPrice, parseOptions, flattenOptionGroups } from '../utils.js';
@@ -1758,7 +1758,19 @@ function showTaskDetailPopup(elementType, elementId, elementName) {
     // Check if user can edit
     const currentRole = state.permissions?.currentRole;
     const isLoading = state.permissions?.isLoading !== false;
-    const canUserEdit = !isLoading && api.canEdit(currentRole);
+    const canEditByRole = api.canEdit(currentRole);
+    // Fallback: If permissions weren't loaded (direct URL access), use session.isOwned
+    const canEditByOwnership = state.session.isOwned === true;
+    const canUserEdit = (!isLoading && canEditByRole) || canEditByOwnership;
+
+    console.log('[Presentation DEBUG] showTaskDetailPopup permission check:', {
+        currentRole,
+        isLoading,
+        canEditByRole,
+        canEditByOwnership,
+        canUserEdit,
+        sessionIsOwned: state.session.isOwned
+    });
 
     // Build affiliated tasks list
     const projectTasks = state.tasks.byProject.get(state.session.id) || [];
@@ -1866,7 +1878,20 @@ async function createTaskFromComment(commentId, commentContent, componentId = nu
     // Check permissions
     const currentRole = state.permissions?.currentRole;
     const isLoading = state.permissions?.isLoading !== false;
-    const canUserEdit = !isLoading && api.canEdit(currentRole);
+    const canEditByRole = api.canEdit(currentRole);
+    // Fallback: If permissions weren't loaded (direct URL access), use session.isOwned
+    const canEditByOwnership = state.session.isOwned === true;
+    const canUserEdit = (!isLoading && canEditByRole) || canEditByOwnership;
+
+    console.log('[Presentation DEBUG] createTaskFromComment permission check:', {
+        currentRole,
+        isLoading,
+        canEditByRole,
+        canEditByOwnership,
+        canUserEdit,
+        permissionsState: state.permissions,
+        sessionIsOwned: state.session.isOwned
+    });
 
     if (!canUserEdit) {
         showToast('You do not have permission to create tasks', 3000);
@@ -4258,6 +4283,32 @@ export async function showPresentationView(listType, startRecordId = null) {
         return;
     }
     // console.log('[Accordion DEBUG] ensureDOMElements succeeded');
+
+    // Load user permissions if not already loaded (handles direct URL access)
+    if (state.permissions?.isLoading !== false && state.session.id && state.session.user?.isAuthenticated && state.session.user?.id) {
+        console.log('[Presentation DEBUG] Permissions not loaded, fetching user role...');
+        try {
+            const { role, permissionRecord } = await api.fetchUserRole(state.session.id, state.session.user.id);
+            setState({
+                permissions: {
+                    currentRole: role,
+                    isLoading: false,
+                    permissionRecord: permissionRecord
+                }
+            });
+            console.log('[Presentation DEBUG] Permissions loaded:', { role, permissionRecord });
+        } catch (error) {
+            console.error('[Presentation DEBUG] Error loading permissions:', error);
+            // On error, set isLoading to false so fallback (isOwned) can be used
+            setState({
+                permissions: {
+                    currentRole: null,
+                    isLoading: false,
+                    permissionRecord: null
+                }
+            });
+        }
+    }
 
     // Register sync callback to handle updates from other views
     registerSyncCallback('presentation', handlePlanSyncUpdate);
