@@ -3433,7 +3433,11 @@ export async function fetchTasks(projectId) {
         'Priority',
         'Order',
         'LinkedItem',
-        'CreatedTime'
+        'CreatedTime',
+        'SourceType',
+        'SourceCommentId',
+        'LinkedPlanItemId',
+        'AffiliatedTaskId'
     ].map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
 
     // Sort by Order field first, then by DueDate
@@ -3527,6 +3531,19 @@ export async function createTask(projectId, taskData) {
     if (taskData.LinkedItem) {
         fields.LinkedItem = [taskData.LinkedItem]; // Link to catalog item
     }
+    // New affiliation fields
+    if (taskData.SourceType) {
+        fields.SourceType = taskData.SourceType; // 'manual' | 'item' | 'comment' | 'detail'
+    }
+    if (taskData.SourceCommentId) {
+        fields.SourceCommentId = taskData.SourceCommentId; // Comment record ID
+    }
+    if (taskData.LinkedPlanItemId) {
+        fields.LinkedPlanItemId = taskData.LinkedPlanItemId; // Plan item ID (e.g., locked item)
+    }
+    if (taskData.AffiliatedTaskId) {
+        fields.AffiliatedTaskId = [taskData.AffiliatedTaskId]; // Link to another task
+    }
 
     try {
         const response = await fetch(url, {
@@ -3598,6 +3615,19 @@ export async function updateTask(taskId, taskData) {
     }
     if (taskData.LinkedItem !== undefined) {
         fields.LinkedItem = taskData.LinkedItem ? [taskData.LinkedItem] : null;
+    }
+    // New affiliation fields
+    if (taskData.SourceType !== undefined) {
+        fields.SourceType = taskData.SourceType || null;
+    }
+    if (taskData.SourceCommentId !== undefined) {
+        fields.SourceCommentId = taskData.SourceCommentId || null;
+    }
+    if (taskData.LinkedPlanItemId !== undefined) {
+        fields.LinkedPlanItemId = taskData.LinkedPlanItemId || null;
+    }
+    if (taskData.AffiliatedTaskId !== undefined) {
+        fields.AffiliatedTaskId = taskData.AffiliatedTaskId ? [taskData.AffiliatedTaskId] : null;
     }
 
     try {

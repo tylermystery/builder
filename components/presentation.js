@@ -11,6 +11,7 @@ import { showWtfPlansPanel } from './wtfPlansPanel.js';
 import { updateEventPlanSection, updateIdeasCarousel } from './sidebar.js';
 import { syncPlanState, registerSyncCallback, unregisterSyncCallback } from '../utils/planStateSync.js';
 import { showUserModal } from '../auth.js';
+import { showToast } from '../ui.js';
 
 console.log('[Presentation DEBUG] presentation.js module loaded');
 console.log('[Presentation DEBUG] QUICK_REACTIONS available:', ['👍', '❤️', '😂', '😮', '😢', '🎉']);
@@ -19,6 +20,28 @@ console.log('[Presentation DEBUG] EMOJI_REACTIONS imported:', EMOJI_REACTIONS);
 
 // Quick emoji reactions available for messages and comments
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
+
+// Task status options for plan elements
+const ELEMENT_TASK_STATUS = {
+    NONE: 'none',           // Default - no status set
+    GTG: 'gtg',             // Good to go / confirmed
+    NO_ACTION: 'no-action', // No action needed
+    CHECK: 'check',         // Needs checking
+    NEEDS_ATTENTION: 'needs-attention' // Needs attention
+};
+
+// Task status labels and icons
+const TASK_STATUS_CONFIG = {
+    [ELEMENT_TASK_STATUS.NONE]: { label: 'Set Status', icon: '○', className: 'task-status-none' },
+    [ELEMENT_TASK_STATUS.GTG]: { label: 'Good to Go', icon: '✓', className: 'task-status-gtg' },
+    [ELEMENT_TASK_STATUS.NO_ACTION]: { label: 'No Action', icon: '—', className: 'task-status-no-action' },
+    [ELEMENT_TASK_STATUS.CHECK]: { label: 'Check', icon: '?', className: 'task-status-check' },
+    [ELEMENT_TASK_STATUS.NEEDS_ATTENTION]: { label: 'Needs Attention', icon: '!', className: 'task-status-attention' }
+};
+
+// Cache for element task statuses (stored in Items with Variations JSON)
+// Key format: 'item:{recordId}' or 'detail:{detailType}'
+let elementTaskStatuses = new Map();
 
 // Cache for component comments - keyed by componentType:componentId
 const componentCommentsCache = new Map();
@@ -348,23 +371,44 @@ function renderEventHeader() {
     // Event name is now shown only in the presentation header (presentationEventLabel)
     // No longer set in summaryEventNameEl since that element was removed
 
+    // Render goals/notes with task status button
     if (summaryEventNotesEl) {
-        summaryEventNotesEl.textContent = goals;
+        if (goals) {
+            const goalsStatusBtn = renderTaskStatusButton('detail', 'goals');
+            summaryEventNotesEl.innerHTML = `
+                <div class="event-detail-with-status">
+                    ${goalsStatusBtn}
+                    <span class="detail-content">${escapeHtml(goals)}</span>
+                </div>
+            `;
+        } else {
+            summaryEventNotesEl.innerHTML = '';
+        }
     }
 
     // Plan name removed from accordion title per design request
     // The first accordion panel now simply shows the list of users
 
-    if (dateValue && summaryEventDateEl) {
-        const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);
-        summaryEventDateEl.textContent = date.toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric'
-        });
-    } else if (summaryEventDateEl) {
-        summaryEventDateEl.textContent = '';
+    // Render date with task status button
+    if (summaryEventDateEl) {
+        if (dateValue) {
+            const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);
+            const dateStr = date.toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric'
+            });
+            const dateStatusBtn = renderTaskStatusButton('detail', 'date');
+            summaryEventDateEl.innerHTML = `
+                <div class="event-detail-with-status">
+                    ${dateStatusBtn}
+                    <span class="detail-content">${dateStr}</span>
+                </div>
+            `;
+        } else {
+            summaryEventDateEl.innerHTML = '';
+        }
     }
 }
 
@@ -1210,10 +1254,14 @@ async function renderItineraryItem(item, index) {
         ? `<span class="item-emoji-indicator has-reactions" data-record-id="${recordId}" style="display: inline-flex;"><span class="emoji-indicator-emoji">${summaryEmoji}</span>${reactionCount > 1 ? `<span class="emoji-indicator-count">${reactionCount}</span>` : ''}</span>`
         : `<span class="item-emoji-indicator" data-record-id="${recordId}" style="display: none;"></span>`;
 
+    // Task status button for this item
+    const taskStatusButtonHTML = renderTaskStatusButton('item', recordId);
+
     return `
-        <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}">
+        <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}" data-item-name="${escapeHtml(name)}">
             <div class="item-accordion-header" data-record-id="${recordId}">
                 <div class="item-accordion-title-row">
+                    ${taskStatusButtonHTML}
                     <h3 class="item-accordion-title">${name}</h3>
                     ${emojiIndicatorHTML}
                     <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
@@ -1524,6 +1572,348 @@ function renderReactionsSummary() {
             }
         });
     });
+}
+
+// =============================================================================
+// TASK STATUS FUNCTIONS FOR PLAN ELEMENTS
+// =============================================================================
+
+/**
+ * Get task status for an element (item or detail)
+ * @param {string} elementType - 'item' or 'detail'
+ * @param {string} elementId - Record ID for items, detail type key for details
+ * @returns {string} - Task status value from ELEMENT_TASK_STATUS
+ */
+function getElementTaskStatus(elementType, elementId) {
+    const key = `${elementType}:${elementId}`;
+    return elementTaskStatuses.get(key) || ELEMENT_TASK_STATUS.NONE;
+}
+
+/**
+ * Set task status for an element and persist to state
+ * @param {string} elementType - 'item' or 'detail'
+ * @param {string} elementId - Record ID for items, detail type key for details
+ * @param {string} status - Task status value from ELEMENT_TASK_STATUS
+ */
+async function setElementTaskStatus(elementType, elementId, status) {
+    const key = `${elementType}:${elementId}`;
+    elementTaskStatuses.set(key, status);
+
+    // Persist task statuses to session state
+    saveElementTaskStatuses();
+
+    // Update UI
+    updateElementTaskStatusUI(elementType, elementId, status);
+
+    // Trigger save to persist to Airtable
+    triggerSave();
+
+    log('Presentation', `Set task status for ${key}: ${status}`);
+}
+
+/**
+ * Save element task statuses to the session's Items with Variations JSON
+ */
+function saveElementTaskStatuses() {
+    // Store task statuses as a plain object in eventDetails
+    const statusesObj = {};
+    elementTaskStatuses.forEach((status, key) => {
+        if (status !== ELEMENT_TASK_STATUS.NONE) {
+            statusesObj[key] = status;
+        }
+    });
+
+    // Store in eventDetails combined map with a special key
+    state.eventDetails.combined.set('_taskStatuses', statusesObj);
+}
+
+/**
+ * Load element task statuses from session state
+ */
+function loadElementTaskStatuses() {
+    const statusesObj = state.eventDetails.combined.get('_taskStatuses');
+    elementTaskStatuses.clear();
+
+    if (statusesObj && typeof statusesObj === 'object') {
+        Object.entries(statusesObj).forEach(([key, status]) => {
+            elementTaskStatuses.set(key, status);
+        });
+    }
+
+    log('Presentation', `Loaded ${elementTaskStatuses.size} element task statuses`);
+}
+
+/**
+ * Update the UI for a specific element's task status
+ * @param {string} elementType - 'item' or 'detail'
+ * @param {string} elementId - Record ID for items, detail type key for details
+ * @param {string} status - Task status value
+ */
+function updateElementTaskStatusUI(elementType, elementId, status) {
+    const statusBtn = document.querySelector(`.task-status-btn[data-element-type="${elementType}"][data-element-id="${elementId}"]`);
+    if (!statusBtn) return;
+
+    const config = TASK_STATUS_CONFIG[status] || TASK_STATUS_CONFIG[ELEMENT_TASK_STATUS.NONE];
+
+    // Update button appearance
+    statusBtn.innerHTML = `<span class="task-status-icon">${config.icon}</span>`;
+    statusBtn.className = `task-status-btn ${config.className}`;
+    statusBtn.title = config.label;
+}
+
+/**
+ * Render task status button HTML for an element
+ * @param {string} elementType - 'item' or 'detail'
+ * @param {string} elementId - Record ID for items, detail type key for details
+ * @returns {string} - HTML string for the task status button
+ */
+function renderTaskStatusButton(elementType, elementId) {
+    const status = getElementTaskStatus(elementType, elementId);
+    const config = TASK_STATUS_CONFIG[status];
+
+    return `
+        <button class="task-status-btn ${config.className}"
+                data-element-type="${elementType}"
+                data-element-id="${elementId}"
+                title="${config.label}">
+            <span class="task-status-icon">${config.icon}</span>
+        </button>
+    `;
+}
+
+/**
+ * Show task status picker dropdown for an element
+ * @param {HTMLElement} button - The status button that was clicked
+ */
+function showTaskStatusPicker(button) {
+    const elementType = button.dataset.elementType;
+    const elementId = button.dataset.elementId;
+    const currentStatus = getElementTaskStatus(elementType, elementId);
+
+    // Remove any existing picker
+    const existingPicker = document.querySelector('.task-status-picker');
+    if (existingPicker) {
+        existingPicker.remove();
+    }
+
+    // Create picker dropdown
+    const picker = document.createElement('div');
+    picker.className = 'task-status-picker';
+
+    // Build options
+    const optionsHTML = Object.entries(TASK_STATUS_CONFIG)
+        .map(([statusValue, config]) => `
+            <button class="task-status-option ${config.className} ${statusValue === currentStatus ? 'active' : ''}"
+                    data-status="${statusValue}">
+                <span class="option-icon">${config.icon}</span>
+                <span class="option-label">${config.label}</span>
+            </button>
+        `).join('');
+
+    picker.innerHTML = optionsHTML;
+
+    // Position picker near button
+    const rect = button.getBoundingClientRect();
+    picker.style.position = 'fixed';
+    picker.style.top = `${rect.bottom + 4}px`;
+    picker.style.left = `${rect.left}px`;
+    picker.style.zIndex = '10001';
+
+    document.body.appendChild(picker);
+
+    // Handle option clicks
+    picker.addEventListener('click', async (e) => {
+        const option = e.target.closest('.task-status-option');
+        if (option) {
+            const newStatus = option.dataset.status;
+            await setElementTaskStatus(elementType, elementId, newStatus);
+            picker.remove();
+        }
+    });
+
+    // Close picker on outside click
+    const closeHandler = (e) => {
+        if (!picker.contains(e.target) && e.target !== button) {
+            picker.remove();
+            document.removeEventListener('click', closeHandler);
+        }
+    };
+
+    // Delay adding close handler to avoid immediate close
+    setTimeout(() => {
+        document.addEventListener('click', closeHandler);
+    }, 0);
+}
+
+/**
+ * Show task detail popup/modal for refining task details
+ * @param {string} elementType - 'item' or 'detail'
+ * @param {string} elementId - Record ID for items, detail type key for details
+ * @param {string} elementName - Display name of the element
+ */
+function showTaskDetailPopup(elementType, elementId, elementName) {
+    const currentStatus = getElementTaskStatus(elementType, elementId);
+    const config = TASK_STATUS_CONFIG[currentStatus];
+
+    // Check if user can edit
+    const currentRole = state.permissions?.currentRole;
+    const isLoading = state.permissions?.isLoading !== false;
+    const canUserEdit = !isLoading && api.canEdit(currentRole);
+
+    // Build affiliated tasks list
+    const projectTasks = state.tasks.byProject.get(state.session.id) || [];
+    const affiliatableTasksHTML = projectTasks.length > 0 ? `
+        <div class="task-detail-section">
+            <label>Affiliate with Task</label>
+            <select id="task-affiliate-select" class="task-affiliate-select">
+                <option value="">-- No affiliation --</option>
+                ${projectTasks.map(t => `
+                    <option value="${t.id}">${escapeHtml(t.fields?.Name || 'Unnamed Task')}</option>
+                `).join('')}
+            </select>
+        </div>
+    ` : '';
+
+    // Create modal HTML
+    const modalHTML = `
+        <div id="task-detail-modal-overlay" class="task-detail-modal-overlay">
+            <div class="task-detail-modal">
+                <div class="task-detail-modal-header">
+                    <h3>Task Details</h3>
+                    <button class="task-detail-modal-close" id="task-detail-modal-close">&times;</button>
+                </div>
+                <div class="task-detail-modal-body">
+                    <div class="task-detail-element-name">
+                        <span class="element-label">${elementType === 'item' ? 'Item' : 'Detail'}:</span>
+                        <span class="element-name">${escapeHtml(elementName)}</span>
+                    </div>
+
+                    <div class="task-detail-section">
+                        <label>Status</label>
+                        <div class="task-status-options">
+                            ${Object.entries(TASK_STATUS_CONFIG).map(([statusValue, cfg]) => `
+                                <button class="task-status-option-btn ${cfg.className} ${statusValue === currentStatus ? 'active' : ''}"
+                                        data-status="${statusValue}"
+                                        ${!canUserEdit ? 'disabled' : ''}>
+                                    <span class="option-icon">${cfg.icon}</span>
+                                    <span class="option-label">${cfg.label}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    ${affiliatableTasksHTML}
+                </div>
+                <div class="task-detail-modal-footer">
+                    <button class="task-detail-done-btn" id="task-detail-done-btn">Done</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Insert modal
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    const overlay = document.getElementById('task-detail-modal-overlay');
+    const closeBtn = document.getElementById('task-detail-modal-close');
+    const doneBtn = document.getElementById('task-detail-done-btn');
+
+    const closeModal = () => {
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 200);
+    };
+
+    // Attach event listeners
+    closeBtn.addEventListener('click', closeModal);
+    doneBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal();
+    });
+
+    // Handle status option clicks
+    overlay.querySelectorAll('.task-status-option-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!canUserEdit) return;
+
+            const newStatus = btn.dataset.status;
+            await setElementTaskStatus(elementType, elementId, newStatus);
+
+            // Update active state in modal
+            overlay.querySelectorAll('.task-status-option-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+
+    // Show modal with animation
+    requestAnimationFrame(() => {
+        overlay.classList.add('active');
+    });
+}
+
+/**
+ * Create a task from a comment
+ * @param {string} commentId - The comment record ID
+ * @param {string} commentContent - The comment text content
+ * @param {string} componentId - The component/item ID the comment is on (if any)
+ */
+async function createTaskFromComment(commentId, commentContent, componentId = null) {
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+        showToast('Please sign in to create tasks', 3000);
+        return;
+    }
+
+    // Check permissions
+    const currentRole = state.permissions?.currentRole;
+    const isLoading = state.permissions?.isLoading !== false;
+    const canUserEdit = !isLoading && api.canEdit(currentRole);
+
+    if (!canUserEdit) {
+        showToast('You do not have permission to create tasks', 3000);
+        return;
+    }
+
+    const projectId = state.session.id;
+    if (!projectId) {
+        showToast('No active project', 3000);
+        return;
+    }
+
+    // Get max order for new task
+    const projectTasks = state.tasks.byProject.get(projectId) || [];
+    const maxOrder = projectTasks.reduce((max, t) => Math.max(max, t.fields?.Order || 0), 0);
+
+    // Create task data
+    const taskData = {
+        Name: commentContent.substring(0, 100) + (commentContent.length > 100 ? '...' : ''),
+        Description: commentContent,
+        Status: api.TASK_STATUS.PENDING,
+        Order: maxOrder + 1,
+        SourceType: 'comment',
+        SourceCommentId: commentId
+    };
+
+    // Auto-affiliate with plan item if comment is on a component
+    if (componentId) {
+        taskData.LinkedPlanItemId = componentId;
+        taskData.LinkedItem = componentId;
+    }
+
+    try {
+        const newTask = await api.createTask(projectId, taskData);
+        if (newTask) {
+            // Update local state
+            state.tasks.all.set(newTask.id, newTask);
+            const existingTasks = state.tasks.byProject.get(projectId) || [];
+            state.tasks.byProject.set(projectId, [...existingTasks, newTask]);
+
+            showToast('Task created from comment!', 2000);
+            log('Presentation', `Created task from comment: ${newTask.id}`);
+        }
+    } catch (error) {
+        console.error('Error creating task from comment:', error);
+        showToast('Failed to create task', 3000);
+    }
 }
 
 function escapeHtml(text) {
@@ -2796,6 +3186,17 @@ function handleItemAccordionClick(e) {
     }
 }
 
+// Handle task status button clicks
+function handleTaskStatusClick(e) {
+    const taskStatusBtn = e.target.closest('.task-status-btn');
+    if (!taskStatusBtn) return;
+
+    e.stopPropagation(); // Prevent triggering other click handlers
+
+    // Show task status picker on click
+    showTaskStatusPicker(taskStatusBtn);
+}
+
 // Initialize accordion states and update UI
 function initializeAccordions() {
     // console.log('[Accordion DEBUG] initializeAccordions called');
@@ -3193,6 +3594,7 @@ function renderComponentComments(componentId, comments) {
                 <div class="comment-actions">
                     <button class="comment-action-btn" data-action="reply" title="Reply to this comment">↩</button>
                     <button class="comment-action-btn" data-action="react" title="Add reaction">😊</button>
+                    <button class="comment-action-btn comment-task-btn" data-action="task" title="Create task from comment">📋</button>
                     ${isOwn ? `
                         <button class="comment-action-btn" data-action="edit" title="Edit comment">✏️</button>
                         <button class="comment-action-btn" data-action="delete" title="Delete comment">🗑️</button>
@@ -3329,7 +3731,7 @@ async function submitComponentComment(componentId) {
 }
 
 /**
- * Handle comment actions (edit, delete, react, reply)
+ * Handle comment actions (edit, delete, react, reply, task)
  */
 async function handleCommentAction(action, commentId) {
     console.log('[ComponentComment DEBUG] handleCommentAction called:', action, commentId);
@@ -3353,7 +3755,30 @@ async function handleCommentAction(action, commentId) {
             console.log('[ComponentComment DEBUG] About to call showCommentReactionPicker');
             showCommentReactionPicker(commentId);
             break;
+        case 'task':
+            console.log('[ComponentComment DEBUG] Creating task from comment');
+            await handleCreateTaskFromComment(commentId);
+            break;
     }
+}
+
+/**
+ * Handle creating a task from a comment
+ * @param {string} commentId - The comment record ID
+ */
+async function handleCreateTaskFromComment(commentId) {
+    const commentEl = document.querySelector(`.component-comment[data-comment-id="${commentId}"]`);
+    if (!commentEl) {
+        console.log('[ComponentComment DEBUG] ❌ Comment element not found for task creation');
+        return;
+    }
+
+    const commentContent = commentEl.dataset.content || '';
+    const componentSection = commentEl.closest('.component-comments-section');
+    const componentId = componentSection?.dataset.componentId || null;
+
+    // Call the createTaskFromComment function with auto-affiliation
+    await createTaskFromComment(commentId, commentContent, componentId);
 }
 
 /**
@@ -3846,6 +4271,9 @@ export async function showPresentationView(listType, startRecordId = null) {
     itemImagesCache.clear();
     componentCommentsCache.clear();
 
+    // Load task statuses from session state
+    loadElementTaskStatuses();
+
     // Render presentation header (copies logo and title from main header)
     renderPresentationHeader();
 
@@ -4043,6 +4471,15 @@ export function setupPresentationEventListeners() {
     console.log('[Events DEBUG] Adding handleComponentCommentsClick listener to itineraryItemsListEl');
     itineraryItemsListEl.addEventListener('click', handleComponentCommentsClick);
     itineraryItemsListEl.addEventListener('keydown', handleComponentCommentsKeydown);
+
+    // Handle task status button clicks on items
+    itineraryItemsListEl.addEventListener('click', handleTaskStatusClick);
+
+    // Handle task status button clicks on event details (date, goals, etc.)
+    const headerAccordionContent = modal.querySelector('.itinerary-header .itinerary-accordion-content');
+    if (headerAccordionContent) {
+        headerAccordionContent.addEventListener('click', handleTaskStatusClick);
+    }
 
     // Note: shareBtn removed - share functionality now in collaborators add/share button
 
