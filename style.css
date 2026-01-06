@@ -10516,3 +10516,28 @@ hr.total-divider {
 /* ============================================
    END COMPONENT COMMENTS FEATURE
    ============================================ */
+
+/* ============================================
+   IMAGE FALLBACK STYLES
+   ============================================ */
+
+/* Style for images that failed to load and are showing fallback */
+.image-fallback {
+    opacity: 0.7;
+    filter: grayscale(20%);
+}
+
+/* Container placeholder styles for lazy-loaded images */
+.lazy-load {
+    background-color: #f5f5f5;
+    background-size: cover;
+    background-position: center;
+}
+
+.lazy-load.loaded {
+    background-color: transparent;
+}
+
+/* ============================================
+   END IMAGE FALLBACK STYLES
+   ============================================ */

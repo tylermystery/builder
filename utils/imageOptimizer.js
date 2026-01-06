@@ -4,6 +4,31 @@
 // Device pixel ratio detection for responsive images
 const DPR = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
 
+// Cache for optimized URLs to avoid regenerating the same URLs repeatedly
+const imageUrlCache = new Map();
+const MAX_CACHE_SIZE = 500;
+
+// Supported image formats for Netlify Image CDN
+const SUPPORTED_IMAGE_FORMATS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.svg'];
+// Unsupported formats that should use Cloudinary transformations instead
+const UNSUPPORTED_FORMATS = ['.heic', '.heif', '.mov', '.mp4', '.avi', '.webm', '.raw', '.tiff', '.tif', '.bmp'];
+
+/**
+ * Check if the image format is supported by Netlify Image CDN
+ * @param {string} url - The image URL to check
+ * @returns {boolean} True if format is supported
+ */
+export function isSupportedImageFormat(url) {
+  if (!url) return false;
+  const lowerUrl = url.toLowerCase();
+  // Check for video URLs (cloudinary video path)
+  if (lowerUrl.includes('/video/upload/')) return false;
+  // Check file extension
+  const extension = lowerUrl.match(/\.[a-z0-9]+(?:\?|$)/i)?.[0]?.replace('?', '') || '';
+  if (UNSUPPORTED_FORMATS.includes(extension)) return false;
+  return true;
+}
+
 /**
  * Check if a Cloudinary URL already has transformations
  * @param {string} url - The Cloudinary URL to check
@@ -95,6 +120,27 @@ export function optimizeImageUrl(imageUrl, options = {}) {
     return imageUrl;
   }
 
+  // Generate cache key
+  const cacheKey = `${imageUrl}|${JSON.stringify(options)}`;
+
+  // Check cache first
+  if (imageUrlCache.has(cacheKey)) {
+    return imageUrlCache.get(cacheKey);
+  }
+
+  // Check if format is supported by Netlify Image CDN
+  if (!isSupportedImageFormat(imageUrl)) {
+    // Fall back to Cloudinary transformations for unsupported formats
+    if (imageUrl.includes('res.cloudinary.com')) {
+      const width = options.width || 400;
+      const result = applyCloudinaryTransform(imageUrl, `f_auto,q_auto,w_${width},c_limit`);
+      cacheResult(cacheKey, result);
+      return result;
+    }
+    // Return original URL for other unsupported formats
+    return imageUrl;
+  }
+
   // For Cloudinary URLs, get the base URL without transformations to avoid double-transforming
   let cleanUrl = imageUrl;
   if (imageUrl.includes('res.cloudinary.com') && hasCloudinaryTransformations(imageUrl)) {
@@ -115,7 +161,21 @@ export function optimizeImageUrl(imageUrl, options = {}) {
   if (options.format) params.set('fm', options.format);
   if (options.quality) params.set('q', options.quality);
 
-  return `/.netlify/images?${params.toString()}`;
+  const result = `/.netlify/images?${params.toString()}`;
+  cacheResult(cacheKey, result);
+  return result;
+}
+
+/**
+ * Helper to cache results with size limit
+ */
+function cacheResult(key, value) {
+  // Evict oldest entries if cache is full
+  if (imageUrlCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = imageUrlCache.keys().next().value;
+    imageUrlCache.delete(firstKey);
+  }
+  imageUrlCache.set(key, value);
 }
 
 /**
@@ -196,6 +256,9 @@ export function getBlurhashPlaceholder(imageUrl) {
 export function shouldUseNetlifyImageCDN(imageUrl) {
   if (!imageUrl) return false;
 
+  // Check if format is supported
+  if (!isSupportedImageFormat(imageUrl)) return false;
+
   // Use for Cloudinary images
   if (imageUrl.includes('res.cloudinary.com')) return true;
 
@@ -265,4 +328,67 @@ export function prefetchImages(imageUrls) {
       });
     }, { timeout: 3000 });
   }
+}
+
+// Default placeholder images for fallback scenarios
+// Using a simple gray gradient as data URI (no external files needed)
+const PLACEHOLDER_DATA_URI = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"%3E%3Crect fill="%23f0f0f0" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999" font-family="system-ui" font-size="16"%3EImage unavailable%3C/text%3E%3C/svg%3E';
+
+const DEFAULT_PLACEHOLDERS = {
+  card: PLACEHOLDER_DATA_URI,
+  avatar: PLACEHOLDER_DATA_URI,
+  thumbnail: PLACEHOLDER_DATA_URI,
+  default: PLACEHOLDER_DATA_URI
+};
+
+/**
+ * Handle image load error with intelligent fallback
+ * @param {HTMLImageElement} img - The image element that failed to load
+ * @param {Object} options - Fallback options
+ * @param {string} options.originalUrl - The original image URL before optimization
+ * @param {string} options.type - Type of image for placeholder selection: 'card', 'avatar', 'thumbnail', 'default'
+ * @param {string} options.fallbackUrl - Custom fallback URL to try before placeholder
+ * @param {Function} options.onFallback - Callback when fallback is used
+ */
+export function handleImageError(img, options = {}) {
+  const { originalUrl, type = 'default', fallbackUrl, onFallback } = options;
+
+  // Track retry attempts to prevent infinite loops
+  const retryCount = parseInt(img.dataset.retryCount || '0', 10);
+
+  if (retryCount === 0 && originalUrl) {
+    // First retry: try the original URL without optimization
+    img.dataset.retryCount = '1';
+    img.src = originalUrl;
+    return;
+  }
+
+  if (retryCount === 1 && fallbackUrl) {
+    // Second retry: try custom fallback URL
+    img.dataset.retryCount = '2';
+    img.src = fallbackUrl;
+    return;
+  }
+
+  // Final fallback: use placeholder
+  img.dataset.retryCount = '3';
+  const placeholder = DEFAULT_PLACEHOLDERS[type] || DEFAULT_PLACEHOLDERS.default;
+  img.src = placeholder;
+
+  // Add visual indicator that this is a placeholder
+  img.classList.add('image-fallback');
+
+  if (onFallback) {
+    onFallback(img, originalUrl);
+  }
+}
+
+/**
+ * Attach error handler to an image element with fallback support
+ * @param {HTMLImageElement} img - The image element
+ * @param {string} originalUrl - The original image URL before optimization
+ * @param {Object} options - Additional options for handleImageError
+ */
+export function attachImageErrorHandler(img, originalUrl, options = {}) {
+  img.onerror = () => handleImageError(img, { originalUrl, ...options });
 }
