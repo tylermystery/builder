@@ -4008,18 +4008,301 @@ async function handleCommentAction(action, commentId) {
  * @param {string} commentId - The comment record ID
  */
 async function handleCreateTaskFromComment(commentId) {
+    console.log('[CreateTaskFromComment DEBUG] handleCreateTaskFromComment called:', commentId);
+
     const commentEl = document.querySelector(`.component-comment[data-comment-id="${commentId}"]`);
     if (!commentEl) {
-        console.log('[ComponentComment DEBUG] ❌ Comment element not found for task creation');
+        console.log('[CreateTaskFromComment DEBUG] ❌ Comment element not found for task creation');
         return;
     }
 
     const commentContent = commentEl.dataset.content || '';
     const componentSection = commentEl.closest('.component-comments-section');
     const componentId = componentSection?.dataset.componentId || null;
+    const componentType = componentSection?.dataset.componentType || 'item';
 
-    // Call the createTaskFromComment function with auto-affiliation
-    await createTaskFromComment(commentId, commentContent, componentId);
+    console.log('[CreateTaskFromComment DEBUG] Comment data:', { commentContent, componentId, componentType });
+
+    // Get the element name for display in the popup
+    let elementName = 'Unknown';
+    if (componentType === 'item') {
+        // Try to find the item name from the accordion
+        const accordion = commentEl.closest('.itinerary-item-accordion');
+        if (accordion) {
+            elementName = accordion.dataset.itemName || 'Unknown Item';
+        } else {
+            // Fallback: try to get from locked/cart items
+            const itemRecord = state.records.all.find(r => r.id === componentId);
+            if (itemRecord) {
+                elementName = itemRecord.fields?.Name || itemRecord.fields?.['Item Name'] || 'Unknown Item';
+            }
+        }
+    } else if (componentType === 'header') {
+        // Header/detail component
+        elementName = componentId === 'goals' ? 'Goals/Notes' :
+                      componentId === 'date' ? 'Event Date' :
+                      'Event Detail';
+    }
+
+    console.log('[CreateTaskFromComment DEBUG] Element name resolved:', elementName);
+
+    // Show the task creation popup instead of directly creating the task
+    showCreateTaskFromCommentPopup(commentId, commentContent, componentId, componentType, elementName);
+}
+
+/**
+ * Show popup for creating a task from a comment
+ * @param {string} commentId - The comment record ID
+ * @param {string} commentContent - The comment text content
+ * @param {string} componentId - The component/item ID
+ * @param {string} componentType - The component type ('item' or 'header')
+ * @param {string} elementName - Display name of the element
+ */
+function showCreateTaskFromCommentPopup(commentId, commentContent, componentId, componentType, elementName) {
+    console.log('[CreateTaskFromComment DEBUG] showCreateTaskFromCommentPopup called:', {
+        commentId,
+        commentContent: commentContent?.substring(0, 50) + '...',
+        componentId,
+        componentType,
+        elementName
+    });
+
+    // Check if user can edit
+    const currentRole = state.permissions?.currentRole;
+    const isLoading = state.permissions?.isLoading !== false;
+    const canEditByRole = api.canEdit(currentRole);
+    const canEditByOwnership = state.session.isOwned === true;
+    const canUserEdit = (!isLoading && canEditByRole) || canEditByOwnership;
+
+    console.log('[CreateTaskFromComment DEBUG] Permission check:', {
+        currentRole,
+        canEditByRole,
+        canEditByOwnership,
+        canUserEdit
+    });
+
+    if (!canUserEdit) {
+        showToast('You do not have permission to create tasks', 3000);
+        return;
+    }
+
+    // Truncate comment content for task name (max 100 chars)
+    const suggestedTaskName = commentContent.substring(0, 100) + (commentContent.length > 100 ? '...' : '');
+
+    // Build affiliated tasks list for the dropdown
+    const projectTasks = state.tasks.byProject.get(state.session.id) || [];
+    const affiliatableTasksHTML = projectTasks.length > 0 ? `
+        <div class="task-detail-section">
+            <label>Affiliate with Existing Task</label>
+            <select id="create-task-affiliate-select" class="task-affiliate-select">
+                <option value="">-- No affiliation --</option>
+                ${projectTasks.map(t => `
+                    <option value="${t.id}">${escapeHtml(t.fields?.Name || 'Unnamed Task')}</option>
+                `).join('')}
+            </select>
+        </div>
+    ` : '';
+
+    // Create modal HTML
+    const modalHTML = `
+        <div id="create-task-modal-overlay" class="task-detail-modal-overlay">
+            <div class="task-detail-modal">
+                <div class="task-detail-modal-header">
+                    <h3>📋 Create Task from Comment</h3>
+                    <button class="task-detail-modal-close" id="create-task-modal-close">&times;</button>
+                </div>
+                <div class="task-detail-modal-body">
+                    <div class="task-detail-element-name">
+                        <span class="element-label">${componentType === 'item' ? 'Item' : 'Detail'}:</span>
+                        <span class="element-name">${escapeHtml(elementName)}</span>
+                    </div>
+
+                    <div class="task-detail-section">
+                        <label>Task Name</label>
+                        <input type="text"
+                               id="create-task-name-input"
+                               class="create-task-name-input"
+                               value="${escapeHtml(suggestedTaskName)}"
+                               placeholder="Enter task name..." />
+                    </div>
+
+                    <div class="task-detail-section">
+                        <label>Description</label>
+                        <textarea id="create-task-description-input"
+                                  class="create-task-description-input"
+                                  rows="3"
+                                  placeholder="Task description...">${escapeHtml(commentContent)}</textarea>
+                    </div>
+
+                    <div class="task-detail-section">
+                        <label>Status</label>
+                        <div class="task-status-options">
+                            ${Object.entries(TASK_STATUS_CONFIG).map(([statusValue, cfg]) => `
+                                <button class="task-status-option-btn ${cfg.className} ${statusValue === 'pending' ? 'active' : ''}"
+                                        data-status="${statusValue}">
+                                    <span class="option-icon">${cfg.icon}</span>
+                                    <span class="option-label">${cfg.label}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    ${affiliatableTasksHTML}
+
+                    <div class="task-detail-section create-task-source-info">
+                        <label>Source Comment</label>
+                        <div class="source-comment-preview">"${escapeHtml(commentContent.substring(0, 200))}${commentContent.length > 200 ? '...' : ''}"</div>
+                    </div>
+                </div>
+                <div class="task-detail-modal-footer">
+                    <button class="task-detail-cancel-btn" id="create-task-cancel-btn">Cancel</button>
+                    <button class="task-detail-done-btn create-task-submit-btn" id="create-task-submit-btn">Create Task</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    console.log('[CreateTaskFromComment DEBUG] Inserting modal HTML');
+
+    // Insert modal
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    const overlay = document.getElementById('create-task-modal-overlay');
+    const closeBtn = document.getElementById('create-task-modal-close');
+    const cancelBtn = document.getElementById('create-task-cancel-btn');
+    const submitBtn = document.getElementById('create-task-submit-btn');
+    const nameInput = document.getElementById('create-task-name-input');
+    const descriptionInput = document.getElementById('create-task-description-input');
+
+    console.log('[CreateTaskFromComment DEBUG] Modal elements:', {
+        overlay: !!overlay,
+        closeBtn: !!closeBtn,
+        cancelBtn: !!cancelBtn,
+        submitBtn: !!submitBtn,
+        nameInput: !!nameInput,
+        descriptionInput: !!descriptionInput
+    });
+
+    let selectedStatus = 'pending';
+
+    const closeModal = () => {
+        console.log('[CreateTaskFromComment DEBUG] Closing modal');
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 200);
+    };
+
+    // Attach event listeners
+    closeBtn.addEventListener('click', closeModal);
+    cancelBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal();
+    });
+
+    // Handle status option clicks
+    overlay.querySelectorAll('.task-status-option-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const newStatus = btn.dataset.status;
+            console.log('[CreateTaskFromComment DEBUG] Status selected:', newStatus);
+            selectedStatus = newStatus;
+
+            // Update active state
+            overlay.querySelectorAll('.task-status-option-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+
+    // Handle submit button click
+    submitBtn.addEventListener('click', async () => {
+        console.log('[CreateTaskFromComment DEBUG] Submit button clicked');
+
+        const taskName = nameInput.value.trim();
+        const taskDescription = descriptionInput.value.trim();
+        const affiliateSelect = document.getElementById('create-task-affiliate-select');
+        const affiliatedTaskId = affiliateSelect?.value || null;
+
+        console.log('[CreateTaskFromComment DEBUG] Task data:', {
+            taskName,
+            taskDescription: taskDescription?.substring(0, 50) + '...',
+            selectedStatus,
+            affiliatedTaskId
+        });
+
+        if (!taskName) {
+            showToast('Please enter a task name', 3000);
+            return;
+        }
+
+        // Disable submit button while creating
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Creating...';
+
+        try {
+            const projectId = state.session.id;
+            const projectTasks = state.tasks.byProject.get(projectId) || [];
+            const maxOrder = projectTasks.reduce((max, t) => Math.max(max, t.fields?.Order || 0), 0);
+
+            // Build task data
+            const taskData = {
+                Name: taskName,
+                Description: taskDescription,
+                Status: selectedStatus,
+                Order: maxOrder + 1
+            };
+
+            // Handle item linking - only link if it's a valid Airtable record ID
+            if (componentId && componentId.startsWith('rec')) {
+                taskData.LinkedItem = componentId;
+            } else if (componentId) {
+                // For AI-generated items, include the item name in the task name
+                const itemRecord = state.records.all.find(r => r.id === componentId);
+                if (itemRecord) {
+                    const itemName = itemRecord.fields?.Name || itemRecord.fields?.['Item Name'] || 'AI Item';
+                    if (!taskName.includes(`[${itemName}]`)) {
+                        taskData.Name = `[${itemName}] ${taskName}`;
+                    }
+                    console.log('[CreateTaskFromComment DEBUG] Task linked to AI item:', itemName);
+                }
+            }
+
+            console.log('[CreateTaskFromComment DEBUG] Creating task with data:', taskData);
+
+            const newTask = await api.createTask(projectId, taskData);
+
+            if (newTask) {
+                console.log('[CreateTaskFromComment DEBUG] ✅ Task created successfully:', newTask.id);
+
+                // Update local state
+                state.tasks.all.set(newTask.id, newTask);
+                const existingTasks = state.tasks.byProject.get(projectId) || [];
+                state.tasks.byProject.set(projectId, [...existingTasks, newTask]);
+
+                showToast('Task created successfully!', 2000);
+                closeModal();
+            } else {
+                console.log('[CreateTaskFromComment DEBUG] ❌ Failed to create task');
+                showToast('Failed to create task', 3000);
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Create Task';
+            }
+        } catch (error) {
+            console.error('[CreateTaskFromComment DEBUG] Error creating task:', error);
+            showToast('Failed to create task', 3000);
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Create Task';
+        }
+    });
+
+    // Show modal with animation
+    console.log('[CreateTaskFromComment DEBUG] Showing modal with animation');
+    requestAnimationFrame(() => {
+        overlay.classList.add('active');
+    });
+
+    // Focus on the name input
+    setTimeout(() => {
+        nameInput.focus();
+        nameInput.select();
+    }, 100);
 }
 
 /**

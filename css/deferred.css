@@ -8824,6 +8824,85 @@ hr.total-divider {
     background: rgba(74, 222, 128, 0.1);
 }
 
+/* Create Task from Comment Popup */
+.create-task-name-input,
+.create-task-description-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    color: #fff;
+    font-size: 14px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.create-task-name-input:focus,
+.create-task-description-input:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.create-task-description-input {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.create-task-description-input::placeholder,
+.create-task-name-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.create-task-source-info {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.source-comment-preview {
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.6);
+    font-style: italic;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.task-detail-cancel-btn {
+    padding: 10px 20px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-right: 10px;
+}
+
+.task-detail-cancel-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+}
+
+.create-task-submit-btn {
+    background: rgba(74, 222, 128, 0.2);
+    border-color: rgba(74, 222, 128, 0.4);
+    color: #4ade80;
+}
+
+.create-task-submit-btn:hover:not(:disabled) {
+    background: rgba(74, 222, 128, 0.3);
+}
+
+.create-task-submit-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* Responsive adjustments */
 @media (max-width: 480px) {
     .task-status-btn {
