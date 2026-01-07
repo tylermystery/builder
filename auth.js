@@ -807,12 +807,80 @@ function initializeNetlifyIdentity() {
     console.log('[Google SSO DEBUG] netlifyIdentity object:', netlifyIdentity);
     console.log('[Google SSO DEBUG] Initializing Netlify Identity');
 
+    // Determine the correct API URL - always use production for OAuth redirects
+    // This prevents deploy previews from causing incorrect OAuth redirect URLs
+    const PRODUCTION_SITE_URL = 'https://whatthefunfinder.netlify.app';
+    const CUSTOM_DOMAIN = 'whatthefun.wtf';
+    const currentHost = window.location.hostname;
+    const isDeployPreview = currentHost.includes('--whatthefunfinder.netlify.app') ||
+                            currentHost.includes('deploy-preview') ||
+                            currentHost.includes('agent-');
+    // Include both the Netlify subdomain and custom domain as production
+    const isProduction = currentHost === 'whatthefunfinder.netlify.app' ||
+                         currentHost === CUSTOM_DOMAIN ||
+                         currentHost === `www.${CUSTOM_DOMAIN}`;
+    const isCustomDomain = currentHost === CUSTOM_DOMAIN || currentHost === `www.${CUSTOM_DOMAIN}`;
+
+    console.log('[Google SSO DEBUG] Current host:', currentHost);
+    console.log('[Google SSO DEBUG] Is deploy preview:', isDeployPreview);
+    console.log('[Google SSO DEBUG] Is production:', isProduction);
+    console.log('[Google SSO DEBUG] Is custom domain:', isCustomDomain);
+
+    // Clear any stale netlifySiteURL from localStorage on production site
+    // This prevents OAuth from redirecting to a cached deploy preview URL
+    if (isProduction) {
+        const storedSiteURL = localStorage.getItem('netlifySiteURL');
+        console.log('[Google SSO DEBUG] Checking localStorage netlifySiteURL:', storedSiteURL);
+        if (storedSiteURL && !storedSiteURL.includes(CUSTOM_DOMAIN) && storedSiteURL !== PRODUCTION_SITE_URL) {
+            console.log('[Google SSO DEBUG] Clearing stale netlifySiteURL from localStorage:', storedSiteURL);
+            localStorage.removeItem('netlifySiteURL');
+        }
+
+        // Also check for any stale goTrueUrl setting that might redirect incorrectly
+        const goTrueUrl = localStorage.getItem('goTrueUrl');
+        if (goTrueUrl) {
+            console.log('[Google SSO DEBUG] Found goTrueUrl in localStorage:', goTrueUrl);
+            if (!goTrueUrl.includes(CUSTOM_DOMAIN) && !goTrueUrl.includes('whatthefunfinder.netlify.app')) {
+                console.log('[Google SSO DEBUG] Clearing stale goTrueUrl from localStorage');
+                localStorage.removeItem('goTrueUrl');
+            }
+        }
+    }
+
+    // Build init options
+    // IMPORTANT: For custom domains AND deploy previews, we must explicitly set the APIUrl
+    // because the Netlify Identity API is hosted on the Netlify subdomain, not the custom domain.
+    // OAuth callbacks are configured in Google to redirect to the Netlify subdomain.
+    const initOptions = {
+        locale: 'en'
+    };
+
+    if (isDeployPreview || isCustomDomain) {
+        // Force API calls to use the Netlify subdomain's identity endpoint
+        initOptions.APIUrl = `${PRODUCTION_SITE_URL}/.netlify/identity`;
+        if (isDeployPreview) {
+            console.log('[Google SSO DEBUG] Deploy preview detected - using production APIUrl:', initOptions.APIUrl);
+        } else {
+            console.log('[Google SSO DEBUG] Custom domain detected - using Netlify subdomain APIUrl:', initOptions.APIUrl);
+        }
+    } else {
+        console.log('[Google SSO DEBUG] Netlify subdomain - using default APIUrl');
+    }
+
+    // Force store the correct site URL for OAuth redirects
+    // This is critical for custom domains - we want OAuth to redirect back to the custom domain
+    // after authentication completes, NOT to a deploy preview or cached URL
+    const currentSiteUrl = window.location.origin;
+    if (isProduction) {
+        // Store the current site URL to ensure OAuth redirects come back here
+        localStorage.setItem('netlifySiteURL', currentSiteUrl);
+        console.log('[Google SSO DEBUG] Set netlifySiteURL to current origin:', currentSiteUrl);
+    }
+
     // Initialize the widget
-    console.log('[Google SSO DEBUG] Calling netlifyIdentity.init()');
+    console.log('[Google SSO DEBUG] Calling netlifyIdentity.init() with options:', initOptions);
     try {
-        netlifyIdentity.init({
-            locale: 'en'
-        });
+        netlifyIdentity.init(initOptions);
         console.log('[Google SSO DEBUG] netlifyIdentity.init() completed successfully');
     } catch (initError) {
         console.error('[Google SSO DEBUG] ERROR in netlifyIdentity.init():', initError);
