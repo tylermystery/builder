@@ -9,7 +9,6 @@ import { buildGoalBucket, calculateRecommendationScore } from '../availability.j
 import { CONSTANTS } from '../config.js';
 import { getRecordPrice, getTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { log } from '../utils/debug.js';
-import * as tileSizingDebug from '../utils/tileSizingDebug.js';
 
 // Helper to generate optimized Cloudinary URLs with responsive sizing
 function getOptimizedImageUrl(url, width = 600, quality = 'auto') {
@@ -146,20 +145,6 @@ export function updateCardButtonText(recordId, isLocked) {
 export async function createInteractiveCard(record, allRecords, imageCache) {
     log('Card', `Creating card for "${record.fields.Name}"`);
 
-    // === TILE SIZING DEBUG: Card creation start ===
-    const cardCreationStart = performance.now();
-    const itemType = record.fields['Item Type'] || 'Unknown';
-
-    console.log('[TileSizing][Card] === CARD CREATION START ===');
-    console.log('[TileSizing][Card] Creating card:', {
-        recordId: record.id,
-        name: record.fields.Name,
-        itemType: itemType,
-        viewport: tileSizingDebug.getViewportInfo()
-    });
-    tileSizingDebug.logCardCreation(record.id, itemType, { name: record.fields.Name });
-
-    console.log('[createInteractiveCard] Creating card for record:', record.id, record.fields.Name);
     const eventCard = document.createElement('div');
     eventCard.dataset.recordId = record.id;
     const fields = record.fields;
@@ -170,6 +155,24 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         partnerBadge = '<span class="partner-badge">Partner</span>';
     }
     // --- END NEW LOGIC ---
+
+    // --- AI-SOURCED CARD DETECTION ---
+    const isAISourced = record.id.startsWith('custom-') ||
+                        record.id.startsWith('ai-search-') ||
+                        record.id.startsWith('ai-group-') ||
+                        record.id.startsWith('ai-child-');
+    const isAIGrouping = record.id.startsWith('ai-group-');
+
+    // Build AI badge HTML
+    let aiDiscoveryBadge = '';
+    if (isAISourced) {
+        if (isAIGrouping) {
+            aiDiscoveryBadge = '<span class="ai-grouping-badge">AI Suggestions</span>';
+        } else {
+            aiDiscoveryBadge = '<span class="ai-discovery-badge">AI Discovery</span>';
+        }
+    }
+    // --- END AI-SOURCED CARD DETECTION ---
 
     // --- VVV SCORE LOGIC REMOVED VVV ---
     // The scoreBanner variable is now always empty
@@ -187,15 +190,10 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     // --- END BLOCK ---
 
     if (fields['Item Type'] === 'Grouping') {
-        // === TILE SIZING DEBUG: Grouping card ===
-        console.log('[TileSizing][Card] Creating GROUPING card:', {
-            recordId: record.id,
-            name: fields.Name,
-            expectedClasses: 'event-card grouping-card'
-        });
-
         const groupingCard = eventCard;
-        groupingCard.className = 'event-card grouping-card';
+        // Apply AI-sourced styling if this is an AI-generated grouping
+        const aiGroupingClass = isAISourced ? ' ai-sourced-card ai-grouping-card' : '';
+        groupingCard.className = 'event-card grouping-card' + aiGroupingClass;
         groupingCard.dataset.categoryName = fields.Name;
         const groupingNameForFilter = fields.Name.toLowerCase().replace(/\s+/g, ' ');
         const childItems = allRecords.filter(r => {
@@ -223,8 +221,11 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         }
         imageContainerHTML += `<div class="heart-icon" data-record-id="${record.id}"></div>`;
         imageContainerHTML += `<button class="availability-btn" title="Select a date range to check availability">📅</button>`;
+        // Add AI badge to grouping cards
+        if (isAISourced) {
+            imageContainerHTML += aiDiscoveryBadge;
+        }
         imageContainerHTML += `</div>`;
-        console.log('[createInteractiveCard] Grouping card HTML includes availability-btn:', imageContainerHTML.includes('availability-btn'));
         groupingCard.innerHTML = `
             ${imageContainerHTML}
             <div class="event-card-content">
@@ -235,34 +236,14 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 <button class="card-action-btn view-options-btn">View Collection (${childItems.length})</button>
             </div>
         `;
-        console.log('[createInteractiveCard] Grouping card created, checking for availability-btn');
-        const availBtn = groupingCard.querySelector('.availability-btn');
-        console.log('[createInteractiveCard] Grouping card availability-btn found:', !!availBtn, availBtn);
-
-        // === TILE SIZING DEBUG: Grouping card complete ===
-        const cardCreationEnd = performance.now();
-        console.log('[TileSizing][Card] GROUPING card created:', {
-            recordId: record.id,
-            name: fields.Name,
-            className: groupingCard.className,
-            childItemCount: childItems.length,
-            collageImageCount: collageImages.length,
-            creationTime: (cardCreationEnd - cardCreationStart).toFixed(2) + 'ms'
-        });
 
         return groupingCard;
     }
 
     if (fields['Item Type'] === 'Event') {
-        // === TILE SIZING DEBUG: Event card ===
-        console.log('[TileSizing][Card] Creating EVENT card:', {
-            recordId: record.id,
-            name: fields.Name,
-            date: fields.Date,
-            expectedClasses: 'event-card event-type-card'
-        });
-
-        eventCard.className = 'event-card event-type-card';
+        // Apply AI-sourced styling if this is an AI-generated event
+        const aiEventClass = isAISourced ? ' ai-sourced-card' : '';
+        eventCard.className = 'event-card event-type-card' + aiEventClass;
         const eventDate = fields.Date ? new Date(fields.Date + 'T00:00:00') : null;
         const month = eventDate ? eventDate.toLocaleString('default', { month: 'short' }).toUpperCase() : 'TBD';
         const day = eventDate ? eventDate.getDate() : '??';
@@ -303,6 +284,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 <div class="heart-icon" data-record-id="${record.id}"></div>
                 <button class="availability-btn" title="Select a date range to check availability">📅</button>
                 ${partnerBadge}
+                ${aiDiscoveryBadge}
                 ${scoreBanner}
             </div>
             <div class="event-card-content">
@@ -319,34 +301,12 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 ${footerButtonsHTML}
             </div>
         `;
-        console.log('[createInteractiveCard] Event card created, checking for availability-btn');
-        const eventAvailBtn = eventCard.querySelector('.availability-btn');
-        console.log('[createInteractiveCard] Event card availability-btn found:', !!eventAvailBtn, eventAvailBtn);
-
-        // === TILE SIZING DEBUG: Event card complete ===
-        const cardCreationEnd = performance.now();
-        console.log('[TileSizing][Card] EVENT card created:', {
-            recordId: record.id,
-            name: fields.Name,
-            className: eventCard.className,
-            hasRsvpd: hasRsvpd,
-            hasLinkedSession: hasLinkedSession,
-            userHasPublishAccess: userHasPublishAccess,
-            eventDate: fields.Date,
-            creationTime: (cardCreationEnd - cardCreationStart).toFixed(2) + 'ms'
-        });
 
         return eventCard;
     }
 
     // === PACKAGE CARD - Special tile for package bundles ===
     if (fields['Item Type'] === 'Package') {
-        console.log('[TileSizing][Card] Creating PACKAGE card:', {
-            recordId: record.id,
-            name: fields.Name,
-            expectedClasses: 'event-card package-card'
-        });
-
         const packageCard = eventCard;
         packageCard.className = 'event-card package-card';
 
@@ -574,29 +534,12 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             });
         });
 
-        const cardCreationEnd = performance.now();
-        console.log('[TileSizing][Card] PACKAGE card created:', {
-            recordId: record.id,
-            name: fields.Name,
-            className: packageCard.className,
-            includedCount,
-            addOnCount,
-            dynamicPrice: dynamicPricing.totalPrice,
-            hasPerGuestItems: dynamicPricing.hasPerGuestItems,
-            creationTime: (cardCreationEnd - cardCreationStart).toFixed(2) + 'ms'
-        });
-
         return packageCard;
     }
 
-    // === TILE SIZING DEBUG: BookableItem card ===
-    console.log('[TileSizing][Card] Creating BOOKABLE ITEM card:', {
-        recordId: record.id,
-        name: fields.Name,
-        expectedClasses: 'event-card'
-    });
-
-    eventCard.className = 'event-card';
+    // Apply AI-sourced styling if this is an AI-generated bookable item
+    const aiBookableClass = isAISourced ? ' ai-sourced-card' : '';
+    eventCard.className = 'event-card' + aiBookableClass;
     const itemState = ui.getItemState(record.id);
     const effectiveMin = getEffectiveMinQuantity(record);
     const isLocked = state.cart.lockedItems.has(record.id);
@@ -607,13 +550,14 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const priceHTML = displayPrice === 0 ? 'Free' : `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
     const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'Update Plan' : 'Add to Plan'}</button>`;
     const placeholder = getLowQualityPlaceholder(imageUrlToLoad);
-    
+
     eventCard.innerHTML = `
         <div class="event-card-image-container lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
             <div class="heart-icon" data-record-id="${record.id}"></div>
             <button class="availability-btn" title="Select a date range to check availability">📅</button>
-            ${partnerBadge} 
-            ${scoreBanner} 
+            ${partnerBadge}
+            ${aiDiscoveryBadge}
+            ${scoreBanner}
             </div>
         <div class="event-card-content">
             <h3>${fields.Name || 'Untitled Event'}</h3>
@@ -624,10 +568,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             <div class="actions-wrapper">${quantitySelectorHTML}${addToPlanBtnHTML}</div>
         </div>
     `;
-    console.log('[createInteractiveCard] Standard card created, checking for availability-btn');
-    const stdAvailBtn = eventCard.querySelector('.availability-btn');
-    console.log('[createInteractiveCard] Standard card availability-btn found:', !!stdAvailBtn, stdAvailBtn);
-    
+
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
@@ -659,18 +600,6 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         minusBtn.addEventListener('click', handleMinus);
         minusBtn.addEventListener('touchend', handleTouchEnd, { passive: false });
     }
-
-    // === TILE SIZING DEBUG: BookableItem card complete ===
-    const cardCreationEnd = performance.now();
-    console.log('[TileSizing][Card] BOOKABLE ITEM card created:', {
-        recordId: record.id,
-        name: fields.Name,
-        className: eventCard.className,
-        price: displayPrice,
-        isLocked: isLocked,
-        creationTime: (cardCreationEnd - cardCreationStart).toFixed(2) + 'ms'
-    });
-    console.log('[TileSizing][Card] === CARD CREATION COMPLETE ===');
 
     return eventCard;
 }

@@ -975,7 +975,7 @@ async function buildPlanComponentCards(container, componentRecords, sessionId) {
 
         // Fetch all images for this component
         let imageUrls = [];
-        if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-')) {
+        if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-')) {
             try {
                 const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
                 imageUrls = fetchedUrls || [];
@@ -1333,7 +1333,7 @@ async function initializePlanCarousel(componentRecords) {
         const record = componentData.record;
         let imageUrl = ui.getPlaceholderImage([]);
 
-        if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-')) {
+        if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-')) {
             try {
                 const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
                 if (fetchedUrls && fetchedUrls.length > 0) {
@@ -1628,7 +1628,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     }
 
     let imageUrls = [];
-    if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-')) {
+    if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-')) {
         const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
         imageUrls = fetchedUrls;
     }
@@ -2052,14 +2052,13 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             }
         });
 
-        // --- THIS IS THE CHANGE ---\
-        const rankingsJsonString = record.fields['AI_Profile'] || record.fields['Rankings'];
-        // --- END CHANGE ---\
-        
-        if (rankingsJsonString) {
+        // Get rankings data - could be a JSON string (from Airtable) or an object (from AI-generated items)
+        const rankingsData = record.fields['AI_Profile'] || record.fields['Rankings'];
+
+        if (rankingsData) {
             try {
-                // --- V2.1: Check for new profile structure ---\
-                const rankingsObject = JSON.parse(rankingsJsonString);
+                // Handle both JSON strings and objects (AI-generated items pass objects directly)
+                const rankingsObject = typeof rankingsData === 'string' ? JSON.parse(rankingsData) : rankingsData;
 
                 let displayRankings = {};
                 // Check if it's the new v2.1 profile
@@ -2104,10 +2103,169 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             `;
             fragment.appendChild(rankingContainer);
         }
+
+        // Add Variations Parsing Tool for authorized users (publish permission)
+        // Now available for all item types: real catalog items, AI-parsed items, and custom items
+        const userHasPublishPermission = api.userHasPublishPermission();
+        const isRealRecord = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-') && !record.id.startsWith('ai-presentation-');
+
+        if (userHasPublishPermission) {
+            const variationsToolContainer = document.createElement('div');
+            variationsToolContainer.className = 'variations-tool-container detail-item';
+            variationsToolContainer.style.gridColumn = '1 / -1';
+
+            const currentOptionsString = record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] || '';
+            const parsedGroups = parseOptions(currentOptionsString);
+            const hasExistingOptions = parsedGroups.length > 0 && parsedGroups.some(g => g.options.length > 0);
+
+            variationsToolContainer.innerHTML = `
+                <div class="variations-tool-header" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                    <span class="detail-label" style="margin-bottom: 0;">Variations & Options</span>
+                    <button class="variations-toggle-btn" style="background: none; border: none; cursor: pointer; font-size: 1.2em; color: #007bff;">
+                        ${hasExistingOptions ? '▼' : '+ Add'}
+                    </button>
+                </div>
+                <div class="variations-tool-content" style="display: none; margin-top: 10px;">
+                    <div class="variations-help-text" style="font-size: 0.85em; color: #666; margin-bottom: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px;">
+                        <strong>Format:</strong> Use <code>[Group Name]</code> for groups, then add options below.<br>
+                        <strong>Modifiers:</strong> <code>[price: +10]</code> <code>[price: 25]</code> (override) <code>[img: tag]</code> <code>[desc: text]</code> <code>[time: +30]</code>
+                    </div>
+                    <textarea class="variations-editor" placeholder="[Size] (required)
+Small [price: -5]
+Medium
+Large [price: +5]
+
+[Add-ons]
+Extra cheese [price: +2]
+Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; font-family: monospace; font-size: 0.9em; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;">${currentOptionsString}</textarea>
+                    <div class="variations-preview" style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px; display: none;">
+                        <strong style="font-size: 0.85em; color: #333;">Preview:</strong>
+                        <div class="variations-preview-content" style="margin-top: 8px;"></div>
+                    </div>
+                    <div class="variations-actions" style="margin-top: 10px; display: flex; gap: 10px;">
+                        <button class="variations-preview-btn" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Preview</button>
+                        <button class="variations-save-btn" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save Variations</button>
+                        <span class="variations-status" style="align-self: center; font-size: 0.85em; color: #666;"></span>
+                    </div>
+                </div>
+            `;
+
+            // Toggle show/hide variations tool
+            const header = variationsToolContainer.querySelector('.variations-tool-header');
+            const content = variationsToolContainer.querySelector('.variations-tool-content');
+            const toggleBtn = variationsToolContainer.querySelector('.variations-toggle-btn');
+
+            header.addEventListener('click', () => {
+                const isVisible = content.style.display !== 'none';
+                content.style.display = isVisible ? 'none' : 'block';
+                toggleBtn.textContent = isVisible ? (hasExistingOptions ? '▼' : '+ Add') : '▲';
+            });
+
+            // Preview functionality
+            const textarea = variationsToolContainer.querySelector('.variations-editor');
+            const previewContainer = variationsToolContainer.querySelector('.variations-preview');
+            const previewContent = variationsToolContainer.querySelector('.variations-preview-content');
+            const previewBtn = variationsToolContainer.querySelector('.variations-preview-btn');
+            const saveBtn = variationsToolContainer.querySelector('.variations-save-btn');
+            const statusSpan = variationsToolContainer.querySelector('.variations-status');
+
+            previewBtn.addEventListener('click', () => {
+                const optionsText = textarea.value;
+                const groups = parseOptions(optionsText);
+
+                if (groups.length === 0 || !groups.some(g => g.options.length > 0)) {
+                    previewContent.innerHTML = '<em style="color: #666;">No valid options found. Add options using the format above.</em>';
+                } else {
+                    let previewHtml = '';
+                    groups.forEach(group => {
+                        if (group.options.length > 0) {
+                            previewHtml += `<div style="margin-bottom: 10px;">
+                                <strong style="color: #333;">${group.name}</strong>${group.modifier ? ` <span style="color: #666; font-size: 0.85em;">(${group.modifier})</span>` : ''}
+                                <ul style="margin: 5px 0 0 15px; padding: 0;">`;
+                            group.options.forEach(opt => {
+                                let priceText = '';
+                                if (opt.priceOverride !== null) {
+                                    priceText = ` <span style="color: #28a745;">$${opt.priceOverride.toFixed(2)}</span>`;
+                                } else if (opt.priceModifier !== null) {
+                                    priceText = ` <span style="color: ${opt.priceModifier >= 0 ? '#28a745' : '#dc3545'}">${opt.priceModifier >= 0 ? '+' : ''}$${opt.priceModifier.toFixed(2)}</span>`;
+                                }
+                                let extras = [];
+                                if (opt.imageTag) extras.push(`img: ${opt.imageTag}`);
+                                if (opt.descriptionAppend) extras.push(`desc: "${opt.descriptionAppend.substring(0, 20)}${opt.descriptionAppend.length > 20 ? '...' : ''}"`);
+                                if (opt.durationChange !== null) extras.push(`time: ${opt.durationChange >= 0 ? '+' : ''}${opt.durationChange}min`);
+                                const extrasText = extras.length > 0 ? ` <span style="color: #888; font-size: 0.85em;">[${extras.join(', ')}]</span>` : '';
+                                previewHtml += `<li style="margin: 3px 0;">${opt.name}${priceText}${extrasText}</li>`;
+                            });
+                            previewHtml += '</ul></div>';
+                        }
+                    });
+                    previewContent.innerHTML = previewHtml;
+                }
+                previewContainer.style.display = 'block';
+            });
+
+            // Save functionality
+            saveBtn.addEventListener('click', async () => {
+                const optionsText = textarea.value;
+                statusSpan.textContent = 'Saving...';
+                statusSpan.style.color = '#666';
+                saveBtn.disabled = true;
+
+                try {
+                    let saveSuccess = false;
+
+                    // For AI-parsed and custom items, save locally only (no API call)
+                    if (!isRealRecord) {
+                        // Store options directly on the record object
+                        record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
+                        saveSuccess = true;
+                        statusSpan.textContent = 'Saved locally!';
+                        statusSpan.style.color = '#28a745';
+                    } else {
+                        // For real catalog items, persist to Airtable
+                        const result = await api.updateItemOptions(record.id, optionsText);
+                        if (result) {
+                            saveSuccess = true;
+                            statusSpan.textContent = 'Saved successfully!';
+                            statusSpan.style.color = '#28a745';
+
+                            // Update the record's options field locally
+                            record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
+                        } else {
+                            throw new Error('Failed to save');
+                        }
+                    }
+
+                    if (saveSuccess) {
+                        // Refresh the options display in the modal
+                        const newGroups = parseOptions(optionsText);
+                        const hasNewOptions = newGroups.length > 0 && newGroups.some(g => g.options.length > 0);
+                        toggleBtn.textContent = hasNewOptions ? '▲' : '+ Add';
+
+                        // Trigger re-render of the options buttons
+                        setTimeout(() => {
+                            showDetailModal(record);
+                        }, 1000);
+                    }
+                } catch (error) {
+                    statusSpan.textContent = 'Error saving. Please try again.';
+                    statusSpan.style.color = '#dc3545';
+                    console.error('Error saving variations:', error);
+                } finally {
+                    saveBtn.disabled = false;
+                    setTimeout(() => {
+                        statusSpan.textContent = '';
+                    }, 3000);
+                }
+            });
+
+            fragment.appendChild(variationsToolContainer);
+        }
+
         modalAdditionalDetails.appendChild(fragment);
     }
 
-    const isGrouping = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && record.fields['Item Type'] === 'Grouping';
+    const isGrouping = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-') && !record.id.startsWith('ai-presentation-') && record.fields['Item Type'] === 'Grouping';
     const isPackage = record.fields['Item Type'] === 'Package';
 
     const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
@@ -2194,7 +2352,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     } else {
         const price = getRecordPrice(record, itemState.selectedOptionIndex);
         let priceText = (typeof price === 'number' ? (price === 0 ? 'Free' : `$${price.toFixed(2)}`) : 'N/A');
-        if ((record.id.startsWith('custom-') || record.id.startsWith('ai-search-')) && price > 0) {
+        if ((record.id.startsWith('custom-') || record.id.startsWith('ai-search-') || record.id.startsWith('ai-child-')) && price > 0) {
             priceText += ' (Est.)';
         }
         modalItemPrice.innerHTML = priceText + pricingTypeHTML;
@@ -2391,6 +2549,10 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             const optionsWrapper = document.createElement('div');
             optionsWrapper.className = 'option-group-options';
 
+            // Determine if this group is required or optional (multi-select allowed for optional)
+            const isRequired = group.modifier && group.modifier.toLowerCase() === 'required';
+            const isMultiSelect = !isRequired; // Optional groups allow multi-select
+
             group.options.forEach((opt, optionIndex) => {
                 const optionButton = document.createElement('button');
                 optionButton.className = 'option-btn';
@@ -2398,8 +2560,13 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 optionButton.dataset.optionIndex = optionIndex;
 
                 // Check if this option is currently selected
+                // Support both single selection (number) and multi-select (array) formats
                 const groupKey = `group${groupIndex}`;
-                if (currentSelections[groupKey] === optionIndex) {
+                const groupSelection = currentSelections[groupKey];
+                const isSelected = Array.isArray(groupSelection)
+                    ? groupSelection.includes(optionIndex)
+                    : groupSelection === optionIndex;
+                if (isSelected) {
                     optionButton.classList.add('selected');
                 }
 
@@ -2437,22 +2604,57 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                         }
                     });
                 } else {
-                    // Regular option selection
+                    // Regular option selection - supports toggle and multi-select for optional groups
                     optionButton.addEventListener('click', (e) => {
                         e.stopPropagation();
 
-                        // Deselect other options in the same group
-                        optionsWrapper.querySelectorAll('.option-btn').forEach(btn => {
-                            btn.classList.remove('selected');
-                        });
-
-                        // Select this option
-                        e.currentTarget.classList.add('selected');
-
-                        // Update selections
                         const gIdx = parseInt(e.currentTarget.dataset.groupIndex, 10);
                         const oIdx = parseInt(e.currentTarget.dataset.optionIndex, 10);
-                        currentSelections[`group${gIdx}`] = oIdx;
+                        const groupKey = `group${gIdx}`;
+                        const currentGroup = optionGroups[gIdx];
+                        const groupIsRequired = currentGroup.modifier && currentGroup.modifier.toLowerCase() === 'required';
+                        const groupIsMultiSelect = !groupIsRequired;
+
+                        const currentlySelected = e.currentTarget.classList.contains('selected');
+
+                        if (groupIsMultiSelect) {
+                            // Multi-select: toggle individual options
+                            let currentArray = Array.isArray(currentSelections[groupKey])
+                                ? [...currentSelections[groupKey]]
+                                : (typeof currentSelections[groupKey] === 'number' ? [currentSelections[groupKey]] : []);
+
+                            if (currentlySelected) {
+                                // Remove from selection
+                                currentArray = currentArray.filter(idx => idx !== oIdx);
+                                e.currentTarget.classList.remove('selected');
+                            } else {
+                                // Add to selection
+                                currentArray.push(oIdx);
+                                currentArray.sort((a, b) => a - b); // Keep sorted
+                                e.currentTarget.classList.add('selected');
+                            }
+
+                            // Store as array for multi-select (or remove key if empty)
+                            if (currentArray.length === 0) {
+                                delete currentSelections[groupKey];
+                            } else {
+                                currentSelections[groupKey] = currentArray;
+                            }
+                        } else {
+                            // Single-select with toggle: deselect all others first
+                            optionsWrapper.querySelectorAll('.option-btn').forEach(btn => {
+                                btn.classList.remove('selected');
+                            });
+
+                            if (currentlySelected) {
+                                // Toggle off - remove selection
+                                delete currentSelections[groupKey];
+                            } else {
+                                // Select this option
+                                e.currentTarget.classList.add('selected');
+                                currentSelections[groupKey] = oIdx;
+                            }
+                        }
 
                         // Update UI reactively
                         updateOptionsUI();
@@ -2477,6 +2679,142 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             updateOptionsUI();
         }
     }
+
+    // Add AI Top Options button for ALL users (sparkles button)
+    // This allows any user to generate AI-recommended options for the item
+    const hasExistingOptions = optionGroups.length > 0 && optionGroups.some(g => g.options.length > 0);
+    const isRealRecord = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-') && !record.id.startsWith('ai-presentation-');
+    const userHasPublishPermissionForOptions = api.userHasPublishPermission();
+    const userIsAuthenticated = state.session.user.isAuthenticated;
+
+    // Create the AI top options button container
+    const aiOptionsContainer = document.createElement('div');
+    aiOptionsContainer.className = 'ai-top-options-container';
+    aiOptionsContainer.style.marginTop = hasExistingOptions ? '15px' : '0';
+
+    // Button text changes based on whether options exist
+    const buttonText = hasExistingOptions ? '✨ Regenerate Options' : '✨ Add Top Options';
+
+    aiOptionsContainer.innerHTML = `
+        <button class="ai-top-options-btn" title="Use AI to generate recommended options/variations">
+            ${buttonText}
+        </button>
+        <div class="ai-options-result" style="display: none;">
+            <div class="ai-options-preview-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span style="font-weight: 600; color: #333;">AI Generated Options</span>
+                <button class="ai-options-close-btn" style="background: none; border: none; cursor: pointer; font-size: 1.2em; color: #666;">×</button>
+            </div>
+            <textarea class="ai-options-editor" placeholder="Loading..." style="width: 100%; min-height: 120px; font-family: monospace; font-size: 0.9em; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;"></textarea>
+            <div class="ai-options-actions" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="ai-options-apply-btn" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Apply to Item</button>
+                ${userIsAuthenticated && (isRealRecord && userHasPublishPermissionForOptions) ? '<button class="ai-options-save-catalog-btn" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save to Catalog</button>' : ''}
+                <span class="ai-options-status" style="align-self: center; font-size: 0.85em; color: #666;"></span>
+            </div>
+            ${!userIsAuthenticated ? '<p class="ai-options-auth-note" style="font-size: 0.8em; color: #888; margin-top: 8px;">Sign in to save options to catalog permanently.</p>' : ''}
+        </div>
+    `;
+
+    // Add event listeners for the AI options button
+    const aiOptionsBtn = aiOptionsContainer.querySelector('.ai-top-options-btn');
+    const aiOptionsResult = aiOptionsContainer.querySelector('.ai-options-result');
+    const aiOptionsEditor = aiOptionsContainer.querySelector('.ai-options-editor');
+    const aiOptionsCloseBtn = aiOptionsContainer.querySelector('.ai-options-close-btn');
+    const aiOptionsApplyBtn = aiOptionsContainer.querySelector('.ai-options-apply-btn');
+    const aiOptionsSaveCatalogBtn = aiOptionsContainer.querySelector('.ai-options-save-catalog-btn');
+    const aiOptionsStatus = aiOptionsContainer.querySelector('.ai-options-status');
+
+    // Generate AI options on click
+    aiOptionsBtn.addEventListener('click', async () => {
+        aiOptionsBtn.disabled = true;
+        aiOptionsBtn.textContent = '✨ Generating...';
+        aiOptionsResult.style.display = 'block';
+        aiOptionsEditor.value = 'Generating AI recommendations...';
+        aiOptionsStatus.textContent = '';
+
+        try {
+            const result = await api.generateTopOptions(record);
+            if (result.success && result.options) {
+                aiOptionsEditor.value = result.options;
+                aiOptionsStatus.textContent = 'Options generated!';
+                aiOptionsStatus.style.color = '#28a745';
+            } else {
+                throw new Error(result.error || 'Failed to generate options');
+            }
+        } catch (error) {
+            aiOptionsEditor.value = '';
+            aiOptionsStatus.textContent = `Error: ${error.message}`;
+            aiOptionsStatus.style.color = '#dc3545';
+            console.error('AI options generation failed:', error);
+        } finally {
+            aiOptionsBtn.disabled = false;
+            aiOptionsBtn.textContent = hasExistingOptions ? '✨ Regenerate Options' : '✨ Add Top Options';
+        }
+    });
+
+    // Close button
+    aiOptionsCloseBtn.addEventListener('click', () => {
+        aiOptionsResult.style.display = 'none';
+    });
+
+    // Apply to item (works for all users - updates locally for this session)
+    aiOptionsApplyBtn.addEventListener('click', () => {
+        const optionsText = aiOptionsEditor.value;
+        if (!optionsText.trim()) {
+            aiOptionsStatus.textContent = 'No options to apply';
+            aiOptionsStatus.style.color = '#dc3545';
+            return;
+        }
+
+        // Store options on the record object locally
+        record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
+        aiOptionsStatus.textContent = 'Applied! Refreshing...';
+        aiOptionsStatus.style.color = '#28a745';
+
+        // Refresh the modal to show the new options
+        setTimeout(() => {
+            showDetailModal(record);
+        }, 500);
+    });
+
+    // Save to Catalog (only for authenticated users with publish permission on real records)
+    if (aiOptionsSaveCatalogBtn) {
+        aiOptionsSaveCatalogBtn.addEventListener('click', async () => {
+            const optionsText = aiOptionsEditor.value;
+            if (!optionsText.trim()) {
+                aiOptionsStatus.textContent = 'No options to save';
+                aiOptionsStatus.style.color = '#dc3545';
+                return;
+            }
+
+            aiOptionsSaveCatalogBtn.disabled = true;
+            aiOptionsStatus.textContent = 'Saving to catalog...';
+            aiOptionsStatus.style.color = '#666';
+
+            try {
+                const result = await api.updateItemOptions(record.id, optionsText);
+                if (result) {
+                    record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
+                    aiOptionsStatus.textContent = 'Saved to catalog!';
+                    aiOptionsStatus.style.color = '#28a745';
+
+                    // Refresh the modal
+                    setTimeout(() => {
+                        showDetailModal(record);
+                    }, 1000);
+                } else {
+                    throw new Error('Failed to save');
+                }
+            } catch (error) {
+                aiOptionsStatus.textContent = 'Error saving. Try again.';
+                aiOptionsStatus.style.color = '#dc3545';
+                console.error('Error saving options to catalog:', error);
+            } finally {
+                aiOptionsSaveCatalogBtn.disabled = false;
+            }
+        });
+    }
+
+    modalOptionsContainer.appendChild(aiOptionsContainer);
 
     // --- THIS IS THE FIX ---\
     // The listeners are now MOVED INSIDE this `if` block

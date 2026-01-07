@@ -109,6 +109,13 @@ export const CONSTANTS = {
     },
     PRICING_TYPES: {
         PER_GUEST: 'per guest',
+        PER_PERSON: 'per person',
+        PER_CHARTER: 'per charter',
+        PER_BUS: 'per bus',
+        PER_VEHICLE: 'per vehicle',
+        PER_HOUR: 'per hour',
+        PER_GROUP: 'per group',
+        FLAT_RATE: 'flat rate',
     },
     ITEM_TYPES: {
         BOOKABLE_ITEM: 'Bookable Item',

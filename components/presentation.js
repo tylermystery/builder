@@ -1,12 +1,14 @@
 import { state } from '../state.js';
 import * as api from '../api.js';
 import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, REACTION_SCORES } from '../config.js';
-import { updateUrl, getRecordPrice } from '../utils.js';
+import { updateUrl, getRecordPrice, parseOptions, flattenOptionGroups } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getCurrentUser, sendMessage as sendChatMessage, getReplyingToMessage, clearReplyState } from '../chat.js';
 import { triggerSave } from '../events.js';
 import { showDetailModal } from './modal.js';
 import { Shader } from '../utils/shader.js';
+import { showWtfPlansPanel } from './wtfPlansPanel.js';
+import { updateEventPlanSection, updateIdeasCarousel } from './sidebar.js';
 
 // Quick emoji reactions available for messages
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
@@ -32,7 +34,6 @@ let summaryEventDateEl = null;
 let shareBtn = null;
 let collaboratorsListEl = null;
 let itineraryItemsListEl = null;
-let chatMessagesEl = null;
 
 // Presentation header elements
 let presentationBackBtn = null;
@@ -41,20 +42,22 @@ let presentationShopTitle = null;
 let presentationEventLabel = null;
 let presentationHeaderShareBtn = null;
 
-// Embedded chat DOM elements
-let presentationChatContainer = null;
-let presentationMessageForm = null;
-let presentationMessageInput = null;
-let presentationUserNameInput = null;
-let presentationWhosHereCount = null;
-let presentationWhosHereList = null;
+// Collaborators carousel and modal elements
+let collaboratorsCarouselPrev = null;
+let collaboratorsCarouselNext = null;
+let collaboratorsExpandBtn = null;
+let collaboratorsModal = null;
+let collaboratorsModalClose = null;
+let collaboratorsModalList = null;
 
 // Accordion summary elements
 let headerSummaryEl = null;
 let itemsSummaryEl = null;
-let chatSummaryEl = null;
 
-// Floating chat button
+// Accordion title element for header section
+let headerAccordionTitleEl = null;
+
+// Floating chat button (no longer used but kept for cleanup)
 let floatingChatBtn = null;
 
 // Reactions summary DOM element
@@ -66,13 +69,31 @@ const itemImagesCache = new Map();
 // Track accordion state (all sections start expanded)
 const accordionState = {
     header: true,
-    items: true,
-    chat: true
+    items: true
 };
+
+// Carousel state for collaborators
+let carouselCurrentIndex = 0;
+const CAROUSEL_VISIBLE_COUNT = 4; // Number of collaborators visible at once
 
 // Pusher instance for presentation chat
 let presentationPusher = null;
 let presentationChatChannel = null;
+
+// Search modal elements
+let presentationAddBtn = null;
+let presentationSearchModal = null;
+let presentationSearchClose = null;
+let presentationSearchInput = null;
+let presentationSearchClear = null;
+let presentationSearchResults = null;
+let presentationRefinementChips = null;
+let presentationBrowseCategories = null;
+
+// Search modal state
+let presentationSearchController = null;
+let presentationSearchDebounceTimer = null;
+const PRESENTATION_SEARCH_DEBOUNCE = 300;
 
 // --- Presentation Background Engine ---
 // WebGL Shader code for the fluid effect (same as catalog background)
@@ -225,7 +246,6 @@ function ensureDOMElements() {
     shareBtn = document.getElementById('presentation-share-btn');
     collaboratorsListEl = document.getElementById('itinerary-collaborators-list');
     itineraryItemsListEl = document.getElementById('itinerary-items-list');
-    chatMessagesEl = document.getElementById('itinerary-chat-messages');
 
     // Presentation header elements
     presentationBackBtn = document.getElementById('presentation-back-btn');
@@ -234,28 +254,39 @@ function ensureDOMElements() {
     presentationEventLabel = document.getElementById('presentation-event-label');
     presentationHeaderShareBtn = document.getElementById('presentation-header-share-btn');
 
-    // Embedded chat elements
-    presentationChatContainer = document.getElementById('presentation-chat-container');
-    presentationMessageForm = document.getElementById('presentation-message-form');
-    presentationMessageInput = document.getElementById('presentation-message-input');
-    presentationUserNameInput = document.getElementById('presentation-chat-user-name');
-    presentationWhosHereCount = document.getElementById('presentation-whos-here-count');
-    presentationWhosHereList = document.getElementById('presentation-whos-here-list');
+    // Collaborators carousel and modal elements
+    collaboratorsCarouselPrev = document.querySelector('.collaborators-carousel-btn.carousel-prev');
+    collaboratorsCarouselNext = document.querySelector('.collaborators-carousel-btn.carousel-next');
+    collaboratorsExpandBtn = document.getElementById('collaborators-expand-btn');
+    collaboratorsModal = document.getElementById('collaborators-modal');
+    collaboratorsModalClose = document.getElementById('collaborators-modal-close');
+    collaboratorsModalList = document.getElementById('collaborators-modal-list');
 
-    // Floating chat button
+    // Floating chat button (kept for cleanup but no longer used)
     floatingChatBtn = document.getElementById('presentation-floating-chat-btn');
 
     // Accordion summary elements
     headerSummaryEl = document.getElementById('header-summary');
     itemsSummaryEl = document.getElementById('items-summary');
-    chatSummaryEl = document.getElementById('chat-summary');
+
+    // Accordion title element for the header section
+    headerAccordionTitleEl = document.getElementById('header-accordion-title');
+
+    // Search modal elements
+    presentationAddBtn = document.getElementById('presentation-add-btn');
+    presentationSearchModal = document.getElementById('presentation-search-modal');
+    presentationSearchClose = document.getElementById('presentation-search-close');
+    presentationSearchInput = document.getElementById('presentation-search-input');
+    presentationSearchClear = document.getElementById('presentation-search-clear');
+    presentationSearchResults = document.getElementById('presentation-search-results');
+    presentationRefinementChips = document.getElementById('presentation-refinement-chips');
+    presentationBrowseCategories = document.getElementById('presentation-browse-categories');
 
     console.log('[Accordion DEBUG] DOM elements after init:', {
         modal: !!modal,
         closeBtn: !!closeBtn,
         headerSummaryEl: !!headerSummaryEl,
-        itemsSummaryEl: !!itemsSummaryEl,
-        chatSummaryEl: !!chatSummaryEl
+        itemsSummaryEl: !!itemsSummaryEl
     });
 
     if (!modal) {
@@ -274,6 +305,11 @@ function renderEventHeader() {
 
     summaryEventNameEl.textContent = eventName;
     summaryEventNotesEl.textContent = goals;
+
+    // Set the accordion title to the plan name
+    if (headerAccordionTitleEl) {
+        headerAccordionTitleEl.textContent = eventName;
+    }
 
     if (dateValue) {
         const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);
@@ -313,11 +349,109 @@ function renderPresentationHeader() {
 
 function renderCollaborators() {
     const userProfiles = state.session.userProfiles;
+    const collaboratorsContainer = document.getElementById('itinerary-collaborators');
+
+    // Reset carousel index
+    carouselCurrentIndex = 0;
 
     if (userProfiles.size === 0) {
-        collaboratorsListEl.innerHTML = '<p class="no-collaborators">No collaborators yet</p>';
+        collaboratorsListEl.innerHTML = '<p class="no-collaborators">No team members yet</p>';
+        // Hide carousel controls and expand button when no collaborators
+        if (collaboratorsCarouselPrev) collaboratorsCarouselPrev.style.display = 'none';
+        if (collaboratorsCarouselNext) collaboratorsCarouselNext.style.display = 'none';
+        if (collaboratorsExpandBtn) collaboratorsExpandBtn.style.display = 'none';
         return;
     }
+
+    // Build all collaborator items
+    const collaboratorsArray = [];
+    userProfiles.forEach((name, odId) => {
+        const isCurrentUser = state.session.user.id === odId;
+        collaboratorsArray.push({ name, odId, isCurrentUser });
+    });
+
+    // Render all items (CSS will handle the carousel display)
+    let html = '';
+    collaboratorsArray.forEach((collab, index) => {
+        const badge = collab.isCurrentUser ? '<span class="collaborator-badge">You</span>' : '';
+        html += `
+            <div class="collaborator-item" data-index="${index}">
+                <span class="collaborator-avatar">${collab.name.charAt(0).toUpperCase()}</span>
+                <span class="collaborator-name">${collab.name}${badge}</span>
+            </div>
+        `;
+    });
+
+    collaboratorsListEl.innerHTML = html;
+
+    // Update carousel visibility based on number of collaborators
+    const totalCount = collaboratorsArray.length;
+    const showCarouselControls = totalCount > CAROUSEL_VISIBLE_COUNT;
+
+    if (collaboratorsCarouselPrev) {
+        collaboratorsCarouselPrev.style.display = showCarouselControls ? 'flex' : 'none';
+    }
+    if (collaboratorsCarouselNext) {
+        collaboratorsCarouselNext.style.display = showCarouselControls ? 'flex' : 'none';
+    }
+    if (collaboratorsExpandBtn) {
+        collaboratorsExpandBtn.style.display = totalCount > CAROUSEL_VISIBLE_COUNT ? 'block' : 'none';
+        collaboratorsExpandBtn.textContent = `Show all (${totalCount})`;
+    }
+
+    // Apply initial carousel state
+    updateCarouselVisibility();
+}
+
+// Update which collaborators are visible in the carousel
+function updateCarouselVisibility() {
+    if (!collaboratorsListEl) return;
+
+    const items = collaboratorsListEl.querySelectorAll('.collaborator-item');
+    const totalCount = items.length;
+
+    items.forEach((item, index) => {
+        // Show items within the visible window
+        if (index >= carouselCurrentIndex && index < carouselCurrentIndex + CAROUSEL_VISIBLE_COUNT) {
+            item.classList.add('visible');
+            item.classList.remove('hidden');
+        } else {
+            item.classList.remove('visible');
+            item.classList.add('hidden');
+        }
+    });
+
+    // Update prev/next button disabled states
+    if (collaboratorsCarouselPrev) {
+        collaboratorsCarouselPrev.disabled = carouselCurrentIndex === 0;
+    }
+    if (collaboratorsCarouselNext) {
+        collaboratorsCarouselNext.disabled = carouselCurrentIndex + CAROUSEL_VISIBLE_COUNT >= totalCount;
+    }
+}
+
+// Navigate carousel to previous set of collaborators
+function carouselPrev() {
+    if (carouselCurrentIndex > 0) {
+        carouselCurrentIndex--;
+        updateCarouselVisibility();
+    }
+}
+
+// Navigate carousel to next set of collaborators
+function carouselNext() {
+    const totalCount = collaboratorsListEl ? collaboratorsListEl.querySelectorAll('.collaborator-item').length : 0;
+    if (carouselCurrentIndex + CAROUSEL_VISIBLE_COUNT < totalCount) {
+        carouselCurrentIndex++;
+        updateCarouselVisibility();
+    }
+}
+
+// Show the expanded collaborators modal with full list
+function showCollaboratorsModal() {
+    if (!collaboratorsModal || !collaboratorsModalList) return;
+
+    const userProfiles = state.session.userProfiles;
 
     let html = '';
     userProfiles.forEach((name, odId) => {
@@ -331,7 +465,15 @@ function renderCollaborators() {
         `;
     });
 
-    collaboratorsListEl.innerHTML = html;
+    collaboratorsModalList.innerHTML = html;
+    collaboratorsModal.classList.add('active');
+}
+
+// Hide the expanded collaborators modal
+function hideCollaboratorsModal() {
+    if (collaboratorsModal) {
+        collaboratorsModal.classList.remove('active');
+    }
 }
 
 // Calculate score for a single reaction
@@ -564,6 +706,117 @@ function createMediaCarousel(images, recordId) {
     `;
 }
 
+/**
+ * Get the selected options text for display.
+ * Returns an array of objects with group name and selected option name.
+ * Supports both single-select (number) and multi-select (array) formats.
+ * @param {Object} record - The Airtable record
+ * @param {Object} itemInfo - The item info containing selections
+ * @returns {Array<{groupName: string, optionName: string}>} Array of selected options
+ */
+function getSelectedOptionsDisplay(record, itemInfo) {
+    const rawOptions = record.fields.Options;
+    if (!rawOptions) return [];
+
+    const groups = parseOptions(rawOptions);
+    if (!groups || groups.length === 0) return [];
+
+    const results = [];
+
+    // Handle new selections object format: { group0: optionIndex, group1: optionIndex, ... }
+    // Also supports multi-select arrays: { group0: [0, 2], group1: 1 }
+    if (itemInfo?.selections && typeof itemInfo.selections === 'object' && Object.keys(itemInfo.selections).length > 0) {
+        for (const [groupKey, optionValue] of Object.entries(itemInfo.selections)) {
+            const groupIndexMatch = groupKey.match(/^group(\d+)$/);
+            if (!groupIndexMatch) continue;
+
+            const groupIndex = parseInt(groupIndexMatch[1], 10);
+            const group = groups[groupIndex];
+            if (!group || !group.options) continue;
+
+            // Handle both single index and array of indices (multi-select)
+            const optionIndices = Array.isArray(optionValue) ? optionValue : [optionValue];
+
+            for (const optionIndex of optionIndices) {
+                const option = group.options[optionIndex];
+                if (option) {
+                    results.push({
+                        groupName: group.name || 'Options',
+                        optionName: option.name
+                    });
+                }
+            }
+        }
+        return results;
+    }
+
+    // Handle legacy single index format
+    if (typeof itemInfo?.selectedOptionIndex === 'number' && itemInfo.selectedOptionIndex >= 0) {
+        const flatOptions = flattenOptionGroups(groups);
+        const option = flatOptions[itemInfo.selectedOptionIndex];
+        if (option) {
+            // Find which group this option belongs to
+            let groupName = 'Options';
+            for (const group of groups) {
+                if (group.options && group.options.includes(option)) {
+                    groupName = group.name || 'Options';
+                    break;
+                }
+            }
+            results.push({
+                groupName: groupName,
+                optionName: option.name
+            });
+        }
+        return results;
+    }
+
+    // No selections - return empty (don't show defaults since they weren't explicitly selected)
+    return results;
+}
+
+// Generate summary text for an item when collapsed in accordion
+function generateItemSummary(record, itemInfo, type) {
+    // Use selections if available, fall back to selectedOptionIndex for legacy
+    const selectionsOrIndex = itemInfo?.selections || itemInfo?.selectedOptionIndex;
+    const price = getRecordPrice(record, selectionsOrIndex);
+    const quantity = itemInfo?.quantity || 1;
+    const typeLabel = type === 'favorites' ? 'Idea' : 'Confirmed';
+    const note = itemInfo?.note || '';
+
+    // Get category/subcategory if available
+    const category = record.fields.Category || '';
+    const subcategory = record.fields.Subcategory || '';
+
+    // Get selected options for display
+    const selectedOptions = getSelectedOptionsDisplay(record, itemInfo);
+
+    let summary = `<span class="item-summary-price">$${price.toFixed(2)}</span>`;
+
+    if (quantity > 1) {
+        summary += ` <span class="item-summary-qty">(×${quantity})</span>`;
+    }
+
+    // Show selected options if any
+    if (selectedOptions.length > 0) {
+        const optionNames = selectedOptions.map(opt => opt.optionName).join(', ');
+        summary += ` &bull; <span class="item-summary-options">${optionNames}</span>`;
+    }
+
+    // Add category hint if available (only if no options shown)
+    if (category && selectedOptions.length === 0) {
+        summary += ` &bull; <span class="item-summary-category">${category}</span>`;
+    }
+
+    // Show truncated note if present
+    if (note) {
+        const truncatedNote = note.length > 30 ? note.substring(0, 30) + '...' : note;
+        summary += ` &bull; <span class="item-summary-note">"${truncatedNote}"</span>`;
+    }
+
+    return summary;
+}
+
 async function renderItineraryItem(item, index) {
     const { recordId, type } = item;
     const record = state.records.all.find(r => r.id === recordId);
@@ -574,9 +827,14 @@ async function renderItineraryItem(item, index) {
 
     const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
     const name = record.fields.Name || 'Untitled Item';
-    const price = getRecordPrice(record, itemInfo?.selectedOptionIndex);
+    // Use selections if available, fall back to selectedOptionIndex for legacy
+    const selectionsOrIndex = itemInfo?.selections || itemInfo?.selectedOptionIndex;
+    const price = getRecordPrice(record, selectionsOrIndex);
     const quantity = itemInfo?.quantity || 1;
     const note = itemInfo?.note || '';
+
+    // Get selected options for expanded view
+    const selectedOptions = getSelectedOptionsDisplay(record, itemInfo);
 
     // Fetch images if not cached
     if (!itemImagesCache.has(recordId)) {
@@ -590,26 +848,53 @@ async function renderItineraryItem(item, index) {
     const typeLabel = type === 'favorites' ? 'Idea' : 'Confirmed';
     const typeClass = type === 'favorites' ? 'item-type-idea' : 'item-type-confirmed';
 
+    // Generate summary for collapsed state
+    const itemSummary = generateItemSummary(record, itemInfo, type);
+
+    // Generate selected options HTML for expanded view
+    let selectedOptionsHTML = '';
+    if (selectedOptions.length > 0) {
+        selectedOptionsHTML = `
+            <div class="itinerary-item-options">
+                ${selectedOptions.map(opt => `
+                    <span class="itinerary-item-option-tag">
+                        <span class="option-group-label">${opt.groupName}:</span> ${opt.optionName}
+                    </span>
+                `).join('')}
+            </div>
+        `;
+    }
+
     return `
-        <article class="itinerary-item itinerary-item-clickable" data-record-id="${recordId}" data-index="${index}">
-            <div class="itinerary-item-number">${index + 1}</div>
-            <div class="itinerary-item-content">
-                ${mediaCarouselHTML}
-                <div class="itinerary-item-details">
-                    <div class="itinerary-item-header">
-                        <h3 class="itinerary-item-name">${name}</h3>
-                        <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
-                    </div>
-                    <div class="itinerary-item-price-qty">
-                        <span class="itinerary-item-price">$${price.toFixed(2)}</span>
-                        ${quantity > 1 ? `<span class="itinerary-item-qty">× ${quantity}</span>` : ''}
-                    </div>
-                    ${note ? `
-                        <div class="itinerary-item-note">
-                            <strong>Note:</strong> ${note}
+        <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}">
+            <div class="item-accordion-header" data-record-id="${recordId}">
+                <div class="item-accordion-title-row">
+                    <h3 class="item-accordion-title">${name}</h3>
+                    <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
+                    <span class="item-accordion-icon"></span>
+                </div>
+                <p class="item-accordion-summary">${itemSummary}</p>
+            </div>
+            <div class="item-accordion-content itinerary-item-clickable">
+                <div class="itinerary-item-content">
+                    ${mediaCarouselHTML}
+                    <div class="itinerary-item-details">
+                        <div class="itinerary-item-price-qty">
+                            <span class="itinerary-item-price">$${price.toFixed(2)}</span>
+                            ${quantity > 1 ? `<span class="itinerary-item-qty">× ${quantity}</span>` : ''}
                         </div>
-                    ` : ''}
-                    <div class="itinerary-item-reactions" data-record-id="${recordId}"></div>
+                        ${selectedOptionsHTML}
+                        ${note ? `
+                            <div class="itinerary-item-note">
+                                <strong>Note:</strong> ${note}
+                            </div>
+                        ` : ''}
+                        <div class="itinerary-item-reactions" data-record-id="${recordId}"></div>
+                        <button class="itinerary-item-expand-btn" data-record-id="${recordId}" title="View full details">
+                            <span class="expand-btn-icon">↗</span>
+                            <span class="expand-btn-text">More Details</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </article>
@@ -622,7 +907,31 @@ async function renderAllItems() {
     const combinedList = [...locked, ...favorites]; // Confirmed items first, then ideas
 
     if (combinedList.length === 0) {
-        itineraryItemsListEl.innerHTML = '<p class="itinerary-empty">No items in your event plan yet.</p>';
+        // Show recommendations when no items exist
+        // All 4 pillars are shown as suggestions since there are no items
+        const allCategories = ["Activities", "Food & Drink", "Venues", "Extras"];
+        let emptyStateHTML = `
+            <div class="presentation-empty-state">
+                <p class="itinerary-empty-title">Start Building Your Event Plan</p>
+                <p class="itinerary-empty-subtitle">Add items from these categories to create your perfect event:</p>
+                <div class="presentation-suggestions">
+        `;
+
+        allCategories.forEach(cat => {
+            const filterTag = cat.toLowerCase().replace(/\s+/g, ' ');
+            emptyStateHTML += `
+                <button class="filter-btn presentation-suggestion-btn" data-category-filter="${filterTag}">
+                    + Add ${cat}
+                </button>
+            `;
+        });
+
+        emptyStateHTML += `
+                </div>
+            </div>
+        `;
+
+        itineraryItemsListEl.innerHTML = emptyStateHTML;
         return;
     }
 
@@ -1639,13 +1948,13 @@ function initializeFloatingChatButton() {
     if (!floatingChatBtn || !modal) return;
 
     const presentationContent = modal.querySelector('.presentation-content');
-    const chatSection = modal.querySelector('.itinerary-chat');
+    const chatContainer = modal.querySelector('#presentation-chat-container');
 
-    if (!presentationContent || !chatSection) return;
+    if (!presentationContent || !chatContainer) return;
 
     // Function to check if chat section is visible in viewport
     const isChatInView = () => {
-        const chatRect = chatSection.getBoundingClientRect();
+        const chatRect = chatContainer.getBoundingClientRect();
         const modalRect = modal.getBoundingClientRect();
         // Chat is "in view" if its top is visible within the modal
         return chatRect.top < modalRect.bottom - 100 && chatRect.bottom > modalRect.top;
@@ -1683,12 +1992,13 @@ function initializeFloatingChatButton() {
         } else {
             // Save current position and scroll to chat
             savedScrollPosition = presentationContent.scrollTop;
-            chatSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            chatContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-            // Also expand the chat accordion if it's collapsed
-            if (!accordionState.chat) {
-                const chatHeader = chatSection.querySelector('.itinerary-accordion-header');
-                if (chatHeader) chatHeader.click();
+            // Also expand the hosts-chat sub-accordion if it's collapsed
+            if (!accordionState['hosts-chat']) {
+                const hostsChatAccordion = modal.querySelector('.sub-accordion[data-section="hosts-chat"]');
+                const hostsChatHeader = hostsChatAccordion?.querySelector('.sub-accordion-header');
+                if (hostsChatHeader) hostsChatHeader.click();
             }
 
             // Focus the input after scrolling
@@ -1745,7 +2055,6 @@ function renderChatMessages() {
 
 // Generate summary for the event header section
 function generateHeaderSummary() {
-    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Untitled Event';
     const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     const collaboratorCount = state.session.userProfiles.size;
 
@@ -1755,14 +2064,16 @@ function generateHeaderSummary() {
         datePart = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
 
-    let summary = `<span class="summary-highlight">${eventName}</span>`;
+    let summaryParts = [];
     if (datePart) {
-        summary += ` on ${datePart}`;
+        summaryParts.push(datePart);
     }
     if (collaboratorCount > 0) {
         const hostWord = collaboratorCount === 1 ? 'host' : 'hosts';
-        summary += ` &bull; <span class="summary-count">${collaboratorCount}</span> ${hostWord}`;
+        summaryParts.push(`<span class="summary-count">${collaboratorCount}</span> ${hostWord}`);
     }
+
+    const summary = summaryParts.join(' &bull; ') || 'Event details';
 
     if (headerSummaryEl) {
         headerSummaryEl.innerHTML = summary;
@@ -1810,54 +2121,48 @@ function generateItemsSummary() {
     }
 }
 
-// Generate summary for the chat section
-function generateChatSummary() {
-    // Use the embedded presentation chat messages, not the sidebar chat
-    if (!chatMessagesEl) {
-        if (chatSummaryEl) {
-            chatSummaryEl.textContent = 'No discussion yet';
-        }
-        return;
+// Generate summary for the hosts-chat section (Hosts, Collaborators & Plan Chat)
+function generateHostsChatSummary() {
+    const collaboratorCount = state.session.userProfiles.size;
+
+    // Count messages from the chat
+    let messageCount = 0;
+    if (chatMessagesEl) {
+        const messages = chatMessagesEl.querySelectorAll('.message-wrapper');
+        messageCount = messages.length;
     }
 
-    const messages = chatMessagesEl.querySelectorAll('.message-wrapper');
-    const messageCount = messages.length;
+    let summary = '';
 
-    if (messageCount === 0) {
-        if (chatSummaryEl) {
-            chatSummaryEl.textContent = 'No messages yet';
-        }
-        return;
+    // Show host/collaborator count
+    if (collaboratorCount > 0) {
+        const hostWord = collaboratorCount === 1 ? 'host' : 'hosts';
+        summary = `<span class="summary-count">${collaboratorCount}</span> ${hostWord}`;
+    } else {
+        summary = 'No hosts yet';
     }
 
-    // Get unique participants
-    const participants = new Set();
-    messages.forEach(msg => {
-        const authorEl = msg.querySelector('.message-author');
-        if (authorEl) {
-            participants.add(authorEl.textContent.trim());
+    // Show message count
+    if (messageCount > 0) {
+        summary += ` &bull; <span class="summary-count">${messageCount}</span> message${messageCount !== 1 ? 's' : ''}`;
+
+        // Get preview of latest message
+        const messages = chatMessagesEl.querySelectorAll('.message-wrapper');
+        const lastMessage = messages[messages.length - 1];
+        const lastContent = lastMessage?.querySelector('.message-content');
+        if (lastContent) {
+            const text = lastContent.textContent.trim();
+            if (text) {
+                const truncated = text.length > 40 ? text.substring(0, 40) + '...' : text;
+                summary += ` &bull; "${truncated}"`;
+            }
         }
-    });
-
-    let summary = `<span class="summary-count">${messageCount}</span> message${messageCount !== 1 ? 's' : ''}`;
-
-    if (participants.size > 0) {
-        summary += ` from <span class="summary-count">${participants.size}</span> participant${participants.size !== 1 ? 's' : ''}`;
+    } else {
+        summary += ' &bull; No messages yet';
     }
 
-    // Get preview of latest message
-    const lastMessage = messages[messages.length - 1];
-    const lastContent = lastMessage?.querySelector('.message-content');
-    if (lastContent) {
-        const text = lastContent.textContent.trim();
-        if (text) {
-            const truncated = text.length > 50 ? text.substring(0, 50) + '...' : text;
-            summary += ` &bull; "${truncated}"`;
-        }
-    }
-
-    if (chatSummaryEl) {
-        chatSummaryEl.innerHTML = summary;
+    if (hostsChatSummaryEl) {
+        hostsChatSummaryEl.innerHTML = summary;
     }
 }
 
@@ -1866,7 +2171,11 @@ function toggleAccordion(section) {
     console.log('[Accordion DEBUG] toggleAccordion called with section:', section);
     console.log('[Accordion DEBUG] modal element:', modal);
 
-    const sectionEl = modal.querySelector(`.itinerary-accordion[data-section="${section}"]`);
+    // Check both main accordions and sub-accordions
+    let sectionEl = modal.querySelector(`.itinerary-accordion[data-section="${section}"]`);
+    if (!sectionEl) {
+        sectionEl = modal.querySelector(`.sub-accordion[data-section="${section}"]`);
+    }
     console.log('[Accordion DEBUG] Found section element:', sectionEl);
 
     if (!sectionEl) {
@@ -1890,6 +2199,39 @@ function toggleAccordion(section) {
     log('Presentation', `Accordion ${section} ${accordionState[section] ? 'expanded' : 'collapsed'}`);
 }
 
+// Toggle individual item accordion
+function toggleItemAccordion(itemElement) {
+    if (!itemElement) return;
+
+    const isExpanded = itemElement.classList.contains('expanded');
+
+    if (isExpanded) {
+        itemElement.classList.remove('expanded');
+    } else {
+        itemElement.classList.add('expanded');
+    }
+
+    log('Presentation', `Item accordion ${isExpanded ? 'collapsed' : 'expanded'} for record ${itemElement.dataset.recordId}`);
+}
+
+// Handle item accordion header clicks
+function handleItemAccordionClick(e) {
+    // Check if clicking on the item accordion header specifically
+    const itemAccordionHeader = e.target.closest('.item-accordion-header');
+    if (!itemAccordionHeader) return;
+
+    // Don't trigger accordion on interactive elements (buttons, links, etc.)
+    if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.reaction-btn')) {
+        return;
+    }
+
+    const itemElement = itemAccordionHeader.closest('.item-accordion');
+    if (itemElement) {
+        e.stopPropagation(); // Prevent triggering parent click handlers
+        toggleItemAccordion(itemElement);
+    }
+}
+
 // Initialize accordion states and update UI
 function initializeAccordions() {
     console.log('[Accordion DEBUG] initializeAccordions called');
@@ -1898,7 +2240,11 @@ function initializeAccordions() {
     // Set all sections to expanded state initially
     Object.keys(accordionState).forEach(section => {
         accordionState[section] = true;
-        const sectionEl = modal.querySelector(`.itinerary-accordion[data-section="${section}"]`);
+        // Check for main accordions first, then sub-accordions
+        let sectionEl = modal.querySelector(`.itinerary-accordion[data-section="${section}"]`);
+        if (!sectionEl) {
+            sectionEl = modal.querySelector(`.sub-accordion[data-section="${section}"]`);
+        }
         console.log(`[Accordion DEBUG] Initializing section "${section}":`, sectionEl);
         if (sectionEl) {
             sectionEl.classList.add('expanded');
@@ -1908,10 +2254,9 @@ function initializeAccordions() {
         }
     });
 
-    // Generate all summaries
+    // Generate all summaries (no longer includes hosts-chat summary)
     generateHeaderSummary();
     generateItemsSummary();
-    generateChatSummary();
 
     console.log('[Accordion DEBUG] initializeAccordions completed');
 }
@@ -1983,10 +2328,11 @@ function handleReactionClick(e) {
 }
 
 function handleItemClick(e) {
-    // Don't trigger if clicking on reactions, thumbnails, or other interactive elements
+    // Don't trigger if clicking on reactions, thumbnails, expand button, or other interactive elements
     if (e.target.closest('.reaction-btn') ||
         e.target.closest('.itinerary-thumbnail') ||
-        e.target.closest('.itinerary-item-reactions')) {
+        e.target.closest('.itinerary-item-reactions') ||
+        e.target.closest('.itinerary-item-expand-btn')) {
         return;
     }
 
@@ -2004,6 +2350,53 @@ function handleItemClick(e) {
 
     log('Presentation', `Opening detail modal for: ${record.fields.Name}`);
     showDetailModal(record);
+}
+
+// Handle clicks on expand button to show full item details
+function handleExpandButtonClick(e) {
+    const expandBtn = e.target.closest('.itinerary-item-expand-btn');
+    if (!expandBtn) return;
+
+    e.stopPropagation();
+    e.preventDefault();
+
+    const recordId = expandBtn.dataset.recordId;
+    if (!recordId) return;
+
+    const record = state.records.all.find(r => r.id === recordId);
+    if (!record) {
+        log('Presentation', `Record not found for ID: ${recordId}`);
+        return;
+    }
+
+    log('Presentation', `Expand button clicked - opening detail modal for: ${record.fields.Name}`);
+    showDetailModal(record);
+}
+
+// Handle clicks on suggestion buttons (empty state recommendations)
+function handleSuggestionClick(e) {
+    const suggestionBtn = e.target.closest('.presentation-suggestion-btn');
+    if (!suggestionBtn) return;
+
+    e.stopPropagation();
+    const categoryToFilter = suggestionBtn.dataset.categoryFilter;
+    if (!categoryToFilter) return;
+
+    const normalizedCategory = categoryToFilter.toLowerCase().replace(/\s+/g, ' ');
+
+    log('Presentation', `Suggestion clicked. Filtering for: ${categoryToFilter}`);
+
+    // Close the presentation view and navigate to the filtered catalog
+    hidePresentationView();
+    updateUrl({ category: normalizedCategory, subcategory: null, view: null });
+
+    // Trigger filter update via the global function
+    if (typeof window.applyFiltersAndSort === 'function') {
+        setTimeout(() => {
+            window.applyFiltersAndSort(window.imageCache);
+            document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+    }
 }
 
 function handleKeyDown(e) {
@@ -2024,13 +2417,6 @@ export async function showPresentationView(listType, startRecordId = null) {
     }
     console.log('[Accordion DEBUG] ensureDOMElements succeeded');
 
-    // Check if there are any items
-    const hasItems = state.cart.items.size > 0 || state.cart.lockedItems.size > 0;
-    if (!hasItems) {
-        alert('There are no items in your lists to present.');
-        return;
-    }
-
     // Mark that catalog will need rendering when exiting presentation view
     // (since we skip catalog rendering while in presentation view)
     catalogNeedsRender = true;
@@ -2045,9 +2431,8 @@ export async function showPresentationView(listType, startRecordId = null) {
     renderEventHeader();
     renderCollaborators();
     await renderAllItems();
-    renderChatMessages(); // Sets loading state
 
-    // Initialize accordions and generate summaries (chat summary will be updated after chat loads)
+    // Initialize accordions and generate summaries
     initializeAccordions();
 
     // Show modal
@@ -2058,15 +2443,6 @@ export async function showPresentationView(listType, startRecordId = null) {
 
     // Start the background animation
     startPresentationBackgroundAnimation();
-
-    // Initialize the embedded chat (loads messages and sets up real-time connection)
-    await initializePresentationChat();
-
-    // Update chat summary after messages are loaded
-    generateChatSummary();
-
-    // Initialize the floating chat button
-    initializeFloatingChatButton();
 
     // Scroll to specific item if provided
     if (startRecordId) {
@@ -2087,11 +2463,8 @@ export function hidePresentationView() {
     // Stop the background animation
     stopPresentationBackgroundAnimation();
 
-    // Clean up the presentation chat connection
-    cleanupPresentationChat();
-
-    // Clean up the floating chat button
-    cleanupFloatingChatButton();
+    // Hide collaborators modal if open
+    hideCollaboratorsModal();
 
     modal.classList.remove('active');
     modal.style.display = 'none';
@@ -2131,11 +2504,13 @@ export function setupPresentationEventListeners() {
         hidePresentationView();
     });
 
-    // Presentation header back button
+    // Presentation header hamburger button (opens WTF Plans panel)
     if (presentationBackBtn) {
         presentationBackBtn.addEventListener('click', () => {
             updateUrl({ view: null });
             hidePresentationView();
+            // Open WTF Plans panel after closing presentation view
+            showWtfPlansPanel();
         });
     }
 
@@ -2163,8 +2538,8 @@ export function setupPresentationEventListeners() {
     console.log('[Accordion DEBUG] setupPresentationEventListeners - scrollContainer:', scrollContainer);
 
     if (scrollContainer) {
-        // Debug: Log all accordion headers found
-        const accordionHeaders = scrollContainer.querySelectorAll('.itinerary-accordion-header');
+        // Debug: Log all accordion headers found (both main and sub)
+        const accordionHeaders = scrollContainer.querySelectorAll('.itinerary-accordion-header, .sub-accordion-header');
         console.log('[Accordion DEBUG] Found accordion headers:', accordionHeaders.length);
         accordionHeaders.forEach((header, index) => {
             console.log(`[Accordion DEBUG] Header ${index}:`, header, 'data-section:', header.dataset.section);
@@ -2176,8 +2551,12 @@ export function setupPresentationEventListeners() {
             console.log('[Accordion DEBUG] Target tagName:', e.target.tagName);
             console.log('[Accordion DEBUG] Target classList:', e.target.classList.toString());
 
-            const accordionHeader = e.target.closest('.itinerary-accordion-header');
-            console.log('[Accordion DEBUG] Closest .itinerary-accordion-header:', accordionHeader);
+            // Check for both main and sub accordion headers
+            let accordionHeader = e.target.closest('.itinerary-accordion-header');
+            if (!accordionHeader) {
+                accordionHeader = e.target.closest('.sub-accordion-header');
+            }
+            console.log('[Accordion DEBUG] Closest accordion header:', accordionHeader);
 
             if (!accordionHeader) {
                 console.log('[Accordion DEBUG] No accordion header found - ignoring click');
@@ -2185,8 +2564,8 @@ export function setupPresentationEventListeners() {
             }
 
             // Don't trigger accordion on interactive elements inside
-            if (e.target.closest('button') || e.target.closest('a')) {
-                console.log('[Accordion DEBUG] Clicked on button/link inside header - ignoring');
+            if (e.target.closest('button') || e.target.closest('a') || e.target.closest('input')) {
+                console.log('[Accordion DEBUG] Clicked on button/link/input inside header - ignoring');
                 return;
             }
 
@@ -2211,8 +2590,17 @@ export function setupPresentationEventListeners() {
     // Handle reaction clicks
     itineraryItemsListEl.addEventListener('click', handleReactionClick);
 
+    // Handle item accordion header clicks (for per-item collapse/expand)
+    itineraryItemsListEl.addEventListener('click', handleItemAccordionClick);
+
     // Handle item clicks to open detail modal
     itineraryItemsListEl.addEventListener('click', handleItemClick);
+
+    // Handle expand button clicks to show full item details
+    itineraryItemsListEl.addEventListener('click', handleExpandButtonClick);
+
+    // Handle suggestion button clicks (for empty state recommendations)
+    itineraryItemsListEl.addEventListener('click', handleSuggestionClick);
 
     // Share button
     shareBtn.addEventListener('click', (e) => {
@@ -2228,4 +2616,710 @@ export function setupPresentationEventListeners() {
             }, 1500);
         });
     });
+
+    // Collaborators carousel navigation
+    if (collaboratorsCarouselPrev) {
+        collaboratorsCarouselPrev.addEventListener('click', carouselPrev);
+    }
+    if (collaboratorsCarouselNext) {
+        collaboratorsCarouselNext.addEventListener('click', carouselNext);
+    }
+
+    // Collaborators expand button (show modal with full list)
+    if (collaboratorsExpandBtn) {
+        collaboratorsExpandBtn.addEventListener('click', showCollaboratorsModal);
+    }
+
+    // Collaborators modal close button
+    if (collaboratorsModalClose) {
+        collaboratorsModalClose.addEventListener('click', hideCollaboratorsModal);
+    }
+
+    // Close collaborators modal on backdrop click
+    if (collaboratorsModal) {
+        collaboratorsModal.addEventListener('click', (e) => {
+            if (e.target === collaboratorsModal) {
+                hideCollaboratorsModal();
+            }
+        });
+    }
+
+    // Search modal event listeners
+    setupSearchModalEventListeners();
 }
+
+// ============================================
+// PRESENTATION SEARCH MODAL FUNCTIONALITY
+// ============================================
+
+/**
+ * Sets up event listeners for the search modal
+ */
+function setupSearchModalEventListeners() {
+    // Add button opens search modal
+    if (presentationAddBtn) {
+        presentationAddBtn.addEventListener('click', openSearchModal);
+    }
+
+    // Close button
+    if (presentationSearchClose) {
+        presentationSearchClose.addEventListener('click', closeSearchModal);
+    }
+
+    // Close on backdrop click
+    if (presentationSearchModal) {
+        presentationSearchModal.addEventListener('click', (e) => {
+            if (e.target === presentationSearchModal) {
+                closeSearchModal();
+            }
+        });
+    }
+
+    // Search input handler
+    if (presentationSearchInput) {
+        presentationSearchInput.addEventListener('input', handleSearchInput);
+        presentationSearchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeSearchModal();
+            }
+        });
+    }
+
+    // Clear search button
+    if (presentationSearchClear) {
+        presentationSearchClear.addEventListener('click', () => {
+            presentationSearchInput.value = '';
+            presentationSearchClear.style.display = 'none';
+            showInitialSearchState();
+            clearPresentationRefinementChips();
+        });
+    }
+
+    // Escape key to close modal
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && presentationSearchModal?.classList.contains('active')) {
+            closeSearchModal();
+        }
+    });
+}
+
+/**
+ * Opens the search modal
+ */
+function openSearchModal() {
+    if (!presentationSearchModal) return;
+
+    presentationSearchModal.classList.add('active');
+    document.body.classList.add('search-modal-open');
+
+    // Focus search input
+    setTimeout(() => {
+        presentationSearchInput?.focus();
+    }, 100);
+
+    // Initialize with browse categories
+    showInitialSearchState();
+
+    log('Presentation', 'Search modal opened');
+}
+
+/**
+ * Closes the search modal
+ */
+function closeSearchModal() {
+    if (!presentationSearchModal) return;
+
+    presentationSearchModal.classList.remove('active');
+    document.body.classList.remove('search-modal-open');
+
+    // Cancel any pending search
+    if (presentationSearchController) {
+        presentationSearchController.abort();
+        presentationSearchController = null;
+    }
+
+    // Clear search state
+    if (presentationSearchInput) {
+        presentationSearchInput.value = '';
+    }
+    if (presentationSearchClear) {
+        presentationSearchClear.style.display = 'none';
+    }
+    clearPresentationRefinementChips();
+
+    log('Presentation', 'Search modal closed');
+}
+
+/**
+ * Shows the initial search state with browse categories
+ */
+function showInitialSearchState() {
+    if (!presentationSearchResults || !presentationBrowseCategories) return;
+
+    // Get unique categories from catalog
+    const categories = new Set();
+    state.records.all.forEach(record => {
+        if (record.fields.Category) {
+            categories.add(record.fields.Category);
+        }
+    });
+
+    // Build category buttons
+    presentationBrowseCategories.innerHTML = '';
+    categories.forEach(category => {
+        const btn = document.createElement('button');
+        btn.className = 'presentation-category-btn';
+        btn.textContent = category;
+        btn.addEventListener('click', () => {
+            presentationSearchInput.value = category;
+            handleSearchInput({ target: presentationSearchInput });
+        });
+        presentationBrowseCategories.appendChild(btn);
+    });
+
+    // Show initial state
+    presentationSearchResults.innerHTML = `
+        <div class="presentation-search-initial">
+            <p class="presentation-search-hint">Search for something specific, or browse popular categories below</p>
+            <div class="presentation-browse-categories" id="presentation-browse-categories-inner">
+                ${presentationBrowseCategories.innerHTML}
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Handles search input changes with debouncing
+ */
+function handleSearchInput(e) {
+    const searchTerm = e.target.value.trim();
+
+    // Show/hide clear button
+    if (presentationSearchClear) {
+        presentationSearchClear.style.display = searchTerm ? 'flex' : 'none';
+    }
+
+    // Clear previous debounce timer
+    if (presentationSearchDebounceTimer) {
+        clearTimeout(presentationSearchDebounceTimer);
+    }
+
+    // If search is cleared, show initial state
+    if (!searchTerm) {
+        showInitialSearchState();
+        clearPresentationRefinementChips();
+        return;
+    }
+
+    // Debounce the search
+    presentationSearchDebounceTimer = setTimeout(() => {
+        performPresentationSearch(searchTerm);
+    }, PRESENTATION_SEARCH_DEBOUNCE);
+}
+
+/**
+ * Performs the hybrid search (catalog + AI)
+ */
+async function performPresentationSearch(searchTerm) {
+    if (!presentationSearchResults) return;
+
+    // Abort any existing search
+    if (presentationSearchController) {
+        presentationSearchController.abort();
+    }
+    presentationSearchController = new AbortController();
+    const signal = presentationSearchController.signal;
+
+    log('Presentation', `Performing search for: "${searchTerm}"`);
+
+    // Filter catalog items
+    const searchLower = searchTerm.toLowerCase();
+    const catalogMatches = state.records.all.filter(record => {
+        const name = (record.fields.Name || '').toLowerCase();
+        const description = (record.fields.Description || '').toLowerCase();
+        const category = (record.fields.Category || '').toLowerCase();
+        const tags = (record.fields.Tags || []).join(' ').toLowerCase();
+
+        return name.includes(searchLower) ||
+               description.includes(searchLower) ||
+               category.includes(searchLower) ||
+               tags.includes(searchLower);
+    }).slice(0, 15); // Limit to 15 catalog matches
+
+    // Clear results and show catalog results first
+    presentationSearchResults.innerHTML = '';
+
+    if (catalogMatches.length > 0) {
+        const catalogSection = await createPresentationResultSection(
+            `Catalog Matches`,
+            'From our curated catalog',
+            catalogMatches,
+            false
+        );
+        presentationSearchResults.appendChild(catalogSection);
+    }
+
+    // Show AI loading section
+    const aiLoadingSection = document.createElement('div');
+    aiLoadingSection.className = 'presentation-search-loading';
+    aiLoadingSection.innerHTML = `
+        <div class="presentation-search-spinner"></div>
+        <span class="presentation-search-loading-text">Finding more options with AI...</span>
+    `;
+    presentationSearchResults.appendChild(aiLoadingSection);
+
+    // Fetch AI results
+    try {
+        const response = await fetch('/.netlify/functions/process-weblink', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: searchTerm }),
+            signal: signal
+        });
+
+        if (!response.ok) {
+            throw new Error(`API returned status ${response.status}`);
+        }
+
+        if (signal.aborted) return;
+
+        const aiData = await response.json();
+        log('Presentation', 'AI Search Response:', aiData);
+
+        // Remove loading indicator
+        aiLoadingSection.remove();
+
+        // Handle relatedKeywords for refinement chips
+        if (aiData.relatedKeywords && Array.isArray(aiData.relatedKeywords)) {
+            renderPresentationRefinementChips(aiData.relatedKeywords);
+        }
+
+        // Create AI records from the response
+        const aiRecords = [];
+        const timestamp = Date.now();
+
+        /**
+         * Helper function to build a comprehensive AI record with all business details
+         * Matches the format used in events.js for catalog search AI results
+         */
+        const buildAIRecord = (source, recordId, searchTermForTags) => {
+            // Build comprehensive Rankings JSON with AI profile scores
+            const rankingsData = {
+                "profileSource": "ai_presentation_search",
+                "Tags": [searchTermForTags.toLowerCase(), "ai-generated", "partner activity"]
+            };
+            // Add activity profile scores if provided by AI
+            const sourceRankings = source.Rankings || source.rankings;
+            if (sourceRankings && typeof sourceRankings === 'object') {
+                rankingsData.Fun = sourceRankings.Fun || 0;
+                rankingsData.Social = sourceRankings.Social || 0;
+                rankingsData.Active = sourceRankings.Active || 0;
+                rankingsData.Creative = sourceRankings.Creative || 0;
+                rankingsData.Learning = sourceRankings.Learning || 0;
+                rankingsData.Relaxing = sourceRankings.Relaxing || 0;
+            }
+
+            // Build location details with availability and address
+            let locationDetails = '';
+            const location = source.Location || source.location || source.Address || source.address || '';
+            const availability = source.Availability || source.availability || source.Hours || source.hours || source.OperatingHours || '';
+            const phone = source.Phone || source.phone || '';
+            const email = source.Email || source.email || '';
+
+            if (location) locationDetails += location;
+            if (availability) {
+                locationDetails += locationDetails ? '\n\n' : '';
+                locationDetails += `Hours: ${availability}`;
+            }
+            if (phone) {
+                locationDetails += locationDetails ? '\n\n' : '';
+                locationDetails += `Phone: ${phone}`;
+            }
+            if (email) {
+                locationDetails += locationDetails ? '\n\n' : '';
+                locationDetails += `Email: ${email}`;
+            }
+
+            // Build "Good to Know" / Additional Information with lead time, website, and extra info
+            let additionalInfo = '';
+            const leadTime = source.LeadTime || source.leadTime || '';
+            const goodToKnow = source.GoodToKnow || source.goodToKnow || '';
+            const website = source.Website || source.website || '';
+            const duration = source.Duration || source.duration || '';
+            const capacity = source.Capacity || source.capacity || '';
+
+            if (leadTime) additionalInfo += `Booking: ${leadTime}`;
+            if (duration) {
+                additionalInfo += additionalInfo ? '\n\n' : '';
+                additionalInfo += `Duration: ${duration}`;
+            }
+            if (capacity) {
+                additionalInfo += additionalInfo ? '\n\n' : '';
+                additionalInfo += `Capacity: ${capacity}`;
+            }
+            if (goodToKnow) {
+                additionalInfo += additionalInfo ? '\n\n' : '';
+                additionalInfo += goodToKnow;
+            }
+            if (website) {
+                additionalInfo += additionalInfo ? '\n\n' : '';
+                additionalInfo += `Website: ${website}`;
+            }
+
+            // Ensure price is a number - handle all edge cases including objects/arrays
+            let price = source.Price || source.price || 0;
+            if (typeof price === 'object') {
+                // Handle cases where price might be an object or array
+                price = 0;
+            } else if (typeof price === 'string') {
+                price = parseFloat(price.replace(/[^0-9.-]/g, '')) || 0;
+            } else if (typeof price !== 'number') {
+                price = 0;
+            }
+            // Ensure we have a valid number
+            price = isNaN(price) ? 0 : price;
+
+            return {
+                id: recordId,
+                fields: {
+                    Name: source.Name || source.name || 'AI Suggestion',
+                    Description: source.Description || source.description || '',
+                    Price: price,
+                    Category: source.Category || source.category || searchTermForTags,
+                    'Image URL': source.imageUrl || source['Image URL'] || '',
+                    ServiceType: source.ServiceType || 'Partner Activity',
+                    'Item Type': 'Bookable Item',
+                    Status: 'Available',
+                    'Pricing Type': source.PricingType || source.pricingType || 'per person',
+                    // Business details for modal display
+                    Duration: duration || null,
+                    Capacity: capacity || null,
+                    'Location Details': locationDetails || null,
+                    'Additional Information': additionalInfo || null,
+                    // Rankings as JSON string (required by modal.js parsing)
+                    Rankings: JSON.stringify(rankingsData),
+                    // Keep raw fields for backwards compatibility
+                    Location: location,
+                    Availability: availability,
+                    Website: website,
+                    LeadTime: leadTime,
+                    GoodToKnow: goodToKnow,
+                    Phone: phone,
+                    Email: email,
+                    Hours: availability,
+                    // Null fields to match events.js structure
+                    Options: null, 'Parent Item': null, 'Headcount min': null,
+                    'Media Tags': source.ImageKeywords || source.imageKeywords || null,
+                    'Curated Images': null, Subcategories: null,
+                    'iCal URL': null, 'Lead Time (days)': null, RSVPs: null, Date: null,
+                    'Chat Enabled': false
+                },
+                isAI: true
+            };
+        };
+
+        if (aiData.itemType === 'Grouping' && aiData.children && Array.isArray(aiData.children)) {
+            aiData.children.forEach((child, index) => {
+                const childId = `ai-presentation-${timestamp}-${index}`;
+                const record = buildAIRecord(child, childId, searchTerm);
+                aiRecords.push(record);
+            });
+        } else if (aiData.Name || aiData.name) {
+            // Single AI result
+            const record = buildAIRecord(aiData, `ai-presentation-${timestamp}-0`, searchTerm);
+            aiRecords.push(record);
+        }
+
+        // Display AI results
+        if (aiRecords.length > 0) {
+            const aiSection = await createPresentationResultSection(
+                'AI Discoveries',
+                `Suggested options for "${searchTerm}"`,
+                aiRecords,
+                true
+            );
+            presentationSearchResults.appendChild(aiSection);
+        }
+
+        // Show no results message if nothing found
+        if (catalogMatches.length === 0 && aiRecords.length === 0) {
+            presentationSearchResults.innerHTML = `
+                <div class="presentation-no-results">
+                    <div class="presentation-no-results-icon">🔍</div>
+                    <p class="presentation-no-results-text">No results found for "${searchTerm}"</p>
+                    <p class="presentation-no-results-hint">Try a different search term or browse categories</p>
+                </div>
+            `;
+        }
+
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            log('Presentation', 'Search was aborted');
+            return;
+        }
+
+        log('Presentation', `AI search error: ${error.message}`);
+        aiLoadingSection.remove();
+
+        // Show error state if no catalog matches either
+        if (catalogMatches.length === 0) {
+            presentationSearchResults.innerHTML = `
+                <div class="presentation-no-results">
+                    <div class="presentation-no-results-icon">⚠️</div>
+                    <p class="presentation-no-results-text">Search encountered an issue</p>
+                    <p class="presentation-no-results-hint">Please try again or browse categories</p>
+                </div>
+            `;
+        }
+    }
+}
+
+/**
+ * Creates a result section with carousel
+ */
+async function createPresentationResultSection(title, subtitle, records, isAI = false) {
+    const section = document.createElement('div');
+    section.className = `presentation-result-section${isAI ? ' ai-section' : ''}`;
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'presentation-result-header';
+    header.innerHTML = `
+        <h4 class="presentation-result-title">${title}</h4>
+        ${isAI ? '<span class="presentation-ai-badge">AI Discovery</span>' : ''}
+        <span class="presentation-result-count">${records.length} items</span>
+        ${subtitle ? `<p class="presentation-result-subtitle">${subtitle}</p>` : ''}
+    `;
+    section.appendChild(header);
+
+    // Carousel wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'presentation-results-carousel-wrapper';
+
+    // Carousel container
+    const carousel = document.createElement('div');
+    carousel.className = 'presentation-results-carousel';
+
+    // Create cards for each record
+    for (const record of records) {
+        const card = createPresentationResultCard(record, isAI);
+        carousel.appendChild(card);
+    }
+
+    wrapper.appendChild(carousel);
+
+    // Navigation buttons
+    const leftNav = document.createElement('button');
+    leftNav.className = 'presentation-carousel-nav left';
+    leftNav.innerHTML = '◄';
+    leftNav.setAttribute('aria-label', 'Scroll left');
+    leftNav.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cardWidth = carousel.querySelector('.presentation-result-card')?.offsetWidth || 240;
+        carousel.scrollBy({ left: -(cardWidth + 16), behavior: 'smooth' });
+    });
+
+    const rightNav = document.createElement('button');
+    rightNav.className = 'presentation-carousel-nav right';
+    rightNav.innerHTML = '►';
+    rightNav.setAttribute('aria-label', 'Scroll right');
+    rightNav.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cardWidth = carousel.querySelector('.presentation-result-card')?.offsetWidth || 240;
+        carousel.scrollBy({ left: cardWidth + 16, behavior: 'smooth' });
+    });
+
+    wrapper.appendChild(leftNav);
+    wrapper.appendChild(rightNav);
+
+    // Update nav visibility based on scroll
+    const updateNavVisibility = () => {
+        const hasOverflow = carousel.scrollWidth > carousel.clientWidth;
+        if (hasOverflow) {
+            wrapper.classList.add('has-overflow');
+            leftNav.style.opacity = carousel.scrollLeft <= 0 ? '0.3' : '';
+            leftNav.style.pointerEvents = carousel.scrollLeft <= 0 ? 'none' : '';
+            const atEnd = carousel.scrollLeft + carousel.clientWidth >= carousel.scrollWidth - 5;
+            rightNav.style.opacity = atEnd ? '0.3' : '';
+            rightNav.style.pointerEvents = atEnd ? 'none' : '';
+        } else {
+            wrapper.classList.remove('has-overflow');
+        }
+    };
+
+    carousel.addEventListener('scroll', updateNavVisibility);
+    setTimeout(updateNavVisibility, 100);
+
+    section.appendChild(wrapper);
+    return section;
+}
+
+/**
+ * Creates a single result card
+ */
+function createPresentationResultCard(record, isAI = false) {
+    const card = document.createElement('div');
+    card.className = 'presentation-result-card';
+    card.dataset.recordId = record.id;
+    if (isAI) {
+        card.dataset.isAi = 'true';
+    }
+
+    const fields = record.fields;
+    const imageUrl = fields['Image URL'] || fields.imageUrl || '';
+    const name = fields.Name || 'Unnamed Item';
+    // Use centralized getRecordPrice for consistent price handling across all views
+    const price = getRecordPrice(record);
+    const category = fields.Category || '';
+
+    // Check if already in plan (check cart.items, cart.lockedItems, and likedItemIds)
+    const isInPlan = state.cart.lockedItems.has(record.id) ||
+                     state.cart.items.has(record.id) ||
+                     state.session.user.likedItemIds.has(record.id);
+
+    card.innerHTML = `
+        <div class="presentation-result-card-image${isAI ? ' ai-item' : ''}" style="${imageUrl ? `background-image: url('${imageUrl}')` : ''}"></div>
+        <div class="presentation-result-card-content">
+            <h5 class="presentation-result-card-name">${name}</h5>
+            <div class="presentation-result-card-meta">
+                <span class="presentation-result-card-price${isAI ? ' estimate' : ''}">
+                    ${price > 0 ? `$${price.toFixed(2)}${isAI ? ' (Est.)' : ''}` : 'Price varies'}
+                </span>
+                ${category ? `<span class="presentation-result-card-category">${category}</span>` : ''}
+            </div>
+            <button class="presentation-quick-add-btn${isInPlan ? ' added' : ''}" data-record-id="${record.id}">
+                ${isInPlan ? '✓ Added' : '+ Quick Add'}
+            </button>
+        </div>
+    `;
+
+    // Click on card (not button) opens detail modal
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('.presentation-quick-add-btn')) return;
+        handleCardClick(record, isAI);
+    });
+
+    // Quick add button handler
+    const quickAddBtn = card.querySelector('.presentation-quick-add-btn');
+    quickAddBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleQuickAdd(record, quickAddBtn, isAI);
+    });
+
+    return card;
+}
+
+/**
+ * Handles clicking on a result card to show detail modal
+ */
+function handleCardClick(record, isAI) {
+    log('Presentation', `Card clicked: ${record.fields.Name}, isAI: ${isAI}`);
+
+    if (isAI) {
+        // For AI items, create a temporary record in state for the modal to use
+        const existingIndex = state.records.all.findIndex(r => r.id === record.id);
+        if (existingIndex === -1) {
+            state.records.all.push(record);
+        }
+    }
+
+    // Close search modal and show detail modal
+    closeSearchModal();
+    showDetailModal(record);
+}
+
+/**
+ * Handles quick add button click
+ */
+async function handleQuickAdd(record, button, isAI) {
+    if (button.classList.contains('added')) return;
+
+    log('Presentation', `Quick adding: ${record.fields.Name}`);
+
+    button.disabled = true;
+    button.textContent = 'Adding...';
+
+    try {
+        if (isAI) {
+            // For AI items, we need to create a proper record first
+            const existingIndex = state.records.all.findIndex(r => r.id === record.id);
+            if (existingIndex === -1) {
+                state.records.all.push(record);
+            }
+        }
+
+        // Add to cart.items (ideas list) so it appears in presentation view and catalog event plan panel
+        if (!state.cart.items.has(record.id) && !state.cart.lockedItems.has(record.id)) {
+            const itemInfo = {
+                quantity: 1,
+                selectedOptionIndex: 0,
+                selections: {},
+                note: ''
+            };
+            state.cart.items.set(record.id, itemInfo);
+            log('Presentation', `Added ${record.fields.Name} to cart.items (ideas)`);
+        }
+
+        // Also add to liked items for authenticated users (persists across sessions)
+        if (state.session.user.isAuthenticated && !state.session.user.likedItemIds.has(record.id)) {
+            state.session.user.likedItemIds.add(record.id);
+        }
+
+        // Trigger save to persist changes
+        await triggerSave();
+
+        // Update the presentation view items list in real-time
+        await renderAllItems();
+
+        // Update the catalog view's event plan panel and ideas carousel
+        await updateEventPlanSection();
+        await updateIdeasCarousel();
+
+        // Update button state
+        button.classList.add('added');
+        button.textContent = '✓ Added';
+        button.disabled = false;
+
+        log('Presentation', `Successfully added ${record.fields.Name} to plan`);
+
+    } catch (error) {
+        log('Presentation', `Error adding item: ${error.message}`);
+        button.disabled = false;
+        button.textContent = '+ Quick Add';
+    }
+}
+
+/**
+ * Renders refinement chips for AI suggestions
+ */
+function renderPresentationRefinementChips(keywords) {
+    if (!presentationRefinementChips || !keywords || keywords.length === 0) return;
+
+    presentationRefinementChips.innerHTML = '';
+
+    keywords.slice(0, 6).forEach(keyword => {
+        const chip = document.createElement('button');
+        chip.className = 'presentation-refinement-chip';
+        chip.textContent = keyword;
+        chip.title = `Search for "${keyword}"`;
+
+        chip.addEventListener('click', () => {
+            presentationSearchInput.value = keyword;
+            handleSearchInput({ target: presentationSearchInput });
+        });
+
+        presentationRefinementChips.appendChild(chip);
+    });
+}
+
+/**
+ * Clears refinement chips
+ */
+function clearPresentationRefinementChips() {
+    if (presentationRefinementChips) {
+        presentationRefinementChips.innerHTML = '';
+    }
+}
+
+// Export the search modal functions for external use if needed
+export { openSearchModal as openPresentationSearchModal, closeSearchModal as closePresentationSearchModal };

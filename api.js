@@ -3872,3 +3872,100 @@ export async function createNewSession(storeId, userId, name = 'New Plan') {
     }
 }
 
+/**
+ * Update item options/variations in Airtable
+ * @param {string} itemId - The item record ID to update
+ * @param {string} optionsString - The new Options field value (multi-line string format)
+ * @returns {Promise<Object|null>} - The updated item record or null if failed
+ */
+export async function updateItemOptions(itemId, optionsString) {
+    if (!itemId) {
+        console.error('updateItemOptions called without itemId');
+        return null;
+    }
+
+    log('API', `Updating options for item: ${itemId}`);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${itemId}`;
+
+    const fields = {
+        [CONSTANTS.FIELD_NAMES.OPTIONS]: optionsString
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error updating item options:', errorText);
+            throw new Error(`Failed to update item options: ${errorText}`);
+        }
+
+        const result = await response.json();
+        log('API', `Successfully updated options for item ${itemId}`);
+
+        // Update the record in local state if present
+        const localRecord = state.records.all.find(r => r.id === itemId);
+        if (localRecord) {
+            localRecord.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsString;
+        }
+
+        return result;
+    } catch (error) {
+        console.error('Error updating item options:', error);
+        return null;
+    }
+}
+
+/**
+ * Generate top recommended options/variations for an item using AI
+ * @param {Object} record - The item record to generate options for
+ * @returns {Promise<Object>} - Object with success flag and generated options string
+ */
+export async function generateTopOptions(record) {
+    if (!record || !record.fields) {
+        console.error('generateTopOptions called without valid record');
+        return { success: false, error: 'Invalid record' };
+    }
+
+    const itemData = {
+        name: record.fields.Name || record.fields['Display Name'] || 'Unknown Item',
+        description: record.fields.Description || '',
+        category: record.fields.Category || record.fields['Item Type'] || '',
+        price: record.fields.Price || record.fields['Base Price'] || null,
+        pricingType: record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''
+    };
+
+    log('API', `Generating top options for item: ${itemData.name}`);
+
+    try {
+        const response = await fetch('/.netlify/functions/generate-top-options', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(itemData)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error from generate-top-options function:', errorText);
+            throw new Error(`Failed to generate options: ${errorText}`);
+        }
+
+        const result = await response.json();
+        log('API', `Successfully generated options for ${itemData.name}`);
+        return result;
+    } catch (error) {
+        console.error('Error generating top options:', error);
+        return { success: false, error: error.message };
+    }
+}
+

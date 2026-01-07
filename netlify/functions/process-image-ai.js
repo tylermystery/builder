@@ -70,13 +70,11 @@ Do NOT include markdown code blocks (e.g., \\\`\\\`\\\`json) or any text before 
         contents: [ { role: "user", parts: [ { text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: base64ImageData } } ] } ],
     };
 
-    // --- THIS IS THE FIX ---
-    // Use the exact stable model ID 'gemini-1.5-flash' with the stable v1 endpoint.
-    const modelId = "gemini-1.5-flash";
-    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
-    // --- END FIX ---
+    // Use Gemini 2.0 Flash model with v1beta endpoint
+    const modelId = "gemini-2.0-flash";
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
 
-    console.log(`[Debug] analyzeImageWithGemini: Sending request to model '${modelId}' via v1 endpoint...`); // Updated log message
+    console.log(`[Debug] analyzeImageWithGemini: Sending request to model '${modelId}' via v1beta endpoint...`);
     const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     console.log(`[Debug] analyzeImageWithGemini: Received status ${response.status} from Gemini.`);
 
@@ -87,7 +85,7 @@ Do NOT include markdown code blocks (e.g., \\\`\\\`\\\`json) or any text before 
         let errorMessage = `Gemini API call failed with status ${response.status}`;
         if (response.status === 400) errorMessage += ". Check payload/prompt structure.";
         if (response.status === 403) errorMessage += ". Check API key permissions/billing.";
-        if (response.status === 404) errorMessage += `. Model '${modelId}' not found or incompatible with v1 endpoint. Verify model ID and API path in GCP console/docs.`; // Updated log message
+        if (response.status === 404) errorMessage += `. Model '${modelId}' not found or incompatible with v1beta endpoint. Verify model ID and API path.`;
         if (response.status === 429) errorMessage += ". Rate limit exceeded.";
         throw new Error(errorMessage);
     }

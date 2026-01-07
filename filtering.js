@@ -6,7 +6,6 @@ import * as ui from './ui.js';
 import * as api from './api.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions, getTempLikes } from './utils.js';
 import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore } from './availability.js';
-import * as tileSizingDebug from './utils/tileSizingDebug.js'; 
 
 
 // --- HELPER FUNCTIONS (Non-Scoring, kept local) ---
@@ -48,18 +47,11 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
         activeSubcategories = [];
     }
 
-    console.log('[FilterDebug] === filterByCategoryAndSubcategory START ===');
-    console.log('[FilterDebug] selectedCategory:', selectedCategory);
-    console.log('[FilterDebug] activeSubcategories:', activeSubcategories);
-    console.log('[FilterDebug] Total records to filter:', records.length);
-
     if (selectedCategory === 'all' || !selectedCategory) {
-        console.log('[FilterDebug] Category is "all" or empty, returning all records');
         return records;
     }
 
     const selectedCategoryLower = String(selectedCategory).toLowerCase().replace(/\s+/g, ' ');
-    console.log('[FilterDebug] selectedCategoryLower:', selectedCategoryLower);
     let categoryFilteredRecords = [];
 
     categoryFilteredRecords = records.filter(record => {
@@ -81,20 +73,10 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
                parentNameLower === selectedCategoryLower ||
                itemSubcategoriesForCategoryCheck.includes(selectedCategoryLower);
 
-        if (matches) {
-            console.log('[FilterDebug] MATCH found for:', fields.Name);
-            console.log('  - itemCategories:', itemCategories);
-            console.log('  - parentNameLower:', parentNameLower);
-            console.log('  - itemSubcategoriesForCategoryCheck:', itemSubcategoriesForCategoryCheck);
-        }
-
         return matches;
     });
 
-    console.log('[FilterDebug] Category filtered records count:', categoryFilteredRecords.length);
-
     if (activeSubcategories.length > 0) {
-        console.log('[FilterDebug] Applying subcategory filter...');
         const subcategoryFilteredRecords = categoryFilteredRecords.filter(record => {
             if (!record || !record.fields) return false;
 
@@ -110,12 +92,8 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
                 parentNameLower === activeSubcat
             );
         });
-        console.log('[FilterDebug] Subcategory filtered records count:', subcategoryFilteredRecords.length);
-        console.log('[FilterDebug] === filterByCategoryAndSubcategory END ===');
         return subcategoryFilteredRecords;
     } else {
-        console.log('[FilterDebug] No subcategory filter applied');
-        console.log('[FilterDebug] === filterByCategoryAndSubcategory END ===');
         return categoryFilteredRecords;
     }
 }
@@ -324,39 +302,17 @@ function sortRecords(records, sortBy, goalBucket) {
 
 
 export async function applyFiltersAndSort(imageCache) {
-    console.log('[FilterDebug] ========================================');
-    console.log('[FilterDebug] applyFiltersAndSort called');
-    console.log('[FilterDebug] URL:', window.location.href);
-
-    // === TILE SIZING DEBUG: Filter/Sort start ===
-    console.log('[TileSizing][Filter] === FILTER/SORT START ===');
-    console.log('[TileSizing][Filter] Viewport:', tileSizingDebug.getViewportInfo());
-
     const catalogContainer = document.getElementById('catalog-container');
 
-    // === TILE SIZING DEBUG: Catalog container pre-filter state ===
-    if (catalogContainer) {
-        console.log('[TileSizing][Filter] Catalog container PRE-filter state:', {
-            childCount: catalogContainer.children.length,
-            hasCarouselSections: !!catalogContainer.querySelector('.grouping-carousel-section'),
-            sizing: tileSizingDebug.getElementSizing(catalogContainer)
-        });
-    }
-    
     const params = new URLSearchParams(window.location.search);
     const rawCategory = params.get('category');
     const selectedCategory = rawCategory ? rawCategory.toLowerCase().replace(/\s+/g, ' ') : 'all';
     const rawSubcategories = params.get('subcategory')?.split(',').filter(Boolean) || [];
     const activeSubcategories = rawSubcategories.map(sc => sc.toLowerCase().replace(/\s+/g, ' '));
     const view = params.get('view');
-    console.log('[FilterDebug] selectedCategory from URL:', selectedCategory);
-    console.log('[FilterDebug] activeSubcategories from URL:', activeSubcategories);
-    console.log('[FilterDebug] view from URL:', view);
 
     // Skip filtering/rendering when tasks view is active - task manager handles its own rendering
     if (view === 'tasks') {
-        console.log('[FilterDebug] Tasks view active, skipping catalog filter/render');
-        console.log('[TileSizing][Filter] === FILTER/SORT SKIPPED (tasks view) ===');
         return;
     }
 
@@ -374,19 +330,6 @@ export async function applyFiltersAndSort(imageCache) {
     let baseRecordsToFilter = state.records.all.filter(record =>
         record.fields.Stores && record.fields.Stores.includes(state.ui.activeShopId)
     );
-
-    // Debug: Check for packages in baseRecordsToFilter
-    const packagesInBase = baseRecordsToFilter.filter(r => r.fields['Item Type'] === 'Package');
-    console.log('[FilterDebug] Packages in baseRecordsToFilter:', packagesInBase.length);
-    if (packagesInBase.length > 0) {
-        console.log('[FilterDebug] Package details:', packagesInBase.map(p => ({
-            id: p.id,
-            name: p.fields.Name,
-            stores: p.fields.Stores,
-            status: p.fields.Status,
-            categories: p.fields.Categories
-        })));
-    }
 
     let recordsToDisplay;
 
@@ -529,55 +472,17 @@ export async function applyFiltersAndSort(imageCache) {
 
     } else if (view === 'packages') {
         // Show all Package type items for this store
-        console.log('[FilterDebug] ========== PACKAGES VIEW ==========');
         recordsToDisplay = baseRecordsToFilter.filter(record => record.fields['Item Type'] === 'Package');
-        console.log('[FilterDebug] Packages found for store:', recordsToDisplay.length);
-        if (recordsToDisplay.length > 0) {
-            console.log('[FilterDebug] Package names:', recordsToDisplay.map(p => p.fields.Name));
-        }
         // Apply status filter (only show Available packages by default)
         recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
-        console.log('[FilterDebug] Packages after status filter:', recordsToDisplay.length);
 
     } else {
-         console.log('[FilterDebug] Standard filtering path (not plan/likes/etc)');
-         console.log('[FilterDebug] baseRecordsToFilter count:', baseRecordsToFilter.length);
-         console.log('[FilterDebug] selectedCategory:', selectedCategory);
-
-         // === FULL WIDTH DEBUG: Check if store has category items ===
+         // Standard filtering path
          const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
          const hasStoreCategories = activeShop && activeShop.fields && activeShop.fields.Items && activeShop.fields.Items.length > 0;
-         console.log('[FullWidthDebug] Store has categories (Items field):', hasStoreCategories);
-
-         if (hasStoreCategories) {
-             const storeItemIds = Array.isArray(activeShop.fields.Items)
-                 ? activeShop.fields.Items
-                 : activeShop.fields.Items.split(',').map(id => id.trim());
-             console.log('[FullWidthDebug] Store category IDs:', storeItemIds);
-
-             // Get the actual category (Grouping) records
-             const storeCategoryRecords = storeItemIds
-                 .filter(id => id.startsWith('rec'))
-                 .map(id => state.records.all.find(r => r.id === id))
-                 .filter(r => r && r.fields['Item Type'] === 'Grouping');
-             console.log('[FullWidthDebug] Store category (Grouping) records found:', storeCategoryRecords.length);
-             console.log('[FullWidthDebug] Category names:', storeCategoryRecords.map(r => r.fields.Name));
-         }
-
-         // Sample first 3 records to see their category data
-         console.log('[FilterDebug] Sample records (first 3):');
-         baseRecordsToFilter.slice(0, 3).forEach((rec, i) => {
-             console.log(`  Record ${i}: ${rec.fields.Name}`);
-             console.log(`    - Item Type: "${rec.fields['Item Type']}"`);
-             console.log(`    - Categories: "${rec.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]}"`);
-             console.log(`    - Parent Item: "${rec.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]}"`);
-             console.log(`    - Subcategories: "${rec.fields.Subcategories}"`);
-         });
 
          // If on landing page (no category selected) AND store has categories, include the Grouping records
          if (selectedCategory === 'all' && hasStoreCategories) {
-             console.log('[FullWidthDebug] Landing page with store categories - including Groupings for carousels');
-
              const storeItemIds = Array.isArray(activeShop.fields.Items)
                  ? activeShop.fields.Items
                  : activeShop.fields.Items.split(',').map(id => id.trim());
@@ -593,91 +498,33 @@ export async function applyFiltersAndSort(imageCache) {
 
              // Combine: Groupings first, then other items
              recordsToDisplay = [...storeCategoryRecords, ...storeItems];
-             console.log('[FullWidthDebug] Combined records: Groupings + store items =', recordsToDisplay.length);
-             console.log('[FullWidthDebug] Groupings count:', storeCategoryRecords.length);
-             console.log('[FullWidthDebug] Other items count:', storeItems.length);
          } else {
              recordsToDisplay = filterByCategoryAndSubcategory(baseRecordsToFilter, selectedCategory, activeSubcategories);
-             console.log('[FilterDebug] After category filter, recordsToDisplay count:', recordsToDisplay.length);
          }
 
          // Standard filters apply to ALL views except 'My Plan'/'My Likes'
          recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
-         console.log('[FilterDebug] After status filter:', recordsToDisplay.length);
          recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
-         console.log('[FilterDebug] After headcount filter:', recordsToDisplay.length);
          recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
-         console.log('[FilterDebug] After location filter:', recordsToDisplay.length);
          recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
-         console.log('[FilterDebug] After budget filter:', recordsToDisplay.length);
 
          if (searchTerm) {
              recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
-             console.log('[FilterDebug] After search term filter:', recordsToDisplay.length);
          }
-
-         // === FULL WIDTH DEBUG: Final records breakdown ===
-         const finalGroupings = recordsToDisplay.filter(r => r.fields['Item Type'] === 'Grouping');
-         const finalBookableItems = recordsToDisplay.filter(r => r.fields['Item Type'] === 'Bookable Item');
-         const finalEvents = recordsToDisplay.filter(r => r.fields['Item Type'] === 'Event');
-         console.log('[FullWidthDebug] FINAL recordsToDisplay breakdown:');
-         console.log('  - Groupings:', finalGroupings.length, finalGroupings.map(r => r.fields.Name));
-         console.log('  - Bookable Items:', finalBookableItems.length);
-         console.log('  - Events:', finalEvents.length);
-         console.log('  - Total:', recordsToDisplay.length);
     }
 
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy, goalBucket);
 
     state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
-    
-    console.log('[FilterDebug] FINAL recordsToDisplay count:', recordsToDisplay.length);
-    if (recordsToDisplay.length > 0) {
-        console.log('[FilterDebug] First result:', recordsToDisplay[0].fields.Name);
-    }
-    console.log('[FilterDebug] ========================================');
-
-    // === TILE SIZING DEBUG: Records to display breakdown ===
-    const typeBreakdown = {
-        groupings: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Grouping').length,
-        events: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Event').length,
-        bookableItems: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Bookable Item').length,
-        packages: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Package').length,
-        sessions: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Session' || r.isSession).length,
-        other: recordsToDisplay.filter(r => !['Grouping', 'Event', 'Bookable Item', 'Session', 'Package'].includes(r.fields['Item Type']) && !r.isSession).length
-    };
-
-    console.log('[TileSizing][Filter] Records to display breakdown:', typeBreakdown);
-    console.log('[TileSizing][Filter] View type:', view || 'catalog');
-    console.log('[TileSizing][Filter] Expected layout:', {
-        isFilteredView: !!view || !!params.get('subcategory') || !!searchTerm,
-        hasGroupings: typeBreakdown.groupings > 0,
-        willUseCarousels: !view && !params.get('subcategory') && !searchTerm && typeBreakdown.groupings > 0
-    });
 
     if (catalogContainer) catalogContainer.innerHTML = '';
 
     const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
 
-    // === TILE SIZING DEBUG: About to render ===
-    console.log('[TileSizing][Filter] About to call renderRecords with:', {
-        recordCount: initialRecords.length,
-        totalFiltered: state.records.filtered.length,
-        loadSize: RECORDS_PER_LOAD
-    });
-
     ui.renderRecords(initialRecords, imageCache, false).then(() => {
         state.ui.recordsCurrentlyDisplayed = initialRecords.length;
-
-        // === TILE SIZING DEBUG: Post-render state ===
-        console.log('[TileSizing][Filter] Post-render state:', {
-            recordsDisplayed: state.ui.recordsCurrentlyDisplayed,
-            catalogContainerChildren: catalogContainer ? catalogContainer.children.length : 0
-        });
     });
 
     ui.updateCatalogHeader(); // This function will now build breadcrumbs from the URL
-
-    console.log('[TileSizing][Filter] === FILTER/SORT COMPLETE ===');
 }

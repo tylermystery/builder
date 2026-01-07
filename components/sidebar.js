@@ -67,8 +67,8 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
 // It also fixes the 404 error for the partner icon
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
-    let isCustomItem = record.id.startsWith('custom-') || record.id.startsWith('ai-search-');
-    
+    let isCustomItem = record.id.startsWith('custom-') || record.id.startsWith('ai-search-') || record.id.startsWith('ai-child-') || record.id.startsWith('ai-presentation-');
+
     // --- THIS IS THE FIX for the 404 error ---\
     // Default to your main placeholder, which we know exists
     let imageUrl = `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_60,h_60/ww71meppejsewxsxr4x7.jpg`;
@@ -88,38 +88,43 @@ async function createLockedInItemElement(record, itemInfo) {
     itemElement.dataset.recordId = record.id;
 
     // Build selected options display string from either selections or legacy selectedOptionIndex
+    // Options are now supported for all item types including custom and AI-parsed items
     let optionNames = [];
-    if (!isCustomItem) { // Custom items don't have options
-        const optionGroups = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const optionGroups = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
 
-        if (itemInfo.selections && Object.keys(itemInfo.selections).length > 0) {
-            // New format: selections object with groupIndex -> optionIndex mapping
-            const sortedKeys = Object.keys(itemInfo.selections).sort((a, b) => {
-                const indexA = parseInt(a.replace('group', ''), 10) || 0;
-                const indexB = parseInt(b.replace('group', ''), 10) || 0;
-                return indexA - indexB;
-            });
+    if (itemInfo.selections && Object.keys(itemInfo.selections).length > 0) {
+        // New format: selections object with groupIndex -> optionIndex mapping
+        // Supports both single-select (number) and multi-select (array) formats
+        const sortedKeys = Object.keys(itemInfo.selections).sort((a, b) => {
+            const indexA = parseInt(a.replace('group', ''), 10) || 0;
+            const indexB = parseInt(b.replace('group', ''), 10) || 0;
+            return indexA - indexB;
+        });
 
-            for (const groupKey of sortedKeys) {
-                const optionIndex = itemInfo.selections[groupKey];
-                const groupIndexMatch = groupKey.match(/^group(\d+)$/);
-                if (!groupIndexMatch) continue;
+        for (const groupKey of sortedKeys) {
+            const optionValue = itemInfo.selections[groupKey];
+            const groupIndexMatch = groupKey.match(/^group(\d+)$/);
+            if (!groupIndexMatch) continue;
 
-                const groupIndex = parseInt(groupIndexMatch[1], 10);
-                const group = optionGroups[groupIndex];
-                if (!group || !group.options) continue;
+            const groupIndex = parseInt(groupIndexMatch[1], 10);
+            const group = optionGroups[groupIndex];
+            if (!group || !group.options) continue;
 
+            // Handle both single index and array of indices (multi-select)
+            const optionIndices = Array.isArray(optionValue) ? optionValue : [optionValue];
+
+            for (const optionIndex of optionIndices) {
                 const option = group.options[optionIndex];
                 if (option && option.name) {
                     optionNames.push(option.name);
                 }
             }
-        } else if (itemInfo.selectedOptionIndex != null) {
-            // Legacy format: single selectedOptionIndex
-            const flatOptions = flattenOptionGroups(optionGroups);
-            if (flatOptions[itemInfo.selectedOptionIndex]) {
-                optionNames.push(flatOptions[itemInfo.selectedOptionIndex].name);
-            }
+        }
+    } else if (itemInfo.selectedOptionIndex != null) {
+        // Legacy format: single selectedOptionIndex
+        const flatOptions = flattenOptionGroups(optionGroups);
+        if (flatOptions[itemInfo.selectedOptionIndex]) {
+            optionNames.push(flatOptions[itemInfo.selectedOptionIndex].name);
         }
     }
 

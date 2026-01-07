@@ -2196,7 +2196,49 @@ body.modal-open {
     font-size: 0.85em;
     opacity: 0.7;
 }
-#modal-quantity-selector { 
+
+/* AI Top Options Button Styles */
+.ai-top-options-container {
+    margin-top: 10px;
+}
+.ai-top-options-btn {
+    padding: 10px 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+.ai-top-options-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+}
+.ai-top-options-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+.ai-options-result {
+    margin-top: 12px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+.ai-options-editor {
+    background: white;
+}
+.ai-options-apply-btn:hover {
+    background: #218838;
+}
+.ai-options-save-catalog-btn:hover {
+    background: #0056b3;
+}
+
+#modal-quantity-selector {
     margin: 20px 0;
 }
 #modal-quantity-selector .quantity-selector {
@@ -3544,8 +3586,14 @@ body.modal-open {
 /* Itinerary Sections */
 .itinerary-section {
     max-width: 800px;
-    margin: 0 auto;
+    margin: 0 auto 20px auto;
     padding: 30px 20px;
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .itinerary-section-title {
@@ -3560,8 +3608,8 @@ body.modal-open {
 /* Event Header Section */
 .itinerary-header {
     text-align: center;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border-bottom: 1px solid #dee2e6;
+    background: transparent;
+    border-bottom: none;
 }
 
 .itinerary-event-title {
@@ -3603,11 +3651,81 @@ body.modal-open {
     margin: 0 0 15px 0;
 }
 
+/* Collaborators Carousel Title */
+.collaborators-title {
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6c757d;
+    margin: 0 0 12px 0;
+    text-align: center;
+}
+
+/* Collaborators Carousel Wrapper */
+.collaborators-carousel-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    position: relative;
+}
+
+/* Collaborators Carousel (horizontal scrolling list) */
+.collaborators-carousel {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 10px;
+    overflow: hidden;
+    padding: 4px 0;
+    max-width: calc(100% - 80px);
+}
+
+/* Carousel navigation buttons */
+.collaborators-carousel-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.1);
+    color: #333;
+    font-size: 1.2em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, opacity 0.2s;
+    flex-shrink: 0;
+}
+
+.collaborators-carousel-btn:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.collaborators-carousel-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
 .collaborators-list {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
     gap: 15px;
+}
+
+/* Carousel-specific item visibility */
+.collaborators-carousel .collaborator-item {
+    flex-shrink: 0;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.collaborators-carousel .collaborator-item.hidden {
+    display: none;
+}
+
+.collaborators-carousel .collaborator-item.visible {
+    display: flex;
 }
 
 .collaborator-item {
@@ -3647,6 +3765,102 @@ body.modal-open {
     margin-left: 5px;
 }
 
+/* Expand button to show full list */
+.collaborators-expand-btn {
+    display: block;
+    margin: 12px auto 0;
+    padding: 6px 16px;
+    border: 1px solid #dee2e6;
+    border-radius: 16px;
+    background: transparent;
+    color: #007bff;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.collaborators-expand-btn:hover {
+    background: rgba(0, 123, 255, 0.1);
+    border-color: #007bff;
+}
+
+/* Collaborators Modal (expanded full list view) */
+.collaborators-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+}
+
+.collaborators-modal.active {
+    display: flex;
+}
+
+.collaborators-modal-content {
+    background: #fff;
+    border-radius: 12px;
+    max-width: 400px;
+    width: 90%;
+    max-height: 70vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.collaborators-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.collaborators-modal-header h3 {
+    margin: 0;
+    font-size: 1.1em;
+    color: #333;
+}
+
+.collaborators-modal-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #6c757d;
+    font-size: 1.5em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.collaborators-modal-close:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: #333;
+}
+
+.collaborators-modal-list {
+    padding: 16px 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.collaborators-modal-list .collaborator-item {
+    justify-content: flex-start;
+    width: 100%;
+}
+
 .no-collaborators {
     color: #6c757d;
     font-style: italic;
@@ -3674,7 +3888,7 @@ body.modal-open {
 
 /* Items Section */
 .itinerary-items {
-    background: #fff;
+    background: transparent;
 }
 
 .itinerary-items-list {
@@ -3689,6 +3903,56 @@ body.modal-open {
     color: #6c757d;
     padding: 40px 20px;
     font-size: 1em;
+}
+
+/* Presentation View Empty State with Recommendations */
+.presentation-empty-state {
+    text-align: center;
+    padding: 60px 30px;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.itinerary-empty-title {
+    font-size: 1.4em;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 10px 0;
+}
+
+.itinerary-empty-subtitle {
+    font-size: 1em;
+    color: #6c757d;
+    margin: 0 0 25px 0;
+}
+
+.presentation-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+.presentation-suggestion-btn {
+    padding: 12px 18px;
+    font-size: 0.95em;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+    font-weight: 500;
+}
+
+.presentation-suggestion-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
+    background: linear-gradient(135deg, #0056b3 0%, #003d82 100%);
+}
+
+.presentation-suggestion-btn:active {
+    transform: translateY(0);
 }
 
 /* Individual Item Card */
@@ -4486,19 +4750,272 @@ body.modal-open {
     }
 }
 
+/* ============================================
+   Item-Level Accordion Styles
+   Each plan component/item can be collapsed
+   ============================================ */
+
+/* Reset the base itinerary-item styles for accordion mode */
+.itinerary-item.item-accordion {
+    display: block;
+    padding: 0;
+    overflow: hidden;
+    cursor: default;
+}
+
+/* Item Accordion Header - Always visible */
+.item-accordion-header {
+    cursor: pointer;
+    padding: 15px 20px;
+    user-select: none;
+    transition: background-color 0.2s ease, padding 0.3s ease;
+    background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,249,250,0.9) 100%);
+}
+
+.item-accordion-header:hover {
+    background: linear-gradient(135deg, rgba(248,249,250,1) 0%, rgba(240,242,244,1) 100%);
+}
+
+.item-accordion-title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.item-accordion-title-row .itinerary-item-number {
+    width: 28px;
+    height: 28px;
+    font-size: 0.85em;
+    flex-shrink: 0;
+}
+
+.item-accordion-title {
+    flex: 1;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #212529;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.item-accordion-title-row .itinerary-item-type {
+    flex-shrink: 0;
+}
+
+/* Item Accordion Icon (plus/minus) */
+.item-accordion-icon {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    position: relative;
+    flex-shrink: 0;
+    transition: transform 0.3s ease;
+}
+
+.item-accordion-icon::before,
+.item-accordion-icon::after {
+    content: '';
+    position: absolute;
+    background-color: #007bff;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.item-accordion-icon::before {
+    width: 2px;
+    height: 12px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.item-accordion-icon::after {
+    width: 12px;
+    height: 2px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Expanded state - hide vertical line to show minus */
+.item-accordion.expanded .item-accordion-icon::before {
+    transform: translate(-50%, -50%) rotate(90deg);
+    opacity: 0;
+}
+
+/* Item Accordion Summary - Shown when collapsed */
+.item-accordion-summary {
+    font-size: 0.85em;
+    color: #6c757d;
+    margin: 10px 0 0 0;
+    padding-left: 40px;
+    line-height: 1.4;
+    max-height: 50px;
+    overflow: hidden;
+    transition: opacity 0.3s ease, max-height 0.3s ease, margin 0.3s ease;
+}
+
+/* Hide summary when expanded */
+.item-accordion.expanded .item-accordion-summary {
+    opacity: 0;
+    max-height: 0;
+    margin-top: 0;
+}
+
+/* Item title stays visible in both collapsed and expanded states */
+.item-accordion:not(.expanded) .item-accordion-title {
+    opacity: 1;
+}
+
+/* Item summary styling elements */
+.item-summary-name {
+    font-weight: 500;
+    color: #495057;
+}
+
+.item-summary-price {
+    font-weight: 600;
+    color: #007bff;
+}
+
+.item-summary-qty {
+    color: #6c757d;
+}
+
+.item-summary-type {
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.item-summary-type.idea {
+    color: #856404;
+}
+
+.item-summary-type.confirmed {
+    color: #155724;
+}
+
+.item-summary-category {
+    color: #6c757d;
+    font-style: italic;
+}
+
+.item-summary-note {
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Item summary options (collapsed view) */
+.item-summary-options {
+    color: #495057;
+    font-weight: 500;
+}
+
+/* Item options display (expanded view) */
+.itinerary-item-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.itinerary-item-option-tag {
+    display: inline-flex;
+    align-items: center;
+    background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%);
+    border: 1px solid #c8e1fc;
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 0.85em;
+    color: #0056b3;
+}
+
+.itinerary-item-option-tag .option-group-label {
+    color: #6c757d;
+    margin-right: 4px;
+    font-weight: 400;
+}
+
+/* Item Accordion Content - Hidden when collapsed */
+.item-accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease, padding 0.3s ease;
+    padding: 0 20px;
+}
+
+/* Expanded state shows content */
+.item-accordion.expanded .item-accordion-content {
+    max-height: 1500px;
+    padding: 0 20px 20px 20px;
+    overflow: visible;
+}
+
+/* Content layout adjustments */
+.item-accordion-content .itinerary-item-content {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* Ensure clickable area works properly */
+.item-accordion-content.itinerary-item-clickable {
+    cursor: pointer;
+}
+
+/* Mobile responsive styles for item accordions */
+@media (max-width: 768px) {
+    .item-accordion-header {
+        padding: 12px 15px;
+    }
+
+    .item-accordion-title-row {
+        gap: 10px;
+    }
+
+    .item-accordion-title-row .itinerary-item-number {
+        width: 24px;
+        height: 24px;
+        font-size: 0.8em;
+    }
+
+    .item-accordion-title {
+        font-size: 0.95em;
+    }
+
+    .item-accordion-icon {
+        width: 18px;
+        height: 18px;
+    }
+
+    .item-accordion-summary {
+        font-size: 0.8em;
+        padding-left: 34px;
+    }
+
+    .item-accordion-content {
+        padding: 0 15px;
+    }
+
+    .item-accordion.expanded .item-accordion-content {
+        padding: 0 15px 15px 15px;
+    }
+}
+
 /* Chat Section */
 .itinerary-chat {
-    background: #f8f9fa;
-    border-top: 1px solid #dee2e6;
+    background: transparent;
+    border-top: none;
 }
 
 .itinerary-chat-messages {
     max-height: 400px;
     overflow-y: auto;
     padding: 15px;
-    background: #fff;
+    background: rgba(255, 255, 255, 0.5);
     border-radius: 8px;
-    border: 1px solid #e9ecef;
+    border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .itinerary-chat-messages .message-wrapper {
@@ -4598,6 +5115,25 @@ body.modal-open {
     opacity: 0;
     max-height: 0;
     margin-top: 0;
+}
+
+/* Accordion section title (e.g., plan name in header) */
+.accordion-section-title {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: #333;
+    margin: 0;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+/* Accordion section title stays visible in both collapsed and expanded states */
+.itinerary-accordion:not(.expanded) .accordion-section-title {
+    opacity: 1;
 }
 
 .itinerary-accordion-content {
@@ -4704,6 +5240,32 @@ body.modal-open {
         align-items: center;
     }
 
+    /* Collaborators Carousel mobile styles */
+    .collaborators-carousel-wrapper {
+        gap: 4px;
+    }
+
+    .collaborators-carousel {
+        max-width: calc(100% - 70px);
+        gap: 8px;
+    }
+
+    .collaborators-carousel-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 1em;
+    }
+
+    .collaborators-expand-btn {
+        font-size: 0.8em;
+        padding: 5px 14px;
+    }
+
+    .collaborators-modal-content {
+        width: 95%;
+        max-height: 80vh;
+    }
+
     .itinerary-chat-messages {
         max-height: 300px;
     }
@@ -4720,6 +5282,154 @@ body.modal-open {
     .itinerary-accordion-icon {
         width: 20px;
         height: 20px;
+    }
+}
+
+/* Sub-Accordion Styles (for nested accordions like Hosts, Collaborators & Plan Chat) */
+.sub-accordion {
+    overflow: hidden;
+    margin-top: 20px;
+    border: 1px solid rgba(0, 123, 255, 0.15);
+    border-radius: 12px;
+    background: rgba(248, 249, 250, 0.5);
+}
+
+.sub-accordion-header {
+    cursor: pointer;
+    padding: 15px 18px;
+    user-select: none;
+    transition: background 0.2s ease, padding 0.3s ease;
+    background: rgba(255, 255, 255, 0.8);
+}
+
+.sub-accordion-header:hover {
+    background: rgba(0, 123, 255, 0.05);
+}
+
+.sub-accordion-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+}
+
+.sub-accordion-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #495057;
+    margin: 0;
+}
+
+.sub-accordion-icon {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    position: relative;
+    flex-shrink: 0;
+    transition: transform 0.3s ease;
+}
+
+.sub-accordion-icon::before,
+.sub-accordion-icon::after {
+    content: '';
+    position: absolute;
+    background-color: #667eea;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.sub-accordion-icon::before {
+    width: 2px;
+    height: 12px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.sub-accordion-icon::after {
+    width: 12px;
+    height: 2px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Expanded state - hide the vertical line to show minus */
+.sub-accordion.expanded .sub-accordion-icon::before {
+    transform: translate(-50%, -50%) rotate(90deg);
+    opacity: 0;
+}
+
+.sub-accordion-summary {
+    font-size: 0.85em;
+    color: #6c757d;
+    margin: 10px 0 0 0;
+    line-height: 1.4;
+    max-height: 50px;
+    overflow: hidden;
+    transition: opacity 0.3s ease, max-height 0.3s ease, margin 0.3s ease;
+}
+
+/* Hide summary when expanded */
+.sub-accordion.expanded .sub-accordion-summary {
+    opacity: 0;
+    max-height: 0;
+    margin-top: 0;
+}
+
+.sub-accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease, padding 0.3s ease;
+    padding: 0 18px;
+}
+
+/* Expanded state */
+.sub-accordion.expanded .sub-accordion-content {
+    max-height: 3000px;
+    padding: 15px 18px;
+    overflow: visible;
+}
+
+/* Plan Chat Section inside sub-accordion */
+.plan-chat-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(0, 123, 255, 0.1);
+}
+
+.plan-chat-section h4,
+.itinerary-collaborators h4 {
+    font-size: 1em;
+    font-weight: 600;
+    color: #495057;
+    margin: 0 0 12px 0;
+}
+
+/* Mobile responsive styles for sub-accordion */
+@media (max-width: 768px) {
+    .sub-accordion-header {
+        padding: 12px 15px;
+    }
+
+    .sub-accordion-title {
+        font-size: 1em;
+    }
+
+    .sub-accordion-summary {
+        font-size: 0.8em;
+    }
+
+    .sub-accordion-icon {
+        width: 18px;
+        height: 18px;
+    }
+
+    .sub-accordion-content {
+        padding: 0 15px;
+    }
+
+    .sub-accordion.expanded .sub-accordion-content {
+        padding: 12px 15px;
     }
 }
 
@@ -6519,6 +7229,57 @@ hr.total-divider {
     color: #ffc107;
     margin-left: 5px;
     font-size: 1.1em;
+}
+
+/* --- Variations Tool Styles --- */
+.variations-tool-container {
+    margin-top: 15px;
+    padding: 15px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+}
+
+.variations-tool-header {
+    user-select: none;
+}
+
+.variations-tool-header:hover {
+    opacity: 0.8;
+}
+
+.variations-toggle-btn:hover {
+    color: #0056b3 !important;
+}
+
+.variations-editor {
+    transition: border-color 0.2s ease;
+}
+
+.variations-editor:focus {
+    border-color: #007bff !important;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.15);
+}
+
+.variations-preview-btn:hover {
+    background: #5a6268 !important;
+}
+
+.variations-save-btn:hover {
+    background: #0056b3 !important;
+}
+
+.variations-save-btn:disabled {
+    background: #ccc !important;
+    cursor: not-allowed;
+}
+
+.variations-help-text code {
+    background: #e9ecef;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 0.9em;
 }
 
 /* --- 9. SLIDER STYLES (Kept for now) --- */
@@ -8479,4 +9240,391 @@ hr.total-divider {
 /* Ensure the actual modal content is above backdrop */
 .ReactModal__Content--after-open {
     z-index: 100001 !important;
+}
+
+/* === AI-SOURCED CARD STYLES === */
+/* Visual styling for AI-generated/discovered catalog items */
+
+.ai-sourced-card {
+    border: 2px solid #3498db !important;
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.05) 0%, rgba(52, 152, 219, 0.1) 100%);
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+}
+
+.ai-sourced-card:hover {
+    box-shadow: 0 4px 16px rgba(52, 152, 219, 0.35);
+    border-color: #2980b9 !important;
+}
+
+/* AI Discovery Badge */
+.ai-discovery-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 2px 6px rgba(52, 152, 219, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ai-discovery-badge::before {
+    content: '✨';
+    font-size: 0.9em;
+}
+
+/* AI Grouping Card (parent container for AI-generated category results) */
+.ai-sourced-card.ai-grouping-card {
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.08) 0%, rgba(155, 89, 182, 0.08) 100%);
+    border: 2px solid #9b59b6 !important;
+}
+
+.ai-sourced-card.ai-grouping-card:hover {
+    box-shadow: 0 4px 16px rgba(155, 89, 182, 0.35);
+    border-color: #8e44ad !important;
+}
+
+.ai-grouping-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 2px 6px rgba(155, 89, 182, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ai-grouping-badge::before {
+    content: '🤖';
+    font-size: 0.9em;
+}
+
+/* === SMART REFINEMENT CHIPS === */
+/* Clickable suggestion chips below the search bar */
+
+#ai-refinement-chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 0;
+    margin-top: 8px;
+}
+
+#ai-refinement-chips-container:empty {
+    display: none;
+}
+
+.ai-refinement-chip {
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(52, 152, 219, 0.2));
+    border: 1px solid #3498db;
+    color: #2980b9;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ai-refinement-chip::before {
+    content: '🔍';
+    font-size: 0.85em;
+}
+
+.ai-refinement-chip:hover {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+}
+
+.ai-refinement-chip:active {
+    transform: translateY(0);
+}
+
+/* AI Child Items Container (for grouping results) */
+.ai-children-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 15px;
+    padding: 15px;
+    margin-top: 10px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 8px;
+}
+
+/* Responsive adjustments for AI cards */
+@media (max-width: 768px) {
+    #ai-refinement-chips-container {
+        padding: 8px 0;
+        gap: 6px;
+    }
+
+    .ai-refinement-chip {
+        padding: 5px 12px;
+        font-size: 0.8em;
+    }
+
+    .ai-discovery-badge,
+    .ai-grouping-badge {
+        padding: 3px 8px;
+        font-size: 0.7em;
+    }
+
+    .ai-children-container {
+        grid-template-columns: 1fr;
+        padding: 10px;
+    }
+}
+
+/* === HYBRID SEARCH RESULT CAROUSELS === */
+/* Styles for the combined catalog + AI search results display */
+
+.search-result-carousel-section {
+    margin-bottom: 30px;
+    padding: 15px 0;
+}
+
+.search-result-carousel-section.catalog-results-section {
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 25px;
+}
+
+.search-result-carousel-section.ai-results-section {
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.03) 0%, rgba(155, 89, 182, 0.05) 100%);
+    border-radius: 12px;
+    padding: 15px;
+    margin-top: 20px;
+}
+
+.search-carousel-header {
+    margin-bottom: 15px;
+}
+
+.search-carousel-title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.search-carousel-title {
+    font-size: 1.2em;
+    font-weight: 600;
+    margin: 0;
+    color: #333;
+}
+
+.search-carousel-count {
+    font-size: 0.85em;
+    color: #666;
+    background: #f0f0f0;
+    padding: 3px 10px;
+    border-radius: 12px;
+}
+
+.search-carousel-subtitle {
+    font-size: 0.9em;
+    color: #888;
+    margin: 5px 0 0 0;
+}
+
+/* AI Badge for search results */
+.search-carousel-header .ai-badge,
+.ai-loading-header .ai-badge {
+    background: linear-gradient(135deg, #3498db, #9b59b6);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.search-carousel-wrapper {
+    position: relative;
+}
+
+.search-carousel-container {
+    display: flex;
+    gap: 20px;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    padding: 10px 5px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #ccc transparent;
+}
+
+.search-carousel-container::-webkit-scrollbar {
+    height: 6px;
+}
+
+.search-carousel-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.search-carousel-container::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 3px;
+}
+
+.search-carousel-container .event-card {
+    flex: 0 0 auto;
+    width: 280px;
+    min-width: 280px;
+}
+
+/* Navigation buttons for search carousels */
+.search-carousel-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 36px;
+    height: 36px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #ddd;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1em;
+    color: #333;
+    z-index: 10;
+    transition: all 0.2s ease;
+    display: none; /* Hidden by default, shown when has-overflow */
+}
+
+.search-carousel-wrapper.has-overflow .search-carousel-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.search-carousel-nav.left {
+    left: -10px;
+}
+
+.search-carousel-nav.right {
+    right: -10px;
+}
+
+.search-carousel-nav:hover {
+    background: #f0f0f0;
+    border-color: #ccc;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* AI Loading Section */
+.ai-loading-section {
+    padding: 25px;
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.03) 0%, rgba(155, 89, 182, 0.05) 100%);
+    border-radius: 12px;
+    text-align: center;
+    margin-top: 20px;
+}
+
+.ai-loading-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.ai-loading-text {
+    color: #666;
+    font-size: 0.95em;
+}
+
+.ai-loading-spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid rgba(52, 152, 219, 0.2);
+    border-top-color: #3498db;
+    border-radius: 50%;
+    animation: ai-spin 1s linear infinite;
+    margin: 0 auto;
+}
+
+@keyframes ai-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Mobile responsive adjustments for hybrid search */
+@media (max-width: 768px) {
+    .search-result-carousel-section {
+        margin-bottom: 20px;
+        padding: 10px 0;
+    }
+
+    .search-result-carousel-section.ai-results-section {
+        padding: 12px;
+        margin: 15px -10px;
+        border-radius: 0;
+    }
+
+    .search-carousel-title {
+        font-size: 1.1em;
+    }
+
+    .search-carousel-title-row {
+        gap: 8px;
+    }
+
+    .search-carousel-container .event-card {
+        width: 260px;
+        min-width: 260px;
+    }
+
+    .search-carousel-nav {
+        width: 32px;
+        height: 32px;
+        font-size: 0.9em;
+    }
+
+    .search-carousel-nav.left {
+        left: 5px;
+    }
+
+    .search-carousel-nav.right {
+        right: 5px;
+    }
+}
+
+@media (max-width: 480px) {
+    .search-carousel-container .event-card {
+        width: 240px;
+        min-width: 240px;
+    }
+
+    .search-carousel-count {
+        font-size: 0.8em;
+        padding: 2px 8px;
+    }
+
+    .ai-loading-section {
+        padding: 15px;
+    }
 }

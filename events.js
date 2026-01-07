@@ -293,7 +293,115 @@ async function handlePaymentFormSubmit(event) {
     }
 }
 
-async function handleProactiveAISearch(searchTerm, imageCache) {
+/**
+ * Creates a carousel section for displaying items (catalog or AI-generated)
+ * @param {string} title - The section title
+ * @param {string} subtitle - Optional subtitle/description
+ * @param {Array} records - Array of record objects to display in the carousel
+ * @param {object} imageCache - Image cache reference
+ * @param {string} searchTerm - The original search term (for AI items)
+ * @param {boolean} isAISection - Whether this is an AI-sourced section
+ * @returns {HTMLElement} The carousel section element
+ */
+async function createSearchResultCarousel(title, subtitle, records, imageCache, searchTerm, isAISection = false) {
+    const section = document.createElement('div');
+    section.className = `search-result-carousel-section ${isAISection ? 'ai-results-section' : 'catalog-results-section'}`;
+
+    // Create header
+    const header = document.createElement('div');
+    header.className = 'search-carousel-header';
+    header.innerHTML = `
+        <div class="search-carousel-title-row">
+            <h3 class="search-carousel-title">${title}</h3>
+            ${isAISection ? '<span class="ai-badge">AI Discovery</span>' : ''}
+            <span class="search-carousel-count">${records.length} items</span>
+        </div>
+        ${subtitle ? `<p class="search-carousel-subtitle">${subtitle}</p>` : ''}
+    `;
+    section.appendChild(header);
+
+    // Create carousel wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'search-carousel-wrapper';
+
+    // Create carousel container
+    const container = document.createElement('div');
+    container.className = 'search-carousel-container';
+
+    // Create cards for all items
+    for (const record of records) {
+        const card = await ui.createInteractiveCard(record, state.records.all, imageCache);
+        if (isAISection && searchTerm) {
+            attachAddToPlanHandler(card, record, searchTerm, imageCache);
+        }
+        container.appendChild(card);
+    }
+
+    wrapper.appendChild(container);
+
+    // Helper function to calculate scroll distance based on card width
+    const getScrollDistance = () => {
+        const card = container.querySelector('.event-card');
+        if (card) {
+            return card.offsetWidth + 20; // 20px gap
+        }
+        return container.clientWidth;
+    };
+
+    // Add navigation buttons
+    const leftNav = document.createElement('button');
+    leftNav.className = 'search-carousel-nav left';
+    leftNav.innerHTML = '◄';
+    leftNav.setAttribute('aria-label', 'Scroll left');
+    leftNav.addEventListener('click', (e) => {
+        e.stopPropagation();
+        container.scrollBy({ left: -getScrollDistance(), behavior: 'smooth' });
+    });
+
+    const rightNav = document.createElement('button');
+    rightNav.className = 'search-carousel-nav right';
+    rightNav.innerHTML = '►';
+    rightNav.setAttribute('aria-label', 'Scroll right');
+    rightNav.addEventListener('click', (e) => {
+        e.stopPropagation();
+        container.scrollBy({ left: getScrollDistance(), behavior: 'smooth' });
+    });
+
+    wrapper.appendChild(leftNav);
+    wrapper.appendChild(rightNav);
+
+    // Update navigation button visibility based on scroll position
+    const updateNavVisibility = () => {
+        const hasOverflow = container.scrollWidth > container.clientWidth;
+
+        if (hasOverflow) {
+            wrapper.classList.add('has-overflow');
+            leftNav.style.opacity = container.scrollLeft <= 0 ? '0.3' : '';
+            leftNav.style.pointerEvents = container.scrollLeft <= 0 ? 'none' : '';
+            const atEnd = container.scrollLeft + container.clientWidth >= container.scrollWidth - 5;
+            rightNav.style.opacity = atEnd ? '0.3' : '';
+            rightNav.style.pointerEvents = atEnd ? 'none' : '';
+        } else {
+            wrapper.classList.remove('has-overflow');
+        }
+    };
+
+    container.addEventListener('scroll', updateNavVisibility);
+    setTimeout(updateNavVisibility, 100);
+    setTimeout(updateNavVisibility, 500);
+
+    section.appendChild(wrapper);
+
+    return section;
+}
+
+/**
+ * Handles the hybrid search display - showing both catalog matches and AI suggestions
+ * @param {string} searchTerm - The search term
+ * @param {object} imageCache - Image cache reference
+ * @param {Array} catalogMatches - Matching catalog items (may be empty)
+ */
+async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches = []) {
     if (aiSearchController) {
         aiSearchController.abort();
     }
@@ -303,103 +411,236 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
     const catalogContainer = document.getElementById('catalog-container');
     if (!catalogContainer) return;
 
-    const ghostRecord = {
-        id: `ai-search-${Date.now()}`,
-        fields: {
-            Name: `Searching for "${searchTerm}"...`,
-            Description: "Our AI is looking for this item in the Bay Area...",
-            Price: 0,
-            'Item Type': 'Bookable Item',
-            ServiceType: 'Partner Activity',
-            Status: 'Available'
-        }
-    };
-    
-    const ghostCard = await ui.createInteractiveCard(ghostRecord, [], imageCache);
-    ghostCard.id = "ai-ghost-card";
-    ghostCard.style.opacity = "0.5";
-    ghostCard.style.pointerEvents = "none";
-    
+    // Clear container and show loading state
     catalogContainer.innerHTML = '';
-    catalogContainer.appendChild(ghostCard);
+
+    // If we have catalog matches, show them first in a carousel
+    if (catalogMatches.length > 0) {
+        log('Events', `Showing ${catalogMatches.length} catalog matches for "${searchTerm}"`);
+
+        const catalogSection = await createSearchResultCarousel(
+            `Top Matches for "${searchTerm}"`,
+            'From our curated catalog',
+            catalogMatches,
+            imageCache,
+            searchTerm,
+            false
+        );
+        catalogContainer.appendChild(catalogSection);
+    }
+
+    // Show loading indicator for AI results
+    const loadingSection = document.createElement('div');
+    loadingSection.className = 'ai-loading-section';
+    loadingSection.innerHTML = `
+        <div class="ai-loading-header">
+            <span class="ai-badge">AI Discovery</span>
+            <span class="ai-loading-text">Finding more options for "${searchTerm}"...</span>
+        </div>
+        <div class="ai-loading-spinner"></div>
+    `;
+    catalogContainer.appendChild(loadingSection);
 
     try {
-        log('Events', 'WORKAROUND: Simulating Proactive AI search for:', searchTerm);
-        await new Promise(res => setTimeout(res, 1500)); 
-        if (signal.aborted) return;
+        log('Events', 'Starting Hybrid AI search for:', searchTerm);
 
-        const webData = {
-            Name: `[DUMMY] ${searchTerm}`,
-            Description: "This is a dummy item. The real AI-parsed description will go here.",
-            Price: Math.floor(Math.random() * 100) + 10,
-            ServiceType: "Partner Activity"
-        };
-        
-        log('Events', 'Proactive AI Parse Success:', webData);
-        
-        const customId = `custom-${Date.now()}`;
-        
-        const liveRecord = {
-            id: customId,
-            fields: {
-                Name: webData.Name,
-                Description: webData.Description,
-                Price: webData.Price,
-                ServiceType: webData.ServiceType,
-                'Item Type': 'Bookable Item',
-                Status: 'Available',
-                Rankings: JSON.stringify({
-                    "profileSource": "ai_v1_dummy_profile",
-                    "Pillars": { "Activities": 10, "Food/Drink": 0, "Venue": 0, "Extras": 0 },
-                    "Vibe": { "Energy": 8, "Relaxation": 2, "Formality": 3, "Novelty": 9 },
-                    "Intellect": { "Creative": 5, "Analytical": 5 },
-                    "Physicality": { "Intensity": 5, "Accessibility": 5 },
-                    "Tags": [searchTerm.toLowerCase(), "dummy", "partner activity"]
-                }),
-                Options: null, 'Parent Item': null, 'Pricing Type': 'per person', 
-                'Headcount min': null, 'Media Tags': null, 'Curated Images': null, 
-                Subcategories: null, 'iCal URL': null, 'Lead Time (days)': null, 
-                RSVPs: null, Date: null, 'Chat Enabled': false, Duration: null, 
-                Capacity: null, 'Location Details': null, 'Additional Information': null
-            }
-        };
-        
-        state.records.all.push(liveRecord);
+        // Call the AI function
+        const response = await fetch('/.netlify/functions/process-weblink', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: searchTerm }),
+            signal: signal
+        });
 
-        const finalCard = await ui.createInteractiveCard(liveRecord, [], imageCache);
-        
-        const addToPlanBtn = finalCard.querySelector('.add-to-plan-btn');
-        if (addToPlanBtn) {
-            addToPlanBtn.textContent = 'Add to Plan';
-            addToPlanBtn.disabled = false;
-            
-            const newBtn = addToPlanBtn.cloneNode(true);
-            addToPlanBtn.parentNode.replaceChild(newBtn, addToPlanBtn);
-
-            newBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                log('Events', `Adding AI-parsed item: ${customId}`);
-                
-                state.cart.lockedItems.set(customId, {
-                    quantity: 1,
-                    selectedOptionIndex: 0,
-                    note: `Added via AI search for: "${searchTerm}"`
-                });
-
-                // Add progress for AI-sourced item
-                updateProgress(0.0002);
-
-                ui.updateEventPlanSection();
-                ui.updateTotalCost();
-                triggerSave();
-                
-                newBtn.textContent = 'Update Plan';
-                newBtn.disabled = true;
-            });
+        if (!response.ok) {
+            throw new Error(`API returned status ${response.status}`);
         }
 
-        catalogContainer.innerHTML = '';
-        catalogContainer.appendChild(finalCard);
+        if (signal.aborted) return;
+
+        const aiData = await response.json();
+        log('Events', 'AI Search Response:', aiData);
+
+        // Remove loading indicator
+        loadingSection.remove();
+
+        // Handle relatedKeywords for refinement chips
+        if (aiData.relatedKeywords && Array.isArray(aiData.relatedKeywords)) {
+            renderRefinementChips(aiData.relatedKeywords, imageCache);
+        }
+
+        // Create AI records from the response
+        const aiRecords = [];
+        const timestamp = Date.now();
+
+        if (aiData.itemType === 'Grouping' && aiData.children && Array.isArray(aiData.children)) {
+            // Handle GROUPING type - multiple AI recommendations
+            aiData.children.forEach((child, index) => {
+                const childId = `ai-child-${timestamp}-${index}`;
+
+                // Build comprehensive Rankings JSON with AI profile scores
+                const rankingsData = {
+                    "profileSource": "ai_hybrid_search",
+                    "Tags": [searchTerm.toLowerCase(), "ai-generated", "partner activity"]
+                };
+                // Add activity profile scores if provided by AI
+                if (child.Rankings && typeof child.Rankings === 'object') {
+                    rankingsData.Fun = child.Rankings.Fun || 0;
+                    rankingsData.Social = child.Rankings.Social || 0;
+                    rankingsData.Active = child.Rankings.Active || 0;
+                    rankingsData.Creative = child.Rankings.Creative || 0;
+                    rankingsData.Learning = child.Rankings.Learning || 0;
+                    rankingsData.Relaxing = child.Rankings.Relaxing || 0;
+                }
+
+                // Build location details with availability and address
+                let locationDetails = '';
+                if (child.Location) locationDetails += child.Location;
+                if (child.Availability) {
+                    locationDetails += locationDetails ? '\n\n' : '';
+                    locationDetails += `Hours: ${child.Availability}`;
+                }
+
+                // Build "Good to Know" / Additional Information with lead time and extra info
+                let additionalInfo = '';
+                if (child.LeadTime) additionalInfo += `Booking: ${child.LeadTime}`;
+                if (child.GoodToKnow) {
+                    additionalInfo += additionalInfo ? '\n\n' : '';
+                    additionalInfo += child.GoodToKnow;
+                }
+                if (child.Website) {
+                    additionalInfo += additionalInfo ? '\n\n' : '';
+                    additionalInfo += `Website: ${child.Website}`;
+                }
+
+                // Ensure price is a number - handle all edge cases
+                let childPrice = child.Price || 0;
+                if (typeof childPrice === 'object') {
+                    childPrice = 0;
+                } else if (typeof childPrice === 'string') {
+                    childPrice = parseFloat(childPrice.replace(/[^0-9.-]/g, '')) || 0;
+                } else if (typeof childPrice !== 'number') {
+                    childPrice = 0;
+                }
+                childPrice = isNaN(childPrice) ? 0 : childPrice;
+
+                const childRecord = {
+                    id: childId,
+                    fields: {
+                        Name: child.Name,
+                        Description: child.Description,
+                        Price: childPrice,
+                        ServiceType: child.ServiceType || 'Partner Activity',
+                        'Item Type': 'Bookable Item',
+                        'Parent Item': aiData.name || `AI ${searchTerm} Options`,
+                        Status: 'Available',
+                        'Pricing Type': child.PricingType || 'per person',
+                        Stores: [state.ui.activeShopId],
+                        Rankings: JSON.stringify(rankingsData),
+                        'Location Details': locationDetails || null,
+                        'Additional Information': additionalInfo || null,
+                        Options: null, 'Headcount min': null,
+                        'Media Tags': child.ImageKeywords || null,
+                        'Curated Images': null, Subcategories: null, 'iCal URL': null,
+                        'Lead Time (days)': null, RSVPs: null, Date: null,
+                        'Chat Enabled': false, Duration: null, Capacity: null
+                    }
+                };
+                aiRecords.push(childRecord);
+                state.records.all.push(childRecord);
+            });
+        } else if (aiData.Name) {
+            // Handle SPECIFIC type - single AI result
+            const customId = `ai-search-${timestamp}`;
+
+            // Build comprehensive Rankings JSON with AI profile scores
+            const rankingsData = {
+                "profileSource": "ai_hybrid_search",
+                "Tags": [searchTerm.toLowerCase(), "ai-generated", "partner activity"]
+            };
+            // Add activity profile scores if provided by AI
+            if (aiData.Rankings && typeof aiData.Rankings === 'object') {
+                rankingsData.Fun = aiData.Rankings.Fun || 0;
+                rankingsData.Social = aiData.Rankings.Social || 0;
+                rankingsData.Active = aiData.Rankings.Active || 0;
+                rankingsData.Creative = aiData.Rankings.Creative || 0;
+                rankingsData.Learning = aiData.Rankings.Learning || 0;
+                rankingsData.Relaxing = aiData.Rankings.Relaxing || 0;
+            }
+
+            // Build location details with availability and address
+            let locationDetails = '';
+            if (aiData.Location) locationDetails += aiData.Location;
+            if (aiData.Availability) {
+                locationDetails += locationDetails ? '\n\n' : '';
+                locationDetails += `Hours: ${aiData.Availability}`;
+            }
+
+            // Build "Good to Know" / Additional Information with lead time and extra info
+            let additionalInfo = '';
+            if (aiData.LeadTime) additionalInfo += `Booking: ${aiData.LeadTime}`;
+            if (aiData.GoodToKnow) {
+                additionalInfo += additionalInfo ? '\n\n' : '';
+                additionalInfo += aiData.GoodToKnow;
+            }
+            if (aiData.Website) {
+                additionalInfo += additionalInfo ? '\n\n' : '';
+                additionalInfo += `Website: ${aiData.Website}`;
+            }
+
+            // Ensure price is a number - handle all edge cases
+            let aiPrice = aiData.Price || 0;
+            if (typeof aiPrice === 'object') {
+                aiPrice = 0;
+            } else if (typeof aiPrice === 'string') {
+                aiPrice = parseFloat(aiPrice.replace(/[^0-9.-]/g, '')) || 0;
+            } else if (typeof aiPrice !== 'number') {
+                aiPrice = 0;
+            }
+            aiPrice = isNaN(aiPrice) ? 0 : aiPrice;
+
+            const liveRecord = {
+                id: customId,
+                fields: {
+                    Name: aiData.Name,
+                    Description: aiData.Description,
+                    Price: aiPrice,
+                    ServiceType: aiData.ServiceType || 'Partner Activity',
+                    'Item Type': 'Bookable Item',
+                    Status: 'Available',
+                    'Pricing Type': aiData.PricingType || 'per person',
+                    Stores: [state.ui.activeShopId],
+                    Rankings: JSON.stringify(rankingsData),
+                    'Location Details': locationDetails || null,
+                    'Additional Information': additionalInfo || null,
+                    Options: null, 'Parent Item': null, 'Headcount min': null,
+                    'Media Tags': aiData.ImageKeywords || null,
+                    'Curated Images': null, Subcategories: null,
+                    'iCal URL': null, 'Lead Time (days)': null, RSVPs: null, Date: null,
+                    'Chat Enabled': false, Duration: null, Capacity: null
+                }
+            };
+            aiRecords.push(liveRecord);
+            state.records.all.push(liveRecord);
+        }
+
+        // Display AI results in their own carousel
+        if (aiRecords.length > 0) {
+            log('Events', `Created ${aiRecords.length} AI-generated items for "${searchTerm}"`);
+
+            const aiSection = await createSearchResultCarousel(
+                `AI Discoveries for "${searchTerm}"`,
+                'Additional options found by AI',
+                aiRecords,
+                imageCache,
+                searchTerm,
+                true
+            );
+            catalogContainer.appendChild(aiSection);
+        } else if (catalogMatches.length === 0) {
+            // No results at all - show empty state
+            catalogContainer.innerHTML = `<p style='text-align: center; padding: 40px;'>Could not find "${searchTerm}". Please try a different name or search term.</p>`;
+        }
 
     } catch (err) {
         if (err.name === 'AbortError') {
@@ -407,9 +648,121 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
             return;
         }
         log('Events', `Proactive AI parse error: ${err.message}`);
-        catalogContainer.innerHTML = `<p style='text-align: center;'>Could not find "${searchTerm}". Please try a different name or URL.</p>`;
+
+        // Remove loading indicator on error
+        loadingSection.remove();
+
+        // If no catalog matches either, show error
+        if (catalogMatches.length === 0) {
+            catalogContainer.innerHTML = `<p style='text-align: center; padding: 40px;'>Could not find "${searchTerm}". Please try a different name or search term.</p>`;
+        }
+        // If we have catalog matches, just silently fail on AI (user still sees catalog results)
     } finally {
         aiSearchController = null;
+    }
+}
+
+// Keep the old function for backward compatibility, but redirect to new implementation
+async function handleProactiveAISearch(searchTerm, imageCache) {
+    // Use the new hybrid display with empty catalog matches
+    await handleHybridSearchDisplay(searchTerm, imageCache, []);
+}
+
+/**
+ * Attaches the "Add to Plan" click handler to an AI-generated card
+ * @param {HTMLElement} card - The card element
+ * @param {object} record - The record data
+ * @param {string} searchTerm - The original search term
+ * @param {object} imageCache - Image cache reference
+ */
+function attachAddToPlanHandler(card, record, searchTerm, imageCache) {
+    const addToPlanBtn = card.querySelector('.add-to-plan-btn');
+    if (addToPlanBtn) {
+        addToPlanBtn.textContent = 'Add to Plan';
+        addToPlanBtn.disabled = false;
+
+        const newBtn = addToPlanBtn.cloneNode(true);
+        addToPlanBtn.parentNode.replaceChild(newBtn, addToPlanBtn);
+
+        newBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            log('Events', `Adding AI-parsed item: ${record.id}`);
+
+            state.cart.lockedItems.set(record.id, {
+                quantity: 1,
+                selectedOptionIndex: 0,
+                note: `Added via AI search for: "${searchTerm}"`
+            });
+
+            // Add progress for AI-sourced item
+            updateProgress(0.0002);
+
+            // Broadcast item addition for real-time updates
+            broadcastItemAdded(record.id, { quantity: 1, note: `AI search: "${searchTerm}"` });
+
+            ui.updateEventPlanSection();
+            ui.updateTotalCost();
+            triggerSave();
+
+            newBtn.textContent = 'Update Plan';
+            newBtn.disabled = true;
+        });
+    }
+}
+
+/**
+ * Renders AI-suggested refinement chips below the search bar
+ * @param {string[]} keywords - Array of related keywords
+ * @param {object} imageCache - Image cache reference
+ */
+function renderRefinementChips(keywords, imageCache) {
+    // Find or create the refinement chips container
+    let chipsContainer = document.getElementById('ai-refinement-chips-container');
+    const searchBarContainer = document.getElementById('search-bar-container');
+
+    if (!chipsContainer && searchBarContainer) {
+        chipsContainer = document.createElement('div');
+        chipsContainer.id = 'ai-refinement-chips-container';
+        searchBarContainer.appendChild(chipsContainer);
+    }
+
+    if (!chipsContainer) return;
+
+    // Clear existing chips
+    chipsContainer.innerHTML = '';
+
+    // Create chips for each keyword
+    keywords.slice(0, 5).forEach(keyword => {
+        const chip = document.createElement('button');
+        chip.className = 'ai-refinement-chip';
+        chip.textContent = keyword;
+        chip.title = `Search for "${keyword}"`;
+
+        chip.addEventListener('click', () => {
+            // Update search input and trigger new search
+            const nameFilterInput = document.getElementById('name-filter');
+            if (nameFilterInput) {
+                nameFilterInput.value = keyword;
+                nameFilterInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+                // Trigger the search with a slight delay to allow debounce
+                setTimeout(() => {
+                    handleProactiveAISearch(keyword, imageCache);
+                }, 100);
+            }
+        });
+
+        chipsContainer.appendChild(chip);
+    });
+}
+
+/**
+ * Clears the AI refinement chips container
+ */
+function clearRefinementChips() {
+    const chipsContainer = document.getElementById('ai-refinement-chips-container');
+    if (chipsContainer) {
+        chipsContainer.innerHTML = '';
     }
 }
 
@@ -563,19 +916,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     const menuLikesBtn = document.getElementById('menu-likes-btn');
     const menuSessionsBtn = document.getElementById('menu-sessions-btn');
 
-    // Toggle hamburger dropdown on button click
-    if (hamburgerMenuBtn && hamburgerMenuDropdown) {
+    // Hamburger button directly opens WTF Plans panel (simplified navigation)
+    if (hamburgerMenuBtn) {
         hamburgerMenuBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const isVisible = hamburgerMenuDropdown.style.display === 'block';
-            hamburgerMenuDropdown.style.display = isVisible ? 'none' : 'block';
-        });
-
-        // Close dropdown when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!hamburgerMenuBtn.contains(e.target) && !hamburgerMenuDropdown.contains(e.target)) {
-                hamburgerMenuDropdown.style.display = 'none';
-            }
+            // Directly open WTF Plans panel instead of showing dropdown
+            showWtfPlansPanel();
         });
     }
 
@@ -895,36 +1241,42 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     
     safeAddEventListener('name-filter', 'input', debounce((e) => {
         const searchTerm = e.target.value.trim();
-        
+
         if (aiSearchController) {
-            aiSearchController.abort(); 
+            aiSearchController.abort();
         }
-        
+
         applyFiltersAndSort(imageCache);
-        
-        if (state.records.filtered.length === 0 && searchTerm.length > 2) {
-            log('Events', 'No local results, triggering proactive AI search.');
-            
-            const hasOtherFilters = 
+
+        // Only trigger hybrid search if search term is substantive (> 2 chars)
+        if (searchTerm.length > 2) {
+            const hasOtherFilters =
                 document.getElementById('status-filter').value !== 'Available' ||
                 document.getElementById('headcount-filter').value !== 'any' ||
                 document.getElementById('location-filter').value !== 'any' ||
                 document.getElementById('budget-filter').value !== 'any' ||
                 (new URLSearchParams(window.location.search).get('category') !== null);
-            
+
+            // Don't trigger hybrid display if user has other filters active
             if (!hasOtherFilters) {
-                handleProactiveAISearch(searchTerm, imageCache);
+                // Get the current filtered results as "catalog matches"
+                const catalogMatches = state.records.filtered.slice(0, 10); // Limit to top 10
+
+                log('Events', `Triggering hybrid search for "${searchTerm}" with ${catalogMatches.length} catalog matches`);
+                handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches);
             }
         }
-    
-        
+
+
     }, 300)); 
     
     safeAddEventListener('clear-search-btn', 'click', () => {
-        handleFilterChipClear({ 
-            target: document.querySelector('#filter-chip-container .filter-chip[data-filter-type="name-filter"] button') 
+        handleFilterChipClear({
+            target: document.querySelector('#filter-chip-container .filter-chip[data-filter-type="name-filter"] button')
         });
-        document.getElementById('name-filter').blur(); 
+        document.getElementById('name-filter').blur();
+        // Clear AI refinement chips when search is cleared
+        clearRefinementChips();
     });
     safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
     safeAddEventListener('headcount-filter', 'change', (e) => {
@@ -1619,14 +1971,24 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 const note = document.getElementById('modal-item-note')?.value || '';
 
                 // Extract selections from option groups
+                // Supports both single-select (returns number) and multi-select (returns array)
                 const selections = {};
                 const optionGroups = document.querySelectorAll('#modal-options-container .option-group');
                 if (optionGroups.length > 0) {
                     optionGroups.forEach((group) => {
                         const groupIndex = group.dataset.groupIndex;
-                        const selectedBtn = group.querySelector('.option-btn.selected');
-                        if (selectedBtn && groupIndex !== undefined) {
-                            selections[`group${groupIndex}`] = parseInt(selectedBtn.dataset.optionIndex, 10) || 0;
+                        const selectedBtns = group.querySelectorAll('.option-btn.selected');
+                        if (selectedBtns.length > 0 && groupIndex !== undefined) {
+                            if (selectedBtns.length === 1) {
+                                // Single selection - store as number
+                                selections[`group${groupIndex}`] = parseInt(selectedBtns[0].dataset.optionIndex, 10) || 0;
+                            } else {
+                                // Multi-selection - store as sorted array
+                                const indices = Array.from(selectedBtns)
+                                    .map(btn => parseInt(btn.dataset.optionIndex, 10) || 0)
+                                    .sort((a, b) => a - b);
+                                selections[`group${groupIndex}`] = indices;
+                            }
                         }
                     });
                 } else {
@@ -1642,7 +2004,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 let selectedOptionIndex = 0;
                 if (Object.keys(selections).length > 0) {
                     // For now, use the first group's selection as the legacy index
-                    selectedOptionIndex = selections['group0'] || 0;
+                    const group0Selection = selections['group0'];
+                    selectedOptionIndex = Array.isArray(group0Selection)
+                        ? (group0Selection[0] || 0)
+                        : (group0Selection || 0);
                 }
 
                 itemInfo = { quantity, selectedOptionIndex, selections, note };
@@ -1872,11 +2237,14 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         } else if (target.matches('#modal-item-note')) {
             updates.note = target.value;
         } else if (e.detail?.selections !== undefined) {
-            // New: Handle selections object from option groups
+            // New: Handle selections object from option groups (supports multi-select arrays)
             updates.selections = e.detail.selections;
             // Also update legacy selectedOptionIndex for backward compatibility
             if (Object.keys(e.detail.selections).length > 0) {
-                updates.selectedOptionIndex = e.detail.selections['group0'] || 0;
+                const group0Selection = e.detail.selections['group0'];
+                updates.selectedOptionIndex = Array.isArray(group0Selection)
+                    ? (group0Selection[0] || 0)
+                    : (group0Selection || 0);
             }
         } else if (e.detail?.selectedOptionIndex !== undefined) {
             // Legacy: Handle single selectedOptionIndex
