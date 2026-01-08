@@ -41,6 +41,19 @@ function syncUiWithUrl() {
 
     const view = params.get('view');
 
+    // DEBUG: Log URL sync entry point with CSS state
+    const isDirectModalAccess = !!openItemId && !document.querySelector('#detail-modal-overlay.active');
+    if (isDirectModalAccess) {
+        console.log('[DIRECT-MODAL-DEBUG] syncUiWithUrl called for direct modal access:', {
+            openItemId,
+            timestamp: performance.now().toFixed(2) + 'ms',
+            cssState: window.__cssDebug ? window.__cssDebug.logState('syncUiWithUrl entry') : 'cssDebug not available',
+            recordsLoaded: state.records.all.length,
+            storesLoaded: state.stores.all.length,
+            documentReadyState: document.readyState
+        });
+    }
+
     // Close any open overlays first
     ui.hideDetailModal();
     ui.hideItineraryModal();
@@ -89,18 +102,41 @@ function syncUiWithUrl() {
         } else if (view === 'itinerary') {
             ui.showItineraryModal();
         } else if (openItemId) {
-            // DEBUG: Check CSS loading state before showing modal
-            console.log('[syncUiWithUrl DEBUG] About to show modal for:', openItemId, {
-                deferredCssLoaded: !!document.querySelector('link[href*="deferred.css"][rel="stylesheet"]'),
-                criticalStyleElements: document.querySelectorAll('style').length,
-                documentReadyState: document.readyState
+            // DEBUG: Comprehensive CSS and DOM state check before showing modal
+            const deferredCssLink = document.querySelector('link[href*="deferred.css"]');
+            const deferredCssLoaded = deferredCssLink && deferredCssLink.rel === 'stylesheet';
+            const sidebarEl = document.querySelector('.sidebar, #sidebar-container, .filter-sidebar');
+            const headerEl = document.querySelector('header, .header, #header');
+
+            console.log('[DIRECT-MODAL-DEBUG] About to show modal for:', openItemId, {
+                timestamp: performance.now().toFixed(2) + 'ms',
+                deferredCssRel: deferredCssLink ? deferredCssLink.rel : 'not found',
+                deferredCssLoaded,
+                documentReadyState: document.readyState,
+                totalStylesheets: document.styleSheets.length,
+                inlineStyles: document.querySelectorAll('style').length,
+                // Check if key UI elements have proper styles
+                sidebarBgColor: sidebarEl ? window.getComputedStyle(sidebarEl).backgroundColor : 'element not found',
+                headerBgColor: headerEl ? window.getComputedStyle(headerEl).backgroundColor : 'element not found',
+                bodyBgColor: window.getComputedStyle(document.body).backgroundColor,
+                // Check stylesheets status
+                stylesheetDetails: Array.from(document.styleSheets).map(s => ({
+                    href: s.href ? s.href.split('/').pop() : 'inline',
+                    disabled: s.disabled,
+                    rulesCount: (() => { try { return s.cssRules ? s.cssRules.length : 'N/A'; } catch(e) { return 'CORS blocked'; }})()
+                }))
             });
 
             const recordToOpen = state.records.all.find(r => r.id === openItemId);
             if (recordToOpen) {
+                // Log if CSS isn't loaded yet - this is the likely cause of styling issues
+                if (!deferredCssLoaded) {
+                    console.warn('[DIRECT-MODAL-DEBUG] WARNING: Deferred CSS not yet loaded when opening modal!');
+                    console.warn('[DIRECT-MODAL-DEBUG] This may cause styling issues. CSS link rel attribute:', deferredCssLink?.rel);
+                }
                 ui.showDetailModal(recordToOpen);
             } else {
-                console.warn(`[syncUiWithUrl] Record ID ${openItemId} not found in state.records.all.`);
+                console.warn(`[DIRECT-MODAL-DEBUG] Record ID ${openItemId} not found in state.records.all. Available records: ${state.records.all.length}`);
             }
         }
     }, 100); // Small delay
@@ -109,6 +145,19 @@ function syncUiWithUrl() {
 
 async function initialize() {
     log('Main', '1. Initialization started.');
+
+    // DEBUG: Check if this is a direct modal URL access
+    const isDirectModalUrl = window.location.pathname.includes('/item/') ||
+                             new URLSearchParams(window.location.search).has('openItem');
+    if (isDirectModalUrl) {
+        console.log('[INIT-DEBUG] Direct modal URL detected at initialization:', {
+            pathname: window.location.pathname,
+            search: window.location.search,
+            timestamp: performance.now().toFixed(2) + 'ms',
+            cssState: window.__cssDebug ? window.__cssDebug.logState('initialize() start') : 'cssDebug not available',
+            documentReadyState: document.readyState
+        });
+    }
 
     // Early detection of presentation mode for optimized initialization
     const urlParamsEarly = new URLSearchParams(window.location.search);
@@ -602,6 +651,18 @@ async function initialize() {
             const menuProjectsBtn = document.getElementById('menu-projects-btn');
             if (menuSessionsBtn) menuSessionsBtn.style.display = 'flex';
             if (menuProjectsBtn) menuProjectsBtn.style.display = 'flex';
+        }
+
+        // DEBUG: Log state just before syncUiWithUrl for direct modal URL debugging
+        if (isDirectModalUrl) {
+            console.log('[INIT-DEBUG] About to call syncUiWithUrl:', {
+                timestamp: performance.now().toFixed(2) + 'ms',
+                cssState: window.__cssDebug ? window.__cssDebug.logState('Before syncUiWithUrl') : 'cssDebug not available',
+                recordsLoaded: state.records.all.length,
+                storesLoaded: state.stores.all.length,
+                activeShopId: state.ui.activeShopId,
+                sessionId: state.session.id
+            });
         }
 
         syncUiWithUrl();

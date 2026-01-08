@@ -1439,6 +1439,35 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     }
     isModalRendering = true;
 
+    // DEBUG: Comprehensive entry point logging for direct modal URL debugging
+    const deferredCssLink = document.querySelector('link[href*="deferred.css"]');
+    const deferredCssLoaded = deferredCssLink && deferredCssLink.rel === 'stylesheet';
+    const isDirectUrlAccess = !document.referrer || document.referrer === '' ||
+                              (new URL(document.referrer).pathname !== window.location.pathname);
+
+    console.log('[MODAL-DEBUG] showDetailModal entry:', {
+        recordId: record.id,
+        recordName: record.fields?.Name,
+        timestamp: performance.now().toFixed(2) + 'ms',
+        isDirectUrlAccess,
+        documentReferrer: document.referrer || 'none',
+        // CSS Loading State
+        deferredCssRel: deferredCssLink ? deferredCssLink.rel : 'not found',
+        deferredCssLoaded,
+        totalStylesheets: document.styleSheets.length,
+        // DOM State
+        documentReadyState: document.readyState,
+        modalOverlayExists: !!document.getElementById('detail-modal-overlay'),
+        modalOverlayDisplay: modalOverlay ? window.getComputedStyle(modalOverlay).display : 'N/A',
+        bodyClasses: document.body.className
+    });
+
+    // If CSS not loaded yet, add a specific warning
+    if (!deferredCssLoaded) {
+        console.warn('[MODAL-DEBUG] Deferred CSS not loaded - this may cause styling issues');
+        console.warn('[MODAL-DEBUG] Consider waiting for CSS before showing modal on direct URL access');
+    }
+
     const detailSpecs = [
         { fieldName: 'Duration', label: 'Duration' },
         { fieldName: 'Capacity', label: 'Capacity' },
@@ -3498,6 +3527,30 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             } else {
                 console.log('[Modal DEBUG] ✓ Modal is correctly above presentation view');
             }
+        }
+    });
+
+    // DEBUG: Log final modal rendering completion state
+    console.log('[MODAL-DEBUG] showDetailModal complete:', {
+        recordId: record.id,
+        timestamp: performance.now().toFixed(2) + 'ms',
+        deferredCssLoadedNow: !!document.querySelector('link[href*="deferred.css"][rel="stylesheet"]'),
+        modalOverlayActive: modalOverlay.classList.contains('active'),
+        modalContentVisible: !!modalOverlay.querySelector('.modal-content'),
+        // Check background page elements to see if they have proper styling
+        pageElementStyles: {
+            sidebarBgColor: (() => {
+                const el = document.querySelector('.sidebar, #sidebar-container, .filter-sidebar, .filters-sidebar');
+                return el ? window.getComputedStyle(el).backgroundColor : 'not found';
+            })(),
+            headerBgColor: (() => {
+                const el = document.querySelector('header, .header, #header');
+                return el ? window.getComputedStyle(el).backgroundColor : 'not found';
+            })(),
+            catalogBgColor: (() => {
+                const el = document.querySelector('#catalog-container, .catalog-container');
+                return el ? window.getComputedStyle(el).backgroundColor : 'not found';
+            })()
         }
     });
 

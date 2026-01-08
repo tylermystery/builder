@@ -1436,8 +1436,75 @@ body.presentation-loading #presentation-modal-overlay {
     </script>
 
     <!-- Load Deferred CSS Asynchronously -->
-    <link rel="preload" href="css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <link rel="preload" href="css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet';console.log('[CSS DEBUG] Deferred CSS loaded and applied as stylesheet at:', performance.now().toFixed(2), 'ms');">
     <noscript><link rel="stylesheet" href="css/deferred.css"></noscript>
+    <script>
+    // CSS Loading Debug - tracks CSS loading state for modal URL debugging
+    (function() {
+        var cssDebug = {
+            deferredCssStartTime: performance.now(),
+            isDirectModalUrl: window.location.pathname.includes('/item/') || new URLSearchParams(window.location.search).has('openItem'),
+            logState: function(label) {
+                var deferredLink = document.querySelector('link[href*="deferred.css"]');
+                var state = {
+                    label: label,
+                    timestamp: performance.now().toFixed(2) + 'ms',
+                    isDirectModalUrl: this.isDirectModalUrl,
+                    deferredCssRel: deferredLink ? deferredLink.rel : 'not found',
+                    deferredCssLoaded: deferredLink && deferredLink.rel === 'stylesheet',
+                    documentReadyState: document.readyState,
+                    stylesheetCount: document.styleSheets.length,
+                    inlineStyleCount: document.querySelectorAll('style').length
+                };
+                console.log('[CSS DEBUG]', state);
+                return state;
+            }
+        };
+        window.__cssDebug = cssDebug;
+
+        // Log initial state
+        cssDebug.logState('Initial (inline script)');
+
+        // Monitor CSS loading via MutationObserver
+        if (cssDebug.isDirectModalUrl) {
+            console.log('[CSS DEBUG] Direct modal URL detected - enabling enhanced CSS tracking');
+            var observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'rel') {
+                        var target = mutation.target;
+                        if (target.href && target.href.includes('deferred.css')) {
+                            console.log('[CSS DEBUG] Deferred CSS rel attribute changed to:', target.rel);
+                            cssDebug.logState('After deferred CSS rel change');
+                        }
+                    }
+                });
+            });
+
+            // Start observing once head is available
+            var startObserving = function() {
+                var links = document.querySelectorAll('link[href*="deferred.css"]');
+                links.forEach(function(link) {
+                    observer.observe(link, { attributes: true });
+                });
+            };
+
+            if (document.head) {
+                startObserving();
+            } else {
+                document.addEventListener('DOMContentLoaded', startObserving);
+            }
+        }
+
+        // Log state at key document lifecycle points
+        document.addEventListener('DOMContentLoaded', function() {
+            cssDebug.logState('DOMContentLoaded');
+        });
+
+        window.addEventListener('load', function() {
+            cssDebug.logState('Window load');
+        });
+    })();
+    </script>
 
     <!-- Third-party libraries - load on demand after page interactive -->
     <!-- Tippy.js/Popper for tooltips - loaded late as non-critical -->
