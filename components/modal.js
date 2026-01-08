@@ -8,6 +8,24 @@ import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, debounce }
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
+import { updateHeader } from './sidebar.js';
+
+/**
+ * Updates the page's title and meta description for SEO purposes.
+ * @param {string} title - The new page title.
+ * @param {string} description - The new meta description.
+ */
+function updatePageMetadata(title, description) {
+    document.title = title;
+
+    let metaDescription = document.querySelector('meta[name="description"]');
+    if (!metaDescription) {
+        metaDescription = document.createElement('meta');
+        metaDescription.setAttribute('name', 'description');
+        document.head.appendChild(metaDescription);
+    }
+    metaDescription.setAttribute('content', description);
+}
 
 /**
  * [V3.7] Generates the "Intelligent Blurb" by calling the central recommendation engine.
@@ -358,7 +376,41 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
-    
+
+    // --- SEO: Update page title and meta description ---
+    const itemName = record.fields.Name || 'Untitled';
+    const seoTitle = `${itemName} | WTFun`;
+    let seoDescription = record.fields.Description || '';
+
+    if (!seoDescription) {
+        // Try to generate description from AI_Profile
+        const aiProfileString = record.fields.AI_Profile;
+        if (aiProfileString) {
+            try {
+                const aiProfile = JSON.parse(aiProfileString);
+                const tags = aiProfile.SearchTerms || aiProfile.Tags || [];
+                if (tags.length > 0) {
+                    seoDescription = `Book ${itemName}. Features: ${tags.join(', ')}.`;
+                }
+            } catch (e) {
+                // Ignore parsing errors
+            }
+        }
+    }
+
+    // Fallback description if still empty
+    if (!seoDescription) {
+        seoDescription = `Check out ${itemName} on WTFun.`;
+    }
+
+    // Truncate to 160 characters for SEO best practices
+    if (seoDescription.length > 160) {
+        seoDescription = seoDescription.substring(0, 157) + '...';
+    }
+
+    updatePageMetadata(seoTitle, seoDescription);
+    // --- END SEO ---
+
     try {
         const blurbHtml = generateRecommendationBlurb(record);
         if (blurbHtml && modalRecBlurb) {
@@ -658,6 +710,11 @@ export function hideDetailModal() {
         log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
         currentItemChatRecordId = null;
     }
+
+    // --- SEO: Reset page title and meta description ---
+    updateHeader(); // Resets title to Shop Name or Event Plan Name
+    updatePageMetadata(document.title, 'Plan your perfect event with WTFun.');
+    // --- END SEO ---
 
     if (modalOverlay) {
         modalOverlay.classList.remove('active');

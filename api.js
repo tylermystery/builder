@@ -476,7 +476,7 @@ export async function fetchAllStores() {
                 throw new Error(`Failed to fetch stores from Airtable. Status: ${response.status}`);
             }
             const data = await response.json();
-            records = records.concat(data.records);\
+            records = records.concat(data.records);
             offset = data.offset;
         } while (offset);
         log('API', `Total stores fetched: ${records.length}`);
@@ -686,7 +686,7 @@ export async function fetchCuratedImagesByRecord(record) {
         return imageUrls;
 
     } catch (error) {
-        console.error(`Error fetching curated images for item ${record.id}:`, error.message);\
+        console.error(`Error fetching curated images for item ${record.id}:`, error.message);
         return [];
     }
 }
@@ -791,179 +791,252 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
          return;
      }
 
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}`;\
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}`;
     const payload = {
-        records: [{\
-            fields: {\
-                SessionID: [sessionId],\
-                SenderID: senderId,\
-                SenderName: senderName,\
-                Content: content.trim(),\
-            }\
-        }]\
-    };\
-\
-    try {\n         log('API', `Posting chat message to session ${sessionId} from ${senderName}`);\
-        const response = await fetch(url, {\
-            method: 'POST',\
-            headers: {\
-                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,\
-                'Content-Type': 'application/json'\
-            },\
-            body: JSON.stringify(payload)\
-        });\
-        if (!response.ok) {\
-            const errorData = await response.json();\
-            throw new Error(`Airtable API Error posting message: ${errorData?.error?.message || response.statusText}`);\
-        }\
-\
-        const result = await response.json();\
-        const newMessageRecordId = result.records[0].id;\
-         log('API', `Chat message saved with record ID: ${newMessageRecordId}`);\
-\
-        if (newMessageRecordId) {\
-            const notificationPromises = [\
-                fetch('/api/send-notification', {\
-                    method: 'POST',\
-                    headers: { 'Content-Type': 'application/json' },\
-                     body: JSON.stringify({ recordId: newMessageRecordId })\
-                }).catch(err => console.error(\"SMS notification trigger failed:\", err)),\
-\
-                fetch('/api/send-email-notification', {\
-                    method: 'POST',\
-                    headers: { 'Content-Type': 'application/json' },\
-                     body: JSON.stringify({ recordId: newMessageRecordId })\
-                }).catch(err => console.error(\"Email notification trigger failed:\", err)),\
-\
-                fetch('/api/send-chat-to-admin', {\
-                    method: 'POST',\
-                    headers: { 'Content-Type': 'application/json' },\
-                     body: JSON.stringify({ recordId: newMessageRecordId })\
-                }).catch(err => console.error(\"Admin chat notification trigger failed:\", err))\
-            ];\
-            await Promise.allSettled(notificationPromises);\
-            log('API', `Triggered all notifications for message ${newMessageRecordId}.`);\
-        }\
-    } catch (error) {\
-        console.error(\"CRITICAL: Failed to save chat message to database.\", error);\
-         if (typeof ui !== 'undefined' && ui.showToast) {\
-             ui.showToast(`Error: Could not send message. ${error.message}`);\
-         } else {\
-             alert(`Could not save message: ${error.message}`);\
-         }\
-    }\
-}\
-\
-\
-export async function fetchItemChatMessages(itemId) {\
-     if (!itemId || !itemId.startsWith('rec')) {\
-          log('API', 'fetchItemChatMessages: Invalid or missing itemId.');\
-          return [];\
-     }\
-    const formula = `FIND('${itemId}', ARRAYJOIN({Item Link}))`; // Corrected field name 'Item Link'\
-    const encodedFormula = encodeURIComponent(formula);\
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;\
-\
-    try {\
-        const response = await fetch(url, {\
-            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }\
-        });\
-        if (!response.ok) {\
-             const errorData = await response.json();\
-            throw new Error(`Failed to fetch item chat messages for ${itemId}: ${errorData?.error?.message || response.statusText}`);\
-        }\
-        const data = await response.json();\
-        log('API', `Fetched ${data.records.length} item chat messages for ${itemId}.`);\
-        return data.records;\
-    } catch (error) {\
-        console.error(`Error fetching item chat history for ${itemId}:`, error);\
-        return [];\
-    }\
-}\
-\
-\
-export async function postItemChatMessage(itemId, senderId, senderName, content) {\
-     if (!itemId || !itemId.startsWith('rec')) {\
-        console.error(`[API] postItemChatMessage Error: Invalid itemId provided: \\\"${itemId}\\\".`);\
-        return;\
-    }\
-    if (!content || !content.trim()) {\
-        log('API', 'postItemChatMessage: Attempted to send empty message.');\
-        return;\
-    }\
-\
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}`;\
-    const payload = {\
-        records: [{\
-            fields: {\
-                'Item Link': [itemId], // Corrected field name 'Item Link'\
-                SenderID: senderId,\
-                SenderName: senderName,\
-                Content: content.trim(),\
-            }\
-        }]\
-    };\
-    try {\n         log('API', `Posting item chat message to item ${itemId} from ${senderName}`);\
-        const response = await fetch(url, {\
-            method: 'POST',\
-            headers: {\
-                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,\
-                'Content-Type': 'application/json'\
-            },\
-            body: JSON.stringify(payload)\
-        });\
-        if (!response.ok) {\
-             const errorData = await response.json();\
-             throw new Error(`Failed to post item chat message to Airtable: ${errorData?.error?.message || response.statusText}`);\
-        }\
-        log('API', `Successfully posted item chat message for ${itemId}.`);\
-    } catch (error) {\
-        console.error(`Error posting item chat message for ${itemId}:`, error);\
-         if (typeof ui !== 'undefined' && ui.showToast) {\
-            ui.showToast(`Error: Could not send message. ${error.message}`);\
-        }\
-    }\
-}\
-\
-\
-export async function banUser(userId) {\
-    log('API', `[MODERATION] Simulating API call to ban user: ${userId}`);\
-    state.session.bannedUsers.add(userId);\
-}\
-\
-\
-export async function updateUserFlagStatus(userId, isFlagged) {\
-    log('API', `[MODERATION] Simulating API call to update flag for user: ${userId} to ${isFlagged}`);\
-    if (isFlagged) {\
-        state.session.flaggedUsers.add(userId);\
-    } else {\
-        state.session.flaggedUsers.delete(userId);\
-    }\
-}\
-\
-\
-export async function addRsvpToEvent(eventId, userId) {\
-    if (!eventId || !userId) {\
-         log('API', 'addRsvpToEvent: Missing eventId or userId.');\
-         return null;\
-    }\
-    log('API', `Adding RSVP for user ${userId} to event ${eventId}`);\
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${eventId}`;\
-\
-    try {\
-        const getResponse = await fetch(url, {\
-            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }\
-        });\
-        if (!getResponse.ok) {\
-             if (getResponse.status === 404) throw new Error(`Event ${eventId} not found.`);\
-             throw new Error(`Could not fetch the event to update RSVPs. Status: ${getResponse.status}`);\
-        }\
-\
-        const existingRecord = await getResponse.json();\
-        const rsvps = new Set(existingRecord.fields.RSVPs || []);\
-\
-        if (rsvps.has(userId)) {\
-             log('API', `User ${userId} already RSVP'd to event ${eventId}.`);\
-             return existingRecord;\
-        }\
-        rsvps.add(
+        records: [{
+            fields: {
+                SessionID: [sessionId],
+                SenderID: senderId,
+                SenderName: senderName,
+                Content: content.trim(),
+            }
+        }]
+    };
+
+    try {
+        log('API', `Posting chat message to session ${sessionId} from ${senderName}`);
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Airtable API Error posting message: ${errorData?.error?.message || response.statusText}`);
+        }
+
+        const result = await response.json();
+        const newMessageRecordId = result.records[0].id;
+        log('API', `Chat message saved with record ID: ${newMessageRecordId}`);
+
+        if (newMessageRecordId) {
+            const notificationPromises = [
+                fetch('/api/send-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recordId: newMessageRecordId })
+                }).catch(err => console.error("SMS notification trigger failed:", err)),
+
+                fetch('/api/send-email-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recordId: newMessageRecordId })
+                }).catch(err => console.error("Email notification trigger failed:", err)),
+
+                fetch('/api/send-chat-to-admin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recordId: newMessageRecordId })
+                }).catch(err => console.error("Admin chat notification trigger failed:", err))
+            ];
+            await Promise.allSettled(notificationPromises);
+            log('API', `Triggered all notifications for message ${newMessageRecordId}.`);
+        }
+    } catch (error) {
+        console.error("CRITICAL: Failed to save chat message to database.", error);
+        if (typeof ui !== 'undefined' && ui.showToast) {
+            ui.showToast(`Error: Could not send message. ${error.message}`);
+        } else {
+            alert(`Could not save message: ${error.message}`);
+        }
+    }
+}
+
+
+export async function fetchItemChatMessages(itemId) {
+    if (!itemId || !itemId.startsWith('rec')) {
+        log('API', 'fetchItemChatMessages: Invalid or missing itemId.');
+        return [];
+    }
+    const formula = `FIND('${itemId}', ARRAYJOIN({Item Link}))`; // Corrected field name 'Item Link'
+    const encodedFormula = encodeURIComponent(formula);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Failed to fetch item chat messages for ${itemId}: ${errorData?.error?.message || response.statusText}`);
+        }
+        const data = await response.json();
+        log('API', `Fetched ${data.records.length} item chat messages for ${itemId}.`);
+        return data.records;
+    } catch (error) {
+        console.error(`Error fetching item chat history for ${itemId}:`, error);
+        return [];
+    }
+}
+
+
+export async function postItemChatMessage(itemId, senderId, senderName, content) {
+    if (!itemId || !itemId.startsWith('rec')) {
+        console.error(`[API] postItemChatMessage Error: Invalid itemId provided: "${itemId}".`);
+        return;
+    }
+    if (!content || !content.trim()) {
+        log('API', 'postItemChatMessage: Attempted to send empty message.');
+        return;
+    }
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}`;
+    const payload = {
+        records: [{
+            fields: {
+                'Item Link': [itemId], // Corrected field name 'Item Link'
+                SenderID: senderId,
+                SenderName: senderName,
+                Content: content.trim(),
+            }
+        }]
+    };
+    try {
+        log('API', `Posting item chat message to item ${itemId} from ${senderName}`);
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Failed to post item chat message to Airtable: ${errorData?.error?.message || response.statusText}`);
+        }
+        log('API', `Successfully posted item chat message for ${itemId}.`);
+    } catch (error) {
+        console.error(`Error posting item chat message for ${itemId}:`, error);
+        if (typeof ui !== 'undefined' && ui.showToast) {
+            ui.showToast(`Error: Could not send message. ${error.message}`);
+        }
+    }
+}
+
+
+export async function banUser(userId) {
+    log('API', `[MODERATION] Simulating API call to ban user: ${userId}`);
+    state.session.bannedUsers.add(userId);
+}
+
+
+export async function updateUserFlagStatus(userId, isFlagged) {
+    log('API', `[MODERATION] Simulating API call to update flag for user: ${userId} to ${isFlagged}`);
+    if (isFlagged) {
+        state.session.flaggedUsers.add(userId);
+    } else {
+        state.session.flaggedUsers.delete(userId);
+    }
+}
+
+
+export async function addRsvpToEvent(eventId, userId) {
+    if (!eventId || !userId) {
+        log('API', 'addRsvpToEvent: Missing eventId or userId.');
+        return null;
+    }
+    log('API', `Adding RSVP for user ${userId} to event ${eventId}`);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${eventId}`;
+
+    try {
+        const getResponse = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!getResponse.ok) {
+            if (getResponse.status === 404) throw new Error(`Event ${eventId} not found.`);
+            throw new Error(`Could not fetch the event to update RSVPs. Status: ${getResponse.status}`);
+        }
+
+        const existingRecord = await getResponse.json();
+        const rsvps = new Set(existingRecord.fields.RSVPs || []);
+
+        if (rsvps.has(userId)) {
+            log('API', `User ${userId} already RSVP'd to event ${eventId}.`);
+            return existingRecord;
+        }
+        rsvps.add(userId);
+
+        const patchResponse = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: { RSVPs: Array.from(rsvps) } })
+        });
+        if (!patchResponse.ok) {
+            const errorData = await patchResponse.json();
+            throw new Error(`Airtable API Error updating RSVPs: ${errorData?.error?.message || patchResponse.statusText}`);
+        }
+
+        log('API', `Successfully added RSVP for user ${userId} to event ${eventId}.`);
+        return await patchResponse.json();
+
+    } catch (error) {
+        console.error(`Error adding RSVP for event ${eventId}:`, error);
+        return null;
+    }
+}
+
+
+export async function removeRsvpFromEvent(eventId, userId) {
+    if (!eventId || !userId) {
+        log('API', 'removeRsvpFromEvent: Missing eventId or userId.');
+        return null;
+    }
+    log('API', `Removing RSVP for user ${userId} from event ${eventId}`);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${eventId}`;
+
+    try {
+        const getResponse = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!getResponse.ok) {
+            if (getResponse.status === 404) throw new Error(`Event ${eventId} not found.`);
+            throw new Error(`Could not fetch the event to update RSVPs. Status: ${getResponse.status}`);
+        }
+
+        const existingRecord = await getResponse.json();
+        const rsvps = new Set(existingRecord.fields.RSVPs || []);
+
+        if (!rsvps.has(userId)) {
+            log('API', `User ${userId} was not RSVP'd to event ${eventId}.`);
+            return existingRecord;
+        }
+        rsvps.delete(userId);
+
+        const patchResponse = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: { RSVPs: Array.from(rsvps) } })
+        });
+        if (!patchResponse.ok) {
+            const errorData = await patchResponse.json();
+            throw new Error(`Airtable API Error updating RSVPs: ${errorData?.error?.message || patchResponse.statusText}`);
+        }
+
+        log('API', `Successfully removed RSVP for user ${userId} from event ${eventId}.`);
+        return await patchResponse.json();
+
+    } catch (error) {
+        console.error(`Error removing RSVP for event ${eventId}:`, error);
+        return null;
+    }
+}
