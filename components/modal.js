@@ -1727,7 +1727,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const isUserRegistered = rsvpYes.includes(userId) || rsvpMaybe.includes(userId) || rsvpNo.includes(userId);
 
         // Only show event-specific sections for individual events, not parent events with child date options
-        // For registered users, skip the RSVP list and duplicate event info sections
+        // Show event info for non-registered users only
+        const userIsAuthenticatedForRsvp = state.session.user.isAuthenticated;
         if (!hasChildEventOptions && !isUserRegistered) {
         const eventDateStr = record.fields.Date;
         const eventTime = record.fields.Time || '';
@@ -1759,8 +1760,11 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             modalItemDescription.parentElement.insertBefore(eventInfoSection, modalItemDescription);
         }
 
-        // RSVP list section - only shown for non-registered users
-        if (rsvpYes.length > 0 || rsvpMaybe.length > 0 || rsvpNo.length > 0) {
+        // Calendar export buttons removed for published events - not needed for viewing
+        }
+
+        // RSVP list section - only shown for authenticated users (moved outside the isUserRegistered check)
+        if (!hasChildEventOptions && userIsAuthenticatedForRsvp && (rsvpYes.length > 0 || rsvpMaybe.length > 0 || rsvpNo.length > 0)) {
             // Remove any existing RSVP list section before creating new one
             const existingRsvpList = document.querySelector('.rsvp-list-section');
             if (existingRsvpList) existingRsvpList.remove();
@@ -1820,9 +1824,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 const items = rsvpListSection.querySelectorAll('.rsvp-list-items');
                 items.forEach(el => el.textContent = 'Guests');
             });
-        }
-
-        // Calendar export buttons removed for published events - not needed for viewing
         }
     }
 
