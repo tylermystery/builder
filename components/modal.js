@@ -148,6 +148,33 @@ function resetSeoMetadata() {
 }
 
 /**
+ * Copies a share link to clipboard and provides visual feedback on the button.
+ * @param {string} url - The URL to copy to clipboard.
+ * @param {HTMLButtonElement} buttonEl - The button element to show feedback on.
+ */
+async function copyShareLinkToClipboard(url, buttonEl) {
+    try {
+        await navigator.clipboard.writeText(url);
+        const originalHTML = buttonEl.innerHTML;
+        buttonEl.innerHTML = '<span class="share-icon">&#10003;</span> Copied!';
+        buttonEl.classList.add('share-copied');
+        log('Modal', `Copied share link to clipboard: ${url}`);
+        setTimeout(() => {
+            buttonEl.innerHTML = originalHTML;
+            buttonEl.classList.remove('share-copied');
+        }, 1500);
+    } catch (err) {
+        console.error('Failed to copy share link:', err);
+        // Show error feedback briefly
+        const originalHTML = buttonEl.innerHTML;
+        buttonEl.innerHTML = '<span class="share-icon">&#x26A0;</span> Failed';
+        setTimeout(() => {
+            buttonEl.innerHTML = originalHTML;
+        }, 1500);
+    }
+}
+
+/**
  * Updates the page's title and meta description for SEO purposes.
  * @param {string} title - The new page title.
  * @param {string} description - The new meta description.
@@ -2496,6 +2523,56 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     heartBtnContainer.id = 'modal-heart-btn';
     heartBtnContainer.dataset.recordId = record.id;
     modalHeaderActions.appendChild(heartBtnContainer);
+
+    // Add share button for sharing item URL (without session)
+    const shareBtn = document.createElement('button');
+    shareBtn.className = 'card-action-btn modal-share-btn';
+    shareBtn.id = 'modal-share-btn';
+    shareBtn.title = 'Share this item';
+    shareBtn.innerHTML = '<span class="share-icon">&#x1F517;</span> Share';
+    shareBtn.dataset.recordId = record.id;
+    shareBtn.dataset.itemName = record.fields.Name || '';
+    modalHeaderActions.appendChild(shareBtn);
+
+    // Share button click handler
+    shareBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+
+        // Generate slug for pretty URL
+        const slug = generateSlug(record.fields.Name, record.id);
+
+        // Build share URL with shopId but WITHOUT session
+        const shareUrl = new URL(`${window.location.origin}/item/${slug}`);
+
+        // Include shopId if available (from current state or URL)
+        const currentShopId = state.activeShop?.id || new URLSearchParams(window.location.search).get('shopId');
+        if (currentShopId) {
+            shareUrl.searchParams.set('shopId', currentShopId);
+        }
+
+        const shareData = {
+            title: record.fields.Name || 'Check out this item',
+            text: record.fields.Description ? record.fields.Description.substring(0, 100) + '...' : 'Check out this item on WTFun!',
+            url: shareUrl.toString()
+        };
+
+        // Try Web Share API first (mobile-friendly)
+        if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+            try {
+                await navigator.share(shareData);
+                log('Modal', `Shared item via Web Share API: ${record.fields.Name}`);
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error('Share failed:', err);
+                    // Fallback to clipboard
+                    await copyShareLinkToClipboard(shareUrl.toString(), shareBtn);
+                }
+            }
+        } else {
+            // Fallback to clipboard copy
+            await copyShareLinkToClipboard(shareUrl.toString(), shareBtn);
+        }
+    });
 
     if (record.fields['Item Type'] === 'Event') {
         const rsvpYes = record.fields.RSVPs || [];
