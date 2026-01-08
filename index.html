@@ -1434,28 +1434,114 @@ body.presentation-loading #presentation-modal-overlay {
     </script>
 
     <!-- Load Deferred CSS Asynchronously -->
-    <link rel="preload" href="css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet';console.log('[CSS DEBUG] Deferred CSS loaded and applied as stylesheet at:', performance.now().toFixed(2), 'ms');">
+    <link rel="preload" href="css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet';window.__deferredCssRelChanged=true;console.log('[CSS DEBUG] Deferred CSS loaded and applied as stylesheet at:', performance.now().toFixed(2), 'ms');">
     <noscript><link rel="stylesheet" href="css/deferred.css"></noscript>
     <script>
     // CSS Loading Debug - tracks CSS loading state for modal URL debugging
     (function() {
+        // Helper to check if deferred.css rules are actually parsed and accessible
+        function areDeferredCssRulesParsed() {
+            try {
+                var sheets = document.styleSheets;
+                for (var i = 0; i < sheets.length; i++) {
+                    var sheet = sheets[i];
+                    if (sheet.href && sheet.href.includes('deferred.css')) {
+                        // Try to access rules - this throws if CSS isn't fully loaded
+                        var rules = sheet.cssRules || sheet.rules;
+                        return rules && rules.length > 0;
+                    }
+                }
+            } catch (e) {
+                // CORS or not-yet-loaded will throw
+                return false;
+            }
+            return false;
+        }
+
+        // Helper to check computed styles on key elements
+        function getKeyElementStyles() {
+            var eventPlanPanel = document.getElementById('event-plan-panel');
+            var filterControls = document.getElementById('filter-controls');
+            var sidebarContainer = document.getElementById('sidebar-container');
+            var catalogContainer = document.getElementById('catalog-container');
+
+            var styles = {};
+
+            if (eventPlanPanel) {
+                var eps = window.getComputedStyle(eventPlanPanel);
+                styles.eventPlanPanel = {
+                    backgroundColor: eps.backgroundColor,
+                    backdropFilter: eps.backdropFilter || eps.webkitBackdropFilter,
+                    display: eps.display
+                };
+            }
+
+            if (filterControls) {
+                var fcs = window.getComputedStyle(filterControls);
+                styles.filterControls = {
+                    backgroundColor: fcs.backgroundColor,
+                    backdropFilter: fcs.backdropFilter || fcs.webkitBackdropFilter,
+                    display: fcs.display
+                };
+            }
+
+            if (sidebarContainer) {
+                var scs = window.getComputedStyle(sidebarContainer);
+                styles.sidebarContainer = {
+                    display: scs.display,
+                    width: scs.width
+                };
+            }
+
+            if (catalogContainer) {
+                var ccs = window.getComputedStyle(catalogContainer);
+                styles.catalogContainer = {
+                    display: ccs.display
+                };
+            }
+
+            return styles;
+        }
+
         var cssDebug = {
             deferredCssStartTime: performance.now(),
             isDirectModalUrl: window.location.pathname.includes('/item/') || new URLSearchParams(window.location.search).has('openItem'),
+            cssRulesApplied: false,
             logState: function(label) {
                 var deferredLink = document.querySelector('link[href*="deferred.css"]');
+                var rulesAccessible = areDeferredCssRulesParsed();
+                var keyStyles = getKeyElementStyles();
                 var state = {
                     label: label,
                     timestamp: performance.now().toFixed(2) + 'ms',
                     isDirectModalUrl: this.isDirectModalUrl,
                     deferredCssRel: deferredLink ? deferredLink.rel : 'not found',
-                    deferredCssLoaded: deferredLink && deferredLink.rel === 'stylesheet',
+                    deferredCssRelIsStylesheet: deferredLink && deferredLink.rel === 'stylesheet',
+                    cssRulesAccessible: rulesAccessible,
                     documentReadyState: document.readyState,
                     stylesheetCount: document.styleSheets.length,
-                    inlineStyleCount: document.querySelectorAll('style').length
+                    inlineStyleCount: document.querySelectorAll('style').length,
+                    keyElementStyles: keyStyles
                 };
                 console.log('[CSS DEBUG]', state);
                 return state;
+            },
+            // Returns true when CSS rules are actually parsed and element styles show frosted glass effect
+            areCssStylesApplied: function() {
+                var rulesAccessible = areDeferredCssRulesParsed();
+                var keyStyles = getKeyElementStyles();
+
+                // Check if event-plan-panel has the frosted glass background from deferred.css
+                // deferred.css sets: background-color: rgba(255, 255, 255, 0.7)
+                var hasCorrectBg = false;
+                if (keyStyles.eventPlanPanel) {
+                    var bg = keyStyles.eventPlanPanel.backgroundColor;
+                    // Check for rgba(255, 255, 255, 0.7) which is the frosted glass style
+                    hasCorrectBg = bg && (bg.includes('rgba(255') || bg.includes('rgb(255'));
+                }
+
+                this.cssRulesApplied = rulesAccessible && hasCorrectBg;
+                return this.cssRulesApplied;
             }
         };
         window.__cssDebug = cssDebug;
@@ -1473,6 +1559,13 @@ body.presentation-loading #presentation-modal-overlay {
                         if (target.href && target.href.includes('deferred.css')) {
                             console.log('[CSS DEBUG] Deferred CSS rel attribute changed to:', target.rel);
                             cssDebug.logState('After deferred CSS rel change');
+
+                            // Check if styles are actually applied after a short delay
+                            setTimeout(function() {
+                                var stylesApplied = cssDebug.areCssStylesApplied();
+                                console.log('[CSS DEBUG] Styles applied check (50ms after rel change):', stylesApplied);
+                                cssDebug.logState('50ms after rel change');
+                            }, 50);
                         }
                     }
                 });
@@ -1500,6 +1593,10 @@ body.presentation-loading #presentation-modal-overlay {
 
         window.addEventListener('load', function() {
             cssDebug.logState('Window load');
+            // Final check of styles applied
+            setTimeout(function() {
+                cssDebug.logState('Window load + 100ms');
+            }, 100);
         });
     })();
     </script>

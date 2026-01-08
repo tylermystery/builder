@@ -29,10 +29,10 @@ window.applyFiltersAndSort = applyFiltersAndSort;
 window.showReceiptModal = showReceiptModal;
 
 /**
- * Waits for the deferred CSS to be fully loaded
+ * Waits for the deferred CSS to be fully loaded AND applied
  * Returns a promise that resolves when CSS is ready, or after a timeout
  * @param {number} maxWait - Maximum time to wait in milliseconds (default: 500ms)
- * @returns {Promise<boolean>} - Resolves to true if CSS loaded, false if timed out
+ * @returns {Promise<{loaded: boolean, rulesApplied: boolean, reason: string}>}
  */
 function waitForDeferredCss(maxWait = 500) {
     return new Promise((resolve) => {
@@ -42,24 +42,72 @@ function waitForDeferredCss(maxWait = 500) {
             return Array.from(links).some(link => link.rel === 'stylesheet');
         };
 
-        // Already loaded
-        if (checkCssLoaded()) {
-            console.log('[CSS-WAIT] Deferred CSS already loaded');
-            resolve(true);
+        // Check if CSS rules are actually accessible (CSS is parsed)
+        const checkCssRulesAccessible = () => {
+            try {
+                const sheets = document.styleSheets;
+                for (let i = 0; i < sheets.length; i++) {
+                    const sheet = sheets[i];
+                    if (sheet.href && sheet.href.includes('deferred.css')) {
+                        const rules = sheet.cssRules || sheet.rules;
+                        return rules && rules.length > 0;
+                    }
+                }
+            } catch (e) {
+                return false;
+            }
+            return false;
+        };
+
+        // Check if styles are actually applied to key elements
+        const checkStylesApplied = () => {
+            const eventPlanPanel = document.getElementById('event-plan-panel');
+            if (eventPlanPanel) {
+                const bg = window.getComputedStyle(eventPlanPanel).backgroundColor;
+                // deferred.css sets rgba(255, 255, 255, 0.7) for the frosted glass effect
+                return bg && (bg.includes('rgba(255') || bg.includes('rgb(255'));
+            }
+            return false;
+        };
+
+        // Already loaded and rules applied
+        const isLoaded = checkCssLoaded();
+        const rulesAccessible = checkCssRulesAccessible();
+        const stylesApplied = checkStylesApplied();
+
+        if (isLoaded && rulesAccessible) {
+            console.log('[CSS-WAIT] Deferred CSS already loaded', {
+                relIsStylesheet: isLoaded,
+                rulesAccessible,
+                stylesApplied,
+                timestamp: performance.now().toFixed(2) + 'ms'
+            });
+            resolve({ loaded: true, rulesApplied: rulesAccessible, reason: 'already-loaded' });
             return;
         }
 
         const startTime = performance.now();
-        console.log('[CSS-WAIT] Waiting for deferred CSS to load...');
+        console.log('[CSS-WAIT] Waiting for deferred CSS to load...', {
+            currentState: { isLoaded, rulesAccessible, stylesApplied }
+        });
 
         // Set up MutationObserver to watch for rel attribute change
         const observer = new MutationObserver((mutations) => {
             for (const mutation of mutations) {
                 if (mutation.type === 'attributes' && mutation.attributeName === 'rel') {
                     if (checkCssLoaded()) {
-                        console.log('[CSS-WAIT] Deferred CSS loaded after', (performance.now() - startTime).toFixed(2), 'ms');
-                        observer.disconnect();
-                        resolve(true);
+                        // Wait a tiny bit for browser to parse the CSS
+                        setTimeout(() => {
+                            const rulesNow = checkCssRulesAccessible();
+                            const stylesNow = checkStylesApplied();
+                            console.log('[CSS-WAIT] Deferred CSS rel changed to stylesheet', {
+                                elapsed: (performance.now() - startTime).toFixed(2) + 'ms',
+                                rulesAccessible: rulesNow,
+                                stylesApplied: stylesNow
+                            });
+                            observer.disconnect();
+                            resolve({ loaded: true, rulesApplied: rulesNow, reason: 'mutation-observer' });
+                        }, 20);
                         return;
                     }
                 }
@@ -72,11 +120,14 @@ function waitForDeferredCss(maxWait = 500) {
 
         // Fallback: poll at short intervals
         const pollInterval = setInterval(() => {
-            if (checkCssLoaded()) {
-                console.log('[CSS-WAIT] Deferred CSS detected via polling after', (performance.now() - startTime).toFixed(2), 'ms');
+            if (checkCssLoaded() && checkCssRulesAccessible()) {
+                console.log('[CSS-WAIT] Deferred CSS detected via polling', {
+                    elapsed: (performance.now() - startTime).toFixed(2) + 'ms',
+                    stylesApplied: checkStylesApplied()
+                });
                 clearInterval(pollInterval);
                 observer.disconnect();
-                resolve(true);
+                resolve({ loaded: true, rulesApplied: true, reason: 'polling' });
             }
         }, 10);
 
@@ -85,10 +136,16 @@ function waitForDeferredCss(maxWait = 500) {
             clearInterval(pollInterval);
             observer.disconnect();
             const loaded = checkCssLoaded();
-            if (!loaded) {
-                console.warn('[CSS-WAIT] Timed out waiting for deferred CSS after', maxWait, 'ms - proceeding anyway');
+            const rulesApplied = checkCssRulesAccessible();
+            if (!loaded || !rulesApplied) {
+                console.warn('[CSS-WAIT] Timed out waiting for deferred CSS', {
+                    maxWait: maxWait + 'ms',
+                    loaded,
+                    rulesApplied,
+                    stylesApplied: checkStylesApplied()
+                });
             }
-            resolve(loaded);
+            resolve({ loaded, rulesApplied, reason: 'timeout' });
         }, maxWait);
     });
 }
@@ -169,27 +226,55 @@ function syncUiWithUrl() {
         } else if (openItemId) {
             // Wait for deferred CSS before showing modal on direct URL access
             // This prevents styling issues where the page behind the modal looks broken
-            const cssLoaded = await waitForDeferredCss(500);
+            const cssResult = await waitForDeferredCss(500);
+
+            // Helper to get computed styles of key page elements
+            const getPageElementStyles = () => {
+                const eventPlanPanel = document.getElementById('event-plan-panel');
+                const filterControls = document.getElementById('filter-controls');
+                const sidebarContainer = document.getElementById('sidebar-container');
+                const catalogContainer = document.getElementById('catalog-container');
+                const header = document.querySelector('header, .header, #header');
+
+                return {
+                    eventPlanPanel: eventPlanPanel ? {
+                        backgroundColor: window.getComputedStyle(eventPlanPanel).backgroundColor,
+                        backdropFilter: window.getComputedStyle(eventPlanPanel).backdropFilter,
+                        display: window.getComputedStyle(eventPlanPanel).display,
+                        visibility: window.getComputedStyle(eventPlanPanel).visibility
+                    } : 'not found',
+                    filterControls: filterControls ? {
+                        backgroundColor: window.getComputedStyle(filterControls).backgroundColor,
+                        backdropFilter: window.getComputedStyle(filterControls).backdropFilter
+                    } : 'not found',
+                    sidebarContainer: sidebarContainer ? {
+                        display: window.getComputedStyle(sidebarContainer).display,
+                        width: window.getComputedStyle(sidebarContainer).width
+                    } : 'not found',
+                    catalogContainer: catalogContainer ? {
+                        display: window.getComputedStyle(catalogContainer).display
+                    } : 'not found',
+                    header: header ? {
+                        backgroundColor: window.getComputedStyle(header).backgroundColor,
+                        position: window.getComputedStyle(header).position
+                    } : 'not found'
+                };
+            };
 
             // DEBUG: Comprehensive CSS and DOM state check before showing modal
             const deferredCssLinks = document.querySelectorAll('link[href*="deferred.css"]');
             const deferredCssLoaded = Array.from(deferredCssLinks).some(link => link.rel === 'stylesheet');
-            const sidebarEl = document.querySelector('.sidebar, #sidebar-container, .filter-sidebar');
-            const headerEl = document.querySelector('header, .header, #header');
 
             console.log('[DIRECT-MODAL-DEBUG] About to show modal for:', openItemId, {
                 timestamp: performance.now().toFixed(2) + 'ms',
-                cssWaitResult: cssLoaded,
+                cssWaitResult: cssResult,
                 deferredCssLoaded,
                 deferredCssLinks: Array.from(deferredCssLinks).map(l => ({ href: l.href, rel: l.rel })),
                 documentReadyState: document.readyState,
                 totalStylesheets: document.styleSheets.length,
                 inlineStyles: document.querySelectorAll('style').length,
-                // Check if key UI elements have proper styles
-                sidebarBgColor: sidebarEl ? window.getComputedStyle(sidebarEl).backgroundColor : 'element not found',
-                headerBgColor: headerEl ? window.getComputedStyle(headerEl).backgroundColor : 'element not found',
-                bodyBgColor: window.getComputedStyle(document.body).backgroundColor,
-                // Check stylesheets status
+                pageElementStyles: getPageElementStyles(),
+                // Log stylesheets with their rule counts
                 stylesheetDetails: Array.from(document.styleSheets).map(s => ({
                     href: s.href ? s.href.split('/').pop() : 'inline',
                     disabled: s.disabled,
@@ -200,9 +285,10 @@ function syncUiWithUrl() {
             const recordToOpen = state.records.all.find(r => r.id === openItemId);
             if (recordToOpen) {
                 // Log if CSS isn't loaded yet - this is the likely cause of styling issues
-                if (!deferredCssLoaded) {
-                    console.warn('[DIRECT-MODAL-DEBUG] WARNING: Deferred CSS not loaded even after waiting!');
-                    console.warn('[DIRECT-MODAL-DEBUG] This may cause styling issues. Proceeding anyway.');
+                if (!cssResult.loaded || !cssResult.rulesApplied) {
+                    console.warn('[DIRECT-MODAL-DEBUG] WARNING: Deferred CSS not fully loaded/applied!');
+                    console.warn('[DIRECT-MODAL-DEBUG] cssResult:', cssResult);
+                    console.warn('[DIRECT-MODAL-DEBUG] This will cause styling issues. Current page styles:', getPageElementStyles());
                 } else {
                     console.log('[DIRECT-MODAL-DEBUG] Deferred CSS confirmed loaded, showing modal');
                 }

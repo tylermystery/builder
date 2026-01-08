@@ -3538,13 +3538,50 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         modalContentVisible: !!modalOverlay.querySelector('.modal-content'),
         // Check background page elements to see if they have proper styling
         pageElementStyles: {
-            sidebarBgColor: (() => {
-                const el = document.querySelector('.sidebar, #sidebar-container, .filter-sidebar, .filters-sidebar');
-                return el ? window.getComputedStyle(el).backgroundColor : 'not found';
+            eventPlanPanel: (() => {
+                const el = document.getElementById('event-plan-panel');
+                if (!el) return 'not found';
+                const styles = window.getComputedStyle(el);
+                return {
+                    backgroundColor: styles.backgroundColor,
+                    backdropFilter: styles.backdropFilter || styles.webkitBackdropFilter || 'none',
+                    display: styles.display,
+                    position: styles.position,
+                    visibility: styles.visibility,
+                    // Expected from deferred.css: rgba(255, 255, 255, 0.7)
+                    hasExpectedBg: styles.backgroundColor.includes('rgba(255, 255, 255') || styles.backgroundColor.includes('255, 255, 255')
+                };
             })(),
-            headerBgColor: (() => {
+            filterControls: (() => {
+                const el = document.getElementById('filter-controls');
+                if (!el) return 'not found';
+                const styles = window.getComputedStyle(el);
+                return {
+                    backgroundColor: styles.backgroundColor,
+                    backdropFilter: styles.backdropFilter || styles.webkitBackdropFilter || 'none',
+                    display: styles.display,
+                    // Expected from deferred.css: rgba(255, 255, 255, 0.7)
+                    hasExpectedBg: styles.backgroundColor.includes('rgba(255, 255, 255') || styles.backgroundColor.includes('255, 255, 255')
+                };
+            })(),
+            sidebarContainer: (() => {
+                const el = document.getElementById('sidebar-container');
+                if (!el) return 'not found';
+                const styles = window.getComputedStyle(el);
+                return {
+                    display: styles.display,
+                    width: styles.width,
+                    visibility: styles.visibility
+                };
+            })(),
+            header: (() => {
                 const el = document.querySelector('header, .header, #header');
-                return el ? window.getComputedStyle(el).backgroundColor : 'not found';
+                if (!el) return 'not found';
+                const styles = window.getComputedStyle(el);
+                return {
+                    backgroundColor: styles.backgroundColor,
+                    position: styles.position
+                };
             })(),
             catalogBgColor: (() => {
                 const el = document.querySelector('#catalog-container, .catalog-container');
