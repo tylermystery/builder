@@ -859,13 +859,19 @@ async function handlePublishEvent() {
  * Handles publishing or updating a session as a reusable Package (Decision 5 - Option B)
  */
 async function handlePublishPackage() {
+    console.log('[SIDEBAR PACKAGE DEBUG] ========== handlePublishPackage CALLED ==========');
+    console.log('[SIDEBAR PACKAGE DEBUG] state.session.id:', state.session.id);
+    console.log('[SIDEBAR PACKAGE DEBUG] state.cart.lockedItems.size:', state.cart.lockedItems.size);
+
     if (!state.session.id) {
+        console.error('[SIDEBAR PACKAGE DEBUG] No active session to publish');
         alert('No active session to publish as package');
         return;
     }
 
     // Check if session has items to package
     if (state.cart.lockedItems.size === 0) {
+        console.error('[SIDEBAR PACKAGE DEBUG] No locked items in cart');
         alert('Add some items to your Event Plan before publishing as a package.');
         return;
     }
@@ -878,8 +884,10 @@ async function handlePublishPackage() {
         );
 
         if (!packageName) {
+            console.log('[SIDEBAR PACKAGE DEBUG] User cancelled - no package name');
             return; // User cancelled
         }
+        console.log('[SIDEBAR PACKAGE DEBUG] Package name:', packageName);
 
         const packageDescription = prompt(
             'Enter a description for this package:',
@@ -888,26 +896,62 @@ async function handlePublishPackage() {
 
         // Calculate suggested package price from locked items
         let totalPrice = 0;
+        console.log('[SIDEBAR PACKAGE DEBUG] Calculating price from locked items...');
+        console.log('[SIDEBAR PACKAGE DEBUG] state.records.all count:', state.records.all?.length || 0);
         for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
             const record = state.records.all.find(r => r.id === recordId);
             if (record) {
-                const price = parseFloat(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || 0);
+                const rawPrice = record.fields[CONSTANTS.FIELD_NAMES.PRICE];
+                const price = parseFloat(rawPrice || 0);
                 const qty = itemInfo.quantity || 1;
-                totalPrice += price * qty;
+                console.log('[SIDEBAR PACKAGE DEBUG] Item:', recordId, 'rawPrice:', rawPrice, 'parsedPrice:', price, 'qty:', qty);
+                if (!isNaN(price)) {
+                    totalPrice += price * qty;
+                }
+            } else {
+                console.log('[SIDEBAR PACKAGE DEBUG] Record NOT FOUND in state.records.all:', recordId);
             }
         }
+        console.log('[SIDEBAR PACKAGE DEBUG] Calculated totalPrice:', totalPrice);
 
         const priceInput = prompt(
-            'Enter the package price (or leave empty to calculate from items):',
-            totalPrice.toFixed(2)
+            'Enter the package price (or leave empty for free/no price):',
+            totalPrice > 0 ? totalPrice.toFixed(2) : ''
         );
 
-        const packagePrice = priceInput ? parseFloat(priceInput) : totalPrice;
+        // Handle price input - when user cancels (null) or explicitly leaves empty, don't set a price
+        // This allows packages to be created as "free" if the user wants
+        let packagePrice = undefined;
+        console.log('[SIDEBAR PACKAGE DEBUG] priceInput:', priceInput, 'type:', typeof priceInput);
+
+        if (priceInput === null) {
+            // User cancelled the prompt - use calculated price as fallback
+            packagePrice = totalPrice > 0 ? totalPrice : undefined;
+            console.log('[SIDEBAR PACKAGE DEBUG] User cancelled, using fallback:', packagePrice);
+        } else if (priceInput.trim() === '') {
+            // User explicitly left the field empty - no price (free)
+            packagePrice = undefined;
+            console.log('[SIDEBAR PACKAGE DEBUG] User left blank - no price set (free)');
+        } else {
+            // User entered a value - parse it
+            const parsedPrice = parseFloat(priceInput);
+            if (!isNaN(parsedPrice) && isFinite(parsedPrice) && parsedPrice >= 0) {
+                packagePrice = parsedPrice;
+                console.log('[SIDEBAR PACKAGE DEBUG] User entered valid price:', packagePrice);
+            } else {
+                // Invalid input - fall back to calculated price
+                packagePrice = totalPrice > 0 ? totalPrice : undefined;
+                console.log('[SIDEBAR PACKAGE DEBUG] Invalid input, using fallback:', packagePrice);
+            }
+        }
+        console.log('[SIDEBAR PACKAGE DEBUG] Final packagePrice:', packagePrice);
 
         const discountInput = prompt('Enter a discount percentage (0-100, or leave empty for no discount):', '0');
         const discount = discountInput ? Math.min(100, Math.max(0, parseFloat(discountInput))) : 0;
 
         log('Sidebar', `Publishing session ${state.session.id} as package with name: ${packageName}`);
+        console.log('[SIDEBAR PACKAGE DEBUG] About to call api.publishSessionAsPackage');
+        console.log('[SIDEBAR PACKAGE DEBUG] Session ID:', state.session.id);
 
         // Disable the button to prevent double-clicks
         const publishPackageBtn = document.getElementById('share-publish-package-btn');
@@ -928,9 +972,14 @@ async function handlePublishPackage() {
             Price: packagePrice,
             Discount: discount > 0 ? discount : undefined
         };
+        console.log('[SIDEBAR PACKAGE DEBUG] packageData being sent:', JSON.stringify(packageData, null, 2));
 
         const result = await api.publishSessionAsPackage(state.session.id, packageData);
 
+        console.log('[SIDEBAR PACKAGE DEBUG] ========== API CALL COMPLETE ==========');
+        console.log('[SIDEBAR PACKAGE DEBUG] Result received:', result);
+        console.log('[SIDEBAR PACKAGE DEBUG] Result ID:', result?.id);
+        console.log('[SIDEBAR PACKAGE DEBUG] Result fields:', JSON.stringify(result?.fields, null, 2));
         log('Sidebar', 'Package published/updated successfully:', result);
         alert(`Package "${packageName}" published successfully! It will now appear in the catalog.`);
 
@@ -948,6 +997,10 @@ async function handlePublishPackage() {
         }
 
     } catch (error) {
+        console.error('[SIDEBAR PACKAGE DEBUG] ========== ERROR PUBLISHING PACKAGE ==========');
+        console.error('[SIDEBAR PACKAGE DEBUG] Error:', error);
+        console.error('[SIDEBAR PACKAGE DEBUG] Error message:', error.message);
+        console.error('[SIDEBAR PACKAGE DEBUG] Error stack:', error.stack);
         console.error('Error publishing package:', error);
         alert(`Failed to publish package: ${error.message}`);
 

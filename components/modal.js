@@ -959,6 +959,356 @@ function resetModalState() {
 }
 
 /**
+ * Build plan component cards with media collage
+ * @param {HTMLElement} container - Container element to append cards to
+ * @param {Array} componentRecords - Array of component data objects
+ * @param {string} sessionId - ID of the linked session
+ */
+async function buildPlanComponentCards(container, componentRecords, sessionId) {
+    // Import getRecordPrice for price calculation
+    const { getRecordPrice } = await import('../utils.js');
+
+    for (const componentData of componentRecords) {
+        const record = componentData.record;
+        const type = componentData.type;
+        const history = componentData.history;
+
+        // Fetch all images for this component
+        let imageUrls = [];
+        if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-')) {
+            try {
+                const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+                imageUrls = fetchedUrls || [];
+            } catch (e) {
+                console.warn('Failed to fetch images for component:', record.id, e);
+            }
+        }
+        if (imageUrls.length === 0) {
+            imageUrls = [ui.getPlaceholderImage([])];
+        }
+
+        // Create the card element
+        const card = document.createElement('div');
+        card.className = `plan-component-card ${type}`;
+        card.dataset.recordId = record.id;
+        card.dataset.componentType = type;
+
+        // Build media container with collage or single image
+        const mediaContainer = document.createElement('div');
+        mediaContainer.className = 'plan-component-media';
+
+        if (imageUrls.length === 1) {
+            // Single image display
+            const optimizedUrl = imageUrls[0].includes('cloudinary')
+                ? imageUrls[0].replace('/upload/', '/upload/w_400,h_400,c_fill,f_auto,q_auto/')
+                : imageUrls[0];
+            mediaContainer.innerHTML = `<img class="single-image" src="${optimizedUrl}" alt="${record.fields.Name || 'Component'}" loading="lazy">`;
+        } else {
+            // Collage display (up to 4 images)
+            const collageClass = imageUrls.length === 2 ? 'two-images' : imageUrls.length === 3 ? 'three-images' : '';
+            const collageDiv = document.createElement('div');
+            collageDiv.className = `media-collage ${collageClass}`;
+
+            imageUrls.slice(0, 4).forEach((url, idx) => {
+                const optimizedUrl = url.includes('cloudinary')
+                    ? url.replace('/upload/', '/upload/w_200,h_200,c_fill,f_auto,q_auto/')
+                    : url;
+                const img = document.createElement('img');
+                img.className = 'collage-img';
+                img.src = optimizedUrl;
+                img.alt = `${record.fields.Name || 'Component'} image ${idx + 1}`;
+                img.loading = 'lazy';
+                collageDiv.appendChild(img);
+            });
+
+            mediaContainer.appendChild(collageDiv);
+
+            // Show image count if more than 4
+            if (imageUrls.length > 4) {
+                const countBadge = document.createElement('span');
+                countBadge.className = 'image-count';
+                countBadge.textContent = imageUrls.length;
+                mediaContainer.appendChild(countBadge);
+            }
+        }
+
+        // Add status badge
+        const badge = document.createElement('span');
+        badge.className = `plan-component-badge ${type}`;
+        badge.textContent = type === 'locked' ? '✅' : '💡';
+        mediaContainer.appendChild(badge);
+
+        card.appendChild(mediaContainer);
+
+        // Build info section
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'plan-component-info';
+
+        const nameEl = document.createElement('h4');
+        nameEl.className = 'plan-component-name';
+        nameEl.textContent = record.fields.Name || 'Untitled';
+        nameEl.title = record.fields.Name || 'Untitled';
+        infoDiv.appendChild(nameEl);
+
+        const detailsDiv = document.createElement('div');
+        detailsDiv.className = 'plan-component-details';
+
+        // Add quantity if > 1
+        const quantity = history?.quantity || 1;
+        if (quantity > 1) {
+            const qtySpan = document.createElement('span');
+            qtySpan.className = 'plan-component-quantity';
+            qtySpan.textContent = `×${quantity}`;
+            detailsDiv.appendChild(qtySpan);
+        }
+
+        // Add price
+        const price = getRecordPrice(record, history?.selectedOptionIndex);
+        if (price > 0) {
+            const priceSpan = document.createElement('span');
+            priceSpan.className = 'plan-component-price';
+            priceSpan.textContent = `$${(price * quantity).toFixed(0)}`;
+            detailsDiv.appendChild(priceSpan);
+        }
+
+        // Add note indicator if has note
+        if (history?.note) {
+            const noteSpan = document.createElement('span');
+            noteSpan.className = 'plan-component-note-indicator';
+            noteSpan.textContent = '📝';
+            noteSpan.title = history.note;
+            detailsDiv.appendChild(noteSpan);
+        }
+
+        infoDiv.appendChild(detailsDiv);
+        card.appendChild(infoDiv);
+
+        // Add click handler to open component detail modal
+        card.addEventListener('click', () => {
+            showComponentDetailModal(record, imageUrls, history, type, sessionId);
+        });
+
+        container.appendChild(card);
+    }
+}
+
+/**
+ * Show the component detail modal with image gallery, notes, and quantity controls
+ */
+async function showComponentDetailModal(record, imageUrls, history, componentType, sessionId) {
+    const { getRecordPrice } = await import('../utils.js');
+
+    // Remove any existing component detail modal
+    const existingOverlay = document.querySelector('.component-detail-overlay');
+    if (existingOverlay) existingOverlay.remove();
+
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'component-detail-overlay';
+
+    // Create modal
+    const modal = document.createElement('div');
+    modal.className = 'component-detail-modal';
+
+    const quantity = history?.quantity || 1;
+    const note = history?.note || '';
+    const price = getRecordPrice(record, history?.selectedOptionIndex);
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'component-detail-header';
+    header.innerHTML = `
+        <h3>${componentType === 'locked' ? '✅' : '💡'} ${record.fields.Name || 'Component Details'}</h3>
+        <button class="component-detail-close" aria-label="Close">&times;</button>
+    `;
+    modal.appendChild(header);
+
+    // Body
+    const body = document.createElement('div');
+    body.className = 'component-detail-body';
+
+    // Image gallery
+    let currentImageIndex = 0;
+    const galleryDiv = document.createElement('div');
+    galleryDiv.className = 'component-detail-gallery';
+
+    const mainImageUrl = imageUrls[0].includes('cloudinary')
+        ? imageUrls[0].replace('/upload/', '/upload/w_800,h_500,c_fill,f_auto,q_auto/')
+        : imageUrls[0];
+
+    galleryDiv.innerHTML = `
+        <div class="component-detail-main-image" style="background-image: url('${mainImageUrl}')"></div>
+        <div class="component-detail-thumbnails"></div>
+    `;
+
+    const mainImageEl = galleryDiv.querySelector('.component-detail-main-image');
+    const thumbsContainer = galleryDiv.querySelector('.component-detail-thumbnails');
+
+    // Build thumbnails if multiple images
+    if (imageUrls.length > 1) {
+        imageUrls.forEach((url, idx) => {
+            const thumbUrl = url.includes('cloudinary')
+                ? url.replace('/upload/', '/upload/w_120,h_120,c_fill,f_auto,q_auto/')
+                : url;
+            const thumb = document.createElement('div');
+            thumb.className = `component-detail-thumb ${idx === 0 ? 'active' : ''}`;
+            thumb.style.backgroundImage = `url('${thumbUrl}')`;
+            thumb.addEventListener('click', () => {
+                currentImageIndex = idx;
+                const fullUrl = url.includes('cloudinary')
+                    ? url.replace('/upload/', '/upload/w_800,h_500,c_fill,f_auto,q_auto/')
+                    : url;
+                mainImageEl.style.backgroundImage = `url('${fullUrl}')`;
+                thumbsContainer.querySelectorAll('.component-detail-thumb').forEach(t => t.classList.remove('active'));
+                thumb.classList.add('active');
+            });
+            thumbsContainer.appendChild(thumb);
+        });
+    }
+
+    body.appendChild(galleryDiv);
+
+    // Info section
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'component-detail-info';
+    infoDiv.innerHTML = `
+        <h4 class="component-detail-name">${record.fields.Name || 'Untitled'}</h4>
+        ${record.fields.Description ? `<p class="component-detail-description">${record.fields.Description}</p>` : ''}
+    `;
+    body.appendChild(infoDiv);
+
+    // Quantity controls
+    const quantityDiv = document.createElement('div');
+    quantityDiv.className = 'component-detail-quantity';
+    quantityDiv.innerHTML = `
+        <label>Quantity:</label>
+        <div class="quantity-selector">
+            <button type="button" class="quantity-btn minus">−</button>
+            <input type="number" class="quantity-input" value="${quantity}" min="1" step="1">
+            <button type="button" class="quantity-btn plus">+</button>
+        </div>
+        <span class="quantity-price">${price > 0 ? `$${(price * quantity).toFixed(2)}` : 'Free'}</span>
+    `;
+
+    const qtyInput = quantityDiv.querySelector('.quantity-input');
+    const priceDisplay = quantityDiv.querySelector('.quantity-price');
+    const minusBtn = quantityDiv.querySelector('.minus');
+    const plusBtn = quantityDiv.querySelector('.plus');
+
+    const updatePrice = () => {
+        const newQty = parseInt(qtyInput.value, 10) || 1;
+        priceDisplay.textContent = price > 0 ? `$${(price * newQty).toFixed(2)}` : 'Free';
+    };
+
+    minusBtn.addEventListener('click', () => {
+        const current = parseInt(qtyInput.value, 10) || 1;
+        if (current > 1) {
+            qtyInput.value = current - 1;
+            updatePrice();
+        }
+    });
+
+    plusBtn.addEventListener('click', () => {
+        const current = parseInt(qtyInput.value, 10) || 1;
+        qtyInput.value = current + 1;
+        updatePrice();
+    });
+
+    qtyInput.addEventListener('change', updatePrice);
+    qtyInput.addEventListener('input', updatePrice);
+
+    body.appendChild(quantityDiv);
+
+    // Notes section
+    const notesDiv = document.createElement('div');
+    notesDiv.className = 'component-detail-notes';
+    notesDiv.innerHTML = `
+        <label>Notes & Customizations:</label>
+        <textarea placeholder="Add notes about customization, timing, or special requests...">${note}</textarea>
+    `;
+    body.appendChild(notesDiv);
+
+    modal.appendChild(body);
+
+    // Footer
+    const footer = document.createElement('div');
+    footer.className = 'component-detail-footer';
+    footer.innerHTML = `
+        <button class="component-view-btn">View Full Details</button>
+        <button class="component-save-btn">Save Changes</button>
+    `;
+    modal.appendChild(footer);
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // Event handlers
+    const closeModal = () => {
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 300);
+    };
+
+    header.querySelector('.component-detail-close').addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal();
+    });
+
+    // View full details - open the main item detail modal
+    footer.querySelector('.component-view-btn').addEventListener('click', () => {
+        closeModal();
+        // Close the parent modal first, then open item detail
+        closeDetailModal();
+        setTimeout(() => {
+            showDetailModal(record);
+        }, 300);
+    });
+
+    // Save changes - update session data (this would need to integrate with the session save logic)
+    footer.querySelector('.component-save-btn').addEventListener('click', async () => {
+        const newQty = parseInt(qtyInput.value, 10) || 1;
+        const newNote = notesDiv.querySelector('textarea').value;
+
+        log('Modal', `Saving component changes: quantity=${newQty}, note="${newNote}" for ${record.id}`);
+
+        // Update the local state and trigger a session save
+        // This dispatches an event that can be caught by the main app
+        const event = new CustomEvent('componentUpdated', {
+            detail: {
+                recordId: record.id,
+                sessionId: sessionId,
+                componentType: componentType,
+                quantity: newQty,
+                note: newNote
+            }
+        });
+        document.dispatchEvent(event);
+
+        // Show feedback
+        const saveBtn = footer.querySelector('.component-save-btn');
+        saveBtn.textContent = 'Saved!';
+        saveBtn.style.backgroundColor = '#28a745';
+
+        setTimeout(() => {
+            closeModal();
+        }, 800);
+    });
+
+    // Escape key to close
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+
+    // Animate in
+    requestAnimationFrame(() => {
+        overlay.classList.add('active');
+    });
+}
+
+/**
  * Initialize the plan items carousel
  */
 async function initializePlanCarousel(componentRecords) {
@@ -1538,7 +1888,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             // Create the main session components section
             const sessionComponentsSection = document.createElement('div');
             sessionComponentsSection.className = 'session-components-section';
-            sessionComponentsSection.style.cssText = 'margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px;';
+            sessionComponentsSection.style.cssText = 'margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 8px;';
 
             // Use different header text based on whether this item is a contained component or the parent event
             const planName = linkedSession.fields.Name || 'Plan';
@@ -1550,113 +1900,33 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 // This is the parent event with its own linked session
                 sectionHeader = '<h4 style="margin-top: 0; color: #495057;">📋 Plan Components</h4>';
             }
-            let componentsHTML = sectionHeader;
+            sessionComponentsSection.innerHTML = sectionHeader;
 
-            // Add image carousel for browsing items
+            // Create scrollable carousel container for component cards
             if (allComponentRecords.length > 0) {
-                componentsHTML += `
-                    <div class="plan-items-carousel" style="margin: 15px 0; position: relative; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                        <div class="carousel-container" style="position: relative;">
-                            <div class="carousel-image-container" style="width: 100%; height: 300px; position: relative; background: #000;">
-                                <img id="plan-carousel-image" style="width: 100%; height: 100%; object-fit: cover;" src="" alt="Item image" loading="lazy">
-                                <div class="carousel-overlay" style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); padding: 15px; color: white;">
-                                    <div id="carousel-item-name" style="font-weight: bold; font-size: 1.1em; margin-bottom: 5px;"></div>
-                                    <div id="carousel-item-details" style="font-size: 0.9em; opacity: 0.9;"></div>
-                                </div>
-                            </div>
-                            <button class="carousel-nav carousel-prev" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.9); border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; font-size: 20px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 10;">‹</button>
-                            <button class="carousel-nav carousel-next" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.9); border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; font-size: 20px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 10;">›</button>
-                        </div>
-                        <div class="carousel-dots" style="display: flex; justify-content: center; padding: 10px; gap: 8px;" id="carousel-dots-container"></div>
-                    </div>
-                `;
+                const carouselContainer = document.createElement('div');
+                carouselContainer.className = 'plan-components-carousel';
+
+                // Build cards for each component (async)
+                await buildPlanComponentCards(carouselContainer, allComponentRecords, linkedSessionId);
+
+                sessionComponentsSection.appendChild(carouselContainer);
             }
 
-            // Display Locked In Items section
+            // Add component summary counts
+            const summaryDiv = document.createElement('div');
+            summaryDiv.style.cssText = 'display: flex; gap: 15px; margin-top: 12px; font-size: 0.85em;';
             if (lockedComponentIds.length > 0) {
-                componentsHTML += '<div class="locked-in-section" style="margin-bottom: 15px;">';
-                componentsHTML += '<h5 style="margin: 10px 0 8px 0; color: #28a745; font-size: 0.95em;">✅ Locked In</h5>';
-                componentsHTML += '<div class="session-components-list">';
-
-                // Fetch component items (check both active and archive)
-                for (const componentId of lockedComponentIds) {
-                    let componentRecord = state.records.all.find(r => r.id === componentId);
-
-                    // If not found in active records, check archive
-                    if (!componentRecord && state.records.archive) {
-                        componentRecord = state.records.archive.find(r => r.id === componentId);
-                    }
-
-                    if (componentRecord) {
-                        const componentName = componentRecord.fields.Name || 'Untitled';
-                        const historyItem = lockedInHistory.find(item => item.id === componentId);
-                        const quantity = historyItem?.quantity || 1;
-                        const note = historyItem?.note || '';
-                        const isGhost = !state.records.all.find(r => r.id === componentId);
-
-                        componentsHTML += `
-                            <div class="session-component-item" style="display: flex; justify-content: space-between; align-items: center; margin: 8px 0; padding: 8px; background-color: white; border-radius: 4px; border-left: 3px solid #28a745; ${isGhost ? 'opacity: 0.7;' : ''}">
-                                <div>
-                                    <strong>${componentName}</strong> ${quantity > 1 ? `(x${quantity})` : ''}
-                                    ${isGhost ? '<span style="color: #6c757d; font-size: 0.85em; margin-left: 8px;">[Archived]</span>' : ''}
-                                    ${note ? `<div style="font-size: 0.85em; color: #6c757d; margin-top: 4px;">Note: ${note}</div>` : ''}
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        console.warn('Could not find record for locked component ID:', componentId);
-                    }
-                }
-
-                componentsHTML += '</div></div>';
+                summaryDiv.innerHTML += `<span style="color: #28a745;"><strong>✅ ${lockedComponentIds.length}</strong> Locked In</span>`;
             }
-
-            // Display Ideas section
             if (ideaComponentIds.length > 0) {
-                componentsHTML += '<div class="ideas-section">';
-                componentsHTML += '<h5 style="margin: 10px 0 8px 0; color: #ffc107; font-size: 0.95em;">💡 Ideas for the Session</h5>';
-                componentsHTML += '<div class="session-ideas-list">';
-
-                // Fetch idea items (check both active and archive)
-                for (const ideaId of ideaComponentIds) {
-                    let ideaRecord = state.records.all.find(r => r.id === ideaId);
-
-                    // If not found in active records, check archive
-                    if (!ideaRecord && state.records.archive) {
-                        ideaRecord = state.records.archive.find(r => r.id === ideaId);
-                    }
-
-                    if (ideaRecord) {
-                        const ideaName = ideaRecord.fields.Name || 'Untitled';
-                        const historyItem = ideasHistory.find(item => item.id === ideaId);
-                        const quantity = historyItem?.quantity || 1;
-                        const note = historyItem?.note || '';
-                        const isGhost = !state.records.all.find(r => r.id === ideaId);
-
-                        componentsHTML += `
-                            <div class="session-idea-item" style="display: flex; justify-content: space-between; align-items: center; margin: 8px 0; padding: 8px; background-color: white; border-radius: 4px; border-left: 3px solid #ffc107; ${isGhost ? 'opacity: 0.7;' : ''}">
-                                <div>
-                                    <strong>${ideaName}</strong> ${quantity > 1 ? `(x${quantity})` : ''}
-                                    ${isGhost ? '<span style="color: #6c757d; font-size: 0.85em; margin-left: 8px;">[Archived]</span>' : ''}
-                                    ${note ? `<div style="font-size: 0.85em; color: #6c757d; margin-top: 4px;">Note: ${note}</div>` : ''}
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        console.warn('Could not find record for idea ID:', ideaId);
-                    }
-                }
-
-                componentsHTML += '</div></div>';
+                summaryDiv.innerHTML += `<span style="color: #856404;"><strong>💡 ${ideaComponentIds.length}</strong> Ideas</span>`;
+            }
+            if (summaryDiv.innerHTML) {
+                sessionComponentsSection.appendChild(summaryDiv);
             }
 
-            sessionComponentsSection.innerHTML = componentsHTML;
             modalItemDescription.parentElement.insertBefore(sessionComponentsSection, modalItemDescription);
-
-            // Initialize the carousel after the HTML is inserted
-            if (allComponentRecords.length > 0) {
-                initializePlanCarousel(allComponentRecords);
-            }
 
             // Check if user is a collaborator, store owner, or has publish permission - add Edit Plan button inside the components section
             const isCollaborator = linkedSession.fields.Collaborators &&

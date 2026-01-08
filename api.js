@@ -810,6 +810,7 @@ export async function addItemToSession(sessionId, itemId, itemInfo = {}) {
 // REPLACE this function in api.js (around line 348)
 
 export async function fetchAllRecords() {
+    console.log('[FETCH DEBUG] ========== fetchAllRecords CALLED ==========');
     let allRecords = [];
     let offset = null;
 
@@ -846,6 +847,7 @@ export async function fetchAllRecords() {
         'LinkedSession'
     ];
     // --- END OF FIELD LIST ---
+    console.log('[FETCH DEBUG] Fields to fetch:', fieldsToFetch.length, 'fields including Item Type and LinkedSession');
 
     // --- Build the fields query parameter ---
     const fieldsQuery = fieldsToFetch.map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
@@ -853,6 +855,8 @@ export async function fetchAllRecords() {
     // --- FIX: Add fieldsQuery *after* the question mark ---
     const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?${fieldsQuery}`;
     // --- END FIX ---
+    console.log('[FETCH DEBUG] Base URL for Items table:', baseUrl.substring(0, 100) + '...');
+    console.log('[FETCH DEBUG] TABLE_ID:', TABLE_ID);
 
     log('API', `Fetching items URL (with fields): ${baseUrl}`); // Log the full URL
 
@@ -864,8 +868,7 @@ export async function fetchAllRecords() {
                 url += `&offset=${offset}`;
             }
 
-            // Log the exact URL being fetched in each iteration
-            // console.log(`[API Fetch] Requesting URL: ${url}`);
+            console.log(`[FETCH DEBUG] Requesting URL (page ${allRecords.length > 0 ? Math.ceil(allRecords.length / 100) + 1 : 1}):`, url.substring(0, 100) + '...');
 
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
@@ -874,24 +877,61 @@ export async function fetchAllRecords() {
             if (!response.ok) {
                 // Log status and potentially body for debugging
                 const errorText = await response.text();
-                console.error(`Airtable Error fetching items (URL: ${url}): Status ${response.status}`, errorText);
+                console.error(`[FETCH DEBUG] Airtable Error fetching items (URL: ${url}): Status ${response.status}`, errorText);
                 throw new Error(`Failed to fetch items from Airtable. Status: ${response.status}`);
             }
             const data = await response.json();
+            console.log(`[FETCH DEBUG] Page fetched: ${data.records.length} records`);
             allRecords = allRecords.concat(data.records);
             offset = data.offset;
         } while (offset);
 
+        console.log('[FETCH DEBUG] ========== ANALYZING FETCHED RECORDS ==========');
+        console.log('[FETCH DEBUG] Total item records fetched:', allRecords.length);
+
+        // Analyze records by Item Type
+        const itemTypeStats = {};
+        const packagesFound = [];
+        allRecords.forEach(record => {
+            const itemType = record.fields['Item Type'] || 'Undefined';
+            itemTypeStats[itemType] = (itemTypeStats[itemType] || 0) + 1;
+
+            // Specifically track packages
+            if (itemType === 'Package') {
+                packagesFound.push({
+                    id: record.id,
+                    name: record.fields.Name,
+                    status: record.fields.Status,
+                    linkedSession: record.fields.LinkedSession
+                });
+            }
+        });
+        console.log('[FETCH DEBUG] Item types breakdown:', JSON.stringify(itemTypeStats, null, 2));
+        console.log('[FETCH DEBUG] Packages found:', packagesFound.length);
+        if (packagesFound.length > 0) {
+            console.log('[FETCH DEBUG] Package details:', JSON.stringify(packagesFound, null, 2));
+        }
+
         log('API', `Total item records fetched: ${allRecords.length}`);
         if (allRecords.length > 0) {
             // Log the actual fields received for the first record
-            console.log('[API Debug] Fields received for first record:', Object.keys(allRecords[0].fields));
+            console.log('[FETCH DEBUG] Fields received for first record:', Object.keys(allRecords[0].fields));
         } else {
-            console.log('[API Debug] No records received from Airtable.');
+            console.log('[FETCH DEBUG] No records received from Airtable.');
         }
-        return allRecords.filter(record => record.fields && record.fields.Name);
+
+        // Filter and return
+        const filteredRecords = allRecords.filter(record => record.fields && record.fields.Name);
+        console.log('[FETCH DEBUG] Records after Name filter:', filteredRecords.length);
+
+        // Check if any packages were filtered out
+        const filteredPackages = filteredRecords.filter(r => r.fields['Item Type'] === 'Package');
+        console.log('[FETCH DEBUG] Packages after Name filter:', filteredPackages.length);
+
+        console.log('[FETCH DEBUG] ========== fetchAllRecords COMPLETE ==========');
+        return filteredRecords;
     } catch (error) {
-        console.error("Error fetching all item records:", error);
+        console.error("[FETCH DEBUG] Error fetching all item records:", error);
         throw error; // Re-throw the error to be caught by the caller
     }
 }
@@ -1933,14 +1973,23 @@ export async function publishSessionAsEvent(sessionId, eventData) {
  * @returns {Promise<Object>} The created package item record
  */
 export async function publishSessionAsPackage(sessionId, packageData = {}) {
+    console.log('[PACKAGE DEBUG] ========== publishSessionAsPackage CALLED ==========');
+    console.log('[PACKAGE DEBUG] sessionId:', sessionId);
+    console.log('[PACKAGE DEBUG] packageData:', JSON.stringify(packageData, null, 2));
+
     if (!sessionId) {
+        console.error('[PACKAGE DEBUG] ERROR: No sessionId provided');
         throw new Error('Session ID is required to publish as package');
     }
 
+    console.log('[PACKAGE DEBUG] Fetching session by ID...');
     const session = await fetchSessionById(sessionId);
     if (!session) {
+        console.error('[PACKAGE DEBUG] ERROR: Session not found for ID:', sessionId);
         throw new Error('Session not found');
     }
+    console.log('[PACKAGE DEBUG] Session found:', session.id);
+    console.log('[PACKAGE DEBUG] Session fields keys:', Object.keys(session.fields || {}));
 
     log('API', `Publishing session ${sessionId} as Package`);
 
@@ -1948,10 +1997,13 @@ export async function publishSessionAsPackage(sessionId, packageData = {}) {
     let sessionItems = { lockedInItems: {}, ideasItems: {} };
     try {
         const sessionDataString = session.fields['Items with Variations'];
+        console.log('[PACKAGE DEBUG] Session Items with Variations raw:', sessionDataString ? sessionDataString.substring(0, 200) + '...' : 'null/empty');
         if (sessionDataString) {
             sessionItems = JSON.parse(sessionDataString);
+            console.log('[PACKAGE DEBUG] Parsed sessionItems keys:', Object.keys(sessionItems));
         }
     } catch (e) {
+        console.warn('[PACKAGE DEBUG] Could not parse session data:', e.message);
         console.warn('[API] Could not parse session data:', e);
     }
 
@@ -1980,22 +2032,33 @@ export async function publishSessionAsPackage(sessionId, packageData = {}) {
         addOnItems,
         tiers: packageData.Tiers || []
     };
+    console.log('[PACKAGE DEBUG] Package contents built:', JSON.stringify(packageContents, null, 2));
 
     // Store package metadata in the session's Items with Variations field
     // This avoids needing new Airtable fields - we extend the existing session data
+    // Handle case where Price might be undefined (user left it blank for free package)
+    let metadataPrice = 0;
+    if (packageData.Price !== undefined && packageData.Price !== null && packageData.Price !== '') {
+        const parsedMetadataPrice = typeof packageData.Price === 'number' ? packageData.Price : parseFloat(packageData.Price);
+        if (!isNaN(parsedMetadataPrice) && isFinite(parsedMetadataPrice)) {
+            metadataPrice = parsedMetadataPrice;
+        }
+    }
     const updatedSessionData = {
         ...sessionItems,
         packageMetadata: {
             discount: packageData.Discount || 0,
             tiers: packageData.Tiers || [],
-            price: packageData.Price || 0,
+            price: metadataPrice,
             pricingType: packageData.PricingType || null
         }
     };
+    console.log('[PACKAGE DEBUG] Updated session data with packageMetadata:', JSON.stringify(updatedSessionData.packageMetadata, null, 2));
 
     // Update session with package metadata
     const updateSessionDataUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
-    await fetch(updateSessionDataUrl, {
+    console.log('[PACKAGE DEBUG] Updating session metadata at URL:', updateSessionDataUrl);
+    const sessionUpdateResponse = await fetch(updateSessionDataUrl, {
         method: 'PATCH',
         headers: {
             'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
@@ -2003,6 +2066,13 @@ export async function publishSessionAsPackage(sessionId, packageData = {}) {
         },
         body: JSON.stringify({ fields: { 'Items with Variations': JSON.stringify(updatedSessionData) } })
     });
+    console.log('[PACKAGE DEBUG] Session metadata update response status:', sessionUpdateResponse.status);
+    if (!sessionUpdateResponse.ok) {
+        const sessionUpdateError = await sessionUpdateResponse.text();
+        console.error('[PACKAGE DEBUG] Session metadata update failed:', sessionUpdateError);
+    } else {
+        console.log('[PACKAGE DEBUG] Session metadata update successful');
+    }
 
     // Build the package item fields - use only existing Airtable fields
     // Package contents are retrieved from LinkedSession at render time
@@ -2011,26 +2081,63 @@ export async function publishSessionAsPackage(sessionId, packageData = {}) {
         'Description': packageData.Description || session.fields.Goals || '',
         'Item Type': 'Package',
         'Status': 'Available',
-        'LinkedSession': [sessionId]
+        'LinkedSession': [sessionId],
+        'Categories': 'Packages'  // Add to "Packages" category for discoverability
     };
 
-    // Add price if provided
-    if (packageData.Price !== undefined && packageData.Price !== null) {
-        itemFields['Price'] = packageData.Price;
+    // CRITICAL: Copy the Stores field from the session to the package
+    // Without this, the package won't appear in the catalog (filtered by store)
+    if (session.fields.Stores && session.fields.Stores.length > 0) {
+        itemFields['Stores'] = session.fields.Stores;
+        console.log('[PACKAGE DEBUG] Added Stores to itemFields from session:', session.fields.Stores);
+    } else {
+        console.warn('[PACKAGE DEBUG] WARNING: Session has no Stores field - package may not appear in catalog');
+    }
+
+    console.log('[PACKAGE DEBUG] Building package item fields for ITEMS TABLE');
+    console.log('[PACKAGE DEBUG] itemFields:', JSON.stringify(itemFields, null, 2));
+    console.log('[PACKAGE DEBUG] Target table ID (Items):', TABLE_ID);
+
+    // Add price if provided - ensure it's a valid number and positive
+    // Airtable Currency fields may reject invalid values, so we validate carefully
+    const rawPrice = packageData.Price;
+    console.log('[PACKAGE DEBUG] packageData.Price raw value:', rawPrice, 'type:', typeof rawPrice);
+
+    // Only add Price field if we have a valid positive number
+    // Skip if: undefined, null, NaN, negative, or non-numeric
+    if (rawPrice !== undefined && rawPrice !== null && rawPrice !== '') {
+        const priceValue = typeof rawPrice === 'number' ? rawPrice : parseFloat(rawPrice);
+        console.log('[PACKAGE DEBUG] packageData.Price parsed:', priceValue, 'isNaN:', isNaN(priceValue));
+
+        if (!isNaN(priceValue) && isFinite(priceValue) && priceValue >= 0) {
+            itemFields['Price'] = priceValue;
+            console.log('[PACKAGE DEBUG] Added Price to itemFields:', priceValue);
+        } else {
+            console.log('[PACKAGE DEBUG] Price not added - invalid value (NaN, infinite, or negative)');
+        }
+    } else {
+        console.log('[PACKAGE DEBUG] Price not added - undefined, null, or empty');
     }
 
     // Add pricing type if provided
     if (packageData.PricingType) {
         itemFields['Pricing Type'] = packageData.PricingType;
+        console.log('[PACKAGE DEBUG] Added Pricing Type to itemFields:', packageData.PricingType);
     }
 
     // Check if this session already has a linked package
     const existingPackageId = session.fields.LinkedPackage ? session.fields.LinkedPackage[0] : null;
+    console.log('[PACKAGE DEBUG] session.fields.LinkedPackage:', session.fields.LinkedPackage);
+    console.log('[PACKAGE DEBUG] existingPackageId:', existingPackageId);
     let itemRecord;
 
     if (existingPackageId) {
         // Update existing package
+        console.log('[PACKAGE DEBUG] ========== UPDATING EXISTING PACKAGE ==========');
         const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${existingPackageId}`;
+        console.log('[PACKAGE DEBUG] Update URL:', url);
+        console.log('[PACKAGE DEBUG] Request body:', JSON.stringify({ fields: itemFields }, null, 2));
+
         const response = await fetch(url, {
             method: 'PATCH',
             headers: {
@@ -2039,18 +2146,25 @@ export async function publishSessionAsPackage(sessionId, packageData = {}) {
             },
             body: JSON.stringify({ fields: itemFields })
         });
+        console.log('[PACKAGE DEBUG] Update response status:', response.status);
 
         if (!response.ok) {
             const errorText = await response.text();
+            console.error('[PACKAGE DEBUG] Failed to update package:', errorText);
             console.error('Failed to update package:', errorText);
             throw new Error(`Failed to update package: ${errorText}`);
         }
 
         itemRecord = await response.json();
+        console.log('[PACKAGE DEBUG] Updated package record:', JSON.stringify(itemRecord, null, 2));
         log('API', `Updated package ${existingPackageId} from session ${sessionId}`);
     } else {
         // Create new package
+        console.log('[PACKAGE DEBUG] ========== CREATING NEW PACKAGE IN ITEMS TABLE ==========');
         const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}`;
+        console.log('[PACKAGE DEBUG] Create URL:', url);
+        console.log('[PACKAGE DEBUG] Request body:', JSON.stringify({ fields: itemFields }, null, 2));
+
         const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -2059,19 +2173,28 @@ export async function publishSessionAsPackage(sessionId, packageData = {}) {
             },
             body: JSON.stringify({ fields: itemFields })
         });
+        console.log('[PACKAGE DEBUG] Create response status:', response.status);
 
         if (!response.ok) {
             const errorText = await response.text();
+            console.error('[PACKAGE DEBUG] Failed to create package:', errorText);
             console.error('Failed to create package:', errorText);
             throw new Error(`Failed to create package: ${errorText}`);
         }
 
         itemRecord = await response.json();
+        console.log('[PACKAGE DEBUG] ========== PACKAGE CREATED SUCCESSFULLY IN ITEMS TABLE ==========');
+        console.log('[PACKAGE DEBUG] New package record ID:', itemRecord.id);
+        console.log('[PACKAGE DEBUG] New package record fields:', JSON.stringify(itemRecord.fields, null, 2));
         log('API', `Created package ${itemRecord.id} from session ${sessionId}`);
 
         // Update session with link to new package
+        console.log('[PACKAGE DEBUG] Updating session with LinkedPackage reference...');
         const updateSessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
-        await fetch(updateSessionUrl, {
+        console.log('[PACKAGE DEBUG] Session link update URL:', updateSessionUrl);
+        console.log('[PACKAGE DEBUG] Session link update body:', JSON.stringify({ fields: { 'LinkedPackage': [itemRecord.id] } }));
+
+        const sessionLinkResponse = await fetch(updateSessionUrl, {
             method: 'PATCH',
             headers: {
                 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
@@ -2079,8 +2202,18 @@ export async function publishSessionAsPackage(sessionId, packageData = {}) {
             },
             body: JSON.stringify({ fields: { 'LinkedPackage': [itemRecord.id] } })
         });
+        console.log('[PACKAGE DEBUG] Session link update response status:', sessionLinkResponse.status);
+        if (!sessionLinkResponse.ok) {
+            const linkError = await sessionLinkResponse.text();
+            console.error('[PACKAGE DEBUG] Session link update failed:', linkError);
+        } else {
+            console.log('[PACKAGE DEBUG] Session link update successful');
+        }
     }
 
+    console.log('[PACKAGE DEBUG] ========== publishSessionAsPackage COMPLETE ==========');
+    console.log('[PACKAGE DEBUG] Returning itemRecord with ID:', itemRecord?.id);
+    console.log('[PACKAGE DEBUG] Returning itemRecord fields:', JSON.stringify(itemRecord?.fields, null, 2));
     return itemRecord;
 }
 
