@@ -6,7 +6,7 @@ const fetch = require('node-fetch');
 const { AIRTABLE_PAT, BASE_ID } = process.env;
 
 const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD';
-const SITE_URL = 'https://whatthefunfinder.netlify.app';
+const SITE_URL = 'https://whatthefun.wtf';
 
 /**
  * Generates a URL-friendly slug from a name string (mirrors utils.js logic)
