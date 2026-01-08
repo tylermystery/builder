@@ -23,11 +23,75 @@ import { applyCloudinaryTransform } from './utils/imageOptimizer.js';
 
 
 const imageCache = new Map();
-window.imageCache = imageCache; 
+window.imageCache = imageCache;
 
 window.applyFiltersAndSort = applyFiltersAndSort;
 window.showReceiptModal = showReceiptModal;
 
+/**
+ * Waits for the deferred CSS to be fully loaded
+ * Returns a promise that resolves when CSS is ready, or after a timeout
+ * @param {number} maxWait - Maximum time to wait in milliseconds (default: 500ms)
+ * @returns {Promise<boolean>} - Resolves to true if CSS loaded, false if timed out
+ */
+function waitForDeferredCss(maxWait = 500) {
+    return new Promise((resolve) => {
+        // Check if any deferred.css link has rel="stylesheet" (meaning it's loaded)
+        const checkCssLoaded = () => {
+            const links = document.querySelectorAll('link[href*="deferred.css"]');
+            return Array.from(links).some(link => link.rel === 'stylesheet');
+        };
+
+        // Already loaded
+        if (checkCssLoaded()) {
+            console.log('[CSS-WAIT] Deferred CSS already loaded');
+            resolve(true);
+            return;
+        }
+
+        const startTime = performance.now();
+        console.log('[CSS-WAIT] Waiting for deferred CSS to load...');
+
+        // Set up MutationObserver to watch for rel attribute change
+        const observer = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'rel') {
+                    if (checkCssLoaded()) {
+                        console.log('[CSS-WAIT] Deferred CSS loaded after', (performance.now() - startTime).toFixed(2), 'ms');
+                        observer.disconnect();
+                        resolve(true);
+                        return;
+                    }
+                }
+            }
+        });
+
+        // Observe all deferred.css link elements
+        const links = document.querySelectorAll('link[href*="deferred.css"]');
+        links.forEach(link => observer.observe(link, { attributes: true }));
+
+        // Fallback: poll at short intervals
+        const pollInterval = setInterval(() => {
+            if (checkCssLoaded()) {
+                console.log('[CSS-WAIT] Deferred CSS detected via polling after', (performance.now() - startTime).toFixed(2), 'ms');
+                clearInterval(pollInterval);
+                observer.disconnect();
+                resolve(true);
+            }
+        }, 10);
+
+        // Timeout fallback - don't wait forever
+        setTimeout(() => {
+            clearInterval(pollInterval);
+            observer.disconnect();
+            const loaded = checkCssLoaded();
+            if (!loaded) {
+                console.warn('[CSS-WAIT] Timed out waiting for deferred CSS after', maxWait, 'ms - proceeding anyway');
+            }
+            resolve(loaded);
+        }, maxWait);
+    });
+}
 
 function syncUiWithUrl() {
     const params = new URLSearchParams(window.location.search);
@@ -96,22 +160,28 @@ function syncUiWithUrl() {
     }
 
     // --- Handle opening modals/views based on URL ---
-    setTimeout(() => {
+    // For direct modal URL access, wait for deferred CSS before showing modal
+    const handleModalOrViewFromUrl = async () => {
         if (view === 'present') {
             ui.showPresentationView('ideas');
         } else if (view === 'itinerary') {
             ui.showItineraryModal();
         } else if (openItemId) {
+            // Wait for deferred CSS before showing modal on direct URL access
+            // This prevents styling issues where the page behind the modal looks broken
+            const cssLoaded = await waitForDeferredCss(500);
+
             // DEBUG: Comprehensive CSS and DOM state check before showing modal
-            const deferredCssLink = document.querySelector('link[href*="deferred.css"]');
-            const deferredCssLoaded = deferredCssLink && deferredCssLink.rel === 'stylesheet';
+            const deferredCssLinks = document.querySelectorAll('link[href*="deferred.css"]');
+            const deferredCssLoaded = Array.from(deferredCssLinks).some(link => link.rel === 'stylesheet');
             const sidebarEl = document.querySelector('.sidebar, #sidebar-container, .filter-sidebar');
             const headerEl = document.querySelector('header, .header, #header');
 
             console.log('[DIRECT-MODAL-DEBUG] About to show modal for:', openItemId, {
                 timestamp: performance.now().toFixed(2) + 'ms',
-                deferredCssRel: deferredCssLink ? deferredCssLink.rel : 'not found',
+                cssWaitResult: cssLoaded,
                 deferredCssLoaded,
+                deferredCssLinks: Array.from(deferredCssLinks).map(l => ({ href: l.href, rel: l.rel })),
                 documentReadyState: document.readyState,
                 totalStylesheets: document.styleSheets.length,
                 inlineStyles: document.querySelectorAll('style').length,
@@ -131,15 +201,20 @@ function syncUiWithUrl() {
             if (recordToOpen) {
                 // Log if CSS isn't loaded yet - this is the likely cause of styling issues
                 if (!deferredCssLoaded) {
-                    console.warn('[DIRECT-MODAL-DEBUG] WARNING: Deferred CSS not yet loaded when opening modal!');
-                    console.warn('[DIRECT-MODAL-DEBUG] This may cause styling issues. CSS link rel attribute:', deferredCssLink?.rel);
+                    console.warn('[DIRECT-MODAL-DEBUG] WARNING: Deferred CSS not loaded even after waiting!');
+                    console.warn('[DIRECT-MODAL-DEBUG] This may cause styling issues. Proceeding anyway.');
+                } else {
+                    console.log('[DIRECT-MODAL-DEBUG] Deferred CSS confirmed loaded, showing modal');
                 }
                 ui.showDetailModal(recordToOpen);
             } else {
                 console.warn(`[DIRECT-MODAL-DEBUG] Record ID ${openItemId} not found in state.records.all. Available records: ${state.records.all.length}`);
             }
         }
-    }, 100); // Small delay
+    };
+
+    // Small initial delay for DOM to stabilize, then handle modal/view
+    setTimeout(handleModalOrViewFromUrl, 100);
 }
 
 

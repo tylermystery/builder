@@ -22,9 +22,7 @@
     <link rel="modulepreload" href="/main.js" fetchpriority="high">
 
     <!-- Note: Critical CSS is inlined in <style> tags below for fastest render -->
-
-    <!-- Preload deferred CSS with lower priority -->
-    <link rel="preload" href="/css/deferred.css" as="style" fetchpriority="low">
+    <!-- Deferred CSS is loaded asynchronously at the end of <head> via the preload/onload pattern -->
 
     <!-- Flatpickr CSS will be loaded on-demand when date picker is used -->
     

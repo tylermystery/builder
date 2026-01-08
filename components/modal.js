@@ -1462,10 +1462,9 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         bodyClasses: document.body.className
     });
 
-    // If CSS not loaded yet, add a specific warning
+    // If CSS not loaded yet, add a note (main.js now handles waiting for CSS on direct URL access)
     if (!deferredCssLoaded) {
-        console.warn('[MODAL-DEBUG] Deferred CSS not loaded - this may cause styling issues');
-        console.warn('[MODAL-DEBUG] Consider waiting for CSS before showing modal on direct URL access');
+        console.log('[MODAL-DEBUG] Note: Deferred CSS not yet loaded. main.js should have waited for it on direct URL access.');
     }
 
     const detailSpecs = [
