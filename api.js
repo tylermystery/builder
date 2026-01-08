@@ -3428,6 +3428,9 @@ export async function fetchTasks(projectId) {
     const formula = `FIND('${projectId}', ARRAYJOIN({ProjectId}))`;
     const encodedFormula = encodeURIComponent(formula);
 
+    console.log('[TASK PERSISTENCE DEBUG] Filter formula:', formula);
+    console.log('[TASK PERSISTENCE DEBUG] Looking for tasks linked to project:', projectId);
+
     // Request fields needed for task display
     // Note: Only request fields that exist in the Airtable Tasks table
     // SourceType, SourceCommentId, LinkedPlanItemId, AffiliatedTaskId are NOT stored in Airtable
@@ -3487,6 +3490,27 @@ export async function fetchTasks(projectId) {
         if (data.records.length > 0) {
             console.log('[TASK PERSISTENCE DEBUG] Task IDs:', data.records.map(t => t.id));
             console.log('[TASK PERSISTENCE DEBUG] Task names:', data.records.map(t => t.fields?.Name));
+            // Show the first task's ProjectId field to debug linked record structure
+            console.log('[TASK PERSISTENCE DEBUG] First task ProjectId value:', data.records[0].fields?.ProjectId);
+        } else {
+            // If no tasks found, try to fetch a few tasks without filter to see if any exist
+            console.log('[TASK PERSISTENCE DEBUG] No tasks found with filter, checking if any tasks exist in table...');
+            const debugUrl = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}?maxRecords=3&fields%5B%5D=Name&fields%5B%5D=ProjectId`;
+            try {
+                const debugResponse = await fetchWithTimeout(debugUrl, {
+                    headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+                });
+                if (debugResponse.ok) {
+                    const debugData = await debugResponse.json();
+                    console.log('[TASK PERSISTENCE DEBUG] Sample tasks in table:', debugData.records.length);
+                    if (debugData.records.length > 0) {
+                        console.log('[TASK PERSISTENCE DEBUG] Sample task ProjectId values:',
+                            debugData.records.map(t => ({ name: t.fields?.Name, projectId: t.fields?.ProjectId })));
+                    }
+                }
+            } catch (debugError) {
+                console.log('[TASK PERSISTENCE DEBUG] Debug fetch error:', debugError.message);
+            }
         }
         console.log('[TASK PERSISTENCE DEBUG] ================================================');
 
@@ -3572,6 +3596,8 @@ export async function createTask(projectId, taskData) {
         }
 
         const data = await response.json();
+        console.log('[TASK PERSISTENCE DEBUG] Task created with fields:', JSON.stringify(data.fields, null, 2));
+        console.log('[TASK PERSISTENCE DEBUG] Task ProjectId:', data.fields?.ProjectId);
         log('API', `Created task: ${data.id}`);
         return data;
     } catch (error) {
