@@ -4378,6 +4378,14 @@ hr.total-divider {
     line-height: 1.1;
 }
 
+.event-date-display .time {
+    display: block;
+    font-size: 0.75em;
+    font-weight: 500;
+    color: #6c757d;
+    margin-top: 4px;
+}
+
 .event-details {
     flex-grow: 1;
 }

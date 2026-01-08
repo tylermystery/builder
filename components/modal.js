@@ -1727,9 +1727,9 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const isUserRegistered = rsvpYes.includes(userId) || rsvpMaybe.includes(userId) || rsvpNo.includes(userId);
 
         // Only show event-specific sections for individual events, not parent events with child date options
-        // Show event info for non-registered users only
+        // Show event info for ALL users (both registered and non-registered) - date/time is important info
         const userIsAuthenticatedForRsvp = state.session.user.isAuthenticated;
-        if (!hasChildEventOptions && !isUserRegistered) {
+        if (!hasChildEventOptions) {
         const eventDateStr = record.fields.Date;
         const eventTime = record.fields.Time || '';
         const eventLocation = record.fields.Location || '';

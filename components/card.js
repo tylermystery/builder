@@ -275,6 +275,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const eventDate = fields.Date ? new Date(fields.Date + 'T00:00:00') : null;
         const month = eventDate ? eventDate.toLocaleString('default', { month: 'short' }).toUpperCase() : 'TBD';
         const day = eventDate ? eventDate.getDate() : '??';
+        const eventTime = fields.Time || '';
         const hasRsvpd = (record.fields.RSVPs || []).includes(state.session.user.id);
 
         // Check if event has a linked session (is affiliated to a plan)
@@ -319,6 +320,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 <div class="event-date-display">
                     <span class="month">${month}</span>
                     <span class="day">${day}</span>
+                    ${eventTime ? `<span class="time">${eventTime}</span>` : ''}
                 </div>
                 <div class="event-details">
                     <h3>${fields.Name || 'Untitled Event'}</h3>
