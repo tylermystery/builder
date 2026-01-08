@@ -5,76 +5,89 @@ import { updateUrl, getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getCurrentUser } from '../chat.js';
 import { triggerSave } from '../events.js';
+import { showDetailModal } from './modal.js';
 
 // DOM element references - lazily initialized to ensure DOM is ready
 let modal = null;
 let closeBtn = null;
-let mainImageEl = null;
-let thumbStripEl = null;
-let itemNameEl = null;
-let itemPriceEl = null;
-let itemDescEl = null;
-let itemNoteContainerEl = null;
-let itemNoteEl = null;
-let prevItemBtn = null;
-let nextItemBtn = null;
-let reactionButtonsEl = null;
-let reactionSummaryEl = null;
 let summaryEventNameEl = null;
 let summaryEventNotesEl = null;
 let summaryEventDateEl = null;
 let shareBtn = null;
+let collaboratorsListEl = null;
+let itineraryItemsListEl = null;
+let chatMessagesEl = null;
+
+// Track loaded images for each item
+const itemImagesCache = new Map();
 
 function ensureDOMElements() {
     if (modal) return true; // Already initialized
 
     modal = document.getElementById('presentation-modal-overlay');
     closeBtn = document.getElementById('presentation-close-btn');
-    mainImageEl = document.getElementById('presentation-main-image');
-    thumbStripEl = document.getElementById('presentation-thumbnail-strip');
-    itemNameEl = document.getElementById('presentation-item-name');
-    itemPriceEl = document.getElementById('presentation-item-price');
-    itemDescEl = document.getElementById('presentation-item-description');
-    itemNoteContainerEl = document.getElementById('presentation-item-note-container');
-    itemNoteEl = document.getElementById('presentation-item-note');
-    prevItemBtn = document.getElementById('presentation-prev-item-btn');
-    nextItemBtn = document.getElementById('presentation-next-item-btn');
-    reactionButtonsEl = document.getElementById('reaction-buttons');
-    reactionSummaryEl = document.getElementById('reaction-summary');
     summaryEventNameEl = document.getElementById('summary-event-name');
     summaryEventNotesEl = document.getElementById('summary-event-notes');
     summaryEventDateEl = document.getElementById('summary-event-date');
     shareBtn = document.getElementById('presentation-share-btn');
+    collaboratorsListEl = document.getElementById('itinerary-collaborators-list');
+    itineraryItemsListEl = document.getElementById('itinerary-items-list');
+    chatMessagesEl = document.getElementById('itinerary-chat-messages');
 
     if (!modal) {
         console.error('[Presentation] Modal element #presentation-modal-overlay not found in DOM');
         return false;
     }
 
-    // Debug: Log that DOM elements were successfully found
-    log('Presentation', `DOM elements initialized. Modal classes: ${modal.className}`);
+    log('Presentation', `DOM elements initialized for itinerary view`);
     return true;
 }
 
-let combinedList = [];
-let globalCurrentIndex = 0;
-let currentImages = [];
-let currentImageIndex = 0;
-
-function renderSummaryHeader() {
-    summaryEventNameEl.textContent = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'N/A';
-    summaryEventNotesEl.textContent = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || 'N/A';
-
+function renderEventHeader() {
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Event Itinerary';
+    const goals = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
     const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+
+    summaryEventNameEl.textContent = eventName;
+    summaryEventNotesEl.textContent = goals;
+
     if (dateValue) {
         const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);
-        summaryEventDateEl.textContent = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        summaryEventDateEl.textContent = date.toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+        });
     } else {
-        summaryEventDateEl.textContent = 'N/A';
+        summaryEventDateEl.textContent = '';
     }
 }
 
-function renderReactions(recordId) {
+function renderCollaborators() {
+    const userProfiles = state.session.userProfiles;
+
+    if (userProfiles.size === 0) {
+        collaboratorsListEl.innerHTML = '<p class="no-collaborators">No collaborators yet</p>';
+        return;
+    }
+
+    let html = '';
+    userProfiles.forEach((name, odId) => {
+        const isCurrentUser = state.session.user.id === odId;
+        const badge = isCurrentUser ? '<span class="collaborator-badge">You</span>' : '';
+        html += `
+            <div class="collaborator-item">
+                <span class="collaborator-avatar">${name.charAt(0).toUpperCase()}</span>
+                <span class="collaborator-name">${name}${badge}</span>
+            </div>
+        `;
+    });
+
+    collaboratorsListEl.innerHTML = html;
+}
+
+function renderReactions(recordId, reactionContainer) {
     const currentUser = getCurrentUser();
     let allReactions = state.session.reactions.get(recordId);
     if (!(allReactions instanceof Map)) {
@@ -82,105 +95,180 @@ function renderReactions(recordId) {
     }
     const currentUserReaction = allReactions.get(currentUser.id);
 
-    reactionButtonsEl.innerHTML = EMOJI_REACTIONS.map(emoji => 
-        `<button class="reaction-btn ${currentUserReaction === emoji ? 'selected' : ''}" data-emoji="${emoji}">${emoji}</button>`
+    const buttonsHTML = EMOJI_REACTIONS.map(emoji =>
+        `<button class="reaction-btn ${currentUserReaction === emoji ? 'selected' : ''}" data-emoji="${emoji}" data-record-id="${recordId}">${emoji}</button>`
     ).join('');
-    let summaryHTML = 'Reactions: ';
+
+    let summaryHTML = '';
     if (allReactions.size > 0) {
-        summaryHTML += Array.from(allReactions.entries()).map(([userId, reaction]) => {
+        summaryHTML = Array.from(allReactions.entries()).map(([userId, reaction]) => {
             const name = state.session.userProfiles.get(userId) || 'A User';
             return `<span>${name}: ${reaction}</span>`;
         }).join(' | ');
-    } else {
-        summaryHTML += 'None yet.';
     }
-    reactionSummaryEl.innerHTML = summaryHTML;
+
+    reactionContainer.innerHTML = `
+        <div class="reaction-bar-buttons">${buttonsHTML}</div>
+        <div class="reaction-summary-display">${summaryHTML || 'No reactions yet'}</div>
+    `;
 }
 
-async function renderCurrentSlide() {
-    if (combinedList.length === 0) {
-        hidePresentationView();
-        return;
+function createMediaCarousel(images, recordId) {
+    if (!images || images.length === 0) {
+        return '<div class="itinerary-item-no-images">No images available</div>';
     }
-    mainImageEl.style.backgroundImage = '';
-    thumbStripEl.innerHTML = '<p>Loading images...</p>';
 
-    const currentItem = combinedList[globalCurrentIndex];
-    const { recordId, type } = currentItem;
+    const currentIndex = itemImagesCache.get(recordId)?.currentIndex || 0;
+
+    const thumbnails = images.map((url, index) =>
+        `<div class="itinerary-thumbnail ${index === currentIndex ? 'active' : ''}"
+              data-record-id="${recordId}"
+              data-index="${index}"
+              style="background-image: url('${url}')"></div>`
+    ).join('');
+
+    return `
+        <div class="itinerary-media-carousel" data-record-id="${recordId}">
+            <div class="itinerary-main-image" style="background-image: url('${images[currentIndex]}')"></div>
+            ${images.length > 1 ? `
+                <div class="itinerary-thumbnails">${thumbnails}</div>
+            ` : ''}
+        </div>
+    `;
+}
+
+async function renderItineraryItem(item, index) {
+    const { recordId, type } = item;
     const record = state.records.all.find(r => r.id === recordId);
-    if (!record) {
-        log('Presentation', `Record not found for ID: ${recordId}`);
-        return;
-    }
 
-    renderReactions(recordId);
+    if (!record) {
+        return '';
+    }
 
     const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
-    itemNameEl.textContent = record.fields.Name || 'Untitled';
+    const name = record.fields.Name || 'Untitled Item';
     const price = getRecordPrice(record, itemInfo?.selectedOptionIndex);
-    itemPriceEl.textContent = `$${price.toFixed(2)}`;
-    itemDescEl.textContent = record.fields.Description || '';
-    if (itemInfo?.note) {
-        itemNoteContainerEl.style.display = 'block';
-        itemNoteEl.textContent = itemInfo.note;
-    } else {
-        itemNoteContainerEl.style.display = 'none';
+    const quantity = itemInfo?.quantity || 1;
+    const note = itemInfo?.note || '';
+
+    // Fetch images if not cached
+    if (!itemImagesCache.has(recordId)) {
+        const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+        itemImagesCache.set(recordId, { images: imageUrls || [], currentIndex: 0 });
     }
 
-    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
-    currentImages = imageUrls || [];
-    currentImageIndex = 0;
-    renderCurrentImage();
+    const cachedImages = itemImagesCache.get(recordId);
+    const mediaCarouselHTML = createMediaCarousel(cachedImages.images, recordId);
+
+    const typeLabel = type === 'favorites' ? 'Idea' : 'Confirmed';
+    const typeClass = type === 'favorites' ? 'item-type-idea' : 'item-type-confirmed';
+
+    return `
+        <article class="itinerary-item itinerary-item-clickable" data-record-id="${recordId}" data-index="${index}">
+            <div class="itinerary-item-number">${index + 1}</div>
+            <div class="itinerary-item-content">
+                ${mediaCarouselHTML}
+                <div class="itinerary-item-details">
+                    <div class="itinerary-item-header">
+                        <h3 class="itinerary-item-name">${name}</h3>
+                        <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
+                    </div>
+                    <div class="itinerary-item-price-qty">
+                        <span class="itinerary-item-price">$${price.toFixed(2)}</span>
+                        ${quantity > 1 ? `<span class="itinerary-item-qty">× ${quantity}</span>` : ''}
+                    </div>
+                    ${note ? `
+                        <div class="itinerary-item-note">
+                            <strong>Note:</strong> ${note}
+                        </div>
+                    ` : ''}
+                    <div class="itinerary-item-reactions" data-record-id="${recordId}"></div>
+                </div>
+            </div>
+        </article>
+    `;
 }
 
-function renderCurrentImage() {
-    if (currentImages.length === 0) {
-        mainImageEl.style.backgroundImage = '';
-        thumbStripEl.innerHTML = '<p>No images available.</p>';
+async function renderAllItems() {
+    const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
+    const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
+    const combinedList = [...locked, ...favorites]; // Confirmed items first, then ideas
+
+    if (combinedList.length === 0) {
+        itineraryItemsListEl.innerHTML = '<p class="itinerary-empty">No items in your event plan yet.</p>';
         return;
     }
-    mainImageEl.style.backgroundImage = `url('${currentImages[currentImageIndex]}')`;
 
-    thumbStripEl.innerHTML = '';
-    currentImages.forEach((url, index) => {
-        const thumb = document.createElement('div');
-        thumb.className = 'thumbnail-img';
-        thumb.style.backgroundImage = `url('${url}')`;
-        if (index === currentImageIndex) {
-            thumb.classList.add('active');
+    itineraryItemsListEl.innerHTML = '<p class="itinerary-loading">Loading items...</p>';
+
+    // Render all items
+    const itemsHTML = [];
+    for (let i = 0; i < combinedList.length; i++) {
+        const html = await renderItineraryItem(combinedList[i], i);
+        if (html) {
+            itemsHTML.push(html);
         }
-        thumb.addEventListener('click', () => {
-            currentImageIndex = index;
-            renderCurrentImage();
-        });
-        thumbStripEl.appendChild(thumb);
+    }
+
+    itineraryItemsListEl.innerHTML = itemsHTML.join('');
+
+    // Render reactions for each item
+    combinedList.forEach(item => {
+        const reactionContainer = itineraryItemsListEl.querySelector(`.itinerary-item-reactions[data-record-id="${item.recordId}"]`);
+        if (reactionContainer) {
+            renderReactions(item.recordId, reactionContainer);
+        }
     });
 }
 
-function navigateToSlide(direction) {
-    if (combinedList.length === 0) return;
-    globalCurrentIndex = (globalCurrentIndex + direction + combinedList.length) % combinedList.length;
-    renderCurrentSlide();
-}
-
-function cycleImage(direction) {
-    const newIndex = (currentImageIndex + direction + currentImages.length) % currentImages.length;
-    if (currentImages.length > 0) {
-        currentImageIndex = newIndex;
-        renderCurrentImage();
+function renderChatMessages() {
+    // Get chat messages from state or session history
+    const messagesList = document.getElementById('messages-list');
+    if (!messagesList) {
+        chatMessagesEl.innerHTML = '<p class="chat-empty">Chat messages will appear here.</p>';
+        return;
     }
+
+    // Clone the chat messages to display in the itinerary view
+    const messages = messagesList.querySelectorAll('.message-wrapper, .event-history-wrapper');
+
+    if (messages.length === 0) {
+        chatMessagesEl.innerHTML = '<p class="chat-empty">No messages yet. Start the conversation!</p>';
+        return;
+    }
+
+    // Copy messages to the itinerary chat section
+    chatMessagesEl.innerHTML = '';
+    messages.forEach(msg => {
+        const clone = msg.cloneNode(true);
+        chatMessagesEl.appendChild(clone);
+    });
 }
 
-function handleKeyDown(e) {
-    switch (e.key) {
-        case 'ArrowDown': navigateToSlide(1); break;
-        case 'ArrowUp': navigateToSlide(-1); break;
-        case 'ArrowRight': cycleImage(1); break;
-        case 'ArrowLeft': cycleImage(-1); break;
-        case 'Escape':
-            updateUrl({ view: null });
-            hidePresentationView();
-            break;
+function handleThumbnailClick(e) {
+    const thumbnail = e.target.closest('.itinerary-thumbnail');
+    if (!thumbnail) return;
+
+    const recordId = thumbnail.dataset.recordId;
+    const index = parseInt(thumbnail.dataset.index, 10);
+
+    if (!itemImagesCache.has(recordId)) return;
+
+    const cached = itemImagesCache.get(recordId);
+    cached.currentIndex = index;
+
+    // Update the main image
+    const carousel = document.querySelector(`.itinerary-media-carousel[data-record-id="${recordId}"]`);
+    if (carousel) {
+        const mainImage = carousel.querySelector('.itinerary-main-image');
+        if (mainImage && cached.images[index]) {
+            mainImage.style.backgroundImage = `url('${cached.images[index]}')`;
+        }
+
+        // Update active thumbnail
+        carousel.querySelectorAll('.itinerary-thumbnail').forEach((thumb, i) => {
+            thumb.classList.toggle('active', i === index);
+        });
     }
 }
 
@@ -189,75 +277,106 @@ function handleReactionClick(e) {
     if (!button) return;
 
     const emoji = button.dataset.emoji;
+    const recordId = button.dataset.recordId;
     const currentUser = getCurrentUser();
-    const recordId = combinedList[globalCurrentIndex].recordId;
 
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, new Map());
     }
 
     const itemReactions = state.session.reactions.get(recordId);
-    
+
     if (itemReactions.get(currentUser.id) === emoji) {
         itemReactions.delete(currentUser.id);
     } else {
         itemReactions.set(currentUser.id, emoji);
     }
-    
-    renderReactions(recordId);
+
+    // Re-render reactions for this item
+    const reactionContainer = document.querySelector(`.itinerary-item-reactions[data-record-id="${recordId}"]`);
+    if (reactionContainer) {
+        renderReactions(recordId, reactionContainer);
+    }
+
     triggerSave();
 }
 
-export function showPresentationView(listType, startRecordId = null) {
-    log('Presentation', `Showing presentation for: ${listType}`);
+function handleItemClick(e) {
+    // Don't trigger if clicking on reactions, thumbnails, or other interactive elements
+    if (e.target.closest('.reaction-btn') ||
+        e.target.closest('.itinerary-thumbnail') ||
+        e.target.closest('.itinerary-item-reactions')) {
+        return;
+    }
 
-    // Ensure DOM elements are available
+    const itemElement = e.target.closest('.itinerary-item-clickable');
+    if (!itemElement) return;
+
+    const recordId = itemElement.dataset.recordId;
+    if (!recordId) return;
+
+    const record = state.records.all.find(r => r.id === recordId);
+    if (!record) {
+        log('Presentation', `Record not found for ID: ${recordId}`);
+        return;
+    }
+
+    log('Presentation', `Opening detail modal for: ${record.fields.Name}`);
+    showDetailModal(record);
+}
+
+function handleKeyDown(e) {
+    if (e.key === 'Escape') {
+        updateUrl({ view: null });
+        hidePresentationView();
+    }
+}
+
+export async function showPresentationView(listType, startRecordId = null) {
+    log('Presentation', `Showing itinerary presentation`);
+
     if (!ensureDOMElements()) {
         console.error('[Presentation] Cannot show presentation view - DOM elements not available');
         return;
     }
 
-    // Debug: Log modal element state before showing
-    const computedStyle = window.getComputedStyle(modal);
-    log('Presentation', `Modal initial state - display: ${computedStyle.display}, position: ${computedStyle.position}, top: ${computedStyle.top}, left: ${computedStyle.left}, zIndex: ${computedStyle.zIndex}`);
-
-    // This function no longer calls updateUrl. The event listener in events.js does.
-    const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
-    const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
-    combinedList = [...favorites, ...locked];
-    if (combinedList.length === 0) {
-        alert(`There are no items in your lists to present.`);
+    // Check if there are any items
+    const hasItems = state.cart.items.size > 0 || state.cart.lockedItems.size > 0;
+    if (!hasItems) {
+        alert('There are no items in your lists to present.');
         return;
     }
 
-    if (startRecordId) {
-        globalCurrentIndex = combinedList.findIndex(item => item.recordId === startRecordId);
-    } else {
-        const firstItemOfList = combinedList.find(item => item.type === listType);
-        globalCurrentIndex = firstItemOfList ? combinedList.indexOf(firstItemOfList) : 0;
-    }
+    // Clear image cache for fresh load
+    itemImagesCache.clear();
 
-    renderSummaryHeader();
+    // Render all sections
+    renderEventHeader();
+    renderCollaborators();
+    await renderAllItems();
+    renderChatMessages();
 
+    // Show modal
     modal.classList.add('active');
     modal.style.display = 'flex';
     document.body.classList.add('modal-open');
     document.addEventListener('keydown', handleKeyDown);
 
-    // Debug: Log modal element state after showing
-    const afterStyle = window.getComputedStyle(modal);
-    log('Presentation', `Modal after activation - display: ${afterStyle.display}, position: ${afterStyle.position}, top: ${afterStyle.top}, left: ${afterStyle.left}, zIndex: ${afterStyle.zIndex}`);
-
-    // Debug: Check if presentation-fullpage CSS class is properly applied
-    if (afterStyle.position !== 'fixed') {
-        console.warn('[Presentation] WARNING: Modal position is not "fixed". Expected "fixed" but got "' + afterStyle.position + '". CSS class .presentation-fullpage may not be loaded properly.');
+    // Scroll to specific item if provided
+    if (startRecordId) {
+        const targetItem = document.querySelector(`.itinerary-item[data-record-id="${startRecordId}"]`);
+        if (targetItem) {
+            setTimeout(() => {
+                targetItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+        }
     }
 
-    renderCurrentSlide();
+    log('Presentation', 'Itinerary view rendered successfully');
 }
 
 export function hidePresentationView() {
-    if (!modal) return; // Guard against null modal
+    if (!modal) return;
     modal.classList.remove('active');
     modal.style.display = 'none';
     document.body.classList.remove('modal-open');
@@ -265,7 +384,6 @@ export function hidePresentationView() {
 }
 
 export function setupPresentationEventListeners() {
-    // Ensure DOM elements are available before setting up listeners
     if (!ensureDOMElements()) {
         console.error('[Presentation] Cannot setup event listeners - DOM elements not available');
         return;
@@ -275,17 +393,25 @@ export function setupPresentationEventListeners() {
         updateUrl({ view: null });
         hidePresentationView();
     });
-    prevItemBtn.addEventListener('click', () => navigateToSlide(-1));
-    nextItemBtn.addEventListener('click', () => navigateToSlide(1));
-    reactionButtonsEl.addEventListener('click', handleReactionClick);
+
+    // Handle thumbnail clicks for image carousel
+    itineraryItemsListEl.addEventListener('click', handleThumbnailClick);
+
+    // Handle reaction clicks
+    itineraryItemsListEl.addEventListener('click', handleReactionClick);
+
+    // Handle item clicks to open detail modal
+    itineraryItemsListEl.addEventListener('click', handleItemClick);
+
+    // Share button
     shareBtn.addEventListener('click', (e) => {
         const baseURL = window.location.origin + window.location.pathname;
         const sessionID = state.session.id;
         const shareURL = `${baseURL}?session=${sessionID}&view=present`;
-        
+
         navigator.clipboard.writeText(shareURL).then(() => {
             const originalText = e.target.textContent;
-            e.target.textContent = 'Copied!';
+            e.target.textContent = 'Link Copied!';
             setTimeout(() => {
                e.target.textContent = originalText;
             }, 1500);

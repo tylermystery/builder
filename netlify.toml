@@ -137,3 +137,10 @@
   to = "/.netlify/functions/merchant-feed"
   status = 200
 
+# SPA routing for item detail pages (pretty URLs)
+# Enables direct links and page refresh on /item/* routes
+[[redirects]]
+  from = "/item/*"
+  to = "/index.html"
+  status = 200
+

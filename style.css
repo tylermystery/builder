@@ -2975,6 +2975,463 @@ body.modal-open {
     color: #6c757d;
     min-height: 20px;
 }
+
+/* ===================================
+   ITINERARY PRESENTATION VIEW STYLES
+   =================================== */
+
+.presentation-itinerary {
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.presentation-itinerary-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0;
+    scroll-behavior: smooth;
+}
+
+/* Itinerary Sections */
+.itinerary-section {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 30px 20px;
+}
+
+.itinerary-section-title {
+    font-size: 1.3em;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 20px 0;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #007bff;
+}
+
+/* Event Header Section */
+.itinerary-header {
+    text-align: center;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #dee2e6;
+}
+
+.itinerary-event-title {
+    font-size: 2em;
+    font-weight: 700;
+    color: #212529;
+    margin: 0 0 10px 0;
+}
+
+.itinerary-event-meta {
+    margin-bottom: 15px;
+}
+
+.itinerary-date {
+    font-size: 1.1em;
+    color: #007bff;
+    font-weight: 500;
+}
+
+.itinerary-notes {
+    font-size: 1em;
+    color: #6c757d;
+    margin: 0 0 25px 0;
+    line-height: 1.5;
+}
+
+/* Collaborators */
+.itinerary-collaborators {
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid #dee2e6;
+}
+
+.itinerary-collaborators h3 {
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6c757d;
+    margin: 0 0 15px 0;
+}
+
+.collaborators-list {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+}
+
+.collaborator-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 15px;
+    background: #fff;
+    border-radius: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.collaborator-avatar {
+    width: 32px;
+    height: 32px;
+    background: #007bff;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.collaborator-name {
+    font-size: 0.95em;
+    color: #333;
+}
+
+.collaborator-badge {
+    font-size: 0.75em;
+    background: #28a745;
+    color: #fff;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: 5px;
+}
+
+.no-collaborators {
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Itinerary Actions */
+.itinerary-actions {
+    margin-top: 20px;
+}
+
+.itinerary-share-btn {
+    background: #007bff;
+    color: #fff;
+    border: none;
+    padding: 10px 25px;
+    border-radius: 25px;
+    font-size: 1em;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.itinerary-share-btn:hover {
+    background: #0056b3;
+}
+
+/* Items Section */
+.itinerary-items {
+    background: #fff;
+}
+
+.itinerary-items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.itinerary-loading,
+.itinerary-empty {
+    text-align: center;
+    color: #6c757d;
+    padding: 40px 20px;
+    font-size: 1em;
+}
+
+/* Individual Item Card */
+.itinerary-item {
+    display: flex;
+    gap: 20px;
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.itinerary-item:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.itinerary-item-number {
+    width: 36px;
+    height: 36px;
+    background: #007bff;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1em;
+    flex-shrink: 0;
+}
+
+.itinerary-item-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* Media Carousel */
+.itinerary-media-carousel {
+    width: 100%;
+}
+
+.itinerary-main-image {
+    width: 100%;
+    height: 250px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    border-radius: 8px;
+    background-color: #f8f9fa;
+}
+
+.itinerary-thumbnails {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+}
+
+.itinerary-thumbnail {
+    width: 60px;
+    height: 45px;
+    background-size: cover;
+    background-position: center;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    flex-shrink: 0;
+    transition: border-color 0.2s, opacity 0.2s;
+    opacity: 0.7;
+}
+
+.itinerary-thumbnail:hover {
+    opacity: 1;
+}
+
+.itinerary-thumbnail.active {
+    border-color: #007bff;
+    opacity: 1;
+}
+
+.itinerary-item-no-images {
+    width: 100%;
+    height: 150px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Item Details */
+.itinerary-item-details {
+    flex: 1;
+}
+
+.itinerary-item-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 15px;
+    margin-bottom: 8px;
+}
+
+.itinerary-item-name {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: #212529;
+    margin: 0;
+    flex: 1;
+}
+
+.itinerary-item-type {
+    font-size: 0.75em;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+
+.item-type-idea {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.item-type-confirmed {
+    background: #d4edda;
+    color: #155724;
+}
+
+.itinerary-item-price-qty {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.itinerary-item-price {
+    font-size: 1.15em;
+    font-weight: 600;
+    color: #007bff;
+}
+
+.itinerary-item-qty {
+    font-size: 0.9em;
+    color: #6c757d;
+}
+
+.itinerary-item-description {
+    font-size: 0.95em;
+    color: #495057;
+    line-height: 1.5;
+    margin: 0 0 10px 0;
+}
+
+.itinerary-item-note {
+    background: #f8f9fa;
+    padding: 12px 15px;
+    border-radius: 6px;
+    font-size: 0.9em;
+    color: #495057;
+    margin-bottom: 15px;
+    border-left: 3px solid #007bff;
+}
+
+.itinerary-item-note strong {
+    color: #212529;
+}
+
+/* Reactions in Itinerary */
+.itinerary-item-reactions {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+}
+
+.itinerary-item-reactions .reaction-bar-buttons {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.itinerary-item-reactions .reaction-btn {
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    font-size: 18px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.itinerary-item-reactions .reaction-btn:hover {
+    transform: scale(1.1);
+    border-color: #999;
+}
+
+.itinerary-item-reactions .reaction-btn.selected {
+    background-color: #e7f3ff;
+    border-color: #007bff;
+}
+
+.itinerary-item-reactions .reaction-summary-display {
+    font-size: 0.8em;
+    color: #6c757d;
+}
+
+/* Chat Section */
+.itinerary-chat {
+    background: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+}
+
+.itinerary-chat-messages {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 15px;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.itinerary-chat-messages .message-wrapper {
+    margin-bottom: 12px;
+}
+
+.chat-empty {
+    text-align: center;
+    color: #6c757d;
+    padding: 30px 20px;
+    font-style: italic;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+    .itinerary-section {
+        padding: 20px 15px;
+    }
+
+    .itinerary-event-title {
+        font-size: 1.5em;
+    }
+
+    .itinerary-item {
+        flex-direction: column;
+        gap: 15px;
+        padding: 15px;
+    }
+
+    .itinerary-item-number {
+        width: 30px;
+        height: 30px;
+        font-size: 0.9em;
+    }
+
+    .itinerary-main-image {
+        height: 200px;
+    }
+
+    .itinerary-item-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .itinerary-item-name {
+        font-size: 1.1em;
+    }
+
+    .collaborators-list {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .itinerary-chat-messages {
+        max-height: 300px;
+    }
+}
+
+/* End Itinerary Presentation Styles */
+
 .total-row.amount-paid-row {
     font-size: 0.9em;
     color: #6c757d;
@@ -3158,17 +3615,7 @@ hr.total-divider {
         z-index: 999;
     }
 
-    .presentation-body {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .presentation-nav-arrow {
-        background: rgba(0,0,0,0.4);
-        width: 32px;
-        height: 32px;
-        font-size: 16px;
-    }
+    /* Itinerary presentation responsive (handled in itinerary styles section) */
 
     #mobile-summary-bar {
         transform: translateY(100%);

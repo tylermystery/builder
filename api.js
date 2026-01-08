@@ -1447,26 +1447,42 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
 
 
 export async function fetchItemChatMessages(itemId) {
+     console.log('[ItemChat API DEBUG] ========== fetchItemChatMessages START ==========');
+     console.log('[ItemChat API DEBUG] itemId:', itemId);
+     console.log('[ItemChat API DEBUG] itemId type:', typeof itemId);
      if (!itemId || !itemId.startsWith('rec')) {
+          console.log('[ItemChat API DEBUG] INVALID itemId - returning empty array');
           log('API', 'fetchItemChatMessages: Invalid or missing itemId.');
           return [];
      }
-    const formula = `FIND('${itemId}', ARRAYJOIN({Item Link}))`; // Corrected field name 'Item Link'
+    // Use {Item Link} & "" to convert linked record field to string containing record IDs
+    // ARRAYJOIN returns display names, but concatenating to empty string returns record IDs
+    const formula = `FIND('${itemId}', {Item Link} & "")`;
     const encodedFormula = encodeURIComponent(formula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
+    console.log('[ItemChat API DEBUG] Airtable filter formula:', formula);
+    console.log('[ItemChat API DEBUG] ITEM_MESSAGES_TABLE_NAME:', ITEM_MESSAGES_TABLE_NAME);
 
     try {
+        console.log('[ItemChat API DEBUG] Making fetch request to Airtable...');
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
+        console.log('[ItemChat API DEBUG] Response status:', response.status);
+        console.log('[ItemChat API DEBUG] Response ok:', response.ok);
         if (!response.ok) {
              const errorData = await response.json();
+             console.log('[ItemChat API DEBUG] Error response:', JSON.stringify(errorData));
             throw new Error(`Failed to fetch item chat messages for ${itemId}: ${errorData?.error?.message || response.statusText}`);
         }
         const data = await response.json();
+        console.log('[ItemChat API DEBUG] Fetched records count:', data.records?.length);
+        console.log('[ItemChat API DEBUG] Records:', JSON.stringify(data.records, null, 2));
         log('API', `Fetched ${data.records.length} item chat messages for ${itemId}.`);
+        console.log('[ItemChat API DEBUG] ========== fetchItemChatMessages END ==========');
         return data.records;
     } catch (error) {
+        console.error(`[ItemChat API DEBUG] ERROR in fetchItemChatMessages:`, error);
         console.error(`Error fetching item chat history for ${itemId}:`, error);
         return [];
     }
@@ -1474,11 +1490,18 @@ export async function fetchItemChatMessages(itemId) {
 
 
 export async function postItemChatMessage(itemId, senderId, senderName, content) {
+     console.log('[ItemChat API DEBUG] ========== postItemChatMessage START ==========');
+     console.log('[ItemChat API DEBUG] itemId:', itemId);
+     console.log('[ItemChat API DEBUG] senderId:', senderId);
+     console.log('[ItemChat API DEBUG] senderName:', senderName);
+     console.log('[ItemChat API DEBUG] content preview:', content?.substring(0, 50));
      if (!itemId || !itemId.startsWith('rec')) {
+        console.error(`[ItemChat API DEBUG] INVALID itemId: \"${itemId}\"`);
         console.error(`[API] postItemChatMessage Error: Invalid itemId provided: \"${itemId}\".`);
         return;
     }
     if (!content || !content.trim()) {
+        console.log('[ItemChat API DEBUG] Empty content - returning');
         log('API', 'postItemChatMessage: Attempted to send empty message.');
         return;
     }
@@ -1494,8 +1517,10 @@ export async function postItemChatMessage(itemId, senderId, senderName, content)
             }
         }]
     };
+    console.log('[ItemChat API DEBUG] Payload:', JSON.stringify(payload, null, 2));
     try {
          log('API', `Posting item chat message to item ${itemId} from ${senderName}`);
+         console.log('[ItemChat API DEBUG] Making POST request to Airtable...');
         const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -1504,21 +1529,21 @@ export async function postItemChatMessage(itemId, senderId, senderName, content)
             },
             body: JSON.stringify(payload)
         });
+        console.log('[ItemChat API DEBUG] Response status:', response.status);
+        console.log('[ItemChat API DEBUG] Response ok:', response.ok);
         if (!response.ok) {
              const errorData = await response.json();
+             console.log('[ItemChat API DEBUG] Error response:', JSON.stringify(errorData));
              throw new Error(`Failed to post item chat message to Airtable: ${errorData?.error?.message || response.statusText}`);
         }
         const result = await response.json();
         const newMessageRecordId = result.records[0].id;
+        console.log('[ItemChat API DEBUG] Successfully posted. New record ID:', newMessageRecordId);
         log('API', `Successfully posted item chat message for ${itemId}. Message ID: ${newMessageRecordId}`);
-        
-        fetch('/api/notify-rsvp-users', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ recordId: newMessageRecordId })
-        }).catch(err => console.error("RSVP user notification trigger failed:", err));
-        
+        console.log('[ItemChat API DEBUG] ========== postItemChatMessage END ==========');
+
     } catch (error) {
+        console.error(`[ItemChat API DEBUG] ERROR in postItemChatMessage:`, error);
         console.error(`Error posting item chat message for ${itemId}:`, error);
          if (typeof ui !== 'undefined' && ui.showToast) {
             ui.showToast(`Error: Could not send message. ${error.message}`);
