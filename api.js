@@ -3425,17 +3425,15 @@ export async function fetchTasks(projectId) {
     log('API', `Fetching tasks for project: ${projectId}`);
 
     // Filter tasks by the ProjectId field (linked to Sessions)
-    const formula = `FIND('${projectId}', ARRAYJOIN({ProjectId}))`;
-    const encodedFormula = encodeURIComponent(formula);
-
-    console.log('[TASK PERSISTENCE DEBUG] Filter formula:', formula);
-    console.log('[TASK PERSISTENCE DEBUG] Looking for tasks linked to project:', projectId);
+    // IMPORTANT: ARRAYJOIN on a linked record field returns display values (names), not record IDs
+    // We need a ProjectId_Rollup field in Airtable that exposes the record IDs as text
+    // If that field doesn't exist, we'll fall back to client-side filtering
 
     // Request fields needed for task display
     // Note: Only request fields that exist in the Airtable Tasks table
     // SourceType, SourceCommentId, LinkedPlanItemId, AffiliatedTaskId are NOT stored in Airtable
     // Comment-to-task linking is tracked client-side via _commentTaskLinks in session data
-    const fieldsQuery = [
+    const fieldsToFetch = [
         'Name',
         'Description',
         'Status',
@@ -3447,13 +3445,18 @@ export async function fetchTasks(projectId) {
         'Order',
         'LinkedItem',
         'CreatedTime'
-    ].map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
+    ];
+    const fieldsQuery = fieldsToFetch.map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
 
-    console.log('[TASK PERSISTENCE DEBUG] fetchTasks fields requested:', ['Name', 'Description', 'Status', 'DueDate', 'Assignee', 'ProjectId', 'ParentTask', 'Priority', 'Order', 'LinkedItem', 'CreatedTime']);
+    console.log('[TASK PERSISTENCE DEBUG] fetchTasks fields requested:', fieldsToFetch);
 
-    // Sort by Order field first, then by DueDate
+    // First, try filtering server-side with ProjectId_Rollup (if it exists in Airtable)
+    const formulaWithRollup = `FIND('${projectId}', {ProjectId_Rollup})`;
+    const encodedFormula = encodeURIComponent(formulaWithRollup);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}&sort%5B0%5D%5Bfield%5D=Order&sort%5B0%5D%5Bdirection%5D=asc&sort%5B1%5D%5Bfield%5D=DueDate&sort%5B1%5D%5Bdirection%5D=asc`;
 
+    console.log('[TASK PERSISTENCE DEBUG] Filter formula (using ProjectId_Rollup):', formulaWithRollup);
+    console.log('[TASK PERSISTENCE DEBUG] Looking for tasks linked to project:', projectId);
     console.log('[API DEBUG] fetchTasks URL:', url.substring(0, 150) + '...');
     console.log('[API DEBUG] fetchTasks table name:', TASKS_TABLE_NAME);
 
@@ -3469,11 +3472,13 @@ export async function fetchTasks(projectId) {
         console.log(`[API DEBUG] fetchTasks fetch completed in ${(fetchEnd - fetchStart).toFixed(2)}ms`);
         console.log('[API DEBUG] fetchTasks response status:', response.status, response.statusText);
 
+        // If the filter failed (likely because ProjectId_Rollup field doesn't exist),
+        // fall back to fetching all tasks and filtering client-side
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('[API DEBUG] fetchTasks Airtable error response:', errorText);
-            console.error('Airtable Error fetching tasks:', errorText);
-            throw new Error(`Failed to fetch tasks from Airtable. Status: ${response.status}`);
+            console.log('[TASK PERSISTENCE DEBUG] Server-side filter failed:', errorText);
+            console.log('[TASK PERSISTENCE DEBUG] Falling back to client-side filtering...');
+            return await fetchTasksWithClientSideFilter(projectId, fieldsQuery);
         }
 
         const data = await response.json();
@@ -3486,40 +3491,96 @@ export async function fetchTasks(projectId) {
         // Enhanced persistence debugging
         console.log('[TASK PERSISTENCE DEBUG] ========== TASKS FETCHED FROM AIRTABLE ==========');
         console.log('[TASK PERSISTENCE DEBUG] Project ID:', projectId);
-        console.log('[TASK PERSISTENCE DEBUG] Total tasks found:', data.records.length);
+        console.log('[TASK PERSISTENCE DEBUG] Total tasks found (server-side filter):', data.records.length);
+
         if (data.records.length > 0) {
             console.log('[TASK PERSISTENCE DEBUG] Task IDs:', data.records.map(t => t.id));
             console.log('[TASK PERSISTENCE DEBUG] Task names:', data.records.map(t => t.fields?.Name));
-            // Show the first task's ProjectId field to debug linked record structure
             console.log('[TASK PERSISTENCE DEBUG] First task ProjectId value:', data.records[0].fields?.ProjectId);
-        } else {
-            // If no tasks found, try to fetch a few tasks without filter to see if any exist
-            console.log('[TASK PERSISTENCE DEBUG] No tasks found with filter, checking if any tasks exist in table...');
-            const debugUrl = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}?maxRecords=3&fields%5B%5D=Name&fields%5B%5D=ProjectId`;
-            try {
-                const debugResponse = await fetchWithTimeout(debugUrl, {
-                    headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
-                });
-                if (debugResponse.ok) {
-                    const debugData = await debugResponse.json();
-                    console.log('[TASK PERSISTENCE DEBUG] Sample tasks in table:', debugData.records.length);
-                    if (debugData.records.length > 0) {
-                        console.log('[TASK PERSISTENCE DEBUG] Sample task ProjectId values:',
-                            debugData.records.map(t => ({ name: t.fields?.Name, projectId: t.fields?.ProjectId })));
-                    }
-                }
-            } catch (debugError) {
-                console.log('[TASK PERSISTENCE DEBUG] Debug fetch error:', debugError.message);
-            }
+            console.log('[TASK PERSISTENCE DEBUG] ================================================');
+            log('API', `Fetched ${data.records.length} tasks for project ${projectId}`);
+            return data.records;
         }
-        console.log('[TASK PERSISTENCE DEBUG] ================================================');
 
-        log('API', `Fetched ${data.records.length} tasks for project ${projectId}`);
-        return data.records;
+        // If server-side filter returned 0 results, try client-side filtering
+        // This handles the case where ProjectId_Rollup field exists but is empty,
+        // or where the field doesn't contain the expected data
+        console.log('[TASK PERSISTENCE DEBUG] No tasks found with server filter, trying client-side filter...');
+        return await fetchTasksWithClientSideFilter(projectId, fieldsQuery);
+
     } catch (error) {
         console.error('[API DEBUG] fetchTasks caught error:', error);
-        console.error('[API DEBUG] fetchTasks error stack:', error?.stack);
-        console.error("Error fetching tasks:", error);
+        console.log('[TASK PERSISTENCE DEBUG] Falling back to client-side filtering after error...');
+        return await fetchTasksWithClientSideFilter(projectId, fieldsQuery);
+    }
+}
+
+/**
+ * Fallback function to fetch all tasks and filter client-side by ProjectId
+ * Used when the server-side filter doesn't work (e.g., ProjectId_Rollup field doesn't exist)
+ * @param {string} projectId - The project/session ID to filter by
+ * @param {string} fieldsQuery - URL query string for fields to fetch
+ * @returns {Promise<Array>} - Array of task records for this project
+ */
+async function fetchTasksWithClientSideFilter(projectId, fieldsQuery) {
+    console.log('[TASK PERSISTENCE DEBUG] ========== CLIENT-SIDE FILTER ==========');
+    console.log('[TASK PERSISTENCE DEBUG] Fetching all tasks and filtering client-side for project:', projectId);
+
+    // Fetch all tasks without a filter (or with a very broad filter)
+    // Note: This is less efficient but works without requiring Airtable schema changes
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}?${fieldsQuery}&sort%5B0%5D%5Bfield%5D=Order&sort%5B0%5D%5Bdirection%5D=asc&sort%5B1%5D%5Bfield%5D=DueDate&sort%5B1%5D%5Bdirection%5D=asc`;
+
+    try {
+        const response = await fetchWithTimeout(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[TASK PERSISTENCE DEBUG] Client-side filter fetch failed:', errorText);
+            return [];
+        }
+
+        const data = await response.json();
+        console.log('[TASK PERSISTENCE DEBUG] Total tasks in table:', data.records.length);
+
+        // Filter client-side by checking if ProjectId array contains the target projectId
+        // The API returns linked records as arrays of record IDs
+        const filteredTasks = data.records.filter(task => {
+            const taskProjectIds = task.fields?.ProjectId;
+            if (!taskProjectIds || !Array.isArray(taskProjectIds)) {
+                return false;
+            }
+            return taskProjectIds.includes(projectId);
+        });
+
+        console.log('[TASK PERSISTENCE DEBUG] Tasks matching project (client-side):', filteredTasks.length);
+        if (filteredTasks.length > 0) {
+            console.log('[TASK PERSISTENCE DEBUG] Matched task IDs:', filteredTasks.map(t => t.id));
+            console.log('[TASK PERSISTENCE DEBUG] Matched task names:', filteredTasks.map(t => t.fields?.Name));
+        }
+
+        // Log sample of all tasks for debugging if no matches found
+        if (filteredTasks.length === 0 && data.records.length > 0) {
+            console.log('[TASK PERSISTENCE DEBUG] No matching tasks found. Sample of all tasks:');
+            data.records.slice(0, 5).forEach((task, index) => {
+                console.log(`[TASK PERSISTENCE DEBUG] Task ${index + 1}:`, {
+                    id: task.id,
+                    name: task.fields?.Name,
+                    projectIdRaw: task.fields?.ProjectId,
+                    projectIdStringified: JSON.stringify(task.fields?.ProjectId),
+                    projectIdType: Array.isArray(task.fields?.ProjectId) ? 'array' : typeof task.fields?.ProjectId,
+                    matchesTarget: Array.isArray(task.fields?.ProjectId) && task.fields.ProjectId.includes(projectId)
+                });
+            });
+        }
+
+        console.log('[TASK PERSISTENCE DEBUG] ================================================');
+        log('API', `Fetched ${filteredTasks.length} tasks for project ${projectId} (client-side filter)`);
+        return filteredTasks;
+
+    } catch (error) {
+        console.error('[TASK PERSISTENCE DEBUG] Client-side filter error:', error);
         return [];
     }
 }
