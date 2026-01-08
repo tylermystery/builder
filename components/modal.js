@@ -1768,31 +1768,58 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             const rsvpListSection = document.createElement('div');
             rsvpListSection.className = 'rsvp-list-section';
 
+            // Initial HTML with loading placeholders
             let rsvpHTML = '<div class="rsvp-list-header"><strong>RSVPs</strong></div>';
 
             if (rsvpYes.length > 0) {
                 rsvpHTML += `<div class="rsvp-list-group">
                     <div class="rsvp-list-label">Going (${rsvpYes.length})</div>
-                    <div class="rsvp-list-items">Anonymous users</div>
+                    <div class="rsvp-list-items" data-rsvp-type="yes">Loading...</div>
                 </div>`;
             }
 
             if (rsvpMaybe.length > 0) {
                 rsvpHTML += `<div class="rsvp-list-group">
                     <div class="rsvp-list-label">Maybe (${rsvpMaybe.length})</div>
-                    <div class="rsvp-list-items">Anonymous users</div>
+                    <div class="rsvp-list-items" data-rsvp-type="maybe">Loading...</div>
                 </div>`;
             }
 
             if (rsvpNo.length > 0) {
                 rsvpHTML += `<div class="rsvp-list-group">
                     <div class="rsvp-list-label">Can't Go (${rsvpNo.length})</div>
-                    <div class="rsvp-list-items">Anonymous users</div>
+                    <div class="rsvp-list-items" data-rsvp-type="no">Loading...</div>
                 </div>`;
             }
 
             rsvpListSection.innerHTML = rsvpHTML;
             modalItemDescription.parentElement.insertBefore(rsvpListSection, modalItemDescription);
+
+            // Fetch user names asynchronously and update the display
+            const allUserIds = [...rsvpYes, ...rsvpMaybe, ...rsvpNo];
+            api.fetchUserNamesByIds(allUserIds).then(userNameMap => {
+                // Helper to format names list
+                const formatNames = (userIds) => {
+                    if (userIds.length === 0) return '';
+                    const names = userIds.map(id => userNameMap.get(id) || 'Guest');
+                    return names.join(', ');
+                };
+
+                // Update each RSVP group with actual names
+                const yesEl = rsvpListSection.querySelector('[data-rsvp-type="yes"]');
+                if (yesEl) yesEl.textContent = formatNames(rsvpYes) || 'Guest';
+
+                const maybeEl = rsvpListSection.querySelector('[data-rsvp-type="maybe"]');
+                if (maybeEl) maybeEl.textContent = formatNames(rsvpMaybe) || 'Guest';
+
+                const noEl = rsvpListSection.querySelector('[data-rsvp-type="no"]');
+                if (noEl) noEl.textContent = formatNames(rsvpNo) || 'Guest';
+            }).catch(err => {
+                console.error('[Modal] Error fetching RSVP user names:', err);
+                // Fallback to generic text on error
+                const items = rsvpListSection.querySelectorAll('.rsvp-list-items');
+                items.forEach(el => el.textContent = 'Guests');
+            });
         }
 
         // Calendar export buttons removed for published events - not needed for viewing

@@ -2581,6 +2581,53 @@ export async function addRsvpToEvent(eventId, userId) {
     return updateRsvpForEvent(eventId, userId, 'yes');
 }
 
+/**
+ * Fetches user names for a list of user IDs from the Users table
+ * @param {string[]} userIds - Array of user record IDs
+ * @returns {Promise<Map<string, string>>} - Map of userId -> userName
+ */
+export async function fetchUserNamesByIds(userIds) {
+    if (!userIds || userIds.length === 0) {
+        return new Map();
+    }
+
+    // Remove duplicates
+    const uniqueIds = [...new Set(userIds)];
+    log('API', `Fetching names for ${uniqueIds.length} users`);
+
+    try {
+        // Build formula to get users by IDs: OR(RECORD_ID()='id1', RECORD_ID()='id2', ...)
+        const formula = `OR(${uniqueIds.map(id => `RECORD_ID()='${id}'`).join(',')})`;
+        const encodedFormula = encodeURIComponent(formula);
+        const url = `https://api.airtable.com/v0/${BASE_ID}/Users?filterByFormula=${encodedFormula}&fields%5B%5D=Name`;
+
+        const response = await fetchWithTimeout(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            console.error(`[API] Failed to fetch user names: ${response.status}`);
+            return new Map();
+        }
+
+        const data = await response.json();
+        const userMap = new Map();
+
+        if (data.records) {
+            data.records.forEach(record => {
+                const name = record.fields?.Name || 'Guest';
+                userMap.set(record.id, name);
+            });
+        }
+
+        log('API', `Fetched ${userMap.size} user names`);
+        return userMap;
+    } catch (error) {
+        console.error('[API] Error fetching user names:', error);
+        return new Map();
+    }
+}
+
 
 // --- FUNCTION TO TOGGLE USER LIKE (Using combined endpoint) ---
 export async function toggleUserLike(itemId) {
