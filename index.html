@@ -734,12 +734,48 @@ body.modal-open {
 }
 
 /* CRITICAL: Grouping carousel layout constraints - needed before deferred CSS loads */
+/* Includes visual styles to prevent broken appearance on direct modal URL access */
 .grouping-carousel-section {
     min-width: 0;
     max-width: 100%;
     overflow: hidden;
     width: 100%;
     box-sizing: border-box;
+    /* Visual styles critical for landing page appearance */
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(8px) saturate(1.2);
+    -webkit-backdrop-filter: blur(8px) saturate(1.2);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+    position: relative;
+    align-self: stretch;
+}
+
+/* Carousel header styles - critical for landing page appearance */
+.grouping-carousel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    cursor: pointer;
+}
+
+.grouping-carousel-title {
+    margin: 0;
+    font-size: 1.4em;
+    font-weight: 600;
+    color: #333;
+}
+
+.grouping-carousel-count {
+    font-size: 0.85em;
+    color: #6c757d;
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 4px 10px;
+    border-radius: 12px;
 }
 
 .grouping-carousel-wrapper {
@@ -748,6 +784,10 @@ body.modal-open {
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 8px 0;
+    position: relative;
 }
 
 .grouping-carousel-container {

@@ -143,7 +143,15 @@ export function toggleLoading(show) {
     const loadingMessage = document.getElementById('loading-message');
     const mainContent = document.querySelector('.main-content'); // Changed to class selector
     if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';
-    if (mainContent) mainContent.style.display = show ? 'none' : 'grid';
+    if (mainContent) {
+        if (show) {
+            mainContent.style.display = 'none';
+        } else {
+            // Clear inline display style to let CSS media queries control the layout
+            // This ensures mobile (flex) vs desktop (grid) layouts are respected
+            mainContent.style.display = '';
+        }
+    }
 }
 
 // Helper function to create skeleton cards
