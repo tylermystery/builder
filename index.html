@@ -1419,6 +1419,94 @@ body.presentation-loading #presentation-modal-overlay {
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+
+/* Critical Mobile Summary Bar Styles - Base styles needed before deferred CSS */
+#mobile-summary-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: #343a40;
+    color: white;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 15px;
+    z-index: 998;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
+    transition: background-color 0.3s ease;
+}
+#mobile-summary-bar.available { background-color: #28a745; }
+#mobile-summary-bar.partial { background-color: #fd7e14; }
+#mobile-summary-bar.unavailable { background-color: #dc3545; }
+
+#mobile-show-filters-btn {
+    display: none;
+}
+
+/* Critical Mobile Sidebar Styles - Must be inline for direct URL access */
+/* These styles are applied by JS on mobile viewports before deferred.css loads */
+@media (max-width: 999px) {
+    #left-sidebar, #right-sidebar {
+        max-width: 100%;
+        transition: max-height 0.4s ease-out, opacity 0.3s ease, margin 0.4s ease, padding 0.4s ease;
+        overflow: hidden;
+        max-height: 2000px;
+        opacity: 1;
+    }
+
+    #left-sidebar.collapsed, #right-sidebar.collapsed {
+        max-height: 0;
+        opacity: 0;
+        margin: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    #mobile-summary-bar {
+        transform: translateY(100%);
+        transition: transform 0.3s ease-in-out;
+    }
+
+    body.mobile-bar-active #mobile-summary-bar {
+        transform: translateY(0);
+    }
+
+    #mobile-summary-bar, #mobile-show-filters-btn {
+        display: flex;
+    }
+
+    #mobile-show-filters-btn {
+        position: sticky;
+        top: 75px;
+        z-index: 999;
+    }
+
+    /* Mobile filter trigger on mobile */
+    #mobile-filter-trigger {
+        display: flex;
+        width: 100%;
+        position: sticky;
+        top: 75px;
+        z-index: 998;
+        background-color: #6c757d;
+        color: white;
+        padding: 15px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+}
+
+/* Desktop: Hide mobile filter trigger */
+@media (min-width: 1000px) {
+    #mobile-filter-trigger {
+        display: none;
+    }
+}
     </style>
 
     <!-- Early presentation mode detection - runs before DOM loads to prevent catalog flash -->

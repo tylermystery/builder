@@ -226,7 +226,8 @@ function syncUiWithUrl() {
         } else if (openItemId) {
             // Wait for deferred CSS before showing modal on direct URL access
             // This prevents styling issues where the page behind the modal looks broken
-            const cssResult = await waitForDeferredCss(500);
+            // Increased timeout to 1500ms to handle slower connections
+            const cssResult = await waitForDeferredCss(1500);
 
             // Helper to get computed styles of key page elements
             const getPageElementStyles = () => {
@@ -289,6 +290,13 @@ function syncUiWithUrl() {
                     console.warn('[DIRECT-MODAL-DEBUG] WARNING: Deferred CSS not fully loaded/applied!');
                     console.warn('[DIRECT-MODAL-DEBUG] cssResult:', cssResult);
                     console.warn('[DIRECT-MODAL-DEBUG] This will cause styling issues. Current page styles:', getPageElementStyles());
+
+                    // Force a layout recalculation by triggering a reflow
+                    // This can help ensure any CSS that has loaded is properly applied
+                    document.body.offsetHeight;
+
+                    // Give a bit more time for CSS to settle before showing modal
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 } else {
                     console.log('[DIRECT-MODAL-DEBUG] Deferred CSS confirmed loaded, showing modal');
                 }
