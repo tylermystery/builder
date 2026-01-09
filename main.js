@@ -161,6 +161,45 @@ function syncUiWithUrl() {
     }
 
     const view = params.get('view');
+    let categoryFilter = params.get('category');
+
+    // --- Auto-select first category when store has categories and no category is selected ---
+    // This applies only when:
+    // 1. No category is selected (categoryFilter is null/undefined)
+    // 2. No special view is active (plan, likes, categories, packages, etc.)
+    // 3. No item modal is being opened
+    // 4. The active store has categories defined in its Items field
+    const specialViews = ['plan', 'likes', 'categories', 'packages', 'my-sessions', 'rsvp-events', 'present', 'itinerary', 'tasks'];
+    const isSpecialView = view && specialViews.includes(view);
+    const isLandingPage = !categoryFilter && !isSpecialView && !openItemId;
+
+    if (isLandingPage && state.ui.activeShopId) {
+        const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
+        if (activeShop && activeShop.fields && activeShop.fields.Items && activeShop.fields.Items.length > 0) {
+            // Get the first category from the store's Items field
+            const storeItemIds = Array.isArray(activeShop.fields.Items)
+                ? activeShop.fields.Items
+                : activeShop.fields.Items.split(',').map(id => id.trim());
+
+            // Find the first valid category (Grouping record)
+            const firstCategoryId = storeItemIds.find(id => id.startsWith('rec'));
+            if (firstCategoryId) {
+                const firstCategoryRecord = state.records.all.find(r => r.id === firstCategoryId && r.fields['Item Type'] === 'Grouping');
+                if (firstCategoryRecord && firstCategoryRecord.fields.Name) {
+                    const firstCategoryName = firstCategoryRecord.fields.Name;
+                    log('Main', `Store has categories - auto-selecting first category: "${firstCategoryName}"`);
+
+                    // Update URL with the first category (using replaceState to avoid adding to history)
+                    const url = new URL(window.location);
+                    url.searchParams.set('category', firstCategoryName);
+                    history.replaceState({}, '', url.toString());
+
+                    // Update categoryFilter for the rest of this function
+                    categoryFilter = firstCategoryName;
+                }
+            }
+        }
+    }
 
     // DEBUG: Log URL sync entry point with CSS state
     const isDirectModalAccess = !!openItemId && !document.querySelector('#detail-modal-overlay.active');
@@ -188,7 +227,6 @@ function syncUiWithUrl() {
     if (categoryFilters) {
         categoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
         let buttonToActivate;
-        let categoryFilter = params.get('category');
 
         if (view === 'plan') {
             buttonToActivate = document.getElementById('plan-filter-btn');
