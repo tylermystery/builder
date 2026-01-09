@@ -272,3 +272,15 @@
   to = "/.netlify/functions/commit-session-data"
   status = 200
 
+# Quick Plan Creation
+[[redirects]]
+  from = "/api/create-quick-plan"
+  to = "/.netlify/functions/create-quick-plan"
+  status = 200
+
+# Quick Plan AI Enrichment (background processing)
+[[redirects]]
+  from = "/api/enrich-quick-plan"
+  to = "/.netlify/functions/enrich-quick-plan"
+  status = 200
+
