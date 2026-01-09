@@ -2640,6 +2640,18 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             }
         }
 
+        // Add Present button for events with linked sessions - allows viewing in presentation mode
+        if (hasLinkedSession) {
+            const presentBtn = document.createElement('button');
+            presentBtn.className = 'card-action-btn present-event-btn';
+            presentBtn.dataset.eventId = record.id;
+            presentBtn.dataset.sessionId = record.fields.LinkedSession[0];
+            presentBtn.innerHTML = '▶️ Present';
+            presentBtn.title = 'View in presentation mode';
+            presentBtn.style.marginRight = '10px';
+            modalHeaderActions.appendChild(presentBtn);
+        }
+
         const rsvpContainer = document.createElement('div');
         rsvpContainer.className = 'rsvp-button-group';
 

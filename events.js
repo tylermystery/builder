@@ -1598,6 +1598,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const demoteBtn = e.target.closest('.demote-locked-item-btn');
         const parentLink = e.target.closest('.parent-link');
         const presentBtn = e.target.closest('.present-btn');
+        const presentEventBtn = e.target.closest('.present-event-btn');
         const carouselNav = e.target.closest('.carousel-nav');
         const saveShareBtn = e.target.closest('#save-share-btn');
         const breadcrumbLink = e.target.closest('.breadcrumb-link');
@@ -1834,6 +1835,36 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             log('Events', `Navigating to edit existing session ${sessionId}`);
             const currentShopId = state.ui.activeShopId;
             window.location.href = `${window.location.pathname}?session=${sessionId}&shopId=${currentShopId}`;
+            return;
+        }
+
+        // Handle "Present" button for events with linked sessions - view in presentation mode
+        if (presentEventBtn) {
+            e.stopPropagation();
+            const sessionId = presentEventBtn.dataset.sessionId;
+            const eventId = presentEventBtn.dataset.eventId;
+            if (!sessionId) {
+                ui.showToast('Session not found');
+                return;
+            }
+
+            log('Events', `Opening presentation view for event session ${sessionId}`);
+
+            // Show loading state
+            presentEventBtn.disabled = true;
+            const originalHTML = presentEventBtn.innerHTML;
+            presentEventBtn.innerHTML = 'Loading...';
+
+            try {
+                // Navigate to the session with presentation view
+                const currentShopId = state.ui.activeShopId;
+                window.location.href = `${window.location.pathname}?session=${sessionId}&shopId=${currentShopId}&view=present&eventId=${eventId}`;
+            } catch (error) {
+                console.error('Error opening presentation view:', error);
+                ui.showToast(`Error: ${error.message}`);
+                presentEventBtn.disabled = false;
+                presentEventBtn.innerHTML = originalHTML;
+            }
             return;
         }
 

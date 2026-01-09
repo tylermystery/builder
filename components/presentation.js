@@ -670,6 +670,280 @@ function hideCollaboratorsModal() {
     }
 }
 
+// ============================================
+// RSVP FUNCTIONALITY FOR PRESENTATION VIEW
+// ============================================
+
+// Cache for the linked event record
+let linkedEventRecord = null;
+
+/**
+ * Fetches and renders the RSVP section for events
+ * This is called during presentation view initialization
+ */
+async function renderRsvpSection() {
+    const rsvpSection = document.getElementById('presentation-rsvp-section');
+    const rsvpButtonsContainer = document.getElementById('presentation-rsvp-buttons');
+    const rsvpListContainer = document.getElementById('presentation-rsvp-list');
+
+    if (!rsvpSection || !rsvpButtonsContainer || !rsvpListContainer) {
+        console.log('[Presentation] RSVP section elements not found');
+        return;
+    }
+
+    // Try to get eventId from URL first
+    const urlParams = new URLSearchParams(window.location.search);
+    const eventIdFromUrl = urlParams.get('eventId');
+
+    // Find the linked event record
+    let eventRecord = null;
+
+    if (eventIdFromUrl) {
+        // Look for the event in state.records.all
+        eventRecord = state.records.all.find(r => r.id === eventIdFromUrl);
+        if (!eventRecord) {
+            // Try fetching the event if not in state
+            try {
+                const fetchedItems = await api.fetchGhostItems([eventIdFromUrl]);
+                if (fetchedItems && fetchedItems.length > 0) {
+                    eventRecord = fetchedItems[0];
+                }
+            } catch (err) {
+                console.error('[Presentation] Error fetching event record:', err);
+            }
+        }
+    }
+
+    // If no eventId in URL, try to find it from session's LinkedItem
+    if (!eventRecord && state.session.id) {
+        try {
+            // Fetch the session to get its LinkedItem
+            const sessionData = await api.fetchSessionById(state.session.id);
+            if (sessionData?.fields?.LinkedItem?.length > 0) {
+                const linkedItemId = sessionData.fields.LinkedItem[0];
+                eventRecord = state.records.all.find(r => r.id === linkedItemId);
+                if (!eventRecord) {
+                    const fetchedItems = await api.fetchGhostItems([linkedItemId]);
+                    if (fetchedItems && fetchedItems.length > 0) {
+                        eventRecord = fetchedItems[0];
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('[Presentation] Error fetching session LinkedItem:', err);
+        }
+    }
+
+    // If no event record found or it's not an Event type, hide the section
+    if (!eventRecord || eventRecord.fields['Item Type'] !== 'Event') {
+        rsvpSection.style.display = 'none';
+        linkedEventRecord = null;
+        return;
+    }
+
+    // Store the event record for RSVP updates
+    linkedEventRecord = eventRecord;
+
+    // Show the RSVP section
+    rsvpSection.style.display = 'block';
+
+    // Render RSVP buttons
+    renderRsvpButtons(rsvpButtonsContainer, eventRecord);
+
+    // Render RSVP list
+    await renderRsvpList(rsvpListContainer, eventRecord);
+}
+
+/**
+ * Renders the RSVP buttons (Yes, Maybe, No)
+ */
+function renderRsvpButtons(container, eventRecord) {
+    const rsvpYes = eventRecord.fields.RSVPs || [];
+    const rsvpMaybe = eventRecord.fields.RSVPMaybe || [];
+    const rsvpNo = eventRecord.fields.RSVPNo || [];
+    const userId = state.session.user.id;
+
+    const hasRsvpdYes = rsvpYes.includes(userId);
+    const hasRsvpdMaybe = rsvpMaybe.includes(userId);
+    const hasRsvpdNo = rsvpNo.includes(userId);
+
+    container.innerHTML = `
+        <div class="presentation-rsvp-label">Are you going?</div>
+        <div class="rsvp-button-group">
+            <button class="rsvp-btn rsvp-yes ${hasRsvpdYes ? 'active' : ''}"
+                    data-record-id="${eventRecord.id}"
+                    data-rsvp-type="yes">
+                ${hasRsvpdYes ? "Going ✅" : "Yes"}
+            </button>
+            <button class="rsvp-btn rsvp-maybe ${hasRsvpdMaybe ? 'active' : ''}"
+                    data-record-id="${eventRecord.id}"
+                    data-rsvp-type="maybe">
+                ${hasRsvpdMaybe ? "Maybe ❓" : "Maybe"}
+            </button>
+            <button class="rsvp-btn rsvp-no ${hasRsvpdNo ? 'active' : ''}"
+                    data-record-id="${eventRecord.id}"
+                    data-rsvp-type="no">
+                ${hasRsvpdNo ? "Can't Go ❌" : "No"}
+            </button>
+        </div>
+    `;
+}
+
+/**
+ * Renders the RSVP list showing who has RSVPed
+ */
+async function renderRsvpList(container, eventRecord) {
+    const rsvpYes = eventRecord.fields.RSVPs || [];
+    const rsvpMaybe = eventRecord.fields.RSVPMaybe || [];
+    const rsvpNo = eventRecord.fields.RSVPNo || [];
+
+    // If no RSVPs at all, show empty state
+    if (rsvpYes.length === 0 && rsvpMaybe.length === 0 && rsvpNo.length === 0) {
+        container.innerHTML = '<div class="rsvp-empty-state">No responses yet</div>';
+        return;
+    }
+
+    // Build initial HTML with loading placeholders
+    let html = '';
+
+    if (rsvpYes.length > 0) {
+        html += `
+            <div class="rsvp-list-group">
+                <div class="rsvp-list-label">Going (${rsvpYes.length})</div>
+                <div class="rsvp-list-items" data-rsvp-type="yes">Loading...</div>
+            </div>
+        `;
+    }
+
+    if (rsvpMaybe.length > 0) {
+        html += `
+            <div class="rsvp-list-group">
+                <div class="rsvp-list-label">Maybe (${rsvpMaybe.length})</div>
+                <div class="rsvp-list-items" data-rsvp-type="maybe">Loading...</div>
+            </div>
+        `;
+    }
+
+    if (rsvpNo.length > 0) {
+        html += `
+            <div class="rsvp-list-group">
+                <div class="rsvp-list-label">Can't Go (${rsvpNo.length})</div>
+                <div class="rsvp-list-items" data-rsvp-type="no">Loading...</div>
+            </div>
+        `;
+    }
+
+    container.innerHTML = html;
+
+    // Fetch user names asynchronously and update the display
+    const allUserIds = [...rsvpYes, ...rsvpMaybe, ...rsvpNo];
+    try {
+        const userNameMap = await api.fetchUserNamesByIds(allUserIds);
+
+        // Helper to format names list
+        const formatNames = (userIds) => {
+            if (userIds.length === 0) return '';
+            const names = userIds.map(id => userNameMap.get(id) || 'Guest');
+            return names.join(', ');
+        };
+
+        // Update each RSVP group with actual names
+        const yesEl = container.querySelector('[data-rsvp-type="yes"]');
+        if (yesEl) yesEl.textContent = formatNames(rsvpYes) || 'Guest';
+
+        const maybeEl = container.querySelector('[data-rsvp-type="maybe"]');
+        if (maybeEl) maybeEl.textContent = formatNames(rsvpMaybe) || 'Guest';
+
+        const noEl = container.querySelector('[data-rsvp-type="no"]');
+        if (noEl) noEl.textContent = formatNames(rsvpNo) || 'Guest';
+    } catch (err) {
+        console.error('[Presentation] Error fetching RSVP user names:', err);
+        // Fallback to generic text on error
+        const items = container.querySelectorAll('.rsvp-list-items');
+        items.forEach(el => el.textContent = 'Guests');
+    }
+}
+
+/**
+ * Handles RSVP button clicks in the presentation view
+ */
+async function handlePresentationRsvpClick(e) {
+    const rsvpBtn = e.target.closest('.rsvp-btn');
+    if (!rsvpBtn) return;
+
+    // Check if we're in the presentation view
+    if (!modal || !modal.classList.contains('active')) return;
+
+    // Check if user is authenticated
+    if (!state.session.user.isAuthenticated) {
+        showToast('Please sign in to RSVP');
+        showUserModal();
+        return;
+    }
+
+    const recordId = rsvpBtn.dataset.recordId;
+    const rsvpType = rsvpBtn.dataset.rsvpType;
+    const userId = state.session.user.id;
+
+    if (!recordId || !rsvpType || !linkedEventRecord) {
+        console.error('[Presentation] Missing RSVP data');
+        return;
+    }
+
+    // Show loading state
+    const originalText = rsvpBtn.innerHTML;
+    rsvpBtn.disabled = true;
+    rsvpBtn.innerHTML = '...';
+
+    try {
+        // Determine if we're toggling off (clicking same button again)
+        const currentlyActive = rsvpBtn.classList.contains('active');
+        const newRsvpType = currentlyActive ? null : rsvpType;
+
+        // Call API to update RSVP
+        const result = await api.updateRsvpForEvent(recordId, userId, newRsvpType);
+
+        if (result) {
+            // Update the local event record with new RSVP data
+            linkedEventRecord.fields.RSVPs = result.RSVPs || [];
+            linkedEventRecord.fields.RSVPMaybe = result.RSVPMaybe || [];
+            linkedEventRecord.fields.RSVPNo = result.RSVPNo || [];
+
+            // Also update in state.records.all if it exists there
+            const stateRecord = state.records.all.find(r => r.id === recordId);
+            if (stateRecord) {
+                stateRecord.fields.RSVPs = result.RSVPs || [];
+                stateRecord.fields.RSVPMaybe = result.RSVPMaybe || [];
+                stateRecord.fields.RSVPNo = result.RSVPNo || [];
+            }
+
+            // Re-render both buttons and list
+            const rsvpButtonsContainer = document.getElementById('presentation-rsvp-buttons');
+            const rsvpListContainer = document.getElementById('presentation-rsvp-list');
+
+            if (rsvpButtonsContainer) {
+                renderRsvpButtons(rsvpButtonsContainer, linkedEventRecord);
+            }
+            if (rsvpListContainer) {
+                await renderRsvpList(rsvpListContainer, linkedEventRecord);
+            }
+
+            log('Presentation', `RSVP updated: ${rsvpType} for event ${recordId}`);
+        } else {
+            throw new Error('RSVP update failed');
+        }
+    } catch (error) {
+        console.error('[Presentation] RSVP Error:', error);
+        showToast(`RSVP Error: ${error.message}`);
+        rsvpBtn.innerHTML = originalText;
+        rsvpBtn.disabled = false;
+    }
+}
+
+// ============================================
+// END RSVP FUNCTIONALITY
+// ============================================
+
 // Calculate score for a single reaction
 function getReactionScore(emoji) {
     return REACTION_SCORES[emoji] || 0;
@@ -5282,6 +5556,7 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Render all sections
     renderEventHeader();
     renderCollaborators();
+    await renderRsvpSection(); // Render RSVP buttons and list for events
     await renderAllItems();
 
     // Initialize accordions and generate summaries
@@ -5480,6 +5755,14 @@ export function setupPresentationEventListeners() {
     console.log('[Events DEBUG] Adding handleTaskStatusClick listener to headerAccordionContent:', headerAccordionContent);
     if (headerAccordionContent) {
         headerAccordionContent.addEventListener('click', handleTaskStatusClick);
+        // Handle RSVP button clicks in the presentation view
+        headerAccordionContent.addEventListener('click', handlePresentationRsvpClick);
+    }
+
+    // Also add RSVP click handler to the RSVP section directly (in case it's outside accordion content)
+    const rsvpSection = document.getElementById('presentation-rsvp-section');
+    if (rsvpSection) {
+        rsvpSection.addEventListener('click', handlePresentationRsvpClick);
     }
 
     // Note: shareBtn removed - share functionality now in collaborators add/share button

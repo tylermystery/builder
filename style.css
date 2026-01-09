@@ -1928,6 +1928,16 @@ body.modal-open {
     z-index: 10;
 }
 
+/* Present Event Button - distinct styling */
+.card-action-btn.present-event-btn {
+    background-color: #28a745;
+}
+
+.card-action-btn.present-event-btn:hover:not(:disabled) {
+    background-color: #218838;
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+}
+
 /* Open to Edit button - for unaffiliated events, admin/publish permission users */
 .open-to-edit-btn {
     background-color: #6f42c1;  /* Purple to indicate admin action */
@@ -8285,6 +8295,79 @@ hr.total-divider {
     color: #666;
     font-size: 0.9em;
     padding-left: 10px;
+}
+
+/* Presentation View RSVP Section Styles */
+.presentation-rsvp-section {
+    background-color: rgba(255, 255, 255, 0.95);
+    border-radius: 12px;
+    padding: 20px;
+    margin: 15px 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.presentation-rsvp-label {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 12px;
+    font-size: 1.1em;
+    text-align: center;
+}
+
+.presentation-rsvp-section .rsvp-button-group {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.presentation-rsvp-section .rsvp-btn {
+    padding: 10px 24px;
+    font-size: 1em;
+    min-width: 100px;
+}
+
+.presentation-rsvp-list {
+    border-top: 1px solid #e9ecef;
+    padding-top: 15px;
+    margin-top: 10px;
+}
+
+.presentation-rsvp-list .rsvp-list-group {
+    margin-bottom: 12px;
+    text-align: left;
+}
+
+.presentation-rsvp-list .rsvp-list-label {
+    font-weight: 600;
+    color: #495057;
+    font-size: 0.95em;
+    margin-bottom: 6px;
+}
+
+.presentation-rsvp-list .rsvp-list-items {
+    color: #6c757d;
+    font-size: 0.9em;
+    padding-left: 15px;
+}
+
+.rsvp-empty-state {
+    color: #6c757d;
+    font-style: italic;
+    text-align: center;
+    padding: 10px;
+}
+
+@media (max-width: 768px) {
+    .presentation-rsvp-section .rsvp-button-group {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .presentation-rsvp-section .rsvp-btn {
+        width: 100%;
+        max-width: 200px;
+    }
 }
 
 @media (max-width: 768px) {
