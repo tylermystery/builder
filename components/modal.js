@@ -2898,10 +2898,10 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     aiOptionsContainer.style.marginTop = hasExistingOptions ? '15px' : '0';
 
     // Button text changes based on whether options exist
-    const buttonText = hasExistingOptions ? '✨ Regenerate Options' : '✨ Add Top Options';
+    const buttonText = hasExistingOptions ? '✨ Re-Estimate Options' : '✨ Estimate Options';
 
     aiOptionsContainer.innerHTML = `
-        <button class="ai-top-options-btn" title="Use AI to generate recommended options/variations">
+        <button class="ai-top-options-btn" title="Use AI to estimate recommended options/variations">
             ${buttonText}
         </button>
         <div class="ai-options-result" style="display: none;">
@@ -2915,7 +2915,6 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 ${userIsAuthenticated && (isRealRecord && userHasPublishPermissionForOptions) ? '<button class="ai-options-save-catalog-btn" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save to Catalog</button>' : ''}
                 <span class="ai-options-status" style="align-self: center; font-size: 0.85em; color: #666;"></span>
             </div>
-            ${!userIsAuthenticated ? '<p class="ai-options-auth-note" style="font-size: 0.8em; color: #888; margin-top: 8px;">Sign in to save options to catalog permanently.</p>' : ''}
         </div>
     `;
 
@@ -2931,19 +2930,19 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     // Generate AI options on click
     aiOptionsBtn.addEventListener('click', async () => {
         aiOptionsBtn.disabled = true;
-        aiOptionsBtn.textContent = '✨ Generating...';
+        aiOptionsBtn.textContent = '✨ Estimating...';
         aiOptionsResult.style.display = 'block';
-        aiOptionsEditor.value = 'Generating AI recommendations...';
+        aiOptionsEditor.value = 'Estimating AI recommendations...';
         aiOptionsStatus.textContent = '';
 
         try {
             const result = await api.generateTopOptions(record);
             if (result.success && result.options) {
                 aiOptionsEditor.value = result.options;
-                aiOptionsStatus.textContent = 'Options generated!';
+                aiOptionsStatus.textContent = 'Options estimated!';
                 aiOptionsStatus.style.color = '#28a745';
             } else {
-                throw new Error(result.error || 'Failed to generate options');
+                throw new Error(result.error || 'Failed to estimate options');
             }
         } catch (error) {
             aiOptionsEditor.value = '';
@@ -2952,7 +2951,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             console.error('AI options generation failed:', error);
         } finally {
             aiOptionsBtn.disabled = false;
-            aiOptionsBtn.textContent = hasExistingOptions ? '✨ Regenerate Options' : '✨ Add Top Options';
+            aiOptionsBtn.textContent = hasExistingOptions ? '✨ Re-Estimate Options' : '✨ Estimate Options';
         }
     });
 
