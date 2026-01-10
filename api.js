@@ -527,18 +527,23 @@ export async function loadSessionFromAirtable(sessionId) {
                 state.session.itemPositions = new Map(Object.entries(savedState.itemPositions || {}));
                 log('API', `Parsed session data: ${state.cart.items.size} ideas, ${state.cart.lockedItems.size} locked items, ${state.eventDetails.combined.size} details.`);
 
-                // Restore AI-generated records from saved session data
-                // These are items that were created via AI parsing and don't exist in Airtable
+                // Restore custom records from saved session data
+                // These are items that were created via AI parsing or manually added, and don't exist in Airtable
+                // Includes: AI-generated items (ai-*), manually added items (manual-add-*, manual-presentation-*)
                 if (savedState.aiRecords && Object.keys(savedState.aiRecords).length > 0) {
-                    const aiRecordsToRestore = Object.values(savedState.aiRecords);
-                    for (const aiRecord of aiRecordsToRestore) {
+                    const customRecordsToRestore = Object.values(savedState.aiRecords);
+                    for (const customRecord of customRecordsToRestore) {
                         // Only add if not already in state.records.all
-                        if (!state.records.all.some(r => r.id === aiRecord.id)) {
-                            state.records.all.push(aiRecord);
+                        if (!state.records.all.some(r => r.id === customRecord.id)) {
+                            // Preserve the isManual flag for manual items
+                            if (customRecord.isManual) {
+                                customRecord.isManual = true;
+                            }
+                            state.records.all.push(customRecord);
                         }
                     }
-                    log('API', `Restored ${aiRecordsToRestore.length} AI-generated items from session data`);
-                    console.log(`[SESSION-LOAD] Restored ${aiRecordsToRestore.length} AI-generated items`);
+                    log('API', `Restored ${customRecordsToRestore.length} custom items from session data`);
+                    console.log(`[SESSION-LOAD] Restored ${customRecordsToRestore.length} custom items (AI + manual)`);
                 }
 
                 // Fetch ghost items (archived/deleted items in the plan)
@@ -548,7 +553,7 @@ export async function loadSessionFromAirtable(sessionId) {
                 ];
                 const missingItemIds = allItemIds.filter(id =>
                     !state.records.all.some(r => r.id === id) &&
-                    id.startsWith('rec') // Only fetch real Airtable IDs, not custom items
+                    id.startsWith('rec') // Only fetch real Airtable IDs, not custom items (ai-*, manual-*)
                 );
 
                 if (missingItemIds.length > 0) {
@@ -678,22 +683,25 @@ export async function saveSessionToAirtable() {
         reactionsForSaving[recordId] = Object.fromEntries(userReactionsMap);
     }
 
-    // Collect AI-generated item records that are in the cart (ideas or locked)
+    // Collect custom item records that are in the cart (ideas or locked)
     // These need to be persisted since they don't exist in Airtable
+    // Includes: AI-generated items (ai-*), manually added items (manual-add-*, manual-presentation-*)
     const allCartItemIds = [
         ...Array.from(state.cart.items.keys()),
         ...Array.from(state.cart.lockedItems.keys())
     ];
-    const aiRecordsToSave = {};
+    const customRecordsToSave = {};
     for (const itemId of allCartItemIds) {
-        // AI-generated items have IDs like 'ai-child-*', 'ai-search-*', or 'ai-presentation-*'
-        if (itemId.startsWith('ai-')) {
-            const aiRecord = state.records.all.find(r => r.id === itemId);
-            if (aiRecord) {
-                aiRecordsToSave[itemId] = {
-                    id: aiRecord.id,
-                    fields: aiRecord.fields,
-                    isAI: true
+        // Custom items include AI-generated items and manually added items
+        const isCustomItem = itemId.startsWith('ai-') || itemId.startsWith('manual-');
+        if (isCustomItem) {
+            const customRecord = state.records.all.find(r => r.id === itemId);
+            if (customRecord) {
+                customRecordsToSave[itemId] = {
+                    id: customRecord.id,
+                    fields: customRecord.fields,
+                    isAI: itemId.startsWith('ai-'),
+                    isManual: itemId.startsWith('manual-') || customRecord.isManual === true
                 };
             }
         }
@@ -706,8 +714,10 @@ export async function saveSessionToAirtable() {
         userProfiles: Object.fromEntries(state.session.userProfiles),
         eventDetails: Object.fromEntries(state.eventDetails.combined),
         itemPositions: Object.fromEntries(state.session.itemPositions),
-        // Store full AI record data for persistence across refreshes
-        aiRecords: aiRecordsToSave
+        // Store full custom record data for persistence across refreshes
+        // Uses 'aiRecords' key for backward compatibility with existing sessions
+        // Contains both AI-generated items and manually added items
+        aiRecords: customRecordsToSave
     };
 
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `New Plan - ${new Date().toLocaleDateString()}`;
