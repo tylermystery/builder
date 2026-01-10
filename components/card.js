@@ -354,7 +354,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex);
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
-    const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
+    const priceHTML = displayPrice === 0 ? 'Free' : `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
     const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'Update Plan' : 'Add to Plan'}</button>`;
     const placeholder = getLowQualityPlaceholder(imageUrlToLoad);
     

@@ -899,9 +899,20 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalOverlay.dataset.mode = isLocked ? 'edit-locked' : 'edit-favorite';
 
     const itemState = isLocked ? state.cart.lockedItems.get(record.id) : ui.getItemState(record.id);
+
+    // Check if event is free ($0 price)
+    const currentPrice = getRecordPrice(record, itemState.selectedOptionIndex);
+    const isFreeEvent = currentPrice === 0;
+
     if (addToPlanBtn) {
-        addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
-        addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
+        if (isFreeEvent) {
+            // Hide Add to Plan button for free events
+            addToPlanBtn.style.display = 'none';
+        } else {
+            addToPlanBtn.style.display = '';
+            addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
+            addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
+        }
     }
 
     // Add Quick Pay button if store has payment options
@@ -937,7 +948,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             if (currentAmount > 0) {
                 quickPayBtn.innerHTML = `<span>Quick Pay $${currentAmount.toFixed(2)}</span>`;
             } else {
-                quickPayBtn.innerHTML = '<span>Quick Pay</span>';
+                // Free event - show "Donations Welcome"
+                quickPayBtn.innerHTML = '<span>Donations Welcome</span>';
             }
         };
 
@@ -945,7 +957,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         if (initialAmount > 0) {
             quickPayBtn.innerHTML = `<span>Quick Pay $${initialAmount.toFixed(2)}</span>`;
         } else {
-            quickPayBtn.innerHTML = '<span>Quick Pay</span>';
+            // Free event - show "Donations Welcome"
+            quickPayBtn.innerHTML = '<span>Donations Welcome</span>';
         }
 
         quickPayBtn.addEventListener('click', () => {
@@ -1078,14 +1091,16 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
     // Display session components if this is a published session/event
     // Skip for registered event users - they don't need to see plan components
+    // BUT always show for users with publish access so they can manage the plan
     const isEventType = record.fields['Item Type'] === 'Event';
     const eventRsvpYes = record.fields.RSVPs || [];
     const eventRsvpMaybe = record.fields.RSVPMaybe || [];
     const eventRsvpNo = record.fields.RSVPNo || [];
     const currentUserId = state.session.user.id;
     const isCurrentUserRegistered = eventRsvpYes.includes(currentUserId) || eventRsvpMaybe.includes(currentUserId) || eventRsvpNo.includes(currentUserId);
+    const userHasPublishAccessForComponents = api.userHasPublishPermission();
 
-    if (linkedSession && linkedSession.fields && !(isEventType && isCurrentUserRegistered)) {
+    if (linkedSession && linkedSession.fields && (userHasPublishAccessForComponents || !(isEventType && isCurrentUserRegistered))) {
         log('Modal', `Displaying session components for linked session ${linkedSessionId}`);
 
         // Parse session data to get locked items (components) and ideas
@@ -1496,10 +1511,10 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
     if (isGrouping) {
         const range = getGroupPriceRange(record);
-        modalItemPrice.innerHTML = (range && typeof range.min === 'number') ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
+        modalItemPrice.innerHTML = (range && typeof range.min === 'number') ? (range.min === range.max ? (range.min === 0 ? 'Free' : `$${range.min.toFixed(2)}`) : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
     } else {
         const price = getRecordPrice(record, itemState.selectedOptionIndex);
-        let priceText = (typeof price === 'number' ? `$${price.toFixed(2)}` : 'N/A');
+        let priceText = (typeof price === 'number' ? (price === 0 ? 'Free' : `$${price.toFixed(2)}`) : 'N/A');
         if ((record.id.startsWith('custom-') || record.id.startsWith('ai-search-')) && price > 0) {
             priceText += ' (Est.)';
         }
@@ -1642,7 +1657,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const updateOptionsUI = () => {
         // Update price display
         const newPrice = getRecordPrice(record, currentSelections);
-        modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A') + pricingTypeHTML;
+        modalItemPrice.innerHTML = (typeof newPrice === 'number' ? (newPrice === 0 ? 'Free' : `$${newPrice.toFixed(2)}`) : 'N/A') + pricingTypeHTML;
 
         // Update description with appended text from selected options
         const fullDescription = getRecordDescription(record, currentSelections);
