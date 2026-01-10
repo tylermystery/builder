@@ -1442,6 +1442,21 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     let imageSource = null;
 
     // ============================================================
+    // STEP 0: Check for custom user-uploaded images first (highest priority)
+    // ============================================================
+    const customImages = record.fields?._customImages;
+    if (customImages && Array.isArray(customImages) && customImages.length > 0) {
+        console.log('[IMAGE DEBUG] Found custom user-uploaded images:', {
+            recordId: record.id,
+            customImageCount: customImages.length
+        });
+        imageUrls = customImages.map(img => img.url || img);
+        imageSource = 'custom_upload';
+        imageCache.set(cacheKey, imageUrls);
+        return { imageUrls, status: 'success', source: imageSource };
+    }
+
+    // ============================================================
     // STEP 1: For AI-sourced items, try website scraping first
     // ============================================================
     if (isAIRecord) {

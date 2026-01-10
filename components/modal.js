@@ -1018,6 +1018,107 @@ function enableItemEditMode(record, nameEl, descEl) {
         priceEl.parentNode.insertBefore(priceContainer, priceEl);
     }
 
+    // Add Photo Upload section
+    const photosContainer = document.createElement('div');
+    photosContainer.className = 'item-edit-container item-edit-photos-container';
+
+    // Get existing custom images for this record (if any)
+    const existingCustomImages = record.fields._customImages || [];
+
+    photosContainer.innerHTML = `
+        <label class="item-edit-label">Photos</label>
+        <div class="item-edit-photos-upload">
+            <input type="file" id="item-edit-photo-input" accept="image/*" multiple class="item-edit-photo-input" />
+            <label for="item-edit-photo-input" class="item-edit-photo-btn">
+                <span class="photo-btn-icon">📷</span>
+                <span class="photo-btn-text">Add Photo(s)</span>
+            </label>
+            <div class="item-edit-photos-preview" id="item-edit-photos-preview">
+                ${existingCustomImages.map((img, idx) => `
+                    <div class="photo-preview-item" data-index="${idx}" data-existing="true">
+                        <img src="${img.url || img}" alt="Photo ${idx + 1}" />
+                        <button type="button" class="photo-remove-btn" data-index="${idx}" title="Remove photo">&times;</button>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+
+    // Insert photos container after price container
+    if (priceEl && priceEl.parentNode) {
+        priceEl.parentNode.insertBefore(photosContainer, priceContainer.nextSibling);
+    } else {
+        descContainer.parentNode.insertBefore(photosContainer, descContainer.nextSibling);
+    }
+
+    // Track pending photos for upload
+    const pendingPhotos = [];
+    const existingPhotosToKeep = [...existingCustomImages];
+
+    // Photo input change handler
+    const photoInput = photosContainer.querySelector('#item-edit-photo-input');
+    const photosPreview = photosContainer.querySelector('#item-edit-photos-preview');
+
+    photoInput.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        for (const file of files) {
+            if (!file.type.startsWith('image/')) continue;
+
+            // Read file as data URL for preview and storage
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const dataUrl = event.target.result;
+                pendingPhotos.push({ url: dataUrl, name: file.name });
+
+                // Add preview
+                const previewItem = document.createElement('div');
+                previewItem.className = 'photo-preview-item';
+                previewItem.dataset.index = existingPhotosToKeep.length + pendingPhotos.length - 1;
+                previewItem.dataset.pending = 'true';
+                previewItem.innerHTML = `
+                    <img src="${dataUrl}" alt="${file.name}" />
+                    <button type="button" class="photo-remove-btn" title="Remove photo">&times;</button>
+                `;
+
+                // Add remove handler for this preview
+                previewItem.querySelector('.photo-remove-btn').addEventListener('click', (evt) => {
+                    evt.preventDefault();
+                    evt.stopPropagation();
+                    const idx = pendingPhotos.findIndex(p => p.url === dataUrl);
+                    if (idx !== -1) {
+                        pendingPhotos.splice(idx, 1);
+                    }
+                    previewItem.remove();
+                });
+
+                photosPreview.appendChild(previewItem);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Clear input to allow re-selecting same files
+        photoInput.value = '';
+    });
+
+    // Add remove handlers for existing photos
+    photosPreview.querySelectorAll('.photo-remove-btn').forEach(btn => {
+        btn.addEventListener('click', (evt) => {
+            evt.preventDefault();
+            evt.stopPropagation();
+            const idx = parseInt(btn.dataset.index, 10);
+            if (!isNaN(idx) && idx < existingPhotosToKeep.length) {
+                existingPhotosToKeep.splice(idx, 1);
+            }
+            btn.closest('.photo-preview-item').remove();
+        });
+    });
+
+    // Store references for save handler
+    photosContainer._pendingPhotos = pendingPhotos;
+    photosContainer._existingPhotosToKeep = existingPhotosToKeep;
+
     // Add Save button container
     const saveContainer = document.createElement('div');
     saveContainer.className = 'item-edit-save-container';
@@ -1049,18 +1150,34 @@ function enableItemEditMode(record, nameEl, descEl) {
         saveBtn.textContent = 'Saving...';
 
         try {
+            // Collect photos to save - combine existing kept photos with newly added ones
+            const photosContainerEl = document.querySelector('.item-edit-photos-container');
+            const allPhotos = [];
+            if (photosContainerEl) {
+                const existingKept = photosContainerEl._existingPhotosToKeep || [];
+                const pending = photosContainerEl._pendingPhotos || [];
+                allPhotos.push(...existingKept, ...pending);
+            }
+
             // Update the record in state.records.all
             const recordIndex = state.records.all.findIndex(r => r.id === record.id);
             if (recordIndex !== -1) {
                 state.records.all[recordIndex].fields.Name = newName;
                 state.records.all[recordIndex].fields.Description = newDesc;
                 state.records.all[recordIndex].fields.Price = newPrice;
+                // Store custom images in a special field
+                if (allPhotos.length > 0) {
+                    state.records.all[recordIndex].fields._customImages = allPhotos;
+                }
             }
 
             // Also update the record reference passed to the modal
             record.fields.Name = newName;
             record.fields.Description = newDesc;
             record.fields.Price = newPrice;
+            if (allPhotos.length > 0) {
+                record.fields._customImages = allPhotos;
+            }
 
             // Trigger save to persist changes
             if (typeof triggerSave === 'function') {
@@ -1077,6 +1194,46 @@ function enableItemEditMode(record, nameEl, descEl) {
             descEl.textContent = newDesc;
             if (priceEl) {
                 priceEl.innerHTML = newPrice > 0 ? `$${newPrice.toFixed(2)}` : 'Free';
+            }
+
+            // Update thumbnail strip if photos were added
+            if (allPhotos.length > 0) {
+                const modalThumbnailStrip = document.getElementById('modal-thumbnail-strip');
+                const modalMainImage = document.getElementById('modal-main-image');
+                if (modalThumbnailStrip && modalMainImage) {
+                    // Get existing non-custom images from the strip
+                    const existingThumbs = Array.from(modalThumbnailStrip.querySelectorAll('.thumbnail-img'));
+                    const existingUrls = existingThumbs.map(t => {
+                        const style = t.style.backgroundImage;
+                        return style.replace(/^url\(['"]?/, '').replace(/['"]?\)$/, '');
+                    });
+
+                    // Add new custom images to the thumbnail strip
+                    allPhotos.forEach((photo, idx) => {
+                        const photoUrl = photo.url || photo;
+                        // Skip if already in strip
+                        if (existingUrls.some(url => url.includes(photoUrl.substring(0, 50)))) return;
+
+                        const thumb = document.createElement('div');
+                        thumb.className = 'thumbnail-img custom-photo-thumb';
+                        thumb.style.backgroundImage = `url('${photoUrl}')`;
+                        thumb.title = 'Custom photo';
+                        thumb.addEventListener('click', () => {
+                            modalMainImage.style.backgroundImage = `url('${photoUrl}')`;
+                            modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
+                            thumb.classList.add('active');
+                        });
+                        modalThumbnailStrip.appendChild(thumb);
+                    });
+
+                    // If this is the first photo added, also update main image
+                    if (allPhotos.length > 0 && existingThumbs.length === 0) {
+                        const firstPhotoUrl = allPhotos[0].url || allPhotos[0];
+                        modalMainImage.style.backgroundImage = `url('${firstPhotoUrl}')`;
+                    }
+
+                    log('Modal', `Added ${allPhotos.length} custom photos to thumbnail strip`);
+                }
             }
 
             // Exit edit mode
