@@ -6206,15 +6206,21 @@ async function performPresentationSearch(searchTerm) {
             presentationSearchResults.appendChild(aiSection);
         }
 
-        // Show no results message if nothing found
+        // Always add manual add option after AI results
+        const manualAddSection = createPresentationManualAddOption(searchTerm);
+        presentationSearchResults.appendChild(manualAddSection);
+
+        // Show no results message if nothing found (but keep manual add option)
         if (catalogMatches.length === 0 && aiRecords.length === 0) {
-            presentationSearchResults.innerHTML = `
-                <div class="presentation-no-results">
-                    <div class="presentation-no-results-icon">🔍</div>
-                    <p class="presentation-no-results-text">No results found for "${searchTerm}"</p>
-                    <p class="presentation-no-results-hint">Try a different search term or browse categories</p>
-                </div>
+            // Insert no results message before the manual add section
+            const noResultsDiv = document.createElement('div');
+            noResultsDiv.className = 'presentation-no-results';
+            noResultsDiv.innerHTML = `
+                <div class="presentation-no-results-icon">🔍</div>
+                <p class="presentation-no-results-text">No results found for "${searchTerm}"</p>
+                <p class="presentation-no-results-hint">Try a different search term, browse categories, or add a custom item below</p>
             `;
+            presentationSearchResults.insertBefore(noResultsDiv, manualAddSection);
         }
 
     } catch (error) {
@@ -6226,17 +6232,145 @@ async function performPresentationSearch(searchTerm) {
         log('Presentation', `AI search error: ${error.message}`);
         aiLoadingSection.remove();
 
-        // Show error state if no catalog matches either
+        // Add manual add option even on error
+        const manualAddSection = createPresentationManualAddOption(searchTerm);
+        presentationSearchResults.appendChild(manualAddSection);
+
+        // Show error state if no catalog matches either (but keep manual add option)
         if (catalogMatches.length === 0) {
-            presentationSearchResults.innerHTML = `
-                <div class="presentation-no-results">
-                    <div class="presentation-no-results-icon">⚠️</div>
-                    <p class="presentation-no-results-text">Search encountered an issue</p>
-                    <p class="presentation-no-results-hint">Please try again or browse categories</p>
-                </div>
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'presentation-no-results';
+            errorDiv.innerHTML = `
+                <div class="presentation-no-results-icon">⚠️</div>
+                <p class="presentation-no-results-text">Search encountered an issue</p>
+                <p class="presentation-no-results-hint">Please try again, browse categories, or add a custom item below</p>
             `;
+            presentationSearchResults.insertBefore(errorDiv, manualAddSection);
         }
     }
+}
+
+/**
+ * Creates a manual add item section for the presentation search modal
+ * Allows users to add a custom item with the search term as the default name
+ * @param {string} searchTerm - The search term to use as default item name
+ * @returns {HTMLElement} The manual add section element
+ */
+function createPresentationManualAddOption(searchTerm) {
+    const section = document.createElement('div');
+    section.className = 'presentation-manual-add-section';
+    section.innerHTML = `
+        <div class="presentation-manual-add-header">
+            <span class="presentation-manual-add-icon">+</span>
+            <span class="presentation-manual-add-title">Can't find what you're looking for?</span>
+        </div>
+        <div class="presentation-manual-add-content">
+            <p class="presentation-manual-add-description">Add a custom item to your plan:</p>
+            <div class="presentation-manual-add-form">
+                <input type="text" class="presentation-manual-add-input" value="${searchTerm.replace(/"/g, '&quot;')}" placeholder="Item name">
+                <button class="presentation-manual-add-btn">Add to Plan</button>
+            </div>
+        </div>
+    `;
+
+    // Attach click handler for the add button
+    const addBtn = section.querySelector('.presentation-manual-add-btn');
+    const nameInput = section.querySelector('.presentation-manual-add-input');
+
+    addBtn.addEventListener('click', async () => {
+        const itemName = nameInput.value.trim();
+        if (!itemName) {
+            nameInput.focus();
+            return;
+        }
+
+        addBtn.disabled = true;
+        addBtn.textContent = 'Adding...';
+
+        try {
+            // Create a manual item record
+            const timestamp = Date.now();
+            const manualId = `manual-presentation-${timestamp}`;
+
+            const manualRecord = {
+                id: manualId,
+                fields: {
+                    Name: itemName,
+                    Description: `Manually added item from presentation search: "${searchTerm}"`,
+                    Price: 0,
+                    ServiceType: 'Custom Item',
+                    'Item Type': 'Bookable Item',
+                    Status: 'Available',
+                    'Pricing Type': 'per person',
+                    Stores: [state.ui.activeShopId],
+                    Rankings: JSON.stringify({
+                        "profileSource": "manual_presentation_add",
+                        "Tags": [searchTerm.toLowerCase(), "manual-add", "custom"]
+                    }),
+                    'Location Details': null,
+                    'Additional Information': null,
+                    Options: null,
+                    'Parent Item': null,
+                    'Headcount min': null,
+                    'Media Tags': null,
+                    'Curated Images': null,
+                    Subcategories: null,
+                    'iCal URL': null,
+                    'Lead Time (days)': null,
+                    RSVPs: null,
+                    Date: null,
+                    'Chat Enabled': false,
+                    Duration: null,
+                    Capacity: null
+                },
+                isManual: true
+            };
+
+            // Add to records
+            state.records.all.push(manualRecord);
+
+            // Add to plan (cart.items as idea first)
+            state.cart.items.set(manualId, {
+                quantity: 1,
+                selectedOptionIndex: 0,
+                selections: {},
+                note: `Manually added from presentation search: "${searchTerm}"`
+            });
+
+            // Trigger save to persist changes
+            await triggerSave();
+
+            // Update the presentation view items list
+            await renderAllItems();
+
+            // Update the catalog view's event plan panel
+            await updateEventPlanSection();
+
+            // Sync plan state across all views
+            syncPlanState('presentation', 'itemAdded', { recordId: manualId, itemName: itemName });
+
+            // Update button state
+            addBtn.textContent = 'Added!';
+            addBtn.classList.add('added');
+            nameInput.disabled = true;
+
+            log('Presentation', `Manually added item: ${manualId} - "${itemName}"`);
+
+        } catch (error) {
+            log('Presentation', `Error adding manual item: ${error.message}`);
+            addBtn.disabled = false;
+            addBtn.textContent = 'Add to Plan';
+        }
+    });
+
+    // Allow Enter key to submit
+    nameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            addBtn.click();
+        }
+    });
+
+    return section;
 }
 
 /**

@@ -963,7 +963,174 @@ function resetModalState() {
     const dynamicSections = document.querySelectorAll('.event-info-section, .rsvp-list-section, .calendar-export-section, .session-components-section, .edit-plan-section');
     dynamicSections.forEach(section => section.remove());
 
+    // Also remove edit mode UI elements
+    const editModeElements = document.querySelectorAll('.item-edit-container, .item-edit-save-container');
+    editModeElements.forEach(el => el.remove());
+
     log('Modal', 'Reset modal state.');
+}
+
+/**
+ * Enables edit mode for a manually added item in the detail modal.
+ * Converts name and description to editable input fields with a save button.
+ * @param {Object} record - The item record being edited
+ * @param {HTMLElement} nameEl - The modal item name element
+ * @param {HTMLElement} descEl - The modal item description element
+ */
+function enableItemEditMode(record, nameEl, descEl) {
+    log('Modal', `Entering edit mode for item: ${record.id}`);
+
+    // Store original values for cancel functionality
+    const originalName = record.fields.Name || '';
+    const originalDescription = record.fields.Description || '';
+    const originalPrice = record.fields.Price || 0;
+
+    // Replace name element with editable input
+    const nameContainer = document.createElement('div');
+    nameContainer.className = 'item-edit-container item-edit-name-container';
+    nameContainer.innerHTML = `
+        <label class="item-edit-label">Item Name</label>
+        <input type="text" class="item-edit-input item-edit-name-input" value="${originalName.replace(/"/g, '&quot;')}" placeholder="Enter item name..." />
+    `;
+    nameEl.style.display = 'none';
+    nameEl.parentNode.insertBefore(nameContainer, nameEl);
+
+    // Replace description element with editable textarea
+    const descContainer = document.createElement('div');
+    descContainer.className = 'item-edit-container item-edit-desc-container';
+    descContainer.innerHTML = `
+        <label class="item-edit-label">Description</label>
+        <textarea class="item-edit-input item-edit-desc-input" placeholder="Enter item description...">${originalDescription}</textarea>
+    `;
+    descEl.style.display = 'none';
+    descEl.parentNode.insertBefore(descContainer, descEl);
+
+    // Add price editor
+    const priceEl = document.getElementById('modal-item-price');
+    const priceContainer = document.createElement('div');
+    priceContainer.className = 'item-edit-container item-edit-price-container';
+    priceContainer.innerHTML = `
+        <label class="item-edit-label">Price ($)</label>
+        <input type="number" class="item-edit-input item-edit-price-input" value="${originalPrice}" placeholder="0.00" min="0" step="0.01" />
+    `;
+    if (priceEl) {
+        priceEl.style.display = 'none';
+        priceEl.parentNode.insertBefore(priceContainer, priceEl);
+    }
+
+    // Add Save button container
+    const saveContainer = document.createElement('div');
+    saveContainer.className = 'item-edit-save-container';
+    saveContainer.innerHTML = `
+        <button class="item-edit-save-btn">💾 Save Changes</button>
+    `;
+
+    // Insert save button before the Add to Plan button
+    const actionsContainer = document.getElementById('modal-actions-container');
+    if (actionsContainer) {
+        actionsContainer.insertBefore(saveContainer, actionsContainer.firstChild);
+    }
+
+    // Save button handler
+    const saveBtn = saveContainer.querySelector('.item-edit-save-btn');
+    saveBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+
+        const newName = nameContainer.querySelector('.item-edit-name-input').value.trim();
+        const newDesc = descContainer.querySelector('.item-edit-desc-input').value.trim();
+        const newPrice = parseFloat(priceContainer.querySelector('.item-edit-price-input').value) || 0;
+
+        if (!newName) {
+            alert('Please enter an item name.');
+            return;
+        }
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        try {
+            // Update the record in state.records.all
+            const recordIndex = state.records.all.findIndex(r => r.id === record.id);
+            if (recordIndex !== -1) {
+                state.records.all[recordIndex].fields.Name = newName;
+                state.records.all[recordIndex].fields.Description = newDesc;
+                state.records.all[recordIndex].fields.Price = newPrice;
+            }
+
+            // Also update the record reference passed to the modal
+            record.fields.Name = newName;
+            record.fields.Description = newDesc;
+            record.fields.Price = newPrice;
+
+            // Trigger save to persist changes
+            if (typeof triggerSave === 'function') {
+                await triggerSave();
+            }
+
+            // Sync plan state across all views
+            if (typeof syncPlanState === 'function') {
+                syncPlanState('modal', 'itemUpdated', { recordId: record.id, itemName: newName });
+            }
+
+            // Update UI to show saved values
+            nameEl.textContent = newName;
+            descEl.textContent = newDesc;
+            if (priceEl) {
+                priceEl.innerHTML = newPrice > 0 ? `$${newPrice.toFixed(2)}` : 'Free';
+            }
+
+            // Exit edit mode
+            disableItemEditMode(record, nameEl, descEl);
+
+            // Reset the edit button state
+            const editBtn = document.getElementById('modal-edit-item-btn');
+            if (editBtn) {
+                editBtn.innerHTML = '✏️ Edit Item';
+                editBtn.classList.remove('editing');
+            }
+
+            // Update presentation view if visible
+            if (typeof renderAllItems === 'function') {
+                await renderAllItems();
+            }
+
+            // Update event plan section
+            if (typeof ui !== 'undefined' && typeof ui.updateEventPlanSection === 'function') {
+                ui.updateEventPlanSection();
+            }
+
+            log('Modal', `Saved changes for item: ${record.id} - "${newName}"`);
+
+        } catch (error) {
+            console.error('Failed to save item changes:', error);
+            saveBtn.disabled = false;
+            saveBtn.textContent = '💾 Save Changes';
+            alert('Failed to save changes. Please try again.');
+        }
+    });
+}
+
+/**
+ * Disables edit mode for a manually added item and restores original display.
+ * @param {Object} record - The item record
+ * @param {HTMLElement} nameEl - The modal item name element
+ * @param {HTMLElement} descEl - The modal item description element
+ */
+function disableItemEditMode(record, nameEl, descEl) {
+    log('Modal', `Exiting edit mode for item: ${record.id}`);
+
+    // Remove edit containers
+    const editContainers = document.querySelectorAll('.item-edit-container, .item-edit-save-container');
+    editContainers.forEach(container => container.remove());
+
+    // Restore original elements
+    nameEl.style.display = '';
+    descEl.style.display = '';
+
+    const priceEl = document.getElementById('modal-item-price');
+    if (priceEl) {
+        priceEl.style.display = '';
+    }
 }
 
 /**
@@ -2601,6 +2768,44 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             await copyShareLinkToClipboard(shareUrl.toString(), shareBtn);
         }
     });
+
+    // Add Edit Item button for manual/custom items (items added via manual add feature)
+    const isManualItem = record.isManual === true ||
+                         record.id?.startsWith('manual-add-') ||
+                         record.id?.startsWith('manual-presentation-') ||
+                         record.id?.startsWith('ai-search-') ||
+                         record.id?.startsWith('ai-presentation-');
+
+    if (isManualItem) {
+        const editItemBtn = document.createElement('button');
+        editItemBtn.className = 'card-action-btn edit-item-btn';
+        editItemBtn.id = 'modal-edit-item-btn';
+        editItemBtn.dataset.recordId = record.id;
+        editItemBtn.innerHTML = '✏️ Edit Item';
+        editItemBtn.title = 'Edit item details';
+        editItemBtn.style.marginRight = '10px';
+        modalHeaderActions.appendChild(editItemBtn);
+
+        // Track edit mode state
+        let isEditMode = false;
+
+        editItemBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            isEditMode = !isEditMode;
+
+            if (isEditMode) {
+                // Enter edit mode
+                editItemBtn.innerHTML = '❌ Cancel Edit';
+                editItemBtn.classList.add('editing');
+                enableItemEditMode(record, modalItemName, modalItemDescription);
+            } else {
+                // Exit edit mode without saving
+                editItemBtn.innerHTML = '✏️ Edit Item';
+                editItemBtn.classList.remove('editing');
+                disableItemEditMode(record, modalItemName, modalItemDescription);
+            }
+        });
+    }
 
     if (record.fields['Item Type'] === 'Event') {
         const rsvpYes = record.fields.RSVPs || [];

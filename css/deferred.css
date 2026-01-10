@@ -8496,6 +8496,291 @@ hr.total-divider {
 }
 
 /* =============================================================================
+   PRESENTATION MANUAL ADD SECTION
+   ============================================================================= */
+
+.presentation-manual-add-section {
+    margin-top: 25px;
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(46, 204, 113, 0.05) 0%, rgba(52, 152, 219, 0.08) 100%);
+    border-radius: 12px;
+    border: 1px dashed rgba(46, 204, 113, 0.3);
+}
+
+.presentation-manual-add-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.presentation-manual-add-icon {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.presentation-manual-add-title {
+    font-size: 1em;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.presentation-manual-add-content {
+    padding-left: 38px;
+}
+
+.presentation-manual-add-description {
+    font-size: 0.9em;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 0 0 12px 0;
+}
+
+.presentation-manual-add-form {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+
+.presentation-manual-add-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    font-size: 0.95em;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.95);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.presentation-manual-add-input:focus {
+    outline: none;
+    border-color: #2ecc71;
+    box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.15);
+}
+
+.presentation-manual-add-input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.presentation-manual-add-input:disabled {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.presentation-manual-add-btn {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+    white-space: nowrap;
+}
+
+.presentation-manual-add-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+}
+
+.presentation-manual-add-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.presentation-manual-add-btn:disabled {
+    background: #95a5a6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.presentation-manual-add-btn.added {
+    background: linear-gradient(135deg, #27ae60, #1e8449);
+}
+
+/* Mobile responsive for presentation manual add section */
+@media (max-width: 768px) {
+    .presentation-manual-add-section {
+        margin-top: 20px;
+        padding: 15px;
+    }
+
+    .presentation-manual-add-content {
+        padding-left: 0;
+    }
+
+    .presentation-manual-add-form {
+        flex-direction: column;
+    }
+
+    .presentation-manual-add-btn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .presentation-manual-add-header {
+        gap: 8px;
+    }
+
+    .presentation-manual-add-icon {
+        width: 24px;
+        height: 24px;
+        font-size: 1em;
+    }
+
+    .presentation-manual-add-title {
+        font-size: 0.95em;
+    }
+
+    .presentation-manual-add-input {
+        padding: 8px 12px;
+    }
+
+    .presentation-manual-add-btn {
+        padding: 10px 16px;
+    }
+}
+
+/* =============================================================================
+   ITEM EDIT MODE IN DETAIL MODAL
+   ============================================================================= */
+
+/* Edit button styling */
+.edit-item-btn {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: all 0.2s ease;
+}
+
+.edit-item-btn:hover {
+    background: linear-gradient(135deg, #2980b9, #2573a7);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+}
+
+.edit-item-btn.editing {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+}
+
+.edit-item-btn.editing:hover {
+    background: linear-gradient(135deg, #c0392b, #a93226);
+}
+
+/* Edit container styling */
+.item-edit-container {
+    margin-bottom: 15px;
+}
+
+.item-edit-label {
+    display: block;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #666;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.item-edit-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 0.95em;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background: #fafafa;
+    box-sizing: border-box;
+}
+
+.item-edit-input:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+    background: white;
+}
+
+.item-edit-name-input {
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+.item-edit-desc-input {
+    min-height: 100px;
+    resize: vertical;
+    font-family: inherit;
+    line-height: 1.5;
+}
+
+.item-edit-price-input {
+    max-width: 150px;
+}
+
+/* Save button container */
+.item-edit-save-container {
+    margin-bottom: 15px;
+}
+
+.item-edit-save-btn {
+    width: 100%;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.item-edit-save-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #27ae60, #1e8449);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+}
+
+.item-edit-save-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.item-edit-save-btn:disabled {
+    background: #95a5a6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Mobile responsive for item edit mode */
+@media (max-width: 768px) {
+    .item-edit-input {
+        padding: 10px 12px;
+    }
+
+    .item-edit-name-input {
+        font-size: 1em;
+    }
+
+    .item-edit-save-btn {
+        padding: 10px 16px;
+    }
+}
+
+/* =============================================================================
    TASK STATUS UI FOR PLAN ELEMENTS
    ============================================================================= */
 
