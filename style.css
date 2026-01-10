@@ -10153,6 +10153,153 @@ hr.total-divider {
 }
 
 /* ============================================
+   MANUAL ADD ITEM SECTION
+   ============================================ */
+
+.manual-add-section {
+    margin-top: 25px;
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(46, 204, 113, 0.05) 0%, rgba(52, 152, 219, 0.08) 100%);
+    border-radius: 12px;
+    border: 1px dashed rgba(46, 204, 113, 0.3);
+}
+
+.manual-add-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.manual-add-icon {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.manual-add-title {
+    font-size: 1em;
+    font-weight: 600;
+    color: #333;
+}
+
+.manual-add-content {
+    padding-left: 38px;
+}
+
+.manual-add-description {
+    font-size: 0.9em;
+    color: #666;
+    margin: 0 0 12px 0;
+}
+
+.manual-add-form {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+
+.manual-add-name-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.95em;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.manual-add-name-input:focus {
+    outline: none;
+    border-color: #2ecc71;
+    box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.15);
+}
+
+.manual-add-name-input:disabled {
+    background: #f5f5f5;
+    color: #999;
+}
+
+.manual-add-btn {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+    white-space: nowrap;
+}
+
+.manual-add-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+}
+
+.manual-add-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.manual-add-btn:disabled {
+    background: #95a5a6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Mobile responsive for manual add section */
+@media (max-width: 768px) {
+    .manual-add-section {
+        margin-top: 20px;
+        padding: 15px;
+    }
+
+    .manual-add-content {
+        padding-left: 0;
+    }
+
+    .manual-add-form {
+        flex-direction: column;
+    }
+
+    .manual-add-btn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .manual-add-header {
+        gap: 8px;
+    }
+
+    .manual-add-icon {
+        width: 24px;
+        height: 24px;
+        font-size: 1em;
+    }
+
+    .manual-add-title {
+        font-size: 0.95em;
+    }
+
+    .manual-add-name-input {
+        padding: 8px 12px;
+    }
+
+    .manual-add-btn {
+        padding: 10px 16px;
+    }
+}
+
+/* ============================================
    COMPONENT COMMENTS FEATURE
    ============================================ */
 

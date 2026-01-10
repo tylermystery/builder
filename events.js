@@ -674,9 +674,20 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
                 true
             );
             catalogContainer.appendChild(aiSection);
-        } else if (catalogMatches.length === 0) {
-            // No results at all - show empty state
-            catalogContainer.innerHTML = `<p style='text-align: center; padding: 40px;'>Could not find "${searchTerm}". Please try a different name or search term.</p>`;
+        }
+
+        // Always add manual add option after AI results (whether AI found items or not)
+        const manualAddSection = createManualAddOption(searchTerm);
+        catalogContainer.appendChild(manualAddSection);
+
+        // If no results at all from AI AND no catalog matches, show context
+        if (aiRecords.length === 0 && catalogMatches.length === 0) {
+            // The manual add section is already shown, but add some context
+            const contextMsg = document.createElement('p');
+            contextMsg.className = 'no-results-context';
+            contextMsg.style.cssText = 'text-align: center; padding: 20px; color: #666;';
+            contextMsg.textContent = `No exact matches found for "${searchTerm}". You can add it manually using the form above.`;
+            catalogContainer.insertBefore(contextMsg, manualAddSection);
         }
 
     } catch (err) {
@@ -689,11 +700,19 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
         // Remove loading indicator on error
         loadingSection.remove();
 
-        // If no catalog matches either, show error
+        // Still show manual add option even when AI fails
+        const manualAddSection = createManualAddOption(searchTerm);
+        catalogContainer.appendChild(manualAddSection);
+
+        // If no catalog matches either, show helpful context
         if (catalogMatches.length === 0) {
-            catalogContainer.innerHTML = `<p style='text-align: center; padding: 40px;'>Could not find "${searchTerm}". Please try a different name or search term.</p>`;
+            const contextMsg = document.createElement('p');
+            contextMsg.className = 'no-results-context';
+            contextMsg.style.cssText = 'text-align: center; padding: 20px; color: #666;';
+            contextMsg.textContent = `Could not find "${searchTerm}". You can add it manually using the form above.`;
+            catalogContainer.insertBefore(contextMsg, manualAddSection);
         }
-        // If we have catalog matches, just silently fail on AI (user still sees catalog results)
+        // If we have catalog matches, user still sees them plus the manual add option
     } finally {
         aiSearchController = null;
     }
@@ -748,6 +767,118 @@ function attachAddToPlanHandler(card, record, searchTerm, imageCache) {
             newBtn.disabled = true;
         });
     }
+}
+
+/**
+ * Creates a manual add item section that allows users to add a custom item
+ * with the search term as the default name
+ * @param {string} searchTerm - The search term to use as default item name
+ * @returns {HTMLElement} The manual add section element
+ */
+function createManualAddOption(searchTerm) {
+    const section = document.createElement('div');
+    section.className = 'manual-add-section';
+    section.innerHTML = `
+        <div class="manual-add-header">
+            <span class="manual-add-icon">+</span>
+            <span class="manual-add-title">Can't find what you're looking for?</span>
+        </div>
+        <div class="manual-add-content">
+            <p class="manual-add-description">Add a custom item to your plan:</p>
+            <div class="manual-add-form">
+                <input type="text" class="manual-add-name-input" value="${searchTerm.replace(/"/g, '&quot;')}" placeholder="Item name">
+                <button class="manual-add-btn">Add to Plan</button>
+            </div>
+        </div>
+    `;
+
+    // Attach click handler for the add button
+    const addBtn = section.querySelector('.manual-add-btn');
+    const nameInput = section.querySelector('.manual-add-name-input');
+
+    addBtn.addEventListener('click', () => {
+        const itemName = nameInput.value.trim();
+        if (!itemName) {
+            nameInput.focus();
+            return;
+        }
+
+        // Create a manual item record
+        const timestamp = Date.now();
+        const manualId = `manual-add-${timestamp}`;
+
+        const manualRecord = {
+            id: manualId,
+            fields: {
+                Name: itemName,
+                Description: `Manually added item from search: "${searchTerm}"`,
+                Price: 0,
+                ServiceType: 'Custom Item',
+                'Item Type': 'Bookable Item',
+                Status: 'Available',
+                'Pricing Type': 'per person',
+                Stores: [state.ui.activeShopId],
+                Rankings: JSON.stringify({
+                    "profileSource": "manual_add",
+                    "Tags": [searchTerm.toLowerCase(), "manual-add", "custom"]
+                }),
+                'Location Details': null,
+                'Additional Information': null,
+                Options: null,
+                'Parent Item': null,
+                'Headcount min': null,
+                'Media Tags': null,
+                'Curated Images': null,
+                Subcategories: null,
+                'iCal URL': null,
+                'Lead Time (days)': null,
+                RSVPs: null,
+                Date: null,
+                'Chat Enabled': false,
+                Duration: null,
+                Capacity: null
+            },
+            isManual: true
+        };
+
+        // Add to records
+        state.records.all.push(manualRecord);
+
+        // Add to plan
+        state.cart.lockedItems.set(manualId, {
+            quantity: 1,
+            selectedOptionIndex: 0,
+            note: `Manually added from search: "${searchTerm}"`
+        });
+
+        // Update progress
+        updateProgress(0.0002);
+
+        // Broadcast and sync
+        broadcastItemAdded(manualId, { quantity: 1, note: `Manual add: "${itemName}"` });
+        syncPlanState('manualAdd', 'itemAdded', { recordId: manualId, itemName: itemName });
+
+        // Update UI
+        ui.updateEventPlanSection();
+        ui.updateTotalCost();
+        triggerSave();
+
+        // Update button state
+        addBtn.textContent = 'Added!';
+        addBtn.disabled = true;
+        nameInput.disabled = true;
+
+        log('Events', `Manually added item: ${manualId} - "${itemName}"`);
+    });
+
+    // Allow Enter key to submit
+    nameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            addBtn.click();
+        }
+    });
+
+    return section;
 }
 
 /**
