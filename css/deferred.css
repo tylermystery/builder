@@ -2508,7 +2508,8 @@
 .presentation-shop-title {
     font-size: 1.2em;
     font-weight: 600;
-    color: #333;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     margin: 0;
     white-space: nowrap;
     overflow: hidden;
@@ -2525,7 +2526,8 @@
 
 .presentation-event-label {
     font-size: 1em;
-    color: #6c757d;
+    color: rgba(255, 255, 255, 0.85);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     font-weight: 500;
 }
 
@@ -2761,10 +2763,11 @@ html.presentation-active {
 .itinerary-section-title {
     font-size: 1.3em;
     font-weight: 600;
-    color: #333;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     margin: 0 0 20px 0;
     padding-bottom: 10px;
-    border-bottom: 2px solid #007bff;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.5);
 }
 
 .itinerary-header {
@@ -2776,7 +2779,8 @@ html.presentation-active {
 .itinerary-event-title {
     font-size: 2em;
     font-weight: 700;
-    color: #212529;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
     margin: 0 0 10px 0;
 }
 
@@ -2786,13 +2790,15 @@ html.presentation-active {
 
 .itinerary-date {
     font-size: 1.1em;
-    color: #007bff;
+    color: rgba(150, 220, 255, 1);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     font-weight: 500;
 }
 
 .itinerary-notes {
     font-size: 1em;
-    color: #6c757d;
+    color: rgba(255, 255, 255, 0.8);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     margin: 0 0 25px 0;
     line-height: 1.5;
 }
@@ -2800,14 +2806,15 @@ html.presentation-active {
 .itinerary-collaborators {
     margin-top: 25px;
     padding-top: 20px;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .itinerary-collaborators h3 {
     font-size: 0.9em;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #6c757d;
+    color: rgba(255, 255, 255, 0.7);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     margin: 0 0 15px 0;
 }
 
@@ -2825,7 +2832,8 @@ html.presentation-active {
     font-size: 0.85em;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #6c757d;
+    color: rgba(255, 255, 255, 0.7);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     margin: 0;
     text-align: center;
 }
@@ -2882,8 +2890,8 @@ html.presentation-active {
     height: 32px;
     border: none;
     border-radius: 50%;
-    background: rgba(0, 0, 0, 0.1);
-    color: #333;
+    background: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
     font-size: 1.2em;
     cursor: pointer;
     display: flex;
@@ -2894,7 +2902,7 @@ html.presentation-active {
 }
 
 .collaborators-carousel-btn:hover:not(:disabled) {
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(255, 255, 255, 0.35);
 }
 
 .collaborators-carousel-btn:disabled {
@@ -2965,18 +2973,18 @@ html.presentation-active {
     display: block;
     margin: 12px auto 0;
     padding: 6px 16px;
-    border: 1px solid #dee2e6;
+    border: 1px solid rgba(255, 255, 255, 0.4);
     border-radius: 16px;
     background: transparent;
-    color: #007bff;
+    color: rgba(255, 255, 255, 0.9);
     font-size: 0.85em;
     cursor: pointer;
     transition: background-color 0.2s, border-color 0.2s;
 }
 
 .collaborators-expand-btn:hover {
-    background: rgba(0, 123, 255, 0.1);
-    border-color: #007bff;
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.6);
 }
 
 /* Collaborators Modal (expanded full list view) */
@@ -3057,7 +3065,7 @@ html.presentation-active {
 }
 
 .no-collaborators {
-    color: #6c757d;
+    color: rgba(255, 255, 255, 0.7);
     font-style: italic;
 }
 
@@ -3373,7 +3381,7 @@ html.presentation-active {
 .itinerary-empty,
 .no-collaborators {
     text-align: center;
-    color: #6c757d;
+    color: rgba(255, 255, 255, 0.7);
     padding: 30px 20px;
     font-style: italic;
 }
@@ -3389,14 +3397,16 @@ html.presentation-active {
 .itinerary-empty-title {
     font-size: 1.4em;
     font-weight: 600;
-    color: #333;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     margin: 0 0 10px 0;
     font-style: normal;
 }
 
 .itinerary-empty-subtitle {
     font-size: 1em;
-    color: #6c757d;
+    color: rgba(255, 255, 255, 0.75);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     margin: 0 0 25px 0;
     font-style: normal;
 }
@@ -3567,7 +3577,8 @@ html.presentation-active {
 .itinerary-accordion-title {
     font-size: 1.3em;
     font-weight: 600;
-    color: #333;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     margin: 0;
     padding-bottom: 0;
     border-bottom: none;
@@ -3586,7 +3597,7 @@ html.presentation-active {
 .itinerary-accordion-icon::after {
     content: '';
     position: absolute;
-    background-color: #007bff;
+    background-color: rgba(255, 255, 255, 0.9);
     transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
@@ -3614,7 +3625,8 @@ html.presentation-active {
 
 .itinerary-accordion-summary {
     font-size: 0.9em;
-    color: #6c757d;
+    color: rgba(255, 255, 255, 0.7);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     margin: 10px 0 0 0;
     line-height: 1.4;
     max-height: 60px;
@@ -3633,7 +3645,8 @@ html.presentation-active {
 .accordion-section-title {
     font-size: 1.2em;
     font-weight: 600;
-    color: #333;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     margin: 0;
     flex: 1;
     white-space: nowrap;
@@ -3687,19 +3700,19 @@ html.presentation-active {
 
 .itinerary-accordion.itinerary-items .itinerary-accordion-header,
 .itinerary-accordion.itinerary-chat .itinerary-accordion-header {
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid rgba(255, 255, 255, 0.25);
     padding-top: 20px;
 }
 
 /* Summary styling variations */
 .itinerary-accordion-summary .summary-count {
     font-weight: 600;
-    color: #007bff;
+    color: rgba(150, 220, 255, 1);
 }
 
 .itinerary-accordion-summary .summary-highlight {
     font-weight: 500;
-    color: #495057;
+    color: rgba(255, 255, 255, 0.85);
 }
 
 /* Item summary when collapsed */
