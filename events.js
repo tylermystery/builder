@@ -557,6 +557,8 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
                         'Curated Images': null, Subcategories: null, 'iCal URL': null,
                         'Lead Time (days)': null, RSVPs: null, Date: null,
                         'Chat Enabled': false, Duration: null, Capacity: null,
+                        // AI confidence score (0.0-1.0)
+                        '_aiConfidence': child.Confidence || null,
                         // Store Website separately for image scraping
                         '_aiWebsite': child.Website || null
                     },
@@ -643,6 +645,8 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
                     'Curated Images': null, Subcategories: null,
                     'iCal URL': null, 'Lead Time (days)': null, RSVPs: null, Date: null,
                     'Chat Enabled': false, Duration: null, Capacity: null,
+                    // AI confidence score (0.0-1.0)
+                    '_aiConfidence': aiData.Confidence || null,
                     // Store Website separately for image scraping
                     '_aiWebsite': aiData.Website || null
                 },

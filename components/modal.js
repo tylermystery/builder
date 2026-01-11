@@ -2089,6 +2089,52 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
 
+    // Display AI confidence badge for AI-parsed items
+    const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.id?.startsWith('ai-presentation-') || record?.isAI === true;
+    const existingConfidenceBadge = document.querySelector('.ai-confidence-badge');
+    if (existingConfidenceBadge) existingConfidenceBadge.remove();
+
+    if (isAIRecord) {
+        const confidence = record.fields?.['_aiConfidence'];
+        const confidenceBadge = document.createElement('div');
+        confidenceBadge.className = 'ai-confidence-badge';
+
+        if (confidence !== null && confidence !== undefined) {
+            const confidencePercent = Math.round(confidence * 100);
+            let confidenceLevel, confidenceLabel, confidenceTooltip;
+
+            if (confidence >= 0.8) {
+                confidenceLevel = 'high';
+                confidenceLabel = 'Verified';
+                confidenceTooltip = `${confidencePercent}% confident - Well-known business with verified details`;
+            } else if (confidence >= 0.6) {
+                confidenceLevel = 'moderate';
+                confidenceLabel = 'Likely';
+                confidenceTooltip = `${confidencePercent}% confident - Details should be accurate`;
+            } else if (confidence >= 0.4) {
+                confidenceLevel = 'low';
+                confidenceLabel = 'Estimated';
+                confidenceTooltip = `${confidencePercent}% confident - Some details may be estimates`;
+            } else {
+                confidenceLevel = 'very-low';
+                confidenceLabel = 'Draft';
+                confidenceTooltip = `${confidencePercent}% confident - Placeholder info, please verify`;
+            }
+
+            confidenceBadge.className = `ai-confidence-badge confidence-${confidenceLevel}`;
+            confidenceBadge.innerHTML = `<span class="confidence-icon">✨</span> AI ${confidenceLabel} <span class="confidence-score">${confidencePercent}%</span>`;
+            confidenceBadge.title = confidenceTooltip;
+        } else {
+            // No confidence score - show generic AI badge
+            confidenceBadge.className = 'ai-confidence-badge confidence-unknown';
+            confidenceBadge.innerHTML = '<span class="confidence-icon">✨</span> AI Suggested';
+            confidenceBadge.title = 'AI-generated suggestion - verify details before booking';
+        }
+
+        // Insert badge after the item name
+        modalItemName.parentNode.insertBefore(confidenceBadge, modalItemName.nextSibling);
+    }
+
     // --- SEO: Update page title, meta description, schema markup, OG tags, etc. ---
     const itemName = record.fields.Name || 'Untitled';
     const seoTitle = `${itemName} | WTFun`;

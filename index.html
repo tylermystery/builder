@@ -180,6 +180,55 @@ body.modal-open {
 #modal-item-name {
     margin-top: 0;
 }
+/* AI Confidence Badge Styles */
+.ai-confidence-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 500;
+    margin: 8px 0;
+    cursor: help;
+}
+.ai-confidence-badge .confidence-icon {
+    font-size: 0.9em;
+}
+.ai-confidence-badge .confidence-score {
+    font-size: 0.85em;
+    opacity: 0.8;
+}
+/* High confidence - green/verified */
+.ai-confidence-badge.confidence-high {
+    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+    color: #155724;
+    border: 1px solid #28a745;
+}
+/* Moderate confidence - blue/likely */
+.ai-confidence-badge.confidence-moderate {
+    background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+    color: #0c5460;
+    border: 1px solid #17a2b8;
+}
+/* Low confidence - yellow/estimated */
+.ai-confidence-badge.confidence-low {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
+    color: #856404;
+    border: 1px solid #ffc107;
+}
+/* Very low confidence - red/draft */
+.ai-confidence-badge.confidence-very-low {
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+    color: #721c24;
+    border: 1px solid #dc3545;
+}
+/* Unknown confidence - gray/suggested */
+.ai-confidence-badge.confidence-unknown {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    color: #495057;
+    border: 1px solid #6c757d;
+}
 #modal-item-price {
     font-size: 1.5em;
     font-weight: bold;

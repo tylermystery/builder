@@ -6170,6 +6170,8 @@ async function performPresentationSearch(searchTerm) {
                     Phone: phone,
                     Email: email,
                     Hours: availability,
+                    // AI confidence score (0.0-1.0)
+                    '_aiConfidence': source.Confidence || source.confidence || null,
                     // Store website URL for image scraping (to match events.js structure)
                     '_aiWebsite': website || null,
                     // Null fields to match events.js structure
