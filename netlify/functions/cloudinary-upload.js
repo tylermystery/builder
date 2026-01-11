@@ -133,8 +133,12 @@ exports.handler = async function (event, context) {
         console.log('[UPLOAD DEBUG] Image data starts with:', imageData.substring(0, 50));
 
         // Generate a unique public_id for the upload
+        // Note: public_id should NOT contain slashes when using the folder parameter
+        // Cloudinary interprets slashes as folder separators in display_name, causing errors
         const timestamp = Date.now();
-        const publicId = `user-uploads/${sessionId || 'unsaved'}/${itemId || 'manual'}-${timestamp}`;
+        const sanitizedSessionId = (sessionId || 'unsaved').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const sanitizedItemId = (itemId || 'manual').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const publicId = `${sanitizedSessionId}_${sanitizedItemId}_${timestamp}`;
 
         // Cloudinary upload URL
         const uploadUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
@@ -144,11 +148,12 @@ exports.handler = async function (event, context) {
         const uploadTimestamp = Math.floor(Date.now() / 1000);
 
         // Build params for signing (alphabetical order, exclude file and api_key)
+        // Note: folder parameter handles the directory structure, public_id is just the filename
         const params = {
             folder: 'user-uploads',
             public_id: publicId,
             timestamp: uploadTimestamp,
-            tags: `user-upload,session-${sessionId || 'unsaved'},item-${itemId || 'manual'}`
+            tags: `user-upload,session-${sanitizedSessionId},item-${sanitizedItemId}`
         };
 
         // Create signature string (params in alphabetical order)

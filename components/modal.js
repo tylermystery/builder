@@ -1174,6 +1174,7 @@ function enableItemEditMode(record, nameEl, descEl) {
                 const allToUpload = [...existingBase64ToMigrate, ...pending];
 
                 // Upload all base64 images to Cloudinary
+                let failedUploadCount = 0;
                 if (allToUpload.length > 0) {
                     saveBtn.textContent = 'Uploading photos...';
                     log('Modal', `Uploading ${allToUpload.length} photos to Cloudinary...`);
@@ -1217,6 +1218,7 @@ function enableItemEditMode(record, nameEl, descEl) {
                                         log('Modal', `Uploaded photo to Cloudinary: ${uploadResult.secure_url}`);
                                     } else {
                                         console.warn('[Modal] Upload succeeded but no secure_url returned, result:', uploadResult);
+                                        failedUploadCount++;
                                     }
                                 } else {
                                     const errorText = await uploadResponse.text();
@@ -1229,14 +1231,17 @@ function enableItemEditMode(record, nameEl, descEl) {
                                         errorData = { rawError: errorText };
                                     }
                                     console.error('[Modal] Failed to upload photo to Cloudinary:', errorData);
-                                    // Still save as base64 fallback if upload fails (may cause save error)
-                                    allPhotos.push({ url: photoUrl });
+                                    // DO NOT fall back to base64 - it will exceed Airtable field size limits
+                                    // Skip this photo and notify user
+                                    console.warn('[Modal] Skipping photo due to upload failure - base64 fallback disabled to prevent Airtable errors');
+                                    failedUploadCount++;
                                 }
                             } catch (uploadError) {
                                 console.error('[Modal DEBUG] Upload exception:', uploadError);
                                 console.error('[Modal] Error uploading photo:', uploadError);
-                                // Fallback: keep base64 if upload fails (may cause save error)
-                                allPhotos.push({ url: photoUrl });
+                                // DO NOT fall back to base64 - it will exceed Airtable field size limits
+                                console.warn('[Modal] Skipping photo due to upload error - base64 fallback disabled to prevent Airtable errors');
+                                failedUploadCount++;
                             }
                         } else if (photoUrl.startsWith('http')) {
                             // Already a URL, keep it
@@ -1244,6 +1249,12 @@ function enableItemEditMode(record, nameEl, descEl) {
                         }
                     }
                     saveBtn.textContent = 'Saving...';
+
+                    // Notify user if any uploads failed
+                    if (failedUploadCount > 0) {
+                        const photoText = failedUploadCount === 1 ? 'photo' : 'photos';
+                        alert(`${failedUploadCount} ${photoText} failed to upload. The item will be saved without ${failedUploadCount === 1 ? 'this photo' : 'these photos'}. Please try again.`);
+                    }
                 }
             }
 
