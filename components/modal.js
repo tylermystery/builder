@@ -2875,8 +2875,8 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     let currentPhotoIndex = startPhotoIndex;
 
     // Get the current cover photo index from the plan item (if it's in the plan)
-    const isInPlan = state.cart.lockedItems.has(recordId);
-    const planItemInfo = isInPlan ? state.cart.lockedItems.get(recordId) : null;
+    const isInPlan = state.cart.lockedItems.has(record.id);
+    const planItemInfo = isInPlan ? state.cart.lockedItems.get(record.id) : null;
     const savedCoverIndex = planItemInfo?.selectedImageIndex ?? 0;
 
     // Setup "Set as Cover" button functionality
@@ -2891,9 +2891,9 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         }
 
         // Update the item info with the new selected image index
-        const itemInfo = state.cart.lockedItems.get(recordId);
+        const itemInfo = state.cart.lockedItems.get(record.id);
         itemInfo.selectedImageIndex = newIndex;
-        state.cart.lockedItems.set(recordId, itemInfo);
+        state.cart.lockedItems.set(record.id, itemInfo);
 
         // Trigger save to persist across views and users
         if (typeof triggerSave === 'function') {
@@ -2912,13 +2912,13 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
         // Update presentation view if visible
         if (typeof window.itemImagesCache !== 'undefined') {
-            const cached = window.itemImagesCache?.get(recordId);
+            const cached = window.itemImagesCache?.get(record.id);
             if (cached) {
                 cached.currentIndex = newIndex;
             }
         }
 
-        log('Modal', `Set cover photo index to ${newIndex} for item ${recordId}`);
+        log('Modal', `Set cover photo index to ${newIndex} for item ${record.id}`);
 
         // Show success feedback
         if (setCoverBtn) {
@@ -2936,7 +2936,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         if (!setCoverBtn || !setCoverContainer) return;
 
         // Only show if item is in plan and current photo is different from cover
-        const currentCover = state.cart.lockedItems.get(recordId)?.selectedImageIndex ?? 0;
+        const currentCover = state.cart.lockedItems.get(record.id)?.selectedImageIndex ?? 0;
         if (isInPlan && selectedIndex !== currentCover && imageUrls.length > 1) {
             setCoverBtn.classList.add('visible');
         } else {
