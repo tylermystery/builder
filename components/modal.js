@@ -2903,7 +2903,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     // Setup "Search More Photos" button for AI-sourced items
     const searchPhotosContainer = document.getElementById('modal-search-photos-container');
     const searchPhotosBtn = document.getElementById('modal-search-photos-btn');
-    const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.id?.startsWith('ai-presentation-') || record?.isAI === true;
+    // Note: isAIRecord was already declared earlier in this function (line ~2093)
 
     if (searchPhotosContainer && searchPhotosBtn) {
         // Show button for AI records that might benefit from additional photo searches
