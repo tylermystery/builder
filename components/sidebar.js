@@ -82,8 +82,10 @@ async function createLockedInItemElement(record, itemInfo) {
     try {
         const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
         if (imageUrls && imageUrls.length > 0) {
-            // Check if URL already has transformations to avoid double-transforming
-            const url = imageUrls[0];
+            // Use the selectedImageIndex from itemInfo if set, otherwise default to first image
+            const selectedIndex = itemInfo?.selectedImageIndex ?? 0;
+            const validIndex = Math.min(selectedIndex, imageUrls.length - 1);
+            const url = imageUrls[validIndex];
             const uploadIndex = url.indexOf('/upload/');
             if (uploadIndex !== -1) {
                 const afterUpload = url.slice(uploadIndex + 8);

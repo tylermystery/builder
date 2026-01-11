@@ -2873,6 +2873,88 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     }
 
     let currentPhotoIndex = startPhotoIndex;
+
+    // Get the current cover photo index from the plan item (if it's in the plan)
+    const isInPlan = state.cart.lockedItems.has(recordId);
+    const planItemInfo = isInPlan ? state.cart.lockedItems.get(recordId) : null;
+    const savedCoverIndex = planItemInfo?.selectedImageIndex ?? 0;
+
+    // Setup "Set as Cover" button functionality
+    const setCoverBtn = document.getElementById('set-cover-photo-btn');
+    const setCoverContainer = document.getElementById('set-cover-photo-container');
+
+    // Function to update the cover photo for this plan item
+    const updateCoverPhoto = async (newIndex) => {
+        if (!isInPlan) {
+            log('Modal', 'Cannot set cover - item is not in plan');
+            return;
+        }
+
+        // Update the item info with the new selected image index
+        const itemInfo = state.cart.lockedItems.get(recordId);
+        itemInfo.selectedImageIndex = newIndex;
+        state.cart.lockedItems.set(recordId, itemInfo);
+
+        // Trigger save to persist across views and users
+        if (typeof triggerSave === 'function') {
+            triggerSave();
+        }
+
+        // Update the cover indicator on thumbnails
+        modalThumbnailStrip.querySelectorAll('.thumbnail-img').forEach((t, idx) => {
+            t.classList.toggle('is-cover', idx === newIndex);
+        });
+
+        // Update sidebar to show new cover
+        if (typeof ui !== 'undefined' && typeof ui.updateEventPlanSection === 'function') {
+            ui.updateEventPlanSection();
+        }
+
+        // Update presentation view if visible
+        if (typeof window.itemImagesCache !== 'undefined') {
+            const cached = window.itemImagesCache?.get(recordId);
+            if (cached) {
+                cached.currentIndex = newIndex;
+            }
+        }
+
+        log('Modal', `Set cover photo index to ${newIndex} for item ${recordId}`);
+
+        // Show success feedback
+        if (setCoverBtn) {
+            setCoverBtn.textContent = '✓ Cover Set!';
+            setCoverBtn.classList.add('success');
+            setTimeout(() => {
+                setCoverBtn.classList.remove('visible', 'success');
+                setCoverBtn.textContent = '⭐ Set as Cover';
+            }, 1500);
+        }
+    };
+
+    // Show/hide the "Set as Cover" button based on whether item is in plan and photo changed
+    const updateSetCoverButton = (selectedIndex) => {
+        if (!setCoverBtn || !setCoverContainer) return;
+
+        // Only show if item is in plan and current photo is different from cover
+        const currentCover = state.cart.lockedItems.get(recordId)?.selectedImageIndex ?? 0;
+        if (isInPlan && selectedIndex !== currentCover && imageUrls.length > 1) {
+            setCoverBtn.classList.add('visible');
+        } else {
+            setCoverBtn.classList.remove('visible');
+        }
+    };
+
+    // Setup click handler for "Set as Cover" button
+    if (setCoverBtn) {
+        // Clone to remove old handlers
+        const newSetCoverBtn = setCoverBtn.cloneNode(true);
+        setCoverBtn.parentNode.replaceChild(newSetCoverBtn, setCoverBtn);
+
+        newSetCoverBtn.addEventListener('click', () => {
+            updateCoverPhoto(currentPhotoIndex);
+        });
+    }
+
     // Optimize main image with proper size and format
     const optimizedMainImage = imageUrls[currentPhotoIndex].includes('cloudinary')
         ? applyCloudinaryTransform(imageUrls[currentPhotoIndex], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
@@ -2882,6 +2964,10 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     imageUrls.forEach((url, index) => {
         const thumb = document.createElement('div');
         thumb.className = 'thumbnail-img';
+        // Add is-cover class if this is the saved cover photo
+        if (isInPlan && index === savedCoverIndex) {
+            thumb.classList.add('is-cover');
+        }
         // Optimize thumbnails with smaller size
         const optimizedThumb = url.includes('cloudinary')
             ? applyCloudinaryTransform(url, 'w_150,h_150,c_fill,f_auto,q_auto')
@@ -2896,9 +2982,14 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
             modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
             thumb.classList.add('active');
+            // Update "Set as Cover" button visibility
+            updateSetCoverButton(index);
         });
         modalThumbnailStrip.appendChild(thumb);
     });
+
+    // Initialize the "Set as Cover" button state
+    updateSetCoverButton(currentPhotoIndex);
 
     // Setup "Search More Photos" button for AI-sourced items
     const searchPhotosContainer = document.getElementById('modal-search-photos-container');

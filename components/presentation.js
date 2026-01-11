@@ -136,6 +136,8 @@ let reactionsSummaryEl = null;
 
 // Track loaded images for each item
 const itemImagesCache = new Map();
+// Expose to window for cross-component updates (e.g., modal cover photo changes)
+window.itemImagesCache = itemImagesCache;
 
 // Track accordion state (all sections start expanded)
 const accordionState = {
@@ -1562,7 +1564,10 @@ async function renderItineraryItem(item, index) {
     // Fetch images if not cached
     if (!itemImagesCache.has(recordId)) {
         const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
-        itemImagesCache.set(recordId, { images: imageUrls || [], currentIndex: 0 });
+        // Use the selectedImageIndex from itemInfo if set, otherwise default to 0
+        const selectedIndex = itemInfo?.selectedImageIndex ?? 0;
+        const validIndex = Math.min(selectedIndex, (imageUrls?.length || 1) - 1);
+        itemImagesCache.set(recordId, { images: imageUrls || [], currentIndex: validIndex });
     }
 
     const cachedImages = itemImagesCache.get(recordId);

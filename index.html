@@ -1664,6 +1664,55 @@ html.presentation-active {
     margin-bottom: 10px;
 }
 
+/* Set as Cover Thumbnail Styles */
+.thumbnail-img.is-cover {
+    position: relative;
+}
+.thumbnail-img.is-cover::after {
+    content: '⭐';
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fbbf24;
+    font-size: 10px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    line-height: 1;
+}
+#set-cover-photo-container {
+    display: flex;
+    justify-content: center;
+    padding: 8px 10px;
+    background-color: #f8f9fa;
+    border-top: 1px solid #eee;
+}
+#set-cover-photo-btn {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 16px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
+    display: none;
+}
+#set-cover-photo-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(245, 158, 11, 0.4);
+}
+#set-cover-photo-btn.visible {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+#set-cover-photo-btn.success {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+}
+
 /* Critical Mobile Summary Bar Styles - Base styles needed before deferred CSS */
 #mobile-summary-bar {
     position: fixed;
@@ -2450,6 +2499,11 @@ html.presentation-active {
             <div class="modal-main-column">
                 <div id="modal-main-image"></div>
                 <div id="modal-thumbnail-strip"></div>
+                <div id="set-cover-photo-container">
+                    <button id="set-cover-photo-btn" title="Use this photo as the item's cover image">
+                        ⭐ Set as Cover
+                    </button>
+                </div>
                 <div id="modal-search-photos-container" style="display: none;">
                     <button id="modal-search-photos-btn" class="search-photos-btn" title="Search for more photos">
                         🔍 Search More Photos
