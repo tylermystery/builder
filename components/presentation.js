@@ -4106,9 +4106,12 @@ function handleComponentCommentsClick(e) {
     if (imageBtn) {
         e.stopPropagation();
         const componentId = imageBtn.dataset.componentId;
+        console.log('[CommentImage DEBUG] Camera button clicked for componentId:', componentId);
         const fileInput = document.querySelector(`.comment-image-input[data-component-id="${componentId}"]`);
+        console.log('[CommentImage DEBUG] fileInput found:', !!fileInput);
         if (fileInput) {
             fileInput.click();
+            console.log('[CommentImage DEBUG] fileInput.click() triggered');
         }
         return;
     }
@@ -4118,6 +4121,7 @@ function handleComponentCommentsClick(e) {
     if (removeBtn) {
         e.stopPropagation();
         const componentId = removeBtn.dataset.componentId;
+        console.log('[CommentImage DEBUG] Remove button clicked for componentId:', componentId);
         clearCommentImagePreview(componentId);
         return;
     }
@@ -4169,10 +4173,18 @@ function handleCommentImageInputChange(e) {
     const componentId = fileInput.dataset.componentId;
     const file = fileInput.files?.[0];
 
-    if (!file) return;
+    console.log('[CommentImage DEBUG] File input change triggered');
+    console.log('[CommentImage DEBUG] componentId:', componentId);
+    console.log('[CommentImage DEBUG] file:', file ? { name: file.name, type: file.type, size: file.size } : null);
+
+    if (!file) {
+        console.log('[CommentImage DEBUG] No file selected, returning');
+        return;
+    }
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
+        console.log('[CommentImage DEBUG] Invalid file type:', file.type);
         showToast('Please select an image file', 'error');
         fileInput.value = '';
         return;
@@ -4180,21 +4192,45 @@ function handleCommentImageInputChange(e) {
 
     // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
+        console.log('[CommentImage DEBUG] File too large:', file.size);
         showToast('Image must be less than 10MB', 'error');
         fileInput.value = '';
         return;
     }
 
+    console.log('[CommentImage DEBUG] File validation passed, creating preview');
+
     // Show preview
     const reader = new FileReader();
     reader.onload = (event) => {
+        console.log('[CommentImage DEBUG] FileReader onload triggered');
         const previewContainer = document.querySelector(`.comment-image-preview[data-component-id="${componentId}"]`);
         const thumbnail = previewContainer?.querySelector('.comment-preview-thumbnail');
+        const removeBtn = previewContainer?.querySelector('.comment-preview-remove');
+
+        console.log('[CommentImage DEBUG] previewContainer found:', !!previewContainer);
+        console.log('[CommentImage DEBUG] thumbnail found:', !!thumbnail);
+        console.log('[CommentImage DEBUG] removeBtn found:', !!removeBtn);
 
         if (previewContainer && thumbnail) {
             thumbnail.src = event.target.result;
             previewContainer.style.display = 'flex';
+
+            console.log('[CommentImage DEBUG] Preview displayed');
+            console.log('[CommentImage DEBUG] previewContainer.style.display:', previewContainer.style.display);
+            console.log('[CommentImage DEBUG] previewContainer.classList:', Array.from(previewContainer.classList));
+            console.log('[CommentImage DEBUG] thumbnail.naturalWidth:', thumbnail.naturalWidth);
+            console.log('[CommentImage DEBUG] thumbnail.naturalHeight:', thumbnail.naturalHeight);
+            console.log('[CommentImage DEBUG] thumbnail.offsetWidth:', thumbnail.offsetWidth);
+            console.log('[CommentImage DEBUG] thumbnail.offsetHeight:', thumbnail.offsetHeight);
+            console.log('[CommentImage DEBUG] previewContainer computed style:', window.getComputedStyle(previewContainer).cssText.substring(0, 200));
+            console.log('[CommentImage DEBUG] thumbnail computed style:', window.getComputedStyle(thumbnail).cssText.substring(0, 200));
+        } else {
+            console.log('[CommentImage DEBUG] ❌ Could not find previewContainer or thumbnail');
         }
+    };
+    reader.onerror = (error) => {
+        console.log('[CommentImage DEBUG] ❌ FileReader error:', error);
     };
     reader.readAsDataURL(file);
 }
@@ -4203,18 +4239,24 @@ function handleCommentImageInputChange(e) {
  * Clear the comment image preview and file input
  */
 function clearCommentImagePreview(componentId) {
+    console.log('[CommentImage DEBUG] clearCommentImagePreview called for componentId:', componentId);
     const fileInput = document.querySelector(`.comment-image-input[data-component-id="${componentId}"]`);
     const previewContainer = document.querySelector(`.comment-image-preview[data-component-id="${componentId}"]`);
     const thumbnail = previewContainer?.querySelector('.comment-preview-thumbnail');
 
+    console.log('[CommentImage DEBUG] Found elements - fileInput:', !!fileInput, 'previewContainer:', !!previewContainer, 'thumbnail:', !!thumbnail);
+
     if (fileInput) {
         fileInput.value = '';
+        console.log('[CommentImage DEBUG] File input cleared');
     }
     if (previewContainer) {
         previewContainer.style.display = 'none';
+        console.log('[CommentImage DEBUG] Preview container hidden');
     }
     if (thumbnail) {
         thumbnail.src = '';
+        console.log('[CommentImage DEBUG] Thumbnail src cleared');
     }
 }
 

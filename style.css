@@ -10581,8 +10581,9 @@ hr.total-divider {
 /* Comment input wrapper */
 .component-comment-input-wrapper {
     display: flex;
-    gap: 8px;
-    align-items: center;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
 }
 
 .component-comment-input {
@@ -10677,14 +10678,22 @@ hr.total-divider {
     background: #f8f9fa;
     border-radius: 8px;
     border: 1px solid #e0e0e0;
+    max-width: 100%;
+    overflow: hidden;
+    position: relative;
 }
 
 .comment-preview-thumbnail {
     width: 60px;
     height: 60px;
+    min-width: 60px;
+    min-height: 60px;
+    max-width: 60px;
+    max-height: 60px;
     object-fit: cover;
     border-radius: 6px;
     border: 1px solid #ddd;
+    flex-shrink: 0;
 }
 
 .comment-preview-remove {
@@ -10768,6 +10777,10 @@ hr.total-divider {
     .comment-preview-thumbnail {
         width: 50px;
         height: 50px;
+        min-width: 50px;
+        min-height: 50px;
+        max-width: 50px;
+        max-height: 50px;
     }
 
     .comment-attachment-image img {
