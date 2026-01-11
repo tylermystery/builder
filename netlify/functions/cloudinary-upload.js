@@ -5,7 +5,14 @@
  *
  * Note: Uses native fetch (available in Node.js 18+) instead of node-fetch
  * to avoid dependency issues in Netlify Functions environment
+ *
+ * IMPORTANT: Uses FormData with Blob instead of URLSearchParams for large
+ * image uploads. URLSearchParams can fail silently or cause memory issues
+ * with large base64 payloads. FormData properly handles multipart/form-data
+ * encoding which is the recommended approach for Cloudinary uploads.
  */
+
+const crypto = require('crypto');
 
 exports.handler = async function (event, context) {
     // Handle CORS preflight requests
@@ -95,6 +102,7 @@ exports.handler = async function (event, context) {
         console.log('[UPLOAD DEBUG] Parsed body fields - sessionId:', sessionId, 'itemId:', itemId);
         console.log('[UPLOAD DEBUG] imageData present:', !!imageData);
         console.log('[UPLOAD DEBUG] imageData type:', typeof imageData);
+        console.log('[UPLOAD DEBUG] imageData length:', imageData?.length || 0);
 
         if (!imageData) {
             console.error('[UPLOAD DEBUG] Missing imageData - body keys:', Object.keys(body || {}));
@@ -130,7 +138,6 @@ exports.handler = async function (event, context) {
         }
 
         console.log('[UPLOAD DEBUG] Uploading image for session:', sessionId, 'item:', itemId);
-        console.log('[UPLOAD DEBUG] Image data length:', imageData.length);
         console.log('[UPLOAD DEBUG] Image data starts with:', imageData.substring(0, 50));
 
         // Generate a unique public_id for the upload
@@ -145,7 +152,6 @@ exports.handler = async function (event, context) {
         const uploadUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 
         // Create the upload signature
-        const crypto = require('crypto');
         const uploadTimestamp = Math.floor(Date.now() / 1000);
 
         // Build params for signing (alphabetical order, exclude file and api_key)
@@ -174,8 +180,10 @@ exports.handler = async function (event, context) {
         console.log('[UPLOAD DEBUG] Public ID:', publicId);
         console.log('[UPLOAD DEBUG] Display Name:', displayName);
 
-        // Make the upload request
-        const formData = new URLSearchParams();
+        // Use FormData instead of URLSearchParams for large file uploads
+        // FormData handles multipart/form-data encoding properly and avoids
+        // memory issues that can occur with URLSearchParams for large base64 strings
+        const formData = new FormData();
         formData.append('file', imageData);
         formData.append('api_key', CLOUDINARY_API_KEY);
         formData.append('timestamp', uploadTimestamp.toString());
@@ -184,6 +192,8 @@ exports.handler = async function (event, context) {
         formData.append('folder', params.folder);
         formData.append('public_id', publicId);
         formData.append('tags', params.tags);
+
+        console.log('[UPLOAD DEBUG] Sending request to Cloudinary...');
 
         const response = await fetch(uploadUrl, {
             method: 'POST',

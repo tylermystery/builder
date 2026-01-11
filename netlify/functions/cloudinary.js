@@ -1,14 +1,18 @@
 /*
- * Version: 1.0.0
+ * Version: 1.0.1
  * Last Modified: 2025-08-25
  *
  * Changelog:
+ *
+ * v1.0.1 - 2025-08-25
+ * - Use native fetch (Node.js 18+) instead of node-fetch dependency
  *
  * v1.0.0 - 2025-08-25
  * - Initial version created to act as a secure proxy for the Cloudinary API.
  */
 
-const fetch = require('node-fetch');
+// Note: Using native fetch (available in Node.js 18+) instead of node-fetch
+// to avoid dependency issues in Netlify Functions environment
 
 exports.handler = async function (event, context) {
     // Get Cloudinary credentials from secure environment variables

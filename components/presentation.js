@@ -4654,7 +4654,12 @@ async function submitComponentComment(componentId) {
                     errorMessage = errorData.error || errorData.message || errorMessage;
                 } catch (parseErr) {
                     // Response wasn't JSON, use the text or status as the error
-                    errorMessage = responseText || `Upload failed with status ${uploadResponse.status}`;
+                    // Netlify returns "Internal Error. ID: xxx" for crashed functions
+                    if (responseText.startsWith('Internal Error')) {
+                        errorMessage = 'Image upload service error. Please try again or use a smaller image.';
+                    } else {
+                        errorMessage = responseText || `Upload failed with status ${uploadResponse.status}`;
+                    }
                 }
                 console.error('[ComponentComment DEBUG] Upload error:', errorMessage);
                 throw new Error(errorMessage);

@@ -1228,7 +1228,12 @@ function enableItemEditMode(record, nameEl, descEl) {
                                     try {
                                         errorData = JSON.parse(errorText);
                                     } catch (e) {
-                                        errorData = { rawError: errorText };
+                                        // Netlify returns "Internal Error. ID: xxx" for crashed functions
+                                        if (errorText.startsWith('Internal Error')) {
+                                            errorData = { error: 'Image upload service error. Please try again or use a smaller image.' };
+                                        } else {
+                                            errorData = { rawError: errorText };
+                                        }
                                     }
                                     console.error('[Modal] Failed to upload photo to Cloudinary:', errorData);
                                     // DO NOT fall back to base64 - it will exceed Airtable field size limits
