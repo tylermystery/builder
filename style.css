@@ -10631,6 +10631,150 @@ hr.total-divider {
     transform: none;
 }
 
+/* Comment input row with image button */
+.comment-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+}
+
+/* Comment image upload button */
+.comment-image-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #f0f0f0;
+    color: #666;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1em;
+    transition: background-color 0.2s, transform 0.2s;
+    flex-shrink: 0;
+}
+
+.comment-image-btn:hover {
+    background: #e0e0e0;
+    transform: scale(1.05);
+}
+
+.comment-image-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Comment image preview in input area */
+.comment-image-preview {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    margin-bottom: 8px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+
+.comment-preview-thumbnail {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+}
+
+.comment-preview-remove {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    line-height: 1;
+    transition: background-color 0.2s;
+    margin-left: auto;
+}
+
+.comment-preview-remove:hover {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+/* Upload loading state */
+.component-comment-input-wrapper.uploading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.component-comment-input-wrapper.uploading .comment-input-row::after {
+    content: '';
+    width: 20px;
+    height: 20px;
+    border: 2px solid #e0e0e0;
+    border-top-color: #007bff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    position: absolute;
+    right: 50px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Comment attachments in message list */
+.comment-attachments {
+    margin-top: 8px;
+}
+
+.comment-attachment {
+    display: inline-block;
+}
+
+.comment-attachment-image {
+    display: block;
+}
+
+.comment-attachment-image img {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.comment-attachment-image img:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Mobile adjustments for comment image attachments */
+@media (max-width: 768px) {
+    .comment-image-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 0.95em;
+    }
+
+    .comment-preview-thumbnail {
+        width: 50px;
+        height: 50px;
+    }
+
+    .comment-attachment-image img {
+        max-height: 150px;
+    }
+}
+
 /* Component comment reply indicator */
 .comment-reply-indicator {
     display: flex;

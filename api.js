@@ -2149,20 +2149,24 @@ export const COMPONENT_TYPES = {
  * @param {string} senderName - Display name of the sender
  * @param {string} content - The comment content
  * @param {string} [parentCommentId] - Optional parent comment ID for replies
+ * @param {Array} [attachments] - Optional array of attachment objects [{url: "...", type: "image"}]
  * @returns {Promise<object|null>} The created record or null on failure
  */
-export async function postComponentComment(sessionId, componentType, componentId, senderId, senderName, content, parentCommentId = null) {
+export async function postComponentComment(sessionId, componentType, componentId, senderId, senderName, content, parentCommentId = null, attachments = []) {
     console.log('[ComponentComment DEBUG] ========== postComponentComment CALLED ==========');
-    console.log('[ComponentComment DEBUG] Params:', { sessionId, componentType, componentId, senderId, senderName, contentLength: content?.length, parentCommentId });
+    console.log('[ComponentComment DEBUG] Params:', { sessionId, componentType, componentId, senderId, senderName, contentLength: content?.length, parentCommentId, attachmentsCount: attachments?.length || 0 });
 
     if (!sessionId || !sessionId.startsWith('rec')) {
         console.log('[ComponentComment DEBUG] ❌ Invalid sessionId:', sessionId);
         log('API', `postComponentComment: Invalid sessionId: "${sessionId}"`);
         return null;
     }
-    if (!content || !content.trim()) {
-        console.log('[ComponentComment DEBUG] ❌ Empty content provided');
-        log('API', 'postComponentComment: Empty content provided.');
+    // Allow empty content if there are attachments
+    const hasContent = content && content.trim();
+    const hasAttachments = attachments && attachments.length > 0;
+    if (!hasContent && !hasAttachments) {
+        console.log('[ComponentComment DEBUG] ❌ Empty content and no attachments');
+        log('API', 'postComponentComment: Empty content and no attachments provided.');
         return null;
     }
 
@@ -2187,12 +2191,18 @@ export async function postComponentComment(sessionId, componentType, componentId
         // Item comment: link to both session AND item
         // Having both SessionID and Item Link distinguishes from regular item chat (which has no SessionID)
         fields['Item Link'] = [componentId];
-        fields.Content = content.trim();
+        fields.Content = hasContent ? content.trim() : '';
         console.log('[ComponentComment DEBUG] Creating item comment with SessionID + Item Link');
     } else {
         // Header/general comment: prefix content to identify as plan comment
-        fields.Content = `[PLAN_COMMENT:${componentType}] ${content.trim()}`;
+        fields.Content = `[PLAN_COMMENT:${componentType}] ${hasContent ? content.trim() : ''}`;
         console.log('[ComponentComment DEBUG] Creating header/general comment with content prefix');
+    }
+
+    // Add attachments if provided
+    if (hasAttachments) {
+        fields.Attachments = JSON.stringify(attachments);
+        console.log('[ComponentComment DEBUG] Adding attachments:', attachments.length);
     }
 
     const payload = { records: [{ fields }] };

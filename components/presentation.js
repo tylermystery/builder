@@ -12,6 +12,7 @@ import { updateEventPlanSection, updateIdeasCarousel } from './sidebar.js';
 import { syncPlanState, registerSyncCallback, unregisterSyncCallback } from '../utils/planStateSync.js';
 import { showUserModal } from '../auth.js';
 import { showToast } from '../ui.js';
+import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 
 console.log('[Presentation DEBUG] presentation.js module loaded');
 console.log('[Presentation DEBUG] QUICK_REACTIONS available:', ['👍', '❤️', '😂', '😮', '😢', '🎉']);
@@ -1651,10 +1652,20 @@ async function renderItineraryItem(item, index) {
                             <!-- Comments will be rendered here -->
                         </div>
                         <div class="component-comment-input-wrapper">
-                            <input type="text" class="component-comment-input" data-component-id="${recordId}" placeholder="Add a comment..." />
-                            <button class="component-comment-submit" data-component-id="${recordId}" title="Post comment">
-                                <span>→</span>
-                            </button>
+                            <div class="comment-image-preview" data-component-id="${recordId}" style="display: none;">
+                                <img class="comment-preview-thumbnail" src="" alt="Preview" />
+                                <button class="comment-preview-remove" data-component-id="${recordId}" title="Remove image">×</button>
+                            </div>
+                            <div class="comment-input-row">
+                                <input type="file" class="comment-image-input" data-component-id="${recordId}" accept="image/*" style="display: none;" />
+                                <button class="comment-image-btn" data-component-id="${recordId}" title="Attach image">
+                                    <span>📷</span>
+                                </button>
+                                <input type="text" class="component-comment-input" data-component-id="${recordId}" placeholder="Add a comment..." />
+                                <button class="component-comment-submit" data-component-id="${recordId}" title="Post comment">
+                                    <span>→</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -4090,6 +4101,27 @@ function handleComponentCommentsClick(e) {
         return;
     }
 
+    // Handle image button clicks (trigger file input)
+    const imageBtn = e.target.closest('.comment-image-btn');
+    if (imageBtn) {
+        e.stopPropagation();
+        const componentId = imageBtn.dataset.componentId;
+        const fileInput = document.querySelector(`.comment-image-input[data-component-id="${componentId}"]`);
+        if (fileInput) {
+            fileInput.click();
+        }
+        return;
+    }
+
+    // Handle image preview remove button
+    const removeBtn = e.target.closest('.comment-preview-remove');
+    if (removeBtn) {
+        e.stopPropagation();
+        const componentId = removeBtn.dataset.componentId;
+        clearCommentImagePreview(componentId);
+        return;
+    }
+
     // Handle comment action buttons (edit, delete, react)
     const actionBtn = e.target.closest('.comment-action-btn');
     if (actionBtn) {
@@ -4124,6 +4156,65 @@ function handleComponentCommentsKeydown(e) {
             const componentId = input.dataset.componentId;
             submitComponentComment(componentId);
         }
+    }
+}
+
+/**
+ * Handle file input change for comment image attachments
+ */
+function handleCommentImageInputChange(e) {
+    const fileInput = e.target;
+    if (!fileInput.classList.contains('comment-image-input')) return;
+
+    const componentId = fileInput.dataset.componentId;
+    const file = fileInput.files?.[0];
+
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        showToast('Please select an image file', 'error');
+        fileInput.value = '';
+        return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+        showToast('Image must be less than 10MB', 'error');
+        fileInput.value = '';
+        return;
+    }
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const previewContainer = document.querySelector(`.comment-image-preview[data-component-id="${componentId}"]`);
+        const thumbnail = previewContainer?.querySelector('.comment-preview-thumbnail');
+
+        if (previewContainer && thumbnail) {
+            thumbnail.src = event.target.result;
+            previewContainer.style.display = 'flex';
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+/**
+ * Clear the comment image preview and file input
+ */
+function clearCommentImagePreview(componentId) {
+    const fileInput = document.querySelector(`.comment-image-input[data-component-id="${componentId}"]`);
+    const previewContainer = document.querySelector(`.comment-image-preview[data-component-id="${componentId}"]`);
+    const thumbnail = previewContainer?.querySelector('.comment-preview-thumbnail');
+
+    if (fileInput) {
+        fileInput.value = '';
+    }
+    if (previewContainer) {
+        previewContainer.style.display = 'none';
+    }
+    if (thumbnail) {
+        thumbnail.src = '';
     }
 }
 
@@ -4293,21 +4384,52 @@ function renderComponentComments(componentId, comments) {
             reactionsHTML += '</div>';
         }
 
+        // Build attachments HTML
+        let attachmentsHTML = '';
+        if (fields.Attachments) {
+            try {
+                const attachments = JSON.parse(fields.Attachments);
+                if (Array.isArray(attachments) && attachments.length > 0) {
+                    attachmentsHTML = '<div class="comment-attachments">';
+                    attachments.forEach(attachment => {
+                        if (attachment.type === 'image' && attachment.url) {
+                            // Apply Cloudinary transformations for optimized display
+                            const optimizedUrl = applyCloudinaryTransform(attachment.url, 'w_400,h_300,c_limit,f_auto,q_auto');
+                            attachmentsHTML += `
+                                <a href="${escapeHtml(attachment.url)}" target="_blank" class="comment-attachment comment-attachment-image">
+                                    <img src="${escapeHtml(optimizedUrl)}" alt="Attached image" loading="lazy" />
+                                </a>
+                            `;
+                        }
+                    });
+                    attachmentsHTML += '</div>';
+                }
+            } catch (e) {
+                console.warn('[ComponentComment] Failed to parse attachments:', e);
+            }
+        }
+
         // Get reply count for parent comments
         const replies = repliesByParent.get(comment.id) || [];
         const replyCountHtml = !isReply && replies.length > 0
             ? `<span class="comment-reply-count">${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}</span>`
             : '';
 
+        // Only show content div if there's actual text content
+        const contentHTML = fields.Content && fields.Content.trim()
+            ? `<div class="comment-content">${escapeHtml(fields.Content)}</div>`
+            : '';
+
         return `
-            <div class="component-comment ${isOwn ? 'own-comment' : ''} ${isReply ? 'comment-reply' : ''}" data-comment-id="${comment.id}" data-sender-name="${escapeHtml(fields.SenderName)}" data-content="${escapeHtml(fields.Content)}">
+            <div class="component-comment ${isOwn ? 'own-comment' : ''} ${isReply ? 'comment-reply' : ''}" data-comment-id="${comment.id}" data-sender-name="${escapeHtml(fields.SenderName)}" data-content="${escapeHtml(fields.Content || '')}">
                 <div class="comment-header">
                     <span class="comment-author">${escapeHtml(fields.SenderName)}${isOwn ? ' (You)' : ''}</span>
                     <span class="comment-time" title="${timestamp.toLocaleString()}">${timeAgo}</span>
                     ${isEdited ? '<span class="comment-edited">(edited)</span>' : ''}
                     ${replyCountHtml}
                 </div>
-                <div class="comment-content">${escapeHtml(fields.Content)}</div>
+                ${contentHTML}
+                ${attachmentsHTML}
                 ${reactionsHTML}
                 <div class="comment-actions">
                     <button class="comment-action-btn" data-action="reply" title="Reply to this comment">↩</button>
@@ -4370,8 +4492,13 @@ async function submitComponentComment(componentId) {
     let content = input.value.trim();
     console.log('[ComponentComment DEBUG] Content:', content?.substring(0, 50) + (content?.length > 50 ? '...' : ''));
 
-    if (!content) {
-        console.log('[ComponentComment DEBUG] ❌ Empty content - aborting');
+    // Check for attached image
+    const fileInput = document.querySelector(`.comment-image-input[data-component-id="${componentId}"]`);
+    const hasImage = fileInput?.files?.[0];
+
+    // Require either content or image
+    if (!content && !hasImage) {
+        console.log('[ComponentComment DEBUG] ❌ Empty content and no image - aborting');
         return;
     }
 
@@ -4398,9 +4525,52 @@ async function submitComponentComment(componentId) {
     // Disable input while submitting
     input.disabled = true;
     const submitBtn = document.querySelector(`.component-comment-submit[data-component-id="${componentId}"]`);
+    const imageBtn = document.querySelector(`.comment-image-btn[data-component-id="${componentId}"]`);
     if (submitBtn) submitBtn.disabled = true;
+    if (imageBtn) imageBtn.disabled = true;
+
+    // Show loading state on input wrapper
+    const inputWrapper = input.closest('.component-comment-input-wrapper');
+    if (inputWrapper) inputWrapper.classList.add('uploading');
+
+    let attachments = [];
 
     try {
+        // Upload image if attached
+        if (hasImage) {
+            console.log('[ComponentComment DEBUG] Uploading attached image...');
+            const file = fileInput.files[0];
+
+            // Convert file to base64
+            const base64Data = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+
+            // Upload to Cloudinary via serverless function
+            const uploadResponse = await fetch('/.netlify/functions/cloudinary-upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    imageData: base64Data,
+                    sessionId: sessionId,
+                    itemId: componentId
+                })
+            });
+
+            if (!uploadResponse.ok) {
+                const errorData = await uploadResponse.json();
+                throw new Error(errorData.error || 'Image upload failed');
+            }
+
+            const uploadResult = await uploadResponse.json();
+            console.log('[ComponentComment DEBUG] Image uploaded:', uploadResult.secure_url);
+
+            attachments = [{ url: uploadResult.secure_url, type: 'image' }];
+        }
+
         console.log('[ComponentComment DEBUG] Calling api.postComponentComment...');
         // Post comment via API with parent comment ID if this is a reply
         const newComment = await api.postComponentComment(
@@ -4410,7 +4580,8 @@ async function submitComponentComment(componentId) {
             currentUser.id,
             currentUser.name,
             content,
-            parentCommentId
+            parentCommentId,
+            attachments
         );
         console.log('[ComponentComment DEBUG] postComponentComment result:', newComment ? 'SUCCESS (id: ' + newComment.id + ')' : 'FAILED');
 
@@ -4418,6 +4589,9 @@ async function submitComponentComment(componentId) {
             // Clear input and reply state
             input.value = '';
             input.placeholder = 'Add a comment...';
+
+            // Clear image preview if an image was attached
+            clearCommentImagePreview(componentId);
 
             // Clear reply state if this was a reply
             if (isReply) {
@@ -4468,14 +4642,18 @@ async function submitComponentComment(componentId) {
             log('Presentation', `Comment posted to component ${componentId}`);
         } else {
             console.log('[ComponentComment DEBUG] ❌ postComponentComment returned null/false');
+            showToast('Failed to post comment', 'error');
         }
     } catch (error) {
         console.log('[ComponentComment DEBUG] ❌ Exception:', error);
         log('Presentation', `Error posting comment: ${error.message}`);
+        showToast(error.message || 'Failed to post comment', 'error');
     } finally {
-        // Re-enable input
+        // Re-enable inputs and remove loading state
         input.disabled = false;
         if (submitBtn) submitBtn.disabled = false;
+        if (imageBtn) imageBtn.disabled = false;
+        if (inputWrapper) inputWrapper.classList.remove('uploading');
         input.focus();
     }
 }
@@ -5752,6 +5930,7 @@ export function setupPresentationEventListeners() {
     console.log('[Events DEBUG] Adding handleComponentCommentsClick listener to itineraryItemsListEl');
     itineraryItemsListEl.addEventListener('click', handleComponentCommentsClick);
     itineraryItemsListEl.addEventListener('keydown', handleComponentCommentsKeydown);
+    itineraryItemsListEl.addEventListener('change', handleCommentImageInputChange);
 
     // Handle task status button clicks on items
     console.log('[Events DEBUG] Adding handleTaskStatusClick listener to itineraryItemsListEl:', itineraryItemsListEl);
