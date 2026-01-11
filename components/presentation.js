@@ -2431,12 +2431,41 @@ async function loadTaskDetailComments(overlay, componentType, elementId) {
             let displayContent = fields.Content || '';
             displayContent = displayContent.replace(/^\[PLAN_COMMENT:\w+\]\s*/i, '');
 
+            // Strip out embedded [ATTACHMENTS:...] from display content
+            let attachments = [];
+            const attachmentMatch = displayContent.match(/\[ATTACHMENTS:(.*?)\]$/);
+            if (attachmentMatch) {
+                try {
+                    attachments = JSON.parse(attachmentMatch[1]);
+                    displayContent = displayContent.replace(/\[ATTACHMENTS:.*?\]$/, '').trim();
+                } catch (e) {
+                    console.warn('[TaskStatus] Failed to parse embedded attachments:', e);
+                }
+            }
+
             if (isDeleted) {
                 return `
                     <div class="task-detail-comment deleted" data-comment-id="${comment.id}">
                         <em class="deleted-comment-text">This comment was deleted</em>
                     </div>
                 `;
+            }
+
+            // Build attachments HTML for popup comments
+            let attachmentsHTML = '';
+            if (Array.isArray(attachments) && attachments.length > 0) {
+                attachmentsHTML = '<div class="comment-attachments">';
+                attachments.forEach(attachment => {
+                    if (attachment.type === 'image' && attachment.url) {
+                        const optimizedUrl = applyCloudinaryTransform(attachment.url, 'w_200,h_150,c_limit,f_auto,q_auto');
+                        attachmentsHTML += `
+                            <a href="${escapeHtml(attachment.url)}" target="_blank" class="comment-attachment comment-attachment-image">
+                                <img src="${escapeHtml(optimizedUrl)}" alt="Attached image" loading="lazy" />
+                            </a>
+                        `;
+                    }
+                });
+                attachmentsHTML += '</div>';
             }
 
             return `
@@ -2446,7 +2475,8 @@ async function loadTaskDetailComments(overlay, componentType, elementId) {
                         <span class="comment-time" title="${timestamp.toLocaleString()}">${timeAgo}</span>
                         ${isEdited ? '<span class="comment-edited">(edited)</span>' : ''}
                     </div>
-                    <div class="comment-content">${escapeHtml(displayContent)}</div>
+                    ${displayContent ? `<div class="comment-content">${escapeHtml(displayContent)}</div>` : ''}
+                    ${attachmentsHTML}
                 </div>
             `;
         }).join('');
@@ -4426,29 +4456,42 @@ function renderComponentComments(componentId, comments) {
             reactionsHTML += '</div>';
         }
 
+        // Parse attachments from Content field (embedded as [ATTACHMENTS:...])
+        // This is because the Messages table doesn't have a separate Attachments field
+        let displayContent = fields.Content || '';
+        let attachments = [];
+
+        // Strip out [PLAN_COMMENT:xxx] prefix from display content
+        displayContent = displayContent.replace(/^\[PLAN_COMMENT:\w+\]\s*/i, '');
+
+        // Check for embedded attachments in content
+        const attachmentMatch = displayContent.match(/\[ATTACHMENTS:(.*?)\]$/);
+        if (attachmentMatch) {
+            try {
+                attachments = JSON.parse(attachmentMatch[1]);
+                // Remove the attachment marker from display content
+                displayContent = displayContent.replace(/\[ATTACHMENTS:.*?\]$/, '').trim();
+            } catch (e) {
+                console.warn('[ComponentComment] Failed to parse embedded attachments:', e);
+            }
+        }
+
         // Build attachments HTML
         let attachmentsHTML = '';
-        if (fields.Attachments) {
-            try {
-                const attachments = JSON.parse(fields.Attachments);
-                if (Array.isArray(attachments) && attachments.length > 0) {
-                    attachmentsHTML = '<div class="comment-attachments">';
-                    attachments.forEach(attachment => {
-                        if (attachment.type === 'image' && attachment.url) {
-                            // Apply Cloudinary transformations for optimized display
-                            const optimizedUrl = applyCloudinaryTransform(attachment.url, 'w_400,h_300,c_limit,f_auto,q_auto');
-                            attachmentsHTML += `
-                                <a href="${escapeHtml(attachment.url)}" target="_blank" class="comment-attachment comment-attachment-image">
-                                    <img src="${escapeHtml(optimizedUrl)}" alt="Attached image" loading="lazy" />
-                                </a>
-                            `;
-                        }
-                    });
-                    attachmentsHTML += '</div>';
+        if (Array.isArray(attachments) && attachments.length > 0) {
+            attachmentsHTML = '<div class="comment-attachments">';
+            attachments.forEach(attachment => {
+                if (attachment.type === 'image' && attachment.url) {
+                    // Apply Cloudinary transformations for optimized display
+                    const optimizedUrl = applyCloudinaryTransform(attachment.url, 'w_400,h_300,c_limit,f_auto,q_auto');
+                    attachmentsHTML += `
+                        <a href="${escapeHtml(attachment.url)}" target="_blank" class="comment-attachment comment-attachment-image">
+                            <img src="${escapeHtml(optimizedUrl)}" alt="Attached image" loading="lazy" />
+                        </a>
+                    `;
                 }
-            } catch (e) {
-                console.warn('[ComponentComment] Failed to parse attachments:', e);
-            }
+            });
+            attachmentsHTML += '</div>';
         }
 
         // Get reply count for parent comments
@@ -4457,13 +4500,13 @@ function renderComponentComments(componentId, comments) {
             ? `<span class="comment-reply-count">${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}</span>`
             : '';
 
-        // Only show content div if there's actual text content
-        const contentHTML = fields.Content && fields.Content.trim()
-            ? `<div class="comment-content">${escapeHtml(fields.Content)}</div>`
+        // Only show content div if there's actual text content (after removing attachment marker)
+        const contentHTML = displayContent && displayContent.trim()
+            ? `<div class="comment-content">${escapeHtml(displayContent)}</div>`
             : '';
 
         return `
-            <div class="component-comment ${isOwn ? 'own-comment' : ''} ${isReply ? 'comment-reply' : ''}" data-comment-id="${comment.id}" data-sender-name="${escapeHtml(fields.SenderName)}" data-content="${escapeHtml(fields.Content || '')}">
+            <div class="component-comment ${isOwn ? 'own-comment' : ''} ${isReply ? 'comment-reply' : ''}" data-comment-id="${comment.id}" data-sender-name="${escapeHtml(fields.SenderName)}" data-content="${escapeHtml(displayContent || '')}">
                 <div class="comment-header">
                     <span class="comment-author">${escapeHtml(fields.SenderName)}${isOwn ? ' (You)' : ''}</span>
                     <span class="comment-time" title="${timestamp.toLocaleString()}">${timeAgo}</span>

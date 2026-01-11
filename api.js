@@ -2187,22 +2187,26 @@ export async function postComponentComment(sessionId, componentType, componentId
         console.log('[ComponentComment DEBUG] Adding ParentMessageID for reply:', parentCommentId);
     }
 
+    // Build the content, embedding attachments within the Content field using a delimiter
+    // This is necessary because the Messages table doesn't have a separate Attachments field
+    let contentValue = hasContent ? content.trim() : '';
+
+    // Embed attachments in content using [ATTACHMENTS:] delimiter if provided
+    if (hasAttachments) {
+        contentValue += `[ATTACHMENTS:${JSON.stringify(attachments)}]`;
+        console.log('[ComponentComment DEBUG] Embedding attachments in content:', attachments.length);
+    }
+
     if (componentType === COMPONENT_TYPES.ITEM && componentId && componentId.startsWith('rec')) {
         // Item comment: link to both session AND item
         // Having both SessionID and Item Link distinguishes from regular item chat (which has no SessionID)
         fields['Item Link'] = [componentId];
-        fields.Content = hasContent ? content.trim() : '';
+        fields.Content = contentValue;
         console.log('[ComponentComment DEBUG] Creating item comment with SessionID + Item Link');
     } else {
         // Header/general comment: prefix content to identify as plan comment
-        fields.Content = `[PLAN_COMMENT:${componentType}] ${hasContent ? content.trim() : ''}`;
+        fields.Content = `[PLAN_COMMENT:${componentType}] ${contentValue}`;
         console.log('[ComponentComment DEBUG] Creating header/general comment with content prefix');
-    }
-
-    // Add attachments if provided
-    if (hasAttachments) {
-        fields.Attachments = JSON.stringify(attachments);
-        console.log('[ComponentComment DEBUG] Adding attachments:', attachments.length);
     }
 
     const payload = { records: [{ fields }] };
