@@ -3110,6 +3110,12 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                         // Show the selection UI
                         searchPhotosResults.classList.add('active');
 
+                        // Add fallback class to parent for browsers without :has() support
+                        const modalMainColumn = document.querySelector('.modal-main-column');
+                        if (modalMainColumn) {
+                            modalMainColumn.classList.add('search-photos-active');
+                        }
+
                         // Reset save button
                         if (saveSelectedPhotosBtn) {
                             saveSelectedPhotosBtn.textContent = '💾 Save Selected (0)';
@@ -3204,6 +3210,12 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                         searchPhotosGrid.innerHTML = '';
                         selectedPhotoUrls = [];
 
+                        // Remove fallback class from parent
+                        const modalMainColumn = document.querySelector('.modal-main-column');
+                        if (modalMainColumn) {
+                            modalMainColumn.classList.remove('search-photos-active');
+                        }
+
                         // Show success message on the search button
                         const searchBtn = document.getElementById('modal-search-photos-btn');
                         if (searchBtn) {
@@ -3235,6 +3247,12 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                     searchPhotosGrid.innerHTML = '';
                     selectedPhotoUrls = [];
 
+                    // Remove fallback class from parent
+                    const modalMainColumn = document.querySelector('.modal-main-column');
+                    if (modalMainColumn) {
+                        modalMainColumn.classList.remove('search-photos-active');
+                    }
+
                     // Reset save button
                     const saveBtn = document.getElementById('save-selected-photos-btn');
                     if (saveBtn) {
@@ -3251,6 +3269,11 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             }
             if (searchPhotosGrid) {
                 searchPhotosGrid.innerHTML = '';
+            }
+            // Remove fallback class from parent
+            const modalMainColumn = document.querySelector('.modal-main-column');
+            if (modalMainColumn) {
+                modalMainColumn.classList.remove('search-photos-active');
             }
         }
     }
