@@ -1183,31 +1183,57 @@ function enableItemEditMode(record, nameEl, descEl) {
                         // Check if it's a base64 data URL that needs uploading
                         if (photoUrl.startsWith('data:')) {
                             try {
+                                // Debug logging for upload request
+                                console.log('[Modal DEBUG] Preparing Cloudinary upload request');
+                                console.log('[Modal DEBUG] Photo URL length:', photoUrl.length);
+                                console.log('[Modal DEBUG] Photo URL starts with:', photoUrl.substring(0, 50));
+                                console.log('[Modal DEBUG] Session ID:', state.session?.id || 'unsaved');
+                                console.log('[Modal DEBUG] Record ID:', record.id);
+
+                                const requestBody = {
+                                    imageData: photoUrl,
+                                    sessionId: state.session?.id || 'unsaved',
+                                    itemId: record.id
+                                };
+
+                                console.log('[Modal DEBUG] Request body keys:', Object.keys(requestBody));
+                                console.log('[Modal DEBUG] Request body imageData present:', !!requestBody.imageData);
+                                console.log('[Modal DEBUG] Request body JSON length:', JSON.stringify(requestBody).length);
+
                                 const uploadResponse = await fetch('/.netlify/functions/cloudinary-upload', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        imageData: photoUrl,
-                                        sessionId: state.session.id || 'unsaved',
-                                        itemId: record.id
-                                    })
+                                    body: JSON.stringify(requestBody)
                                 });
+
+                                console.log('[Modal DEBUG] Upload response status:', uploadResponse.status);
+                                console.log('[Modal DEBUG] Upload response ok:', uploadResponse.ok);
 
                                 if (uploadResponse.ok) {
                                     const uploadResult = await uploadResponse.json();
+                                    console.log('[Modal DEBUG] Upload result:', uploadResult);
                                     if (uploadResult.secure_url) {
                                         allPhotos.push({ url: uploadResult.secure_url });
                                         log('Modal', `Uploaded photo to Cloudinary: ${uploadResult.secure_url}`);
                                     } else {
-                                        console.warn('[Modal] Upload succeeded but no secure_url returned');
+                                        console.warn('[Modal] Upload succeeded but no secure_url returned, result:', uploadResult);
                                     }
                                 } else {
-                                    const errorData = await uploadResponse.json().catch(() => ({}));
+                                    const errorText = await uploadResponse.text();
+                                    console.error('[Modal DEBUG] Upload failed - status:', uploadResponse.status);
+                                    console.error('[Modal DEBUG] Upload failed - response text:', errorText);
+                                    let errorData = {};
+                                    try {
+                                        errorData = JSON.parse(errorText);
+                                    } catch (e) {
+                                        errorData = { rawError: errorText };
+                                    }
                                     console.error('[Modal] Failed to upload photo to Cloudinary:', errorData);
                                     // Still save as base64 fallback if upload fails (may cause save error)
                                     allPhotos.push({ url: photoUrl });
                                 }
                             } catch (uploadError) {
+                                console.error('[Modal DEBUG] Upload exception:', uploadError);
                                 console.error('[Modal] Error uploading photo:', uploadError);
                                 // Fallback: keep base64 if upload fails (may cause save error)
                                 allPhotos.push({ url: photoUrl });
