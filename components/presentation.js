@@ -4646,8 +4646,18 @@ async function submitComponentComment(componentId) {
             });
 
             if (!uploadResponse.ok) {
-                const errorData = await uploadResponse.json();
-                throw new Error(errorData.error || 'Image upload failed');
+                // Try to parse JSON error, but handle plain text errors gracefully
+                let errorMessage = 'Image upload failed';
+                const responseText = await uploadResponse.text();
+                try {
+                    const errorData = JSON.parse(responseText);
+                    errorMessage = errorData.error || errorData.message || errorMessage;
+                } catch (parseErr) {
+                    // Response wasn't JSON, use the text or status as the error
+                    errorMessage = responseText || `Upload failed with status ${uploadResponse.status}`;
+                }
+                console.error('[ComponentComment DEBUG] Upload error:', errorMessage);
+                throw new Error(errorMessage);
             }
 
             const uploadResult = await uploadResponse.json();

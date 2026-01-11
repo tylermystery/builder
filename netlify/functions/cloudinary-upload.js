@@ -2,9 +2,10 @@
  * Cloudinary Upload Function
  * Handles uploading user images to Cloudinary for persistent storage
  * Returns a secure URL that can be stored in the session data
+ *
+ * Note: Uses native fetch (available in Node.js 18+) instead of node-fetch
+ * to avoid dependency issues in Netlify Functions environment
  */
-
-const fetch = require('node-fetch');
 
 exports.handler = async function (event, context) {
     // Handle CORS preflight requests
