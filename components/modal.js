@@ -1156,7 +1156,69 @@ function enableItemEditMode(record, nameEl, descEl) {
             if (photosContainerEl) {
                 const existingKept = photosContainerEl._existingPhotosToKeep || [];
                 const pending = photosContainerEl._pendingPhotos || [];
-                allPhotos.push(...existingKept, ...pending);
+
+                // Process existing photos - migrate base64 to Cloudinary if needed
+                const existingBase64ToMigrate = [];
+                for (const img of existingKept) {
+                    const url = img.url || img;
+                    if (url.startsWith('http')) {
+                        // Already a Cloudinary/HTTP URL, keep as-is
+                        allPhotos.push({ url });
+                    } else if (url.startsWith('data:')) {
+                        // Old base64 format - need to migrate to Cloudinary
+                        existingBase64ToMigrate.push({ url });
+                    }
+                }
+
+                // Combine existing base64 that need migration with new pending photos
+                const allToUpload = [...existingBase64ToMigrate, ...pending];
+
+                // Upload all base64 images to Cloudinary
+                if (allToUpload.length > 0) {
+                    saveBtn.textContent = 'Uploading photos...';
+                    log('Modal', `Uploading ${allToUpload.length} photos to Cloudinary...`);
+
+                    for (const photo of allToUpload) {
+                        const photoUrl = photo.url || photo;
+                        // Check if it's a base64 data URL that needs uploading
+                        if (photoUrl.startsWith('data:')) {
+                            try {
+                                const uploadResponse = await fetch('/.netlify/functions/cloudinary-upload', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        imageData: photoUrl,
+                                        sessionId: state.session.id || 'unsaved',
+                                        itemId: record.id
+                                    })
+                                });
+
+                                if (uploadResponse.ok) {
+                                    const uploadResult = await uploadResponse.json();
+                                    if (uploadResult.secure_url) {
+                                        allPhotos.push({ url: uploadResult.secure_url });
+                                        log('Modal', `Uploaded photo to Cloudinary: ${uploadResult.secure_url}`);
+                                    } else {
+                                        console.warn('[Modal] Upload succeeded but no secure_url returned');
+                                    }
+                                } else {
+                                    const errorData = await uploadResponse.json().catch(() => ({}));
+                                    console.error('[Modal] Failed to upload photo to Cloudinary:', errorData);
+                                    // Still save as base64 fallback if upload fails (may cause save error)
+                                    allPhotos.push({ url: photoUrl });
+                                }
+                            } catch (uploadError) {
+                                console.error('[Modal] Error uploading photo:', uploadError);
+                                // Fallback: keep base64 if upload fails (may cause save error)
+                                allPhotos.push({ url: photoUrl });
+                            }
+                        } else if (photoUrl.startsWith('http')) {
+                            // Already a URL, keep it
+                            allPhotos.push({ url: photoUrl });
+                        }
+                    }
+                    saveBtn.textContent = 'Saving...';
+                }
             }
 
             // Update the record in state.records.all
