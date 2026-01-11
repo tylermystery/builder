@@ -149,7 +149,12 @@ exports.handler = async function (event, context) {
 
         // Build params for signing (alphabetical order, exclude file and api_key)
         // Note: folder parameter handles the directory structure, public_id is just the filename
+        // IMPORTANT: display_name must be set explicitly without slashes to avoid Cloudinary error
+        // "Display name cannot contain slashes" - this happens when Cloudinary auto-generates
+        // display_name from folder + public_id path
+        const displayName = `${sanitizedSessionId}-${sanitizedItemId}-${timestamp}`;
         const params = {
+            display_name: displayName,
             folder: 'user-uploads',
             public_id: publicId,
             timestamp: uploadTimestamp,
@@ -165,6 +170,8 @@ exports.handler = async function (event, context) {
         const signature = crypto.createHash('sha1').update(signatureString).digest('hex');
 
         console.log('[UPLOAD DEBUG] Generated signature for upload');
+        console.log('[UPLOAD DEBUG] Public ID:', publicId);
+        console.log('[UPLOAD DEBUG] Display Name:', displayName);
 
         // Make the upload request
         const formData = new URLSearchParams();
@@ -172,6 +179,7 @@ exports.handler = async function (event, context) {
         formData.append('api_key', CLOUDINARY_API_KEY);
         formData.append('timestamp', uploadTimestamp.toString());
         formData.append('signature', signature);
+        formData.append('display_name', displayName);
         formData.append('folder', params.folder);
         formData.append('public_id', publicId);
         formData.append('tags', params.tags);
