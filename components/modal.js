@@ -4590,7 +4590,11 @@ export async function showCheckoutModal(shopSettings) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
 
-        const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
+        // Use selections if available, otherwise fall back to selectedOptionIndex
+        const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
+            ? itemInfo.selections
+            : itemInfo.selectedOptionIndex;
+        const price = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
 
         const itemTotal = price * (itemInfo.quantity || 1);
         finalTotal += itemTotal;
