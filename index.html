@@ -1534,6 +1534,136 @@ html.presentation-active {
     to { transform: rotate(360deg); }
 }
 
+/* Photo Selection Grid for Search More Photos */
+#search-photos-results {
+    display: none;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+#search-photos-results.active {
+    display: block;
+}
+
+.search-photos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.search-photo-item {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 3px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.search-photo-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.search-photo-item:hover {
+    border-color: #6366f1;
+    transform: scale(1.02);
+}
+
+.search-photo-item.selected {
+    border-color: #22c55e;
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3);
+}
+
+.search-photo-item .photo-select-indicator {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
+    border: 2px solid #ccc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.search-photo-item.selected .photo-select-indicator {
+    background: #22c55e;
+    border-color: #22c55e;
+    color: white;
+}
+
+.search-photo-item .photo-select-indicator::after {
+    content: '';
+}
+
+.search-photo-item.selected .photo-select-indicator::after {
+    content: '✓';
+}
+
+.search-photos-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.save-selected-photos-btn {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+}
+
+.save-selected-photos-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+}
+
+.save-selected-photos-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.cancel-selection-btn {
+    background: #6b7280;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.cancel-selection-btn:hover {
+    background: #4b5563;
+}
+
+.search-photos-hint {
+    text-align: center;
+    color: #6b7280;
+    font-size: 0.85rem;
+    margin-bottom: 10px;
+}
+
 /* Critical Mobile Summary Bar Styles - Base styles needed before deferred CSS */
 #mobile-summary-bar {
     position: fixed;
@@ -2324,6 +2454,18 @@ html.presentation-active {
                     <button id="modal-search-photos-btn" class="search-photos-btn" title="Search for more photos">
                         🔍 Search More Photos
                     </button>
+                    <div id="search-photos-results">
+                        <p class="search-photos-hint">Select the photos you want to save to this item:</p>
+                        <div class="search-photos-grid" id="search-photos-grid"></div>
+                        <div class="search-photos-actions">
+                            <button class="save-selected-photos-btn" id="save-selected-photos-btn" disabled>
+                                💾 Save Selected (0)
+                            </button>
+                            <button class="cancel-selection-btn" id="cancel-photo-selection-btn">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 <div class="modal-sidebar-column">

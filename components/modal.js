@@ -2903,12 +2903,27 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     // Setup "Search More Photos" button for AI-sourced items
     const searchPhotosContainer = document.getElementById('modal-search-photos-container');
     const searchPhotosBtn = document.getElementById('modal-search-photos-btn');
+    const searchPhotosResults = document.getElementById('search-photos-results');
+    const searchPhotosGrid = document.getElementById('search-photos-grid');
+    const saveSelectedPhotosBtn = document.getElementById('save-selected-photos-btn');
+    const cancelPhotoSelectionBtn = document.getElementById('cancel-photo-selection-btn');
     // Note: isAIRecord was already declared earlier in this function (line ~2093)
 
     if (searchPhotosContainer && searchPhotosBtn) {
         // Show button for AI records that might benefit from additional photo searches
         if (isAIRecord) {
             searchPhotosContainer.style.display = 'block';
+
+            // Reset the photo selection UI state
+            if (searchPhotosResults) {
+                searchPhotosResults.classList.remove('active');
+            }
+            if (searchPhotosGrid) {
+                searchPhotosGrid.innerHTML = '';
+            }
+
+            // Track selected photos for saving
+            let selectedPhotoUrls = [];
 
             // Remove previous listener if any (to avoid duplicates)
             const newSearchBtn = searchPhotosBtn.cloneNode(true);
@@ -2930,6 +2945,13 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
                     // Build set of existing image URLs to filter duplicates
                     const existingUrls = new Set(imageUrls.map(url => url.toLowerCase()));
+
+                    // Also check existing custom images
+                    const existingCustomImages = record.fields._customImages || [];
+                    existingCustomImages.forEach(img => {
+                        const url = img.url || img;
+                        if (url) existingUrls.add(url.toLowerCase());
+                    });
 
                     let newImageUrls = [];
 
@@ -2958,35 +2980,55 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                     }
 
                     if (newImageUrls.length > 0) {
-                        // Add new images to the array
-                        imageUrls.push(...newImageUrls);
+                        // Show the photo selection UI instead of immediately adding to thumbnail strip
+                        selectedPhotoUrls = []; // Reset selection
+                        searchPhotosGrid.innerHTML = '';
 
-                        // Rebuild thumbnail strip with all images
-                        modalThumbnailStrip.innerHTML = '';
-                        imageUrls.forEach((url, index) => {
-                            const thumb = document.createElement('div');
-                            thumb.className = 'thumbnail-img';
-                            const optimizedThumb = url.includes('cloudinary')
-                                ? applyCloudinaryTransform(url, 'w_150,h_150,c_fill,f_auto,q_auto')
-                                : url;
-                            thumb.style.backgroundImage = `url('${optimizedThumb}')`;
-                            if (index === currentPhotoIndex) thumb.classList.add('active');
-                            thumb.addEventListener('click', () => {
-                                currentPhotoIndex = index;
-                                const optimizedClickImage = url.includes('cloudinary')
-                                    ? applyCloudinaryTransform(url, 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
-                                    : url;
-                                modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
-                                modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
-                                thumb.classList.add('active');
+                        newImageUrls.forEach((url, index) => {
+                            const photoItem = document.createElement('div');
+                            photoItem.className = 'search-photo-item';
+                            photoItem.dataset.url = url;
+                            photoItem.innerHTML = `
+                                <img src="${url}" alt="Photo ${index + 1}" loading="lazy" />
+                                <div class="photo-select-indicator"></div>
+                            `;
+
+                            // Toggle selection on click
+                            photoItem.addEventListener('click', () => {
+                                photoItem.classList.toggle('selected');
+
+                                if (photoItem.classList.contains('selected')) {
+                                    if (!selectedPhotoUrls.includes(url)) {
+                                        selectedPhotoUrls.push(url);
+                                    }
+                                } else {
+                                    selectedPhotoUrls = selectedPhotoUrls.filter(u => u !== url);
+                                }
+
+                                // Update save button text and state
+                                const saveBtn = document.getElementById('save-selected-photos-btn');
+                                if (saveBtn) {
+                                    saveBtn.textContent = `💾 Save Selected (${selectedPhotoUrls.length})`;
+                                    saveBtn.disabled = selectedPhotoUrls.length === 0;
+                                }
                             });
-                            modalThumbnailStrip.appendChild(thumb);
+
+                            searchPhotosGrid.appendChild(photoItem);
                         });
 
-                        newSearchBtn.textContent = `Found ${newImageUrls.length} from website!`;
+                        // Show the selection UI
+                        searchPhotosResults.classList.add('active');
+
+                        // Reset save button
+                        if (saveSelectedPhotosBtn) {
+                            saveSelectedPhotosBtn.textContent = '💾 Save Selected (0)';
+                            saveSelectedPhotosBtn.disabled = true;
+                        }
+
+                        newSearchBtn.textContent = `Found ${newImageUrls.length} photos!`;
                         setTimeout(() => {
                             newSearchBtn.textContent = originalText;
-                        }, 3000);
+                        }, 2000);
                     } else {
                         // No images found from website
                         newSearchBtn.textContent = websiteUrl ? 'No website photos found' : 'No website available';
@@ -3005,8 +3047,120 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                     newSearchBtn.disabled = false;
                 }
             });
+
+            // Save Selected Photos button handler
+            if (saveSelectedPhotosBtn) {
+                const newSaveBtn = saveSelectedPhotosBtn.cloneNode(true);
+                saveSelectedPhotosBtn.parentNode.replaceChild(newSaveBtn, saveSelectedPhotosBtn);
+
+                newSaveBtn.addEventListener('click', async () => {
+                    if (selectedPhotoUrls.length === 0) return;
+
+                    newSaveBtn.disabled = true;
+                    newSaveBtn.textContent = 'Saving photos...';
+
+                    try {
+                        // Get existing custom images
+                        const existingCustomImages = record.fields._customImages || [];
+
+                        // Create new photos array with URL objects
+                        const newPhotos = selectedPhotoUrls.map(url => ({ url }));
+
+                        // Combine existing and new photos
+                        const allPhotos = [...existingCustomImages, ...newPhotos];
+
+                        // Update the record in state.records.all
+                        const recordIndex = state.records.all.findIndex(r => r.id === record.id);
+                        if (recordIndex !== -1) {
+                            state.records.all[recordIndex].fields._customImages = allPhotos;
+                        }
+
+                        // Also update the record reference passed to the modal
+                        record.fields._customImages = allPhotos;
+
+                        log('Modal', `Saved ${selectedPhotoUrls.length} new photos to item. Total photos: ${allPhotos.length}`);
+
+                        // Trigger save to persist changes to Airtable
+                        if (typeof triggerSave === 'function') {
+                            await triggerSave();
+                        }
+
+                        // Sync plan state across all views
+                        if (typeof syncPlanState === 'function') {
+                            syncPlanState('modal', 'itemUpdated', { recordId: record.id, itemName: record.fields.Name });
+                        }
+
+                        // Add the new photos to the thumbnail strip
+                        selectedPhotoUrls.forEach((url) => {
+                            // Add to imageUrls array for the modal
+                            imageUrls.push(url);
+
+                            // Create thumbnail
+                            const thumb = document.createElement('div');
+                            thumb.className = 'thumbnail-img custom-photo-thumb';
+                            thumb.style.backgroundImage = `url('${url}')`;
+                            thumb.addEventListener('click', () => {
+                                currentPhotoIndex = imageUrls.indexOf(url);
+                                modalMainImage.style.backgroundImage = `url('${url}')`;
+                                modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
+                                thumb.classList.add('active');
+                            });
+                            modalThumbnailStrip.appendChild(thumb);
+                        });
+
+                        // Hide the selection UI
+                        searchPhotosResults.classList.remove('active');
+                        searchPhotosGrid.innerHTML = '';
+                        selectedPhotoUrls = [];
+
+                        // Show success message on the search button
+                        const searchBtn = document.getElementById('modal-search-photos-btn');
+                        if (searchBtn) {
+                            const originalText = searchBtn.textContent;
+                            searchBtn.textContent = '✓ Photos saved!';
+                            setTimeout(() => {
+                                searchBtn.textContent = originalText;
+                            }, 2000);
+                        }
+
+                    } catch (error) {
+                        console.error('Error saving selected photos:', error);
+                        alert('Failed to save photos. Please try again.');
+                    } finally {
+                        newSaveBtn.textContent = '💾 Save Selected (0)';
+                        newSaveBtn.disabled = true;
+                    }
+                });
+            }
+
+            // Cancel button handler
+            if (cancelPhotoSelectionBtn) {
+                const newCancelBtn = cancelPhotoSelectionBtn.cloneNode(true);
+                cancelPhotoSelectionBtn.parentNode.replaceChild(newCancelBtn, cancelPhotoSelectionBtn);
+
+                newCancelBtn.addEventListener('click', () => {
+                    // Hide the selection UI
+                    searchPhotosResults.classList.remove('active');
+                    searchPhotosGrid.innerHTML = '';
+                    selectedPhotoUrls = [];
+
+                    // Reset save button
+                    const saveBtn = document.getElementById('save-selected-photos-btn');
+                    if (saveBtn) {
+                        saveBtn.textContent = '💾 Save Selected (0)';
+                        saveBtn.disabled = true;
+                    }
+                });
+            }
         } else {
             searchPhotosContainer.style.display = 'none';
+            // Also reset the photo selection UI when viewing non-AI records
+            if (searchPhotosResults) {
+                searchPhotosResults.classList.remove('active');
+            }
+            if (searchPhotosGrid) {
+                searchPhotosGrid.innerHTML = '';
+            }
         }
     }
 
