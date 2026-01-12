@@ -2891,29 +2891,23 @@ html.presentation-active {
                     </div>
                 </section>
 
-                <!-- Items Section - Rendered dynamically -->
-                <section class="itinerary-section itinerary-items itinerary-accordion" data-section="items">
-                    <div class="itinerary-accordion-header" data-section="items">
-                        <div class="itinerary-accordion-title-row">
-                            <!-- Add button at the beginning of items, title removed -->
-                            <button id="presentation-add-btn" class="presentation-add-item-btn" title="Add items to plan" aria-label="Add items to plan">
-                                <span class="add-icon">+</span>
-                                <span class="add-text">Add</span>
-                            </button>
-                            <span class="itinerary-accordion-icon"></span>
-                        </div>
-                        <p class="itinerary-accordion-summary" id="items-summary"></p>
-                    </div>
-                    <div class="itinerary-accordion-content">
-                        <div id="itinerary-items-list" class="itinerary-items-list">
-                            <!-- Items will be rendered here by JavaScript -->
-                        </div>
-                        <!-- Reactions Summary Section -->
-                        <div id="reactions-summary-container" class="reactions-summary-container">
-                            <!-- Reactions summary and rankings will be rendered here by JavaScript -->
-                        </div>
-                    </div>
+                <!-- Add Item Section - Standalone add functionality -->
+                <section class="itinerary-section itinerary-add-section" data-section="add">
+                    <button id="presentation-add-btn" class="presentation-add-item-btn" title="Add items to plan" aria-label="Add items to plan">
+                        <span class="add-icon">+</span>
+                        <span class="add-text">Add</span>
+                    </button>
                 </section>
+
+                <!-- Plan Items Container - Each item rendered as its own container -->
+                <div id="itinerary-items-list" class="itinerary-items-list">
+                    <!-- Individual plan item containers will be rendered here by JavaScript -->
+                </div>
+
+                <!-- Reactions Summary Section -->
+                <div id="reactions-summary-container" class="reactions-summary-container">
+                    <!-- Reactions summary and rankings will be rendered here by JavaScript -->
+                </div>
 
             </div>
         </div>

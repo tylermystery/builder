@@ -1604,73 +1604,76 @@ async function renderItineraryItem(item, index) {
     // Task status button for this item
     const taskStatusButtonHTML = renderTaskStatusButton('item', recordId);
 
+    // Each item is wrapped in its own section container for independent layout
     return `
-        <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}" data-item-name="${escapeHtml(name)}">
-            <div class="item-accordion-header" data-record-id="${recordId}">
-                <div class="item-accordion-title-row">
-                    ${taskStatusButtonHTML}
-                    <h3 class="item-accordion-title">${name}</h3>
-                    ${emojiIndicatorHTML}
-                    <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
-                    <span class="item-accordion-icon"></span>
-                </div>
-                <p class="item-accordion-summary">${itemSummary}</p>
-            </div>
-            <div class="item-accordion-content itinerary-item-clickable">
-                <div class="itinerary-item-content">
-                    ${mediaCarouselHTML}
-                    <div class="itinerary-item-details">
-                        <div class="itinerary-item-price-qty">
-                            <span class="itinerary-item-price">$${price.toFixed(2)}</span>
-                            ${quantity > 1 ? `<span class="itinerary-item-qty">× ${quantity}</span>` : ''}
-                        </div>
-                        ${selectedOptionsHTML}
-                        ${note ? `
-                            <div class="itinerary-item-note">
-                                <strong>Note:</strong> ${note}
-                            </div>
-                        ` : ''}
-                        <div class="itinerary-item-reactions" data-record-id="${recordId}"></div>
-                        <button class="itinerary-item-expand-btn" data-record-id="${recordId}" title="View full details">
-                            <span class="expand-btn-icon">↗</span>
-                            <span class="expand-btn-text">More Details</span>
-                        </button>
+        <section class="itinerary-section itinerary-item-section" data-section="item-${recordId}">
+            <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}" data-item-name="${escapeHtml(name)}">
+                <div class="item-accordion-header" data-record-id="${recordId}">
+                    <div class="item-accordion-title-row">
+                        ${taskStatusButtonHTML}
+                        <h3 class="item-accordion-title">${name}</h3>
+                        ${emojiIndicatorHTML}
+                        <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
+                        <span class="item-accordion-icon"></span>
                     </div>
+                    <p class="item-accordion-summary">${itemSummary}</p>
                 </div>
-                <!-- Component Comments Section -->
-                <div class="component-comments-section" data-component-type="item" data-component-id="${recordId}">
-                    <div class="component-comments-header">
-                        <button class="component-comments-toggle" data-component-id="${recordId}" title="Show comments">
-                            <span class="comments-icon">💬</span>
-                            <span class="comments-count" data-component-id="${recordId}">0</span>
-                            <span class="comments-label">Comments</span>
-                            <span class="comments-toggle-icon">▼</span>
-                        </button>
-                    </div>
-                    <div class="component-comments-body" data-component-id="${recordId}" style="display: none;">
-                        <div class="component-comments-list" data-component-id="${recordId}">
-                            <!-- Comments will be rendered here -->
-                        </div>
-                        <div class="component-comment-input-wrapper">
-                            <div class="comment-image-preview" data-component-id="${recordId}" style="display: none;">
-                                <img class="comment-preview-thumbnail" src="" alt="Preview" />
-                                <button class="comment-preview-remove" data-component-id="${recordId}" title="Remove image">×</button>
+                <div class="item-accordion-content itinerary-item-clickable">
+                    <div class="itinerary-item-content">
+                        ${mediaCarouselHTML}
+                        <div class="itinerary-item-details">
+                            <div class="itinerary-item-price-qty">
+                                <span class="itinerary-item-price">$${price.toFixed(2)}</span>
+                                ${quantity > 1 ? `<span class="itinerary-item-qty">× ${quantity}</span>` : ''}
                             </div>
-                            <div class="comment-input-row">
-                                <input type="file" class="comment-image-input" data-component-id="${recordId}" accept="image/*" style="display: none;" />
-                                <button class="comment-image-btn" data-component-id="${recordId}" title="Attach image">
-                                    <span>📷</span>
-                                </button>
-                                <input type="text" class="component-comment-input" data-component-id="${recordId}" placeholder="Add a comment..." />
-                                <button class="component-comment-submit" data-component-id="${recordId}" title="Post comment">
-                                    <span>→</span>
-                                </button>
-                            </div>
+                            ${selectedOptionsHTML}
+                            ${note ? `
+                                <div class="itinerary-item-note">
+                                    <strong>Note:</strong> ${note}
+                                </div>
+                            ` : ''}
+                            <div class="itinerary-item-reactions" data-record-id="${recordId}"></div>
+                            <button class="itinerary-item-expand-btn" data-record-id="${recordId}" title="View full details">
+                                <span class="expand-btn-icon">↗</span>
+                                <span class="expand-btn-text">More Details</span>
+                            </button>
                         </div>
                     </div>
+                    <!-- Component Comments Section -->
+                    <div class="component-comments-section" data-component-type="item" data-component-id="${recordId}">
+                        <div class="component-comments-header">
+                            <button class="component-comments-toggle" data-component-id="${recordId}" title="Show comments">
+                                <span class="comments-icon">💬</span>
+                                <span class="comments-count" data-component-id="${recordId}">0</span>
+                                <span class="comments-label">Comments</span>
+                                <span class="comments-toggle-icon">▼</span>
+                            </button>
+                        </div>
+                        <div class="component-comments-body" data-component-id="${recordId}" style="display: none;">
+                            <div class="component-comments-list" data-component-id="${recordId}">
+                                <!-- Comments will be rendered here -->
+                            </div>
+                            <div class="component-comment-input-wrapper">
+                                <div class="comment-image-preview" data-component-id="${recordId}" style="display: none;">
+                                    <img class="comment-preview-thumbnail" src="" alt="Preview" />
+                                    <button class="comment-preview-remove" data-component-id="${recordId}" title="Remove image">×</button>
+                                </div>
+                                <div class="comment-input-row">
+                                    <input type="file" class="comment-image-input" data-component-id="${recordId}" accept="image/*" style="display: none;" />
+                                    <button class="comment-image-btn" data-component-id="${recordId}" title="Attach image">
+                                        <span>📷</span>
+                                    </button>
+                                    <input type="text" class="component-comment-input" data-component-id="${recordId}" placeholder="Add a comment..." />
+                                    <button class="component-comment-submit" data-component-id="${recordId}" title="Post comment">
+                                        <span>→</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </article>
+            </article>
+        </section>
     `;
 }
 
@@ -1684,10 +1687,11 @@ async function renderAllItems() {
         // All 4 pillars are shown as suggestions since there are no items
         const allCategories = ["Activities", "Food & Drink", "Venues", "Extras"];
         let emptyStateHTML = `
-            <div class="presentation-empty-state">
-                <p class="itinerary-empty-title">Start Building Your Event Plan</p>
-                <p class="itinerary-empty-subtitle">Add items from these categories to create your perfect event:</p>
-                <div class="presentation-suggestions">
+            <section class="itinerary-section itinerary-empty-section" data-section="empty">
+                <div class="presentation-empty-state">
+                    <p class="itinerary-empty-title">Start Building Your Event Plan</p>
+                    <p class="itinerary-empty-subtitle">Add items from these categories to create your perfect event:</p>
+                    <div class="presentation-suggestions">
         `;
 
         allCategories.forEach(cat => {
@@ -1700,8 +1704,9 @@ async function renderAllItems() {
         });
 
         emptyStateHTML += `
+                    </div>
                 </div>
-            </div>
+            </section>
         `;
 
         itineraryItemsListEl.innerHTML = emptyStateHTML;
