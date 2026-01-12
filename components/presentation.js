@@ -172,6 +172,15 @@ let presentationBrowseCategories = null;
 // Search modal state
 let presentationSearchController = null;
 let presentationSearchDebounceTimer = null;
+
+// Drag-drop state
+let sortableInstance = null;
+let dragBucketsEl = null;
+let dragBucketArchive = null;
+let dragBucketCompleted = null;
+let isDragging = false;
+let dragDelayTimer = null;
+const DRAG_DELAY_MS = 300; // Delay before drag buckets appear (ms)
 const PRESENTATION_SEARCH_DEBOUNCE = 300;
 
 // --- Presentation Background Engine ---
@@ -357,6 +366,11 @@ function ensureDOMElements() {
     presentationSearchResults = document.getElementById('presentation-search-results');
     presentationRefinementChips = document.getElementById('presentation-refinement-chips');
     presentationBrowseCategories = document.getElementById('presentation-browse-categories');
+
+    // Drag-drop bucket elements
+    dragBucketsEl = document.getElementById('presentation-drag-buckets');
+    dragBucketArchive = document.getElementById('drag-bucket-archive');
+    dragBucketCompleted = document.getElementById('drag-bucket-completed');
 
     /* DEBUG: DOM elements after init
     console.log('[Accordion DEBUG] DOM elements after init:', {
@@ -1682,7 +1696,25 @@ async function renderItineraryItem(item, index) {
 async function renderAllItems() {
     const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
     const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
-    const combinedList = [...locked, ...favorites]; // Confirmed items first, then ideas
+    let combinedList = [...locked, ...favorites]; // Confirmed items first, then ideas
+
+    // Filter out archived and completed items
+    const archivedItems = state.session.archivedItems || new Set();
+    const completedItems = state.session.completedItems || new Set();
+    combinedList = combinedList.filter(item =>
+        !archivedItems.has(item.recordId) && !completedItems.has(item.recordId)
+    );
+
+    // Apply custom ordering if available
+    const customOrder = state.session.planItemOrder || [];
+    if (customOrder.length > 0) {
+        const orderMap = new Map(customOrder.map((id, index) => [id, index]));
+        combinedList.sort((a, b) => {
+            const orderA = orderMap.has(a.recordId) ? orderMap.get(a.recordId) : Infinity;
+            const orderB = orderMap.has(b.recordId) ? orderMap.get(b.recordId) : Infinity;
+            return orderA - orderB;
+        });
+    }
 
     if (combinedList.length === 0) {
         // Show recommendations when no items exist
@@ -1741,6 +1773,286 @@ async function renderAllItems() {
 
     // Update the event-level emoji indicator
     updateEventEmojiIndicator();
+
+    // Initialize drag-and-drop functionality
+    initializeItemDragDrop();
+}
+
+// Load SortableJS dynamically if not already loaded
+async function loadSortableJS() {
+    if (window.Sortable) {
+        return window.Sortable;
+    }
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js';
+        script.onload = () => resolve(window.Sortable);
+        script.onerror = () => reject(new Error('Failed to load SortableJS'));
+        document.head.appendChild(script);
+    });
+}
+
+// Initialize drag-and-drop for plan items
+async function initializeItemDragDrop() {
+    if (!itineraryItemsListEl) return;
+
+    // Destroy existing sortable instance if exists
+    if (sortableInstance) {
+        sortableInstance.destroy();
+        sortableInstance = null;
+    }
+
+    try {
+        const Sortable = await loadSortableJS();
+
+        sortableInstance = new Sortable(itineraryItemsListEl, {
+            animation: 200,
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            handle: '.itinerary-item-section', // Entire section is draggable
+            delay: 150, // Small delay for touch devices
+            delayOnTouchOnly: true,
+            touchStartThreshold: 5,
+
+            onStart: function(evt) {
+                isDragging = true;
+                // Start timer to show drag buckets after delay
+                dragDelayTimer = setTimeout(() => {
+                    showDragBuckets();
+                }, DRAG_DELAY_MS);
+
+                // Add document-level listeners to track drag position
+                document.addEventListener('mousemove', handleDragMove);
+                document.addEventListener('touchmove', handleDragMove, { passive: true });
+            },
+
+            onEnd: function(evt) {
+                isDragging = false;
+                clearTimeout(dragDelayTimer);
+
+                // Remove document-level listeners
+                document.removeEventListener('mousemove', handleDragMove);
+                document.removeEventListener('touchmove', handleDragMove);
+
+                // Check if dropped on a bucket
+                const droppedOnBucket = checkBucketDrop(evt.originalEvent, evt.item);
+                if (droppedOnBucket) {
+                    hideDragBuckets();
+                    return; // Item was moved to bucket, don't update order
+                }
+
+                hideDragBuckets();
+
+                // Update the order in state
+                updateItemOrder();
+            }
+        });
+
+        log('Presentation', 'Drag-drop initialized for plan items');
+    } catch (error) {
+        console.error('[Presentation] Failed to initialize drag-drop:', error);
+    }
+}
+
+// Show drag buckets during drag
+function showDragBuckets() {
+    if (dragBucketsEl && isDragging) {
+        dragBucketsEl.style.display = 'block';
+        // Small delay for animation
+        requestAnimationFrame(() => {
+            dragBucketsEl.classList.add('visible');
+        });
+    }
+}
+
+// Hide drag buckets
+function hideDragBuckets() {
+    if (dragBucketsEl) {
+        dragBucketsEl.classList.remove('visible');
+        // Remove drag-over from all buckets
+        if (dragBucketArchive) dragBucketArchive.classList.remove('drag-over');
+        if (dragBucketCompleted) dragBucketCompleted.classList.remove('drag-over');
+        // Hide after animation completes
+        setTimeout(() => {
+            if (!isDragging && dragBucketsEl) {
+                dragBucketsEl.style.display = 'none';
+            }
+        }, 300);
+    }
+}
+
+// Check if pointer is over a bucket and update hover state
+function checkBucketHover(event) {
+    if (!dragBucketsEl || !isDragging) return;
+
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+    // Check archive bucket
+    if (dragBucketArchive) {
+        const archiveRect = dragBucketArchive.getBoundingClientRect();
+        const overArchive = clientX >= archiveRect.left && clientX <= archiveRect.right &&
+                          clientY >= archiveRect.top && clientY <= archiveRect.bottom;
+        dragBucketArchive.classList.toggle('drag-over', overArchive);
+    }
+
+    // Check completed bucket
+    if (dragBucketCompleted) {
+        const completedRect = dragBucketCompleted.getBoundingClientRect();
+        const overCompleted = clientX >= completedRect.left && clientX <= completedRect.right &&
+                             clientY >= completedRect.top && clientY <= completedRect.bottom;
+        dragBucketCompleted.classList.toggle('drag-over', overCompleted);
+    }
+}
+
+// Handle mouse/touch move during drag
+function handleDragMove(event) {
+    checkBucketHover(event);
+}
+
+// Check if item was dropped on a bucket
+function checkBucketDrop(event, item) {
+    if (!dragBucketsEl) return false;
+
+    const clientX = event.changedTouches ? event.changedTouches[0].clientX : event.clientX;
+    const clientY = event.changedTouches ? event.changedTouches[0].clientY : event.clientY;
+
+    // Get record ID from the dragged item
+    const itemSection = item.closest('.itinerary-item-section');
+    const article = itemSection?.querySelector('.itinerary-item');
+    const recordId = article?.dataset.recordId;
+
+    if (!recordId) return false;
+
+    // Check archive bucket
+    if (dragBucketArchive) {
+        const archiveRect = dragBucketArchive.getBoundingClientRect();
+        if (clientX >= archiveRect.left && clientX <= archiveRect.right &&
+            clientY >= archiveRect.top && clientY <= archiveRect.bottom) {
+            archiveItem(recordId);
+            return true;
+        }
+    }
+
+    // Check completed bucket
+    if (dragBucketCompleted) {
+        const completedRect = dragBucketCompleted.getBoundingClientRect();
+        if (clientX >= completedRect.left && clientX <= completedRect.right &&
+            clientY >= completedRect.top && clientY <= completedRect.bottom) {
+            completeItem(recordId);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// Archive an item
+async function archiveItem(recordId) {
+    if (!recordId) return;
+
+    // Initialize archivedItems if not exists
+    if (!state.session.archivedItems) {
+        state.session.archivedItems = new Set();
+    }
+
+    // Add to archived items
+    state.session.archivedItems.add(recordId);
+
+    // Remove from custom order if present
+    if (state.session.planItemOrder) {
+        state.session.planItemOrder = state.session.planItemOrder.filter(id => id !== recordId);
+    }
+
+    // Get item name for toast
+    const record = state.records.all.find(r => r.id === recordId);
+    const itemName = record?.fields?.Name || 'Item';
+
+    // Re-render items
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+
+    // Show toast notification
+    showToast(`"${itemName}" archived`, 'info');
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Item ${recordId} archived`);
+}
+
+// Mark an item as completed
+async function completeItem(recordId) {
+    if (!recordId) return;
+
+    // Initialize completedItems if not exists
+    if (!state.session.completedItems) {
+        state.session.completedItems = new Set();
+    }
+
+    // Add to completed items
+    state.session.completedItems.add(recordId);
+
+    // Remove from custom order if present
+    if (state.session.planItemOrder) {
+        state.session.planItemOrder = state.session.planItemOrder.filter(id => id !== recordId);
+    }
+
+    // Get item name for toast
+    const record = state.records.all.find(r => r.id === recordId);
+    const itemName = record?.fields?.Name || 'Item';
+
+    // Re-render items
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+
+    // Show toast notification
+    showToast(`"${itemName}" marked complete`, 'success');
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Item ${recordId} marked completed`);
+}
+
+// Update item order in state after drag reorder
+function updateItemOrder() {
+    if (!itineraryItemsListEl) return;
+
+    // Get all item sections in current DOM order
+    const itemSections = itineraryItemsListEl.querySelectorAll('.itinerary-item-section');
+    const newOrder = [];
+
+    itemSections.forEach(section => {
+        const article = section.querySelector('.itinerary-item');
+        if (article && article.dataset.recordId) {
+            newOrder.push(article.dataset.recordId);
+        }
+    });
+
+    // Update state
+    state.session.planItemOrder = newOrder;
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Item order updated: ${newOrder.length} items`);
+}
+
+// Cleanup drag-drop on presentation view close
+function cleanupItemDragDrop() {
+    if (sortableInstance) {
+        sortableInstance.destroy();
+        sortableInstance = null;
+    }
+    isDragging = false;
+    clearTimeout(dragDelayTimer);
+    document.removeEventListener('mousemove', handleDragMove);
+    document.removeEventListener('touchmove', handleDragMove);
+    hideDragBuckets();
 }
 
 // Render the reactions summary section showing component rankings
@@ -6078,6 +6390,9 @@ export function hidePresentationView() {
 
     // Hide collaborators modal if open
     hideCollaboratorsModal();
+
+    // Cleanup drag-drop functionality
+    cleanupItemDragDrop();
 
     modal.classList.remove('active');
     modal.style.display = 'none';

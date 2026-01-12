@@ -525,6 +525,12 @@ export async function loadSessionFromAirtable(sessionId) {
                 console.log('[SESSION-LOAD DEBUG] Date value:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE));
 
                 state.session.itemPositions = new Map(Object.entries(savedState.itemPositions || {}));
+
+                // Restore plan item organization
+                state.session.planItemOrder = savedState.planItemOrder || [];
+                state.session.archivedItems = new Set(savedState.archivedItems || []);
+                state.session.completedItems = new Set(savedState.completedItems || []);
+
                 log('API', `Parsed session data: ${state.cart.items.size} ideas, ${state.cart.lockedItems.size} locked items, ${state.eventDetails.combined.size} details.`);
 
                 // Restore custom records from saved session data
@@ -593,6 +599,9 @@ export async function loadSessionFromAirtable(sessionId) {
                  state.session.userProfiles = new Map();
                  state.eventDetails.combined = new Map();
                 state.session.itemPositions = new Map();
+                state.session.planItemOrder = [];
+                state.session.archivedItems = new Set();
+                state.session.completedItems = new Set();
             }
         } else {
              log('API', `Session ${sessionId} has no 'Items with Variations' data.`);
@@ -714,6 +723,10 @@ export async function saveSessionToAirtable() {
         userProfiles: Object.fromEntries(state.session.userProfiles),
         eventDetails: Object.fromEntries(state.eventDetails.combined),
         itemPositions: Object.fromEntries(state.session.itemPositions),
+        // Plan item organization for presentation view
+        planItemOrder: state.session.planItemOrder || [],
+        archivedItems: Array.from(state.session.archivedItems || []),
+        completedItems: Array.from(state.session.completedItems || []),
         // Store full custom record data for persistence across refreshes
         // Uses 'aiRecords' key for backward compatibility with existing sessions
         // Contains both AI-generated items and manually added items

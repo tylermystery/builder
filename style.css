@@ -5475,6 +5475,8 @@ body.presentation-active #wtf-plans-panel-overlay {
     border: 1px solid rgba(255, 255, 255, 0.2);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     overflow: hidden;
+    position: relative;
+    cursor: grab;
 }
 
 .itinerary-item-section .itinerary-item {
@@ -5483,6 +5485,152 @@ body.presentation-active #wtf-plans-panel-overlay {
     border-radius: 0;
     box-shadow: none;
     background: transparent;
+}
+
+/* Drag-and-Drop Styles for Presentation View */
+.presentation-drag-buckets {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.presentation-drag-buckets.visible {
+    opacity: 1;
+}
+
+.drag-bucket {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 100px;
+    height: 160px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 16px;
+    backdrop-filter: blur(20px);
+    pointer-events: auto;
+    transition: all 0.3s ease, transform 0.2s ease;
+    opacity: 0.85;
+}
+
+.drag-bucket-archive {
+    left: 16px;
+    background: linear-gradient(135deg, rgba(108, 117, 125, 0.9), rgba(73, 80, 87, 0.9));
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.drag-bucket-completed {
+    right: 16px;
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.9), rgba(25, 135, 84, 0.9));
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.drag-bucket .bucket-icon {
+    font-size: 2em;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.drag-bucket .bucket-label {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Hover/drag-over state for buckets */
+.drag-bucket.drag-over {
+    transform: translateY(-50%) scale(1.15);
+    opacity: 1;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+}
+
+.drag-bucket-archive.drag-over {
+    background: linear-gradient(135deg, rgba(108, 117, 125, 1), rgba(73, 80, 87, 1));
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+.drag-bucket-completed.drag-over {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 1), rgba(25, 135, 84, 1));
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* Sortable ghost styling */
+.itinerary-item-section.sortable-ghost {
+    opacity: 0.4;
+    background: rgba(0, 123, 255, 0.1);
+}
+
+/* Sortable drag styling */
+.itinerary-item-section.sortable-drag {
+    opacity: 1;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    z-index: 9999;
+    cursor: grabbing;
+}
+
+/* Sortable chosen (about to drag) styling */
+.itinerary-item-section.sortable-chosen {
+    box-shadow: 0 4px 16px rgba(0, 123, 255, 0.3);
+    cursor: grabbing;
+}
+
+/* Drag handle indicator on items */
+.itinerary-item-section::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 40px;
+    background: linear-gradient(to bottom,
+        transparent 0%,
+        rgba(0, 0, 0, 0.15) 20%,
+        rgba(0, 0, 0, 0.15) 80%,
+        transparent 100%
+    );
+    border-radius: 2px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.itinerary-item-section:hover::before {
+    opacity: 1;
+}
+
+/* Mobile adjustments for drag buckets */
+@media (max-width: 768px) {
+    .drag-bucket {
+        width: 80px;
+        height: 120px;
+    }
+
+    .drag-bucket-archive {
+        left: 8px;
+    }
+
+    .drag-bucket-completed {
+        right: 8px;
+    }
+
+    .drag-bucket .bucket-icon {
+        font-size: 1.5em;
+    }
+
+    .drag-bucket .bucket-label {
+        font-size: 0.75em;
+    }
 }
 
 /* Empty state section */

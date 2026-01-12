@@ -63,6 +63,11 @@ export let state = {
         itemPositions: new Map(), // Stores { x: 120, y: 50, z: 1 } for each recordId
         // --- END NEW LINE ---
 
+        // Plan item organization for presentation view
+        planItemOrder: [], // Array of record IDs for custom ordering (empty = default order)
+        archivedItems: new Set(), // Set of record IDs that have been archived
+        completedItems: new Set(), // Set of record IDs that have been marked as completed
+
         // Recent chats list for expandable chat history
         recentChats: [], // Array of { id, type: 'session'|'item', name, lastMessage, lastMessageTime, unreadCount }
     },
