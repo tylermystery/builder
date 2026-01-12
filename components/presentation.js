@@ -1053,10 +1053,16 @@ function updateItemEmojiIndicator(recordId) {
         emojiIndicator.innerHTML = `<span class="emoji-indicator-emoji">${summaryEmoji}</span>${reactionCount > 1 ? `<span class="emoji-indicator-count">${reactionCount}</span>` : ''}`;
         emojiIndicator.style.display = 'inline-flex';
         emojiIndicator.classList.add('has-reactions');
+        // Update tooltip with ranking info
+        const tooltip = getItemRankingTooltip(recordId);
+        if (tooltip) {
+            emojiIndicator.title = tooltip;
+        }
     } else {
         emojiIndicator.innerHTML = '';
         emojiIndicator.style.display = 'none';
         emojiIndicator.classList.remove('has-reactions');
+        emojiIndicator.removeAttribute('title');
     }
 }
 
@@ -2373,6 +2379,19 @@ async function renderAllItems() {
     const archivedItems = state.session.archivedItems || new Set();
     const completedItems = state.session.completedItems || new Set();
 
+    // DEBUG: Log archived and completed items state
+    console.log('[Presentation DEBUG] renderAllItems - archivedItems Set:', {
+        exists: !!state.session.archivedItems,
+        size: archivedItems.size,
+        items: Array.from(archivedItems)
+    });
+    console.log('[Presentation DEBUG] renderAllItems - completedItems Set:', {
+        exists: !!state.session.completedItems,
+        size: completedItems.size,
+        items: Array.from(completedItems)
+    });
+    console.log('[Presentation DEBUG] renderAllItems - combinedList count:', combinedList.length);
+
     // Add status to each item (active, archived, or completed)
     combinedList = combinedList.map(item => {
         let itemStatus = 'active';
@@ -2384,12 +2403,20 @@ async function renderAllItems() {
         return { ...item, itemStatus };
     });
 
+    // DEBUG: Log item status distribution
+    const statusCounts = { active: 0, archived: 0, completed: 0 };
+    combinedList.forEach(item => statusCounts[item.itemStatus]++);
+    console.log('[Presentation DEBUG] Item status distribution BEFORE filter:', statusCounts);
+
     // Filter based on show/hide toggles
     combinedList = combinedList.filter(item => {
         if (item.itemStatus === 'archived' && !showArchivedItems) return false;
         if (item.itemStatus === 'completed' && !showCompletedItems) return false;
         return true;
     });
+
+    // DEBUG: Log filtered list
+    console.log('[Presentation DEBUG] After filter - combinedList count:', combinedList.length, 'showArchivedItems:', showArchivedItems, 'showCompletedItems:', showCompletedItems);
 
     // Apply custom ordering if available
     const customOrder = state.session.planItemOrder || [];
@@ -2653,15 +2680,18 @@ function checkBucketDrop(event, item) {
 
 // Archive an item
 async function archiveItem(recordId) {
+    console.log('[Presentation DEBUG] archiveItem called with recordId:', recordId);
     if (!recordId) return;
 
     // Initialize archivedItems if not exists
     if (!state.session.archivedItems) {
+        console.log('[Presentation DEBUG] Initializing archivedItems Set');
         state.session.archivedItems = new Set();
     }
 
     // Add to archived items (item stays in its position, just changes status)
     state.session.archivedItems.add(recordId);
+    console.log('[Presentation DEBUG] Added to archivedItems, new size:', state.session.archivedItems.size);
 
     // Get item name for toast
     const record = state.records.all.find(r => r.id === recordId);
@@ -2683,15 +2713,18 @@ async function archiveItem(recordId) {
 
 // Mark an item as completed
 async function completeItem(recordId) {
+    console.log('[Presentation DEBUG] completeItem called with recordId:', recordId);
     if (!recordId) return;
 
     // Initialize completedItems if not exists
     if (!state.session.completedItems) {
+        console.log('[Presentation DEBUG] Initializing completedItems Set');
         state.session.completedItems = new Set();
     }
 
     // Add to completed items (item stays in its position, just changes status)
     state.session.completedItems.add(recordId);
+    console.log('[Presentation DEBUG] Added to completedItems, new size:', state.session.completedItems.size);
 
     // Get item name for toast
     const record = state.records.all.find(r => r.id === recordId);
@@ -2713,8 +2746,22 @@ async function completeItem(recordId) {
 
 // Update the status toggle buttons visibility and state
 function updateStatusToggles(archivedCount, completedCount) {
+    // DEBUG: Log toggle update calls
+    console.log('[Presentation DEBUG] updateStatusToggles called:', {
+        archivedCount,
+        completedCount,
+        showArchivedItems,
+        showCompletedItems
+    });
+
     const archivedToggle = document.getElementById('presentation-toggle-archived');
     const completedToggle = document.getElementById('presentation-toggle-completed');
+
+    // DEBUG: Log toggle element existence
+    console.log('[Presentation DEBUG] Toggle elements found:', {
+        archivedToggle: !!archivedToggle,
+        completedToggle: !!completedToggle
+    });
 
     // Show/hide archived toggle based on whether there are archived items
     if (archivedToggle) {
@@ -2723,8 +2770,10 @@ function updateStatusToggles(archivedCount, completedCount) {
             archivedToggle.classList.toggle('active', showArchivedItems);
             const countEl = archivedToggle.querySelector('.toggle-count');
             if (countEl) countEl.textContent = archivedCount;
+            console.log('[Presentation DEBUG] Archived toggle shown with count:', archivedCount);
         } else {
             archivedToggle.style.display = 'none';
+            console.log('[Presentation DEBUG] Archived toggle hidden (count is 0)');
         }
     }
 
@@ -2735,8 +2784,10 @@ function updateStatusToggles(archivedCount, completedCount) {
             completedToggle.classList.toggle('active', showCompletedItems);
             const countEl = completedToggle.querySelector('.toggle-count');
             if (countEl) countEl.textContent = completedCount;
+            console.log('[Presentation DEBUG] Completed toggle shown with count:', completedCount);
         } else {
             completedToggle.style.display = 'none';
+            console.log('[Presentation DEBUG] Completed toggle hidden (count is 0)');
         }
     }
 }
@@ -2792,21 +2843,18 @@ function cleanupItemDragDrop() {
     hideDragBuckets();
 }
 
-// Render the reactions summary section showing component rankings
-function renderReactionsSummary() {
-    if (!reactionsSummaryEl) {
-        reactionsSummaryEl = document.getElementById('reactions-summary-container');
-    }
-    if (!reactionsSummaryEl) return;
-
+/**
+ * Calculate reaction rankings for all items in the plan.
+ * Returns an array of ranked items with their ranking info.
+ * @returns {Array<{recordId: string, rank: number, score: number, reactionCount: number, emojiBreakdown: Object, totalItems: number}>}
+ */
+function calculateReactionRankings() {
     const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
     const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
     const combinedList = [...locked, ...favorites];
 
     // Calculate scores for all items
     const itemsWithScores = combinedList.map(item => {
-        const record = state.records.all.find(r => r.id === item.recordId);
-        const name = record?.fields.Name || 'Unknown Item';
         const reactions = state.session.reactions.get(item.recordId);
         const reactionCount = reactions instanceof Map ? reactions.size : 0;
         const score = getItemReactionScore(item.recordId);
@@ -2821,18 +2869,11 @@ function renderReactionsSummary() {
 
         return {
             recordId: item.recordId,
-            type: item.type,
-            name,
             score,
             reactionCount,
             emojiBreakdown
         };
     });
-
-    // Calculate totals
-    const totalScore = itemsWithScores.reduce((sum, item) => sum + item.score, 0);
-    const totalReactions = itemsWithScores.reduce((sum, item) => sum + item.reactionCount, 0);
-    const itemsWithReactions = itemsWithScores.filter(item => item.reactionCount > 0).length;
 
     // Sort by score (descending), then by reaction count
     const rankedItems = [...itemsWithScores].sort((a, b) => {
@@ -2840,150 +2881,75 @@ function renderReactionsSummary() {
         return b.reactionCount - a.reactionCount;
     });
 
-    // Generate ranking HTML
-    let rankingHTML = '';
-    if (totalReactions > 0) {
-        rankingHTML = rankedItems.map((item, index) => {
-            if (item.reactionCount === 0) return ''; // Skip items with no reactions
+    // Filter items with reactions and add rank
+    const itemsWithReactions = rankedItems.filter(item => item.reactionCount > 0);
+    const totalItemsWithReactions = itemsWithReactions.length;
 
-            const rank = index + 1;
-            const typeClass = item.type === 'favorites' ? 'idea' : 'confirmed';
+    return itemsWithReactions.map((item, index) => ({
+        ...item,
+        rank: index + 1,
+        totalItems: totalItemsWithReactions
+    }));
+}
 
-            // Create emoji pills showing the breakdown
-            const emojiPills = Object.entries(item.emojiBreakdown)
-                .map(([emoji, count]) => `<span class="emoji-pill">${emoji}${count > 1 ? `<sup>${count}</sup>` : ''}</span>`)
-                .join('');
+/**
+ * Get ranking tooltip text for an item's emoji indicator.
+ * @param {string} recordId - The item record ID
+ * @returns {string} Tooltip text showing rank and emoji breakdown
+ */
+function getItemRankingTooltip(recordId) {
+    const rankings = calculateReactionRankings();
+    const itemRanking = rankings.find(item => item.recordId === recordId);
 
-            // Medal for top 3
-            let medalHTML = '';
-            if (rank === 1) medalHTML = '<span class="rank-medal gold">🥇</span>';
-            else if (rank === 2) medalHTML = '<span class="rank-medal silver">🥈</span>';
-            else if (rank === 3) medalHTML = '<span class="rank-medal bronze">🥉</span>';
-
-            // Get summary emoji for this item
-            const summaryEmoji = getItemSummaryEmoji(item.recordId);
-
-            return `
-                <div class="ranking-item" data-record-id="${item.recordId}">
-                    <div class="ranking-position">
-                        ${medalHTML}
-                        <span class="ranking-number">#${rank}</span>
-                    </div>
-                    <div class="ranking-details">
-                        <div class="ranking-name">${item.name}</div>
-                        <div class="ranking-type ${typeClass}">${item.type === 'favorites' ? 'Idea' : 'Confirmed'}</div>
-                    </div>
-                    <div class="ranking-reactions">${emojiPills}</div>
-                    <div class="ranking-summary-emoji">
-                        <span class="summary-emoji">${summaryEmoji}</span>
-                        <span class="reaction-count">${item.reactionCount}</span>
-                    </div>
-                </div>
-            `;
-        }).filter(html => html !== '').join('');
+    if (!itemRanking) {
+        return '';
     }
 
-    // Calculate sentiment analysis
-    let sentimentHTML = '';
-    if (totalReactions > 0) {
-        const positiveItems = itemsWithScores.filter(item => item.score > 0).length;
-        const negativeItems = itemsWithScores.filter(item => item.score < 0).length;
-        const neutralItems = itemsWithScores.filter(item => item.score === 0 && item.reactionCount > 0).length;
+    // Build emoji breakdown string
+    const emojiBreakdownStr = Object.entries(itemRanking.emojiBreakdown)
+        .map(([emoji, count]) => `${emoji}${count > 1 ? '×' + count : ''}`)
+        .join(' ');
 
-        // Overall sentiment indicator
-        let overallSentiment = 'neutral';
-        let sentimentEmoji = '😐';
-        let sentimentText = 'Mixed reactions';
-        if (totalScore > 8) {
-            overallSentiment = 'very-positive';
-            sentimentEmoji = '🎉';
-            sentimentText = 'Very enthusiastic!';
-        } else if (totalScore > 3) {
-            overallSentiment = 'positive';
-            sentimentEmoji = '😊';
-            sentimentText = 'Generally positive!';
-        } else if (totalScore < -8) {
-            overallSentiment = 'very-negative';
-            sentimentEmoji = '😟';
-            sentimentText = 'Needs attention';
-        } else if (totalScore < -3) {
-            overallSentiment = 'negative';
-            sentimentEmoji = '😕';
-            sentimentText = 'Some concerns';
+    // Build medal string for top 3
+    let medal = '';
+    if (itemRanking.rank === 1) medal = '🥇 ';
+    else if (itemRanking.rank === 2) medal = '🥈 ';
+    else if (itemRanking.rank === 3) medal = '🥉 ';
+
+    // Build score indicator
+    const scoreStr = itemRanking.score > 0 ? `+${itemRanking.score}` : itemRanking.score.toString();
+
+    return `${medal}Rank #${itemRanking.rank} of ${itemRanking.totalItems} | Score: ${scoreStr} | ${emojiBreakdownStr}`;
+}
+
+// Render the reactions summary section - now hidden, ranking info moved to tooltips
+function renderReactionsSummary() {
+    if (!reactionsSummaryEl) {
+        reactionsSummaryEl = document.getElementById('reactions-summary-container');
+    }
+    if (!reactionsSummaryEl) return;
+
+    // Hide the reactions summary container - ranking info is now in item emoji tooltips
+    reactionsSummaryEl.innerHTML = '';
+    reactionsSummaryEl.style.display = 'none';
+
+    // Update all item emoji indicator tooltips with ranking info
+    updateAllItemEmojiTooltips();
+}
+
+/**
+ * Update all item emoji indicator tooltips with current ranking info
+ */
+function updateAllItemEmojiTooltips() {
+    const emojiIndicators = document.querySelectorAll('.item-emoji-indicator[data-record-id]');
+    emojiIndicators.forEach(indicator => {
+        const recordId = indicator.dataset.recordId;
+        const tooltip = getItemRankingTooltip(recordId);
+        if (tooltip) {
+            indicator.title = tooltip;
+        } else {
+            indicator.removeAttribute('title');
         }
-
-        sentimentHTML = `
-            <div class="sentiment-analysis">
-                <div class="sentiment-overall ${overallSentiment}">
-                    <span class="sentiment-emoji">${sentimentEmoji}</span>
-                    <span class="sentiment-text">${sentimentText}</span>
-                </div>
-                <div class="sentiment-breakdown">
-                    <div class="sentiment-stat positive">
-                        <span class="stat-icon">👍</span>
-                        <span class="stat-value">${positiveItems}</span>
-                        <span class="stat-label">positive</span>
-                    </div>
-                    <div class="sentiment-stat neutral">
-                        <span class="stat-icon">🤷</span>
-                        <span class="stat-value">${neutralItems}</span>
-                        <span class="stat-label">neutral</span>
-                    </div>
-                    <div class="sentiment-stat negative">
-                        <span class="stat-icon">👎</span>
-                        <span class="stat-value">${negativeItems}</span>
-                        <span class="stat-label">negative</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    // No reactions state
-    if (totalReactions === 0) {
-        reactionsSummaryEl.innerHTML = `
-            <div class="reactions-summary-empty">
-                <span class="empty-icon">✨</span>
-                <p>No reactions yet! React to items above to see how they rank.</p>
-                <p class="empty-hint">Use emojis to express your preferences and see real-time feedback.</p>
-            </div>
-        `;
-        return;
-    }
-
-    // Full summary HTML
-    reactionsSummaryEl.innerHTML = `
-        <div class="reactions-summary-header">
-            <h3 class="reactions-summary-title">Reaction Rankings</h3>
-            <div class="reactions-summary-stats">
-                <span class="stat"><strong>${totalReactions}</strong> reactions</span>
-                <span class="stat"><strong>${itemsWithReactions}</strong> items rated</span>
-            </div>
-        </div>
-        ${sentimentHTML}
-        <div class="reactions-ranking-list">
-            ${rankingHTML}
-        </div>
-        <div class="reactions-summary-footer">
-            <p class="scoring-note">
-                <span class="note-icon">ℹ️</span>
-                Click any ranking to scroll to that item. Emojis update in real-time as people react.
-            </p>
-        </div>
-    `;
-
-    // Add click handlers to scroll to items
-    reactionsSummaryEl.querySelectorAll('.ranking-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const recordId = item.dataset.recordId;
-            const targetItem = document.querySelector(`.itinerary-item[data-record-id="${recordId}"]`);
-            if (targetItem) {
-                targetItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                // Brief highlight
-                targetItem.classList.add('highlight');
-                setTimeout(() => targetItem.classList.remove('highlight'), 2000);
-            }
-        });
     });
 }
 
@@ -7114,6 +7080,20 @@ export async function showPresentationView(listType, startRecordId = null) {
             position: computedStyle.position,
             boundingRect: dragBucketsEl.getBoundingClientRect()
         });
+        // Debug: Check parent element's overflow and position
+        const parentEl = dragBucketsEl.parentElement;
+        if (parentEl) {
+            const parentStyle = window.getComputedStyle(parentEl);
+            console.log('[Presentation DEBUG] Bucket parent element:', {
+                id: parentEl.id,
+                overflow: parentStyle.overflow,
+                overflowX: parentStyle.overflowX,
+                overflowY: parentStyle.overflowY,
+                position: parentStyle.position,
+                zIndex: parentStyle.zIndex,
+                display: parentStyle.display
+            });
+        }
         // Debug: Check individual buckets
         if (dragBucketArchive) {
             const archiveStyle = window.getComputedStyle(dragBucketArchive);

@@ -531,6 +531,18 @@ export async function loadSessionFromAirtable(sessionId) {
                 state.session.archivedItems = new Set(savedState.archivedItems || []);
                 state.session.completedItems = new Set(savedState.completedItems || []);
 
+                // DEBUG: Log restored archived/completed items
+                console.log('[SESSION-LOAD DEBUG] Restored archivedItems:', {
+                    rawData: savedState.archivedItems,
+                    setSize: state.session.archivedItems.size,
+                    items: Array.from(state.session.archivedItems)
+                });
+                console.log('[SESSION-LOAD DEBUG] Restored completedItems:', {
+                    rawData: savedState.completedItems,
+                    setSize: state.session.completedItems.size,
+                    items: Array.from(state.session.completedItems)
+                });
+
                 log('API', `Parsed session data: ${state.cart.items.size} ideas, ${state.cart.lockedItems.size} locked items, ${state.eventDetails.combined.size} details.`);
 
                 // Restore custom records from saved session data
@@ -732,6 +744,10 @@ export async function saveSessionToAirtable() {
         // Contains both AI-generated items and manually added items
         aiRecords: customRecordsToSave
     };
+
+    // DEBUG: Log what's being saved for archived/completed items
+    console.log('[SESSION-SAVE DEBUG] Saving archivedItems:', sessionData.archivedItems);
+    console.log('[SESSION-SAVE DEBUG] Saving completedItems:', sessionData.completedItems);
 
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `New Plan - ${new Date().toLocaleDateString()}`;
     const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);

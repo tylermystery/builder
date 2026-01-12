@@ -5687,6 +5687,12 @@ body.presentation-active #wtf-plans-panel-overlay {
 .item-emoji-indicator.has-reactions {
     background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
     box-shadow: 0 2px 8px rgba(255, 193, 7, 0.2);
+    cursor: help;
+}
+
+.item-emoji-indicator.has-reactions:hover {
+    box-shadow: 0 3px 12px rgba(255, 193, 7, 0.35);
+    transform: scale(1.05);
 }
 
 .item-emoji-indicator .emoji-indicator-emoji {
