@@ -1339,9 +1339,14 @@ function closeExpandedEmojiPicker() {
  * showing where each item lies on the sentiment scale
  */
 function createSentimentPopupHTML() {
+    console.log('[SentimentPopup DEBUG] createSentimentPopupHTML called');
+
     const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
     const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
     const combinedList = [...locked, ...favorites];
+
+    console.log('[SentimentPopup DEBUG] combinedList length:', combinedList.length);
+    console.log('[SentimentPopup DEBUG] state.session.reactions:', state.session.reactions);
 
     // Calculate scores for all items
     const itemsWithScores = combinedList.map(item => {
@@ -1635,8 +1640,13 @@ function showSentimentPopup() {
     // Close any existing popup
     closeSentimentPopup();
 
+    console.log('[SentimentPopup DEBUG] Starting showSentimentPopup');
+
     const popupHTML = createSentimentPopupHTML();
     const pickerZIndex = getModalZIndex('picker');
+
+    console.log('[SentimentPopup DEBUG] popupHTML length:', popupHTML.length);
+    console.log('[SentimentPopup DEBUG] z-index:', pickerZIndex);
 
     const popupContainer = document.createElement('div');
     popupContainer.className = 'sentiment-popup-overlay';
@@ -1661,6 +1671,237 @@ function showSentimentPopup() {
 
     document.body.appendChild(popupContainer);
 
+    // Apply inline styles to the modal element to ensure it displays correctly
+    // This addresses potential CSS loading/specificity issues
+    const modalElement = popupContainer.querySelector('.sentiment-popup-modal');
+    if (modalElement) {
+        console.log('[SentimentPopup DEBUG] Modal element found, applying inline styles');
+        modalElement.style.cssText = `
+            background: white;
+            border-radius: 16px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: sentimentPopupIn 0.3s ease-out;
+            flex-shrink: 0;
+        `;
+
+        // Apply inline styles to header
+        const headerElement = modalElement.querySelector('.sentiment-popup-header');
+        if (headerElement) {
+            headerElement.style.cssText = `
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 20px 24px;
+                border-bottom: 1px solid #eee;
+                position: sticky;
+                top: 0;
+                background: white;
+                border-radius: 16px 16px 0 0;
+                z-index: 1;
+            `;
+            console.log('[SentimentPopup DEBUG] Header styles applied');
+        }
+
+        // Apply inline styles to title
+        const titleElement = modalElement.querySelector('.sentiment-popup-title');
+        if (titleElement) {
+            titleElement.style.cssText = `
+                margin: 0;
+                font-size: 1.4em;
+                font-weight: 700;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+            `;
+        }
+
+        // Apply inline styles to close button
+        const closeBtn = modalElement.querySelector('.sentiment-popup-close');
+        if (closeBtn) {
+            closeBtn.style.cssText = `
+                width: 32px;
+                height: 32px;
+                border: none;
+                background: #f5f5f5;
+                border-radius: 50%;
+                font-size: 1.5em;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+                color: #666;
+            `;
+        }
+
+        // Apply inline styles to content area
+        const contentElement = modalElement.querySelector('.sentiment-popup-content');
+        if (contentElement) {
+            contentElement.style.cssText = `
+                padding: 24px;
+            `;
+            console.log('[SentimentPopup DEBUG] Content styles applied');
+        }
+
+        // Apply inline styles to empty state if present
+        const emptyElement = modalElement.querySelector('.sentiment-popup-empty');
+        if (emptyElement) {
+            emptyElement.style.cssText = `
+                text-align: center;
+                padding: 40px 20px;
+            `;
+            console.log('[SentimentPopup DEBUG] Empty state styles applied');
+        }
+
+        // Apply inline styles to key content sections
+        const bannerElement = modalElement.querySelector('.sentiment-overall-banner');
+        if (bannerElement) {
+            bannerElement.style.cssText = `
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                padding: 16px 20px;
+                border-radius: 12px;
+                margin-bottom: 20px;
+                background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.05) 100%);
+                border: 1px solid rgba(102, 126, 234, 0.2);
+            `;
+            const bannerEmoji = bannerElement.querySelector('.banner-emoji');
+            if (bannerEmoji) bannerEmoji.style.fontSize = '2.5em';
+            const bannerText = bannerElement.querySelector('.banner-text');
+            if (bannerText) bannerText.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
+            const bannerTitle = bannerElement.querySelector('.banner-title');
+            if (bannerTitle) bannerTitle.style.cssText = 'font-size: 1.2em; font-weight: 700; color: #333;';
+            const bannerDesc = bannerElement.querySelector('.banner-description');
+            if (bannerDesc) bannerDesc.style.cssText = 'font-size: 0.9em; color: #666;';
+            console.log('[SentimentPopup DEBUG] Banner styles applied');
+        }
+
+        // Stats row
+        const statsRow = modalElement.querySelector('.sentiment-stats-row');
+        if (statsRow) {
+            statsRow.style.cssText = 'display: flex; gap: 12px; margin-bottom: 24px;';
+            statsRow.querySelectorAll('.sentiment-stat-card').forEach(card => {
+                card.style.cssText = 'flex: 1; background: #f8f9fa; border-radius: 10px; padding: 16px; text-align: center; border: 1px solid #eee;';
+                const statValue = card.querySelector('.stat-value');
+                if (statValue) statValue.style.cssText = 'display: block; font-size: 1.8em; font-weight: 700; color: #333;';
+                const statLabel = card.querySelector('.stat-label');
+                if (statLabel) statLabel.style.cssText = 'font-size: 0.75em; color: #666; text-transform: uppercase; letter-spacing: 0.5px;';
+            });
+            console.log('[SentimentPopup DEBUG] Stats row styles applied');
+        }
+
+        // Section titles
+        modalElement.querySelectorAll('.section-title').forEach(title => {
+            title.style.cssText = 'margin: 0 0 12px; font-size: 1em; font-weight: 600; color: #333;';
+        });
+        modalElement.querySelectorAll('.section-hint').forEach(hint => {
+            hint.style.cssText = 'margin: -8px 0 12px; font-size: 0.8em; color: #999;';
+        });
+
+        // Distribution section
+        const distSection = modalElement.querySelector('.sentiment-distribution');
+        if (distSection) {
+            distSection.style.cssText = 'margin-bottom: 24px; padding: 16px; background: #f8f9fa; border-radius: 12px;';
+            const distBars = distSection.querySelector('.distribution-bars');
+            if (distBars) distBars.style.cssText = 'display: flex; flex-direction: column; gap: 10px;';
+            distSection.querySelectorAll('.distribution-item').forEach(item => {
+                item.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+                const icon = item.querySelector('.dist-icon');
+                if (icon) icon.style.cssText = 'font-size: 1.3em; width: 28px; text-align: center;';
+                const barContainer = item.querySelector('.dist-bar-container');
+                if (barContainer) barContainer.style.cssText = 'flex: 1; height: 24px; background: #e9ecef; border-radius: 12px; overflow: hidden;';
+                const bar = item.querySelector('.dist-bar');
+                if (bar) {
+                    let bgColor = '#6c757d';
+                    if (item.classList.contains('positive')) bgColor = 'linear-gradient(90deg, #28a745 0%, #5cb85c 100%)';
+                    else if (item.classList.contains('negative')) bgColor = 'linear-gradient(90deg, #dc3545 0%, #ff6b6b 100%)';
+                    bar.style.cssText = `height: 100%; border-radius: 12px; background: ${bgColor}; transition: width 0.5s ease;`;
+                }
+                const count = item.querySelector('.dist-count');
+                if (count) count.style.cssText = 'min-width: 24px; font-weight: 600; color: #333;';
+            });
+            console.log('[SentimentPopup DEBUG] Distribution styles applied');
+        }
+
+        // Graph section
+        const graphSection = modalElement.querySelector('.sentiment-graph-section');
+        if (graphSection) {
+            graphSection.style.cssText = 'margin-bottom: 24px;';
+            const graph = graphSection.querySelector('.sentiment-graph');
+            if (graph) {
+                graph.style.cssText = 'background: #f8f9fa; border-radius: 12px; padding: 16px; overflow: hidden;';
+                const graphScale = graph.querySelector('.graph-scale');
+                if (graphScale) {
+                    graphScale.style.cssText = 'display: flex; margin-bottom: 8px;';
+                    graphScale.querySelectorAll('.scale-zone').forEach(zone => {
+                        let bgColor = '#f8f9fa';
+                        if (zone.classList.contains('negative')) bgColor = 'rgba(220, 53, 69, 0.1)';
+                        else if (zone.classList.contains('neutral')) bgColor = 'rgba(108, 117, 125, 0.1)';
+                        else if (zone.classList.contains('positive')) bgColor = 'rgba(40, 167, 69, 0.1)';
+                        zone.style.cssText = `flex: 1; padding: 8px; text-align: center; font-size: 0.75em; background: ${bgColor}; border-radius: 6px; margin: 0 2px;`;
+                    });
+                }
+                const graphTrack = graph.querySelector('.graph-track');
+                if (graphTrack) {
+                    graphTrack.style.cssText = 'position: relative; height: 80px; background: linear-gradient(90deg, rgba(220, 53, 69, 0.05) 0%, rgba(220, 53, 69, 0.05) 30%, rgba(108, 117, 125, 0.05) 30%, rgba(108, 117, 125, 0.05) 70%, rgba(40, 167, 69, 0.05) 70%, rgba(40, 167, 69, 0.05) 100%); border-radius: 8px; margin-top: 12px;';
+                    const markers = graphTrack.querySelector('.track-markers');
+                    if (markers) {
+                        markers.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; height: 20px; display: flex; justify-content: space-between; padding: 0 4px;';
+                        markers.querySelectorAll('.marker').forEach(m => m.style.cssText = 'font-size: 0.65em; color: #999;');
+                    }
+                    const graphItems = graphTrack.querySelector('.graph-items');
+                    if (graphItems) {
+                        graphItems.style.cssText = 'position: absolute; top: 24px; left: 0; right: 0; bottom: 8px;';
+                        graphItems.querySelectorAll('.sentiment-graph-item').forEach(item => {
+                            let borderColor = '#6c757d';
+                            if (item.classList.contains('positive')) borderColor = '#28a745';
+                            else if (item.classList.contains('negative')) borderColor = '#dc3545';
+                            item.style.cssText += `; position: absolute; transform: translateX(-50%); background: white; border: 2px solid ${borderColor}; border-radius: 8px; padding: 4px 8px; font-size: 0.75em; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.1);`;
+                        });
+                    }
+                }
+            }
+            console.log('[SentimentPopup DEBUG] Graph section styles applied');
+        }
+
+        // Ranking section
+        const rankingSection = modalElement.querySelector('.sentiment-ranking-section');
+        if (rankingSection) {
+            rankingSection.style.cssText = 'margin-bottom: 24px;';
+            const rankingList = rankingSection.querySelector('.sentiment-ranking-list');
+            if (rankingList) {
+                rankingList.style.cssText = 'max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;';
+                rankingList.querySelectorAll('.sentiment-ranking-item').forEach(item => {
+                    let borderColor = '#eee';
+                    if (item.classList.contains('positive')) borderColor = '#28a745';
+                    else if (item.classList.contains('negative')) borderColor = '#dc3545';
+                    item.style.cssText = `display: flex; align-items: center; gap: 12px; padding: 12px; background: white; border-radius: 10px; border: 1px solid #eee; border-left: 3px solid ${borderColor}; cursor: pointer; transition: all 0.2s ease;`;
+                });
+            }
+            console.log('[SentimentPopup DEBUG] Ranking section styles applied');
+        }
+
+        // Info section
+        const infoSection = modalElement.querySelector('.sentiment-info');
+        if (infoSection) {
+            infoSection.style.cssText = 'display: flex; gap: 12px; padding: 16px; background: #f0f4ff; border-radius: 10px; border: 1px solid #d0d8ff;';
+            const infoIcon = infoSection.querySelector('.info-icon');
+            if (infoIcon) infoIcon.style.fontSize = '1.2em';
+            const infoText = infoSection.querySelector('.info-text');
+            if (infoText) infoText.style.cssText = 'font-size: 0.85em; color: #555; line-height: 1.5;';
+            console.log('[SentimentPopup DEBUG] Info section styles applied');
+        }
+    } else {
+        console.error('[SentimentPopup DEBUG] ERROR: Modal element .sentiment-popup-modal not found in popupContainer');
+        console.log('[SentimentPopup DEBUG] popupContainer innerHTML preview:', popupHTML.substring(0, 500));
+    }
+
     // Add click handler for the popup content
     popupContainer.addEventListener('click', handleSentimentPopupClick);
 
@@ -1681,6 +1922,7 @@ function showSentimentPopup() {
     document.addEventListener('keydown', escHandler);
 
     log('Presentation', 'Sentiment popup opened');
+    console.log('[SentimentPopup DEBUG] Popup opened and appended to body');
 }
 
 /**
