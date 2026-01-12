@@ -181,6 +181,10 @@ let dragBucketCompleted = null;
 let isDragging = false;
 let dragDelayTimer = null;
 const DRAG_DELAY_MS = 300; // Delay before drag buckets appear (ms)
+
+// Show/hide state for archived and completed items
+let showArchivedItems = true;
+let showCompletedItems = true;
 const PRESENTATION_SEARCH_DEBOUNCE = 300;
 
 // --- Presentation Background Engine ---
@@ -1560,7 +1564,7 @@ function generateItemSummary(record, itemInfo, type) {
 }
 
 async function renderItineraryItem(item, index) {
-    const { recordId, type } = item;
+    const { recordId, type, itemStatus = 'active' } = item;
     const record = state.records.all.find(r => r.id === recordId);
 
     if (!record) {
@@ -1590,8 +1594,21 @@ async function renderItineraryItem(item, index) {
     const cachedImages = itemImagesCache.get(recordId);
     const mediaCarouselHTML = createMediaCarousel(cachedImages.images, recordId);
 
-    const typeLabel = type === 'favorites' ? 'Idea' : 'Confirmed';
-    const typeClass = type === 'favorites' ? 'item-type-idea' : 'item-type-confirmed';
+    // Determine the display label based on itemStatus
+    let typeLabel = type === 'favorites' ? 'Idea' : 'Confirmed';
+    let typeClass = type === 'favorites' ? 'item-type-idea' : 'item-type-confirmed';
+
+    // Override label/class if item is archived or completed
+    if (itemStatus === 'archived') {
+        typeLabel = 'Archived';
+        typeClass = 'item-type-archived';
+    } else if (itemStatus === 'completed') {
+        typeLabel = 'Completed';
+        typeClass = 'item-type-completed';
+    }
+
+    // Add status class to section
+    const statusClass = itemStatus !== 'active' ? `item-status-${itemStatus}` : '';
 
     // Generate summary for collapsed state
     const itemSummary = generateItemSummary(record, itemInfo, type);
@@ -1622,7 +1639,7 @@ async function renderItineraryItem(item, index) {
 
     // Each item is wrapped in its own section container for independent layout
     return `
-        <section class="itinerary-section itinerary-item-section" data-section="item-${recordId}">
+        <section class="itinerary-section itinerary-item-section ${statusClass}" data-section="item-${recordId}" data-item-status="${itemStatus}">
             <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}" data-item-name="${escapeHtml(name)}">
                 <div class="item-accordion-header" data-record-id="${recordId}">
                     <div class="item-accordion-title-row">
@@ -1698,12 +1715,27 @@ async function renderAllItems() {
     const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
     let combinedList = [...locked, ...favorites]; // Confirmed items first, then ideas
 
-    // Filter out archived and completed items
+    // Get archived and completed items sets
     const archivedItems = state.session.archivedItems || new Set();
     const completedItems = state.session.completedItems || new Set();
-    combinedList = combinedList.filter(item =>
-        !archivedItems.has(item.recordId) && !completedItems.has(item.recordId)
-    );
+
+    // Add status to each item (active, archived, or completed)
+    combinedList = combinedList.map(item => {
+        let itemStatus = 'active';
+        if (archivedItems.has(item.recordId)) {
+            itemStatus = 'archived';
+        } else if (completedItems.has(item.recordId)) {
+            itemStatus = 'completed';
+        }
+        return { ...item, itemStatus };
+    });
+
+    // Filter based on show/hide toggles
+    combinedList = combinedList.filter(item => {
+        if (item.itemStatus === 'archived' && !showArchivedItems) return false;
+        if (item.itemStatus === 'completed' && !showCompletedItems) return false;
+        return true;
+    });
 
     // Apply custom ordering if available
     const customOrder = state.session.planItemOrder || [];
@@ -1715,6 +1747,13 @@ async function renderAllItems() {
             return orderA - orderB;
         });
     }
+
+    // Count archived and completed items for toggle visibility
+    const archivedCount = archivedItems.size;
+    const completedCount = completedItems.size;
+
+    // Update toggle buttons visibility
+    updateStatusToggles(archivedCount, completedCount);
 
     if (combinedList.length === 0) {
         // Show recommendations when no items exist
@@ -1957,13 +1996,8 @@ async function archiveItem(recordId) {
         state.session.archivedItems = new Set();
     }
 
-    // Add to archived items
+    // Add to archived items (item stays in its position, just changes status)
     state.session.archivedItems.add(recordId);
-
-    // Remove from custom order if present
-    if (state.session.planItemOrder) {
-        state.session.planItemOrder = state.session.planItemOrder.filter(id => id !== recordId);
-    }
 
     // Get item name for toast
     const record = state.records.all.find(r => r.id === recordId);
@@ -1992,13 +2026,8 @@ async function completeItem(recordId) {
         state.session.completedItems = new Set();
     }
 
-    // Add to completed items
+    // Add to completed items (item stays in its position, just changes status)
     state.session.completedItems.add(recordId);
-
-    // Remove from custom order if present
-    if (state.session.planItemOrder) {
-        state.session.planItemOrder = state.session.planItemOrder.filter(id => id !== recordId);
-    }
 
     // Get item name for toast
     const record = state.records.all.find(r => r.id === recordId);
@@ -2016,6 +2045,50 @@ async function completeItem(recordId) {
     triggerSave();
 
     log('Presentation', `Item ${recordId} marked completed`);
+}
+
+// Update the status toggle buttons visibility and state
+function updateStatusToggles(archivedCount, completedCount) {
+    const archivedToggle = document.getElementById('presentation-toggle-archived');
+    const completedToggle = document.getElementById('presentation-toggle-completed');
+
+    // Show/hide archived toggle based on whether there are archived items
+    if (archivedToggle) {
+        if (archivedCount > 0) {
+            archivedToggle.style.display = 'inline-flex';
+            archivedToggle.classList.toggle('active', showArchivedItems);
+            const countEl = archivedToggle.querySelector('.toggle-count');
+            if (countEl) countEl.textContent = archivedCount;
+        } else {
+            archivedToggle.style.display = 'none';
+        }
+    }
+
+    // Show/hide completed toggle based on whether there are completed items
+    if (completedToggle) {
+        if (completedCount > 0) {
+            completedToggle.style.display = 'inline-flex';
+            completedToggle.classList.toggle('active', showCompletedItems);
+            const countEl = completedToggle.querySelector('.toggle-count');
+            if (countEl) countEl.textContent = completedCount;
+        } else {
+            completedToggle.style.display = 'none';
+        }
+    }
+}
+
+// Toggle archived items visibility
+async function toggleArchivedItems() {
+    showArchivedItems = !showArchivedItems;
+    await renderAllItems();
+    log('Presentation', `Archived items ${showArchivedItems ? 'shown' : 'hidden'}`);
+}
+
+// Toggle completed items visibility
+async function toggleCompletedItems() {
+    showCompletedItems = !showCompletedItems;
+    await renderAllItems();
+    log('Presentation', `Completed items ${showCompletedItems ? 'shown' : 'hidden'}`);
 }
 
 // Update item order in state after drag reorder
@@ -6617,6 +6690,18 @@ function setupSearchModalEventListeners() {
     // Toggle all button collapses/expands all item accordions
     if (presentationToggleAllBtn) {
         presentationToggleAllBtn.addEventListener('click', toggleAllItemAccordions);
+    }
+
+    // Toggle archived items button
+    const archivedToggle = document.getElementById('presentation-toggle-archived');
+    if (archivedToggle) {
+        archivedToggle.addEventListener('click', toggleArchivedItems);
+    }
+
+    // Toggle completed items button
+    const completedToggle = document.getElementById('presentation-toggle-completed');
+    if (completedToggle) {
+        completedToggle.addEventListener('click', toggleCompletedItems);
     }
 
     // Close button

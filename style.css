@@ -4352,6 +4352,16 @@ body.presentation-active #wtf-plans-panel-overlay {
     color: #155724;
 }
 
+.item-type-archived {
+    background: #868e96;
+    color: #fff;
+}
+
+.item-type-completed {
+    background: #28a745;
+    color: #fff;
+}
+
 .itinerary-item-price-qty {
     display: flex;
     align-items: center;
@@ -5428,6 +5438,7 @@ body.presentation-active #wtf-plans-panel-overlay {
     align-items: center;
     gap: 12px;
     padding: 15px 20px;
+    flex-wrap: wrap;
 }
 
 /* Collapse/Expand All Button */
@@ -5465,6 +5476,53 @@ body.presentation-active #wtf-plans-panel-overlay {
     font-weight: 500;
 }
 
+/* Status Toggle Buttons (Archived/Completed) */
+.presentation-status-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    background: rgba(108, 117, 125, 0.08);
+    border: 1px solid rgba(108, 117, 125, 0.2);
+    border-radius: 16px;
+    font-size: 0.85em;
+    color: #6c757d;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.presentation-status-toggle:hover {
+    background: rgba(108, 117, 125, 0.15);
+    border-color: rgba(108, 117, 125, 0.4);
+}
+
+.presentation-status-toggle.active {
+    background: rgba(108, 117, 125, 0.15);
+    border-color: rgba(108, 117, 125, 0.5);
+}
+
+.presentation-status-toggle:not(.active) {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+.presentation-status-toggle .toggle-icon {
+    font-size: 0.9em;
+}
+
+.presentation-status-toggle .toggle-label {
+    font-weight: 500;
+}
+
+.presentation-status-toggle .toggle-count {
+    background: rgba(0, 0, 0, 0.1);
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
 /* Individual Item Section Container - each plan item gets its own container */
 .itinerary-item-section {
     padding: 0;
@@ -5485,6 +5543,39 @@ body.presentation-active #wtf-plans-panel-overlay {
     border-radius: 0;
     box-shadow: none;
     background: transparent;
+}
+
+/* Archived item styling - grayscale effect */
+.itinerary-item-section.item-status-archived {
+    filter: grayscale(100%);
+    opacity: 0.7;
+}
+
+.itinerary-item-section.item-status-archived:hover {
+    filter: grayscale(80%);
+    opacity: 0.85;
+}
+
+/* Completed item styling - strikethrough effect */
+.itinerary-item-section.item-status-completed .item-accordion-title {
+    text-decoration: line-through;
+    text-decoration-color: rgba(40, 167, 69, 0.6);
+    text-decoration-thickness: 2px;
+}
+
+.itinerary-item-section.item-status-completed .item-accordion-summary {
+    text-decoration: line-through;
+    text-decoration-color: rgba(40, 167, 69, 0.4);
+    text-decoration-thickness: 1px;
+    opacity: 0.7;
+}
+
+.itinerary-item-section.item-status-completed {
+    opacity: 0.85;
+}
+
+.itinerary-item-section.item-status-completed:hover {
+    opacity: 1;
 }
 
 /* Drag-and-Drop Styles for Presentation View */
