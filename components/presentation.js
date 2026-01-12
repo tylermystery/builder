@@ -160,6 +160,7 @@ let presentationWhosHereList = null;
 
 // Search modal elements
 let presentationAddBtn = null;
+let presentationToggleAllBtn = null;
 let presentationSearchModal = null;
 let presentationSearchClose = null;
 let presentationSearchInput = null;
@@ -348,6 +349,7 @@ function ensureDOMElements() {
 
     // Search modal elements
     presentationAddBtn = document.getElementById('presentation-add-btn');
+    presentationToggleAllBtn = document.getElementById('presentation-toggle-all-btn');
     presentationSearchModal = document.getElementById('presentation-search-modal');
     presentationSearchClose = document.getElementById('presentation-search-close');
     presentationSearchInput = document.getElementById('presentation-search-input');
@@ -3844,6 +3846,44 @@ function toggleItemAccordion(itemElement) {
     log('Presentation', `Item accordion ${isExpanded ? 'collapsed' : 'expanded'} for record ${itemElement.dataset.recordId}`);
 }
 
+// Track the collapsed/expanded state for "toggle all" functionality
+let allItemsCollapsed = false;
+
+// Toggle all item accordions (collapse/expand all)
+function toggleAllItemAccordions() {
+    const itemAccordions = modal?.querySelectorAll('.item-accordion');
+    if (!itemAccordions || itemAccordions.length === 0) return;
+
+    // Determine new state: if currently "all collapsed", expand all; otherwise collapse all
+    const shouldExpand = allItemsCollapsed;
+
+    itemAccordions.forEach(item => {
+        if (shouldExpand) {
+            item.classList.add('expanded');
+        } else {
+            item.classList.remove('expanded');
+        }
+    });
+
+    // Update the state
+    allItemsCollapsed = !shouldExpand;
+
+    // Update button text and icon
+    if (presentationToggleAllBtn) {
+        const textEl = presentationToggleAllBtn.querySelector('.toggle-all-text');
+        if (textEl) {
+            textEl.textContent = allItemsCollapsed ? 'Expand All' : 'Collapse All';
+        }
+        if (allItemsCollapsed) {
+            presentationToggleAllBtn.classList.add('collapsed');
+        } else {
+            presentationToggleAllBtn.classList.remove('collapsed');
+        }
+    }
+
+    log('Presentation', `All item accordions ${shouldExpand ? 'expanded' : 'collapsed'}`);
+}
+
 // Handle item accordion header clicks
 function handleItemAccordionClick(e) {
     // Check if clicking on the item accordion header specifically
@@ -3938,6 +3978,16 @@ function initializeAccordions() {
     // Generate all summaries (no longer includes hosts-chat summary)
     generateHeaderSummary();
     generateItemsSummary();
+
+    // Reset the toggle all button state (all items start expanded)
+    allItemsCollapsed = false;
+    if (presentationToggleAllBtn) {
+        const textEl = presentationToggleAllBtn.querySelector('.toggle-all-text');
+        if (textEl) {
+            textEl.textContent = 'Collapse All';
+        }
+        presentationToggleAllBtn.classList.remove('collapsed');
+    }
 
     // console.log('[Accordion DEBUG] initializeAccordions completed');
 }
@@ -6247,6 +6297,11 @@ function setupSearchModalEventListeners() {
     // Add button opens search modal
     if (presentationAddBtn) {
         presentationAddBtn.addEventListener('click', openSearchModal);
+    }
+
+    // Toggle all button collapses/expands all item accordions
+    if (presentationToggleAllBtn) {
+        presentationToggleAllBtn.addEventListener('click', toggleAllItemAccordions);
     }
 
     // Close button

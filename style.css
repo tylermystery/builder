@@ -5426,7 +5426,43 @@ body.presentation-active #wtf-plans-panel-overlay {
     display: flex;
     justify-content: center;
     align-items: center;
+    gap: 12px;
     padding: 15px 20px;
+}
+
+/* Collapse/Expand All Button */
+.presentation-toggle-all-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: rgba(108, 117, 125, 0.1);
+    border: 1px solid rgba(108, 117, 125, 0.3);
+    border-radius: 20px;
+    font-size: 0.95em;
+    color: #6c757d;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
+    white-space: nowrap;
+}
+
+.presentation-toggle-all-btn:hover {
+    background: rgba(108, 117, 125, 0.2);
+    border-color: rgba(108, 117, 125, 0.5);
+    transform: translateY(-1px);
+}
+
+.presentation-toggle-all-btn .toggle-all-icon {
+    font-size: 0.8em;
+    transition: transform 0.3s ease;
+}
+
+.presentation-toggle-all-btn.collapsed .toggle-all-icon {
+    transform: rotate(-90deg);
+}
+
+.presentation-toggle-all-btn .toggle-all-text {
+    font-weight: 500;
 }
 
 /* Individual Item Section Container - each plan item gets its own container */
