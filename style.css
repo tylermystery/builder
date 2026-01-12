@@ -5616,25 +5616,25 @@ body.presentation-active #wtf-plans-panel-overlay {
     backdrop-filter: blur(20px);
     pointer-events: auto;
     transition: all 0.3s ease, transform 0.2s ease;
-    /* Grayed out by default */
-    opacity: 0.35;
-    filter: grayscale(100%);
+    /* Dormant state: more visible than before (was 0.35, now 0.6) */
+    opacity: 0.6;
+    filter: grayscale(50%);
 }
 
-/* Archive bucket - gray by default */
+/* Archive bucket - subtle gray/blue tint in dormant state */
 .drag-bucket-archive {
     left: 16px;
-    background: linear-gradient(135deg, rgba(108, 117, 125, 0.9), rgba(73, 80, 87, 0.9));
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    background: linear-gradient(135deg, rgba(108, 117, 145, 0.85), rgba(73, 80, 107, 0.85));
+    border: 3px solid rgba(100, 150, 200, 0.8);
+    box-shadow: 0 4px 20px rgba(100, 150, 200, 0.4);
 }
 
-/* Completed bucket - gray by default (green shows when active) */
+/* Completed bucket - subtle gray/green tint in dormant state */
 .drag-bucket-completed {
     right: 16px;
-    background: linear-gradient(135deg, rgba(108, 117, 125, 0.9), rgba(73, 80, 87, 0.9));
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    background: linear-gradient(135deg, rgba(108, 167, 125, 0.85), rgba(73, 130, 87, 0.85));
+    border: 3px solid rgba(100, 200, 150, 0.8);
+    box-shadow: 0 4px 20px rgba(100, 200, 150, 0.4);
 }
 
 /* Active drag state - colorize buckets */
@@ -5683,6 +5683,27 @@ body.presentation-active #wtf-plans-panel-overlay {
 .drag-bucket-completed.drag-over {
     background: linear-gradient(135deg, rgba(40, 167, 69, 1), rgba(25, 135, 84, 1));
     border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* Mobile-friendly bucket sizing */
+@media (max-width: 768px) {
+    .drag-bucket {
+        width: 70px;
+        height: 100px;
+        gap: 4px;
+    }
+    .drag-bucket-archive {
+        left: 8px;
+    }
+    .drag-bucket-completed {
+        right: 8px;
+    }
+    .drag-bucket .bucket-icon {
+        font-size: 1.4em;
+    }
+    .drag-bucket .bucket-label {
+        font-size: 0.7em;
+    }
 }
 
 /* Sortable ghost styling */

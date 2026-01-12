@@ -6451,6 +6451,38 @@ export async function showPresentationView(listType, startRecordId = null) {
     if (dragBucketsEl) {
         console.log('[Presentation DEBUG] Showing drag buckets (grayed out)');
         dragBucketsEl.classList.add('buckets-shown');
+        // Debug: Log the bucket element state after adding class
+        const computedStyle = window.getComputedStyle(dragBucketsEl);
+        console.log('[Presentation DEBUG] Bucket container after adding buckets-shown:', {
+            classList: Array.from(dragBucketsEl.classList),
+            display: computedStyle.display,
+            visibility: computedStyle.visibility,
+            opacity: computedStyle.opacity,
+            zIndex: computedStyle.zIndex,
+            position: computedStyle.position,
+            boundingRect: dragBucketsEl.getBoundingClientRect()
+        });
+        // Debug: Check individual buckets
+        if (dragBucketArchive) {
+            const archiveStyle = window.getComputedStyle(dragBucketArchive);
+            console.log('[Presentation DEBUG] Archive bucket:', {
+                display: archiveStyle.display,
+                opacity: archiveStyle.opacity,
+                left: archiveStyle.left,
+                position: archiveStyle.position,
+                boundingRect: dragBucketArchive.getBoundingClientRect()
+            });
+        }
+        if (dragBucketCompleted) {
+            const completedStyle = window.getComputedStyle(dragBucketCompleted);
+            console.log('[Presentation DEBUG] Completed bucket:', {
+                display: completedStyle.display,
+                opacity: completedStyle.opacity,
+                right: completedStyle.right,
+                position: completedStyle.position,
+                boundingRect: dragBucketCompleted.getBoundingClientRect()
+            });
+        }
     } else {
         console.log('[Presentation DEBUG] dragBucketsEl not found when opening modal');
     }
