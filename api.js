@@ -2198,11 +2198,16 @@ export async function postComponentComment(sessionId, componentType, componentId
     }
 
     if (componentType === COMPONENT_TYPES.ITEM && componentId && componentId.startsWith('rec')) {
-        // Item comment: link to both session AND item
+        // Item comment: link to both session AND item via Item Link field
         // Having both SessionID and Item Link distinguishes from regular item chat (which has no SessionID)
         fields['Item Link'] = [componentId];
         fields.Content = contentValue;
         console.log('[ComponentComment DEBUG] Creating item comment with SessionID + Item Link');
+    } else if (componentType === COMPONENT_TYPES.ITEM && componentId) {
+        // Manual item comment (componentId doesn't start with 'rec', e.g., 'manual-presentation-xxx')
+        // Use content prefix with the specific componentId to ensure unique identification
+        fields.Content = `[PLAN_COMMENT:item:${componentId}] ${contentValue}`;
+        console.log('[ComponentComment DEBUG] Creating manual item comment with content prefix + componentId:', componentId);
     } else {
         // Header/general comment: prefix content to identify as plan comment
         fields.Content = `[PLAN_COMMENT:${componentType}] ${contentValue}`;
@@ -2297,6 +2302,10 @@ export async function fetchComponentComments(sessionId, componentType, component
         formula = `AND(FIND('${sessionId}', {SessionID_Rollup}), {Item Link} != '')`;
         needsClientFilter = true;
         console.log('[ComponentComment DEBUG] Fetching item comments with SessionID + Item Link (will filter client-side for componentId)');
+    } else if (componentType === COMPONENT_TYPES.ITEM && componentId) {
+        // Manual item comments: filter by SessionID AND specific componentId in content prefix
+        formula = `AND(FIND('${sessionId}', {SessionID_Rollup}), FIND('[PLAN_COMMENT:item:${componentId}]', {Content}))`;
+        console.log('[ComponentComment DEBUG] Fetching manual item comments with content prefix + componentId:', componentId);
     } else {
         // For header/general comments: filter by SessionID AND content prefix
         formula = `AND(FIND('${sessionId}', {SessionID_Rollup}), FIND('[PLAN_COMMENT:${componentType}]', {Content}))`;

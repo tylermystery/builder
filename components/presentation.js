@@ -3964,6 +3964,61 @@ function handleThumbnailClick(e) {
     }
 }
 
+/**
+ * Add an image to an item's image carousel.
+ * This is called when a user uploads an image via a comment.
+ * @param {string} itemId - The item/component ID
+ * @param {string} imageUrl - The URL of the image to add
+ */
+function addImageToItemCarousel(itemId, imageUrl) {
+    console.log('[CommentImage DEBUG] addImageToItemCarousel called for:', itemId, 'url:', imageUrl?.substring(0, 50) + '...');
+
+    if (!itemId || !imageUrl) {
+        console.log('[CommentImage DEBUG] Missing itemId or imageUrl');
+        return;
+    }
+
+    // Get or initialize the image cache for this item
+    if (!itemImagesCache.has(itemId)) {
+        // Initialize cache if it doesn't exist (e.g., for manual items with no initial images)
+        itemImagesCache.set(itemId, { images: [], currentIndex: 0 });
+        console.log('[CommentImage DEBUG] Initialized image cache for item:', itemId);
+    }
+
+    const cached = itemImagesCache.get(itemId);
+
+    // Check if image already exists in the cache (avoid duplicates)
+    if (cached.images.includes(imageUrl)) {
+        console.log('[CommentImage DEBUG] Image already in carousel, skipping');
+        return;
+    }
+
+    // Add the image to the cache
+    cached.images.push(imageUrl);
+    console.log('[CommentImage DEBUG] Added image to cache. Total images:', cached.images.length);
+
+    // Update the carousel in the DOM
+    const carousel = document.querySelector(`.itinerary-media-carousel[data-record-id="${itemId}"]`);
+    const itemContainer = document.querySelector(`.itinerary-item[data-record-id="${itemId}"]`);
+
+    if (carousel) {
+        // Re-render the carousel with the new image
+        const newCarouselHTML = createMediaCarousel(cached.images, itemId);
+        carousel.outerHTML = newCarouselHTML;
+        console.log('[CommentImage DEBUG] Updated carousel with new image');
+    } else if (itemContainer) {
+        // If there was no carousel (e.g., item had no images), create one
+        const noImagesDiv = itemContainer.querySelector('.itinerary-item-no-images');
+        if (noImagesDiv) {
+            const newCarouselHTML = createMediaCarousel(cached.images, itemId);
+            noImagesDiv.outerHTML = newCarouselHTML;
+            console.log('[CommentImage DEBUG] Created new carousel replacing "no images" placeholder');
+        }
+    } else {
+        console.log('[CommentImage DEBUG] No carousel element found for item:', itemId);
+    }
+}
+
 function handleReactionClick(e) {
     console.log('[ReactionClick DEBUG] handleReactionClick called, target:', e.target);
     const button = e.target.closest('.reaction-btn');
@@ -4356,6 +4411,10 @@ async function loadComponentComments(componentId) {
         // Cache comments
         componentCommentsCache.set(cacheKey, comments);
 
+        // Extract images from comments and add to carousel
+        // This ensures images from previously posted comments appear in the item's carousel
+        extractAndAddCommentImages(componentId, comments);
+
         // Render comments
         renderComponentComments(componentId, comments);
 
@@ -4367,6 +4426,44 @@ async function loadComponentComments(componentId) {
         console.log('[ComponentComment DEBUG] ❌ Error loading comments:', error);
         log('Presentation', `Error loading comments: ${error.message}`);
         commentsList.innerHTML = '<div class="comments-error">Failed to load comments</div>';
+    }
+}
+
+/**
+ * Extract images from comments and add them to the item's carousel.
+ * This ensures images uploaded via comments appear in the item's image gallery.
+ * @param {string} componentId - The item/component ID
+ * @param {Array} comments - Array of comment records
+ */
+function extractAndAddCommentImages(componentId, comments) {
+    if (!comments || comments.length === 0) return;
+
+    let imagesAdded = 0;
+
+    comments.forEach(comment => {
+        const content = comment.fields?.Content || '';
+
+        // Parse attachments from Content field (embedded as [ATTACHMENTS:...])
+        const attachmentMatch = content.match(/\[ATTACHMENTS:(.*?)\]$/);
+        if (attachmentMatch) {
+            try {
+                const attachments = JSON.parse(attachmentMatch[1]);
+                if (Array.isArray(attachments)) {
+                    attachments.forEach(attachment => {
+                        if (attachment.type === 'image' && attachment.url) {
+                            addImageToItemCarousel(componentId, attachment.url);
+                            imagesAdded++;
+                        }
+                    });
+                }
+            } catch (e) {
+                console.warn('[ComponentComment] Failed to parse attachments for carousel:', e);
+            }
+        }
+    });
+
+    if (imagesAdded > 0) {
+        console.log('[ComponentComment DEBUG] Extracted and added', imagesAdded, 'images from comments to carousel for:', componentId);
     }
 }
 
@@ -4461,8 +4558,9 @@ function renderComponentComments(componentId, comments) {
         let displayContent = fields.Content || '';
         let attachments = [];
 
-        // Strip out [PLAN_COMMENT:xxx] prefix from display content
-        displayContent = displayContent.replace(/^\[PLAN_COMMENT:\w+\]\s*/i, '');
+        // Strip out [PLAN_COMMENT:xxx] or [PLAN_COMMENT:item:componentId] prefix from display content
+        // The pattern now handles both formats: [PLAN_COMMENT:type] and [PLAN_COMMENT:item:manual-presentation-xxx]
+        displayContent = displayContent.replace(/^\[PLAN_COMMENT:[^\]]+\]\s*/i, '');
 
         // Check for embedded attachments in content
         const attachmentMatch = displayContent.match(/\[ATTACHMENTS:(.*?)\]$/);
@@ -4692,6 +4790,15 @@ async function submitComponentComment(componentId) {
 
             // Clear image preview if an image was attached
             clearCommentImagePreview(componentId);
+
+            // If an image was attached, add it to the item's image carousel
+            if (attachments.length > 0) {
+                attachments.forEach(attachment => {
+                    if (attachment.type === 'image' && attachment.url) {
+                        addImageToItemCarousel(componentId, attachment.url);
+                    }
+                });
+            }
 
             // Clear reply state if this was a reply
             if (isReply) {
@@ -5710,15 +5817,39 @@ async function loadAllCommentCounts() {
         const allComments = await api.fetchAllComponentComments(sessionId);
         console.log('[ComponentComment DEBUG] fetchAllComponentComments returned:', allComments?.length, 'comments');
 
-        // Group by componentId (from Item Link field) and count
+        // Group by componentId and count
+        // Also collect comments by component for image extraction
         const countsByComponent = new Map();
+        const commentsByComponent = new Map();
+
         allComments.forEach(comment => {
-            // Item Link is an array of record IDs
+            let componentId = null;
+
+            // Check for Item Link field (regular items starting with 'rec')
             const itemLinks = comment.fields['Item Link'];
             if (itemLinks && itemLinks.length > 0) {
-                const componentId = itemLinks[0]; // Get the first linked item ID
+                componentId = itemLinks[0]; // Get the first linked item ID
+            }
+
+            // Check for manual items via content prefix [PLAN_COMMENT:item:componentId]
+            if (!componentId) {
+                const content = comment.fields?.Content || '';
+                const manualItemMatch = content.match(/^\[PLAN_COMMENT:item:(manual-presentation-\d+)\]/);
+                if (manualItemMatch) {
+                    componentId = manualItemMatch[1];
+                }
+            }
+
+            if (componentId) {
+                // Update count
                 const current = countsByComponent.get(componentId) || 0;
                 countsByComponent.set(componentId, current + 1);
+
+                // Collect comments for image extraction
+                if (!commentsByComponent.has(componentId)) {
+                    commentsByComponent.set(componentId, []);
+                }
+                commentsByComponent.get(componentId).push(comment);
             }
         });
 
@@ -5727,6 +5858,11 @@ async function loadAllCommentCounts() {
         // Update all count badges
         countsByComponent.forEach((count, componentId) => {
             updateCommentCount(componentId, count);
+        });
+
+        // Extract images from comments and add to carousels
+        commentsByComponent.forEach((comments, componentId) => {
+            extractAndAddCommentImages(componentId, comments);
         });
 
         console.log('[ComponentComment DEBUG] ✅ Updated badges for', countsByComponent.size, 'components');
