@@ -2087,10 +2087,43 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     } catch (e) {
         console.warn('Failed to fetch images for record:', record.id, e);
     }
+
+    // Merge comment-uploaded images from presentation view's itemImagesCache
+    // These are images uploaded via comments that aren't stored in the record
+    if (typeof window.itemImagesCache !== 'undefined' && window.itemImagesCache.has(record.id)) {
+        const cachedImages = window.itemImagesCache.get(record.id);
+        if (cachedImages && cachedImages.images && Array.isArray(cachedImages.images)) {
+            // Filter out duplicates and add comment images
+            const existingUrls = new Set(imageUrls.map(url => url.toLowerCase()));
+            const commentImages = cachedImages.images.filter(url => !existingUrls.has(url.toLowerCase()));
+            if (commentImages.length > 0) {
+                console.log('[Modal DEBUG] Adding comment-uploaded images:', {
+                    recordId: record.id,
+                    commentImageCount: commentImages.length,
+                    existingImageCount: imageUrls.length
+                });
+                imageUrls = [...imageUrls, ...commentImages];
+            }
+        }
+    }
+
     if (imageUrls.length === 0) {
         imageUrls = [ui.getPlaceholderImage([])];
     }
-    
+
+    // Sync imageUrls back to itemImagesCache so the presentation view stays consistent
+    // This ensures both views have the same images in the same order
+    if (typeof window.itemImagesCache !== 'undefined') {
+        const cachedImages = window.itemImagesCache.get(record.id);
+        if (cachedImages) {
+            // Update the cache with the merged image list
+            cachedImages.images = [...imageUrls];
+        } else {
+            // Initialize the cache if it doesn't exist
+            window.itemImagesCache.set(record.id, { images: [...imageUrls], currentIndex: 0 });
+        }
+    }
+
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
 
@@ -2920,6 +2953,22 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             const cached = window.itemImagesCache?.get(record.id);
             if (cached) {
                 cached.currentIndex = newIndex;
+
+                // Also update the visible carousel in presentation view
+                const carousel = document.querySelector(`.itinerary-media-carousel[data-record-id="${record.id}"]`);
+                if (carousel && cached.images && cached.images[newIndex]) {
+                    // Update main image
+                    const mainImage = carousel.querySelector('.itinerary-main-image');
+                    if (mainImage) {
+                        mainImage.style.backgroundImage = `url('${cached.images[newIndex]}')`;
+                    }
+                    // Update active thumbnail
+                    const thumbnails = carousel.querySelectorAll('.itinerary-thumbnail');
+                    thumbnails.forEach((thumb, idx) => {
+                        thumb.classList.toggle('active', idx === newIndex);
+                    });
+                    log('Modal', `Updated presentation carousel to show image ${newIndex}`);
+                }
             }
         }
 
@@ -4494,6 +4543,38 @@ export function hideDetailModal() {
     console.log('[hideDetailModal] Called.');
     // Reset the rendering guard when modal is closed
     isModalRendering = false;
+
+    // Refresh presentation carousel if images may have been updated
+    const recordId = modalOverlay?.dataset?.recordId;
+    if (recordId && typeof window.itemImagesCache !== 'undefined' && window.itemImagesCache.has(recordId)) {
+        const cached = window.itemImagesCache.get(recordId);
+        const carousel = document.querySelector(`.itinerary-media-carousel[data-record-id="${recordId}"]`);
+        if (carousel && cached && cached.images && cached.images.length > 0) {
+            // Check if the carousel needs re-rendering (e.g., new images were added)
+            const currentThumbnailCount = carousel.querySelectorAll('.itinerary-thumbnail').length;
+            if (currentThumbnailCount !== cached.images.length || cached.images.length === 1) {
+                // Re-render the carousel with updated images
+                const currentIndex = cached.currentIndex || 0;
+                const thumbnails = cached.images.map((url, index) =>
+                    `<div class="itinerary-thumbnail ${index === currentIndex ? 'active' : ''}"
+                          data-record-id="${recordId}"
+                          data-index="${index}"
+                          style="background-image: url('${url}')"></div>`
+                ).join('');
+
+                const newCarouselHTML = `
+                    <div class="itinerary-media-carousel" data-record-id="${recordId}">
+                        <div class="itinerary-main-image" style="background-image: url('${cached.images[currentIndex]}')"></div>
+                        ${cached.images.length > 1 ? `
+                            <div class="itinerary-thumbnails">${thumbnails}</div>
+                        ` : ''}
+                    </div>
+                `;
+                carousel.outerHTML = newCarouselHTML;
+                console.log('[Modal DEBUG] Re-rendered presentation carousel with updated images');
+            }
+        }
+    }
 
     const closeBtn = document.getElementById('modal-close-btn');
     if (closeBtn) {
