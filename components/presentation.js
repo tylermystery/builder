@@ -1330,6 +1330,413 @@ function closeExpandedEmojiPicker() {
     }
 }
 
+// ============================================
+// SENTIMENT ANALYSIS POPUP
+// ============================================
+
+/**
+ * Generate HTML for the sentiment analysis popup with a sentiment graph
+ * showing where each item lies on the sentiment scale
+ */
+function createSentimentPopupHTML() {
+    const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
+    const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
+    const combinedList = [...locked, ...favorites];
+
+    // Calculate scores for all items
+    const itemsWithScores = combinedList.map(item => {
+        const record = state.records.all.find(r => r.id === item.recordId);
+        const name = record?.fields.Name || 'Unknown Item';
+        const reactions = state.session.reactions.get(item.recordId);
+        const reactionCount = reactions instanceof Map ? reactions.size : 0;
+        const totalScore = getItemReactionScore(item.recordId);
+
+        // Calculate average score per reaction for positioning on scale
+        const avgScore = reactionCount > 0 ? totalScore / reactionCount : 0;
+
+        // Get emoji breakdown
+        const emojiBreakdown = {};
+        if (reactions instanceof Map) {
+            reactions.forEach((emoji) => {
+                emojiBreakdown[emoji] = (emojiBreakdown[emoji] || 0) + 1;
+            });
+        }
+
+        return {
+            recordId: item.recordId,
+            type: item.type,
+            name,
+            totalScore,
+            avgScore,
+            reactionCount,
+            emojiBreakdown,
+            summaryEmoji: getItemSummaryEmoji(item.recordId)
+        };
+    });
+
+    // Filter to only items with reactions for the graph
+    const itemsWithReactions = itemsWithScores.filter(item => item.reactionCount > 0);
+
+    // Calculate totals
+    const totalReactions = itemsWithScores.reduce((sum, item) => sum + item.reactionCount, 0);
+    const totalScore = itemsWithScores.reduce((sum, item) => sum + item.totalScore, 0);
+
+    // Determine overall sentiment
+    let overallSentiment = 'neutral';
+    let sentimentEmoji = '😐';
+    let sentimentText = 'Mixed reactions';
+    let sentimentDescription = 'The group has varied opinions about the plan items.';
+
+    if (totalScore > 8) {
+        overallSentiment = 'very-positive';
+        sentimentEmoji = '🎉';
+        sentimentText = 'Very Enthusiastic!';
+        sentimentDescription = 'Everyone is excited about this plan! High positive sentiment across items.';
+    } else if (totalScore > 3) {
+        overallSentiment = 'positive';
+        sentimentEmoji = '😊';
+        sentimentText = 'Generally Positive';
+        sentimentDescription = 'The group is happy with most of the plan items.';
+    } else if (totalScore < -8) {
+        overallSentiment = 'very-negative';
+        sentimentEmoji = '😟';
+        sentimentText = 'Needs Attention';
+        sentimentDescription = 'Multiple items have concerns. Consider reviewing the plan together.';
+    } else if (totalScore < -3) {
+        overallSentiment = 'negative';
+        sentimentEmoji = '😕';
+        sentimentText = 'Some Concerns';
+        sentimentDescription = 'A few items might need discussion or alternatives.';
+    }
+
+    // Count sentiment categories
+    const positiveItems = itemsWithReactions.filter(item => item.avgScore > 0.5).length;
+    const negativeItems = itemsWithReactions.filter(item => item.avgScore < -0.5).length;
+    const neutralItems = itemsWithReactions.filter(item => item.avgScore >= -0.5 && item.avgScore <= 0.5).length;
+
+    // Generate graph items HTML - position items on a -5 to +5 scale
+    // The scale represents average sentiment per reaction
+    const minScore = -5;
+    const maxScore = 5;
+    const scaleRange = maxScore - minScore;
+
+    let graphItemsHTML = '';
+    if (itemsWithReactions.length > 0) {
+        // Sort by average score for consistent layering
+        const sortedItems = [...itemsWithReactions].sort((a, b) => a.avgScore - b.avgScore);
+
+        graphItemsHTML = sortedItems.map((item, index) => {
+            // Clamp avgScore to scale range
+            const clampedScore = Math.max(minScore, Math.min(maxScore, item.avgScore));
+            // Calculate position as percentage (0% = -5, 100% = +5)
+            const position = ((clampedScore - minScore) / scaleRange) * 100;
+
+            // Determine sentiment class
+            let sentimentClass = 'neutral';
+            if (item.avgScore > 0.5) sentimentClass = 'positive';
+            else if (item.avgScore < -0.5) sentimentClass = 'negative';
+
+            // Truncate name for display
+            const displayName = item.name.length > 20 ? item.name.substring(0, 18) + '...' : item.name;
+
+            // Create emoji pills for breakdown tooltip
+            const emojiPills = Object.entries(item.emojiBreakdown)
+                .map(([emoji, count]) => `${emoji}${count > 1 ? '×' + count : ''}`)
+                .join(' ');
+
+            return `
+                <div class="sentiment-graph-item ${sentimentClass}"
+                     style="left: ${position}%;"
+                     data-record-id="${item.recordId}"
+                     title="${item.name}\nAvg Score: ${item.avgScore.toFixed(2)}\nReactions: ${emojiPills}">
+                    <span class="graph-item-emoji">${item.summaryEmoji || '💬'}</span>
+                    <span class="graph-item-name">${displayName}</span>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // Generate ranking list for detailed breakdown
+    let rankingHTML = '';
+    if (itemsWithReactions.length > 0) {
+        const rankedItems = [...itemsWithReactions].sort((a, b) => b.totalScore - a.totalScore);
+
+        rankingHTML = rankedItems.map((item, index) => {
+            const rank = index + 1;
+            let medalHTML = '';
+            if (rank === 1) medalHTML = '<span class="rank-medal">🥇</span>';
+            else if (rank === 2) medalHTML = '<span class="rank-medal">🥈</span>';
+            else if (rank === 3) medalHTML = '<span class="rank-medal">🥉</span>';
+
+            const emojiPills = Object.entries(item.emojiBreakdown)
+                .map(([emoji, count]) => `<span class="emoji-pill">${emoji}${count > 1 ? `<sup>${count}</sup>` : ''}</span>`)
+                .join('');
+
+            let sentimentClass = 'neutral';
+            if (item.avgScore > 0.5) sentimentClass = 'positive';
+            else if (item.avgScore < -0.5) sentimentClass = 'negative';
+
+            return `
+                <div class="sentiment-ranking-item ${sentimentClass}" data-record-id="${item.recordId}">
+                    <div class="ranking-position">
+                        ${medalHTML}
+                        <span class="ranking-number">#${rank}</span>
+                    </div>
+                    <div class="ranking-info">
+                        <div class="ranking-name">${item.name}</div>
+                        <div class="ranking-reactions">${emojiPills}</div>
+                    </div>
+                    <div class="ranking-score">
+                        <span class="score-value ${item.totalScore >= 0 ? 'positive' : 'negative'}">
+                            ${item.totalScore >= 0 ? '+' : ''}${item.totalScore.toFixed(1)}
+                        </span>
+                        <span class="score-label">score</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // Empty state
+    if (totalReactions === 0) {
+        return `
+            <div class="sentiment-popup-modal">
+                <div class="sentiment-popup-header">
+                    <h2 class="sentiment-popup-title">Sentiment Analysis</h2>
+                    <button class="sentiment-popup-close" title="Close">&times;</button>
+                </div>
+                <div class="sentiment-popup-empty">
+                    <span class="empty-icon">✨</span>
+                    <h3>No Reactions Yet</h3>
+                    <p>React to plan items using emojis to see sentiment analysis.</p>
+                    <p class="empty-hint">Each collaborator's reaction contributes to the overall sentiment score.</p>
+                </div>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="sentiment-popup-modal">
+            <div class="sentiment-popup-header">
+                <h2 class="sentiment-popup-title">Sentiment Analysis</h2>
+                <button class="sentiment-popup-close" title="Close">&times;</button>
+            </div>
+
+            <div class="sentiment-popup-content">
+                <!-- Overall Sentiment Banner -->
+                <div class="sentiment-overall-banner ${overallSentiment}">
+                    <span class="banner-emoji">${sentimentEmoji}</span>
+                    <div class="banner-text">
+                        <span class="banner-title">${sentimentText}</span>
+                        <span class="banner-description">${sentimentDescription}</span>
+                    </div>
+                </div>
+
+                <!-- Stats Row -->
+                <div class="sentiment-stats-row">
+                    <div class="sentiment-stat-card">
+                        <span class="stat-value">${totalReactions}</span>
+                        <span class="stat-label">Total Reactions</span>
+                    </div>
+                    <div class="sentiment-stat-card">
+                        <span class="stat-value">${itemsWithReactions.length}</span>
+                        <span class="stat-label">Items Rated</span>
+                    </div>
+                    <div class="sentiment-stat-card ${totalScore >= 0 ? 'positive' : 'negative'}">
+                        <span class="stat-value">${totalScore >= 0 ? '+' : ''}${totalScore.toFixed(1)}</span>
+                        <span class="stat-label">Net Score</span>
+                    </div>
+                </div>
+
+                <!-- Sentiment Distribution -->
+                <div class="sentiment-distribution">
+                    <h3 class="section-title">Sentiment Distribution</h3>
+                    <div class="distribution-bars">
+                        <div class="distribution-item positive">
+                            <span class="dist-icon">👍</span>
+                            <div class="dist-bar-container">
+                                <div class="dist-bar" style="width: ${itemsWithReactions.length > 0 ? (positiveItems / itemsWithReactions.length * 100) : 0}%"></div>
+                            </div>
+                            <span class="dist-count">${positiveItems}</span>
+                        </div>
+                        <div class="distribution-item neutral">
+                            <span class="dist-icon">🤷</span>
+                            <div class="dist-bar-container">
+                                <div class="dist-bar" style="width: ${itemsWithReactions.length > 0 ? (neutralItems / itemsWithReactions.length * 100) : 0}%"></div>
+                            </div>
+                            <span class="dist-count">${neutralItems}</span>
+                        </div>
+                        <div class="distribution-item negative">
+                            <span class="dist-icon">👎</span>
+                            <div class="dist-bar-container">
+                                <div class="dist-bar" style="width: ${itemsWithReactions.length > 0 ? (negativeItems / itemsWithReactions.length * 100) : 0}%"></div>
+                            </div>
+                            <span class="dist-count">${negativeItems}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sentiment Graph -->
+                <div class="sentiment-graph-section">
+                    <h3 class="section-title">Item Sentiment Map</h3>
+                    <p class="section-hint">Items positioned by their average sentiment score</p>
+                    <div class="sentiment-graph">
+                        <div class="graph-scale">
+                            <div class="scale-zone negative">
+                                <span class="zone-label">😟 Negative</span>
+                            </div>
+                            <div class="scale-zone neutral">
+                                <span class="zone-label">😐 Neutral</span>
+                            </div>
+                            <div class="scale-zone positive">
+                                <span class="zone-label">😊 Positive</span>
+                            </div>
+                        </div>
+                        <div class="graph-track">
+                            <div class="track-markers">
+                                <span class="marker" style="left: 0%">-5</span>
+                                <span class="marker" style="left: 25%">-2.5</span>
+                                <span class="marker" style="left: 50%">0</span>
+                                <span class="marker" style="left: 75%">+2.5</span>
+                                <span class="marker" style="left: 100%">+5</span>
+                            </div>
+                            <div class="graph-items">
+                                ${graphItemsHTML}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ranking List -->
+                <div class="sentiment-ranking-section">
+                    <h3 class="section-title">Item Rankings</h3>
+                    <div class="sentiment-ranking-list">
+                        ${rankingHTML}
+                    </div>
+                </div>
+
+                <!-- Analysis Info -->
+                <div class="sentiment-info">
+                    <div class="info-icon">ℹ️</div>
+                    <div class="info-text">
+                        <strong>How scores are calculated:</strong> Each emoji has a sentiment value from -5 (very negative) to +5 (very positive).
+                        An item's score is the sum of all reaction values. Click any item to scroll to it in the plan.
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Show the sentiment analysis popup
+ */
+function showSentimentPopup() {
+    // Close any existing popup
+    closeSentimentPopup();
+
+    const popupHTML = createSentimentPopupHTML();
+    const pickerZIndex = getModalZIndex('picker');
+
+    const popupContainer = document.createElement('div');
+    popupContainer.className = 'sentiment-popup-overlay';
+    popupContainer.innerHTML = popupHTML;
+
+    // Apply inline styles for positioning
+    popupContainer.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: ${pickerZIndex};
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+        box-sizing: border-box;
+        overflow-y: auto;
+    `;
+
+    document.body.appendChild(popupContainer);
+
+    // Add click handler for the popup content
+    popupContainer.addEventListener('click', handleSentimentPopupClick);
+
+    // Close on background click
+    popupContainer.addEventListener('click', (e) => {
+        if (e.target === popupContainer) {
+            closeSentimentPopup();
+        }
+    });
+
+    // Close on Escape
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeSentimentPopup();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    log('Presentation', 'Sentiment popup opened');
+}
+
+/**
+ * Close the sentiment analysis popup
+ */
+function closeSentimentPopup() {
+    const existingPopup = document.querySelector('.sentiment-popup-overlay');
+    if (existingPopup) {
+        existingPopup.remove();
+    }
+}
+
+/**
+ * Handle clicks within the sentiment popup
+ */
+function handleSentimentPopupClick(e) {
+    e.stopPropagation();
+
+    // Close button
+    if (e.target.classList.contains('sentiment-popup-close')) {
+        closeSentimentPopup();
+        return;
+    }
+
+    // Click on ranking item or graph item to scroll to it
+    const clickableItem = e.target.closest('.sentiment-ranking-item, .sentiment-graph-item');
+    if (clickableItem) {
+        const recordId = clickableItem.dataset.recordId;
+        closeSentimentPopup();
+
+        // Scroll to the item in the presentation view
+        const targetItem = document.querySelector(`.itinerary-item[data-record-id="${recordId}"]`);
+        if (targetItem) {
+            targetItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Brief highlight
+            targetItem.classList.add('highlight');
+            setTimeout(() => targetItem.classList.remove('highlight'), 2000);
+        }
+    }
+}
+
+/**
+ * Initialize click handler for the event emoji indicator to open sentiment popup
+ */
+function initializeEventEmojiClickHandler() {
+    const eventEmojiEl = document.getElementById('event-emoji-indicator');
+    if (eventEmojiEl) {
+        eventEmojiEl.style.cursor = 'pointer';
+        eventEmojiEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showSentimentPopup();
+        });
+        log('Presentation', 'Event emoji indicator click handler initialized');
+    }
+}
+
 // Handle clicks within the emoji picker
 function handleEmojiPickerClick(e) {
     // Stop propagation to prevent any parent handlers from firing
@@ -6423,6 +6830,9 @@ export async function showPresentationView(listType, startRecordId = null) {
 
     // Render presentation header (copies logo and title from main header)
     renderPresentationHeader();
+
+    // Initialize click handler for sentiment popup on emoji indicator
+    initializeEventEmojiClickHandler();
 
     // Update the running total cost in the header
     updatePresentationHeaderTotal();
