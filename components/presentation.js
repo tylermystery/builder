@@ -375,6 +375,11 @@ function ensureDOMElements() {
     dragBucketsEl = document.getElementById('presentation-drag-buckets');
     dragBucketArchive = document.getElementById('drag-bucket-archive');
     dragBucketCompleted = document.getElementById('drag-bucket-completed');
+    console.log('[Presentation DEBUG] Bucket elements found:', {
+        dragBucketsEl: !!dragBucketsEl,
+        dragBucketArchive: !!dragBucketArchive,
+        dragBucketCompleted: !!dragBucketCompleted
+    });
 
     /* DEBUG: DOM elements after init
     console.log('[Accordion DEBUG] DOM elements after init:', {
@@ -1833,7 +1838,11 @@ async function loadSortableJS() {
 
 // Initialize drag-and-drop for plan items
 async function initializeItemDragDrop() {
-    if (!itineraryItemsListEl) return;
+    console.log('[Presentation DEBUG] initializeItemDragDrop called, itineraryItemsListEl:', !!itineraryItemsListEl);
+    if (!itineraryItemsListEl) {
+        console.log('[Presentation DEBUG] No itineraryItemsListEl, exiting initializeItemDragDrop');
+        return;
+    }
 
     // Destroy existing sortable instance if exists
     if (sortableInstance) {
@@ -1843,6 +1852,7 @@ async function initializeItemDragDrop() {
 
     try {
         const Sortable = await loadSortableJS();
+        console.log('[Presentation DEBUG] SortableJS loaded:', !!Sortable);
 
         sortableInstance = new Sortable(itineraryItemsListEl, {
             animation: 200,
@@ -1855,9 +1865,11 @@ async function initializeItemDragDrop() {
             touchStartThreshold: 5,
 
             onStart: function(evt) {
+                console.log('[Presentation DEBUG] Drag onStart triggered');
                 isDragging = true;
                 // Start timer to show drag buckets after delay
                 dragDelayTimer = setTimeout(() => {
+                    console.log('[Presentation DEBUG] dragDelayTimer fired, calling showDragBuckets');
                     showDragBuckets();
                 }, DRAG_DELAY_MS);
 
@@ -1867,6 +1879,7 @@ async function initializeItemDragDrop() {
             },
 
             onEnd: function(evt) {
+                console.log('[Presentation DEBUG] Drag onEnd triggered');
                 isDragging = false;
                 clearTimeout(dragDelayTimer);
 
@@ -1876,6 +1889,7 @@ async function initializeItemDragDrop() {
 
                 // Check if dropped on a bucket
                 const droppedOnBucket = checkBucketDrop(evt.originalEvent, evt.item);
+                console.log('[Presentation DEBUG] droppedOnBucket:', droppedOnBucket);
                 if (droppedOnBucket) {
                     hideDragBuckets();
                     return; // Item was moved to bucket, don't update order
@@ -1888,36 +1902,30 @@ async function initializeItemDragDrop() {
             }
         });
 
+        console.log('[Presentation DEBUG] Sortable instance created');
         log('Presentation', 'Drag-drop initialized for plan items');
     } catch (error) {
         console.error('[Presentation] Failed to initialize drag-drop:', error);
     }
 }
 
-// Show drag buckets during drag
+// Show drag buckets during drag (colorize them)
 function showDragBuckets() {
+    console.log('[Presentation DEBUG] showDragBuckets called, isDragging:', isDragging, 'dragBucketsEl:', !!dragBucketsEl);
     if (dragBucketsEl && isDragging) {
-        dragBucketsEl.style.display = 'block';
-        // Small delay for animation
-        requestAnimationFrame(() => {
-            dragBucketsEl.classList.add('visible');
-        });
+        console.log('[Presentation DEBUG] Adding drag-active class to buckets');
+        dragBucketsEl.classList.add('drag-active');
     }
 }
 
-// Hide drag buckets
+// Hide drag buckets (decolorize them, but keep visible)
 function hideDragBuckets() {
+    console.log('[Presentation DEBUG] hideDragBuckets called, dragBucketsEl:', !!dragBucketsEl);
     if (dragBucketsEl) {
-        dragBucketsEl.classList.remove('visible');
+        dragBucketsEl.classList.remove('drag-active');
         // Remove drag-over from all buckets
         if (dragBucketArchive) dragBucketArchive.classList.remove('drag-over');
         if (dragBucketCompleted) dragBucketCompleted.classList.remove('drag-over');
-        // Hide after animation completes
-        setTimeout(() => {
-            if (!isDragging && dragBucketsEl) {
-                dragBucketsEl.style.display = 'none';
-            }
-        }, 300);
     }
 }
 
@@ -1952,23 +1960,28 @@ function handleDragMove(event) {
 
 // Check if item was dropped on a bucket
 function checkBucketDrop(event, item) {
+    console.log('[Presentation DEBUG] checkBucketDrop called, event:', !!event, 'item:', !!item, 'dragBucketsEl:', !!dragBucketsEl);
     if (!dragBucketsEl) return false;
 
-    const clientX = event.changedTouches ? event.changedTouches[0].clientX : event.clientX;
-    const clientY = event.changedTouches ? event.changedTouches[0].clientY : event.clientY;
+    const clientX = event?.changedTouches ? event.changedTouches[0].clientX : event?.clientX;
+    const clientY = event?.changedTouches ? event.changedTouches[0].clientY : event?.clientY;
+    console.log('[Presentation DEBUG] Drop coordinates:', { clientX, clientY });
 
     // Get record ID from the dragged item
     const itemSection = item.closest('.itinerary-item-section');
     const article = itemSection?.querySelector('.itinerary-item');
     const recordId = article?.dataset.recordId;
+    console.log('[Presentation DEBUG] recordId from item:', recordId);
 
     if (!recordId) return false;
 
     // Check archive bucket
     if (dragBucketArchive) {
         const archiveRect = dragBucketArchive.getBoundingClientRect();
+        console.log('[Presentation DEBUG] Archive bucket rect:', archiveRect);
         if (clientX >= archiveRect.left && clientX <= archiveRect.right &&
             clientY >= archiveRect.top && clientY <= archiveRect.bottom) {
+            console.log('[Presentation DEBUG] Dropped on archive bucket!');
             archiveItem(recordId);
             return true;
         }
@@ -1977,8 +1990,10 @@ function checkBucketDrop(event, item) {
     // Check completed bucket
     if (dragBucketCompleted) {
         const completedRect = dragBucketCompleted.getBoundingClientRect();
+        console.log('[Presentation DEBUG] Completed bucket rect:', completedRect);
         if (clientX >= completedRect.left && clientX <= completedRect.right &&
             clientY >= completedRect.top && clientY <= completedRect.bottom) {
+            console.log('[Presentation DEBUG] Dropped on completed bucket!');
             completeItem(recordId);
             return true;
         }
@@ -6432,6 +6447,14 @@ export async function showPresentationView(listType, startRecordId = null) {
     document.documentElement.classList.remove('presentation-loading');
     document.addEventListener('keydown', handleKeyDown);
 
+    // Show drag buckets (grayed out initially, colorize on drag)
+    if (dragBucketsEl) {
+        console.log('[Presentation DEBUG] Showing drag buckets (grayed out)');
+        dragBucketsEl.classList.add('buckets-shown');
+    } else {
+        console.log('[Presentation DEBUG] dragBucketsEl not found when opening modal');
+    }
+
     // Start the background animation
     startPresentationBackgroundAnimation();
 
@@ -6466,6 +6489,13 @@ export function hidePresentationView() {
 
     // Cleanup drag-drop functionality
     cleanupItemDragDrop();
+
+    // Hide drag buckets
+    if (dragBucketsEl) {
+        console.log('[Presentation DEBUG] Hiding drag buckets');
+        dragBucketsEl.classList.remove('buckets-shown');
+        dragBucketsEl.classList.remove('drag-active');
+    }
 
     modal.classList.remove('active');
     modal.style.display = 'none';

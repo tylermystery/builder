@@ -2926,7 +2926,8 @@ html.presentation-active {
             </div>
         </div>
         <!-- Drag-and-Drop Buckets for Presentation View (Archive/Completed) -->
-        <div id="presentation-drag-buckets" class="presentation-drag-buckets" style="display: none;">
+        <!-- Always visible when presentation modal is open, grayed out until dragging -->
+        <div id="presentation-drag-buckets" class="presentation-drag-buckets">
             <div id="drag-bucket-archive" class="drag-bucket drag-bucket-archive" data-bucket="archive">
                 <span class="bucket-icon">📦</span>
                 <span class="bucket-label">Archive</span>

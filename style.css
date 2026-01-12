@@ -5579,6 +5579,7 @@ body.presentation-active #wtf-plans-panel-overlay {
 }
 
 /* Drag-and-Drop Styles for Presentation View */
+/* Buckets are always visible when presentation modal is open, grayed out by default */
 .presentation-drag-buckets {
     position: fixed;
     top: 0;
@@ -5587,12 +5588,17 @@ body.presentation-active #wtf-plans-panel-overlay {
     bottom: 0;
     pointer-events: none;
     z-index: 10000;
-    opacity: 0;
-    transition: opacity 0.3s ease;
+    display: none; /* Hidden by default, shown via JS when modal is open */
 }
 
-.presentation-drag-buckets.visible {
-    opacity: 1;
+/* When presentation modal is open, buckets container is shown */
+.presentation-drag-buckets.buckets-shown {
+    display: block;
+}
+
+/* Active during drag - enables pointer events for drop targets */
+.presentation-drag-buckets.drag-active {
+    display: block;
 }
 
 .drag-bucket {
@@ -5610,18 +5616,40 @@ body.presentation-active #wtf-plans-panel-overlay {
     backdrop-filter: blur(20px);
     pointer-events: auto;
     transition: all 0.3s ease, transform 0.2s ease;
-    opacity: 0.85;
+    /* Grayed out by default */
+    opacity: 0.35;
+    filter: grayscale(100%);
 }
 
+/* Archive bucket - gray by default */
 .drag-bucket-archive {
     left: 16px;
+    background: linear-gradient(135deg, rgba(108, 117, 125, 0.9), rgba(73, 80, 87, 0.9));
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* Completed bucket - gray by default (green shows when active) */
+.drag-bucket-completed {
+    right: 16px;
+    background: linear-gradient(135deg, rgba(108, 117, 125, 0.9), rgba(73, 80, 87, 0.9));
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* Active drag state - colorize buckets */
+.presentation-drag-buckets.drag-active .drag-bucket {
+    opacity: 0.85;
+    filter: grayscale(0%);
+}
+
+.presentation-drag-buckets.drag-active .drag-bucket-archive {
     background: linear-gradient(135deg, rgba(108, 117, 125, 0.9), rgba(73, 80, 87, 0.9));
     border: 2px solid rgba(255, 255, 255, 0.3);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-.drag-bucket-completed {
-    right: 16px;
+.presentation-drag-buckets.drag-active .drag-bucket-completed {
     background: linear-gradient(135deg, rgba(40, 167, 69, 0.9), rgba(25, 135, 84, 0.9));
     border: 2px solid rgba(255, 255, 255, 0.3);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
@@ -5643,6 +5671,7 @@ body.presentation-active #wtf-plans-panel-overlay {
 .drag-bucket.drag-over {
     transform: translateY(-50%) scale(1.15);
     opacity: 1;
+    filter: grayscale(0%);
     box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
 }
 
