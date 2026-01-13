@@ -2173,6 +2173,31 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalItemName.parentNode.insertBefore(confidenceBadge, modalItemName.nextSibling);
     }
 
+    // Display solution badge for AI-generated solution items
+    const existingSolutionBadge = document.querySelector('.solution-type-badge');
+    if (existingSolutionBadge) existingSolutionBadge.remove();
+
+    if (record.isSolution && record.solutionData) {
+        const solutionBadge = document.createElement('div');
+        solutionBadge.className = 'solution-type-badge';
+
+        // Use confidence from solution data
+        const confidence = record.solutionData.confidence;
+        const confidenceColors = {
+            high: '#28a745',
+            medium: '#ffc107',
+            low: '#6c757d'
+        };
+        const bgColor = confidenceColors[confidence] || confidenceColors.medium;
+
+        solutionBadge.innerHTML = `<span class="solution-badge-dot" style="background: ${bgColor};"></span> AI Solution`;
+        solutionBadge.title = `${confidence ? confidence.charAt(0).toUpperCase() + confidence.slice(1) : 'Medium'} confidence - This is an AI-suggested solution for your concept`;
+
+        // Insert badge after the item name (or after AI badge if present)
+        const insertAfter = document.querySelector('.ai-confidence-badge') || modalItemName;
+        insertAfter.parentNode.insertBefore(solutionBadge, insertAfter.nextSibling);
+    }
+
     // --- SEO: Update page title, meta description, schema markup, OG tags, etc. ---
     const itemName = record.fields.Name || 'Untitled';
     const seoTitle = `${itemName} | WTFun`;
@@ -3334,7 +3359,30 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
     modalHeaderActions.innerHTML = '';
     const breadcrumbs = getBreadcrumbs(record);
-    if (breadcrumbs.length > 0) {
+
+    // For solution items, add a back navigation to parent concept
+    if (record.isSolution && record.parentConceptRecord) {
+        // Solution items get special breadcrumb with back arrow to parent concept
+        const parentConcept = record.parentConceptRecord;
+        modalBreadcrumbs.innerHTML = `
+            <a class="solution-back-link" data-concept-id="${parentConcept.id}" title="Back to ${parentConcept.fields.Name}">
+                ← ${parentConcept.fields.Name}
+            </a>
+            <span class="breadcrumb-separator">›</span>
+            <span class="breadcrumb-current">${record.fields.Name}</span>
+        `;
+
+        // Add click handler for back navigation to parent concept
+        const backLink = modalBreadcrumbs.querySelector('.solution-back-link');
+        if (backLink) {
+            backLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                log('Modal', `Navigating back to parent concept: ${parentConcept.fields.Name}`);
+                showDetailModal(parentConcept);
+            });
+        }
+    } else if (breadcrumbs.length > 0) {
         modalBreadcrumbs.innerHTML = breadcrumbs.map(name => `<a class="parent-link" data-parent-name="${name}" title="Go to ${name}">${name}</a>`).join(' > ');
     }
 
@@ -3733,29 +3781,52 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     const userHasPublishPermissionForOptions = api.userHasPublishPermission();
     const userIsAuthenticated = state.session.user.isAuthenticated;
 
+    // Determine if this is a concept item (manual/idea item that should generate solutions)
+    // Solution items (drilled down from concepts) are treated as specific items with variations
+    const isConceptItem = !record.isSolution && (
+                          record.isManual === true ||
+                          record.id?.startsWith('manual-add-') ||
+                          record.id?.startsWith('manual-presentation-'));
+
+    // Check if this item already has solutions stored
+    const hasExistingSolutions = record._generatedSolutions && record._generatedSolutions.length > 0;
+
     // Create the AI top options button container
     const aiOptionsContainer = document.createElement('div');
     aiOptionsContainer.className = 'ai-top-options-container';
     aiOptionsContainer.style.marginTop = hasExistingOptions ? '15px' : '0';
 
-    // Button text changes based on whether options exist
-    const buttonText = hasExistingOptions ? '✨ Re-Estimate Options' : '✨ Estimate Options';
+    // Button text changes based on item type and existing options/solutions
+    let buttonText;
+    let buttonTitle;
+    if (isConceptItem) {
+        buttonText = hasExistingSolutions ? '✨ Re-Find Solutions' : '✨ Find Solutions';
+        buttonTitle = 'Use AI to find specific solutions for this concept';
+    } else {
+        buttonText = hasExistingOptions ? '✨ Re-Estimate Options' : '✨ Estimate Options';
+        buttonTitle = 'Use AI to estimate recommended options/variations';
+    }
 
     aiOptionsContainer.innerHTML = `
-        <button class="ai-top-options-btn" title="Use AI to estimate recommended options/variations">
+        <button class="ai-top-options-btn" title="${buttonTitle}">
             ${buttonText}
         </button>
         <div class="ai-options-result" style="display: none;">
             <div class="ai-options-preview-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <span style="font-weight: 600; color: #333;">AI Generated Options</span>
+                <span style="font-weight: 600; color: #333;">${isConceptItem ? 'AI Generated Solutions' : 'AI Generated Options'}</span>
                 <button class="ai-options-close-btn" style="background: none; border: none; cursor: pointer; font-size: 1.2em; color: #666;">×</button>
             </div>
-            <textarea class="ai-options-editor" placeholder="Loading..." style="width: 100%; min-height: 120px; font-family: monospace; font-size: 0.9em; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;"></textarea>
-            <div class="ai-options-actions" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
-                <button class="ai-options-apply-btn" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Apply to Item</button>
-                ${userIsAuthenticated && (isRealRecord && userHasPublishPermissionForOptions) ? '<button class="ai-options-save-catalog-btn" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save to Catalog</button>' : ''}
-                <span class="ai-options-status" style="align-self: center; font-size: 0.85em; color: #666;"></span>
-            </div>
+            ${isConceptItem ? `
+                <div class="ai-solutions-container"></div>
+                <span class="ai-options-status" style="display: block; margin-top: 10px; font-size: 0.85em; color: #666;"></span>
+            ` : `
+                <textarea class="ai-options-editor" placeholder="Loading..." style="width: 100%; min-height: 120px; font-family: monospace; font-size: 0.9em; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;"></textarea>
+                <div class="ai-options-actions" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="ai-options-apply-btn" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Apply to Item</button>
+                    ${userIsAuthenticated && (isRealRecord && userHasPublishPermissionForOptions) ? '<button class="ai-options-save-catalog-btn" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save to Catalog</button>' : ''}
+                    <span class="ai-options-status" style="align-self: center; font-size: 0.85em; color: #666;"></span>
+                </div>
+            `}
         </div>
     `;
 
@@ -3767,32 +3838,138 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     const aiOptionsApplyBtn = aiOptionsContainer.querySelector('.ai-options-apply-btn');
     const aiOptionsSaveCatalogBtn = aiOptionsContainer.querySelector('.ai-options-save-catalog-btn');
     const aiOptionsStatus = aiOptionsContainer.querySelector('.ai-options-status');
+    const aiSolutionsContainer = aiOptionsContainer.querySelector('.ai-solutions-container');
 
-    // Generate AI options on click
+    // Helper function to render solutions as rectangular badges
+    const renderSolutions = (solutions) => {
+        if (!aiSolutionsContainer) return;
+
+        aiSolutionsContainer.innerHTML = '';
+
+        solutions.forEach((solution, index) => {
+            const solutionBadge = document.createElement('button');
+            solutionBadge.className = 'solution-item-badge';
+            solutionBadge.dataset.solutionIndex = index;
+
+            // Confidence badge color
+            const confidenceColors = {
+                high: '#28a745',
+                medium: '#ffc107',
+                low: '#6c757d'
+            };
+            const confidenceColor = confidenceColors[solution.confidence] || confidenceColors.medium;
+
+            solutionBadge.innerHTML = `
+                <span class="solution-badge-indicator" style="background: ${confidenceColor};" title="${solution.confidence} confidence"></span>
+                <span class="solution-badge-name">${solution.name}</span>
+                <span class="solution-badge-price">${solution.estimatedPrice}</span>
+            `;
+            solutionBadge.title = solution.description || solution.name;
+
+            // Click handler to navigate to solution item
+            solutionBadge.addEventListener('click', () => {
+                // Create a temporary record for the solution that links back to the concept
+                const solutionRecord = {
+                    id: `solution-${record.id}-${index}`,
+                    fields: {
+                        Name: solution.name,
+                        Description: solution.description || '',
+                        Price: parseFloat(solution.estimatedPrice.replace(/[^0-9.-]+/g, '')) || 0,
+                        [CONSTANTS.FIELD_NAMES.PARENT_ITEM]: record.fields.Name, // Link back to concept
+                        Category: record.fields.Category || 'Solution'
+                    },
+                    isSolution: true,
+                    parentConceptRecord: record, // Store reference to parent concept
+                    solutionData: solution,
+                    searchTerms: solution.searchTerms || []
+                };
+
+                // Store the solution data on the parent concept for persistence
+                if (!record._generatedSolutions) {
+                    record._generatedSolutions = [];
+                }
+                record._generatedSolutions[index] = solution;
+
+                log('Modal', `Navigating to solution: ${solution.name} (from concept: ${record.fields.Name})`);
+                showDetailModal(solutionRecord);
+            });
+
+            aiSolutionsContainer.appendChild(solutionBadge);
+        });
+    };
+
+    // Display existing solutions if available
+    if (isConceptItem && hasExistingSolutions) {
+        aiOptionsResult.style.display = 'block';
+        renderSolutions(record._generatedSolutions);
+    }
+
+    // Generate AI options/solutions on click
     aiOptionsBtn.addEventListener('click', async () => {
         aiOptionsBtn.disabled = true;
-        aiOptionsBtn.textContent = '✨ Estimating...';
         aiOptionsResult.style.display = 'block';
-        aiOptionsEditor.value = 'Estimating AI recommendations...';
         aiOptionsStatus.textContent = '';
 
-        try {
-            const result = await api.generateTopOptions(record);
-            if (result.success && result.options) {
-                aiOptionsEditor.value = result.options;
-                aiOptionsStatus.textContent = 'Options estimated!';
-                aiOptionsStatus.style.color = '#28a745';
-            } else {
-                throw new Error(result.error || 'Failed to estimate options');
+        if (isConceptItem) {
+            // Generate solutions for concept items
+            aiOptionsBtn.textContent = '✨ Finding Solutions...';
+            if (aiSolutionsContainer) {
+                aiSolutionsContainer.innerHTML = '<div class="solutions-loading">Searching for solutions...</div>';
             }
-        } catch (error) {
-            aiOptionsEditor.value = '';
-            aiOptionsStatus.textContent = `Error: ${error.message}`;
-            aiOptionsStatus.style.color = '#dc3545';
-            console.error('AI options generation failed:', error);
-        } finally {
-            aiOptionsBtn.disabled = false;
-            aiOptionsBtn.textContent = hasExistingOptions ? '✨ Re-Estimate Options' : '✨ Estimate Options';
+
+            try {
+                const result = await api.generateConceptSolutions(record);
+                if (result.success && result.solutions && result.solutions.length > 0) {
+                    // Store solutions on record for persistence
+                    record._generatedSolutions = result.solutions;
+                    renderSolutions(result.solutions);
+                    aiOptionsStatus.textContent = `Found ${result.solutions.length} solutions! Click one to explore.`;
+                    aiOptionsStatus.style.color = '#28a745';
+                } else {
+                    throw new Error(result.error || 'No solutions found');
+                }
+            } catch (error) {
+                if (aiSolutionsContainer) {
+                    aiSolutionsContainer.innerHTML = '';
+                }
+                aiOptionsStatus.textContent = `Error: ${error.message}`;
+                aiOptionsStatus.style.color = '#dc3545';
+                console.error('AI solutions generation failed:', error);
+            } finally {
+                aiOptionsBtn.disabled = false;
+                aiOptionsBtn.textContent = hasExistingSolutions || record._generatedSolutions?.length > 0
+                    ? '✨ Re-Find Solutions'
+                    : '✨ Find Solutions';
+            }
+        } else {
+            // Generate options for specific items (existing behavior)
+            aiOptionsBtn.textContent = '✨ Estimating...';
+            if (aiOptionsEditor) {
+                aiOptionsEditor.value = 'Estimating AI recommendations...';
+            }
+
+            try {
+                const result = await api.generateTopOptions(record);
+                if (result.success && result.options) {
+                    if (aiOptionsEditor) {
+                        aiOptionsEditor.value = result.options;
+                    }
+                    aiOptionsStatus.textContent = 'Options estimated!';
+                    aiOptionsStatus.style.color = '#28a745';
+                } else {
+                    throw new Error(result.error || 'Failed to estimate options');
+                }
+            } catch (error) {
+                if (aiOptionsEditor) {
+                    aiOptionsEditor.value = '';
+                }
+                aiOptionsStatus.textContent = `Error: ${error.message}`;
+                aiOptionsStatus.style.color = '#dc3545';
+                console.error('AI options generation failed:', error);
+            } finally {
+                aiOptionsBtn.disabled = false;
+                aiOptionsBtn.textContent = hasExistingOptions ? '✨ Re-Estimate Options' : '✨ Estimate Options';
+            }
         }
     });
 
@@ -3802,52 +3979,55 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     });
 
     // Apply to item (works for all users - updates locally for this session)
-    aiOptionsApplyBtn.addEventListener('click', () => {
-        const optionsText = aiOptionsEditor.value;
-        if (!optionsText.trim()) {
-            aiOptionsStatus.textContent = 'No options to apply';
-            aiOptionsStatus.style.color = '#dc3545';
-            return;
-        }
+    // Only for non-concept items (product variations)
+    if (aiOptionsApplyBtn) {
+        aiOptionsApplyBtn.addEventListener('click', () => {
+            const optionsText = aiOptionsEditor?.value;
+            if (!optionsText?.trim()) {
+                aiOptionsStatus.textContent = 'No options to apply';
+                aiOptionsStatus.style.color = '#dc3545';
+                return;
+            }
 
-        // Store options on the record object locally
-        record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
-        // Mark that these options were locally generated (for persistence when adding to plan)
-        record._locallyGeneratedOptions = optionsText;
+            // Store options on the record object locally
+            record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
+            // Mark that these options were locally generated (for persistence when adding to plan)
+            record._locallyGeneratedOptions = optionsText;
 
-        // Also persist the generated options in the plan item info
-        // This ensures options survive page reload
-        const isLocked = state.cart.lockedItems.has(record.id);
-        const isIdea = state.cart.items.has(record.id);
+            // Also persist the generated options in the plan item info
+            // This ensures options survive page reload
+            const isLocked = state.cart.lockedItems.has(record.id);
+            const isIdea = state.cart.items.has(record.id);
 
-        if (isLocked) {
-            const itemInfo = state.cart.lockedItems.get(record.id);
-            itemInfo.generatedOptions = optionsText;
-            state.cart.lockedItems.set(record.id, itemInfo);
-            triggerSave(); // Persist to session
-            log('Modal', `Saved generated options for locked item ${record.id}`);
-        } else if (isIdea) {
-            const itemInfo = state.cart.items.get(record.id);
-            itemInfo.generatedOptions = optionsText;
-            state.cart.items.set(record.id, itemInfo);
-            triggerSave(); // Persist to session
-            log('Modal', `Saved generated options for idea item ${record.id}`);
-        }
+            if (isLocked) {
+                const itemInfo = state.cart.lockedItems.get(record.id);
+                itemInfo.generatedOptions = optionsText;
+                state.cart.lockedItems.set(record.id, itemInfo);
+                triggerSave(); // Persist to session
+                log('Modal', `Saved generated options for locked item ${record.id}`);
+            } else if (isIdea) {
+                const itemInfo = state.cart.items.get(record.id);
+                itemInfo.generatedOptions = optionsText;
+                state.cart.items.set(record.id, itemInfo);
+                triggerSave(); // Persist to session
+                log('Modal', `Saved generated options for idea item ${record.id}`);
+            }
 
-        aiOptionsStatus.textContent = 'Applied! Refreshing...';
-        aiOptionsStatus.style.color = '#28a745';
+            aiOptionsStatus.textContent = 'Applied! Refreshing...';
+            aiOptionsStatus.style.color = '#28a745';
 
-        // Refresh the modal to show the new options
-        setTimeout(() => {
-            showDetailModal(record);
-        }, 500);
-    });
+            // Refresh the modal to show the new options
+            setTimeout(() => {
+                showDetailModal(record);
+            }, 500);
+        });
+    }
 
     // Save to Catalog (only for authenticated users with publish permission on real records)
     if (aiOptionsSaveCatalogBtn) {
         aiOptionsSaveCatalogBtn.addEventListener('click', async () => {
-            const optionsText = aiOptionsEditor.value;
-            if (!optionsText.trim()) {
+            const optionsText = aiOptionsEditor?.value;
+            if (!optionsText?.trim()) {
                 aiOptionsStatus.textContent = 'No options to save';
                 aiOptionsStatus.style.color = '#dc3545';
                 return;

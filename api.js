@@ -4770,6 +4770,53 @@ export async function generateTopOptions(record) {
 }
 
 /**
+ * Generate solutions for a concept/idea item using AI
+ * For conceptual items, this returns specific solutions (catalog items or AI-suggested providers)
+ * instead of product variations.
+ * @param {Object} record - The concept item record to generate solutions for
+ * @returns {Promise<Object>} - Object with success flag and solutions array
+ */
+export async function generateConceptSolutions(record) {
+    if (!record || !record.fields) {
+        console.error('generateConceptSolutions called without valid record');
+        return { success: false, error: 'Invalid record' };
+    }
+
+    const conceptData = {
+        name: record.fields.Name || record.fields['Display Name'] || 'Unknown Concept',
+        description: record.fields.Description || '',
+        category: record.fields.Category || record.fields['Item Type'] || '',
+        location: record.fields.Location || '',
+        budget: record.fields.Price || record.fields['Base Price'] || null
+    };
+
+    log('API', `Generating solutions for concept: ${conceptData.name}`);
+
+    try {
+        const response = await fetch('/.netlify/functions/generate-concept-solutions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(conceptData)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error from generate-concept-solutions function:', errorText);
+            throw new Error(`Failed to generate solutions: ${errorText}`);
+        }
+
+        const result = await response.json();
+        log('API', `Successfully generated ${result.solutions?.length || 0} solutions for ${conceptData.name}`);
+        return result;
+    } catch (error) {
+        console.error('Error generating concept solutions:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
  * Fetch Cloudinary image resources by tags with full metadata including public_id
  * This returns the full resource objects, not just URLs, enabling AI processing
  * @param {string|Array} tags - Single tag string or array of tags to search for
