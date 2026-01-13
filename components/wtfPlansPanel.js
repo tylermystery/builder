@@ -13,7 +13,8 @@ import { registerSyncCallback, getPlanSummary } from '../utils/planStateSync.js'
 // Filter types for the WTF Plans panel
 export const WTF_PLAN_TYPES = {
     ALL: 'all',
-    PLANS: 'plans',      // Sessions user is collaborator on
+    PLANS: 'plans',      // Sessions successfully shared (1+ collaborators or has RSVPs)
+    DRAFTS: 'drafts',    // Sessions not yet shared (only creator, no RSVPs)
     RSVPS: 'rsvps',      // Public events and guest invites
     FAVORITES: 'favorites', // Liked items
     PROJECTS: 'projects'    // Projects/sessions owned
@@ -21,7 +22,8 @@ export const WTF_PLAN_TYPES = {
 
 // Local state for the panel
 let wtfPlansData = {
-    plans: [],
+    plans: [],      // Shared plans (has collaborators or RSVPs)
+    drafts: [],     // Unshared plans (only creator)
     rsvps: [],
     favorites: [],
     projects: []
@@ -298,15 +300,16 @@ async function loadWtfPlansData() {
 
         // Fetch data in parallel where possible
         const dataPromises = [];
+        let allUserPlans = [];
 
         // Plans/Collabs (sessions user is collaborator on)
         if (isAuthenticated && userId) {
             dataPromises.push(
                 api.fetchPlansForUser(userId, true)
-                    .then(plans => { wtfPlansData.plans = plans || []; })
+                    .then(plans => { allUserPlans = plans || []; })
                     .catch(err => {
                         console.error('Error fetching plans:', err);
-                        wtfPlansData.plans = [];
+                        allUserPlans = [];
                     })
             );
 
@@ -320,12 +323,31 @@ async function loadWtfPlansData() {
                     })
             );
         } else {
-            wtfPlansData.plans = [];
+            allUserPlans = [];
             wtfPlansData.projects = [];
         }
 
         // Wait for API calls
         await Promise.all(dataPromises);
+
+        // Separate plans into shared (promoted) vs drafts based on collaborator count and RSVPs
+        // A plan is "shared" if it has:
+        // 1. More than 1 collaborator (creator + at least 1 other), OR
+        // 2. Has RSVPs on its linked event
+        wtfPlansData.plans = [];
+        wtfPlansData.drafts = [];
+
+        if (isAuthenticated && userId) {
+            allUserPlans.forEach(plan => {
+                const isShared = isPlanShared(plan, userId);
+                if (isShared) {
+                    wtfPlansData.plans.push(plan);
+                } else {
+                    wtfPlansData.drafts.push(plan);
+                }
+            });
+            log('WtfPlansPanel', `Separated ${allUserPlans.length} plans: ${wtfPlansData.plans.length} shared, ${wtfPlansData.drafts.length} drafts`);
+        }
 
         // RSVPs - filter from records (events user has RSVP'd to)
         // For non-authenticated users, show upcoming public events they can browse/RSVP to
@@ -368,6 +390,48 @@ async function loadWtfPlansData() {
         isLoading = false;
         container.innerHTML = '<div class="wtf-plans-empty">Error loading your plans. Please try again.</div>';
     }
+}
+
+/**
+ * Check if a plan is considered "shared" (promoted from draft)
+ * A plan is shared if it has at least 1 collaborator besides the creator OR has RSVPs
+ * @param {Object} plan - The plan record from Airtable
+ * @param {string} currentUserId - The current user's ID
+ * @returns {boolean} - True if the plan is shared
+ */
+function isPlanShared(plan, currentUserId) {
+    const collaborators = plan.fields?.Collaborators || [];
+
+    // Check if there are collaborators beyond the creator
+    // A plan with only the creator (or empty) is a draft
+    // A plan with 2+ collaborators, OR 1 collaborator who isn't the creator, is shared
+    const hasOtherCollaborators = collaborators.length > 1 ||
+        (collaborators.length === 1 && collaborators[0] !== currentUserId);
+
+    if (hasOtherCollaborators) {
+        return true;
+    }
+
+    // Check if the plan has a linked event with RSVPs
+    const linkedItemId = plan.fields?.LinkedItem;
+    if (linkedItemId) {
+        // Find the linked event in records
+        const linkedEvent = state.records.all.find(record =>
+            record.id === linkedItemId ||
+            (Array.isArray(linkedItemId) && linkedItemId.includes(record.id))
+        );
+
+        if (linkedEvent) {
+            const rsvpYes = linkedEvent.fields?.RSVPs || [];
+            const rsvpMaybe = linkedEvent.fields?.RSVPMaybe || [];
+            // If anyone has RSVP'd (yes or maybe), the plan is shared
+            if (rsvpYes.length > 0 || rsvpMaybe.length > 0) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -425,8 +489,29 @@ function getCombinedItems() {
     let items = [];
     const currentSessionId = state.session.id;
     const currentSessionItem = buildCurrentSessionItem();
+    const currentUserId = state.session.user.id;
 
-    // Add plans
+    // Determine if the current session is a draft or shared
+    // For the current session, we need to check collaborators from the live state
+    // Since the current session might not be in the fetched plans yet
+    let currentSessionIsDraft = true;
+    if (currentSessionItem && currentUserId) {
+        // Check if current session exists in plans (shared) or drafts
+        const inPlans = wtfPlansData.plans.some(p => p.id === currentSessionId);
+        const inDrafts = wtfPlansData.drafts.some(p => p.id === currentSessionId);
+
+        if (inPlans) {
+            currentSessionIsDraft = false;
+        } else if (inDrafts) {
+            currentSessionIsDraft = true;
+        } else {
+            // If not in either list (new unsaved session), check state
+            // New sessions are drafts by default until shared
+            currentSessionIsDraft = true;
+        }
+    }
+
+    // Add shared plans
     if (currentFilter === WTF_PLAN_TYPES.ALL || currentFilter === WTF_PLAN_TYPES.PLANS) {
         wtfPlansData.plans.forEach(plan => {
             // Skip the current session from fetched plans - we'll add the live version instead
@@ -450,9 +535,45 @@ function getCombinedItems() {
             });
         });
 
-        // Add the current session with live data if user has an active session
-        if (currentSessionItem) {
+        // Add the current session with live data if it's a shared plan
+        if (currentSessionItem && !currentSessionIsDraft) {
             items.push(currentSessionItem);
+        }
+    }
+
+    // Add drafts (unshared plans)
+    if (currentFilter === WTF_PLAN_TYPES.ALL || currentFilter === WTF_PLAN_TYPES.DRAFTS) {
+        wtfPlansData.drafts.forEach(draft => {
+            // Skip the current session from fetched drafts - we'll add the live version instead
+            if (currentSessionId && draft.id === currentSessionId) {
+                return;
+            }
+
+            // Parse Items with Variations to get accurate item count and total cost
+            const { itemCount, totalCost } = parsePlanItemsData(draft);
+
+            items.push({
+                type: 'draft',
+                id: draft.id,
+                name: draft.fields?.Name || 'Untitled Draft',
+                date: draft.fields?.Date,
+                createdTime: draft.createdTime,
+                itemCount,
+                totalCost,
+                icon: '📝',
+                data: draft
+            });
+        });
+
+        // Add the current session with live data if it's a draft
+        if (currentSessionItem && currentSessionIsDraft) {
+            // Mark the current session item as a draft
+            const draftSessionItem = {
+                ...currentSessionItem,
+                type: 'draft',
+                icon: '📝'
+            };
+            items.push(draftSessionItem);
         }
     }
 
@@ -594,6 +715,7 @@ function getEmptyMessage() {
             case WTF_PLAN_TYPES.FAVORITES:
                 return 'Sign in to save your favorites.';
             case WTF_PLAN_TYPES.PLANS:
+            case WTF_PLAN_TYPES.DRAFTS:
             case WTF_PLAN_TYPES.PROJECTS:
                 return 'Sign in to see your plans and projects.';
             default:
@@ -603,7 +725,9 @@ function getEmptyMessage() {
 
     switch (currentFilter) {
         case WTF_PLAN_TYPES.PLANS:
-            return 'No plans yet. Start collaborating on a plan!';
+            return 'No shared plans yet. Share a plan with someone to see it here!';
+        case WTF_PLAN_TYPES.DRAFTS:
+            return 'No drafts. Create a new plan to get started!';
         case WTF_PLAN_TYPES.RSVPS:
             return 'No RSVPs yet. Browse events and RSVP!';
         case WTF_PLAN_TYPES.FAVORITES:
@@ -626,6 +750,9 @@ function createWtfPlanItem(item) {
     if (item.isCurrentSession) {
         itemEl.classList.add('current-session');
     }
+    if (item.type === 'draft') {
+        itemEl.classList.add('draft-item');
+    }
     itemEl.dataset.itemId = item.id;
     itemEl.dataset.itemType = item.type;
 
@@ -635,6 +762,10 @@ function createWtfPlanItem(item) {
         case 'plan':
             const dateStr = item.date ? new Date(item.date + 'T00:00:00').toLocaleDateString() : 'No date';
             preview = `${item.itemCount} items • ${dateStr} • $${(item.totalCost || 0).toFixed(2)}`;
+            break;
+        case 'draft':
+            const draftDateStr = item.date ? new Date(item.date + 'T00:00:00').toLocaleDateString() : 'No date';
+            preview = `Draft • ${item.itemCount} items • ${draftDateStr}`;
             break;
         case 'rsvp':
             const eventDate = item.date ? new Date(item.date + 'T00:00:00').toLocaleDateString() : 'TBD';
@@ -684,6 +815,7 @@ function handleWtfPlanItemClick(item) {
 
     switch (item.type) {
         case 'plan':
+        case 'draft':
         case 'project':
             // Navigate to session using pushState for proper browser history
             // First, ensure the wtfPlans state is in history so back button returns to it
@@ -740,22 +872,26 @@ function handleWtfPlanItemClick(item) {
 function updateFilterCounts() {
     const allBtn = document.querySelector('.wtf-plans-filter-btn[data-filter="all"]');
     const plansBtn = document.querySelector('.wtf-plans-filter-btn[data-filter="plans"]');
+    const draftsBtn = document.querySelector('.wtf-plans-filter-btn[data-filter="drafts"]');
     const rsvpsBtn = document.querySelector('.wtf-plans-filter-btn[data-filter="rsvps"]');
     const favoritesBtn = document.querySelector('.wtf-plans-filter-btn[data-filter="favorites"]');
     const projectsBtn = document.querySelector('.wtf-plans-filter-btn[data-filter="projects"]');
 
     const planCount = wtfPlansData.plans.length;
+    const draftCount = wtfPlansData.drafts.length;
     const rsvpCount = wtfPlansData.rsvps.length;
     const favoriteCount = wtfPlansData.favorites.length;
 
-    // Projects that aren't already in plans
+    // Projects that aren't already in plans or drafts
     const planIds = new Set(wtfPlansData.plans.map(p => p.id));
-    const projectCount = wtfPlansData.projects.filter(p => !planIds.has(p.id)).length;
+    const draftIds = new Set(wtfPlansData.drafts.map(p => p.id));
+    const projectCount = wtfPlansData.projects.filter(p => !planIds.has(p.id) && !draftIds.has(p.id)).length;
 
-    const totalCount = planCount + rsvpCount + favoriteCount + projectCount;
+    const totalCount = planCount + draftCount + rsvpCount + favoriteCount + projectCount;
 
     if (allBtn) updateButtonCount(allBtn, totalCount);
     if (plansBtn) updateButtonCount(plansBtn, planCount);
+    if (draftsBtn) updateButtonCount(draftsBtn, draftCount);
     if (rsvpsBtn) updateButtonCount(rsvpsBtn, rsvpCount);
     if (favoritesBtn) updateButtonCount(favoritesBtn, favoriteCount);
     if (projectsBtn) updateButtonCount(projectsBtn, projectCount);
