@@ -550,7 +550,8 @@ export async function loadSessionFromAirtable(sessionId) {
 
                 // Restore custom records from saved session data
                 // These are items that were created via AI parsing or manually added, and don't exist in Airtable
-                // Includes: AI-generated items (ai-*), manually added items (manual-add-*, manual-presentation-*)
+                // Includes: AI-generated items (ai-*), manually added items (manual-add-*, manual-presentation-*),
+                // and solution items (solution-*)
                 if (savedState.aiRecords && Object.keys(savedState.aiRecords).length > 0) {
                     const customRecordsToRestore = Object.values(savedState.aiRecords);
                     for (const customRecord of customRecordsToRestore) {
@@ -560,11 +561,21 @@ export async function loadSessionFromAirtable(sessionId) {
                             if (customRecord.isManual) {
                                 customRecord.isManual = true;
                             }
+                            // Preserve solution item flags and data
+                            if (customRecord.isSolution) {
+                                customRecord.isSolution = true;
+                                // Restore to solution records registry for sidebar rendering
+                                if (!window._solutionRecords) {
+                                    window._solutionRecords = new Map();
+                                }
+                                window._solutionRecords.set(customRecord.id, customRecord);
+                                log('API', `Restored solution record to registry: ${customRecord.id}`);
+                            }
                             state.records.all.push(customRecord);
                         }
                     }
                     log('API', `Restored ${customRecordsToRestore.length} custom items from session data`);
-                    console.log(`[SESSION-LOAD] Restored ${customRecordsToRestore.length} custom items (AI + manual)`);
+                    console.log(`[SESSION-LOAD] Restored ${customRecordsToRestore.length} custom items (AI + manual + solution)`);
                 }
 
                 // Fetch ghost items (archived/deleted items in the plan)
@@ -709,23 +720,35 @@ export async function saveSessionToAirtable() {
 
     // Collect custom item records that are in the cart (ideas or locked)
     // These need to be persisted since they don't exist in Airtable
-    // Includes: AI-generated items (ai-*), manually added items (manual-add-*, manual-presentation-*)
+    // Includes: AI-generated items (ai-*), manually added items (manual-add-*, manual-presentation-*),
+    // and solution items (solution-*)
     const allCartItemIds = [
         ...Array.from(state.cart.items.keys()),
         ...Array.from(state.cart.lockedItems.keys())
     ];
     const customRecordsToSave = {};
     for (const itemId of allCartItemIds) {
-        // Custom items include AI-generated items and manually added items
-        const isCustomItem = itemId.startsWith('ai-') || itemId.startsWith('manual-');
+        // Custom items include AI-generated items, manually added items, and solution items
+        const isCustomItem = itemId.startsWith('ai-') || itemId.startsWith('manual-') || itemId.startsWith('solution-');
         if (isCustomItem) {
-            const customRecord = state.records.all.find(r => r.id === itemId);
+            // Look in state.records.all first
+            let customRecord = state.records.all.find(r => r.id === itemId);
+
+            // For solution items, also check the solution records registry
+            if (!customRecord && itemId.startsWith('solution-') && window._solutionRecords) {
+                customRecord = window._solutionRecords.get(itemId);
+            }
+
             if (customRecord) {
                 customRecordsToSave[itemId] = {
                     id: customRecord.id,
                     fields: customRecord.fields,
                     isAI: itemId.startsWith('ai-'),
-                    isManual: itemId.startsWith('manual-') || customRecord.isManual === true
+                    isManual: itemId.startsWith('manual-') || customRecord.isManual === true,
+                    isSolution: itemId.startsWith('solution-') || customRecord.isSolution === true,
+                    parentConceptId: customRecord.parentConceptId,
+                    parentConceptRecord: customRecord.parentConceptRecord,
+                    solutionData: customRecord.solutionData
                 };
             }
         }
@@ -1704,8 +1727,8 @@ export async function postPlanEvent(sessionId, eventType, eventData = {}) {
                 SessionID: [sessionId],
                 SenderID: 'system',
                 SenderName: 'System',
-                Content: eventContent,
-                EventType: eventType
+                Content: eventContent
+                // Note: EventType is stored in Content JSON, not as a separate field
             }
         }]
     };

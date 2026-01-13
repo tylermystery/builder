@@ -1781,6 +1781,14 @@ export async function updateEventPlanSection() {
                     record = state.records.archive.find(r => r.id === recordId);
                 }
 
+                // Check solution records registry for AI-generated solution items
+                if (!record && recordId.startsWith('solution-') && window._solutionRecords) {
+                    record = window._solutionRecords.get(recordId);
+                    if (record) {
+                        log('Sidebar', `Found solution record in registry: ${recordId}`);
+                    }
+                }
+
                 if (record) {
                     const itemElement = await createLockedInItemElement(record, itemInfo); // Pass the full record
                     fragment.appendChild(itemElement);
