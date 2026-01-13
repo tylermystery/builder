@@ -461,10 +461,13 @@ export async function loadSessionFromAirtable(sessionId) {
             // This ensures the plan appears in their plans list immediately
             if (!isCollaborator) {
                 console.log(`[SESSION-LOAD] User ${state.session.user.id} not yet collaborator on session ${sessionId}, adding...`);
-                // Fire async - don't block session load, just log errors
-                associateSessionWithUser(sessionId, state.session.user.id).catch(err => {
+                // Await the association to ensure plan appears in wtfplans list immediately
+                try {
+                    await associateSessionWithUser(sessionId, state.session.user.id);
+                    console.log('[SESSION-LOAD] Successfully associated user with session');
+                } catch (err) {
                     console.error('[SESSION-LOAD] Failed to auto-associate user with session:', err.message);
-                });
+                }
             }
         } else {
             state.session.isOwned = false;
