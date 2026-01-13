@@ -16,7 +16,8 @@ const syncCallbacks = {
     presentation: null,
     catalog: null,
     hamburgerMenu: null,
-    detailModal: null
+    detailModal: null,
+    wtfPlansPanel: null
 };
 
 // Debug mode flag for comprehensive logging

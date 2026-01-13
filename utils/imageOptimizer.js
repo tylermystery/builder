@@ -5,6 +5,77 @@
 const DPR = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
 
 /**
+ * Check if a Cloudinary URL already has transformations
+ * @param {string} url - The Cloudinary URL to check
+ * @returns {boolean} True if transformations exist
+ */
+export function hasCloudinaryTransformations(url) {
+  if (!url || !url.includes('/upload/')) return false;
+  const uploadIndex = url.indexOf('/upload/');
+  const afterUpload = url.slice(uploadIndex + 8);
+  // Cloudinary transformation patterns start with letter_value (e.g., c_fill, w_600)
+  return /^[a-z]_[^/]+/.test(afterUpload);
+}
+
+/**
+ * Apply Cloudinary transformations to a URL, avoiding duplicates
+ * @param {string} url - The Cloudinary URL
+ * @param {string} transformations - The transformations to apply (e.g., "c_fill,w_300")
+ * @returns {string} URL with transformations applied
+ */
+export function applyCloudinaryTransform(url, transformations) {
+  if (!url || !url.includes('cloudinary') || !url.includes('/upload/')) return url;
+
+  const uploadIndex = url.indexOf('/upload/');
+
+  // Check if URL already has transformations
+  if (hasCloudinaryTransformations(url)) {
+    // Prepend new transformations before existing ones (Cloudinary chains transformations)
+    return url.slice(0, uploadIndex + 8) + transformations + '/' + url.slice(uploadIndex + 8);
+  }
+
+  // No existing transformations, add them normally
+  return url.slice(0, uploadIndex + 8) + transformations + '/' + url.slice(uploadIndex + 8);
+}
+
+/**
+ * Get the base Cloudinary URL without any transformations
+ * Useful for passing clean URLs to Netlify Image CDN
+ * @param {string} url - The Cloudinary URL
+ * @returns {string} Base URL without transformations
+ */
+export function getBaseCloudinaryUrl(url) {
+  if (!url || !url.includes('cloudinary') || !url.includes('/upload/')) return url;
+
+  const uploadIndex = url.indexOf('/upload/');
+  const afterUpload = url.slice(uploadIndex + 8);
+
+  // Check if there are transformations
+  if (/^[a-z]_[^/]+/.test(afterUpload)) {
+    // Find where the actual filename starts (after all transformation segments)
+    // Cloudinary transformations are separated by / and the last segment before version (v123...) or filename is the last transform
+    const segments = afterUpload.split('/');
+    let filenameStartIndex = 0;
+
+    for (let i = 0; i < segments.length; i++) {
+      // Check if this segment looks like a transformation (starts with letter_something)
+      if (/^[a-z]_/.test(segments[i]) || /^[a-z]:[^/]+/.test(segments[i])) {
+        filenameStartIndex = i + 1;
+      } else {
+        break;
+      }
+    }
+
+    // Reconstruct URL with base and filename parts only
+    const baseUrl = url.slice(0, uploadIndex + 8);
+    const filenamePart = segments.slice(filenameStartIndex).join('/');
+    return baseUrl + filenamePart;
+  }
+
+  return url;
+}
+
+/**
  * Convert a Cloudinary or external image URL to use Netlify Image CDN
  * @param {string} imageUrl - The original image URL
  * @param {Object} options - Transformation options
@@ -24,9 +95,15 @@ export function optimizeImageUrl(imageUrl, options = {}) {
     return imageUrl;
   }
 
+  // For Cloudinary URLs, get the base URL without transformations to avoid double-transforming
+  let cleanUrl = imageUrl;
+  if (imageUrl.includes('res.cloudinary.com') && hasCloudinaryTransformations(imageUrl)) {
+    cleanUrl = getBaseCloudinaryUrl(imageUrl);
+  }
+
   // Build query parameters
   const params = new URLSearchParams();
-  params.set('url', imageUrl);
+  params.set('url', cleanUrl);
 
   // Apply DPR scaling for sharper images on high-res displays
   const useDPR = options.useDPR !== false;

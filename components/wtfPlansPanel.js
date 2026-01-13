@@ -7,6 +7,8 @@ import { log } from '../utils/debug.js';
 import * as api from '../api.js';
 import { getTempLikes } from '../utils.js';
 import { showDetailModal } from './modal.js';
+import { CONSTANTS } from '../config.js';
+import { registerSyncCallback, getPlanSummary } from '../utils/planStateSync.js';
 
 // Filter types for the WTF Plans panel
 export const WTF_PLAN_TYPES = {
@@ -26,6 +28,82 @@ let wtfPlansData = {
 };
 let currentFilter = WTF_PLAN_TYPES.ALL;
 let isLoading = false;
+
+/**
+ * Normalize a date value to YYYY-MM-DD format for consistent display
+ * @param {*} dateValue - Date in various formats (string, Date, array)
+ * @returns {string|null} - Date in YYYY-MM-DD format or null if invalid
+ */
+function normalizeDateToYYYYMMDD(dateValue) {
+    if (!dateValue) return null;
+
+    try {
+        // Handle arrays (eventDetails sometimes stores dates as arrays)
+        const rawDate = Array.isArray(dateValue) ? dateValue[0] : dateValue;
+        if (!rawDate) return null;
+
+        // If it's already in YYYY-MM-DD format, return as-is
+        if (typeof rawDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+            return rawDate;
+        }
+
+        // Parse the date and extract YYYY-MM-DD
+        const dateObj = new Date(rawDate);
+        if (isNaN(dateObj.getTime())) {
+            return null;
+        }
+
+        // Format as YYYY-MM-DD
+        return dateObj.toISOString().split('T')[0];
+    } catch (e) {
+        console.warn('Could not normalize date:', dateValue, e);
+        return null;
+    }
+}
+
+/**
+ * Build a plan item from the current live session state
+ * @returns {Object|null} Plan item representing current session, or null if no session active
+ */
+function buildCurrentSessionItem() {
+    const currentSessionId = state.session.id;
+    if (!currentSessionId) return null;
+
+    // Get live plan summary from state
+    const summary = getPlanSummary();
+
+    // Calculate total items in the locked plan
+    const lockedItemsCount = state.cart.lockedItems.size;
+
+    // Get event details from live state
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME);
+    const eventDateRaw = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+
+    // Normalize the date to YYYY-MM-DD format for consistent display
+    const eventDate = normalizeDateToYYYYMMDD(eventDateRaw);
+
+    return {
+        type: 'plan',
+        id: currentSessionId,
+        name: eventName || 'Current Plan',
+        date: eventDate,
+        createdTime: new Date().toISOString(), // Use now to sort to top
+        itemCount: lockedItemsCount,
+        totalCost: summary.subtotal || 0,
+        icon: '📋',
+        isCurrentSession: true, // Flag to identify this as the live session
+        data: {
+            id: currentSessionId,
+            fields: {
+                Name: eventName || 'Current Plan',
+                Date: eventDate,
+                Items: Array(lockedItemsCount).fill(null), // Placeholder for count
+                TotalCost: summary.subtotal
+            },
+            createdTime: new Date().toISOString()
+        }
+    };
+}
 
 /**
  * Initialize the WTF Plans panel
@@ -68,7 +146,29 @@ export function initializeWtfPlansPanel() {
         }
     });
 
+    // Register for plan state sync to update the current session in the list in real-time
+    registerSyncCallback('wtfPlansPanel', handlePlanStateSync);
+
     log('WtfPlansPanel', 'WTF Plans panel initialized.');
+}
+
+/**
+ * Handle plan state sync events to update the current session in the list
+ * @param {string} changeType - Type of change
+ * @param {Object} summary - Plan summary data
+ * @param {Object} changeData - Additional change data
+ */
+function handlePlanStateSync(changeType, summary, changeData) {
+    // Only re-render if the panel is open
+    const panel = document.getElementById('wtf-plans-panel');
+    if (!panel || !panel.classList.contains('open')) {
+        return;
+    }
+
+    log('WtfPlansPanel', `Received sync event: ${changeType}`, summary);
+
+    // Re-render the list to show updated current session data
+    renderWtfPlansList();
 }
 
 /**
@@ -267,27 +367,82 @@ export async function refreshWtfPlansData() {
 }
 
 /**
+ * Parse Items with Variations JSON to extract item count and total cost
+ * @param {Object} plan - The plan record from Airtable
+ * @returns {Object} - { itemCount, totalCost }
+ */
+function parsePlanItemsData(plan) {
+    let itemCount = 0;
+    let totalCost = 0;
+
+    try {
+        const itemsWithVariations = plan.fields?.['Items with Variations'];
+        if (itemsWithVariations) {
+            const parsed = JSON.parse(itemsWithVariations);
+            const lockedInItems = parsed.lockedInItems || {};
+
+            // Count locked items
+            itemCount = Object.keys(lockedInItems).length;
+
+            // Calculate total cost from locked items
+            Object.entries(lockedInItems).forEach(([recordId, itemInfo]) => {
+                const record = state.records.all.find(r => r.id === recordId);
+                if (!record) return;
+
+                // Get price - use override price if available, otherwise record price
+                let unitPrice = itemInfo.overridePrice;
+                if (unitPrice == null) {
+                    unitPrice = parseFloat(record.fields?.Price) || 0;
+                }
+
+                const quantity = parseInt(itemInfo.quantity) || 1;
+                totalCost += unitPrice * quantity;
+            });
+        }
+    } catch (e) {
+        console.warn('Could not parse Items with Variations for plan:', plan.id, e);
+    }
+
+    return { itemCount, totalCost };
+}
+
+/**
  * Get all items combined and sorted by most recent
  * @returns {Array} - Combined and sorted items
  */
 function getCombinedItems() {
     let items = [];
+    const currentSessionId = state.session.id;
+    const currentSessionItem = buildCurrentSessionItem();
 
     // Add plans
     if (currentFilter === WTF_PLAN_TYPES.ALL || currentFilter === WTF_PLAN_TYPES.PLANS) {
         wtfPlansData.plans.forEach(plan => {
+            // Skip the current session from fetched plans - we'll add the live version instead
+            if (currentSessionId && plan.id === currentSessionId) {
+                return;
+            }
+
+            // Parse Items with Variations to get accurate item count and total cost
+            const { itemCount, totalCost } = parsePlanItemsData(plan);
+
             items.push({
                 type: 'plan',
                 id: plan.id,
                 name: plan.fields?.Name || 'Untitled Plan',
                 date: plan.fields?.Date,
                 createdTime: plan.createdTime,
-                itemCount: (plan.fields?.Items || []).length,
-                totalCost: plan.fields?.TotalCost || 0,
+                itemCount,
+                totalCost,
                 icon: '📋',
                 data: plan
             });
         });
+
+        // Add the current session with live data if user has an active session
+        if (currentSessionItem) {
+            items.push(currentSessionItem);
+        }
     }
 
     // Add RSVPs
@@ -335,6 +490,8 @@ function getCombinedItems() {
         wtfPlansData.projects.forEach(project => {
             // Skip if already in plans
             if (planIds.has(project.id)) return;
+            // Also skip current session if it's the same
+            if (currentSessionId && project.id === currentSessionId) return;
 
             items.push({
                 type: 'project',
@@ -349,7 +506,11 @@ function getCombinedItems() {
     }
 
     // Sort by most recent (createdTime or date)
+    // Current session items get priority by having a recent createdTime
     items.sort((a, b) => {
+        // Current session always goes first
+        if (a.isCurrentSession) return -1;
+        if (b.isCurrentSession) return 1;
         const dateA = new Date(a.createdTime || a.date || 0);
         const dateB = new Date(b.createdTime || b.date || 0);
         return dateB - dateA; // Most recent first
@@ -422,6 +583,9 @@ function getEmptyMessage() {
 function createWtfPlanItem(item) {
     const itemEl = document.createElement('div');
     itemEl.className = 'wtf-plans-item';
+    if (item.isCurrentSession) {
+        itemEl.classList.add('current-session');
+    }
     itemEl.dataset.itemId = item.id;
     itemEl.dataset.itemType = item.type;
 
@@ -446,13 +610,16 @@ function createWtfPlanItem(item) {
             break;
     }
 
-    // Format time ago
-    const timeAgo = formatTimeAgo(item.createdTime);
+    // Format time ago - show "Now" for current session
+    const timeAgo = item.isCurrentSession ? 'Now' : formatTimeAgo(item.createdTime);
+
+    // Show "Editing" indicator for current session
+    const currentBadge = item.isCurrentSession ? '<span class="wtf-plans-current-badge">Editing</span>' : '';
 
     itemEl.innerHTML = `
         <div class="wtf-plans-item-icon">${item.icon}</div>
         <div class="wtf-plans-item-content">
-            <div class="wtf-plans-item-name">${escapeHtml(item.name)}</div>
+            <div class="wtf-plans-item-name">${escapeHtml(item.name)}${currentBadge}</div>
             <div class="wtf-plans-item-preview">${escapeHtml(preview)}</div>
         </div>
         <div class="wtf-plans-item-time">${timeAgo}</div>

@@ -19,6 +19,7 @@ import { showReceiptModal } from './components/receipt.js';
 import { updateFooter } from './components/footer.js';
 import { initializeProjectsDashboard, updateProjectsData, showProjectsLoading } from './components/projectsDashboard.js';
 import { initializeWtfPlansPanel, syncWtfPlansPanelWithUrl } from './components/wtfPlansPanel.js';
+import { applyCloudinaryTransform } from './utils/imageOptimizer.js';
 
 
 const imageCache = new Map();
@@ -101,16 +102,31 @@ function syncUiWithUrl() {
 
 async function initialize() {
     log('Main', '1. Initialization started.');
+
+    // Early detection of presentation mode for optimized initialization
+    const urlParamsEarly = new URLSearchParams(window.location.search);
+    const isInPresentationMode = urlParamsEarly.get('view') === 'present';
+    if (isInPresentationMode) {
+        log('Main', 'Presentation mode detected - optimizing initialization for faster load');
+    }
+
     ui.initStateHelpers({ getItemState: ui.getItemState });
 
      document.addEventListener('userLoggedIn', () => {
          log('Main', "'userLoggedIn' event caught, reapplying filters and reinitializing chat.");
-         if (typeof applyFiltersAndSort === 'function') {
+
+         // Skip catalog operations if in presentation mode
+         const currentUrlParams = new URLSearchParams(window.location.search);
+         const currentlyInPresentation = currentUrlParams.get('view') === 'present';
+
+         if (!currentlyInPresentation && typeof applyFiltersAndSort === 'function') {
               applyFiltersAndSort(imageCache);
          }
          // Update all heart icons to reflect the newly loaded liked items
-         const recordIds = Array.from(document.querySelectorAll('.event-card[data-record-id]')).map(card => card.dataset.recordId);
-         if (recordIds.length > 0) ui.batchUpdateCardIcons(recordIds);
+         if (!currentlyInPresentation) {
+             const recordIds = Array.from(document.querySelectorAll('.event-card[data-record-id]')).map(card => card.dataset.recordId);
+             if (recordIds.length > 0) ui.batchUpdateCardIcons(recordIds);
+         }
          if (typeof initializeSessionChat === 'function') {
             log('Main', 'User logged in, re-initializing session chat with new user info.');
             initializeSessionChat();
@@ -385,17 +401,17 @@ async function initialize() {
                 const logoUrl = imageUrls[0];
                 const favicon = document.createElement('link');
                 favicon.rel = 'icon';
-                favicon.href = logoUrl.replace('/upload/', '/upload/c_scale,w_32/');
+                favicon.href = applyCloudinaryTransform(logoUrl, 'c_scale,w_32');
                 document.head.appendChild(favicon);
                 const headerLogo = document.createElement('img');
-                headerLogo.src = logoUrl.replace('/upload/', '/upload/h_50,c_scale,f_auto,q_auto/');
+                headerLogo.src = applyCloudinaryTransform(logoUrl, 'h_50,c_scale,f_auto,q_auto');
                 headerLogo.alt = `${activeShop.fields.Name} Logo`;
                 headerLogo.loading = 'eager'; // Logo should load immediately
                 headerLogo.fetchPriority = 'high'; // Prioritize logo loading
-                
+
                 const logoContainer = document.getElementById('shop-logo-container');
                 if (logoContainer) {
-                    logoContainer.innerHTML = ''; 
+                    logoContainer.innerHTML = '';
                     logoContainer.appendChild(headerLogo);
                 } else {
                     const headerLeft = document.getElementById('header-left');
@@ -412,36 +428,42 @@ async function initialize() {
             cartLabels: {}
         };
         try {
-            shopSettings.cartLabels = JSON.parse(activeShop.fields.CartLabels || '{}'); 
+            shopSettings.cartLabels = JSON.parse(activeShop.fields.CartLabels || '{}');
         } catch (e) { console.warn('Could not parse CartLabels JSON, using defaults.'); }
 
-        const marqueeContainer = document.getElementById('marquee-banner-container');
-        const marqueeTextElement = document.getElementById('marquee-text');
+        // Skip catalog-specific UI setup in presentation mode
+        if (!isInPresentationMode) {
+            const marqueeContainer = document.getElementById('marquee-banner-container');
+            const marqueeTextElement = document.getElementById('marquee-text');
 
-        if (marqueeContainer && marqueeTextElement) {
-            const marqueeContent = activeShop.fields['Marquee Text'] || activeShop.fields.Description || '';
+            if (marqueeContainer && marqueeTextElement) {
+                const marqueeContent = activeShop.fields['Marquee Text'] || activeShop.fields.Description || '';
 
-            if (marqueeContent.trim()) { 
-                marqueeTextElement.textContent = marqueeContent; 
+                if (marqueeContent.trim()) {
+                    marqueeTextElement.textContent = marqueeContent;
 
-                const textLength = marqueeContent.length;
-                const duration = Math.min(60, Math.max(10, textLength / 15));
-                marqueeTextElement.style.animationDuration = `${duration}s`;
+                    const textLength = marqueeContent.length;
+                    const duration = Math.min(60, Math.max(10, textLength / 15));
+                    marqueeTextElement.style.animationDuration = `${duration}s`;
 
-                marqueeContainer.style.display = 'block'; 
-                log('Main', `Marquee activated with text (duration: ${duration}s).`);
+                    marqueeContainer.style.display = 'block';
+                    log('Main', `Marquee activated with text (duration: ${duration}s).`);
+                } else {
+                    marqueeContainer.style.display = 'none';
+                    log('Main', 'Marquee has no content, keeping it hidden.');
+                }
             } else {
-                marqueeContainer.style.display = 'none'; 
-                log('Main', 'Marquee has no content, keeping it hidden.');
+                console.warn('Marquee container or text element not found.');
             }
-        } else {
-            console.warn('Marquee container or text element not found.');
         }
         ui.applyCartLabels(shopSettings.cartLabels);
         initializeEventListeners(imageCache, window.flatpickr, shopSettings);
 
-        // Update footer with store details
-        updateFooter(activeShop);
+        // Skip footer update in presentation mode (footer not visible)
+        if (!isInPresentationMode) {
+            // Update footer with store details
+            updateFooter(activeShop);
+        }
 
         // Note: JWT authentication is now handled earlier in initialization (before session load)
         // to prevent the "collaborator or store owner" race condition error
@@ -547,14 +569,19 @@ async function initialize() {
         updateSaveShareButton();
         initializeChatEventListeners();
         setupAuthEventListeners();
-        setupCalendarEventListeners();
+
+        // Skip calendar and projects dashboard setup in presentation mode
+        if (!isInPresentationMode) {
+            setupCalendarEventListeners();
+            initializeProjectsDashboard(); // Initialize projects dashboard panel
+        }
+
         initializeBiometricAuth(); // Initialize biometric/passkey authentication
-        initializeProjectsDashboard(); // Initialize projects dashboard panel
         initializeWtfPlansPanel(); // Initialize WTF Plans panel
         updateUserProfileIcon();
 
-        // If user is already authenticated, fetch their projects
-        if (state.session.user.isAuthenticated && state.session.user.id) {
+        // If user is already authenticated, fetch their projects (skip in presentation mode)
+        if (state.session.user.isAuthenticated && state.session.user.id && !isInPresentationMode) {
             log('Main', 'User already authenticated, fetching project hierarchy...');
             api.fetchProjectHierarchy(state.session.user.id).then(projects => {
                 updateProjectsData(projects);
@@ -570,13 +597,17 @@ async function initialize() {
             if (menuProjectsBtn) menuProjectsBtn.style.display = 'flex';
         }
 
-        syncUiWithUrl(); 
-        window.addEventListener('popstate', syncUiWithUrl); 
+        syncUiWithUrl();
+        window.addEventListener('popstate', syncUiWithUrl);
 
-        setState({ ui: { ...state.ui, isInitializing: false }}); 
-        // Initialize background animation immediately so it loads first
-        backgroundEngine.initBackgroundEngine();
-        backgroundEngine.loadEffect(fluidEffect, null);
+        setState({ ui: { ...state.ui, isInitializing: false }});
+
+        // Skip main catalog background in presentation mode (presentation has its own background)
+        if (!isInPresentationMode) {
+            // Initialize background animation immediately so it loads first
+            backgroundEngine.initBackgroundEngine();
+            backgroundEngine.loadEffect(fluidEffect, null);
+        }
 
         log('Main', 'Initialization complete.');
 

@@ -5,11 +5,17 @@ import { updateUrl, getRecordPrice, parseOptions, flattenOptionGroups } from '..
 import { log } from '../utils/debug.js';
 import { getCurrentUser, sendMessage as sendChatMessage, getReplyingToMessage, clearReplyState } from '../chat.js';
 import { triggerSave } from '../events.js';
-import { showDetailModal } from './modal.js';
+import { showDetailModal, showCheckoutModal, getShopSettings } from './modal.js';
 import { Shader } from '../utils/shader.js';
 import { showWtfPlansPanel } from './wtfPlansPanel.js';
 import { updateEventPlanSection, updateIdeasCarousel } from './sidebar.js';
 import { syncPlanState, registerSyncCallback, unregisterSyncCallback } from '../utils/planStateSync.js';
+import { showUserModal } from '../auth.js';
+
+console.log('[Presentation DEBUG] presentation.js module loaded');
+console.log('[Presentation DEBUG] QUICK_REACTIONS available:', ['👍', '❤️', '😂', '😮', '😢', '🎉']);
+console.log('[Presentation DEBUG] EMOJI_CATEGORIES imported:', EMOJI_CATEGORIES ? 'yes' : 'no');
+console.log('[Presentation DEBUG] EMOJI_REACTIONS imported:', EMOJI_REACTIONS);
 
 // Quick emoji reactions available for messages and comments
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
@@ -48,6 +54,8 @@ async function handlePlanSyncUpdate(changeType, summary, changeData) {
             // Re-render the items list
             await renderAllItems();
             generateItemsSummary();
+            // Update running total in header
+            updatePresentationHeaderTotal();
             break;
         case 'dateChanged':
             // Update the date display
@@ -61,6 +69,8 @@ async function handlePlanSyncUpdate(changeType, summary, changeData) {
             renderEventHeader();
             await renderAllItems();
             initializeAccordions();
+            // Update running total in header
+            updatePresentationHeaderTotal();
             break;
         default:
             // console.log('[Presentation DEBUG] Unknown sync change type:', changeType);
@@ -70,10 +80,10 @@ async function handlePlanSyncUpdate(changeType, summary, changeData) {
 // DOM element references - lazily initialized to ensure DOM is ready
 let modal = null;
 let closeBtn = null;
-let summaryEventNameEl = null;
+// summaryEventNameEl removed - event name now only shown in header
 let summaryEventNotesEl = null;
 let summaryEventDateEl = null;
-let shareBtn = null;
+// shareBtn removed - share functionality merged into collaborators add/share button
 let collaboratorsListEl = null;
 let itineraryItemsListEl = null;
 
@@ -82,22 +92,18 @@ let presentationBackBtn = null;
 let presentationLogoContainer = null;
 let presentationShopTitle = null;
 let presentationEventLabel = null;
-let presentationHeaderShareBtn = null;
+// Note: presentationHeaderShareBtn removed - share merged into collaborators add/share button
 
-// Collaborators carousel and modal elements
-let collaboratorsCarouselPrev = null;
-let collaboratorsCarouselNext = null;
-let collaboratorsExpandBtn = null;
+// Collaborators modal elements (carousel removed, using inline list instead)
 let collaboratorsModal = null;
 let collaboratorsModalClose = null;
 let collaboratorsModalList = null;
+let presentationAccountBtn = null;
+let collaboratorsAddShareBtn = null;
 
 // Accordion summary elements
 let headerSummaryEl = null;
 let itemsSummaryEl = null;
-
-// Accordion title element for header section
-let headerAccordionTitleEl = null;
 
 // Floating chat button (no longer used but kept for cleanup)
 let floatingChatBtn = null;
@@ -113,10 +119,6 @@ const accordionState = {
     header: true,
     items: true
 };
-
-// Carousel state for collaborators
-let carouselCurrentIndex = 0;
-const CAROUSEL_VISIBLE_COUNT = 4; // Number of collaborators visible at once
 
 // Pusher instance for presentation chat
 let presentationPusher = null;
@@ -282,10 +284,10 @@ function ensureDOMElements() {
 
     modal = document.getElementById('presentation-modal-overlay');
     closeBtn = document.getElementById('presentation-close-btn');
-    summaryEventNameEl = document.getElementById('summary-event-name');
+    // summaryEventNameEl removed - event name is now only in header
     summaryEventNotesEl = document.getElementById('summary-event-notes');
     summaryEventDateEl = document.getElementById('summary-event-date');
-    shareBtn = document.getElementById('presentation-share-btn');
+    // shareBtn removed - share functionality merged into collaborators add/share button
     collaboratorsListEl = document.getElementById('itinerary-collaborators-list');
     itineraryItemsListEl = document.getElementById('itinerary-items-list');
 
@@ -294,15 +296,14 @@ function ensureDOMElements() {
     presentationLogoContainer = document.getElementById('presentation-logo-container');
     presentationShopTitle = document.getElementById('presentation-shop-title');
     presentationEventLabel = document.getElementById('presentation-event-label');
-    presentationHeaderShareBtn = document.getElementById('presentation-header-share-btn');
+    // presentationHeaderShareBtn removed - share merged into collaborators add/share button
 
-    // Collaborators carousel and modal elements
-    collaboratorsCarouselPrev = document.querySelector('.collaborators-carousel-btn.carousel-prev');
-    collaboratorsCarouselNext = document.querySelector('.collaborators-carousel-btn.carousel-next');
-    collaboratorsExpandBtn = document.getElementById('collaborators-expand-btn');
+    // Collaborators modal elements (carousel removed, using inline list instead)
     collaboratorsModal = document.getElementById('collaborators-modal');
     collaboratorsModalClose = document.getElementById('collaborators-modal-close');
     collaboratorsModalList = document.getElementById('collaborators-modal-list');
+    presentationAccountBtn = document.getElementById('presentation-account-btn');
+    collaboratorsAddShareBtn = document.getElementById('collaborators-add-share-btn');
 
     // Floating chat button (kept for cleanup but no longer used)
     floatingChatBtn = document.getElementById('presentation-floating-chat-btn');
@@ -310,9 +311,6 @@ function ensureDOMElements() {
     // Accordion summary elements
     headerSummaryEl = document.getElementById('header-summary');
     itemsSummaryEl = document.getElementById('items-summary');
-
-    // Accordion title element for the header section
-    headerAccordionTitleEl = document.getElementById('header-accordion-title');
 
     // Search modal elements
     presentationAddBtn = document.getElementById('presentation-add-btn');
@@ -347,15 +345,17 @@ function renderEventHeader() {
     const goals = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
     const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
 
-    summaryEventNameEl.textContent = eventName;
-    summaryEventNotesEl.textContent = goals;
+    // Event name is now shown only in the presentation header (presentationEventLabel)
+    // No longer set in summaryEventNameEl since that element was removed
 
-    // Set the accordion title to the plan name
-    if (headerAccordionTitleEl) {
-        headerAccordionTitleEl.textContent = eventName;
+    if (summaryEventNotesEl) {
+        summaryEventNotesEl.textContent = goals;
     }
 
-    if (dateValue) {
+    // Plan name removed from accordion title per design request
+    // The first accordion panel now simply shows the list of users
+
+    if (dateValue && summaryEventDateEl) {
         const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);
         summaryEventDateEl.textContent = date.toLocaleDateString('en-US', {
             weekday: 'long',
@@ -363,7 +363,7 @@ function renderEventHeader() {
             day: 'numeric',
             year: 'numeric'
         });
-    } else {
+    } else if (summaryEventDateEl) {
         summaryEventDateEl.textContent = '';
     }
 }
@@ -391,126 +391,224 @@ function renderPresentationHeader() {
     }
 }
 
+/**
+ * Update the running total cost displayed in the presentation header
+ */
+function updatePresentationHeaderTotal() {
+    const totalEl = document.getElementById('presentation-header-total');
+    if (!totalEl) return;
+
+    let subtotal = 0;
+    state.cart.lockedItems.forEach((itemInfo, recordId) => {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) return;
+
+        // Use selections for price if available, otherwise fall back to selectedOptionIndex
+        const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
+            ? itemInfo.selections
+            : itemInfo.selectedOptionIndex;
+
+        let unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
+        if (isNaN(unitPrice)) return;
+
+        // Apply package discount if this item came from a package
+        if (itemInfo.packageId && state.session.activePackages) {
+            const packageInfo = state.session.activePackages.get(itemInfo.packageId);
+            if (packageInfo && packageInfo.discount > 0) {
+                unitPrice = unitPrice * (1 - packageInfo.discount / 100);
+            }
+        }
+
+        // Use itemInfo.quantity for all items
+        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
+        subtotal += unitPrice * effectiveQuantity;
+    });
+
+    // Calculate total due (subtotal minus any payments received)
+    const amountReceived = state.session.user.amountReceived || 0;
+    const totalDue = subtotal - amountReceived;
+
+    // Display the total - show subtotal if no payments, otherwise show total due
+    if (subtotal > 0) {
+        if (amountReceived > 0) {
+            totalEl.textContent = `$${totalDue.toFixed(2)} due`;
+        } else {
+            totalEl.textContent = `$${subtotal.toFixed(2)}`;
+        }
+    } else {
+        totalEl.textContent = '';
+    }
+}
+
+/**
+ * Update the presentation account button with current user info
+ */
+function updatePresentationAccountButton() {
+    if (!presentationAccountBtn) return;
+
+    const currentUser = getCurrentUser();
+
+    if (currentUser && currentUser.name) {
+        // Show user's name in the button
+        presentationAccountBtn.textContent = currentUser.name;
+        presentationAccountBtn.title = state.session.user.isAuthenticated
+            ? 'Account settings'
+            : 'Sign in to save your plan';
+    } else {
+        // Hide button if no user
+        presentationAccountBtn.textContent = '';
+    }
+}
+
+/**
+ * Handles user login in presentation view.
+ * Removes the old temporary user identity from the collaborators list and
+ * re-initializes the presence channel with the authenticated user.
+ */
+async function handlePresentationUserLogin() {
+    log('Presentation', 'User logged in - updating collaborators and presence');
+
+    // Get the old temporary user ID from localStorage (if it exists)
+    // This was the ID used before the user authenticated
+    const oldTempUserId = localStorage.getItem('chatUserId');
+
+    // If there was a temporary user ID, remove it from userProfiles
+    // The authenticated user now has a new ID (starting with 'rec')
+    if (oldTempUserId && state.session.userProfiles.has(oldTempUserId)) {
+        log('Presentation', `Removing old temporary user from collaborators: ${oldTempUserId}`);
+        state.session.userProfiles.delete(oldTempUserId);
+        triggerSave();
+    }
+
+    // Update the account button with the authenticated user's name
+    updatePresentationAccountButton();
+
+    // Re-render the collaborators list (without the old temp user)
+    renderCollaborators();
+
+    // Re-initialize the presentation chat with the new authenticated identity
+    // This reconnects to Pusher with the real user ID and name
+    if (presentationPusher) {
+        await initializePresentationChat();
+    }
+}
+
 function renderCollaborators() {
     const userProfiles = state.session.userProfiles;
     const collaboratorsContainer = document.getElementById('itinerary-collaborators');
 
-    // Reset carousel index
-    carouselCurrentIndex = 0;
+    // Update the account button with current user info
+    updatePresentationAccountButton();
 
     if (userProfiles.size === 0) {
-        collaboratorsListEl.innerHTML = '<p class="no-collaborators">No team members yet</p>';
-        // Hide carousel controls and expand button when no collaborators
-        if (collaboratorsCarouselPrev) collaboratorsCarouselPrev.style.display = 'none';
-        if (collaboratorsCarouselNext) collaboratorsCarouselNext.style.display = 'none';
-        if (collaboratorsExpandBtn) collaboratorsExpandBtn.style.display = 'none';
+        // Empty state - just show the add/share button is enough
+        if (collaboratorsListEl) {
+            collaboratorsListEl.innerHTML = '';
+        }
         return;
     }
 
-    // Build all collaborator items
+    // Build all collaborator items (excluding current user since they have their own button)
     const collaboratorsArray = [];
     userProfiles.forEach((name, odId) => {
         const isCurrentUser = state.session.user.id === odId;
-        collaboratorsArray.push({ name, odId, isCurrentUser });
-    });
-
-    // Render all items (CSS will handle the carousel display)
-    let html = '';
-    collaboratorsArray.forEach((collab, index) => {
-        const badge = collab.isCurrentUser ? '<span class="collaborator-badge">You</span>' : '';
-        html += `
-            <div class="collaborator-item" data-index="${index}">
-                <span class="collaborator-avatar">${collab.name.charAt(0).toUpperCase()}</span>
-                <span class="collaborator-name">${collab.name}${badge}</span>
-            </div>
-        `;
-    });
-
-    collaboratorsListEl.innerHTML = html;
-
-    // Update carousel visibility based on number of collaborators
-    const totalCount = collaboratorsArray.length;
-    const showCarouselControls = totalCount > CAROUSEL_VISIBLE_COUNT;
-
-    if (collaboratorsCarouselPrev) {
-        collaboratorsCarouselPrev.style.display = showCarouselControls ? 'flex' : 'none';
-    }
-    if (collaboratorsCarouselNext) {
-        collaboratorsCarouselNext.style.display = showCarouselControls ? 'flex' : 'none';
-    }
-    if (collaboratorsExpandBtn) {
-        collaboratorsExpandBtn.style.display = totalCount > CAROUSEL_VISIBLE_COUNT ? 'block' : 'none';
-        collaboratorsExpandBtn.textContent = `Show all (${totalCount})`;
-    }
-
-    // Apply initial carousel state
-    updateCarouselVisibility();
-}
-
-// Update which collaborators are visible in the carousel
-function updateCarouselVisibility() {
-    if (!collaboratorsListEl) return;
-
-    const items = collaboratorsListEl.querySelectorAll('.collaborator-item');
-    const totalCount = items.length;
-
-    items.forEach((item, index) => {
-        // Show items within the visible window
-        if (index >= carouselCurrentIndex && index < carouselCurrentIndex + CAROUSEL_VISIBLE_COUNT) {
-            item.classList.add('visible');
-            item.classList.remove('hidden');
-        } else {
-            item.classList.remove('visible');
-            item.classList.add('hidden');
+        if (!isCurrentUser) {
+            collaboratorsArray.push({ name, odId });
         }
     });
 
-    // Update prev/next button disabled states
-    if (collaboratorsCarouselPrev) {
-        collaboratorsCarouselPrev.disabled = carouselCurrentIndex === 0;
-    }
-    if (collaboratorsCarouselNext) {
-        collaboratorsCarouselNext.disabled = carouselCurrentIndex + CAROUSEL_VISIBLE_COUNT >= totalCount;
+    // Render as a simple inline list of names (no carousel needed)
+    let html = '';
+    collaboratorsArray.forEach((collab) => {
+        html += `
+            <button class="collaborator-name-btn" data-collaborator-id="${collab.odId}" title="${collab.name}">
+                ${collab.name}
+            </button>
+        `;
+    });
+
+    if (collaboratorsListEl) {
+        collaboratorsListEl.innerHTML = html;
     }
 }
 
-// Navigate carousel to previous set of collaborators
-function carouselPrev() {
-    if (carouselCurrentIndex > 0) {
-        carouselCurrentIndex--;
-        updateCarouselVisibility();
-    }
-}
-
-// Navigate carousel to next set of collaborators
-function carouselNext() {
-    const totalCount = collaboratorsListEl ? collaboratorsListEl.querySelectorAll('.collaborator-item').length : 0;
-    if (carouselCurrentIndex + CAROUSEL_VISIBLE_COUNT < totalCount) {
-        carouselCurrentIndex++;
-        updateCarouselVisibility();
-    }
-}
+// Note: Carousel functions (updateCarouselVisibility, carouselPrev, carouselNext) removed
+// Collaborators are now displayed as a simple inline list instead of a carousel
 
 // Show the expanded collaborators modal with full list
 function showCollaboratorsModal() {
     if (!collaboratorsModal || !collaboratorsModalList) return;
 
     const userProfiles = state.session.userProfiles;
+    const currentUserIsAuthenticated = state.session.user.isAuthenticated;
 
     let html = '';
     userProfiles.forEach((name, odId) => {
         const isCurrentUser = state.session.user.id === odId;
         const badge = isCurrentUser ? '<span class="collaborator-badge">You</span>' : '';
+        // Unauthenticated collaborators don't have IDs starting with 'rec' (Airtable record IDs)
+        const isUnauthenticatedCollaborator = !odId.startsWith('rec');
+        // Only show remove button if current user is authenticated and the collaborator is unauthenticated
+        const showRemoveBtn = currentUserIsAuthenticated && isUnauthenticatedCollaborator && !isCurrentUser;
+        const removeBtn = showRemoveBtn
+            ? `<button class="collaborator-remove-btn" data-collaborator-id="${odId}" title="Remove this collaborator">&#10005;</button>`
+            : '';
         html += `
-            <div class="collaborator-item">
+            <div class="collaborator-item${isUnauthenticatedCollaborator ? ' unauthenticated' : ''}">
                 <span class="collaborator-avatar">${name.charAt(0).toUpperCase()}</span>
                 <span class="collaborator-name">${name}${badge}</span>
+                ${removeBtn}
             </div>
         `;
     });
 
     collaboratorsModalList.innerHTML = html;
+
+    // Add event listeners for remove buttons
+    collaboratorsModalList.querySelectorAll('.collaborator-remove-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const collaboratorId = btn.dataset.collaboratorId;
+            await removeUnauthenticatedCollaborator(collaboratorId);
+        });
+    });
+
     collaboratorsModal.classList.add('active');
+}
+
+/**
+ * Remove an unauthenticated collaborator from the plan
+ * @param {string} collaboratorId - The collaborator ID to remove
+ */
+async function removeUnauthenticatedCollaborator(collaboratorId) {
+    if (!collaboratorId) return;
+
+    // Safety check - don't allow removing authenticated users (with 'rec' IDs)
+    if (collaboratorId.startsWith('rec')) {
+        console.warn('Cannot remove authenticated collaborators via this function');
+        return;
+    }
+
+    const collaboratorName = state.session.userProfiles.get(collaboratorId) || 'Unknown';
+
+    // Confirm removal
+    if (!confirm(`Remove "${collaboratorName}" from this plan? Their reactions will remain but they won't appear in the team list.`)) {
+        return;
+    }
+
+    // Remove from userProfiles
+    state.session.userProfiles.delete(collaboratorId);
+
+    // Trigger save to persist the change
+    await triggerSave();
+
+    // Refresh the modal to reflect the change
+    showCollaboratorsModal();
+
+    // Also refresh the main collaborators list
+    renderCollaborators();
+
+    log('Presentation', `Removed unauthenticated collaborator: ${collaboratorName} (${collaboratorId})`);
 }
 
 // Hide the expanded collaborators modal
@@ -542,6 +640,158 @@ function getItemReactionCount(recordId) {
     const reactions = state.session.reactions.get(recordId);
     if (!reactions || !(reactions instanceof Map)) return 0;
     return reactions.size;
+}
+
+/**
+ * Get a summary emoji that represents the overall sentiment/activity for an item
+ * based on the average score of all reactions. Returns the emoji whose score is
+ * closest to the calculated average score from all collaborators' reactions.
+ * @param {string} recordId - The item record ID
+ * @returns {string} A single emoji closest to the average reaction score, or empty string if none
+ */
+function getItemSummaryEmoji(recordId) {
+    const reactions = state.session.reactions.get(recordId);
+    if (!reactions || !(reactions instanceof Map) || reactions.size === 0) {
+        return '';
+    }
+
+    // Calculate the average score from all reactions
+    let totalScore = 0;
+    let reactionCount = 0;
+    reactions.forEach((emoji) => {
+        totalScore += getReactionScore(emoji);
+        reactionCount++;
+    });
+
+    if (reactionCount === 0) {
+        return '';
+    }
+
+    const averageScore = totalScore / reactionCount;
+
+    // Find the emoji with the score closest to the average
+    let closestEmoji = '';
+    let closestDifference = Infinity;
+
+    Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
+        const difference = Math.abs(score - averageScore);
+        if (difference < closestDifference) {
+            closestDifference = difference;
+            closestEmoji = emoji;
+        }
+    });
+
+    return closestEmoji || '💬';
+}
+
+/**
+ * Update the emoji indicator next to an item's name
+ * @param {string} recordId - The item record ID
+ */
+function updateItemEmojiIndicator(recordId) {
+    const emojiIndicator = document.querySelector(`.item-emoji-indicator[data-record-id="${recordId}"]`);
+    if (!emojiIndicator) return;
+
+    const summaryEmoji = getItemSummaryEmoji(recordId);
+    const reactionCount = getItemReactionCount(recordId);
+
+    if (summaryEmoji && reactionCount > 0) {
+        emojiIndicator.innerHTML = `<span class="emoji-indicator-emoji">${summaryEmoji}</span>${reactionCount > 1 ? `<span class="emoji-indicator-count">${reactionCount}</span>` : ''}`;
+        emojiIndicator.style.display = 'inline-flex';
+        emojiIndicator.classList.add('has-reactions');
+    } else {
+        emojiIndicator.innerHTML = '';
+        emojiIndicator.style.display = 'none';
+        emojiIndicator.classList.remove('has-reactions');
+    }
+}
+
+/**
+ * Calculate the event-level emoji by averaging all component summary emojis.
+ * Uses the same averaging logic as individual components, but aggregates
+ * the averaged scores from each component that has reactions.
+ * @returns {{emoji: string, count: number, totalReactions: number}} Event emoji, component count, and total reactions
+ */
+function getEventSummaryEmoji() {
+    // Get all items in the plan (locked and favorites/ideas)
+    const favorites = Array.from(state.cart.items.keys());
+    const locked = Array.from(state.cart.lockedItems.keys());
+    const allItemIds = [...new Set([...locked, ...favorites])];
+
+    // Collect average scores from each component that has reactions
+    const componentAverages = [];
+    let totalReactionCount = 0;
+
+    allItemIds.forEach(recordId => {
+        const reactions = state.session.reactions.get(recordId);
+        if (!reactions || !(reactions instanceof Map) || reactions.size === 0) {
+            return;
+        }
+
+        // Calculate this component's average score (same as getItemSummaryEmoji)
+        let totalScore = 0;
+        let reactionCount = 0;
+        reactions.forEach((emoji) => {
+            totalScore += getReactionScore(emoji);
+            reactionCount++;
+        });
+
+        if (reactionCount > 0) {
+            const averageScore = totalScore / reactionCount;
+            componentAverages.push(averageScore);
+            totalReactionCount += reactionCount;
+        }
+    });
+
+    // No components with reactions
+    if (componentAverages.length === 0) {
+        return { emoji: '', count: 0, totalReactions: 0 };
+    }
+
+    // Calculate the average of all component averages (event-level average)
+    const eventAverageScore = componentAverages.reduce((sum, avg) => sum + avg, 0) / componentAverages.length;
+
+    // Find the emoji with the score closest to the event average
+    let closestEmoji = '';
+    let closestDifference = Infinity;
+
+    Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
+        const difference = Math.abs(score - eventAverageScore);
+        if (difference < closestDifference) {
+            closestDifference = difference;
+            closestEmoji = emoji;
+        }
+    });
+
+    return {
+        emoji: closestEmoji || '💬',
+        count: componentAverages.length,
+        totalReactions: totalReactionCount
+    };
+}
+
+/**
+ * Update the event-level emoji indicator in the presentation header.
+ * This shows a real-time averaged emoji representing overall sentiment
+ * across all components in the plan.
+ */
+function updateEventEmojiIndicator() {
+    const eventEmojiEl = document.getElementById('event-emoji-indicator');
+    if (!eventEmojiEl) return;
+
+    const { emoji, count, totalReactions } = getEventSummaryEmoji();
+
+    if (emoji && count > 0) {
+        // Show count of components with reactions if more than 1
+        const countDisplay = count > 1 ? `<span class="event-emoji-count">${count}</span>` : '';
+        eventEmojiEl.innerHTML = `<span class="event-emoji-icon">${emoji}</span>${countDisplay}`;
+        eventEmojiEl.classList.add('visible');
+        eventEmojiEl.title = `Event sentiment: ${emoji} (${totalReactions} reaction${totalReactions !== 1 ? 's' : ''} across ${count} component${count !== 1 ? 's' : ''})`;
+    } else {
+        eventEmojiEl.innerHTML = '';
+        eventEmojiEl.classList.remove('visible');
+        eventEmojiEl.title = '';
+    }
 }
 
 // Generate the expanded emoji picker HTML
@@ -582,21 +832,30 @@ function createEmojiPickerHTML(recordId) {
 
 // Show the expanded emoji picker
 function showExpandedEmojiPicker(recordId, anchorElement) {
+    console.log('[ExpandedEmojiPicker DEBUG] showExpandedEmojiPicker called');
+    console.log('[ExpandedEmojiPicker DEBUG] recordId:', recordId);
+    console.log('[ExpandedEmojiPicker DEBUG] anchorElement:', anchorElement);
+
     // Close any existing picker
     closeExpandedEmojiPicker();
 
     const pickerHTML = createEmojiPickerHTML(recordId);
+    console.log('[ExpandedEmojiPicker DEBUG] pickerHTML length:', pickerHTML.length);
+
     const pickerContainer = document.createElement('div');
     pickerContainer.className = 'emoji-picker-overlay';
     pickerContainer.innerHTML = pickerHTML;
+    console.log('[ExpandedEmojiPicker DEBUG] pickerContainer created');
 
     // Add to DOM
     document.body.appendChild(pickerContainer);
+    console.log('[ExpandedEmojiPicker DEBUG] ✅ pickerContainer appended to document.body');
 
     // Position near the anchor
     const picker = pickerContainer.querySelector('.emoji-picker-modal');
     const rect = anchorElement.getBoundingClientRect();
     const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    console.log('[ExpandedEmojiPicker DEBUG] anchor rect:', rect);
 
     // Center the picker on screen for mobile, near anchor for desktop
     if (window.innerWidth <= 768) {
@@ -604,11 +863,34 @@ function showExpandedEmojiPicker(recordId, anchorElement) {
         picker.style.top = '50%';
         picker.style.left = '50%';
         picker.style.transform = 'translate(-50%, -50%)';
+        console.log('[ExpandedEmojiPicker DEBUG] Mobile positioning: centered');
     } else {
         picker.style.position = 'absolute';
         picker.style.top = `${rect.bottom + scrollTop + 10}px`;
         picker.style.left = `${Math.max(10, rect.left - 100)}px`;
+        console.log('[ExpandedEmojiPicker DEBUG] Desktop positioning:', picker.style.top, picker.style.left);
     }
+
+    // Verify picker visibility
+    setTimeout(() => {
+        const verifyPicker = document.querySelector('.emoji-picker-overlay');
+        console.log('[ExpandedEmojiPicker DEBUG] Verify picker in DOM:', verifyPicker);
+        if (verifyPicker) {
+            const modal = verifyPicker.querySelector('.emoji-picker-modal');
+            if (modal) {
+                const computedStyle = window.getComputedStyle(modal);
+                console.log('[ExpandedEmojiPicker DEBUG] Modal computed styles:', {
+                    display: computedStyle.display,
+                    visibility: computedStyle.visibility,
+                    opacity: computedStyle.opacity,
+                    position: computedStyle.position,
+                    zIndex: computedStyle.zIndex,
+                    width: computedStyle.width,
+                    height: computedStyle.height
+                });
+            }
+        }
+    }, 10);
 
     // Add event listeners
     pickerContainer.addEventListener('click', handleEmojiPickerClick);
@@ -679,8 +961,28 @@ function selectEmoji(recordId, emoji) {
         renderReactions(recordId, reactionContainer);
     }
 
+    // Update the emoji indicator next to item name
+    updateItemEmojiIndicator(recordId);
+
     // Update the reactions summary
     renderReactionsSummary();
+
+    // Update the event-level emoji indicator
+    updateEventEmojiIndicator();
+
+    // Broadcast item reaction update via Pusher for real-time sync
+    if (presentationChatChannel) {
+        // Convert Map to object for Pusher transmission
+        const reactionsObj = {};
+        itemReactions.forEach((userEmoji, odUserId) => {
+            reactionsObj[odUserId] = userEmoji;
+        });
+        presentationChatChannel.trigger('client-item-reaction-update', {
+            recordId,
+            reactions: reactionsObj,
+            userId: currentUser.id
+        });
+    }
 
     triggerSave();
 }
@@ -693,10 +995,6 @@ function renderReactions(recordId, reactionContainer) {
     }
     const currentUserReaction = allReactions.get(currentUser.id);
 
-    // Calculate score for this item
-    const itemScore = getItemReactionScore(recordId);
-    const scoreClass = itemScore > 0 ? 'positive' : itemScore < 0 ? 'negative' : 'neutral';
-
     // Quick reaction buttons (8 most common)
     const buttonsHTML = EMOJI_REACTIONS.map(emoji =>
         `<button class="reaction-btn ${currentUserReaction === emoji ? 'selected' : ''}" data-emoji="${emoji}" data-record-id="${recordId}">${emoji}</button>`
@@ -705,7 +1003,7 @@ function renderReactions(recordId, reactionContainer) {
     // More button to open full picker
     const moreButtonHTML = `<button class="reaction-btn reaction-more-btn" data-record-id="${recordId}" title="More reactions">+</button>`;
 
-    // Summary showing who reacted
+    // Summary showing who reacted (simplified - just names and emojis)
     let summaryHTML = '';
     if (allReactions.size > 0) {
         summaryHTML = Array.from(allReactions.entries()).map(([userId, reaction]) => {
@@ -714,14 +1012,10 @@ function renderReactions(recordId, reactionContainer) {
         }).join('');
     }
 
-    // Score display
-    const scoreHTML = `<span class="item-reaction-score ${scoreClass}" title="Reaction score">${itemScore > 0 ? '+' : ''}${itemScore.toFixed(2)}</span>`;
-
     reactionContainer.innerHTML = `
         <div class="reaction-bar-buttons">${buttonsHTML}${moreButtonHTML}</div>
         <div class="reaction-info-row">
             <div class="reaction-summary-display">${summaryHTML || 'No reactions yet'}</div>
-            ${allReactions.size > 0 ? scoreHTML : ''}
         </div>
     `;
 }
@@ -909,11 +1203,19 @@ async function renderItineraryItem(item, index) {
         `;
     }
 
+    // Get the initial emoji indicator for this item
+    const summaryEmoji = getItemSummaryEmoji(recordId);
+    const reactionCount = getItemReactionCount(recordId);
+    const emojiIndicatorHTML = summaryEmoji && reactionCount > 0
+        ? `<span class="item-emoji-indicator has-reactions" data-record-id="${recordId}" style="display: inline-flex;"><span class="emoji-indicator-emoji">${summaryEmoji}</span>${reactionCount > 1 ? `<span class="emoji-indicator-count">${reactionCount}</span>` : ''}</span>`
+        : `<span class="item-emoji-indicator" data-record-id="${recordId}" style="display: none;"></span>`;
+
     return `
         <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}">
             <div class="item-accordion-header" data-record-id="${recordId}">
                 <div class="item-accordion-title-row">
                     <h3 class="item-accordion-title">${name}</h3>
+                    ${emojiIndicatorHTML}
                     <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
                     <span class="item-accordion-icon"></span>
                 </div>
@@ -1024,6 +1326,9 @@ async function renderAllItems() {
 
     // Render the reactions summary after items
     renderReactionsSummary();
+
+    // Update the event-level emoji indicator
+    updateEventEmojiIndicator();
 }
 
 // Render the reactions summary section showing component rankings
@@ -1081,7 +1386,6 @@ function renderReactionsSummary() {
             if (item.reactionCount === 0) return ''; // Skip items with no reactions
 
             const rank = index + 1;
-            const scoreClass = item.score > 0 ? 'positive' : item.score < 0 ? 'negative' : 'neutral';
             const typeClass = item.type === 'favorites' ? 'idea' : 'confirmed';
 
             // Create emoji pills showing the breakdown
@@ -1095,8 +1399,11 @@ function renderReactionsSummary() {
             else if (rank === 2) medalHTML = '<span class="rank-medal silver">🥈</span>';
             else if (rank === 3) medalHTML = '<span class="rank-medal bronze">🥉</span>';
 
+            // Get summary emoji for this item
+            const summaryEmoji = getItemSummaryEmoji(item.recordId);
+
             return `
-                <div class="ranking-item ${scoreClass}" data-record-id="${item.recordId}">
+                <div class="ranking-item" data-record-id="${item.recordId}">
                     <div class="ranking-position">
                         ${medalHTML}
                         <span class="ranking-number">#${rank}</span>
@@ -1106,9 +1413,9 @@ function renderReactionsSummary() {
                         <div class="ranking-type ${typeClass}">${item.type === 'favorites' ? 'Idea' : 'Confirmed'}</div>
                     </div>
                     <div class="ranking-reactions">${emojiPills}</div>
-                    <div class="ranking-score ${scoreClass}">
-                        <span class="score-value">${item.score > 0 ? '+' : ''}${item.score.toFixed(2)}</span>
-                        <span class="score-label">pts</span>
+                    <div class="ranking-summary-emoji">
+                        <span class="summary-emoji">${summaryEmoji}</span>
+                        <span class="reaction-count">${item.reactionCount}</span>
                     </div>
                 </div>
             `;
@@ -1177,7 +1484,7 @@ function renderReactionsSummary() {
             <div class="reactions-summary-empty">
                 <span class="empty-icon">✨</span>
                 <p>No reactions yet! React to items above to see how they rank.</p>
-                <p class="empty-hint">Use emojis to express your preferences - positive reactions boost scores, negative ones lower them.</p>
+                <p class="empty-hint">Use emojis to express your preferences and see real-time feedback.</p>
             </div>
         `;
         return;
@@ -1190,9 +1497,6 @@ function renderReactionsSummary() {
             <div class="reactions-summary-stats">
                 <span class="stat"><strong>${totalReactions}</strong> reactions</span>
                 <span class="stat"><strong>${itemsWithReactions}</strong> items rated</span>
-                <span class="stat total-score ${totalScore > 0 ? 'positive' : totalScore < 0 ? 'negative' : 'neutral'}">
-                    <strong>${totalScore > 0 ? '+' : ''}${totalScore.toFixed(2)}</strong> total score
-                </span>
             </div>
         </div>
         ${sentimentHTML}
@@ -1202,7 +1506,7 @@ function renderReactionsSummary() {
         <div class="reactions-summary-footer">
             <p class="scoring-note">
                 <span class="note-icon">ℹ️</span>
-                Scores range from -4.82 to +4.92 per reaction based on sentiment analysis. Click any ranking to scroll to that item.
+                Click any ranking to scroll to that item. Emojis update in real-time as people react.
             </p>
         </div>
     `;
@@ -1310,7 +1614,9 @@ function addPresentationMessageToUI(sender, message, isSent, timestamp, senderId
     reactionBtn.innerHTML = '😀';
     reactionBtn.title = 'Add reaction';
     reactionBtn.addEventListener('click', (e) => {
+        console.log('[Presentation DEBUG] Reaction button clicked!');
         e.stopPropagation();
+        e.preventDefault();
         showPresentationReactionPicker(wrapper, messageId, senderId);
     });
     actionsContainer.appendChild(reactionBtn);
@@ -1431,28 +1737,95 @@ function addPresentationMessageToUI(sender, message, isSent, timestamp, senderId
  * Shows the emoji reaction picker near a message in presentation view
  */
 function showPresentationReactionPicker(wrapper, messageId, senderId) {
+    console.log('[ReactionPicker DEBUG] showPresentationReactionPicker called');
+    console.log('[ReactionPicker DEBUG] wrapper:', wrapper);
+    console.log('[ReactionPicker DEBUG] messageId:', messageId);
+    console.log('[ReactionPicker DEBUG] QUICK_REACTIONS:', QUICK_REACTIONS);
+
     // Remove any existing picker
-    document.querySelectorAll('.reaction-picker').forEach(p => p.remove());
+    const existingPickers = document.querySelectorAll('.reaction-picker');
+    console.log('[ReactionPicker DEBUG] Existing pickers found:', existingPickers.length);
+    existingPickers.forEach(p => p.remove());
+
+    // Find the reaction button to position near it
+    const reactionBtn = wrapper.querySelector('.msg-action-btn.reaction-btn');
+    console.log('[ReactionPicker DEBUG] reactionBtn found:', reactionBtn);
+    if (!reactionBtn) {
+        console.log('[ReactionPicker DEBUG] ❌ No reaction button found, returning early');
+        return;
+    }
 
     const picker = document.createElement('div');
     picker.className = 'reaction-picker';
+    console.log('[ReactionPicker DEBUG] Created picker element:', picker);
 
-    QUICK_REACTIONS.forEach(emoji => {
+    QUICK_REACTIONS.forEach((emoji, index) => {
+        console.log(`[ReactionPicker DEBUG] Adding emoji ${index}:`, emoji, 'type:', typeof emoji);
         const btn = document.createElement('button');
         btn.className = 'reaction-picker-btn';
         btn.textContent = emoji;
+        console.log(`[ReactionPicker DEBUG] Button ${index} textContent set to:`, btn.textContent);
         btn.addEventListener('click', async () => {
+            console.log('[ReactionPicker DEBUG] Emoji button clicked:', emoji);
             picker.remove();
             await togglePresentationReaction(messageId, emoji, true, wrapper);
         });
         picker.appendChild(btn);
     });
 
-    wrapper.appendChild(picker);
+    console.log('[ReactionPicker DEBUG] Picker innerHTML:', picker.innerHTML);
+    console.log('[ReactionPicker DEBUG] Picker children count:', picker.children.length);
+
+    // Append to body to avoid overflow clipping issues in presentation view
+    document.body.appendChild(picker);
+    console.log('[ReactionPicker DEBUG] ✅ Picker appended to document.body');
+
+    // Position the picker near the reaction button
+    const rect = reactionBtn.getBoundingClientRect();
+    console.log('[ReactionPicker DEBUG] Button rect:', rect);
+
+    picker.style.position = 'fixed';
+    picker.style.zIndex = '10001'; // Higher than presentation modal (z-index: 1000)
+
+    // Position above the button if there's room, otherwise below
+    const pickerHeight = 50; // Approximate height
+    if (rect.top > pickerHeight + 10) {
+        picker.style.top = `${rect.top - pickerHeight - 8}px`;
+    } else {
+        picker.style.top = `${rect.bottom + 8}px`;
+    }
+    picker.style.left = `${Math.max(10, rect.left - 50)}px`;
+
+    console.log('[ReactionPicker DEBUG] Final picker styles:', {
+        position: picker.style.position,
+        top: picker.style.top,
+        left: picker.style.left,
+        zIndex: picker.style.zIndex
+    });
+
+    // Verify picker is in DOM
+    setTimeout(() => {
+        const verifyPicker = document.querySelector('.reaction-picker');
+        console.log('[ReactionPicker DEBUG] Verify picker in DOM after append:', verifyPicker);
+        if (verifyPicker) {
+            const computedStyle = window.getComputedStyle(verifyPicker);
+            console.log('[ReactionPicker DEBUG] Picker computed styles:', {
+                display: computedStyle.display,
+                visibility: computedStyle.visibility,
+                opacity: computedStyle.opacity,
+                position: computedStyle.position,
+                zIndex: computedStyle.zIndex,
+                width: computedStyle.width,
+                height: computedStyle.height
+            });
+        }
+    }, 10);
 
     // Close picker when clicking elsewhere
     const closePicker = (e) => {
+        console.log('[ReactionPicker DEBUG] closePicker triggered, target:', e.target);
         if (!picker.contains(e.target)) {
+            console.log('[ReactionPicker DEBUG] Click outside picker, removing');
             picker.remove();
             document.removeEventListener('click', closePicker);
         }
@@ -2000,6 +2373,42 @@ async function initializePresentationChat() {
         }
     });
 
+    // Handle real-time item reaction updates from other users
+    presentationChatChannel.bind('client-item-reaction-update', (data) => {
+        if (data.userId !== currentUser.id) {
+            const { recordId, reactions } = data;
+
+            // Update local state from received reactions object
+            if (!state.session.reactions.has(recordId)) {
+                state.session.reactions.set(recordId, new Map());
+            }
+            const itemReactions = state.session.reactions.get(recordId);
+
+            // Clear existing and rebuild from received data
+            itemReactions.clear();
+            if (reactions && typeof reactions === 'object') {
+                Object.entries(reactions).forEach(([odUserId, userEmoji]) => {
+                    itemReactions.set(odUserId, userEmoji);
+                });
+            }
+
+            // Re-render reactions for this item
+            const reactionContainer = document.querySelector(`.itinerary-item-reactions[data-record-id="${recordId}"]`);
+            if (reactionContainer) {
+                renderReactions(recordId, reactionContainer);
+            }
+
+            // Update the emoji indicator next to item name
+            updateItemEmojiIndicator(recordId);
+
+            // Update the reactions summary
+            renderReactionsSummary();
+
+            // Update the event-level emoji indicator
+            updateEventEmojiIndicator();
+        }
+    });
+
     // Set up message form submission
     if (presentationMessageForm) {
         const newForm = presentationMessageForm.cloneNode(true);
@@ -2444,13 +2853,17 @@ function handleThumbnailClick(e) {
 }
 
 function handleReactionClick(e) {
+    console.log('[ReactionClick DEBUG] handleReactionClick called, target:', e.target);
     const button = e.target.closest('.reaction-btn');
+    console.log('[ReactionClick DEBUG] button found:', button);
     if (!button) return;
 
     const recordId = button.dataset.recordId;
+    console.log('[ReactionClick DEBUG] recordId:', recordId);
 
     // Check if this is the "more" button to open expanded picker
     if (button.classList.contains('reaction-more-btn')) {
+        console.log('[ReactionClick DEBUG] More button clicked, calling showExpandedEmojiPicker');
         showExpandedEmojiPicker(recordId, button);
         return;
     }
@@ -2476,8 +2889,28 @@ function handleReactionClick(e) {
         renderReactions(recordId, reactionContainer);
     }
 
+    // Update the emoji indicator next to item name
+    updateItemEmojiIndicator(recordId);
+
     // Update the reactions summary
     renderReactionsSummary();
+
+    // Update the event-level emoji indicator
+    updateEventEmojiIndicator();
+
+    // Broadcast item reaction update via Pusher for real-time sync
+    if (presentationChatChannel) {
+        // Convert Map to object for Pusher transmission
+        const reactionsObj = {};
+        itemReactions.forEach((userEmoji, odUserId) => {
+            reactionsObj[odUserId] = userEmoji;
+        });
+        presentationChatChannel.trigger('client-item-reaction-update', {
+            recordId,
+            reactions: reactionsObj,
+            userId: currentUser.id
+        });
+    }
 
     triggerSave();
 }
@@ -2585,8 +3018,10 @@ function handleComponentCommentsClick(e) {
     const actionBtn = e.target.closest('.comment-action-btn');
     if (actionBtn) {
         e.stopPropagation();
+        e.preventDefault();
         const action = actionBtn.dataset.action;
         const commentId = actionBtn.closest('.component-comment').dataset.commentId;
+        console.log('[ComponentComment DEBUG] Comment action button clicked:', action, commentId);
         handleCommentAction(action, commentId);
         return;
     }
@@ -2915,6 +3350,7 @@ async function handleCommentAction(action, commentId) {
             await deleteComment(commentId);
             break;
         case 'react':
+            console.log('[ComponentComment DEBUG] About to call showCommentReactionPicker');
             showCommentReactionPicker(commentId);
             break;
     }
@@ -3133,33 +3569,102 @@ async function deleteComment(commentId) {
  * Show reaction picker for a comment
  */
 function showCommentReactionPicker(commentId) {
+    console.log('[CommentReactionPicker DEBUG] showCommentReactionPicker called');
+    console.log('[CommentReactionPicker DEBUG] commentId:', commentId);
+    console.log('[CommentReactionPicker DEBUG] QUICK_REACTIONS:', QUICK_REACTIONS);
+
     const commentEl = document.querySelector(`.component-comment[data-comment-id="${commentId}"]`);
-    if (!commentEl) return;
+    console.log('[CommentReactionPicker DEBUG] commentEl found:', commentEl);
+    if (!commentEl) {
+        console.log('[CommentReactionPicker DEBUG] ❌ No comment element found, returning early');
+        return;
+    }
+
+    // Find the react button to position near it
+    const reactBtn = commentEl.querySelector('.comment-action-btn[data-action="react"]');
+    console.log('[CommentReactionPicker DEBUG] reactBtn found:', reactBtn);
+    if (!reactBtn) {
+        console.log('[CommentReactionPicker DEBUG] ❌ No react button found, returning early');
+        return;
+    }
 
     // Remove existing picker
     const existingPicker = document.querySelector('.comment-reaction-picker');
+    console.log('[CommentReactionPicker DEBUG] Existing picker found:', existingPicker);
     if (existingPicker) existingPicker.remove();
 
     const picker = document.createElement('div');
     picker.className = 'comment-reaction-picker';
+    console.log('[CommentReactionPicker DEBUG] Created picker element:', picker);
 
-    QUICK_REACTIONS.forEach(emoji => {
+    QUICK_REACTIONS.forEach((emoji, index) => {
+        console.log(`[CommentReactionPicker DEBUG] Adding emoji ${index}:`, emoji, 'type:', typeof emoji);
         const btn = document.createElement('button');
         btn.className = 'reaction-picker-btn';
         btn.textContent = emoji;
+        console.log(`[CommentReactionPicker DEBUG] Button ${index} textContent:`, btn.textContent);
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
+            console.log('[CommentReactionPicker DEBUG] Emoji button clicked:', emoji);
             picker.remove();
             await toggleCommentReaction(commentId, emoji);
         });
         picker.appendChild(btn);
     });
 
-    commentEl.appendChild(picker);
+    console.log('[CommentReactionPicker DEBUG] Picker innerHTML:', picker.innerHTML);
+    console.log('[CommentReactionPicker DEBUG] Picker children count:', picker.children.length);
+
+    // Append to body to avoid overflow clipping issues in presentation view
+    document.body.appendChild(picker);
+    console.log('[CommentReactionPicker DEBUG] ✅ Picker appended to document.body');
+
+    // Position the picker near the react button
+    const rect = reactBtn.getBoundingClientRect();
+    console.log('[CommentReactionPicker DEBUG] Button rect:', rect);
+
+    picker.style.position = 'fixed';
+    picker.style.zIndex = '10001'; // Higher than presentation modal (z-index: 1000)
+
+    // Position above the button if there's room, otherwise below
+    const pickerHeight = 50; // Approximate height
+    if (rect.top > pickerHeight + 10) {
+        picker.style.top = `${rect.top - pickerHeight - 8}px`;
+    } else {
+        picker.style.top = `${rect.bottom + 8}px`;
+    }
+    picker.style.left = `${Math.max(10, rect.left - 50)}px`;
+
+    console.log('[CommentReactionPicker DEBUG] Final picker styles:', {
+        position: picker.style.position,
+        top: picker.style.top,
+        left: picker.style.left,
+        zIndex: picker.style.zIndex
+    });
+
+    // Verify picker is in DOM
+    setTimeout(() => {
+        const verifyPicker = document.querySelector('.comment-reaction-picker');
+        console.log('[CommentReactionPicker DEBUG] Verify picker in DOM after append:', verifyPicker);
+        if (verifyPicker) {
+            const computedStyle = window.getComputedStyle(verifyPicker);
+            console.log('[CommentReactionPicker DEBUG] Picker computed styles:', {
+                display: computedStyle.display,
+                visibility: computedStyle.visibility,
+                opacity: computedStyle.opacity,
+                position: computedStyle.position,
+                zIndex: computedStyle.zIndex,
+                width: computedStyle.width,
+                height: computedStyle.height
+            });
+        }
+    }, 10);
 
     // Close picker on outside click
     const closePicker = (e) => {
+        console.log('[CommentReactionPicker DEBUG] closePicker triggered, target:', e.target);
         if (!picker.contains(e.target)) {
+            console.log('[CommentReactionPicker DEBUG] Click outside picker, removing');
             picker.remove();
             document.removeEventListener('click', closePicker);
         }
@@ -3344,6 +3849,9 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Render presentation header (copies logo and title from main header)
     renderPresentationHeader();
 
+    // Update the running total cost in the header
+    updatePresentationHeaderTotal();
+
     // Render all sections
     renderEventHeader();
     renderCollaborators();
@@ -3356,6 +3864,10 @@ export async function showPresentationView(listType, startRecordId = null) {
     modal.classList.add('active');
     modal.style.display = 'flex';
     document.body.classList.add('modal-open');
+    document.body.classList.add('presentation-active');
+    // Remove early-loading optimization class now that presentation is properly initialized
+    document.body.classList.remove('presentation-loading');
+    document.documentElement.classList.remove('presentation-loading');
     document.addEventListener('keydown', handleKeyDown);
 
     // Start the background animation
@@ -3393,6 +3905,7 @@ export function hidePresentationView() {
     modal.classList.remove('active');
     modal.style.display = 'none';
     document.body.classList.remove('modal-open');
+    document.body.classList.remove('presentation-active');
     document.removeEventListener('keydown', handleKeyDown);
 
     // If catalog rendering was skipped when entering presentation view,
@@ -3416,6 +3929,10 @@ export function setupPresentationEventListeners() {
     }
     // console.log('[Accordion DEBUG] ensureDOMElements succeeded in setupPresentationEventListeners');
 
+    // Listen for user login/logout events to update the account button and collaborators
+    document.addEventListener('userLoggedIn', handlePresentationUserLogin);
+    document.addEventListener('userLoggedOut', updatePresentationAccountButton);
+
     // Handle window resize for background canvas
     window.addEventListener('resize', () => {
         if (modal && modal.classList.contains('active')) {
@@ -3438,22 +3955,17 @@ export function setupPresentationEventListeners() {
         });
     }
 
-    // Presentation header share button
-    if (presentationHeaderShareBtn) {
-        presentationHeaderShareBtn.addEventListener('click', () => {
-            const baseURL = window.location.origin + window.location.pathname;
-            const sessionID = state.session.id;
-            const shareURL = `${baseURL}?session=${sessionID}&view=present`;
+    // Note: presentationHeaderShareBtn removed - share functionality now in collaborators add/share button
 
-            navigator.clipboard.writeText(shareURL).then(() => {
-                const originalHTML = presentationHeaderShareBtn.innerHTML;
-                presentationHeaderShareBtn.innerHTML = '<span class="share-icon">✓</span>';
-                presentationHeaderShareBtn.title = 'Link Copied!';
-                setTimeout(() => {
-                    presentationHeaderShareBtn.innerHTML = originalHTML;
-                    presentationHeaderShareBtn.title = 'Share this plan';
-                }, 1500);
-            });
+    // Presentation header total button (opens checkout modal)
+    const presentationHeaderTotalBtn = document.getElementById('presentation-header-total');
+    if (presentationHeaderTotalBtn) {
+        presentationHeaderTotalBtn.addEventListener('click', () => {
+            // Only show checkout if there's a total (button is visible)
+            if (presentationHeaderTotalBtn.textContent.trim()) {
+                const shopSettings = getShopSettings();
+                showCheckoutModal(shopSettings);
+            }
         });
     }
 
@@ -3512,6 +4024,7 @@ export function setupPresentationEventListeners() {
     itineraryItemsListEl.addEventListener('click', handleThumbnailClick);
 
     // Handle reaction clicks
+    console.log('[Events DEBUG] Adding handleReactionClick listener to itineraryItemsListEl:', itineraryItemsListEl);
     itineraryItemsListEl.addEventListener('click', handleReactionClick);
 
     // Handle item accordion header clicks (for per-item collapse/expand)
@@ -3527,35 +4040,34 @@ export function setupPresentationEventListeners() {
     itineraryItemsListEl.addEventListener('click', handleSuggestionClick);
 
     // Handle component comments interactions
+    console.log('[Events DEBUG] Adding handleComponentCommentsClick listener to itineraryItemsListEl');
     itineraryItemsListEl.addEventListener('click', handleComponentCommentsClick);
     itineraryItemsListEl.addEventListener('keydown', handleComponentCommentsKeydown);
 
-    // Share button
-    shareBtn.addEventListener('click', (e) => {
-        const baseURL = window.location.origin + window.location.pathname;
-        const sessionID = state.session.id;
-        const shareURL = `${baseURL}?session=${sessionID}&view=present`;
+    // Note: shareBtn removed - share functionality now in collaborators add/share button
 
-        navigator.clipboard.writeText(shareURL).then(() => {
-            const originalText = e.target.textContent;
-            e.target.textContent = 'Link Copied!';
-            setTimeout(() => {
-               e.target.textContent = originalText;
-            }, 1500);
+    // Collaborators add/share button - copies shareable link
+    if (collaboratorsAddShareBtn) {
+        collaboratorsAddShareBtn.addEventListener('click', () => {
+            const baseURL = window.location.origin + window.location.pathname;
+            const sessionID = state.session.id;
+            const shareURL = `${baseURL}?session=${sessionID}&view=present`;
+
+            navigator.clipboard.writeText(shareURL).then(() => {
+                const originalHTML = collaboratorsAddShareBtn.innerHTML;
+                collaboratorsAddShareBtn.innerHTML = '<span class="add-share-icon">✓</span><span class="add-share-text">Copied!</span>';
+                collaboratorsAddShareBtn.title = 'Link Copied!';
+                setTimeout(() => {
+                    collaboratorsAddShareBtn.innerHTML = originalHTML;
+                    collaboratorsAddShareBtn.title = 'Add people or share this plan';
+                }, 1500);
+            });
         });
-    });
-
-    // Collaborators carousel navigation
-    if (collaboratorsCarouselPrev) {
-        collaboratorsCarouselPrev.addEventListener('click', carouselPrev);
-    }
-    if (collaboratorsCarouselNext) {
-        collaboratorsCarouselNext.addEventListener('click', carouselNext);
     }
 
-    // Collaborators expand button (show modal with full list)
-    if (collaboratorsExpandBtn) {
-        collaboratorsExpandBtn.addEventListener('click', showCollaboratorsModal);
+    // Account button in team section header - opens user profile modal
+    if (presentationAccountBtn) {
+        presentationAccountBtn.addEventListener('click', showUserModal);
     }
 
     // Collaborators modal close button
@@ -3935,6 +4447,8 @@ async function performPresentationSearch(searchTerm) {
                     Phone: phone,
                     Email: email,
                     Hours: availability,
+                    // Store website URL for image scraping (to match events.js structure)
+                    '_aiWebsite': website || null,
                     // Null fields to match events.js structure
                     Options: null, 'Parent Item': null, 'Headcount min': null,
                     'Media Tags': source.ImageKeywords || source.imageKeywords || null,

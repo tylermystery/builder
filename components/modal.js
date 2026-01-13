@@ -7,8 +7,9 @@ import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
-import { initializeItemChat } from '../chat.js';
 import { showReceiptModal } from './receipt.js';
+import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
+import { triggerSave } from '../events.js';
 
 /**
  * Helper to create or update a meta tag
@@ -297,54 +298,6 @@ function resetSchema() {
     }
 }
 
-/**
- * [V3.7] Generates the "Intelligent Blurb" by calling the central recommendation engine.
- * @param {object} record - The item record being displayed.
- * @returns {string | null} The HTML string for the blurb, or null.
- */
-function generateRecommendationBlurb(record) {
-    // Get the current sort value from the DOM
-    const sortBy = document.getElementById('sort-by')?.value || 'recommended';
-    
-    // 1. Get the current goal bucket, passing the sortBy value
-    const goalBucket = buildGoalBucket(sortBy); // This import already exists
-    
-    if (goalBucket.length === 0) {
-        // "Tip" blurb
-        return "<span class='beta-tag-subtle' style='float: right; margin-left: 5px;'>Beta</span><strong style='color: #5a6268;'>Tip:</strong> Add goals to your 'Goals/Notes' or search to get personalized recommendations.";
-    }
-
-    // 2. Call the ONE, TRUE scoring function from availability.js
-    const score = calculateRecommendationScore(record, goalBucket);
-
-    // 3. Check if the item scored well
-    if (score > 0) {
-        // Create a simple, robust blurb
-        let goalString = "goals"; // Default
-        
-        // Filter out pillar names (like "Food & Drink") from the blurb for cleaner text
-        const displayGoals = goalBucket.filter(g => 
-            !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Activity"].includes(g.toLowerCase()) &&
-            !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Food & Drink"].includes(g.toLowerCase()) &&
-            !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Venues"].includes(g.toLowerCase()) &&
-            !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Extras"].includes(g.toLowerCase())
-        );
-
-        if (displayGoals.length > 2) {
-            goalString = `'${displayGoals.slice(0, -1).join("', '")}', and '${displayGoals.slice(-1)}'`;
-        } else if (displayGoals.length > 0) {
-            goalString = `'${displayGoals.join("' and '")}'`;
-        }
-
-        // --- THIS IS THE CHANGE ---\
-        // Adds the score directly into the recommendation blurb
-        return `<span class='beta-tag-subtle' style='float: right; margin-left: 5px;'>Beta</span><strong style='color: #0056b3;'>Recommended for you (Score: ${score.toFixed(0)})</strong> This item is a good match for your ${goalString} goals.`;
-        // --- END THE CHANGE ---\
-    }
-
-    return null; // No match
-}
-
 let stripe;
 let elements; // To hold the Stripe elements instance
 let paymentElement; // To hold the payment element
@@ -355,7 +308,40 @@ let currentProcessingFee = 0; // To store the current fee
 
 let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
-let currentItemChatRecordId = null;
+
+/**
+ * Get shop settings from the current active shop
+ * Mirrors the logic in main.js for constructing shopSettings
+ * @returns {Object} Shop settings object
+ */
+export function getShopSettings() {
+    const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
+    if (!activeShop || !activeShop.fields) {
+        return {
+            shopType: 'Events',
+            enabledFilters: ['Date & Time', 'Headcount', 'Location', 'Subcategories'],
+            paymentOptions: 'DepositOnly',
+            terms: 'Default terms and conditions text.',
+            cartLabels: {}
+        };
+    }
+
+    const settings = {
+        shopType: activeShop.fields.ShopType || 'Events',
+        enabledFilters: activeShop.fields.EnabledFilters || ['Date & Time', 'Headcount', 'Location', 'Subcategories'],
+        paymentOptions: activeShop.fields.PaymentOptions || 'DepositOnly',
+        terms: activeShop.fields.TermsAndConditions || 'Default terms and conditions text.',
+        cartLabels: {}
+    };
+
+    try {
+        settings.cartLabels = JSON.parse(activeShop.fields.CartLabels || '{}');
+    } catch (e) {
+        console.warn('Could not parse CartLabels JSON, using defaults.');
+    }
+
+    return settings;
+}
 
 // Quick Pay Modal Functions
 const quickPayModalOverlay = document.getElementById('quick-pay-modal-overlay');
@@ -936,17 +922,12 @@ function resetModalState() {
         modalItemNote: document.getElementById('modal-item-note'),
         modalCalendarContainer: document.getElementById('modal-calendar-container'),
         modalBreadcrumbs: document.getElementById('modal-breadcrumbs'),
-        modalAdditionalDetails: document.getElementById('modal-additional-details'),
-        modalRecommendationBlurb: document.getElementById('modal-recommendation-blurb')
+        modalAdditionalDetails: document.getElementById('modal-additional-details')
     };
     for (const key in elements) {
         if (elements[key]) {
             if (key === 'modalItemNote') elements[key].value = '';
             else if (key === 'modalMainImage') elements[key].style.backgroundImage = '';
-            else if (key === 'modalRecommendationBlurb') {
-                elements[key].innerHTML = '';
-                elements[key].style.display = 'none';
-            }
             else elements[key].innerHTML = '';
         }
     }
@@ -998,7 +979,7 @@ async function buildPlanComponentCards(container, componentRecords, sessionId) {
         if (imageUrls.length === 1) {
             // Single image display
             const optimizedUrl = imageUrls[0].includes('cloudinary')
-                ? imageUrls[0].replace('/upload/', '/upload/w_400,h_400,c_fill,f_auto,q_auto/')
+                ? applyCloudinaryTransform(imageUrls[0], 'w_400,h_400,c_fill,f_auto,q_auto')
                 : imageUrls[0];
             mediaContainer.innerHTML = `<img class="single-image" src="${optimizedUrl}" alt="${record.fields.Name || 'Component'}" loading="lazy">`;
         } else {
@@ -1009,7 +990,7 @@ async function buildPlanComponentCards(container, componentRecords, sessionId) {
 
             imageUrls.slice(0, 4).forEach((url, idx) => {
                 const optimizedUrl = url.includes('cloudinary')
-                    ? url.replace('/upload/', '/upload/w_200,h_200,c_fill,f_auto,q_auto/')
+                    ? applyCloudinaryTransform(url, 'w_200,h_200,c_fill,f_auto,q_auto')
                     : url;
                 const img = document.createElement('img');
                 img.className = 'collage-img';
@@ -1131,7 +1112,7 @@ async function showComponentDetailModal(record, imageUrls, history, componentTyp
     galleryDiv.className = 'component-detail-gallery';
 
     const mainImageUrl = imageUrls[0].includes('cloudinary')
-        ? imageUrls[0].replace('/upload/', '/upload/w_800,h_500,c_fill,f_auto,q_auto/')
+        ? applyCloudinaryTransform(imageUrls[0], 'w_800,h_500,c_fill,f_auto,q_auto')
         : imageUrls[0];
 
     galleryDiv.innerHTML = `
@@ -1146,7 +1127,7 @@ async function showComponentDetailModal(record, imageUrls, history, componentTyp
     if (imageUrls.length > 1) {
         imageUrls.forEach((url, idx) => {
             const thumbUrl = url.includes('cloudinary')
-                ? url.replace('/upload/', '/upload/w_120,h_120,c_fill,f_auto,q_auto/')
+                ? applyCloudinaryTransform(url, 'w_120,h_120,c_fill,f_auto,q_auto')
                 : url;
             const thumb = document.createElement('div');
             thumb.className = `component-detail-thumb ${idx === 0 ? 'active' : ''}`;
@@ -1154,7 +1135,7 @@ async function showComponentDetailModal(record, imageUrls, history, componentTyp
             thumb.addEventListener('click', () => {
                 currentImageIndex = idx;
                 const fullUrl = url.includes('cloudinary')
-                    ? url.replace('/upload/', '/upload/w_800,h_500,c_fill,f_auto,q_auto/')
+                    ? applyCloudinaryTransform(url, 'w_800,h_500,c_fill,f_auto,q_auto')
                     : url;
                 mainImageEl.style.backgroundImage = `url('${fullUrl}')`;
                 thumbsContainer.querySelectorAll('.component-detail-thumb').forEach(t => t.classList.remove('active'));
@@ -1355,7 +1336,7 @@ async function initializePlanCarousel(componentRecords) {
 
         // Update image with optimization
         const optimizedImage = current.imageUrl.includes('cloudinary')
-            ? current.imageUrl.replace('/upload/', '/upload/w_800,h_600,c_fill,f_auto,q_auto/')
+            ? applyCloudinaryTransform(current.imageUrl, 'w_800,h_600,c_fill,f_auto,q_auto')
             : current.imageUrl;
         carouselImage.src = optimizedImage;
 
@@ -1483,7 +1464,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
     const modalAdditionalDetails = document.getElementById('modal-additional-details');
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
-    const modalRecBlurb = document.getElementById('modal-recommendation-blurb');
 
     const closeBtn = document.getElementById('modal-close-btn');
     closeBtn.onclick = closeDetailModal;
@@ -1501,7 +1481,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         linkedSessionId = record.fields.LinkedSession[0];
         linkedSession = await api.fetchSessionById(linkedSessionId);
         log('Modal', `Item linked to session ${linkedSessionId}, using session chat context`);
-        currentItemChatRecordId = linkedSessionId;
     } else {
         // FALLBACK: For Events that were published before LinkedSession was added,
         // try to find the session by searching for which session has this event in its LinkedItem field
@@ -1509,22 +1488,16 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             linkedSession = await api.fetchSessionByLinkedItem(record.id);
             if (linkedSession) {
                 linkedSessionId = linkedSession.id;
-                currentItemChatRecordId = linkedSessionId;
             } else {
                 // NEW: Check if this event item is contained as a component in another plan
                 // This handles the case where an event item was added to a plan via "Add to Plan"
                 linkedSession = await api.fetchSessionContainingItem(record.id, state.ui.activeShopId);
                 if (linkedSession) {
                     linkedSessionId = linkedSession.id;
-                    currentItemChatRecordId = linkedSessionId;
                     itemIsContainedInSession = true; // This item is a component, not the parent event
                     log('Modal', `Event item found as component in session ${linkedSessionId}`);
-                } else {
-                    currentItemChatRecordId = record.id;
                 }
             }
-        } else {
-            currentItemChatRecordId = record.id;
         }
     }
 
@@ -2022,16 +1995,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         }
     }
 
-    try {
-        const blurbHtml = generateRecommendationBlurb(record);
-        if (blurbHtml && modalRecBlurb) {
-            modalRecBlurb.innerHTML = blurbHtml;
-            modalRecBlurb.style.display = 'block';
-        }
-    } catch (e) {
-        console.warn('Failed to generate recommendation blurb:', e);
-    }
-
     if (modalAdditionalDetails) {
         modalAdditionalDetails.innerHTML = '';
         const fragment = document.createDocumentFragment();
@@ -2359,8 +2322,8 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
     let currentPhotoIndex = startPhotoIndex;
     // Optimize main image with proper size and format
-    const optimizedMainImage = imageUrls[currentPhotoIndex].includes('cloudinary') 
-        ? imageUrls[currentPhotoIndex].replace('/upload/', '/upload/w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive/')
+    const optimizedMainImage = imageUrls[currentPhotoIndex].includes('cloudinary')
+        ? applyCloudinaryTransform(imageUrls[currentPhotoIndex], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
         : imageUrls[currentPhotoIndex];
     modalMainImage.style.backgroundImage = `url('${optimizedMainImage}')`;
     modalThumbnailStrip.innerHTML = '';
@@ -2369,14 +2332,14 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         thumb.className = 'thumbnail-img';
         // Optimize thumbnails with smaller size
         const optimizedThumb = url.includes('cloudinary')
-            ? url.replace('/upload/', '/upload/w_150,h_150,c_fill,f_auto,q_auto/')
+            ? applyCloudinaryTransform(url, 'w_150,h_150,c_fill,f_auto,q_auto')
             : url;
         thumb.style.backgroundImage = `url('${optimizedThumb}')`;
         if (index === currentPhotoIndex) thumb.classList.add('active');
         thumb.addEventListener('click', () => {
             currentPhotoIndex = index;
             const optimizedClickImage = imageUrls[index].includes('cloudinary')
-                ? imageUrls[index].replace('/upload/', '/upload/w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive/')
+                ? applyCloudinaryTransform(imageUrls[index], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
                 : imageUrls[index];
             modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
             modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
@@ -2384,6 +2347,107 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         });
         modalThumbnailStrip.appendChild(thumb);
     });
+
+    // Setup "Search More Photos" button for AI-sourced items
+    const searchPhotosContainer = document.getElementById('modal-search-photos-container');
+    const searchPhotosBtn = document.getElementById('modal-search-photos-btn');
+    const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.id?.startsWith('ai-presentation-') || record?.isAI === true;
+
+    if (searchPhotosContainer && searchPhotosBtn) {
+        // Show button for AI records that might benefit from additional photo searches
+        if (isAIRecord) {
+            searchPhotosContainer.style.display = 'block';
+
+            // Remove previous listener if any (to avoid duplicates)
+            const newSearchBtn = searchPhotosBtn.cloneNode(true);
+            searchPhotosBtn.parentNode.replaceChild(newSearchBtn, searchPhotosBtn);
+
+            newSearchBtn.addEventListener('click', async () => {
+                newSearchBtn.classList.add('loading');
+                newSearchBtn.disabled = true;
+                const originalText = newSearchBtn.textContent;
+                newSearchBtn.textContent = 'Searching...';
+
+                try {
+                    // Build search keywords from record data
+                    const searchTerms = [];
+                    const name = record.fields?.Name || '';
+                    const mediaTags = record.fields?.['Media Tags'] || '';
+                    const category = record.fields?.Category || '';
+
+                    if (name) searchTerms.push(name);
+                    if (mediaTags) searchTerms.push(mediaTags);
+                    if (category && !searchTerms.includes(category)) searchTerms.push(category);
+
+                    const searchQuery = searchTerms.join(' ').trim() || 'activity';
+
+                    log('Modal', `Searching for more photos with: "${searchQuery}"`);
+
+                    // Use fetchImagesByTags to search for more images
+                    const additionalImages = await api.fetchImagesByTags(searchQuery);
+
+                    if (additionalImages && additionalImages.length > 0) {
+                        // Filter out duplicates
+                        const existingUrls = new Set(imageUrls);
+                        const newImages = additionalImages.filter(url => !existingUrls.has(url));
+
+                        if (newImages.length > 0) {
+                            // Add new images to the array
+                            imageUrls.push(...newImages);
+
+                            // Rebuild thumbnail strip with all images
+                            modalThumbnailStrip.innerHTML = '';
+                            imageUrls.forEach((url, index) => {
+                                const thumb = document.createElement('div');
+                                thumb.className = 'thumbnail-img';
+                                const optimizedThumb = url.includes('cloudinary')
+                                    ? applyCloudinaryTransform(url, 'w_150,h_150,c_fill,f_auto,q_auto')
+                                    : url;
+                                thumb.style.backgroundImage = `url('${optimizedThumb}')`;
+                                if (index === currentPhotoIndex) thumb.classList.add('active');
+                                thumb.addEventListener('click', () => {
+                                    currentPhotoIndex = index;
+                                    const optimizedClickImage = url.includes('cloudinary')
+                                        ? applyCloudinaryTransform(url, 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+                                        : url;
+                                    modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
+                                    modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
+                                    thumb.classList.add('active');
+                                });
+                                modalThumbnailStrip.appendChild(thumb);
+                            });
+
+                            newSearchBtn.textContent = `Found ${newImages.length} more!`;
+                            setTimeout(() => {
+                                newSearchBtn.textContent = originalText;
+                            }, 2000);
+                        } else {
+                            newSearchBtn.textContent = 'No new photos found';
+                            setTimeout(() => {
+                                newSearchBtn.textContent = originalText;
+                            }, 2000);
+                        }
+                    } else {
+                        newSearchBtn.textContent = 'No photos found';
+                        setTimeout(() => {
+                            newSearchBtn.textContent = originalText;
+                        }, 2000);
+                    }
+                } catch (error) {
+                    console.error('Error searching for more photos:', error);
+                    newSearchBtn.textContent = 'Search failed';
+                    setTimeout(() => {
+                        newSearchBtn.textContent = originalText;
+                    }, 2000);
+                } finally {
+                    newSearchBtn.classList.remove('loading');
+                    newSearchBtn.disabled = false;
+                }
+            });
+        } else {
+            searchPhotosContainer.style.display = 'none';
+        }
+    }
 
     modalHeaderActions.innerHTML = '';
     const breadcrumbs = getBreadcrumbs(record);
@@ -2506,7 +2570,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             api.fetchImagesByTags(record, [imageTag], state.records.all).then(taggedImages => {
                 if (taggedImages && taggedImages.length > 0) {
                     const optimizedImage = taggedImages[0].includes('cloudinary')
-                        ? taggedImages[0].replace('/upload/', '/upload/w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive/')
+                        ? applyCloudinaryTransform(taggedImages[0], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
                         : taggedImages[0];
                     modalMainImage.style.backgroundImage = `url('${optimizedImage}')`;
                 }
@@ -2766,6 +2830,28 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
         // Store options on the record object locally
         record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
+        // Mark that these options were locally generated (for persistence when adding to plan)
+        record._locallyGeneratedOptions = optionsText;
+
+        // Also persist the generated options in the plan item info
+        // This ensures options survive page reload
+        const isLocked = state.cart.lockedItems.has(record.id);
+        const isIdea = state.cart.items.has(record.id);
+
+        if (isLocked) {
+            const itemInfo = state.cart.lockedItems.get(record.id);
+            itemInfo.generatedOptions = optionsText;
+            state.cart.lockedItems.set(record.id, itemInfo);
+            triggerSave(); // Persist to session
+            log('Modal', `Saved generated options for locked item ${record.id}`);
+        } else if (isIdea) {
+            const itemInfo = state.cart.items.get(record.id);
+            itemInfo.generatedOptions = optionsText;
+            state.cart.items.set(record.id, itemInfo);
+            triggerSave(); // Persist to session
+            log('Modal', `Saved generated options for idea item ${record.id}`);
+        }
+
         aiOptionsStatus.textContent = 'Applied! Refreshing...';
         aiOptionsStatus.style.color = '#28a745';
 
@@ -3228,48 +3314,6 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     modalOverlay.classList.add('active');
     modalOverlay.style.display = 'flex';
     document.body.classList.add('modal-open');
-    setTimeout(() => {
-        const chatContainer = document.getElementById('modal-chat-container');
-        const isChatEnabledOnItem = record.fields['Chat Enabled'] || false;
-        const isEvent = record.fields['Item Type'] === 'Event';
-        const userRsvped = isEvent && (record.fields.RSVPs || []).includes(state.session.user.id);
-
-        console.log('[ItemChat Modal DEBUG] ========== Modal Chat Init ==========');
-        console.log('[ItemChat Modal DEBUG] record.id:', record.id);
-        console.log('[ItemChat Modal DEBUG] isAuthenticated:', state.session.user.isAuthenticated);
-        console.log('[ItemChat Modal DEBUG] isChatEnabledOnItem:', isChatEnabledOnItem);
-        console.log('[ItemChat Modal DEBUG] isEvent:', isEvent);
-        console.log('[ItemChat Modal DEBUG] userRsvped:', userRsvped);
-        console.log('[ItemChat Modal DEBUG] chatContainerExists:', !!chatContainer);
-        console.log('[ItemChat Modal DEBUG] Full user object:', JSON.stringify(state.session.user));
-        log('Modal Chat Init', {
-            isAuthenticated: state.session.user.isAuthenticated,
-            isChatEnabledOnItem: isChatEnabledOnItem,
-            isEvent,
-            userRsvped,
-            chatContainerExists: !!chatContainer,
-            user: state.session.user
-        });
-        // Show item chat to all authenticated users for persistent item-level discussions
-        // Chat is visible when: user is logged in AND chat container exists
-        // (Previously required Chat Enabled on item or user RSVP)
-        if (state.session.user.isAuthenticated && chatContainer) {
-            console.log('[ItemChat Modal DEBUG] Condition MET - initializing item chat');
-            log('Modal', 'User authenticated. Initializing item chat.');
-            chatContainer.style.display = 'flex';
-            initializeItemChat(record.id);
-        } else {
-            console.log('[ItemChat Modal DEBUG] Condition NOT MET - hiding chat');
-            console.log('[ItemChat Modal DEBUG] Reason: isAuthenticated=' + state.session.user.isAuthenticated + ', chatContainerExists=' + !!chatContainer);
-            log('Modal', 'Hiding chat. Reason:', {
-                isAuthenticated: state.session.user.isAuthenticated,
-                chatContainerExists: !!chatContainer
-            });
-            if (chatContainer) {
-                chatContainer.style.display = 'none';
-            }
-        }
-    }, 0);
 
     // Reset the rendering guard after modal is fully displayed
     isModalRendering = false;
@@ -3286,10 +3330,6 @@ export function hideDetailModal() {
     }
     modalOverlay.removeEventListener('click', handleOverlayClick);
     document.removeEventListener('keydown', handleEscapeKey);
-    if (currentItemChatRecordId) {
-        log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
-        currentItemChatRecordId = null;
-    }
 
     // --- SEO: Reset all SEO meta tags and schema markup ---
     resetSeoMetadata();

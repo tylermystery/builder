@@ -11,6 +11,7 @@ import { log } from '../utils/debug.js';
 import * as backgroundEngine from './backgroundEngine.js';
 import { showReceiptModal } from './receipt.js';
 import { syncPlanState, registerSyncCallback, updateMobileSummaryBar } from '../utils/planStateSync.js';
+import { applyCloudinaryTransform, hasCloudinaryTransformations } from '../utils/imageOptimizer.js';
 
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
@@ -25,8 +26,8 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     // Optimize background image with proper Cloudinary transformations
     const defaultPlaceholder = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520,f_auto,q_auto/ww71meppejsewxsxr4x7.jpg`;
     const bgImageUrl = imageUrls[0] || defaultPlaceholder;
-    itemCard.dataset.bgImage = bgImageUrl.includes('cloudinary') && !bgImageUrl.includes('/upload/c_fill')
-        ? bgImageUrl.replace('/upload/', '/upload/c_fill,w_600,h_520,f_auto,q_auto/')
+    itemCard.dataset.bgImage = bgImageUrl.includes('cloudinary')
+        ? applyCloudinaryTransform(bgImageUrl, 'c_fill,w_600,h_520,f_auto,q_auto')
         : bgImageUrl;
 
     // Use selections for price if available, otherwise fall back to selectedOptionIndex
@@ -81,7 +82,21 @@ async function createLockedInItemElement(record, itemInfo) {
     try {
         const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
         if (imageUrls && imageUrls.length > 0) {
-            imageUrl = imageUrls[0].replace('/upload/', '/upload/c_fill,g_auto,w_60,h_60/');
+            // Check if URL already has transformations to avoid double-transforming
+            const url = imageUrls[0];
+            const uploadIndex = url.indexOf('/upload/');
+            if (uploadIndex !== -1) {
+                const afterUpload = url.slice(uploadIndex + 8);
+                const hasExistingTransformations = /^[a-z]_[^/]+/.test(afterUpload);
+                if (hasExistingTransformations) {
+                    // URL already has transformations - prepend thumbnail size
+                    imageUrl = url.slice(0, uploadIndex + 8) + 'c_fill,g_auto,w_60,h_60/' + url.slice(uploadIndex + 8);
+                } else {
+                    imageUrl = url.replace('/upload/', '/upload/c_fill,g_auto,w_60,h_60/');
+                }
+            } else {
+                imageUrl = url;
+            }
         }
     } catch (e) {
         console.warn('Failed to fetch image for locked item:', record.id, e);

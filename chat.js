@@ -11,7 +11,6 @@ import { getDebugLogs, isDebugPanelInitialized } from './utils/debug-panel.js';
 let currentUser = null;
 let pusher = null;
 let sessionChatChannel = null;
-const itemChatChannels = new Map();
 const FUN_ADJECTIVES = ['Happy', 'Clever', 'Sunny', 'Lucky', 'Creative', 'Brave', 'Sparkling', 'Cosmic', 'Witty', 'Zesty'];
 const FUN_NOUNS = ['Panda', 'Wombat', 'Explorer', 'Starship', 'Juggler', 'Wizard', 'Dolphin', 'Robot', 'Pineapple', 'Comet'];
 let originalTitle = document.title;
@@ -152,16 +151,7 @@ function renderFilteredHistory() {
         visibleCount++;
     });
 
-    // Show empty state if no items visible
-    if (visibleCount === 0) {
-        const emptyState = document.createElement('div');
-        emptyState.className = 'history-empty-state';
-        emptyState.innerHTML = `
-            <p>No history items to display.</p>
-            <p class="empty-hint">Toggle the filters above to show chat messages, plan events, or debug logs.</p>
-        `;
-        messagesList.appendChild(emptyState);
-    }
+    // Empty state removed - chat window starts clean without placeholder text
 
     // Scroll to bottom
     if (messagesList.lastElementChild) {
@@ -721,10 +711,6 @@ function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmi
                 state.session.flaggedUsers.add(senderId);
             }
             await api.updateUserFlagStatus(senderId, !isFlagged);
-            const currentModalRecordId = document.getElementById('detail-modal-overlay')?.dataset.recordId;
-            if (currentModalRecordId) {
-                initializeItemChat(currentModalRecordId);
-            }
         });
         actionsContainer.appendChild(flagBtn);
 
@@ -791,6 +777,10 @@ function showReactionPicker(wrapper, messageId, senderId) {
     // Remove any existing picker
     document.querySelectorAll('.reaction-picker').forEach(p => p.remove());
 
+    // Find the reaction button to position near it
+    const reactionBtn = wrapper.querySelector('.msg-action-btn.reaction-btn');
+    if (!reactionBtn) return;
+
     const picker = document.createElement('div');
     picker.className = 'reaction-picker';
 
@@ -805,7 +795,22 @@ function showReactionPicker(wrapper, messageId, senderId) {
         picker.appendChild(btn);
     });
 
-    wrapper.appendChild(picker);
+    // Append to body to avoid overflow clipping issues
+    document.body.appendChild(picker);
+
+    // Position the picker near the reaction button
+    const rect = reactionBtn.getBoundingClientRect();
+    picker.style.position = 'fixed';
+    picker.style.zIndex = '10001';
+
+    // Position above the button if there's room, otherwise below
+    const pickerHeight = 50; // Approximate height
+    if (rect.top > pickerHeight + 10) {
+        picker.style.top = `${rect.top - pickerHeight - 8}px`;
+    } else {
+        picker.style.top = `${rect.bottom + 8}px`;
+    }
+    picker.style.left = `${Math.max(10, rect.left - 50)}px`;
 
     // Close picker when clicking elsewhere
     const closePicker = (e) => {
@@ -1430,240 +1435,83 @@ export async function initializeSessionChat() {
 }
 
 export async function sendMessage(message, recordId = null) {
-    if (recordId) {
-        // console.log('[ItemChat DEBUG] sendMessage START for item chat');
-        // console.log('[ItemChat DEBUG] recordId:', recordId);
-        // console.log('[ItemChat DEBUG] currentUser at send time:', JSON.stringify(currentUser));
-        const channel = itemChatChannels.get(recordId);
-        // console.log('[ItemChat DEBUG] channel exists:', !!channel);
-        if (!channel || !currentUser) {
-            // console.log('[ItemChat DEBUG] sendMessage ABORTED: channel or currentUser missing');
-            return;
-        }
-        const timestamp = new Date().toISOString();
-        const messagesList = document.getElementById('messages-list-item');
-        // Remove empty state placeholder if present
-        const emptyState = messagesList.querySelector('.item-chat-empty-state');
-        if (emptyState) {
-            emptyState.remove();
-        }
+    if (!sessionChatChannel || !currentUser) return;
 
-        // Check if this is a reply
-        if (replyingToMessage) {
-            await api.postReplyMessage(replyingToMessage.id, null, recordId, currentUser.id, currentUser.name, message);
-            // Add reply indicator to the parent message
-            const parentWrapper = messagesList.querySelector(`[data-message-id="${replyingToMessage.id}"]`);
+    requestNotificationPermissionIfNeeded();
+    const sessionId = state.session.id || 'default-session';
+    const timestamp = new Date().toISOString();
+
+    // Check if this is a reply
+    if (replyingToMessage) {
+        const result = await api.postReplyMessage(replyingToMessage.id, sessionId, null, currentUser.id, currentUser.name, message);
+        if (result) {
+            // Update the parent message's reply count in UI
+            const parentWrapper = document.querySelector(`[data-message-id="${replyingToMessage.id}"]`);
             if (parentWrapper) {
                 const existingIndicator = parentWrapper.querySelector('.thread-indicator');
                 if (existingIndicator) {
                     const currentCount = parseInt(existingIndicator.textContent.match(/\d+/)?.[0] || '0');
                     existingIndicator.innerHTML = `↳ ${currentCount + 1} ${currentCount + 1 === 1 ? 'reply' : 'replies'}`;
+                } else {
+                    // Add thread indicator
+                    const threadIndicator = document.createElement('button');
+                    threadIndicator.className = 'thread-indicator';
+                    threadIndicator.innerHTML = `↳ 1 reply`;
+                    threadIndicator.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        toggleThreadView(replyingToMessage.id, parentWrapper);
+                    });
+                    parentWrapper.querySelector('.chat-message')?.appendChild(threadIndicator);
                 }
             }
-            cancelReply();
-        } else {
-            addMessageToUI(messagesList, currentUser.name, message, true, timestamp, false, null, currentUser.id);
-            await api.postItemChatMessage(recordId, currentUser.id, currentUser.name, message);
-        }
-
-        // console.log('[ItemChat DEBUG] api.postItemChatMessage completed');
-        channel.trigger('client-new-message-item', {
-            content: message,
-            senderId: currentUser.id,
-            senderName: currentUser.name,
-            timestamp: timestamp,
-            isReply: !!replyingToMessage
-        });
-    } else {
-        if (!sessionChatChannel || !currentUser) return;
-
-        requestNotificationPermissionIfNeeded();
-        const sessionId = state.session.id || 'default-session';
-        const timestamp = new Date().toISOString();
-
-        // Check if this is a reply
-        if (replyingToMessage) {
-            const result = await api.postReplyMessage(replyingToMessage.id, sessionId, null, currentUser.id, currentUser.name, message);
-            if (result) {
-                // Update the parent message's reply count in UI
-                const parentWrapper = document.querySelector(`[data-message-id="${replyingToMessage.id}"]`);
-                if (parentWrapper) {
-                    const existingIndicator = parentWrapper.querySelector('.thread-indicator');
-                    if (existingIndicator) {
-                        const currentCount = parseInt(existingIndicator.textContent.match(/\d+/)?.[0] || '0');
-                        existingIndicator.innerHTML = `↳ ${currentCount + 1} ${currentCount + 1 === 1 ? 'reply' : 'replies'}`;
-                    } else {
-                        // Add thread indicator
-                        const threadIndicator = document.createElement('button');
-                        threadIndicator.className = 'thread-indicator';
-                        threadIndicator.innerHTML = `↳ 1 reply`;
-                        threadIndicator.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            toggleThreadView(replyingToMessage.id, parentWrapper);
-                        });
-                        parentWrapper.querySelector('.chat-message')?.appendChild(threadIndicator);
-                    }
-                }
-                sessionChatChannel.trigger('client-new-reply', {
-                    parentMessageId: replyingToMessage.id,
-                    content: message,
-                    senderId: currentUser.id,
-                    senderName: currentUser.name,
-                    timestamp: timestamp
-                });
-            }
-            cancelReply();
-        } else {
-            // Regular message (not a reply)
-            // Add to session history items
-            const messageData = {
-                type: 'chat',
-                timestamp: timestamp,
-                data: {
-                    sender: currentUser.name,
-                    message: message,
-                    isSent: true,
-                    timestamp: timestamp,
-                    senderId: currentUser.id,
-                    messageId: null, // Will be updated when we get the response
-                    reactions: {},
-                    isEdited: false,
-                    isDeleted: false,
-                    replyCount: 0
-                }
-            };
-            sessionHistoryItems.push(messageData);
-
-            // Append to UI directly (without re-rendering entire list to avoid duplicates)
-            if (historyFilters.chat) {
-                const messagesList = document.getElementById('messages-list');
-                if (messagesList) {
-                    renderHistoryItem(messagesList, messageData);
-                }
-            }
-
-            await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
-            sessionChatChannel.trigger('client-new-message', {
+            sessionChatChannel.trigger('client-new-reply', {
+                parentMessageId: replyingToMessage.id,
                 content: message,
                 senderId: currentUser.id,
                 senderName: currentUser.name,
                 timestamp: timestamp
             });
         }
-    }
-}
-
-export async function initializeItemChat(recordId) {
-    // console.log('[ItemChat DEBUG] ========== initializeItemChat START ==========');
-    // console.log('[ItemChat DEBUG] recordId:', recordId);
-    // console.log('[ItemChat DEBUG] recordId type:', typeof recordId);
-    // console.log('[ItemChat DEBUG] recordId starts with "rec":', recordId?.startsWith?.('rec'));
-    log('Chat', `Initializing item chat for recordId: ${recordId}`);
-
-    // Wait for Pusher library to be loaded
-    if (typeof window.waitForPusher === 'function') {
-        try {
-            await window.waitForPusher();
-            log('Chat', 'Pusher library is now available for item chat');
-        } catch (err) {
-            console.error('[Chat] Failed to wait for Pusher for item chat:', err);
-            return;
-        }
-    } else if (typeof Pusher === 'undefined') {
-        console.error('[Chat] Pusher is not defined for item chat');
-        return;
-    }
-
-    const chatContainer = document.getElementById('modal-chat-container');
-    if (chatContainer) chatContainer.style.display = 'block';
-
-    currentUser = getCurrentUser();
-    // console.log('[ItemChat DEBUG] currentUser:', JSON.stringify(currentUser));
-    // console.log('[ItemChat DEBUG] currentUser.id:', currentUser?.id);
-    // console.log('[ItemChat DEBUG] currentUser.name:', currentUser?.name);
-    // console.log('[ItemChat DEBUG] state.session.user:', JSON.stringify(state.session?.user));
-    const messagesList = document.getElementById('messages-list-item');
-    const messageForm = document.getElementById('message-form-item');
-    const messageInput = document.getElementById('message-input-item');
-
-    // Guard against missing elements
-    if (!messagesList) {
-        console.warn('Chat: messages-list-item element not found');
-        return;
-    }
-    if (!messageForm || !messageForm.parentNode) {
-        console.warn('Chat: message-form-item element not found or not in DOM');
-        return;
-    }
-
-    messagesList.innerHTML = '';
-    itemChatChannels.forEach((channel) => channel.unsubscribe());
-    itemChatChannels.clear();
-    // console.log('[ItemChat DEBUG] About to call api.fetchItemChatMessages for recordId:', recordId);
-    const records = await api.fetchItemChatMessages(recordId);
-    // console.log('[ItemChat DEBUG] api.fetchItemChatMessages returned records count:', records?.length);
-    // console.log('[ItemChat DEBUG] api.fetchItemChatMessages records:', JSON.stringify(records, null, 2));
-    if (records.length === 0) {
-        // Show empty state placeholder
-        const emptyState = document.createElement('div');
-        emptyState.className = 'item-chat-empty-state';
-        emptyState.innerHTML = '<p>No messages yet. Start the conversation!</p>';
-        messagesList.appendChild(emptyState);
+        cancelReply();
     } else {
-        // console.log('[ItemChat DEBUG] Processing', records.length, 'messages for display');
-        records.forEach((record, index) => {
-            const { SenderID, SenderName, Content, Timestamp } = record.fields;
-            const isSent = SenderID === currentUser.id;
-            // console.log(`[ItemChat DEBUG] Message ${index + 1}:`, {
-            //     SenderID,
-            //     SenderName,
-            //     Content: Content?.substring(0, 50) + (Content?.length > 50 ? '...' : ''),
-            //     Timestamp,
-            //     isSent,
-            //     currentUserId: currentUser.id
-            // });
-            addMessageToUI(messagesList, SenderName, Content, isSent, Timestamp, false, null, SenderID);
-        });
-        // console.log('[ItemChat DEBUG] Finished rendering all messages to UI');
-    }
-    const pusher = new Pusher('236f480714e5001590b5', {
-        cluster: 'us3',
-        authEndpoint: '/api/pusher-auth',
-        auth: {
-            params: {
-                user_id: currentUser.id,
-                user_name: currentUser.name
+        // Regular message (not a reply)
+        // Add to session history items
+        const messageData = {
+            type: 'chat',
+            timestamp: timestamp,
+            data: {
+                sender: currentUser.name,
+                message: message,
+                isSent: true,
+                timestamp: timestamp,
+                senderId: currentUser.id,
+                messageId: null, // Will be updated when we get the response
+                reactions: {},
+                isEdited: false,
+                isDeleted: false,
+                replyCount: 0
+            }
+        };
+        sessionHistoryItems.push(messageData);
+
+        // Append to UI directly (without re-rendering entire list to avoid duplicates)
+        if (historyFilters.chat) {
+            const messagesList = document.getElementById('messages-list');
+            if (messagesList) {
+                renderHistoryItem(messagesList, messageData);
             }
         }
 
-       });
-    const channelName = `presence-item-${recordId}`;
-    const channel = pusher.subscribe(channelName);
-    itemChatChannels.set(recordId, channel);
-    channel.bind('client-new-message-item', (data) => {
-        if (data.senderId !== currentUser.id) {
-            // Remove empty state placeholder if present
-            const emptyState = messagesList.querySelector('.item-chat-empty-state');
-            if (emptyState) {
-                emptyState.remove();
-            }
-            addMessageToUI(messagesList, data.senderName, data.content, false, data.timestamp, false, null, data.senderId);
-        }
-    });
-    const newForm = messageForm.cloneNode(true);
-    messageForm.parentNode.replaceChild(newForm, messageForm);
-    const newMessageInput = document.getElementById('message-input-item');
-    newForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const message = newMessageInput.value;
-        if (message.trim() === '') return;
-        // console.log('[ItemChat DEBUG] Sending message for recordId:', recordId);
-        // console.log('[ItemChat DEBUG] Message content:', message);
-        sendMessage(message, recordId);
-        newMessageInput.value = '';
-    });
-    // console.log('[ItemChat DEBUG] ========== initializeItemChat END ==========');
+        await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
+        sessionChatChannel.trigger('client-new-message', {
+            content: message,
+            senderId: currentUser.id,
+            senderName: currentUser.name,
+            timestamp: timestamp
+        });
+    }
 }
+
 export async function banUser(userId) {
     if (!state.session.user.isOwner) {
         log('Moderation', 'Permission denied: Not an owner.');

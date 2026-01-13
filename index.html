@@ -1151,6 +1151,38 @@ body.modal-open {
     flex-shrink: 0;
 }
 
+/* Current session styling in WTF Plans list */
+.wtf-plans-item.current-session {
+    background-color: #e8f4fd;
+    border-left: 3px solid #007bff;
+}
+
+.wtf-plans-item.current-session:hover {
+    background-color: #dceefb;
+}
+
+.wtf-plans-item.current-session .wtf-plans-item-icon {
+    background-color: #007bff;
+    color: white;
+}
+
+.wtf-plans-current-badge {
+    display: inline-block;
+    background-color: #007bff;
+    color: white;
+    font-size: 0.65em;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.wtf-plans-item.current-session .wtf-plans-item-time {
+    color: #007bff;
+    font-weight: 500;
+}
+
 /* WTF Plans panel overlay */
 .wtf-plans-panel-overlay {
     position: fixed;
@@ -1173,8 +1205,86 @@ body.modal-open {
         max-width: 100%;
     }
 }
+
+/* Presentation mode optimizations - hide catalog elements when URL has view=present */
+/* This will be activated by early JS detection before DOM loads */
+body.presentation-loading #main-header,
+body.presentation-loading #left-sidebar,
+body.presentation-loading #right-sidebar,
+body.presentation-loading #catalog-area,
+body.presentation-loading #kaleidoscope-bg,
+body.presentation-loading .marquee-banner,
+body.presentation-loading footer {
+    display: none !important;
+}
+
+body.presentation-loading #loading-overlay {
+    display: none !important;
+}
+
+body.presentation-loading #presentation-modal-overlay {
+    display: flex !important;
+}
+
+/* Search More Photos button styles */
+#modal-search-photos-container {
+    text-align: center;
+    padding: 10px 0;
+}
+
+.search-photos-btn {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.search-photos-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+.search-photos-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.search-photos-btn.loading::after {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-left: 8px;
+    border: 2px solid #fff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
     </style>
-    
+
+    <!-- Early presentation mode detection - runs before DOM loads to prevent catalog flash -->
+    <script>
+    (function() {
+        if (window.location.search.indexOf('view=present') !== -1) {
+            document.documentElement.classList.add('presentation-loading');
+            document.addEventListener('DOMContentLoaded', function() {
+                document.body.classList.add('presentation-loading');
+            });
+        }
+    })();
+    </script>
+
     <!-- Load Deferred CSS Asynchronously -->
     <link rel="preload" href="css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="css/deferred.css"></noscript>
@@ -1696,6 +1806,11 @@ body.modal-open {
             <div class="modal-main-column">
                 <div id="modal-main-image"></div>
                 <div id="modal-thumbnail-strip"></div>
+                <div id="modal-search-photos-container" style="display: none;">
+                    <button id="modal-search-photos-btn" class="search-photos-btn" title="Search for more photos">
+                        🔍 Search More Photos
+                    </button>
+                </div>
             </div>
 <div class="modal-sidebar-column">
                 <div id="modal-header-actions"></div>
@@ -1706,9 +1821,6 @@ body.modal-open {
 
                 <p id="modal-item-price" class="price"></p>
 
-    <div id="modal-recommendation-blurb" style="display: none; background-color: #f0f8ff; border-left: 4px solid #007bff; border-radius: 4px; padding: 12px; margin-bottom: 15px; font-size: 0.9em; line-height: 1.4;">
-        </div>
-    
                 <p id="modal-item-description"></p>
 
                 <div id="modal-options-container"></div>
@@ -1726,14 +1838,6 @@ body.modal-open {
                 <div id="modal-additional-details" class="details-section">
                     </div>
 
-                <div id="modal-chat-container">
-                  <h4>Item Chat</h4>
-                  <div id="messages-list-item" class="messages-list"></div>
-                  <form id="message-form-item">
-                    <input type="text" id="message-input-item" placeholder="Type a message..." autocomplete="off">
-                    <button type="submit">Send</button>
-                  </form>
-                </div>
 
             </div>
         </div>
@@ -1942,19 +2046,15 @@ body.modal-open {
                     <h1 id="presentation-shop-title" class="presentation-shop-title"></h1>
                 </div>
 
-                <!-- Center: Event Name -->
+                <!-- Center: Event Name with Event-Level Emoji -->
                 <div id="presentation-header-center">
                     <span id="presentation-event-label" class="presentation-event-label">Viewing Plan</span>
+                    <span id="event-emoji-indicator" class="event-emoji-indicator"></span>
                 </div>
 
-                <!-- Right: Add and Share Buttons -->
+                <!-- Right: Total Cost only (Add button moved to items, Share merged with people) -->
                 <div id="presentation-header-right">
-                    <button id="presentation-add-btn" class="header-icon-btn presentation-add-btn" title="Add items to plan" aria-label="Add items to plan">
-                        <span class="add-icon">+</span>
-                    </button>
-                    <button id="presentation-header-share-btn" class="header-icon-btn" title="Share this plan" aria-label="Share this plan">
-                        <span class="share-icon">↗</span>
-                    </button>
+                    <button id="presentation-header-total" class="presentation-header-total" title="View checkout" aria-label="View checkout summary"></button>
                 </div>
             </div>
         </header>
@@ -2001,28 +2101,27 @@ body.modal-open {
                 <section class="itinerary-section itinerary-header itinerary-accordion" data-section="header">
                     <div class="itinerary-accordion-header" data-section="header">
                         <div class="itinerary-accordion-title-row">
-                            <h3 id="header-accordion-title" class="accordion-section-title"></h3>
+                            <!-- People List: Current user button, team members, then add/share button -->
+                            <div id="itinerary-collaborators" class="itinerary-collaborators">
+                                <div class="collaborators-inline-list">
+                                    <button id="presentation-account-btn" class="presentation-account-btn collaborator-btn" title="Account settings"></button>
+                                    <div id="itinerary-collaborators-list" class="collaborators-list collaborators-inline"></div>
+                                    <button id="collaborators-add-share-btn" class="collaborator-btn add-share-btn" title="Add people or share this plan">
+                                        <span class="add-share-icon">+</span>
+                                        <span class="add-share-text">Share</span>
+                                    </button>
+                                </div>
+                            </div>
                             <span class="itinerary-accordion-icon"></span>
                         </div>
                         <p class="itinerary-accordion-summary" id="header-summary"></p>
                     </div>
                     <div class="itinerary-accordion-content">
-                        <h1 id="summary-event-name" class="itinerary-event-title"></h1>
+                        <!-- Event title is now in the header, removed from here -->
                         <div class="itinerary-event-meta">
                             <span id="summary-event-date" class="itinerary-date"></span>
                         </div>
                         <p id="summary-event-notes" class="itinerary-notes"></p>
-
-                        <!-- Hosts & Collaborators Carousel -->
-                        <div id="itinerary-collaborators" class="itinerary-collaborators">
-                            <h4 class="collaborators-title">Team</h4>
-                            <div class="collaborators-carousel-wrapper">
-                                <button class="collaborators-carousel-btn carousel-prev" aria-label="Previous collaborators">&#8249;</button>
-                                <div id="itinerary-collaborators-list" class="collaborators-list collaborators-carousel"></div>
-                                <button class="collaborators-carousel-btn carousel-next" aria-label="Next collaborators">&#8250;</button>
-                            </div>
-                            <button id="collaborators-expand-btn" class="collaborators-expand-btn">Show all</button>
-                        </div>
 
                         <!-- Expanded collaborators modal -->
                         <div id="collaborators-modal" class="collaborators-modal">
@@ -2034,10 +2133,6 @@ body.modal-open {
                                 <div id="collaborators-modal-list" class="collaborators-modal-list"></div>
                             </div>
                         </div>
-
-                        <div class="itinerary-actions">
-                            <button id="presentation-share-btn" class="itinerary-share-btn" title="Copy link to share this itinerary">Share Itinerary</button>
-                        </div>
                     </div>
                 </section>
 
@@ -2045,7 +2140,11 @@ body.modal-open {
                 <section class="itinerary-section itinerary-items itinerary-accordion" data-section="items">
                     <div class="itinerary-accordion-header" data-section="items">
                         <div class="itinerary-accordion-title-row">
-                            <h3 id="items-accordion-title" class="accordion-section-title">Planned Items</h3>
+                            <!-- Add button at the beginning of items, title removed -->
+                            <button id="presentation-add-btn" class="presentation-add-item-btn" title="Add items to plan" aria-label="Add items to plan">
+                                <span class="add-icon">+</span>
+                                <span class="add-text">Add</span>
+                            </button>
                             <span class="itinerary-accordion-icon"></span>
                         </div>
                         <p class="itinerary-accordion-summary" id="items-summary"></p>

@@ -2198,18 +2198,6 @@
     border-left: 3px solid #6366f1;
     padding-left: 8px;
 }
-#modal-chat-container {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #eee;
-  display: flex;
-  flex-direction: column;
-}
-
-#modal-chat-container h4 {
-  margin-top: 0;
-  margin-bottom: 10px;
-}
 
 .messages-list {
   display: flex;
@@ -2222,39 +2210,6 @@
   border-radius: 8px;
   background-color: #f8f9fa;
   flex-grow: 1;
-}
-
-.item-chat-empty-state {
-  text-align: center;
-  color: #6c757d;
-  font-style: italic;
-  padding: 20px 10px;
-}
-
-.item-chat-empty-state p {
-  margin: 0;
-}
-
-#message-form-item {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-#message-input-item {
-  flex-grow: 1;
-  border: 1px solid #ccc;
-  border-radius: 20px;
-  padding: 10px;
-}
-
-#message-form-item button {
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 20px;
-  padding: 10px 15px;
-  cursor: pointer;
 }
 
 .message-wrapper .moderation-actions {
@@ -2553,11 +2508,84 @@
     font-weight: 500;
 }
 
+/* Event-level emoji indicator (averaged from all component reactions) */
+.event-emoji-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-left: 8px;
+    padding: 3px 10px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    font-size: 0.95em;
+    transition: all 0.3s ease;
+    opacity: 0;
+    transform: scale(0.8);
+}
+
+.event-emoji-indicator.visible {
+    opacity: 1;
+    transform: scale(1);
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    box-shadow: 0 2px 8px rgba(255, 193, 7, 0.2);
+    animation: event-emoji-pop 0.4s ease-out;
+}
+
+.event-emoji-indicator .event-emoji-icon {
+    font-size: 1.15em;
+    line-height: 1;
+}
+
+.event-emoji-indicator .event-emoji-count {
+    font-size: 0.7em;
+    font-weight: 600;
+    color: #6c757d;
+    background: rgba(0, 0, 0, 0.08);
+    padding: 1px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+}
+
+@keyframes event-emoji-pop {
+    0% { transform: scale(0.7); opacity: 0; }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
 #presentation-header-right {
     display: flex;
     align-items: center;
     gap: 10px;
     flex-shrink: 0;
+}
+
+/* Presentation header total cost display - now a button */
+.presentation-header-total {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #28a745;
+    background: rgba(40, 167, 69, 0.1);
+    padding: 4px 12px;
+    border-radius: 20px;
+    white-space: nowrap;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+}
+
+.presentation-header-total:hover {
+    background: rgba(40, 167, 69, 0.2);
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+}
+
+.presentation-header-total:active {
+    transform: scale(0.97);
+    background: rgba(40, 167, 69, 0.25);
+}
+
+.presentation-header-total:empty {
+    display: none;
 }
 
 .back-icon, .share-icon {
@@ -2679,14 +2707,49 @@
     margin: 0 0 15px 0;
 }
 
+/* Collaborators Title Row - contains title and account button */
+.collaborators-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
 /* Collaborators Carousel Title */
 .collaborators-title {
     font-size: 0.85em;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: #6c757d;
-    margin: 0 0 12px 0;
+    margin: 0;
     text-align: center;
+}
+
+/* Presentation Account Button */
+.presentation-account-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: 0.8em;
+    font-weight: 500;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 15px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    white-space: nowrap;
+}
+
+.presentation-account-btn:hover {
+    transform: scale(1.02);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+.presentation-account-btn:empty {
+    display: none;
 }
 
 /* Collaborators Carousel Wrapper */
@@ -3282,6 +3345,23 @@
         text-overflow: ellipsis;
     }
 
+    .event-emoji-indicator {
+        margin-left: 5px;
+        padding: 2px 6px;
+        font-size: 0.85em;
+    }
+
+    .event-emoji-indicator .event-emoji-count {
+        font-size: 0.65em;
+        padding: 1px 4px;
+        min-width: 14px;
+    }
+
+    .presentation-header-total {
+        font-size: 0.9em;
+        padding: 3px 8px;
+    }
+
     .presentation-itinerary-scroll {
         padding: 15px;
     }
@@ -3739,6 +3819,76 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* Item Emoji Indicator - Real-time reaction summary next to item name */
+.item-emoji-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    font-size: 0.9em;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+    animation: emoji-pop 0.3s ease-out;
+}
+
+.item-emoji-indicator.has-reactions {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    box-shadow: 0 2px 8px rgba(255, 193, 7, 0.2);
+}
+
+.item-emoji-indicator .emoji-indicator-emoji {
+    font-size: 1.1em;
+    line-height: 1;
+}
+
+.item-emoji-indicator .emoji-indicator-count {
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #6c757d;
+    background: rgba(0, 0, 0, 0.08);
+    padding: 1px 5px;
+    border-radius: 8px;
+    min-width: 16px;
+    text-align: center;
+}
+
+@keyframes emoji-pop {
+    0% {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Ranking summary emoji styles */
+.ranking-summary-emoji {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 16px;
+    flex-shrink: 0;
+}
+
+.ranking-summary-emoji .summary-emoji {
+    font-size: 1.2em;
+}
+
+.ranking-summary-emoji .reaction-count {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #6c757d;
 }
 
 .item-accordion-title-row .itinerary-item-type {

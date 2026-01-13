@@ -9,9 +9,8 @@ import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailabi
 import { updateAllCardAvailabilityIcons } from './events.js';
 import * as api from './api.js';
 import { showPresentationView, hidePresentationView, setupPresentationEventListeners } from './components/presentation.js';
-import { initializeItemChat } from './chat.js';
 import { addEnergy, updateProgress } from './components/backgroundEngine.js';
-import { shouldUseNetlifyImageCDN, optimizeImageUrl } from './utils/imageOptimizer.js';
+import { shouldUseNetlifyImageCDN, optimizeImageUrl, applyCloudinaryTransform, hasCloudinaryTransformations } from './utils/imageOptimizer.js';
 
 
 // Re-export functions from component modules
@@ -22,7 +21,6 @@ export * from './utils.js';
 // --- THIS LINE IS MODIFIED (renderItineraryHeader and renderItinerary removed) ---
 export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, checkAvailability };
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };
-export { initializeItemChat };
 export { updateFooter, initializeFooter } from './components/footer.js';
 // Phase 3a: Task Manager exports
 export { initTaskManager, getCurrentProjectId, getCurrentTasks } from './components/taskManager.js';
@@ -224,12 +222,12 @@ async function createNestedCollectionTile(nestedGrouping, allRecords, imageCache
 
         if (collageImages.length > 0) {
             collageImagesHTML = collageImages.map(url => {
-                // Use a low-quality placeholder for lazy loading
+                // Use the safe transformation helper to avoid double-transforming
                 const placeholder = url.includes('cloudinary')
-                    ? url.replace('/upload/', '/upload/c_fill,w_50,q_30,f_auto,e_blur:300/')
+                    ? applyCloudinaryTransform(url, 'c_fill,w_50,q_30,f_auto,e_blur:300')
                     : url;
                 const optimized = url.includes('cloudinary')
-                    ? url.replace('/upload/', '/upload/c_fill,w_300,q_auto,f_auto/')
+                    ? applyCloudinaryTransform(url, 'c_fill,w_300,q_auto,f_auto')
                     : url;
                 return `<div class="collage-image lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${optimized}"></div>`;
             }).join('');

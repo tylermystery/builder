@@ -2053,6 +2053,13 @@ body.modal-open {
 .modal-overlay.active {
     display: flex;
     opacity: 1;
+    pointer-events: auto;
+}
+
+/* Ensure modals appear above presentation view when both are active */
+.presentation-fullpage.active ~ .modal-overlay.active,
+body.presentation-active .modal-overlay.active {
+    z-index: 1100;
 }
 
 /* --- Presentation Full Page View --- */
@@ -2092,6 +2099,14 @@ body.modal-open {
     max-width: none;
     border-radius: 0;
     box-shadow: none;
+    background: transparent;
+}
+
+/* Semi-transparent header in fullpage presentation mode */
+.presentation-fullpage .presentation-header {
+    background-color: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 
 .modal-content, .checkout-modal-content, .itinerary-content, .presentation-content {
@@ -2827,18 +2842,6 @@ body.modal-open {
     color: #999;
     margin: 0;
 }
-#modal-chat-container {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #eee;
-  display: flex;
-  flex-direction: column;
-}
-
-#modal-chat-container h4 {
-  margin-top: 0;
-  margin-bottom: 10px;
-}
 
 .messages-list {
   display: flex;
@@ -2851,28 +2854,6 @@ body.modal-open {
   border-radius: 8px;
   background-color: #f8f9fa;
   flex-grow: 1;
-}
-
-#message-form-item {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-#message-input-item {
-  flex-grow: 1;
-  border: 1px solid #ccc;
-  border-radius: 20px;
-  padding: 10px;
-}
-
-#message-form-item button {
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 20px;
-  padding: 10px 15px;
-  cursor: pointer;
 }
 
 .message-wrapper .moderation-actions {
@@ -3030,12 +3011,8 @@ body.modal-open {
     color: #1877f2;
 }
 
-/* Reaction Picker */
+/* Reaction Picker - positioned via JS to avoid overflow clipping in presentation view */
 .reaction-picker {
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
     background: #fff;
     border: 1px solid #e0e0e0;
     border-radius: 24px;
@@ -3043,8 +3020,9 @@ body.modal-open {
     display: flex;
     gap: 4px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 100;
-    margin-bottom: 8px;
+    /* Debug: ensure visibility */
+    min-width: 200px;
+    min-height: 40px;
 }
 
 .reaction-picker-btn {
@@ -3055,6 +3033,11 @@ body.modal-open {
     cursor: pointer;
     border-radius: 8px;
     transition: all 0.15s ease;
+    /* Debug: ensure button is visible */
+    min-width: 30px;
+    min-height: 30px;
+    /* Ensure emoji font support */
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
 }
 
 .reaction-picker-btn:hover {
@@ -3675,7 +3658,7 @@ body.modal-open {
 /* Event Header Section */
 .itinerary-header {
     text-align: center;
-    background: transparent;
+    /* Removed background: transparent to allow .itinerary-section background to show */
     border-bottom: none;
 }
 
@@ -3705,9 +3688,112 @@ body.modal-open {
 
 /* Collaborators */
 .itinerary-collaborators {
-    margin-top: 25px;
-    padding-top: 20px;
-    border-top: 1px solid #dee2e6;
+    margin-top: 15px;
+    padding-top: 0;
+    border-top: none;
+}
+
+/* When collaborators is inside accordion title row, remove margin */
+.itinerary-accordion-title-row .itinerary-collaborators {
+    margin-top: 0;
+    flex: 1;
+}
+
+/* Inline Collaborators List - horizontal row of buttons */
+.collaborators-inline-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Inline collaborators container */
+.collaborators-inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Collaborator button - shared style for current user and other collaborators */
+.collaborator-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 14px;
+    min-height: 36px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 20px;
+    font-size: 0.9em;
+    color: #333;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+.collaborator-btn:hover {
+    background: rgba(255, 255, 255, 1);
+    border-color: rgba(0, 123, 255, 0.3);
+    transform: translateY(-1px);
+}
+
+/* Current user's account button styling */
+.presentation-account-btn.collaborator-btn {
+    background: rgba(0, 123, 255, 0.1);
+    border-color: rgba(0, 123, 255, 0.3);
+    color: #007bff;
+    font-weight: 500;
+}
+
+.presentation-account-btn.collaborator-btn:hover {
+    background: rgba(0, 123, 255, 0.2);
+}
+
+/* Other collaborator name buttons */
+.collaborator-name-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 14px;
+    min-height: 36px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 20px;
+    font-size: 0.9em;
+    color: #495057;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+.collaborator-name-btn:hover {
+    background: rgba(255, 255, 255, 1);
+    border-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Add/Share button at the end of the collaborators list */
+.add-share-btn {
+    background: rgba(40, 167, 69, 0.1);
+    border-color: rgba(40, 167, 69, 0.3);
+    color: #28a745;
+}
+
+.add-share-btn:hover {
+    background: rgba(40, 167, 69, 0.2);
+    border-color: rgba(40, 167, 69, 0.5);
+}
+
+.add-share-icon {
+    font-size: 1.1em;
+    font-weight: bold;
+}
+
+.add-share-text {
+    font-weight: 500;
 }
 
 .itinerary-collaborators h3 {
@@ -3928,6 +4014,32 @@ body.modal-open {
     width: 100%;
 }
 
+/* Collaborator remove button (for authenticated users removing unauthenticated collaborators) */
+.collaborator-remove-btn {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    font-size: 1em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s, color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.collaborator-remove-btn:hover {
+    background-color: #fee;
+    color: #dc3545;
+}
+
+/* Visual indicator for unauthenticated collaborators */
+.collaborator-item.unauthenticated .collaborator-avatar {
+    background: linear-gradient(135deg, #adb5bd, #6c757d);
+}
+
 .no-collaborators {
     color: #6c757d;
     font-style: italic;
@@ -3955,7 +4067,7 @@ body.modal-open {
 
 /* Items Section */
 .itinerary-items {
-    background: transparent;
+    /* Removed background: transparent to allow .itinerary-section background to show */
 }
 
 .itinerary-items-list {
@@ -4220,6 +4332,8 @@ body.modal-open {
     padding: 4px 10px;
     cursor: pointer;
     transition: all 0.2s ease;
+    /* Ensure emoji font support across all platforms */
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
 }
 
 .itinerary-item-reactions .reaction-btn:hover {
@@ -4306,6 +4420,7 @@ body.modal-open {
     display: flex;
     justify-content: center;
     align-items: center;
+    pointer-events: auto;
 }
 
 .emoji-picker-modal {
@@ -4391,6 +4506,8 @@ body.modal-open {
     display: flex;
     align-items: center;
     justify-content: center;
+    /* Ensure emoji font support across all platforms */
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
 }
 
 .emoji-picker-emoji:hover {
@@ -4867,6 +4984,76 @@ body.modal-open {
     text-overflow: ellipsis;
 }
 
+/* Item Emoji Indicator - Real-time reaction summary next to item name */
+.item-emoji-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    font-size: 0.9em;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+    animation: emoji-pop 0.3s ease-out;
+}
+
+.item-emoji-indicator.has-reactions {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    box-shadow: 0 2px 8px rgba(255, 193, 7, 0.2);
+}
+
+.item-emoji-indicator .emoji-indicator-emoji {
+    font-size: 1.1em;
+    line-height: 1;
+}
+
+.item-emoji-indicator .emoji-indicator-count {
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #6c757d;
+    background: rgba(0, 0, 0, 0.08);
+    padding: 1px 5px;
+    border-radius: 8px;
+    min-width: 16px;
+    text-align: center;
+}
+
+@keyframes emoji-pop {
+    0% {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Ranking summary emoji styles */
+.ranking-summary-emoji {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 16px;
+    flex-shrink: 0;
+}
+
+.ranking-summary-emoji .summary-emoji {
+    font-size: 1.2em;
+}
+
+.ranking-summary-emoji .reaction-count {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #6c757d;
+}
+
 .item-accordion-title-row .itinerary-item-type {
     flex-shrink: 0;
 }
@@ -5117,6 +5304,37 @@ body.modal-open {
     justify-content: space-between;
     align-items: center;
     gap: 15px;
+}
+
+/* Add button at the beginning of items section */
+.presentation-add-item-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: rgba(0, 123, 255, 0.1);
+    border: 1px solid rgba(0, 123, 255, 0.3);
+    border-radius: 20px;
+    font-size: 0.95em;
+    color: #007bff;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
+    white-space: nowrap;
+}
+
+.presentation-add-item-btn:hover {
+    background: rgba(0, 123, 255, 0.2);
+    border-color: rgba(0, 123, 255, 0.5);
+    transform: translateY(-1px);
+}
+
+.presentation-add-item-btn .add-icon {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.presentation-add-item-btn .add-text {
+    font-weight: 500;
 }
 
 .itinerary-accordion-title {
@@ -10149,19 +10367,17 @@ hr.total-divider {
     color: #333;
 }
 
-/* Comment reaction picker */
+/* Comment reaction picker - positioned via JS to avoid overflow clipping */
 .comment-reaction-picker {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
     background: #fff;
     border-radius: 8px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
     padding: 8px;
     display: flex;
     gap: 4px;
-    z-index: 100;
-    margin-bottom: 8px;
+    /* Debug: ensure visibility */
+    min-width: 200px;
+    min-height: 40px;
 }
 
 .comment-reaction-picker .reaction-picker-btn {
@@ -10176,6 +10392,8 @@ hr.total-divider {
     cursor: pointer;
     font-size: 1.2em;
     transition: background 0.2s, transform 0.2s;
+    /* Ensure emoji font support */
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
 }
 
 .comment-reaction-picker .reaction-picker-btn:hover {

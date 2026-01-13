@@ -527,6 +527,20 @@ export async function loadSessionFromAirtable(sessionId) {
                 state.session.itemPositions = new Map(Object.entries(savedState.itemPositions || {}));
                 log('API', `Parsed session data: ${state.cart.items.size} ideas, ${state.cart.lockedItems.size} locked items, ${state.eventDetails.combined.size} details.`);
 
+                // Restore AI-generated records from saved session data
+                // These are items that were created via AI parsing and don't exist in Airtable
+                if (savedState.aiRecords && Object.keys(savedState.aiRecords).length > 0) {
+                    const aiRecordsToRestore = Object.values(savedState.aiRecords);
+                    for (const aiRecord of aiRecordsToRestore) {
+                        // Only add if not already in state.records.all
+                        if (!state.records.all.some(r => r.id === aiRecord.id)) {
+                            state.records.all.push(aiRecord);
+                        }
+                    }
+                    log('API', `Restored ${aiRecordsToRestore.length} AI-generated items from session data`);
+                    console.log(`[SESSION-LOAD] Restored ${aiRecordsToRestore.length} AI-generated items`);
+                }
+
                 // Fetch ghost items (archived/deleted items in the plan)
                 const allItemIds = [
                     ...Array.from(state.cart.lockedItems.keys()),
@@ -543,6 +557,27 @@ export async function loadSessionFromAirtable(sessionId) {
                     setState({ records: { ...state.records, archive: ghostItems } });
                     log('API', `Stored ${ghostItems.length} ghost items in state.records.archive`);
                 }
+
+                // Restore generated options to record objects from itemInfo
+                // This allows AI-generated options to persist across page reloads
+                const restoreGeneratedOptions = (itemsMap) => {
+                    for (const [recordId, itemInfo] of itemsMap.entries()) {
+                        if (itemInfo.generatedOptions) {
+                            // Find the record in state.records.all or state.records.archive
+                            let record = state.records.all.find(r => r.id === recordId);
+                            if (!record) {
+                                record = state.records.archive?.find(r => r.id === recordId);
+                            }
+                            if (record) {
+                                record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = itemInfo.generatedOptions;
+                                log('API', `Restored generated options for item ${recordId}`);
+                            }
+                        }
+                    }
+                };
+
+                restoreGeneratedOptions(state.cart.lockedItems);
+                restoreGeneratedOptions(state.cart.items);
 
             } catch (jsonError) {
                 log('API', `Failed to parse session JSON for ${sessionId}: ${jsonError.message}`);
@@ -643,13 +678,36 @@ export async function saveSessionToAirtable() {
         reactionsForSaving[recordId] = Object.fromEntries(userReactionsMap);
     }
 
+    // Collect AI-generated item records that are in the cart (ideas or locked)
+    // These need to be persisted since they don't exist in Airtable
+    const allCartItemIds = [
+        ...Array.from(state.cart.items.keys()),
+        ...Array.from(state.cart.lockedItems.keys())
+    ];
+    const aiRecordsToSave = {};
+    for (const itemId of allCartItemIds) {
+        // AI-generated items have IDs like 'ai-child-*', 'ai-search-*', or 'ai-presentation-*'
+        if (itemId.startsWith('ai-')) {
+            const aiRecord = state.records.all.find(r => r.id === itemId);
+            if (aiRecord) {
+                aiRecordsToSave[itemId] = {
+                    id: aiRecord.id,
+                    fields: aiRecord.fields,
+                    isAI: true
+                };
+            }
+        }
+    }
+
     const sessionData = {
         ideasItems: Object.fromEntries(state.cart.items),
         lockedInItems: Object.fromEntries(state.cart.lockedItems),
         itemReactions: reactionsForSaving,
         userProfiles: Object.fromEntries(state.session.userProfiles),
         eventDetails: Object.fromEntries(state.eventDetails.combined),
-        itemPositions: Object.fromEntries(state.session.itemPositions)
+        itemPositions: Object.fromEntries(state.session.itemPositions),
+        // Store full AI record data for persistence across refreshes
+        aiRecords: aiRecordsToSave
     };
 
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `New Plan - ${new Date().toLocaleDateString()}`;
@@ -795,6 +853,23 @@ export async function addItemToSession(sessionId, itemId, itemInfo = {}) {
             selections: itemInfo.selections || {},
             note: itemInfo.note || ''
         };
+
+        // If this is an AI-generated item, also save its full record data
+        // so it persists in the target session
+        if (itemId.startsWith('ai-')) {
+            const aiRecord = state.records.all.find(r => r.id === itemId);
+            if (aiRecord) {
+                if (!sessionData.aiRecords) {
+                    sessionData.aiRecords = {};
+                }
+                sessionData.aiRecords[itemId] = {
+                    id: aiRecord.id,
+                    fields: aiRecord.fields,
+                    isAI: true
+                };
+                log('API', `Also saving AI record data for ${itemId} to session ${sessionId}`);
+            }
+        }
 
         // Update the session in Airtable
         const updateUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
@@ -1676,112 +1751,6 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
          } else {
              alert(`Could not save message: ${error.message}`);
          }
-    }
-}
-
-
-export async function fetchItemChatMessages(itemId) {
-     console.log('[ItemChat API DEBUG] ========== fetchItemChatMessages START ==========');
-     console.log('[ItemChat API DEBUG] itemId:', itemId);
-     console.log('[ItemChat API DEBUG] itemId type:', typeof itemId);
-     if (!itemId || !itemId.startsWith('rec')) {
-          console.log('[ItemChat API DEBUG] INVALID itemId - returning empty array');
-          log('API', 'fetchItemChatMessages: Invalid or missing itemId.');
-          return [];
-     }
-    // Use {Item Link} & "" to convert linked record field to string containing record IDs
-    // ARRAYJOIN returns display names, but concatenating to empty string returns record IDs
-    const formula = `FIND('${itemId}', {Item Link} & "")`;
-    const encodedFormula = encodeURIComponent(formula);
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
-    console.log('[ItemChat API DEBUG] Airtable filter formula:', formula);
-    console.log('[ItemChat API DEBUG] ITEM_MESSAGES_TABLE_NAME:', ITEM_MESSAGES_TABLE_NAME);
-
-    try {
-        console.log('[ItemChat API DEBUG] Making fetch request to Airtable...');
-        const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
-        });
-        console.log('[ItemChat API DEBUG] Response status:', response.status);
-        console.log('[ItemChat API DEBUG] Response ok:', response.ok);
-        if (!response.ok) {
-             const errorData = await response.json();
-             console.log('[ItemChat API DEBUG] Error response:', JSON.stringify(errorData));
-            throw new Error(`Failed to fetch item chat messages for ${itemId}: ${errorData?.error?.message || response.statusText}`);
-        }
-        const data = await response.json();
-        console.log('[ItemChat API DEBUG] Fetched records count:', data.records?.length);
-        console.log('[ItemChat API DEBUG] Records:', JSON.stringify(data.records, null, 2));
-        log('API', `Fetched ${data.records.length} item chat messages for ${itemId}.`);
-        console.log('[ItemChat API DEBUG] ========== fetchItemChatMessages END ==========');
-        return data.records;
-    } catch (error) {
-        console.error(`[ItemChat API DEBUG] ERROR in fetchItemChatMessages:`, error);
-        console.error(`Error fetching item chat history for ${itemId}:`, error);
-        return [];
-    }
-}
-
-
-export async function postItemChatMessage(itemId, senderId, senderName, content) {
-     console.log('[ItemChat API DEBUG] ========== postItemChatMessage START ==========');
-     console.log('[ItemChat API DEBUG] itemId:', itemId);
-     console.log('[ItemChat API DEBUG] senderId:', senderId);
-     console.log('[ItemChat API DEBUG] senderName:', senderName);
-     console.log('[ItemChat API DEBUG] content preview:', content?.substring(0, 50));
-     if (!itemId || !itemId.startsWith('rec')) {
-        console.error(`[ItemChat API DEBUG] INVALID itemId: \"${itemId}\"`);
-        console.error(`[API] postItemChatMessage Error: Invalid itemId provided: \"${itemId}\".`);
-        return;
-    }
-    if (!content || !content.trim()) {
-        console.log('[ItemChat API DEBUG] Empty content - returning');
-        log('API', 'postItemChatMessage: Attempted to send empty message.');
-        return;
-    }
-
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}`;
-    const payload = {
-        records: [{
-            fields: {
-                'Item Link': [itemId], // Corrected field name 'Item Link'
-                SenderID: senderId,
-                SenderName: senderName,
-                Content: content.trim(),
-            }
-        }]
-    };
-    console.log('[ItemChat API DEBUG] Payload:', JSON.stringify(payload, null, 2));
-    try {
-         log('API', `Posting item chat message to item ${itemId} from ${senderName}`);
-         console.log('[ItemChat API DEBUG] Making POST request to Airtable...');
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-        console.log('[ItemChat API DEBUG] Response status:', response.status);
-        console.log('[ItemChat API DEBUG] Response ok:', response.ok);
-        if (!response.ok) {
-             const errorData = await response.json();
-             console.log('[ItemChat API DEBUG] Error response:', JSON.stringify(errorData));
-             throw new Error(`Failed to post item chat message to Airtable: ${errorData?.error?.message || response.statusText}`);
-        }
-        const result = await response.json();
-        const newMessageRecordId = result.records[0].id;
-        console.log('[ItemChat API DEBUG] Successfully posted. New record ID:', newMessageRecordId);
-        log('API', `Successfully posted item chat message for ${itemId}. Message ID: ${newMessageRecordId}`);
-        console.log('[ItemChat API DEBUG] ========== postItemChatMessage END ==========');
-
-    } catch (error) {
-        console.error(`[ItemChat API DEBUG] ERROR in postItemChatMessage:`, error);
-        console.error(`Error posting item chat message for ${itemId}:`, error);
-         if (typeof ui !== 'undefined' && ui.showToast) {
-            ui.showToast(`Error: Could not send message. ${error.message}`);
-        }
     }
 }
 
