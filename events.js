@@ -2223,13 +2223,37 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         else if (addToPlanBtn) {
             e.stopPropagation();
             const recordId = addToPlanBtn.closest('[data-record-id]')?.dataset.recordId;
-            if (!recordId) return;
+            console.log('[DEBUG Events] Add to Plan clicked, recordId:', recordId);
+            if (!recordId) {
+                console.log('[DEBUG Events] No recordId found - exiting');
+                return;
+            }
 
             addEnergy();
 
             // Check if this is Union Machine Works being added
-            const record = state.records.all.find(r => r.id === recordId);
-            if (!record) return;
+            let record = state.records.all.find(r => r.id === recordId);
+
+            // DEBUG: Check if this is a solution item (not in state.records.all)
+            const isSolutionItem = recordId?.startsWith('solution-');
+            console.log('[DEBUG Events] Looking for record in state.records.all:', {
+                recordId,
+                found: !!record,
+                isSolutionItem,
+                solutionRecordsAvailable: !!window._solutionRecords,
+                solutionRecordExists: window._solutionRecords?.has(recordId)
+            });
+
+            // If it's a solution item, try to get from the solution registry
+            if (!record && isSolutionItem && window._solutionRecords) {
+                record = window._solutionRecords.get(recordId);
+                console.log('[DEBUG Events] Retrieved solution record from registry:', record);
+            }
+
+            if (!record) {
+                console.log('[DEBUG Events] Record not found - exiting. This is the issue: solution items are not in state.records.all');
+                return;
+            }
 
             const isUmwBeingAdded = record.fields.Name && record.fields.Name.includes("Union Machine Works");
 
@@ -2346,6 +2370,13 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
             state.cart.lockedItems.set(recordId, itemInfo);
             state.cart.items.delete(recordId);
+
+            console.log('[DEBUG Events] Successfully added item to lockedItems:', {
+                recordId,
+                itemName: record.fields?.Name,
+                isSolution: record.isSolution,
+                itemInfo
+            });
 
             // Add progress for adding item to plan (scaled by quantity)
             const progressDelta = 0.0002 * (itemInfo.quantity || 1);

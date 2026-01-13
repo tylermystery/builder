@@ -3890,6 +3890,20 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 }
                 record._generatedSolutions[index] = solution;
 
+                // DEBUG: Store solution record in a temporary registry for Add to Plan
+                if (!window._solutionRecords) {
+                    window._solutionRecords = new Map();
+                }
+                window._solutionRecords.set(solutionRecord.id, solutionRecord);
+                console.log('[DEBUG Modal] Solution record created and stored:', {
+                    solutionId: solutionRecord.id,
+                    solutionName: solutionRecord.fields.Name,
+                    parentConceptId: record.id,
+                    parentConceptName: record.fields.Name,
+                    isSolution: solutionRecord.isSolution,
+                    solutionData: solutionRecord.solutionData
+                });
+
                 log('Modal', `Navigating to solution: ${solution.name} (from concept: ${record.fields.Name})`);
                 showDetailModal(solutionRecord);
             });
