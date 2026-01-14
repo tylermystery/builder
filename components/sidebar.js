@@ -285,11 +285,10 @@ async function createLockedInItemElement(record, itemInfo) {
                 </button>`;
         }
         // === DIG INFO DEBUG START ===
-        console.log('[DIG-INFO DEBUG] solutionBadgeHtml generated:', {
-            recordId: record.id,
-            htmlLength: solutionBadgeHtml.length,
-            htmlPreview: solutionBadgeHtml.substring(0, 100) + '...'
-        });
+        console.log('[DIG-INFO DEBUG] solutionBadgeHtml generated:',
+            'recordId=' + record.id +
+            ', htmlLength=' + solutionBadgeHtml.length +
+            ', htmlPreview="' + solutionBadgeHtml.substring(0, 150).replace(/\n/g, ' ').replace(/\s+/g, ' ') + '..."');
         // === DIG INFO DEBUG END ===
     } else {
         // === DIG INFO DEBUG START ===
@@ -300,7 +299,7 @@ async function createLockedInItemElement(record, itemInfo) {
     itemElement.innerHTML = `
         <img class="locked-item-thumbnail lazy-load" data-src="${imageUrl}" width="60" height="60" alt="${fields.Name}" loading="lazy">
         <div class="locked-item-details">
-            <p class="locked-item-name">${fields.Name}${solutionBadgeHtml}</p>
+            <p class="locked-item-name"><span class="locked-item-name-text">${fields.Name}</span>${solutionBadgeHtml}</p>
             ${optionDisplay ? `<p class="locked-item-option">${optionDisplay}</p>` : ''}
             <p class="locked-item-pricing">${quantityDisplay} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
             ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
@@ -311,12 +310,11 @@ async function createLockedInItemElement(record, itemInfo) {
     `;
 
     // === DIG INFO DEBUG START ===
-    console.log('[DIG-INFO DEBUG] After setting innerHTML:', {
-        recordId: record.id,
-        itemElementHtml: itemElement.innerHTML.substring(0, 200) + '...',
-        containsDigInfoBtn: itemElement.innerHTML.includes('dig-solution-btn'),
-        containsDigInfoText: itemElement.innerHTML.includes('Dig Info')
-    });
+    console.log('[DIG-INFO DEBUG] After setting innerHTML:',
+        'recordId=' + record.id +
+        ', htmlContainsDigBtn=' + itemElement.innerHTML.includes('dig-solution-btn') +
+        ', htmlContainsDigText=' + itemElement.innerHTML.includes('Dig Info') +
+        ', itemNameElementText=' + (itemElement.querySelector('.locked-item-name')?.innerHTML?.substring(0, 150) || 'null'));
     // === DIG INFO DEBUG END ===
 
     // Initialize Tippy tooltip for the warning asterisk if present
@@ -355,11 +353,11 @@ async function createLockedInItemElement(record, itemInfo) {
     // Initialize Tippy tooltip for the dig solution button if present
     const digBtn = itemElement.querySelector('.dig-solution-btn');
     // === DIG INFO DEBUG START ===
-    console.log('[DIG-INFO DEBUG] Dig button query result:', {
-        recordId: record.id,
-        digBtnFound: !!digBtn,
-        tippyAvailable: !!window.tippy
-    });
+    console.log('[DIG-INFO DEBUG] Dig button query result:',
+        'recordId=' + record.id +
+        ', digBtnFound=' + (!!digBtn) +
+        ', digBtnOuterHTML=' + (digBtn ? digBtn.outerHTML.substring(0, 100) : 'null') +
+        ', tippyAvailable=' + (!!window.tippy));
     // === DIG INFO DEBUG END ===
     if (digBtn && window.tippy) {
         tippy(digBtn, {

@@ -2007,6 +2007,19 @@ html.presentation-active {
 }
 .locked-item-name {
     font-weight: bold;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    white-space: normal;
+    overflow: visible;
+}
+.locked-item-name-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: calc(100% - 80px); /* Leave space for the dig button */
+    flex-shrink: 1;
 }
 .locked-item-option, .locked-item-note {
     font-size: 0.8em;
@@ -2464,6 +2477,7 @@ body.presentation-active #wtf-plans-panel-overlay {
     margin-left: 6px;
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+    flex-shrink: 0; /* Prevent button from shrinking */
 }
 
 .dig-solution-btn:hover {
