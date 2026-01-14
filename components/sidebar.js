@@ -88,15 +88,25 @@ async function createLockedInItemElement(record, itemInfo) {
                          record.id.startsWith('ai-child-') ||
                          record.id.startsWith('ai-presentation-');
 
-    // Check if this is a solution item (AI-generated from concept)
+    // Check if this is a solution item (AI-generated from concept) or a manually added item
+    // Manual items (manual-add-*, manual-presentation-*) are also researchable - they are user concepts
     const isSolutionItem = record.id.startsWith('solution-') || record.isSolution === true;
+    const isManualItem = record.id.startsWith('manual-add-') ||
+                         record.id.startsWith('manual-presentation-') ||
+                         record.isManual === true;
+    const isResearchableItem = isSolutionItem || isManualItem;
 
     // === DIG INFO DEBUG START ===
     console.log('[DIG-INFO DEBUG] Solution item check:', {
         recordId: record.id,
         isSolutionItem: isSolutionItem,
+        isManualItem: isManualItem,
+        isResearchableItem: isResearchableItem,
         checkResult1_startsWithSolution: record.id.startsWith('solution-'),
-        checkResult2_isSolutionTrue: record.isSolution === true
+        checkResult2_isSolutionTrue: record.isSolution === true,
+        checkResult3_startsWithManualAdd: record.id.startsWith('manual-add-'),
+        checkResult4_startsWithManualPresentation: record.id.startsWith('manual-presentation-'),
+        checkResult5_isManualTrue: record.isManual === true
     });
     // === DIG INFO DEBUG END ===
 
@@ -238,7 +248,7 @@ async function createLockedInItemElement(record, itemInfo) {
     }
 
     // Check if this solution has been researched (has research data with confidence)
-    const hasResearchData = isSolutionItem && record._researchData?.confidence != null;
+    const hasResearchData = isResearchableItem && record._researchData?.confidence != null;
     const confidenceScore = hasResearchData ? Math.round(record._researchData.confidence * 100) : null;
     const confidenceLevel = confidenceScore >= 80 ? 'high' : confidenceScore >= 50 ? 'medium' : 'low';
     const confidenceColors = { high: '#28a745', medium: '#ffc107', low: '#6c757d' };
@@ -247,6 +257,8 @@ async function createLockedInItemElement(record, itemInfo) {
     console.log('[DIG-INFO DEBUG] Research data check:', {
         recordId: record.id,
         isSolutionItem: isSolutionItem,
+        isManualItem: isManualItem,
+        isResearchableItem: isResearchableItem,
         hasResearchData: hasResearchData,
         confidenceRaw: record._researchData?.confidence,
         confidenceScore: confidenceScore,
@@ -254,16 +266,16 @@ async function createLockedInItemElement(record, itemInfo) {
     });
     // === DIG INFO DEBUG END ===
 
-    // Build the AI solution indicator and dig button for solution items
+    // Build the AI solution indicator and dig button for researchable items (solutions and manual items)
     let solutionBadgeHtml = '';
-    if (isSolutionItem) {
+    if (isResearchableItem) {
         // === DIG INFO DEBUG START ===
-        console.log('[DIG-INFO DEBUG] Entering isSolutionItem block, hasResearchData:', hasResearchData);
+        console.log('[DIG-INFO DEBUG] Entering isResearchableItem block, hasResearchData:', hasResearchData);
         // === DIG INFO DEBUG END ===
         if (hasResearchData) {
-            // Show accuracy score badge for researched solutions
+            // Show accuracy score badge for researched items
             // === DIG INFO DEBUG START ===
-            console.log('[DIG-INFO DEBUG] Rendering accuracy badge for researched solution:', record.id);
+            console.log('[DIG-INFO DEBUG] Rendering accuracy badge for researched item:', record.id);
             // === DIG INFO DEBUG END ===
             solutionBadgeHtml = `
                 <span class="solution-accuracy-badge"
@@ -272,15 +284,15 @@ async function createLockedInItemElement(record, itemInfo) {
                     <span style="font-size: 0.9em;">&#x2714;</span> ${confidenceScore}%
                 </span>`;
         } else {
-            // Show dig/research button for unresearched solutions
+            // Show dig/research button for unresearched items
             // === DIG INFO DEBUG START ===
-            console.log('[DIG-INFO DEBUG] Rendering Dig Info button for unresearched solution:', record.id);
+            console.log('[DIG-INFO DEBUG] Rendering Dig Info button for unresearched item:', record.id);
             // === DIG INFO DEBUG END ===
             solutionBadgeHtml = `
                 <button class="dig-solution-btn"
                         data-record-id="${record.id}"
                         style="display: inline-flex; align-items: center; gap: 3px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 2px 8px; border-radius: 10px; font-size: 0.7em; margin-left: 6px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;"
-                        data-tippy-content="Click to research this AI solution and get detailed information with accuracy score">
+                        data-tippy-content="Click to research this item and get detailed information with accuracy score">
                     <span style="font-size: 1em;">&#x1F50D;</span> Dig Info
                 </button>`;
         }
@@ -292,7 +304,7 @@ async function createLockedInItemElement(record, itemInfo) {
         // === DIG INFO DEBUG END ===
     } else {
         // === DIG INFO DEBUG START ===
-        console.log('[DIG-INFO DEBUG] NOT a solution item, no badge will be shown:', record.id);
+        console.log('[DIG-INFO DEBUG] NOT a researchable item, no badge will be shown:', record.id);
         // === DIG INFO DEBUG END ===
     }
 
