@@ -3441,6 +3441,231 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         }
     });
 
+    // Add "Dig Info" button for AI-generated solution items
+    // This allows users to research the solution and get detailed information with accuracy scores
+    const isSolutionItem = record.isSolution === true || record.id?.startsWith('solution-');
+    const hasResearchData = isSolutionItem && record._researchData?.confidence != null;
+
+    if (isSolutionItem) {
+        if (hasResearchData) {
+            // Show accuracy badge for already-researched solutions
+            const confidenceScore = Math.round(record._researchData.confidence * 100);
+            const confidenceLevel = confidenceScore >= 80 ? 'high' : confidenceScore >= 50 ? 'medium' : 'low';
+            const confidenceColors = { high: '#28a745', medium: '#ffc107', low: '#6c757d' };
+
+            const accuracyBadge = document.createElement('span');
+            accuracyBadge.className = 'modal-accuracy-badge card-action-btn';
+            accuracyBadge.style.cssText = `
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                background: ${confidenceColors[confidenceLevel]}20;
+                color: ${confidenceColors[confidenceLevel]};
+                padding: 4px 10px;
+                border-radius: 12px;
+                font-size: 0.85em;
+                margin-right: 10px;
+                border: 1px solid ${confidenceColors[confidenceLevel]}40;
+                cursor: help;
+            `;
+            accuracyBadge.innerHTML = `<span style="font-size: 0.9em;">&#x2714;</span> ${confidenceScore}% Accuracy`;
+            accuracyBadge.title = record._researchData.confidenceNotes || 'Based on AI research';
+            modalHeaderActions.appendChild(accuracyBadge);
+
+            // Initialize Tippy tooltip if available
+            if (window.tippy) {
+                tippy(accuracyBadge, {
+                    content: `AI research accuracy: ${confidenceScore}%<br><em>${record._researchData.confidenceNotes || 'Based on AI research'}</em>`,
+                    allowHTML: true,
+                    placement: 'bottom',
+                    arrow: true
+                });
+            }
+
+            log('Modal', `Showing accuracy badge for researched solution: ${record.id} (${confidenceScore}%)`);
+        } else {
+            // Show "Dig Info" button for unresearched solutions
+            const digInfoBtn = document.createElement('button');
+            digInfoBtn.className = 'card-action-btn modal-dig-info-btn dig-solution-btn';
+            digInfoBtn.id = 'modal-dig-info-btn';
+            digInfoBtn.dataset.recordId = record.id;
+            digInfoBtn.style.cssText = `
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 12px;
+                font-size: 0.85em;
+                margin-right: 10px;
+                cursor: pointer;
+                transition: transform 0.2s, box-shadow 0.2s;
+            `;
+            digInfoBtn.innerHTML = '<span style="font-size: 1em;">&#x1F50D;</span> Dig Info';
+            digInfoBtn.title = 'Research this solution and get detailed information with accuracy score';
+            modalHeaderActions.appendChild(digInfoBtn);
+
+            // Initialize Tippy tooltip if available
+            if (window.tippy) {
+                tippy(digInfoBtn, {
+                    content: 'Click to research this solution and get detailed information with accuracy score',
+                    placement: 'bottom',
+                    arrow: true
+                });
+            }
+
+            // Add click handler for the Dig Info button
+            digInfoBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+
+                log('Modal', `Dig Info clicked for solution: ${record.id}`);
+
+                // Find the solution record in the registry
+                let solutionRecord = null;
+                if (record.id.startsWith('solution-') && window._solutionRecords) {
+                    solutionRecord = window._solutionRecords.get(record.id);
+                }
+
+                // Fallback to the record passed to the modal
+                if (!solutionRecord) {
+                    solutionRecord = record;
+                }
+
+                if (!solutionRecord) {
+                    log('Modal', `Solution record ${record.id} not found`);
+                    if (typeof ui !== 'undefined' && ui.showToast) {
+                        ui.showToast('Could not find solution record');
+                    }
+                    return;
+                }
+
+                // Update button to show loading state
+                const originalContent = digInfoBtn.innerHTML;
+                digInfoBtn.innerHTML = '<span style="font-size: 1em;">&#x23F3;</span> Researching...';
+                digInfoBtn.disabled = true;
+                digInfoBtn.style.opacity = '0.7';
+
+                try {
+                    // Call the API to research the solution
+                    const result = await api.digSolutionDetails(solutionRecord);
+
+                    if (!result.success) {
+                        throw new Error(result.error || 'Failed to research solution');
+                    }
+
+                    const research = result.research;
+                    log('Modal', `Successfully researched solution ${record.id} with confidence ${research.confidence}`);
+
+                    // Update the solution record with research data
+                    solutionRecord._researchData = research;
+
+                    // Update fields with researched information
+                    if (research.name) solutionRecord.fields.Name = research.name;
+                    if (research.description) solutionRecord.fields.Description = research.description;
+                    if (research.price?.estimate) solutionRecord.fields.Price = research.price.estimate;
+
+                    // Add location details
+                    if (research.location?.serviceArea) {
+                        solutionRecord.fields['Location Details'] = research.location.serviceArea;
+                        if (research.location.type) {
+                            solutionRecord.fields['Location Details'] += ` (${research.location.type} service)`;
+                        }
+                    }
+
+                    // Add availability/lead time info to Additional Information
+                    let additionalInfo = '';
+                    if (research.availability?.leadTime) {
+                        additionalInfo += `Booking: ${research.availability.leadTime}`;
+                    }
+                    if (research.availability?.hours) {
+                        additionalInfo += additionalInfo ? '\n\n' : '';
+                        additionalInfo += `Hours: ${research.availability.hours}`;
+                    }
+                    if (research.goodToKnow) {
+                        additionalInfo += additionalInfo ? '\n\n' : '';
+                        additionalInfo += `Good to Know: ${research.goodToKnow}`;
+                    }
+                    if (additionalInfo) {
+                        solutionRecord.fields['Additional Information'] = additionalInfo;
+                    }
+
+                    // Add rankings/profile data
+                    if (research.rankings) {
+                        const rankingsData = {
+                            profileSource: 'ai_solution_research',
+                            Fun: research.rankings.Fun || 0,
+                            Social: research.rankings.Social || 0,
+                            Active: research.rankings.Active || 0,
+                            Creative: research.rankings.Creative || 0,
+                            Learning: research.rankings.Learning || 0,
+                            Relaxing: research.rankings.Relaxing || 0,
+                            Tags: research.imageKeywords || []
+                        };
+                        solutionRecord.fields.Rankings = JSON.stringify(rankingsData);
+                    }
+
+                    // Add media tags for image searching
+                    if (research.imageKeywords && research.imageKeywords.length > 0) {
+                        solutionRecord.fields['Media Tags'] = research.imageKeywords.join(' ');
+                    }
+
+                    // Store confidence score on the record
+                    solutionRecord._aiConfidence = research.confidence;
+
+                    // Update the registry with the enriched record
+                    if (window._solutionRecords) {
+                        window._solutionRecords.set(record.id, solutionRecord);
+                    }
+
+                    // Also update in state.records.all if present
+                    const stateIndex = state.records.all.findIndex(r => r.id === record.id);
+                    if (stateIndex !== -1) {
+                        state.records.all[stateIndex] = solutionRecord;
+                    }
+
+                    // Show success toast with accuracy score
+                    const accuracyPercent = Math.round(research.confidence * 100);
+                    if (typeof ui !== 'undefined' && ui.showToast) {
+                        ui.showToast(`Research complete! Accuracy: ${accuracyPercent}%`);
+                    }
+
+                    // Add energy visual feedback if available
+                    if (typeof addEnergy === 'function') {
+                        addEnergy();
+                    }
+
+                    // Re-render the modal to show updated info and accuracy badge
+                    showDetailModal(solutionRecord);
+
+                    // Also update the sidebar if the item is in the plan
+                    if (typeof ui !== 'undefined' && ui.updateEventPlanSection) {
+                        await ui.updateEventPlanSection();
+                    }
+
+                    // Trigger save to persist the research data
+                    if (typeof triggerSave === 'function') {
+                        triggerSave();
+                    }
+
+                } catch (error) {
+                    console.error('Error researching solution:', error);
+                    if (typeof ui !== 'undefined' && ui.showToast) {
+                        ui.showToast('Failed to research solution. Try again.');
+                    }
+
+                    // Restore button
+                    digInfoBtn.innerHTML = originalContent;
+                    digInfoBtn.disabled = false;
+                    digInfoBtn.style.opacity = '1';
+                }
+            });
+
+            log('Modal', `Showing Dig Info button for unresearched solution: ${record.id}`);
+        }
+    }
+
     // Add Edit Item button for manual/custom items (items added via manual add feature)
     const isManualItem = record.isManual === true ||
                          record.id?.startsWith('manual-add-') ||
