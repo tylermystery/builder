@@ -76,6 +76,9 @@ async function createLockedInItemElement(record, itemInfo) {
                          record.id.startsWith('ai-child-') ||
                          record.id.startsWith('ai-presentation-');
 
+    // Check if this is a solution item (AI-generated from concept)
+    const isSolutionItem = record.id.startsWith('solution-') || record.isSolution === true;
+
     // Fetch images for all items (including AI-parsed and custom items)
     // The fetchImagesForRecord function now handles multi-tier image sourcing
     let imageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_60,h_60/ww71meppejsewxsxr4x7.jpg`;
@@ -213,10 +216,39 @@ async function createLockedInItemElement(record, itemInfo) {
         }
     }
 
+    // Check if this solution has been researched (has research data with confidence)
+    const hasResearchData = isSolutionItem && record._researchData?.confidence != null;
+    const confidenceScore = hasResearchData ? Math.round(record._researchData.confidence * 100) : null;
+    const confidenceLevel = confidenceScore >= 80 ? 'high' : confidenceScore >= 50 ? 'medium' : 'low';
+    const confidenceColors = { high: '#28a745', medium: '#ffc107', low: '#6c757d' };
+
+    // Build the AI solution indicator and dig button for solution items
+    let solutionBadgeHtml = '';
+    if (isSolutionItem) {
+        if (hasResearchData) {
+            // Show accuracy score badge for researched solutions
+            solutionBadgeHtml = `
+                <span class="solution-accuracy-badge"
+                      style="display: inline-flex; align-items: center; gap: 4px; background: ${confidenceColors[confidenceLevel]}20; color: ${confidenceColors[confidenceLevel]}; padding: 2px 6px; border-radius: 10px; font-size: 0.7em; margin-left: 6px; border: 1px solid ${confidenceColors[confidenceLevel]}40;"
+                      data-tippy-content="AI research accuracy: ${confidenceScore}%<br><em>${record._researchData.confidenceNotes || 'Based on AI research'}</em>">
+                    <span style="font-size: 0.9em;">&#x2714;</span> ${confidenceScore}%
+                </span>`;
+        } else {
+            // Show dig/research button for unresearched solutions
+            solutionBadgeHtml = `
+                <button class="dig-solution-btn"
+                        data-record-id="${record.id}"
+                        style="display: inline-flex; align-items: center; gap: 3px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 2px 8px; border-radius: 10px; font-size: 0.7em; margin-left: 6px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;"
+                        data-tippy-content="Click to research this AI solution and get detailed information with accuracy score">
+                    <span style="font-size: 1em;">&#x1F50D;</span> Dig Info
+                </button>`;
+        }
+    }
+
     itemElement.innerHTML = `
         <img class="locked-item-thumbnail lazy-load" data-src="${imageUrl}" width="60" height="60" alt="${fields.Name}" loading="lazy">
         <div class="locked-item-details">
-            <p class="locked-item-name">${fields.Name}</p>
+            <p class="locked-item-name">${fields.Name}${solutionBadgeHtml}</p>
             ${optionDisplay ? `<p class="locked-item-option">${optionDisplay}</p>` : ''}
             <p class="locked-item-pricing">${quantityDisplay} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
             ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
@@ -253,6 +285,28 @@ async function createLockedInItemElement(record, itemInfo) {
     if (packageDiscountSpan && window.tippy) {
         tippy(packageDiscountSpan, {
             content: packageDiscountSpan.dataset.tippyContent,
+            allowHTML: true,
+            placement: 'top',
+            arrow: true
+        });
+    }
+
+    // Initialize Tippy tooltip for the dig solution button if present
+    const digBtn = itemElement.querySelector('.dig-solution-btn');
+    if (digBtn && window.tippy) {
+        tippy(digBtn, {
+            content: digBtn.dataset.tippyContent,
+            allowHTML: true,
+            placement: 'top',
+            arrow: true
+        });
+    }
+
+    // Initialize Tippy tooltip for the accuracy badge if present
+    const accuracyBadge = itemElement.querySelector('.solution-accuracy-badge');
+    if (accuracyBadge && window.tippy) {
+        tippy(accuracyBadge, {
+            content: accuracyBadge.dataset.tippyContent,
             allowHTML: true,
             placement: 'top',
             arrow: true

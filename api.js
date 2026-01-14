@@ -748,7 +748,10 @@ export async function saveSessionToAirtable() {
                     isSolution: itemId.startsWith('solution-') || customRecord.isSolution === true,
                     parentConceptId: customRecord.parentConceptId,
                     parentConceptRecord: customRecord.parentConceptRecord,
-                    solutionData: customRecord.solutionData
+                    solutionData: customRecord.solutionData,
+                    // Preserve research data for solution items that have been "dug"
+                    _researchData: customRecord._researchData,
+                    _aiConfidence: customRecord._aiConfidence
                 };
             }
         }
@@ -4835,6 +4838,52 @@ export async function generateConceptSolutions(record) {
         return result;
     } catch (error) {
         console.error('Error generating concept solutions:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Research a solution item to dig for more detailed information using AI
+ * This fills in details like location, pricing, rankings, etc. similar to full AI-parsed items
+ * @param {Object} solutionRecord - The solution record to research
+ * @returns {Promise<Object>} - Object with success flag and research data including accuracy score
+ */
+export async function digSolutionDetails(solutionRecord) {
+    if (!solutionRecord || !solutionRecord.fields) {
+        console.error('digSolutionDetails called without valid solution record');
+        return { success: false, error: 'Invalid solution record' };
+    }
+
+    const solutionData = {
+        name: solutionRecord.fields.Name || 'Unknown Solution',
+        description: solutionRecord.fields.Description || solutionRecord.solutionData?.description || '',
+        price: solutionRecord.fields.Price || null,
+        category: solutionRecord.fields.Category || '',
+        parentConcept: solutionRecord.parentConceptRecord?.fields?.Name || ''
+    };
+
+    log('API', `Digging for details on solution: ${solutionData.name}`);
+
+    try {
+        const response = await fetch('/.netlify/functions/dig-solution-details', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(solutionData)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error from dig-solution-details function:', errorText);
+            throw new Error(`Failed to research solution: ${errorText}`);
+        }
+
+        const result = await response.json();
+        log('API', `Successfully researched solution ${solutionData.name} with confidence ${result.research?.confidence || 'N/A'}`);
+        return result;
+    } catch (error) {
+        console.error('Error researching solution details:', error);
         return { success: false, error: error.message };
     }
 }
