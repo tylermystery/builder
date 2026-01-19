@@ -2494,6 +2494,79 @@ body.presentation-active #wtf-plans-panel-overlay {
     cursor: wait;
 }
 
+/* Categorize button styles */
+.categorize-item-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: linear-gradient(135deg, #43a047 0%, #1b5e20 100%);
+    color: white;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.categorize-item-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(67, 160, 71, 0.4);
+}
+
+.categorize-item-btn:active {
+    transform: scale(0.98);
+}
+
+.categorize-item-btn:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+/* Category badges container */
+.modal-categories-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+/* Individual category badge */
+.category-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    cursor: help;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.category-badge:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Category badge color variations - already handled inline but these are fallbacks */
+.category-badge.primary {
+    background: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #a5d6a7;
+}
+
+.category-badge.secondary {
+    background: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffcc80;
+}
+
+.category-badge.tertiary {
+    background: #f3e5f5;
+    color: #7b1fa2;
+    border: 1px solid #ce93d8;
+}
+
 /* Solution accuracy badge in sidebar */
 .solution-accuracy-badge {
     display: inline-flex;

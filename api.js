@@ -4889,6 +4889,51 @@ export async function digSolutionDetails(solutionRecord) {
 }
 
 /**
+ * Categorize an item to find the top 3 event types it's best suited for
+ * Uses AI to analyze the item and suggest appropriate event categories
+ * @param {Object} itemRecord - The item record to categorize
+ * @returns {Promise<Object>} - Object with success flag and categorization data
+ */
+export async function categorizeItem(itemRecord) {
+    if (!itemRecord || !itemRecord.fields) {
+        console.error('categorizeItem called without valid item record');
+        return { success: false, error: 'Invalid item record' };
+    }
+
+    const itemData = {
+        name: itemRecord.fields.Name || 'Unknown Item',
+        description: itemRecord.fields.Description || '',
+        price: itemRecord.fields.Price || null,
+        category: itemRecord.fields.Categories || itemRecord.fields.Category || ''
+    };
+
+    log('API', `Categorizing item: ${itemData.name}`);
+
+    try {
+        const response = await fetch('/.netlify/functions/categorize-item', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(itemData)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error from categorize-item function:', errorText);
+            throw new Error(`Failed to categorize item: ${errorText}`);
+        }
+
+        const result = await response.json();
+        log('API', `Successfully categorized ${itemData.name} with ${result.categorization?.categories?.length || 0} categories`);
+        return result;
+    } catch (error) {
+        console.error('Error categorizing item:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
  * Fetch Cloudinary image resources by tags with full metadata including public_id
  * This returns the full resource objects, not just URLs, enabling AI processing
  * @param {string|Array} tags - Single tag string or array of tags to search for

@@ -3666,6 +3666,193 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         }
     }
 
+    // Add "Categorize" button for ALL items (both catalog and solution items)
+    // This allows users to see what event types an item would be best suited for
+    const hasCategorization = record._categorization?.categories?.length > 0;
+
+    if (hasCategorization) {
+        // Show category badges for already-categorized items
+        const categoriesContainer = document.createElement('div');
+        categoriesContainer.className = 'modal-categories-container';
+        categoriesContainer.style.cssText = `
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-right: 10px;
+            flex-wrap: wrap;
+        `;
+
+        // Add a small label
+        const categoryLabel = document.createElement('span');
+        categoryLabel.style.cssText = `
+            font-size: 0.75em;
+            color: #666;
+            margin-right: 2px;
+        `;
+        categoryLabel.textContent = 'Good for:';
+        categoriesContainer.appendChild(categoryLabel);
+
+        record._categorization.categories.forEach((cat, index) => {
+            const relevancePercent = Math.round(cat.relevance * 100);
+            const badge = document.createElement('span');
+            badge.className = 'category-badge';
+            badge.style.cssText = `
+                display: inline-flex;
+                align-items: center;
+                gap: 3px;
+                background: ${index === 0 ? '#e8f5e9' : index === 1 ? '#fff3e0' : '#f3e5f5'};
+                color: ${index === 0 ? '#2e7d32' : index === 1 ? '#e65100' : '#7b1fa2'};
+                padding: 3px 8px;
+                border-radius: 10px;
+                font-size: 0.75em;
+                border: 1px solid ${index === 0 ? '#a5d6a7' : index === 1 ? '#ffcc80' : '#ce93d8'};
+                cursor: help;
+            `;
+            badge.textContent = cat.name;
+            badge.title = cat.reason || `${relevancePercent}% match`;
+
+            // Initialize Tippy tooltip if available
+            if (window.tippy) {
+                tippy(badge, {
+                    content: `<strong>${cat.name}</strong><br><em>${cat.reason || 'Recommended for this event type'}</em><br>Relevance: ${relevancePercent}%`,
+                    allowHTML: true,
+                    placement: 'bottom',
+                    arrow: true
+                });
+            }
+
+            categoriesContainer.appendChild(badge);
+        });
+
+        modalHeaderActions.appendChild(categoriesContainer);
+        log('Modal', `Showing category badges for categorized item: ${record.id}`);
+    } else {
+        // Show "Categorize" button for uncategorized items
+        const categorizeBtn = document.createElement('button');
+        categorizeBtn.className = 'card-action-btn modal-categorize-btn categorize-item-btn';
+        categorizeBtn.id = 'modal-categorize-btn';
+        categorizeBtn.dataset.recordId = record.id;
+        categorizeBtn.style.cssText = `
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: linear-gradient(135deg, #43a047 0%, #1b5e20 100%);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            margin-right: 10px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        `;
+        categorizeBtn.innerHTML = '<span style="font-size: 1em;">🏷️</span> Categorize';
+        categorizeBtn.title = 'Find the best event types for this item';
+        modalHeaderActions.appendChild(categorizeBtn);
+
+        // Initialize Tippy tooltip if available
+        if (window.tippy) {
+            tippy(categorizeBtn, {
+                content: 'Click to see what types of events this item is best suited for',
+                placement: 'bottom',
+                arrow: true
+            });
+        }
+
+        // Add click handler for the Categorize button
+        categorizeBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+
+            log('Modal', `Categorize clicked for item: ${record.id}`);
+
+            // Get the item record - check various sources
+            let itemRecord = record;
+
+            // If it's a solution, check the registry
+            if (record.id?.startsWith('solution-') && window._solutionRecords) {
+                const solutionRecord = window._solutionRecords.get(record.id);
+                if (solutionRecord) {
+                    itemRecord = solutionRecord;
+                }
+            }
+
+            // Also check state.records.all for catalog items
+            if (!itemRecord.fields && state.records.all) {
+                const stateRecord = state.records.all.find(r => r.id === record.id);
+                if (stateRecord) {
+                    itemRecord = stateRecord;
+                }
+            }
+
+            if (!itemRecord || !itemRecord.fields) {
+                log('Modal', `Item record ${record.id} not found`);
+                if (typeof ui !== 'undefined' && ui.showToast) {
+                    ui.showToast('Could not find item record');
+                }
+                return;
+            }
+
+            // Update button to show loading state
+            const originalContent = categorizeBtn.innerHTML;
+            categorizeBtn.innerHTML = '<span style="font-size: 1em;">⏳</span> Analyzing...';
+            categorizeBtn.disabled = true;
+            categorizeBtn.style.opacity = '0.7';
+
+            try {
+                // Call the API to categorize the item
+                const result = await api.categorizeItem(itemRecord);
+
+                if (!result.success) {
+                    throw new Error(result.error || 'Failed to categorize item');
+                }
+
+                const categorization = result.categorization;
+                log('Modal', `Successfully categorized item ${record.id} with ${categorization.categories?.length || 0} categories`);
+
+                // Store the categorization on the record
+                itemRecord._categorization = categorization;
+
+                // Update the solution registry if it's a solution
+                if (record.id?.startsWith('solution-') && window._solutionRecords) {
+                    window._solutionRecords.set(record.id, itemRecord);
+                }
+
+                // Update in state.records.all if present
+                const stateIndex = state.records.all.findIndex(r => r.id === record.id);
+                if (stateIndex !== -1) {
+                    state.records.all[stateIndex]._categorization = categorization;
+                }
+
+                // Show success toast
+                const topCategory = categorization.categories?.[0]?.name || 'events';
+                if (typeof ui !== 'undefined' && ui.showToast) {
+                    ui.showToast(`Perfect for ${topCategory}!`);
+                }
+
+                // Add energy visual feedback if available
+                if (typeof addEnergy === 'function') {
+                    addEnergy();
+                }
+
+                // Re-render the modal to show the category badges
+                showDetailModal(itemRecord);
+
+            } catch (error) {
+                console.error('Error categorizing item:', error);
+                if (typeof ui !== 'undefined' && ui.showToast) {
+                    ui.showToast('Failed to categorize item. Try again.');
+                }
+
+                // Restore button
+                categorizeBtn.innerHTML = originalContent;
+                categorizeBtn.disabled = false;
+                categorizeBtn.style.opacity = '1';
+            }
+        });
+
+        log('Modal', `Showing Categorize button for item: ${record.id}`);
+    }
+
     // Add Edit Item button for manual/custom items (items added via manual add feature)
     const isManualItem = record.isManual === true ||
                          record.id?.startsWith('manual-add-') ||
