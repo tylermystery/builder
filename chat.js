@@ -7,6 +7,7 @@ import { log } from './utils/debug.js';
 import { triggerSave, openChatWidget } from './events.js';
 import { updateUrl } from './utils.js';
 import { getDebugLogs, isDebugPanelInitialized } from './utils/debug-panel.js';
+import { refreshForumData, setGetCurrentUser, onNewItemReceived, updateNotificationBadges } from './components/forumPanel.js';
 
 let currentUser = null;
 let pusher = null;
@@ -660,16 +661,18 @@ function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmi
     });
     actionsContainer.appendChild(reactionBtn);
 
-    // Reply button
-    const replyBtn = document.createElement('button');
-    replyBtn.className = 'msg-action-btn reply-btn';
-    replyBtn.innerHTML = '↩';
-    replyBtn.title = 'Reply';
-    replyBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        startReply(messageId, sender, message);
-    });
-    actionsContainer.appendChild(replyBtn);
+    // Reply button (only for messages with valid IDs - not for newly sent messages that haven't been saved yet)
+    if (messageId && messageId.startsWith && messageId.startsWith('rec')) {
+        const replyBtn = document.createElement('button');
+        replyBtn.className = 'msg-action-btn reply-btn';
+        replyBtn.innerHTML = '↩';
+        replyBtn.title = 'Reply';
+        replyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            startReply(messageId, sender, message);
+        });
+        actionsContainer.appendChild(replyBtn);
+    }
 
     // Edit button (only for own messages)
     if (isSent && messageId) {
@@ -1091,6 +1094,10 @@ export function getCurrentUser() {
     // Always call getSimpleUserIdentity to ensure authentication status is checked
     return getSimpleUserIdentity();
 }
+
+// Initialize forum panel with getCurrentUser reference to avoid circular dependency
+setGetCurrentUser(getCurrentUser);
+
 function showNewMessageNotification(sender, message) {
   if (Notification.permission === 'granted' && !document.hasFocus()) {
     const notification = new Notification(`New message from ${sender}`, {
@@ -1268,6 +1275,9 @@ export async function initializeSessionChat() {
 
         // Render the filtered history
         renderFilteredHistory();
+
+        // Update forum panel notification badges after loading chat history
+        updateNotificationBadges();
     }
 
     pusher = new Pusher('236f480714e5001590b5', {
@@ -1313,6 +1323,10 @@ export async function initializeSessionChat() {
                     renderHistoryItem(messagesList, messageData);
                 }
             }
+            // Refresh forum panel if open
+            refreshForumData();
+            // Update notification counts for new message
+            onNewItemReceived('message', { timestamp });
             showNewMessageNotification(data.senderName, data.content);
             if (!isTabActive) {
                 document.title = 'New Message! - ' + originalTitle;
@@ -1327,6 +1341,10 @@ export async function initializeSessionChat() {
             if (wrapper) {
                 updateReactionsDisplay(wrapper, data.reactions);
             }
+            // Refresh forum panel if open to show updated reactions
+            refreshForumData();
+            // Update notification counts for new reaction
+            onNewItemReceived('reaction', { timestamp: new Date().toISOString() });
         }
     });
 
@@ -1346,6 +1364,8 @@ export async function initializeSessionChat() {
                     }
                 }
             }
+            // Refresh forum panel if open to show edited message
+            refreshForumData();
         }
     });
 
@@ -1357,6 +1377,8 @@ export async function initializeSessionChat() {
                 wrapper.classList.add('deleted-message');
                 wrapper.innerHTML = `<div class="chat-message deleted"><em>This message was deleted</em></div>`;
             }
+            // Refresh forum panel if open to show deleted message
+            refreshForumData();
         }
     });
 
@@ -1380,6 +1402,10 @@ export async function initializeSessionChat() {
                     parentWrapper.querySelector('.chat-message')?.appendChild(threadIndicator);
                 }
             }
+            // Refresh forum panel if open to show new replies
+            refreshForumData();
+            // Update notification counts for new reply
+            onNewItemReceived('reply', { timestamp: new Date().toISOString() });
         }
     });
 
@@ -1428,6 +1454,11 @@ export async function initializeSessionChat() {
             if (!isTabActive) {
                 document.title = 'New Comment! - ' + originalTitle;
             }
+
+            // Refresh forum panel if open to show new component comments
+            refreshForumData();
+            // Update notification counts for new component comment
+            onNewItemReceived('comment', { timestamp });
 
             log('Chat', `Received component comment from ${data.senderId} on ${componentId}`);
         }
@@ -1502,12 +1533,48 @@ export async function sendMessage(message, recordId = null) {
             }
         }
 
-        await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
+        const newMessageId = await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
+
+        // Update the message data and UI element with the real message ID
+        if (newMessageId) {
+            messageData.data.messageId = newMessageId;
+
+            // Find and update the wrapper element (it's the last one without a messageId)
+            const messagesList = document.getElementById('messages-list');
+            if (messagesList) {
+                const wrappers = messagesList.querySelectorAll('.message-wrapper.sent:not([data-message-id])');
+                const lastWrapper = wrappers.length > 0 ? wrappers[wrappers.length - 1] : null;
+                if (lastWrapper) {
+                    lastWrapper.dataset.messageId = newMessageId;
+                    // Add the reply button now that we have a valid message ID
+                    const actionsContainer = lastWrapper.querySelector('.message-actions');
+                    if (actionsContainer && !actionsContainer.querySelector('.reply-btn')) {
+                        const replyBtn = document.createElement('button');
+                        replyBtn.className = 'msg-action-btn reply-btn';
+                        replyBtn.innerHTML = '↩';
+                        replyBtn.title = 'Reply';
+                        replyBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            startReply(newMessageId, currentUser.name, message);
+                        });
+                        // Insert after the reaction button
+                        const reactionBtn = actionsContainer.querySelector('.reaction-btn');
+                        if (reactionBtn && reactionBtn.nextSibling) {
+                            actionsContainer.insertBefore(replyBtn, reactionBtn.nextSibling);
+                        } else {
+                            actionsContainer.appendChild(replyBtn);
+                        }
+                    }
+                }
+            }
+        }
+
         sessionChatChannel.trigger('client-new-message', {
             content: message,
             senderId: currentUser.id,
             senderName: currentUser.name,
-            timestamp: timestamp
+            timestamp: timestamp,
+            messageId: newMessageId // Include the message ID for other clients
         });
     }
 }
@@ -1773,4 +1840,7 @@ export function addPlanEventToHistory(record) {
             addEventToUI(messagesList, record);
         }
     }
+
+    // Refresh forum panel if open to show new plan event
+    refreshForumData();
 }
