@@ -118,14 +118,36 @@ function saveLastSeenTimestamp(filterType, timestamp) {
  */
 function markCurrentFilterAsSeen() {
     const items = getItemsForFilter(currentFilter);
-    if (items.length === 0) return;
+    log('ForumPanel', `[Notification] markCurrentFilterAsSeen - filter: ${currentFilter}, items count: ${items.length}`);
+    if (items.length === 0) {
+        log('ForumPanel', '[Notification] No items to mark as seen');
+        return;
+    }
+
+    // Debug: log first few items' timestamps
+    const sampleItems = items.slice(0, 3).map(item => ({
+        id: item.id,
+        timestamp: item.timestamp,
+        itemType: item.itemType || 'message'
+    }));
+    log('ForumPanel', `[Notification] Sample items timestamps: ${JSON.stringify(sampleItems)}`);
 
     // Find the most recent timestamp in the current view
     const mostRecentTimestamp = items.reduce((latest, item) => {
         const itemTime = new Date(item.timestamp);
-        return itemTime > new Date(latest) ? item.timestamp : latest;
+        const latestTime = new Date(latest);
+        // Handle invalid dates
+        if (isNaN(itemTime.getTime())) {
+            log('ForumPanel', `[Notification] Invalid timestamp for item ${item.id}: ${item.timestamp}`);
+            return latest;
+        }
+        if (isNaN(latestTime.getTime())) {
+            return item.timestamp;
+        }
+        return itemTime > latestTime ? item.timestamp : latest;
     }, items[0].timestamp);
 
+    log('ForumPanel', `[Notification] Most recent timestamp determined: ${mostRecentTimestamp}`);
     saveLastSeenTimestamp(currentFilter, mostRecentTimestamp);
     updateNotificationBadges();
 }
@@ -165,6 +187,7 @@ function getUnreadCount(filterType) {
     if (!lastSeen) {
         // Never seen this filter - all items are "new" but show 0 initially
         // (user needs to view once to set baseline)
+        log('ForumPanel', `[Notification] getUnreadCount(${filterType}): no lastSeen, returning 0`);
         return 0;
     }
 
@@ -172,12 +195,15 @@ function getUnreadCount(filterType) {
     const currentUser = getCurrentUser();
 
     // Count items newer than last-seen, excluding user's own messages
-    return items.filter(item => {
+    const unreadItems = items.filter(item => {
         const itemDate = new Date(item.timestamp);
         const isNewer = itemDate > lastSeenDate;
         const isOwnMessage = item.senderId === currentUser?.id;
         return isNewer && !isOwnMessage;
-    }).length;
+    });
+
+    log('ForumPanel', `[Notification] getUnreadCount(${filterType}): lastSeen=${lastSeen}, items=${items.length}, unread=${unreadItems.length}`);
+    return unreadItems.length;
 }
 
 /**
@@ -210,11 +236,17 @@ function getTotalUnreadCount() {
  * Update notification badges on filter tabs and trigger button
  */
 export function updateNotificationBadges() {
+    // Debug: log current state
+    log('ForumPanel', `[Notification] updateNotificationBadges - messages: ${forumMessages.length}, events: ${forumPlanEvents.length}`);
+
     // Update filter tab badges
     const filterBtns = document.querySelectorAll('.forum-filter-btn');
+    log('ForumPanel', `[Notification] Found ${filterBtns.length} filter buttons`);
+
     filterBtns.forEach(btn => {
         const filterType = btn.dataset.filter;
         const count = getUnreadCount(filterType);
+        log('ForumPanel', `[Notification] Filter ${filterType}: unread count = ${count}`);
 
         // Remove existing badge
         const existingBadge = btn.querySelector('.notification-badge');
@@ -228,6 +260,7 @@ export function updateNotificationBadges() {
             badge.className = 'notification-badge';
             badge.textContent = count > 99 ? '99+' : count.toString();
             btn.appendChild(badge);
+            log('ForumPanel', `[Notification] Added badge to ${filterType} with count ${count}`);
         }
     });
 
@@ -245,6 +278,7 @@ function updateTriggerButtonBadge() {
     if (!triggerBtn) return;
 
     const totalCount = getTotalUnreadCount();
+    log('ForumPanel', `[Notification] Trigger button - total unread: ${totalCount}`);
 
     // Remove existing badge
     const existingBadge = triggerBtn.querySelector('.notification-badge');
@@ -258,6 +292,7 @@ function updateTriggerButtonBadge() {
         badge.className = 'notification-badge';
         badge.textContent = totalCount > 99 ? '99+' : totalCount.toString();
         triggerBtn.appendChild(badge);
+        log('ForumPanel', `[Notification] Added trigger badge with count ${totalCount}`);
     }
 }
 
@@ -267,10 +302,15 @@ function updateTriggerButtonBadge() {
  */
 function initializeNotificationTracking() {
     const key = getStorageKey();
-    if (!key) return;
+    log('ForumPanel', `[Notification] initializeNotificationTracking - storage key: ${key}`);
+    if (!key) {
+        log('ForumPanel', '[Notification] No storage key available - user or session not ready');
+        return;
+    }
 
     const existing = getLastSeenTimestamps();
     const now = new Date().toISOString();
+    log('ForumPanel', `[Notification] Existing timestamps: ${JSON.stringify(existing)}`);
 
     // If user has never visited, set current time as baseline for all filters
     // This prevents showing all historical items as "unread"
@@ -283,10 +323,12 @@ function initializeNotificationTracking() {
         };
         try {
             localStorage.setItem(key, JSON.stringify(initialTimestamps));
-            log('ForumPanel', 'Initialized notification tracking for new session');
+            log('ForumPanel', `[Notification] Initialized notification tracking with baseline: ${now}`);
         } catch (e) {
             log('ForumPanel', 'Error initializing notification tracking:', e);
         }
+    } else {
+        log('ForumPanel', '[Notification] Notification tracking already initialized');
     }
 }
 
@@ -529,6 +571,8 @@ async function loadForumData() {
                 const content = fields.Content || '';
                 const senderId = fields.SenderID;
                 const reactions = parseReactions(fields.Reactions);
+                // Get timestamp with fallback chain: record.createdTime -> fields.Timestamp -> eventData.timestamp -> now
+                const recordTimestamp = record.createdTime || fields.Timestamp || new Date().toISOString();
 
                 // Check if this is a system event (plan history)
                 if (senderId === 'system') {
@@ -538,7 +582,7 @@ async function loadForumData() {
                             id: record.id,
                             type: eventData.type,
                             data: eventData.data,
-                            timestamp: fields.Timestamp || eventData.timestamp,
+                            timestamp: recordTimestamp || eventData.timestamp,
                             ...eventData
                         });
                     } catch (e) {
@@ -566,7 +610,7 @@ async function loadForumData() {
                                         messageSender: senderName,
                                         messageId: record.id
                                     },
-                                    timestamp: fields.Timestamp // Use message timestamp as approximation
+                                    timestamp: recordTimestamp // Use message timestamp
                                 });
                             }
                         }
@@ -598,12 +642,15 @@ function createMessageObject(record) {
     const fields = record.fields || record;
     const currentUser = getCurrentUser();
 
+    // Use createdTime from record level, fall back to fields.Timestamp, then current time
+    const timestamp = record.createdTime || fields.Timestamp || new Date().toISOString();
+
     return {
         id: record.id,
         senderId: fields.SenderID,
         senderName: fields.SenderName || 'Anonymous',
         content: fields.Content || '',
-        timestamp: fields.Timestamp,
+        timestamp: timestamp,
         parentMessageId: fields.ParentMessageID,
         reactions: parseReactions(fields.Reactions),
         isEdited: fields.IsEdited || false,
