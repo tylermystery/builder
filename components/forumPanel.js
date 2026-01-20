@@ -234,8 +234,50 @@ function getTotalUnreadCount() {
 
 /**
  * Update notification badges on filter tabs and trigger button
+ * @param {Object} options - Optional configuration
+ * @param {Array} options.messages - Messages array from external source (chat.js sessionHistoryItems)
+ * @param {Array} options.events - Events array from external source
  */
-export function updateNotificationBadges() {
+export function updateNotificationBadges(options = {}) {
+    // If external data is provided, use it to populate the local arrays
+    // This allows badge calculation before the forum panel is opened
+    if (options.messages || options.events) {
+        if (options.messages && options.messages.length > 0) {
+            // Transform chat.js sessionHistoryItems format to forumPanel format
+            forumMessages = options.messages.map(item => ({
+                id: item.data?.messageId || item.id,
+                senderId: item.data?.senderId || item.senderId,
+                senderName: item.data?.sender || item.senderName || 'Anonymous',
+                content: item.data?.message || item.content || '',
+                timestamp: item.timestamp || item.data?.timestamp,
+                reactions: item.data?.reactions || {},
+                replyCount: item.data?.replyCount || 0,
+                componentId: item.data?.componentInfo?.id || null,
+                itemType: 'message'
+            }));
+        }
+        if (options.events && options.events.length > 0) {
+            forumPlanEvents = options.events.map(item => {
+                // Parse system event content
+                let eventData = {};
+                try {
+                    const content = item.data?.fields?.Content || item.data?.Content || '';
+                    if (content) eventData = JSON.parse(content);
+                } catch (e) {
+                    // Not JSON, use raw data
+                }
+                return {
+                    id: item.data?.id || item.id,
+                    type: eventData.type || item.data?.fields?.EventType || 'event',
+                    data: eventData.data || {},
+                    timestamp: item.timestamp || item.data?.createdTime,
+                    itemType: 'event'
+                };
+            });
+        }
+        log('ForumPanel', `[Notification] Populated from external data - messages: ${forumMessages.length}, events: ${forumPlanEvents.length}`);
+    }
+
     // Debug: log current state
     log('ForumPanel', `[Notification] updateNotificationBadges - messages: ${forumMessages.length}, events: ${forumPlanEvents.length}`);
 
@@ -299,8 +341,9 @@ function updateTriggerButtonBadge() {
 /**
  * Initialize notification tracking for a new session
  * Sets initial baseline timestamps if user has never visited
+ * Exported so it can be called early from chat.js when messages load
  */
-function initializeNotificationTracking() {
+export function initializeNotificationTracking() {
     const key = getStorageKey();
     log('ForumPanel', `[Notification] initializeNotificationTracking - storage key: ${key}`);
     if (!key) {
@@ -336,7 +379,7 @@ function initializeNotificationTracking() {
  * Increment unread count for new items received via Pusher
  * Called when real-time events arrive (new messages, reactions, etc.)
  * @param {string} itemType - Type of item: 'message', 'reaction', 'event'
- * @param {Object} data - Item data with timestamp
+ * @param {Object} data - Item data with timestamp and optional sessionHistoryItems
  */
 export function onNewItemReceived(itemType, data) {
     // Just update badges - the data is already added to forumMessages/forumPlanEvents
@@ -345,7 +388,15 @@ export function onNewItemReceived(itemType, data) {
 
     // Small delay to allow refreshForumData to complete first
     setTimeout(() => {
-        updateNotificationBadges();
+        // If session history items are provided, use them to update badges
+        // This allows badge updates to work even when forum panel hasn't been opened
+        if (data.sessionHistoryItems) {
+            const chatMessages = data.sessionHistoryItems.filter(item => item.type === 'chat');
+            const planEvents = data.sessionHistoryItems.filter(item => item.type === 'planEvent');
+            updateNotificationBadges({ messages: chatMessages, events: planEvents });
+        } else {
+            updateNotificationBadges();
+        }
     }, 500);
 }
 

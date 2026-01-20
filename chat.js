@@ -7,7 +7,7 @@ import { log } from './utils/debug.js';
 import { triggerSave, openChatWidget } from './events.js';
 import { updateUrl } from './utils.js';
 import { getDebugLogs, isDebugPanelInitialized } from './utils/debug-panel.js';
-import { refreshForumData, setGetCurrentUser, onNewItemReceived, updateNotificationBadges } from './components/forumPanel.js';
+import { refreshForumData, setGetCurrentUser, onNewItemReceived, updateNotificationBadges, initializeNotificationTracking } from './components/forumPanel.js';
 
 let currentUser = null;
 let pusher = null;
@@ -1276,8 +1276,15 @@ export async function initializeSessionChat() {
         // Render the filtered history
         renderFilteredHistory();
 
+        // Initialize notification tracking early (before forum panel is opened)
+        // This sets baseline timestamps for first-time visitors
+        initializeNotificationTracking();
+
         // Update forum panel notification badges after loading chat history
-        updateNotificationBadges();
+        // Pass the loaded messages and events so badge counts work before forum panel is opened
+        const chatMessages = sessionHistoryItems.filter(item => item.type === 'chat');
+        const planEvents = sessionHistoryItems.filter(item => item.type === 'planEvent');
+        updateNotificationBadges({ messages: chatMessages, events: planEvents });
     }
 
     pusher = new Pusher('236f480714e5001590b5', {
@@ -1326,7 +1333,7 @@ export async function initializeSessionChat() {
             // Refresh forum panel if open
             refreshForumData();
             // Update notification counts for new message
-            onNewItemReceived('message', { timestamp });
+            onNewItemReceived('message', { timestamp, sessionHistoryItems });
             showNewMessageNotification(data.senderName, data.content);
             if (!isTabActive) {
                 document.title = 'New Message! - ' + originalTitle;
@@ -1344,7 +1351,7 @@ export async function initializeSessionChat() {
             // Refresh forum panel if open to show updated reactions
             refreshForumData();
             // Update notification counts for new reaction
-            onNewItemReceived('reaction', { timestamp: new Date().toISOString() });
+            onNewItemReceived('reaction', { timestamp: new Date().toISOString(), sessionHistoryItems });
         }
     });
 
@@ -1405,7 +1412,7 @@ export async function initializeSessionChat() {
             // Refresh forum panel if open to show new replies
             refreshForumData();
             // Update notification counts for new reply
-            onNewItemReceived('reply', { timestamp: new Date().toISOString() });
+            onNewItemReceived('reply', { timestamp: new Date().toISOString(), sessionHistoryItems });
         }
     });
 
@@ -1458,7 +1465,7 @@ export async function initializeSessionChat() {
             // Refresh forum panel if open to show new component comments
             refreshForumData();
             // Update notification counts for new component comment
-            onNewItemReceived('comment', { timestamp });
+            onNewItemReceived('comment', { timestamp, sessionHistoryItems });
 
             log('Chat', `Received component comment from ${data.senderId} on ${componentId}`);
         }
