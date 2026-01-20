@@ -2844,9 +2844,18 @@ html.presentation-active {
     <div id="wtf-plans-panel-overlay" class="wtf-plans-panel-overlay"></div>
 
     <!-- Forum Panel (Slide-out from Right) - Threaded discussions, comments, and plan history -->
-    <div id="forum-panel" class="forum-panel" style="display: none;">
+    <div id="forum-panel" class="forum-panel stream-view-expanded" style="display: none;">
         <div class="forum-panel-header">
             <h3>Forum</h3>
+            <div class="forum-header-controls">
+                <!-- Stream Toggle Controls in Forum Header -->
+                <button id="forum-toggle-reactions" class="stream-toggle-btn active" title="Show/Hide Reactions" aria-pressed="true">
+                    <span>😊</span>
+                </button>
+                <button id="forum-toggle-expand" class="stream-toggle-btn" title="Expand/Collapse All">
+                    <span>↕</span>
+                </button>
+            </div>
             <button id="forum-panel-close" class="forum-panel-close-btn" title="Close">&times;</button>
         </div>
         <div class="forum-panel-filters">
@@ -2859,6 +2868,13 @@ html.presentation-active {
             <div class="forum-loading">Loading discussions...</div>
         </div>
         <div id="forum-input-container" class="forum-input-container">
+            <!-- Component Selector for forum message affiliation -->
+            <div id="forum-component-selector" class="stream-component-selector">
+                <label for="forum-component-select">Attach to:</label>
+                <select id="forum-component-select" class="stream-component-select">
+                    <option value="">Plan-wide (no specific item)</option>
+                </select>
+            </div>
             <div id="forum-reply-indicator" class="forum-reply-indicator" style="display: none;">
                 <span class="reply-indicator-text"></span>
                 <button class="cancel-reply-btn" type="button">&times;</button>
@@ -3420,7 +3436,7 @@ html.presentation-active {
             💬
             <span id="presence-counter">0</span>
         </button>
-        <div id="chat-window">
+        <div id="chat-window" class="stream-view-compact">
             <div id="chat-header">
                <p><span id="chat-session-title">Session Chat</span> (<span id="whos-here-count">0</span>)</p>
                 <div class="user-identity">
@@ -3430,6 +3446,16 @@ html.presentation-active {
                 <div class="chat-options">
                     <input type="checkbox" id="chat-remain-open-checkbox">
                     <label for="chat-remain-open-checkbox">Keep open</label>
+                    <!-- Stream Toggle Controls -->
+                    <button id="stream-toggle-reactions" class="stream-toggle-btn active" title="Show/Hide Reactions" aria-pressed="true">
+                        <span>😊</span>
+                    </button>
+                    <button id="stream-toggle-expand" class="stream-toggle-btn" title="Expand/Collapse All">
+                        <span>↕</span>
+                    </button>
+                    <button id="stream-view-toggle" class="stream-toggle-btn" title="Expand View">
+                        <span>⛶</span>
+                    </button>
                     <button id="forum-panel-trigger" class="forum-panel-trigger-btn" title="Open Forum Panel for threaded discussion" aria-expanded="false">
                         <span class="forum-icon">📋</span>
                         <span class="forum-label">Forum</span>
@@ -3444,6 +3470,13 @@ html.presentation-active {
                 <div id="recent-chats-list" class="collapsed">
                     <div id="recent-chats-loading">Loading recent chats...</div>
                 </div>
+            </div>
+            <!-- Component Selector for message affiliation -->
+            <div id="stream-component-selector" class="stream-component-selector" style="display: none;">
+                <label for="stream-component-select">Attach to:</label>
+                <select id="stream-component-select" class="stream-component-select">
+                    <option value="">Plan-wide (no specific item)</option>
+                </select>
             </div>
             <div id="whos-here-list"></div>
             <div id="messages-container">

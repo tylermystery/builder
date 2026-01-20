@@ -1989,10 +1989,42 @@
     padding-right: 5px;
     margin-top: 5px;
     color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-wrap: wrap;
 }
 
 .chat-options input {
     vertical-align: middle;
+}
+
+/* Stream Toggle Buttons in Chat Header */
+.stream-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid #ddd;
+    background: #fff;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.stream-toggle-btn:hover {
+    background: #f0f0f0;
+    border-color: #ccc;
+}
+
+.stream-toggle-btn.active {
+    background: rgba(0, 123, 255, 0.15);
+    border-color: rgba(0, 123, 255, 0.4);
+    color: #007bff;
 }
 
 #chat-toggle-button {
@@ -2162,6 +2194,13 @@
 
 .message-wrapper.sent { align-self: flex-end; }
 .message-wrapper.received { align-self: flex-start; }
+
+/* Unread message indicator */
+.message-wrapper.unread {
+    border-left: 3px solid #007bff;
+    padding-left: 8px;
+    background: rgba(0, 123, 255, 0.05);
+}
 
 .chat-message {
     padding: 8px 12px;
@@ -10163,4 +10202,564 @@ hr.total-divider {
 
 /* ============================================
    END COMPONENT COMMENTS FEATURE
+   ============================================ */
+
+/* ============================================
+   UNIFIED STREAM FEATURE
+   Single stream/chat for plan with topics, reactions,
+   and resizable view (chat widget / thread view)
+   ============================================ */
+
+/* Stream Container - Supports both compact and expanded views */
+.stream-view-compact {
+    /* Compact mode - same as chat widget */
+    width: 350px;
+    height: 500px;
+}
+
+.stream-view-expanded {
+    /* Expanded mode - larger thread view */
+    width: 100%;
+    max-width: 600px;
+    height: 80vh;
+    max-height: 700px;
+}
+
+/* Stream Header with Toggle Controls */
+.stream-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #dee2e6;
+    flex-shrink: 0;
+}
+
+.stream-header-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: #333;
+}
+
+.stream-unread-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    background: #dc3545;
+    color: #fff;
+    font-size: 0.75em;
+    font-weight: 600;
+    border-radius: 10px;
+}
+
+.stream-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.stream-header-controls button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #6c757d;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.stream-header-controls button:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #333;
+}
+
+.stream-header-controls button.active {
+    background: rgba(0, 123, 255, 0.15);
+    color: #007bff;
+}
+
+/* Stream Topic (Top-level message) */
+.stream-topic {
+    position: relative;
+    padding: 12px;
+    margin: 8px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    transition: box-shadow 0.2s;
+}
+
+.stream-topic:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.stream-topic.sent {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: #fff;
+}
+
+.stream-topic.unread {
+    border-left: 3px solid #007bff;
+}
+
+.stream-topic.has-component {
+    border-left: 3px solid #6366f1;
+}
+
+.stream-topic.unread.has-component {
+    border-left: 3px solid #6366f1;
+    box-shadow: 0 0 0 1px #007bff;
+}
+
+/* Topic Header */
+.stream-topic-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.stream-sender {
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.stream-topic.sent .stream-sender {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.stream-timestamp {
+    font-size: 0.75em;
+    color: #999;
+}
+
+.stream-topic.sent .stream-timestamp {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* Component Badge */
+.stream-component-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    font-size: 0.7em;
+    font-weight: 600;
+    border-radius: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    max-width: 150px;
+}
+
+.stream-component-badge .badge-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Topic Content */
+.stream-content {
+    font-size: 0.95em;
+    line-height: 1.5;
+    word-wrap: break-word;
+}
+
+.stream-content .deleted {
+    color: #999;
+    font-style: italic;
+}
+
+.stream-content .edited-indicator {
+    font-size: 0.8em;
+    color: #999;
+    margin-left: 4px;
+}
+
+.stream-topic.sent .stream-content .edited-indicator {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* Stream Reactions */
+.stream-reactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.stream-reaction-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: #f0f0f0;
+    border: 1px solid #e0e0e0;
+    border-radius: 16px;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.stream-reaction-badge:hover {
+    background: #e8e8e8;
+    border-color: #d0d0d0;
+}
+
+.stream-reaction-badge.user-reacted {
+    background: rgba(0, 123, 255, 0.15);
+    border-color: rgba(0, 123, 255, 0.3);
+}
+
+.stream-reaction-badge span {
+    font-weight: 500;
+    color: #666;
+}
+
+/* Topic Replies Button */
+.stream-topic-replies-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 8px;
+    padding: 4px 8px;
+    background: transparent;
+    border: none;
+    color: #007bff;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.stream-topic-replies-btn:hover {
+    color: #0056b3;
+}
+
+.stream-topic.sent .stream-topic-replies-btn {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.stream-topic.sent .stream-topic-replies-btn:hover {
+    color: #fff;
+}
+
+.topic-expand-indicator {
+    font-size: 18px;
+}
+
+/* Topic Actions (on hover) */
+.stream-topic-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: none;
+    gap: 4px;
+}
+
+.stream-topic:hover .stream-topic-actions {
+    display: flex;
+}
+
+.stream-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    color: #666;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.stream-action-btn:hover {
+    background: #fff;
+    color: #007bff;
+    border-color: #007bff;
+}
+
+/* Stream Replies Container */
+.stream-replies {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    margin-top: 0;
+    transition: max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;
+}
+
+.stream-replies.expanded {
+    max-height: 500px;
+    overflow-y: auto;
+    opacity: 1;
+    margin-top: 12px;
+    padding-left: 16px;
+    border-left: 2px solid #e0e0e0;
+}
+
+.stream-topic.sent .stream-replies.expanded {
+    border-left-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Individual Reply */
+.stream-reply {
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.stream-reply.sent {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.stream-reply-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.stream-reply .stream-sender {
+    font-size: 0.85em;
+}
+
+.stream-reply .stream-timestamp {
+    font-size: 0.7em;
+}
+
+.stream-reply .stream-content {
+    font-size: 0.9em;
+}
+
+/* Context Menu */
+.stream-context-menu {
+    position: fixed;
+    z-index: 10002;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    padding: 8px 0;
+    min-width: 180px;
+}
+
+.context-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 16px;
+    background: transparent;
+    border: none;
+    font-size: 0.9em;
+    color: #333;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.15s;
+}
+
+.context-menu-item:hover {
+    background: #f5f5f5;
+}
+
+.context-icon {
+    font-size: 18px;
+    color: #666;
+    width: 20px;
+    text-align: center;
+}
+
+.context-divider {
+    border: none;
+    border-top: 1px solid #e0e0e0;
+    margin: 4px 0;
+}
+
+/* Component Selector */
+.stream-component-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.stream-component-selector label {
+    font-size: 0.85em;
+    color: #666;
+    white-space: nowrap;
+}
+
+.stream-component-select {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 0.85em;
+    background: #fff;
+    cursor: pointer;
+}
+
+.stream-component-select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
+}
+
+/* Reply Indicator */
+.stream-reply-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: #e3f2fd;
+    border-left: 3px solid #007bff;
+}
+
+.stream-reply-indicator .reply-text {
+    font-size: 0.85em;
+    color: #333;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stream-reply-indicator .cancel-reply {
+    padding: 4px 8px;
+    background: transparent;
+    border: none;
+    color: #666;
+    font-size: 1.2em;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.stream-reply-indicator .cancel-reply:hover {
+    color: #dc3545;
+}
+
+/* Toast Notification */
+.stream-toast {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    padding: 12px 24px;
+    background: #333;
+    color: #fff;
+    border-radius: 8px;
+    font-size: 0.9em;
+    z-index: 10003;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, transform 0.3s, visibility 0.3s;
+}
+
+.stream-toast.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+
+.stream-toast.error {
+    background: #dc3545;
+}
+
+.stream-toast.success {
+    background: #28a745;
+}
+
+/* Reaction Picker */
+.stream-reaction-picker {
+    display: flex;
+    gap: 4px;
+    padding: 8px;
+    background: #fff;
+    border-radius: 24px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.stream-reaction-picker .reaction-picker-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    font-size: 1.3em;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.2s;
+}
+
+.stream-reaction-picker .reaction-picker-btn:hover {
+    background: #f0f0f0;
+    transform: scale(1.15);
+}
+
+/* Forum Panel Integration - Update header to include toggles */
+.forum-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.forum-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .stream-view-compact,
+    .stream-view-expanded {
+        width: 100%;
+        max-width: none;
+        height: calc(100vh - 120px);
+    }
+
+    .stream-header-controls button {
+        width: 36px;
+        height: 36px;
+    }
+
+    .stream-topic {
+        margin: 6px;
+        padding: 10px;
+    }
+
+    .stream-component-badge {
+        max-width: 100px;
+    }
+
+    .stream-context-menu {
+        min-width: 160px;
+    }
+
+    .context-menu-item {
+        padding: 12px 14px;
+    }
+}
+
+/* ============================================
+   END UNIFIED STREAM FEATURE
    ============================================ */

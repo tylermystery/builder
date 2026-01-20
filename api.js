@@ -1763,7 +1763,7 @@ export async function postPlanEvent(sessionId, eventType, eventData = {}) {
     }
 }
 
-export async function postChatMessage(sessionId, senderId, senderName, content) {
+export async function postChatMessage(sessionId, senderId, senderName, content, itemId = null) {
     if (!sessionId || !sessionId.startsWith('rec')) {
         log('API', `postChatMessage: Invalid sessionId provided: "${sessionId}". Cannot save message.`);
         return null;
@@ -1774,14 +1774,21 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
      }
 
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}`;
+    const fields = {
+        SessionID: [sessionId],
+        SenderID: senderId,
+        SenderName: senderName,
+        Content: content.trim(),
+    };
+
+    // Add Item Link if itemId is provided (for component affiliation)
+    if (itemId && itemId.startsWith('rec')) {
+        fields['Item Link'] = [itemId];
+    }
+
     const payload = {
         records: [{
-            fields: {
-                SessionID: [sessionId],
-                SenderID: senderId,
-                SenderName: senderName,
-                Content: content.trim(),
-            }
+            fields: fields
         }]
     };
 
