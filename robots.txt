@@ -1,8 +1,10 @@
-# Robots.txt for WTFun (whatthefunfinder.netlify.app)
+# Robots.txt for WTFun (whatthefun.wtf)
 # Allow all major search engine crawlers to access the site
 
 User-agent: *
 Allow: /
+Allow: /item/
+Allow: /start-a-plan.html
 
 # Sitemap location
 Sitemap: https://whatthefun.wtf/sitemap.xml
@@ -21,8 +23,27 @@ Allow: /
 User-agent: AdsBot-Google
 Allow: /
 
+User-agent: AdsBot-Google-Mobile
+Allow: /
+
 # Allow Bing
 User-agent: Bingbot
+Allow: /
+
+# Social media crawlers for rich previews
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /
+
+User-agent: WhatsApp
+Allow: /
+
+User-agent: Discordbot
 Allow: /
 
 # Disallow crawling of internal/admin pages
@@ -34,7 +55,11 @@ Disallow: /store-dashboard.html
 Disallow: /diagnostic-likes.html
 Disallow: /test-calendar-export.html
 Disallow: /.netlify/
+Disallow: /teammate.html
+Disallow: /invitee.html
+Disallow: /itinerary.html
 
 # Allow access to API endpoints that provide public data
 Allow: /api/merchant-feed
 Allow: /sitemap.xml
+Allow: /merchant-feed.xml

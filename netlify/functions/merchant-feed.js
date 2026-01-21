@@ -9,7 +9,8 @@ const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD';
 const SITE_URL = 'https://whatthefun.wtf';
 
 /**
- * Generates a URL-friendly slug from a name string (mirrors utils.js logic)
+ * Generates a URL-friendly slug from a name string
+ * IMPORTANT: This must match the logic in utils.js generateSlug() to avoid redirect issues
  */
 function generateSlug(name, recordId, tags = []) {
     if (!name || typeof name !== 'string') {
@@ -21,9 +22,9 @@ function generateSlug(name, recordId, tags = []) {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
 
-    // Add up to 2 SEO-friendly tags if available
+    // Add up to 3 SEO-friendly tags if available (matching utils.js)
     if (tags.length > 0) {
-        const seoTags = tags.slice(0, 2).map(tag =>
+        const seoTags = tags.slice(0, 3).map(tag =>
             tag.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
         ).filter(tag => tag.length > 0 && !slug.includes(tag));
 
@@ -32,8 +33,11 @@ function generateSlug(name, recordId, tags = []) {
         }
     }
 
-    const shortId = recordId.replace('rec', '');
-    return `${slug}-${shortId}`;
+    // Limit total length for reasonable URLs (matching utils.js - 60 chars max before recordId)
+    slug = slug.substring(0, 60);
+
+    // Append full record ID (not shortened) - matching utils.js
+    return `${slug}-${recordId}`;
 }
 
 /**
