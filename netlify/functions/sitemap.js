@@ -83,8 +83,8 @@ exports.handler = async (event) => {
         const fieldsToFetch = ['Name', 'Status', 'AI_Profile', 'Rankings'];
         const fieldsQuery = fieldsToFetch.map(f => `fields%5B%5D=${encodeURIComponent(f)}`).join('&');
 
-        // Only fetch active/published items
-        const filterFormula = encodeURIComponent("OR({Status}='Active', {Status}='Published', {Status}='')");
+        // Only fetch items with 'Available' or 'Featured' status (matching the frontend filtering logic)
+        const filterFormula = encodeURIComponent("OR({Status}='Available', {Status}='Featured')");
         const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEMS_TABLE}?${fieldsQuery}&filterByFormula=${filterFormula}`;
 
         do {
