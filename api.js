@@ -1253,24 +1253,15 @@ export async function fetchImagesByTags(tags, retries = 2) {
                 const tagName = String(tags).trim();
                 if (!tagName) return [];
 
-                // Check if the tag string contains spaces (multiple keywords from AI)
-                // If so, split and search using OR expression to find images matching ANY keyword
-                const tagParts = tagName.split(/\s+/).filter(Boolean);
-                if (tagParts.length > 1) {
-                    // Multiple space-separated keywords - use OR expression for broader matching
-                    // Cloudinary Search API uses tags:"value" syntax (with colon, not equals)
-                    payload = { expression: tagParts.map(tag => `tags:"${tag}"`).join(' OR ') };
-                    log('API', `Fetching images by multi-keyword expression: ${payload.expression}`);
-                    console.log('[IMAGE DEBUG] Multi-keyword search - splitting tags:', {
-                        original: tagName,
-                        splitTags: tagParts,
-                        expression: payload.expression
-                    });
-                } else {
-                    // Single keyword - use direct tag lookup
-                    payload = { tag: tagName };
-                    log('API', `Fetching images by single tag: ${tagName}`);
-                }
+                // Use exact tag matching - treat the entire tag string as one tag
+                // This ensures "segway kart" matches only media tagged with "segway kart",
+                // not media tagged with just "segway" or just "kart"
+                payload = { expression: `tags:"${tagName}"` };
+                log('API', `Fetching images by exact tag: ${tagName}`);
+                console.log('[IMAGE DEBUG] Exact tag search:', {
+                    tagName: tagName,
+                    expression: payload.expression
+                });
             }
 
             const response = await fetch('/.netlify/functions/cloudinary', {
@@ -5125,14 +5116,11 @@ export async function fetchImageResourcesByTags(tags, retries = 2) {
             const tagName = String(tags).trim();
             if (!tagName) return [];
 
-            const tagParts = tagName.split(/\s+/).filter(Boolean);
-            if (tagParts.length > 1) {
-                payload = { expression: tagParts.map(tag => `tags:"${tag}"`).join(' OR ') };
-                log('API', `Fetching image resources by multi-keyword expression: ${payload.expression}`);
-            } else {
-                payload = { tag: tagName };
-                log('API', `Fetching image resources by single tag: ${tagName}`);
-            }
+            // Use exact tag matching - treat the entire tag string as one tag
+            // This ensures "segway kart" matches only media tagged with "segway kart",
+            // not media tagged with just "segway" or just "kart"
+            payload = { expression: `tags:"${tagName}"` };
+            log('API', `Fetching image resources by exact tag: ${tagName}`);
         }
 
         const response = await fetch('/.netlify/functions/cloudinary', {
