@@ -2693,6 +2693,13 @@ async function initializeItemDragDrop() {
 // Show drag buckets during drag (colorize them)
 function showDragBuckets() {
     console.log('[Presentation DEBUG] showDragBuckets called, isDragging:', isDragging, 'dragBucketsEl:', !!dragBucketsEl);
+
+    // Safety check: Only show drag buckets if presentation view is active
+    if (!document.body.classList.contains('presentation-active')) {
+        console.log('[Presentation DEBUG] showDragBuckets aborted - presentation view is not active');
+        return;
+    }
+
     if (dragBucketsEl && isDragging) {
         console.log('[Presentation DEBUG] Adding drag-active class to buckets');
 
@@ -2862,9 +2869,10 @@ function hideDragBuckets() {
         // Clear reaction/comment hover states
         clearReactionHoverStates();
         clearQuickCommentHoverStates();
-        // Hide merge indicator
+        // Hide merge indicator with explicit inline style reset
         if (dragMergeIndicator) {
             dragMergeIndicator.style.display = 'none';
+            dragMergeIndicator.style.visibility = 'hidden';
         }
         // Hide action tooltip
         hideDragActionTooltip();
@@ -2999,11 +3007,18 @@ function checkBucketHover(event) {
 function updateDragActionTooltip(clientX, clientY, hoveredBucket, isOverAnyBucket) {
     if (!dragActionTooltip) return;
 
+    // Safety check: Only show tooltip if presentation view is active
+    if (!document.body.classList.contains('presentation-active')) {
+        hideDragActionTooltip();
+        return;
+    }
+
     // Position tooltip near cursor (offset to avoid finger/cursor)
     const tooltipOffset = 25;
     dragActionTooltip.style.left = `${clientX + tooltipOffset}px`;
     dragActionTooltip.style.top = `${clientY - tooltipOffset}px`;
     dragActionTooltip.style.display = 'flex';
+    dragActionTooltip.style.visibility = 'visible';
 
     // Get tooltip elements
     const iconEl = dragActionTooltip.querySelector('.tooltip-icon');
@@ -3053,6 +3068,7 @@ function updateDragActionTooltip(clientX, clientY, hoveredBucket, isOverAnyBucke
 function hideDragActionTooltip() {
     if (dragActionTooltip) {
         dragActionTooltip.style.display = 'none';
+        dragActionTooltip.style.visibility = 'hidden';
         dragActionTooltip.classList.remove(
             'action-goal', 'action-ideas', 'action-lock', 'action-demote',
             'action-archive', 'action-delete', 'action-reactions',
@@ -8022,6 +8038,9 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Show drag buckets (grayed out initially, colorize on drag)
     if (dragBucketsEl) {
         console.log('[Presentation DEBUG] Showing drag buckets (grayed out)');
+        // Reset any inline styles that might have been set when hiding
+        dragBucketsEl.style.display = '';
+        dragBucketsEl.style.visibility = '';
         dragBucketsEl.classList.add('buckets-shown');
         // Debug: Log the bucket element state after adding class
         const computedStyle = window.getComputedStyle(dragBucketsEl);
@@ -8157,11 +8176,26 @@ export function hidePresentationView() {
     // Cleanup drag-drop functionality
     cleanupItemDragDrop();
 
-    // Hide drag buckets
+    // Hide drag buckets and related elements - comprehensive cleanup
     if (dragBucketsEl) {
         console.log('[Presentation DEBUG] Hiding drag buckets');
         dragBucketsEl.classList.remove('buckets-shown');
         dragBucketsEl.classList.remove('drag-active');
+        // Explicitly set visibility to ensure elements don't leak through
+        dragBucketsEl.style.display = 'none';
+        dragBucketsEl.style.visibility = 'hidden';
+    }
+
+    // Ensure drag tooltip is hidden
+    if (dragActionTooltip) {
+        dragActionTooltip.style.display = 'none';
+        dragActionTooltip.style.visibility = 'hidden';
+    }
+
+    // Ensure merge indicator is hidden
+    if (dragMergeIndicator) {
+        dragMergeIndicator.style.display = 'none';
+        dragMergeIndicator.style.visibility = 'hidden';
     }
 
     modal.classList.remove('active');

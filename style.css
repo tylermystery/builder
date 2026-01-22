@@ -6443,6 +6443,14 @@ body.presentation-active #wtf-plans-panel-overlay {
 /* Left side: Actions (Goals at top, Archive/Delete at bottom) */
 /* Right side: Reactions and Comments */
 /* Z-INDEX: Uses TIER 4 (5000-6000) for drag/drop overlays */
+
+/*
+ * CRITICAL FIX: Prevent drag bucket elements from appearing outside presentation view
+ * Issue: Fixed-position elements can "escape" their parent's display:none in some browsers
+ * Solution: Use multiple hiding mechanisms (display, visibility, opacity, clip) as fail-safes
+ */
+
+/* BASE STATE: Always hidden by default - multiple hiding mechanisms for safety */
 .presentation-drag-buckets {
     position: fixed;
     top: 0;
@@ -6454,11 +6462,34 @@ body.presentation-active #wtf-plans-panel-overlay {
     pointer-events: none;
     z-index: 5000; /* TIER 4: Drag container base */
     display: none;
+    visibility: hidden;
+    opacity: 0;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(100%);
+}
+
+/* GUARD RAIL: When presentation is NOT active, force ALL drag elements to be hidden */
+/* This prevents any CSS specificity issues from showing these elements */
+body:not(.presentation-active) .presentation-drag-buckets,
+body:not(.presentation-active) .presentation-drag-buckets *,
+body:not(.presentation-active) .drag-zone-left,
+body:not(.presentation-active) .drag-zone-right,
+body:not(.presentation-active) .drag-bucket,
+body:not(.presentation-active) .drag-action-tooltip,
+body:not(.presentation-active) .drag-merge-indicator {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
 }
 
 /* When presentation modal is open, buckets container is shown */
 .presentation-drag-buckets.buckets-shown {
     display: block;
+    visibility: visible;
+    opacity: 1;
+    clip: auto;
+    clip-path: none;
 }
 
 /* Active during drag - enables pointer events for drop targets */
@@ -6466,6 +6497,8 @@ body.presentation-active #wtf-plans-panel-overlay {
     display: block;
     visibility: visible;
     opacity: 1;
+    clip: auto;
+    clip-path: none;
 }
 
 /* Left and Right zone containers */
@@ -6770,6 +6803,7 @@ body.presentation-active #wtf-plans-panel-overlay {
 /* MERGE INDICATOR */
 /* Z-INDEX: TIER 4 - 5600 (above tooltip, below reaction pickers) */
 /* NOTE: This element lives OUTSIDE the drag-buckets container for proper layering */
+/* CRITICAL: Must be explicitly hidden when presentation view is not active */
 .drag-merge-indicator {
     position: fixed;
     padding: 12px 20px;
@@ -6777,6 +6811,7 @@ body.presentation-active #wtf-plans-panel-overlay {
     border: 2px solid rgba(255, 255, 255, 0.8);
     border-radius: 20px;
     display: none; /* Hidden by default, shown via JS */
+    visibility: hidden; /* Additional safety: hidden even if display is overridden */
     align-items: center;
     gap: 8px;
     pointer-events: none;
@@ -6914,12 +6949,14 @@ body.presentation-active #wtf-plans-panel-overlay {
 /* Drag action tooltip - follows cursor during drag */
 /* Z-INDEX: TIER 4 - 5500 (above drag zones, below reaction pickers) */
 /* NOTE: This element lives OUTSIDE the drag-buckets container for proper layering */
+/* CRITICAL: Must be explicitly hidden when presentation view is not active */
 .drag-action-tooltip {
     position: fixed;
     padding: 10px 16px;
     background: rgba(30, 30, 30, 0.95);
     border-radius: 12px;
     display: none; /* Hidden by default, shown via JS */
+    visibility: hidden; /* Additional safety: hidden even if display is overridden */
     align-items: center;
     gap: 8px;
     pointer-events: none;
