@@ -3088,7 +3088,7 @@ function positionRadialBuckets() {
 // Show radial menu at a specific point
 function showRadialMenu(x, y, itemElement) {
     if (!dragBucketsEl || !radialMenuContainer) {
-        console.log('[Radial Menu] Cannot show - missing elements');
+        console.log('[Radial Menu] Cannot show - missing elements', { dragBucketsEl: !!dragBucketsEl, radialMenuContainer: !!radialMenuContainer });
         return;
     }
 
@@ -3096,6 +3096,16 @@ function showRadialMenu(x, y, itemElement) {
     if (!document.body.classList.contains('presentation-active')) {
         console.log('[Radial Menu] Aborted - presentation view is not active');
         return;
+    }
+
+    // Check if radial menu has buckets
+    const bucketCount = radialMenuContainer.querySelectorAll('.drag-bucket').length;
+    console.log('[Radial Menu] Bucket count in radial container:', bucketCount);
+
+    // If no buckets, re-initialize
+    if (bucketCount === 0) {
+        console.log('[Radial Menu] No buckets found, re-initializing...');
+        initializeRadialMenu();
     }
 
     // Store origin point
@@ -3120,12 +3130,50 @@ function showRadialMenu(x, y, itemElement) {
     // Show the drag buckets container in radial mode
     dragBucketsEl.classList.add('buckets-shown', 'drag-active', 'radial-mode');
 
+    // Debug: Log computed styles after adding classes
+    const computedStyle = window.getComputedStyle(dragBucketsEl);
+    console.log('[Radial Menu] dragBucketsEl after adding classes:', {
+        classes: Array.from(dragBucketsEl.classList),
+        display: computedStyle.display,
+        visibility: computedStyle.visibility,
+        opacity: computedStyle.opacity,
+        zIndex: computedStyle.zIndex
+    });
+
     // Position buckets in radial layout
     positionRadialBuckets();
 
     // Activate the radial menu with animation
     requestAnimationFrame(() => {
         radialMenuContainer.classList.add('radial-active');
+
+        // Debug: Log radial container state
+        const containerStyle = window.getComputedStyle(radialMenuContainer);
+        console.log('[Radial Menu] radialMenuContainer after radial-active:', {
+            classes: Array.from(radialMenuContainer.classList),
+            display: containerStyle.display,
+            visibility: containerStyle.visibility,
+            opacity: containerStyle.opacity,
+            zIndex: containerStyle.zIndex,
+            left: containerStyle.left,
+            top: containerStyle.top
+        });
+
+        // Debug: Log first bucket state
+        const firstBucket = radialMenuContainer.querySelector('.drag-bucket');
+        if (firstBucket) {
+            const bucketStyle = window.getComputedStyle(firstBucket);
+            console.log('[Radial Menu] First bucket state:', {
+                display: bucketStyle.display,
+                visibility: bucketStyle.visibility,
+                opacity: bucketStyle.opacity,
+                transform: bucketStyle.transform,
+                left: bucketStyle.left,
+                top: bucketStyle.top,
+                width: bucketStyle.width,
+                height: bucketStyle.height
+            });
+        }
     });
 
     // Store the item element for later

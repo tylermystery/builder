@@ -7051,13 +7051,18 @@ body:not(.presentation-active) .drag-merge-indicator {
     pointer-events: auto !important;
 }
 
+/* CRITICAL: Override guard rail for radial menu buckets when presentation is active */
+body.presentation-active .radial-menu-container .drag-bucket {
+    display: flex !important;
+}
+
 /* Radial menu container - positioned at touch/click point */
 .radial-menu-container {
     position: fixed;
     width: 0;
     height: 0;
     pointer-events: none;
-    z-index: 5200;
+    z-index: 10000; /* TIER 5: Above all other drag elements and modals */
     /* Center point set via JS */
 }
 
@@ -7071,6 +7076,7 @@ body:not(.presentation-active) .drag-merge-indicator {
 .presentation-drag-buckets.radial-mode .radial-menu-container {
     display: block;
     pointer-events: auto;
+    visibility: visible !important;
 }
 
 /* Radial menu items arranged in a circle */
@@ -7080,31 +7086,38 @@ body:not(.presentation-active) .drag-merge-indicator {
     pointer-events: auto;
     opacity: 0;
     transform: scale(0.3);
-    transition: opacity 0.15s ease-out, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: opacity 0.15s ease-out, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), visibility 0s linear 0.15s;
     /* Size adjustments for radial layout */
     width: 64px;
     height: 64px;
     min-width: 64px;
     min-height: 64px;
+    /* Ensure buckets can become visible - override any inherited hiding */
+    visibility: hidden;
+    display: flex !important;
+    z-index: 10001; /* Above the radial container */
 }
 
 /* Radial menu active - show items with animation */
 .radial-menu-container.radial-active .drag-bucket {
     opacity: 0.95;
     transform: scale(1);
+    visibility: visible !important;
+    display: flex !important;
+    transition: opacity 0.15s ease-out, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), visibility 0s linear 0s;
 }
 
-/* Staggered animation for radial menu items */
-.radial-menu-container.radial-active .drag-bucket:nth-child(1) { transition-delay: 0ms; }
-.radial-menu-container.radial-active .drag-bucket:nth-child(2) { transition-delay: 15ms; }
-.radial-menu-container.radial-active .drag-bucket:nth-child(3) { transition-delay: 30ms; }
-.radial-menu-container.radial-active .drag-bucket:nth-child(4) { transition-delay: 45ms; }
-.radial-menu-container.radial-active .drag-bucket:nth-child(5) { transition-delay: 60ms; }
-.radial-menu-container.radial-active .drag-bucket:nth-child(6) { transition-delay: 75ms; }
-.radial-menu-container.radial-active .drag-bucket:nth-child(7) { transition-delay: 90ms; }
-.radial-menu-container.radial-active .drag-bucket:nth-child(8) { transition-delay: 105ms; }
-.radial-menu-container.radial-active .drag-bucket:nth-child(9) { transition-delay: 120ms; }
-.radial-menu-container.radial-active .drag-bucket:nth-child(10) { transition-delay: 135ms; }
+/* Staggered animation for radial menu items - use nth-of-type to skip indicator elements */
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(1) { transition-delay: 0ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(2) { transition-delay: 15ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(3) { transition-delay: 30ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(4) { transition-delay: 45ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(5) { transition-delay: 60ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(6) { transition-delay: 75ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(7) { transition-delay: 90ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(8) { transition-delay: 105ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(9) { transition-delay: 120ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(10) { transition-delay: 135ms; }
 
 /* Radial menu bucket hover state */
 .radial-menu-container .drag-bucket.drag-over {
@@ -7134,7 +7147,7 @@ body:not(.presentation-active) .drag-merge-indicator {
     border: 2px solid rgba(255, 255, 255, 0.4);
     border-radius: 50%;
     pointer-events: none;
-    z-index: 5150;
+    z-index: 10002; /* Above radial buckets */
     animation: radial-pulse 1.5s ease-in-out infinite;
 }
 
@@ -7159,7 +7172,7 @@ body:not(.presentation-active) .drag-merge-indicator {
     background: linear-gradient(to bottom, rgba(255, 255, 255, 0.8), transparent);
     border-radius: 2px;
     pointer-events: none;
-    z-index: 5160;
+    z-index: 10002; /* Above radial buckets */
     transform-origin: center top;
     opacity: 0;
     transition: opacity 0.1s ease;
