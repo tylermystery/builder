@@ -6418,8 +6418,9 @@ body.presentation-active #wtf-plans-panel-overlay {
     opacity: 1;
 }
 
-/* Drag-and-Drop Styles for Presentation View */
-/* Buckets are always visible when presentation modal is open, grayed out by default */
+/* Drag-and-Drop Styles for Presentation View - Enhanced Version */
+/* Left side: Actions (Goals at top, Archive/Delete at bottom) */
+/* Right side: Reactions and Comments */
 .presentation-drag-buckets {
     position: fixed;
     top: 0;
@@ -6428,7 +6429,7 @@ body.presentation-active #wtf-plans-panel-overlay {
     bottom: 0;
     pointer-events: none;
     z-index: 10000;
-    display: none; /* Hidden by default, shown via JS when modal is open */
+    display: none;
 }
 
 /* When presentation modal is open, buckets container is shown */
@@ -6438,111 +6439,429 @@ body.presentation-active #wtf-plans-panel-overlay {
 
 /* Active during drag - enables pointer events for drop targets */
 .presentation-drag-buckets.drag-active {
-    display: block;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
-.drag-bucket {
+/* Left and Right zone containers */
+.drag-zone-left,
+.drag-zone-right {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    width: 100px;
-    height: 160px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: auto;
+    opacity: 0;
+    transition: opacity 0.2s ease; /* Faster transition for better visibility */
+}
+
+.presentation-drag-buckets.drag-active .drag-zone-left,
+.presentation-drag-buckets.drag-active .drag-zone-right {
+    /* RESILIENCE: Force ALL visibility-related properties */
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: flex !important;
+    pointer-events: auto !important;
+    /* Add more visible background to confirm zones are visible during debugging */
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 8px;
+    padding: 8px;
+}
+
+/* DEBUG: Add outline to buckets during drag to confirm they're rendering */
+.presentation-drag-buckets.drag-active .drag-bucket {
+    outline: 2px dashed rgba(255, 255, 255, 0.3);
+    outline-offset: 2px;
+}
+
+.drag-zone-left {
+    left: 8px;
+}
+
+.drag-zone-right {
+    right: 8px;
+}
+
+/* Base bucket styles - now smaller since we have more buckets */
+.drag-bucket {
+    position: relative;
+    width: 70px;
+    height: 70px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    border-radius: 16px;
+    gap: 4px;
+    border-radius: 12px;
     backdrop-filter: blur(20px);
     pointer-events: auto;
-    transition: all 0.3s ease, transform 0.2s ease;
-    /* Dormant state: more visible than before (was 0.35, now 0.6) */
-    opacity: 0.6;
-    filter: grayscale(50%);
-}
-
-/* Archive bucket - subtle gray/blue tint in dormant state */
-.drag-bucket-archive {
-    left: 16px;
-    background: linear-gradient(135deg, rgba(108, 117, 145, 0.85), rgba(73, 80, 107, 0.85));
-    border: 3px solid rgba(100, 150, 200, 0.8);
-    box-shadow: 0 4px 20px rgba(100, 150, 200, 0.4);
-}
-
-/* Completed bucket - subtle gray/green tint in dormant state */
-.drag-bucket-completed {
-    right: 16px;
-    background: linear-gradient(135deg, rgba(108, 167, 125, 0.85), rgba(73, 130, 87, 0.85));
-    border: 3px solid rgba(100, 200, 150, 0.8);
-    box-shadow: 0 4px 20px rgba(100, 200, 150, 0.4);
-}
-
-/* Active drag state - colorize buckets */
-.presentation-drag-buckets.drag-active .drag-bucket {
-    opacity: 0.85;
-    filter: grayscale(0%);
-}
-
-.presentation-drag-buckets.drag-active .drag-bucket-archive {
-    background: linear-gradient(135deg, rgba(108, 117, 125, 0.9), rgba(73, 80, 87, 0.9));
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-.presentation-drag-buckets.drag-active .drag-bucket-completed {
-    background: linear-gradient(135deg, rgba(40, 167, 69, 0.9), rgba(25, 135, 84, 0.9));
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transition: all 0.25s ease, transform 0.2s ease;
+    opacity: 0.75;
+    filter: grayscale(30%);
+    cursor: pointer;
 }
 
 .drag-bucket .bucket-icon {
-    font-size: 2em;
+    font-size: 1.4em;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    line-height: 1;
 }
 
 .drag-bucket .bucket-label {
+    font-size: 0.65em;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* LEFT SIDE ACTION BUCKETS */
+
+/* Goal bucket - gold/yellow gradient */
+.drag-bucket-goal {
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.9), rgba(255, 160, 0, 0.9));
+    border: 2px solid rgba(255, 215, 0, 0.8);
+    box-shadow: 0 4px 16px rgba(255, 193, 7, 0.3);
+}
+
+/* Ideas bucket - purple/violet gradient */
+.drag-bucket-ideas {
+    background: linear-gradient(135deg, rgba(156, 39, 176, 0.9), rgba(123, 31, 162, 0.9));
+    border: 2px solid rgba(186, 104, 200, 0.8);
+    box-shadow: 0 4px 16px rgba(156, 39, 176, 0.3);
+}
+
+/* Lock bucket - blue gradient */
+.drag-bucket-lock {
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.9), rgba(25, 118, 210, 0.9));
+    border: 2px solid rgba(100, 181, 246, 0.8);
+    box-shadow: 0 4px 16px rgba(33, 150, 243, 0.3);
+}
+
+/* Demote bucket - orange gradient */
+.drag-bucket-demote {
+    background: linear-gradient(135deg, rgba(255, 152, 0, 0.9), rgba(245, 124, 0, 0.9));
+    border: 2px solid rgba(255, 183, 77, 0.8);
+    box-shadow: 0 4px 16px rgba(255, 152, 0, 0.3);
+}
+
+/* Archive bucket - gray gradient */
+.drag-bucket-archive {
+    background: linear-gradient(135deg, rgba(108, 117, 125, 0.9), rgba(73, 80, 87, 0.9));
+    border: 2px solid rgba(134, 142, 150, 0.8);
+    box-shadow: 0 4px 16px rgba(108, 117, 125, 0.3);
+}
+
+/* Delete bucket - red gradient */
+.drag-bucket-delete {
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.9), rgba(176, 42, 55, 0.9));
+    border: 2px solid rgba(245, 108, 108, 0.8);
+    box-shadow: 0 4px 16px rgba(220, 53, 69, 0.3);
+}
+
+/* RIGHT SIDE REACTION/COMMENT BUCKETS */
+
+/* Reactions bucket - pink/red gradient */
+.drag-bucket-reactions {
+    background: linear-gradient(135deg, rgba(233, 30, 99, 0.9), rgba(194, 24, 91, 0.9));
+    border: 2px solid rgba(240, 98, 146, 0.8);
+    box-shadow: 0 4px 16px rgba(233, 30, 99, 0.3);
+    overflow: visible;
+}
+
+/* Quick comment bucket - teal gradient */
+.drag-bucket-quick-comment {
+    background: linear-gradient(135deg, rgba(0, 150, 136, 0.9), rgba(0, 121, 107, 0.9));
+    border: 2px solid rgba(77, 182, 172, 0.8);
+    box-shadow: 0 4px 16px rgba(0, 150, 136, 0.3);
+    overflow: visible;
+}
+
+/* Custom comment bucket - indigo gradient */
+.drag-bucket-custom-comment {
+    background: linear-gradient(135deg, rgba(63, 81, 181, 0.9), rgba(48, 63, 159, 0.9));
+    border: 2px solid rgba(121, 134, 203, 0.8);
+    box-shadow: 0 4px 16px rgba(63, 81, 181, 0.3);
+}
+
+/* Completed bucket - green gradient */
+.drag-bucket-completed {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.9), rgba(25, 135, 84, 0.9));
+    border: 2px solid rgba(100, 200, 150, 0.8);
+    box-shadow: 0 4px 16px rgba(40, 167, 69, 0.3);
+}
+
+/* Active drag state - full color */
+.presentation-drag-buckets.drag-active .drag-bucket {
+    opacity: 0.9;
+    filter: grayscale(0%);
+}
+
+/* Hover/drag-over state for all buckets */
+.drag-bucket.drag-over {
+    transform: scale(1.15);
+    opacity: 1;
+    filter: grayscale(0%) brightness(1.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    z-index: 10;
+}
+
+/* Specific hover states for left side buckets */
+.drag-bucket-goal.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(255, 193, 7, 0.6);
+}
+
+.drag-bucket-ideas.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(156, 39, 176, 0.6);
+}
+
+.drag-bucket-lock.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(33, 150, 243, 0.6);
+}
+
+.drag-bucket-demote.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(255, 152, 0, 0.6);
+}
+
+.drag-bucket-archive.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(108, 117, 125, 0.6);
+}
+
+.drag-bucket-delete.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(220, 53, 69, 0.6);
+}
+
+/* Specific hover states for right side buckets */
+.drag-bucket-reactions.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(233, 30, 99, 0.6);
+}
+
+.drag-bucket-quick-comment.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(0, 150, 136, 0.6);
+}
+
+.drag-bucket-custom-comment.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(63, 81, 181, 0.6);
+}
+
+.drag-bucket-completed.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(40, 167, 69, 0.6);
+}
+
+/* REACTION OPTIONS - revealed on hover/drag-over */
+.reaction-options,
+.quick-comment-options {
+    position: absolute;
+    left: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    transform-origin: left center;
+}
+
+.drag-bucket-reactions.drag-over .reaction-options,
+.drag-bucket-quick-comment.drag-over .quick-comment-options {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(-50%) translateX(0);
+}
+
+/* Reaction option buttons */
+.reaction-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    font-size: 1.3em;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.reaction-option:hover,
+.reaction-option.drag-over {
+    transform: scale(1.2);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* Quick comment option buttons */
+.quick-comment-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    font-size: 0.7em;
+    font-weight: 600;
+    color: #333;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    white-space: nowrap;
+}
+
+.quick-comment-option:hover,
+.quick-comment-option.drag-over {
+    transform: scale(1.1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    background: #fff;
+}
+
+/* MERGE INDICATOR */
+.drag-merge-indicator {
+    position: fixed;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(56, 142, 60, 0.95));
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+    z-index: 10001;
+    box-shadow: 0 8px 32px rgba(76, 175, 80, 0.5);
+    animation: pulse-merge 1s ease infinite;
+}
+
+.drag-merge-indicator .merge-icon {
+    font-size: 1.2em;
+}
+
+.drag-merge-indicator .merge-label {
     font-size: 0.85em;
     font-weight: 600;
     color: #fff;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
-/* Hover/drag-over state for buckets */
-.drag-bucket.drag-over {
-    transform: translateY(-50%) scale(1.15);
-    opacity: 1;
-    filter: grayscale(0%);
-    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+@keyframes pulse-merge {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
 }
 
-.drag-bucket-archive.drag-over {
-    background: linear-gradient(135deg, rgba(108, 117, 125, 1), rgba(73, 80, 87, 1));
-    border-color: rgba(255, 255, 255, 0.6);
+/* Item being merged onto - highlight state */
+.itinerary-item-section.merge-target {
+    outline: 3px solid rgba(76, 175, 80, 0.8);
+    outline-offset: 4px;
+    background: rgba(76, 175, 80, 0.1);
 }
 
-.drag-bucket-completed.drag-over {
-    background: linear-gradient(135deg, rgba(40, 167, 69, 1), rgba(25, 135, 84, 1));
-    border-color: rgba(255, 255, 255, 0.6);
+/* Goal item indicator on rendered items */
+.itinerary-item-section.item-status-goal {
+    border-left: 4px solid #ffc107;
 }
 
-/* Mobile-friendly bucket sizing */
+.itinerary-item-section.item-status-goal::after {
+    content: '⭐';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 1.2em;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+/* Mobile-friendly adjustments for enhanced drag zones */
 @media (max-width: 768px) {
-    .drag-bucket {
-        width: 70px;
-        height: 100px;
+    .drag-zone-left,
+    .drag-zone-right {
         gap: 4px;
     }
-    .drag-bucket-archive {
-        left: 8px;
+
+    .drag-bucket {
+        width: 52px;
+        height: 52px;
+        border-radius: 10px;
     }
-    .drag-bucket-completed {
-        right: 8px;
-    }
+
     .drag-bucket .bucket-icon {
-        font-size: 1.4em;
+        font-size: 1.1em;
     }
+
     .drag-bucket .bucket-label {
-        font-size: 0.7em;
+        font-size: 0.5em;
+    }
+
+    .drag-zone-left {
+        left: 4px;
+    }
+
+    .drag-zone-right {
+        right: 4px;
+    }
+
+    .reaction-option {
+        width: 28px;
+        height: 28px;
+        font-size: 1em;
+    }
+
+    .quick-comment-option {
+        padding: 4px 8px;
+        font-size: 0.6em;
+    }
+
+    .reaction-options,
+    .quick-comment-options {
+        left: calc(100% + 4px);
+    }
+
+    /* MOBILE RESILIENCE: Force visibility during drag-active state on mobile */
+    .presentation-drag-buckets.drag-active {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+
+    .presentation-drag-buckets.drag-active .drag-zone-left,
+    .presentation-drag-buckets.drag-active .drag-zone-right {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        flex-direction: column !important;
+        position: absolute !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        z-index: 10001 !important;
+    }
+
+    .presentation-drag-buckets.drag-active .drag-zone-left {
+        left: 4px !important;
+    }
+
+    .presentation-drag-buckets.drag-active .drag-zone-right {
+        right: 4px !important;
+    }
+
+    .presentation-drag-buckets.drag-active .drag-bucket {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 0.9 !important;
+        pointer-events: auto !important;
     }
 }
 
@@ -6588,30 +6907,6 @@ body.presentation-active #wtf-plans-panel-overlay {
 
 .itinerary-item-section:hover::before {
     opacity: 1;
-}
-
-/* Mobile adjustments for drag buckets */
-@media (max-width: 768px) {
-    .drag-bucket {
-        width: 80px;
-        height: 120px;
-    }
-
-    .drag-bucket-archive {
-        left: 8px;
-    }
-
-    .drag-bucket-completed {
-        right: 8px;
-    }
-
-    .drag-bucket .bucket-icon {
-        font-size: 1.5em;
-    }
-
-    .drag-bucket .bucket-label {
-        font-size: 0.75em;
-    }
 }
 
 /* Empty state section */

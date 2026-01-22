@@ -67,6 +67,8 @@ export let state = {
         planItemOrder: [], // Array of record IDs for custom ordering (empty = default order)
         archivedItems: new Set(), // Set of record IDs that have been archived
         completedItems: new Set(), // Set of record IDs that have been marked as completed
+        goalItems: new Set(), // Set of record IDs marked as goals/inspiration (typically top-ranked items)
+        relatedGroups: [], // Array of arrays, each containing record IDs that are related/merged together
 
         // Recent chats list for expandable chat history
         recentChats: [], // Array of { id, type: 'session'|'item', name, lastMessage, lastMessageTime, unreadCount }

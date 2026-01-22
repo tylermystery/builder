@@ -177,10 +177,28 @@ let presentationSearchDebounceTimer = null;
 // Drag-drop state
 let sortableInstance = null;
 let dragBucketsEl = null;
+// Left side buckets (actions)
+let dragBucketGoal = null;
+let dragBucketIdeas = null;
+let dragBucketLock = null;
+let dragBucketDemote = null;
 let dragBucketArchive = null;
+let dragBucketDelete = null;
+// Right side buckets (reactions/comments)
+let dragBucketReactions = null;
+let dragBucketQuickComment = null;
+let dragBucketCustomComment = null;
 let dragBucketCompleted = null;
+// Merge indicator
+let dragMergeIndicator = null;
+// Drag state
 let isDragging = false;
 let dragDelayTimer = null;
+let currentDraggedItem = null;
+let currentDraggedRecordId = null;
+let hoveredReactionEmoji = null;
+let hoveredQuickComment = null;
+let potentialMergeTarget = null;
 const DRAG_DELAY_MS = 300; // Delay before drag buckets appear (ms)
 
 // Show/hide state for archived and completed items
@@ -374,13 +392,57 @@ function ensureDOMElements() {
 
     // Drag-drop bucket elements
     dragBucketsEl = document.getElementById('presentation-drag-buckets');
+    // Left side buckets (actions)
+    dragBucketGoal = document.getElementById('drag-bucket-goal');
+    dragBucketIdeas = document.getElementById('drag-bucket-ideas');
+    dragBucketLock = document.getElementById('drag-bucket-lock');
+    dragBucketDemote = document.getElementById('drag-bucket-demote');
     dragBucketArchive = document.getElementById('drag-bucket-archive');
+    dragBucketDelete = document.getElementById('drag-bucket-delete');
+    // Right side buckets (reactions/comments)
+    dragBucketReactions = document.getElementById('drag-bucket-reactions');
+    dragBucketQuickComment = document.getElementById('drag-bucket-quick-comment');
+    dragBucketCustomComment = document.getElementById('drag-bucket-custom-comment');
     dragBucketCompleted = document.getElementById('drag-bucket-completed');
+    // Merge indicator
+    dragMergeIndicator = document.getElementById('drag-merge-indicator');
     console.log('[Presentation DEBUG] Bucket elements found:', {
         dragBucketsEl: !!dragBucketsEl,
+        dragBucketGoal: !!dragBucketGoal,
+        dragBucketIdeas: !!dragBucketIdeas,
+        dragBucketLock: !!dragBucketLock,
+        dragBucketDemote: !!dragBucketDemote,
         dragBucketArchive: !!dragBucketArchive,
-        dragBucketCompleted: !!dragBucketCompleted
+        dragBucketDelete: !!dragBucketDelete,
+        dragBucketReactions: !!dragBucketReactions,
+        dragBucketQuickComment: !!dragBucketQuickComment,
+        dragBucketCustomComment: !!dragBucketCustomComment,
+        dragBucketCompleted: !!dragBucketCompleted,
+        dragMergeIndicator: !!dragMergeIndicator
     });
+
+    // DEBUG: Log initial styling of drag buckets container
+    if (dragBucketsEl) {
+        const style = window.getComputedStyle(dragBucketsEl);
+        console.log('[Presentation DEBUG] Initial drag buckets container styling:', {
+            display: style.display,
+            visibility: style.visibility,
+            opacity: style.opacity,
+            position: style.position,
+            zIndex: style.zIndex,
+            pointerEvents: style.pointerEvents
+        });
+
+        // Check for left/right zones
+        const leftZone = dragBucketsEl.querySelector('.drag-zone-left');
+        const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
+        console.log('[Presentation DEBUG] Drag zones found:', {
+            leftZone: !!leftZone,
+            rightZone: !!rightZone,
+            leftZoneChildren: leftZone ? leftZone.children.length : 0,
+            rightZoneChildren: rightZone ? rightZone.children.length : 0
+        });
+    }
 
     /* DEBUG: DOM elements after init
     console.log('[Accordion DEBUG] DOM elements after init:', {
@@ -2271,6 +2333,10 @@ async function renderItineraryItem(item, index) {
     // Add status class to section
     const statusClass = itemStatus !== 'active' ? `item-status-${itemStatus}` : '';
 
+    // Add goal class if item is marked as a goal
+    const isGoal = state.session.goalItems?.has(recordId);
+    const goalClass = isGoal ? 'item-status-goal' : '';
+
     // Generate summary for collapsed state
     const itemSummary = generateItemSummary(record, itemInfo, type);
 
@@ -2300,7 +2366,7 @@ async function renderItineraryItem(item, index) {
 
     // Each item is wrapped in its own section container for independent layout
     return `
-        <section class="itinerary-section itinerary-item-section ${statusClass}" data-section="item-${recordId}" data-item-status="${itemStatus}">
+        <section class="itinerary-section itinerary-item-section ${statusClass} ${goalClass}" data-section="item-${recordId}" data-item-status="${itemStatus}" data-is-goal="${isGoal}">
             <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}" data-item-name="${escapeHtml(name)}">
                 <div class="item-accordion-header" data-record-id="${recordId}">
                     <div class="item-accordion-title-row">
@@ -2544,6 +2610,25 @@ async function initializeItemDragDrop() {
             onStart: function(evt) {
                 console.log('[Presentation DEBUG] Drag onStart triggered');
                 isDragging = true;
+                // Reset debug counters
+                dragMoveDebugCounter = 0;
+                bucketHoverDebugCounter = 0;
+
+                // Track the currently dragged item
+                currentDraggedItem = evt.item;
+                const article = evt.item.querySelector('.itinerary-item');
+                currentDraggedRecordId = article?.dataset.recordId;
+                console.log('[Presentation DEBUG] Dragging item:', currentDraggedRecordId);
+
+                // DEBUG: Log initial state of drag buckets container
+                console.log('[Presentation DEBUG] onStart - Initial drag bucket state:', {
+                    dragBucketsElExists: !!dragBucketsEl,
+                    dragBucketsId: dragBucketsEl?.id,
+                    currentClasses: dragBucketsEl ? Array.from(dragBucketsEl.classList) : [],
+                    bucketGoalExists: !!dragBucketGoal,
+                    bucketReactionsExists: !!dragBucketReactions
+                });
+
                 // Start timer to show drag buckets after delay
                 dragDelayTimer = setTimeout(() => {
                     console.log('[Presentation DEBUG] dragDelayTimer fired, calling showDragBuckets');
@@ -2557,6 +2642,12 @@ async function initializeItemDragDrop() {
 
             onEnd: function(evt) {
                 console.log('[Presentation DEBUG] Drag onEnd triggered');
+                console.log('[Presentation DEBUG] onEnd - Final drag state:', {
+                    isDragging,
+                    hasDragActiveClass: dragBucketsEl ? dragBucketsEl.classList.contains('drag-active') : false,
+                    dragMoveEvents: dragMoveDebugCounter,
+                    bucketHoverChecks: bucketHoverDebugCounter
+                });
                 isDragging = false;
                 clearTimeout(dragDelayTimer);
 
@@ -2591,7 +2682,177 @@ function showDragBuckets() {
     console.log('[Presentation DEBUG] showDragBuckets called, isDragging:', isDragging, 'dragBucketsEl:', !!dragBucketsEl);
     if (dragBucketsEl && isDragging) {
         console.log('[Presentation DEBUG] Adding drag-active class to buckets');
+
+        // RESILIENCE FIX 1: Force container visibility with inline styles
+        // This overrides any CSS issues including display:none, visibility:hidden, etc.
+        dragBucketsEl.style.display = 'block';
+        dragBucketsEl.style.visibility = 'visible';
+        dragBucketsEl.style.opacity = '1';
+        dragBucketsEl.style.pointerEvents = 'auto';
+
         dragBucketsEl.classList.add('drag-active');
+
+        const leftZone = dragBucketsEl.querySelector('.drag-zone-left');
+        const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
+
+        // Helper function to apply zone styles - can be called multiple times for retry
+        const applyZoneStyles = () => {
+            // RESILIENCE FIX 2: Force zone visibility with comprehensive inline styles
+            // Setting ALL properties that could prevent visibility
+            if (leftZone) {
+                leftZone.style.cssText = `
+                    opacity: 1 !important;
+                    visibility: visible !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 8px !important;
+                    pointer-events: auto !important;
+                    transform: translateY(-50%) !important;
+                    position: absolute !important;
+                    left: 8px !important;
+                    top: 50% !important;
+                    z-index: 10001 !important;
+                    background: rgba(0, 0, 0, 0.2) !important;
+                    padding: 8px !important;
+                    border-radius: 12px !important;
+                `;
+            }
+            if (rightZone) {
+                rightZone.style.cssText = `
+                    opacity: 1 !important;
+                    visibility: visible !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 8px !important;
+                    pointer-events: auto !important;
+                    transform: translateY(-50%) !important;
+                    position: absolute !important;
+                    right: 8px !important;
+                    top: 50% !important;
+                    z-index: 10001 !important;
+                    background: rgba(0, 0, 0, 0.2) !important;
+                    padding: 8px !important;
+                    border-radius: 12px !important;
+                `;
+            }
+
+            // RESILIENCE FIX 3: Also force visibility on all bucket elements
+            const allBuckets = dragBucketsEl.querySelectorAll('.drag-bucket');
+            allBuckets.forEach((bucket) => {
+                bucket.style.opacity = '1';
+                bucket.style.visibility = 'visible';
+                bucket.style.display = 'flex';
+                bucket.style.pointerEvents = 'auto';
+            });
+        };
+
+        // Apply immediately
+        applyZoneStyles();
+        console.log('[Presentation DEBUG] Zone styles applied directly');
+
+        // RESILIENCE FIX 4: Force a repaint/reflow to ensure browser renders changes
+        // This is crucial on mobile where CSS changes may not apply immediately
+        void dragBucketsEl.offsetHeight;
+        if (leftZone) void leftZone.offsetHeight;
+        if (rightZone) void rightZone.offsetHeight;
+
+        // RESILIENCE FIX 5: Use requestAnimationFrame to retry applying styles
+        // This helps with timing issues on mobile browsers
+        requestAnimationFrame(() => {
+            applyZoneStyles();
+            console.log('[Presentation DEBUG] Zone styles re-applied via requestAnimationFrame');
+
+            // Double-check with another frame for stubborn browsers
+            requestAnimationFrame(() => {
+                applyZoneStyles();
+                // Force another reflow
+                void dragBucketsEl.offsetHeight;
+            });
+        });
+
+        // RESILIENCE FIX 6: Also retry after a small delay as final fallback
+        setTimeout(() => {
+            if (isDragging && dragBucketsEl?.classList.contains('drag-active')) {
+                applyZoneStyles();
+                console.log('[Presentation DEBUG] Zone styles re-applied via setTimeout fallback');
+            }
+        }, 100);
+
+        // DEBUG: Log detailed styling info after adding drag-active class (stringified for text export)
+        setTimeout(() => {
+            const containerStyle = window.getComputedStyle(dragBucketsEl);
+            const containerRect = dragBucketsEl.getBoundingClientRect();
+            console.log('[Presentation DEBUG] Drag buckets container styling - ' +
+                'classes: [' + Array.from(dragBucketsEl.classList).join(', ') + '], ' +
+                'display: ' + containerStyle.display + ', ' +
+                'visibility: ' + containerStyle.visibility + ', ' +
+                'opacity: ' + containerStyle.opacity + ', ' +
+                'zIndex: ' + containerStyle.zIndex + ', ' +
+                'rect: ' + Math.round(containerRect.width) + 'x' + Math.round(containerRect.height) +
+                ' at (' + Math.round(containerRect.left) + ',' + Math.round(containerRect.top) + ')');
+
+            // DEBUG: Log left zone styling (stringified)
+            if (leftZone) {
+                const leftStyle = window.getComputedStyle(leftZone);
+                const leftRect = leftZone.getBoundingClientRect();
+                console.log('[Presentation DEBUG] Left zone - ' +
+                    'display: ' + leftStyle.display + ', ' +
+                    'visibility: ' + leftStyle.visibility + ', ' +
+                    'opacity: ' + leftStyle.opacity + ', ' +
+                    'position: ' + leftStyle.position + ', ' +
+                    'left: ' + leftStyle.left + ', ' +
+                    'rect: ' + Math.round(leftRect.width) + 'x' + Math.round(leftRect.height) +
+                    ' at (' + Math.round(leftRect.left) + ',' + Math.round(leftRect.top) + ')');
+            } else {
+                console.warn('[Presentation DEBUG] Left zone NOT FOUND in dragBucketsEl');
+            }
+
+            // DEBUG: Log right zone styling (stringified)
+            if (rightZone) {
+                const rightStyle = window.getComputedStyle(rightZone);
+                const rightRect = rightZone.getBoundingClientRect();
+                console.log('[Presentation DEBUG] Right zone - ' +
+                    'display: ' + rightStyle.display + ', ' +
+                    'visibility: ' + rightStyle.visibility + ', ' +
+                    'opacity: ' + rightStyle.opacity + ', ' +
+                    'position: ' + rightStyle.position + ', ' +
+                    'right: ' + rightStyle.right + ', ' +
+                    'rect: ' + Math.round(rightRect.width) + 'x' + Math.round(rightRect.height) +
+                    ' at (' + Math.round(rightRect.left) + ',' + Math.round(rightRect.top) + ')');
+            } else {
+                console.warn('[Presentation DEBUG] Right zone NOT FOUND in dragBucketsEl');
+            }
+
+            // DEBUG: Log individual bucket elements (stringified for text export)
+            const bucketDebugInfo = [
+                { el: dragBucketGoal, name: 'Goal' },
+                { el: dragBucketIdeas, name: 'Ideas' },
+                { el: dragBucketLock, name: 'Lock' },
+                { el: dragBucketDemote, name: 'Demote' },
+                { el: dragBucketArchive, name: 'Archive' },
+                { el: dragBucketDelete, name: 'Delete' },
+                { el: dragBucketReactions, name: 'Reactions' },
+                { el: dragBucketQuickComment, name: 'QuickComment' },
+                { el: dragBucketCustomComment, name: 'CustomComment' },
+                { el: dragBucketCompleted, name: 'Completed' }
+            ];
+
+            console.log('[Presentation DEBUG] Individual bucket elements:');
+            bucketDebugInfo.forEach(({ el, name }) => {
+                if (el) {
+                    const style = window.getComputedStyle(el);
+                    const rect = el.getBoundingClientRect();
+                    console.log('[Presentation DEBUG]   ' + name + ': ' +
+                        'display=' + style.display + ', ' +
+                        'visibility=' + style.visibility + ', ' +
+                        'opacity=' + style.opacity + ', ' +
+                        'rect=' + Math.round(rect.width) + 'x' + Math.round(rect.height) +
+                        ' at (' + Math.round(rect.left) + ',' + Math.round(rect.top) + ')');
+                } else {
+                    console.warn('[Presentation DEBUG]   ' + name + ': ELEMENT NOT FOUND');
+                }
+            });
+        }, 50); // Small delay to allow CSS transitions to start
     }
 }
 
@@ -2600,38 +2861,270 @@ function hideDragBuckets() {
     console.log('[Presentation DEBUG] hideDragBuckets called, dragBucketsEl:', !!dragBucketsEl);
     if (dragBucketsEl) {
         dragBucketsEl.classList.remove('drag-active');
-        // Remove drag-over from all buckets
+
+        // Clear all inline styles set by showDragBuckets
+        dragBucketsEl.style.display = '';
+        dragBucketsEl.style.visibility = '';
+        dragBucketsEl.style.opacity = '';
+        dragBucketsEl.style.pointerEvents = '';
+
+        const leftZone = dragBucketsEl.querySelector('.drag-zone-left');
+        const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
+        if (leftZone) leftZone.style.cssText = '';
+        if (rightZone) rightZone.style.cssText = '';
+
+        // Clear inline styles from all bucket elements
+        const allBuckets = dragBucketsEl.querySelectorAll('.drag-bucket');
+        allBuckets.forEach(bucket => {
+            bucket.style.opacity = '';
+            bucket.style.visibility = '';
+            bucket.style.display = '';
+            bucket.style.pointerEvents = '';
+        });
+        // Remove drag-over from all left side buckets
+        if (dragBucketGoal) dragBucketGoal.classList.remove('drag-over');
+        if (dragBucketIdeas) dragBucketIdeas.classList.remove('drag-over');
+        if (dragBucketLock) dragBucketLock.classList.remove('drag-over');
+        if (dragBucketDemote) dragBucketDemote.classList.remove('drag-over');
         if (dragBucketArchive) dragBucketArchive.classList.remove('drag-over');
+        if (dragBucketDelete) dragBucketDelete.classList.remove('drag-over');
+        // Remove drag-over from all right side buckets
+        if (dragBucketReactions) dragBucketReactions.classList.remove('drag-over');
+        if (dragBucketQuickComment) dragBucketQuickComment.classList.remove('drag-over');
+        if (dragBucketCustomComment) dragBucketCustomComment.classList.remove('drag-over');
         if (dragBucketCompleted) dragBucketCompleted.classList.remove('drag-over');
+        // Clear reaction/comment hover states
+        clearReactionHoverStates();
+        clearQuickCommentHoverStates();
+        // Hide merge indicator
+        if (dragMergeIndicator) {
+            dragMergeIndicator.style.display = 'none';
+        }
+        // Clear merge target
+        clearMergeTarget();
     }
+    // Reset drag state
+    currentDraggedItem = null;
+    currentDraggedRecordId = null;
+    hoveredReactionEmoji = null;
+    hoveredQuickComment = null;
+    potentialMergeTarget = null;
+}
+
+// Clear reaction option hover states
+function clearReactionHoverStates() {
+    if (dragBucketReactions) {
+        const options = dragBucketReactions.querySelectorAll('.reaction-option');
+        options.forEach(opt => opt.classList.remove('drag-over'));
+    }
+    hoveredReactionEmoji = null;
+}
+
+// Clear quick comment option hover states
+function clearQuickCommentHoverStates() {
+    if (dragBucketQuickComment) {
+        const options = dragBucketQuickComment.querySelectorAll('.quick-comment-option');
+        options.forEach(opt => opt.classList.remove('drag-over'));
+    }
+    hoveredQuickComment = null;
+}
+
+// Clear merge target highlight
+function clearMergeTarget() {
+    const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
+    if (currentTarget) {
+        currentTarget.classList.remove('merge-target');
+    }
+    potentialMergeTarget = null;
+}
+
+// Helper to check if point is within a rect
+function isPointInRect(x, y, rect) {
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 }
 
 // Check if pointer is over a bucket and update hover state
+let bucketHoverDebugCounter = 0;
 function checkBucketHover(event) {
     if (!dragBucketsEl || !isDragging) return;
 
     const clientX = event.touches ? event.touches[0].clientX : event.clientX;
     const clientY = event.touches ? event.touches[0].clientY : event.clientY;
 
-    // Check archive bucket
-    if (dragBucketArchive) {
-        const archiveRect = dragBucketArchive.getBoundingClientRect();
-        const overArchive = clientX >= archiveRect.left && clientX <= archiveRect.right &&
-                          clientY >= archiveRect.top && clientY <= archiveRect.bottom;
-        dragBucketArchive.classList.toggle('drag-over', overArchive);
+    // All buckets to check
+    const buckets = [
+        { el: dragBucketGoal, name: 'goal' },
+        { el: dragBucketIdeas, name: 'ideas' },
+        { el: dragBucketLock, name: 'lock' },
+        { el: dragBucketDemote, name: 'demote' },
+        { el: dragBucketArchive, name: 'archive' },
+        { el: dragBucketDelete, name: 'delete' },
+        { el: dragBucketReactions, name: 'reactions' },
+        { el: dragBucketQuickComment, name: 'quick-comment' },
+        { el: dragBucketCustomComment, name: 'custom-comment' },
+        { el: dragBucketCompleted, name: 'completed' }
+    ];
+
+    let isOverAnyBucket = false;
+
+    // DEBUG: Log bucket positions periodically
+    bucketHoverDebugCounter++;
+    const shouldLogDebug = bucketHoverDebugCounter % 60 === 0;
+
+    if (shouldLogDebug) {
+        console.log('[Presentation DEBUG] checkBucketHover - Pointer at:', { clientX, clientY });
+        console.log('[Presentation DEBUG] Window dimensions:', {
+            innerWidth: window.innerWidth,
+            innerHeight: window.innerHeight
+        });
     }
 
-    // Check completed bucket
-    if (dragBucketCompleted) {
-        const completedRect = dragBucketCompleted.getBoundingClientRect();
-        const overCompleted = clientX >= completedRect.left && clientX <= completedRect.right &&
-                             clientY >= completedRect.top && clientY <= completedRect.bottom;
-        dragBucketCompleted.classList.toggle('drag-over', overCompleted);
+    buckets.forEach(({ el, name }) => {
+        if (el) {
+            const rect = el.getBoundingClientRect();
+            const isOver = isPointInRect(clientX, clientY, rect);
+            el.classList.toggle('drag-over', isOver);
+
+            // DEBUG: Log each bucket's position periodically
+            if (shouldLogDebug) {
+                console.log(`[Presentation DEBUG]   Bucket "${name}":`, {
+                    exists: true,
+                    rect: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height },
+                    isOver,
+                    isVisible: rect.width > 0 && rect.height > 0
+                });
+            }
+
+            if (isOver) {
+                isOverAnyBucket = true;
+                console.log(`[Presentation DEBUG] HOVER DETECTED on bucket: ${name}`);
+                // Special handling for reaction and quick comment buckets
+                if (name === 'reactions') {
+                    checkReactionOptionHover(clientX, clientY);
+                } else if (name === 'quick-comment') {
+                    checkQuickCommentOptionHover(clientX, clientY);
+                }
+            }
+        } else if (shouldLogDebug) {
+            console.warn(`[Presentation DEBUG]   Bucket "${name}": ELEMENT NOT FOUND`);
+        }
+    });
+
+    // If not over any bucket, check for potential merge target
+    if (!isOverAnyBucket && currentDraggedRecordId) {
+        checkMergeTargetHover(clientX, clientY);
+    } else {
+        clearMergeTarget();
+        if (dragMergeIndicator) {
+            dragMergeIndicator.style.display = 'none';
+        }
+    }
+}
+
+// Check if hovering over a specific reaction emoji option
+function checkReactionOptionHover(clientX, clientY) {
+    if (!dragBucketReactions) return;
+
+    const options = dragBucketReactions.querySelectorAll('.reaction-option');
+    let foundHover = false;
+
+    options.forEach(opt => {
+        const rect = opt.getBoundingClientRect();
+        const isOver = isPointInRect(clientX, clientY, rect);
+        opt.classList.toggle('drag-over', isOver);
+        if (isOver) {
+            hoveredReactionEmoji = opt.dataset.emoji;
+            foundHover = true;
+        }
+    });
+
+    if (!foundHover) {
+        hoveredReactionEmoji = null;
+    }
+}
+
+// Check if hovering over a specific quick comment option
+function checkQuickCommentOptionHover(clientX, clientY) {
+    if (!dragBucketQuickComment) return;
+
+    const options = dragBucketQuickComment.querySelectorAll('.quick-comment-option');
+    let foundHover = false;
+
+    options.forEach(opt => {
+        const rect = opt.getBoundingClientRect();
+        const isOver = isPointInRect(clientX, clientY, rect);
+        opt.classList.toggle('drag-over', isOver);
+        if (isOver) {
+            hoveredQuickComment = opt.dataset.comment;
+            foundHover = true;
+        }
+    });
+
+    if (!foundHover) {
+        hoveredQuickComment = null;
+    }
+}
+
+// Check if hovering over another item for potential merge
+function checkMergeTargetHover(clientX, clientY) {
+    if (!itineraryItemsListEl) return;
+
+    const items = itineraryItemsListEl.querySelectorAll('.itinerary-item-section:not(.sortable-drag)');
+    let foundTarget = null;
+
+    items.forEach(item => {
+        const article = item.querySelector('.itinerary-item');
+        const itemRecordId = article?.dataset.recordId;
+
+        // Don't merge with self
+        if (itemRecordId === currentDraggedRecordId) return;
+
+        const rect = item.getBoundingClientRect();
+        if (isPointInRect(clientX, clientY, rect)) {
+            foundTarget = { element: item, recordId: itemRecordId };
+        }
+    });
+
+    // Update merge target highlighting
+    const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
+    if (currentTarget && (!foundTarget || currentTarget !== foundTarget.element)) {
+        currentTarget.classList.remove('merge-target');
+    }
+
+    if (foundTarget) {
+        foundTarget.element.classList.add('merge-target');
+        potentialMergeTarget = foundTarget;
+
+        // Show merge indicator near cursor
+        if (dragMergeIndicator) {
+            dragMergeIndicator.style.display = 'flex';
+            dragMergeIndicator.style.left = `${clientX + 20}px`;
+            dragMergeIndicator.style.top = `${clientY - 20}px`;
+        }
+    } else {
+        potentialMergeTarget = null;
+        if (dragMergeIndicator) {
+            dragMergeIndicator.style.display = 'none';
+        }
     }
 }
 
 // Handle mouse/touch move during drag
+let dragMoveDebugCounter = 0;
 function handleDragMove(event) {
+    // DEBUG: Log every 30th move event to avoid console spam
+    dragMoveDebugCounter++;
+    if (dragMoveDebugCounter % 30 === 0) {
+        const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+        const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+        console.log('[Presentation DEBUG] handleDragMove:', {
+            clientX,
+            clientY,
+            isDragging,
+            dragBucketsElExists: !!dragBucketsEl,
+            hasDragActiveClass: dragBucketsEl ? dragBucketsEl.classList.contains('drag-active') : false
+        });
+    }
     checkBucketHover(event);
 }
 
@@ -2652,28 +3145,103 @@ function checkBucketDrop(event, item) {
 
     if (!recordId) return false;
 
+    // Helper to check drop on bucket
+    const checkDropOnBucket = (bucket) => {
+        if (!bucket) return false;
+        const rect = bucket.getBoundingClientRect();
+        return isPointInRect(clientX, clientY, rect);
+    };
+
+    // LEFT SIDE BUCKETS (Actions)
+
+    // Check goal bucket
+    if (checkDropOnBucket(dragBucketGoal)) {
+        console.log('[Presentation DEBUG] Dropped on goal bucket!');
+        setItemAsGoal(recordId);
+        return true;
+    }
+
+    // Check ideas bucket
+    if (checkDropOnBucket(dragBucketIdeas)) {
+        console.log('[Presentation DEBUG] Dropped on ideas bucket!');
+        moveToIdeas(recordId);
+        return true;
+    }
+
+    // Check lock bucket
+    if (checkDropOnBucket(dragBucketLock)) {
+        console.log('[Presentation DEBUG] Dropped on lock bucket!');
+        lockItem(recordId);
+        return true;
+    }
+
+    // Check demote bucket
+    if (checkDropOnBucket(dragBucketDemote)) {
+        console.log('[Presentation DEBUG] Dropped on demote bucket!');
+        demoteItem(recordId);
+        return true;
+    }
+
     // Check archive bucket
-    if (dragBucketArchive) {
-        const archiveRect = dragBucketArchive.getBoundingClientRect();
-        console.log('[Presentation DEBUG] Archive bucket rect:', archiveRect);
-        if (clientX >= archiveRect.left && clientX <= archiveRect.right &&
-            clientY >= archiveRect.top && clientY <= archiveRect.bottom) {
-            console.log('[Presentation DEBUG] Dropped on archive bucket!');
-            archiveItem(recordId);
-            return true;
+    if (checkDropOnBucket(dragBucketArchive)) {
+        console.log('[Presentation DEBUG] Dropped on archive bucket!');
+        archiveItem(recordId);
+        return true;
+    }
+
+    // Check delete bucket
+    if (checkDropOnBucket(dragBucketDelete)) {
+        console.log('[Presentation DEBUG] Dropped on delete bucket!');
+        deleteItem(recordId);
+        return true;
+    }
+
+    // RIGHT SIDE BUCKETS (Reactions/Comments)
+
+    // Check reactions bucket (check individual emoji options first)
+    if (checkDropOnBucket(dragBucketReactions)) {
+        console.log('[Presentation DEBUG] Dropped on reactions bucket!');
+        // Check if dropped on a specific emoji option
+        if (hoveredReactionEmoji) {
+            addReactionToItem(recordId, hoveredReactionEmoji);
+        } else {
+            // Default reaction if no specific emoji hovered
+            addReactionToItem(recordId, '👍');
         }
+        return true;
+    }
+
+    // Check quick comment bucket (check individual comment options first)
+    if (checkDropOnBucket(dragBucketQuickComment)) {
+        console.log('[Presentation DEBUG] Dropped on quick comment bucket!');
+        if (hoveredQuickComment) {
+            addQuickCommentToItem(recordId, hoveredQuickComment);
+        } else {
+            // Default quick comment
+            addQuickCommentToItem(recordId, 'Great idea');
+        }
+        return true;
+    }
+
+    // Check custom comment bucket
+    if (checkDropOnBucket(dragBucketCustomComment)) {
+        console.log('[Presentation DEBUG] Dropped on custom comment bucket!');
+        openCustomCommentDialog(recordId);
+        return true;
     }
 
     // Check completed bucket
-    if (dragBucketCompleted) {
-        const completedRect = dragBucketCompleted.getBoundingClientRect();
-        console.log('[Presentation DEBUG] Completed bucket rect:', completedRect);
-        if (clientX >= completedRect.left && clientX <= completedRect.right &&
-            clientY >= completedRect.top && clientY <= completedRect.bottom) {
-            console.log('[Presentation DEBUG] Dropped on completed bucket!');
-            completeItem(recordId);
-            return true;
-        }
+    if (checkDropOnBucket(dragBucketCompleted)) {
+        console.log('[Presentation DEBUG] Dropped on completed bucket!');
+        completeItem(recordId);
+        return true;
+    }
+
+    // Check for merge (drop on another item)
+    if (potentialMergeTarget && potentialMergeTarget.recordId) {
+        console.log('[Presentation DEBUG] Dropped on another item for merge!');
+        openMergeDialog(recordId, potentialMergeTarget.recordId);
+        return true;
     }
 
     return false;
@@ -2743,6 +3311,327 @@ async function completeItem(recordId) {
     triggerSave();
 
     log('Presentation', `Item ${recordId} marked completed`);
+}
+
+// =====================================================
+// NEW DRAG ACTION HANDLERS
+// =====================================================
+
+// Set item as a goal/inspiration (top-ranked target)
+async function setItemAsGoal(recordId) {
+    console.log('[Presentation DEBUG] setItemAsGoal called with recordId:', recordId);
+    if (!recordId) return;
+
+    // Initialize goalItems if not exists
+    if (!state.session.goalItems) {
+        state.session.goalItems = new Set();
+    }
+
+    // Toggle goal status
+    if (state.session.goalItems.has(recordId)) {
+        state.session.goalItems.delete(recordId);
+        showToast('Removed from goals', 'info');
+    } else {
+        state.session.goalItems.add(recordId);
+        const record = state.records.all.find(r => r.id === recordId);
+        const itemName = record?.fields?.Name || 'Item';
+        showToast(`"${itemName}" set as goal`, 'success');
+    }
+
+    // Re-render items
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Item ${recordId} goal status toggled`);
+}
+
+// Move item to Ideas bucket (from lockedItems to items)
+async function moveToIdeas(recordId) {
+    console.log('[Presentation DEBUG] moveToIdeas called with recordId:', recordId);
+    if (!recordId) return;
+
+    // Check if item is currently in lockedItems
+    const itemInfo = state.cart.lockedItems.get(recordId);
+    if (itemInfo) {
+        // Move from lockedItems to items
+        state.cart.lockedItems.delete(recordId);
+        state.cart.items.set(recordId, itemInfo);
+
+        // Get item name for toast
+        const record = state.records.all.find(r => r.id === recordId);
+        const itemName = record?.fields?.Name || 'Item';
+        showToast(`"${itemName}" moved to Ideas`, 'info');
+    } else {
+        // Item might already be in ideas, just confirm
+        showToast('Item is already in Ideas', 'info');
+    }
+
+    // Re-render items
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Item ${recordId} moved to Ideas`);
+}
+
+// Lock an item (move from items to lockedItems if not already)
+async function lockItem(recordId) {
+    console.log('[Presentation DEBUG] lockItem called with recordId:', recordId);
+    if (!recordId) return;
+
+    // Check if item is in items (Ideas)
+    const itemInfo = state.cart.items.get(recordId);
+    if (itemInfo) {
+        // Move from items to lockedItems
+        state.cart.items.delete(recordId);
+        state.cart.lockedItems.set(recordId, itemInfo);
+
+        const record = state.records.all.find(r => r.id === recordId);
+        const itemName = record?.fields?.Name || 'Item';
+        showToast(`"${itemName}" locked in plan`, 'success');
+    } else if (state.cart.lockedItems.has(recordId)) {
+        showToast('Item is already locked', 'info');
+    } else {
+        // Item not found, add it to locked
+        state.cart.lockedItems.set(recordId, { quantity: 1, selections: {} });
+        const record = state.records.all.find(r => r.id === recordId);
+        const itemName = record?.fields?.Name || 'Item';
+        showToast(`"${itemName}" locked in plan`, 'success');
+    }
+
+    // Re-render items
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Item ${recordId} locked in plan`);
+}
+
+// Demote an item (move from locked to idea status while keeping in view)
+async function demoteItem(recordId) {
+    console.log('[Presentation DEBUG] demoteItem called with recordId:', recordId);
+    if (!recordId) return;
+
+    // Move from lockedItems to items if applicable
+    const itemInfo = state.cart.lockedItems.get(recordId);
+    if (itemInfo) {
+        state.cart.lockedItems.delete(recordId);
+        state.cart.items.set(recordId, itemInfo);
+
+        const record = state.records.all.find(r => r.id === recordId);
+        const itemName = record?.fields?.Name || 'Item';
+        showToast(`"${itemName}" demoted to idea`, 'info');
+    } else {
+        showToast('Item is already an idea', 'info');
+    }
+
+    // Re-render items
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Item ${recordId} demoted to idea`);
+}
+
+// Delete an item (remove from plan entirely with confirmation)
+async function deleteItem(recordId) {
+    console.log('[Presentation DEBUG] deleteItem called with recordId:', recordId);
+    if (!recordId) return;
+
+    // Get item name for confirmation
+    const record = state.records.all.find(r => r.id === recordId);
+    const itemName = record?.fields?.Name || 'Item';
+
+    // Show confirmation dialog
+    const confirmed = confirm(`Are you sure you want to remove "${itemName}" from the plan?`);
+    if (!confirmed) return;
+
+    // Remove from all collections
+    state.cart.lockedItems.delete(recordId);
+    state.cart.items.delete(recordId);
+    state.session.archivedItems?.delete(recordId);
+    state.session.completedItems?.delete(recordId);
+    state.session.goalItems?.delete(recordId);
+
+    // Remove from plan order if present
+    const orderIndex = state.session.planItemOrder?.indexOf(recordId);
+    if (orderIndex !== -1 && orderIndex !== undefined) {
+        state.session.planItemOrder.splice(orderIndex, 1);
+    }
+
+    showToast(`"${itemName}" removed from plan`, 'info');
+
+    // Re-render items
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Item ${recordId} deleted from plan`);
+}
+
+// Add a reaction to an item
+async function addReactionToItem(recordId, emoji) {
+    console.log('[Presentation DEBUG] addReactionToItem called:', recordId, emoji);
+    if (!recordId || !emoji) return;
+
+    // Initialize reactions map if not exists
+    if (!state.session.reactions) {
+        state.session.reactions = new Map();
+    }
+
+    // Get or create the reactions for this item
+    let itemReactions = state.session.reactions.get(recordId);
+    if (!itemReactions || !(itemReactions instanceof Map)) {
+        itemReactions = new Map();
+        state.session.reactions.set(recordId, itemReactions);
+    }
+
+    // Use current user ID or generate anonymous ID
+    const userId = state.session.user?.id || `anon-${Date.now()}`;
+
+    // Add/update reaction
+    itemReactions.set(userId, emoji);
+
+    // Get item name for toast
+    const record = state.records.all.find(r => r.id === recordId);
+    const itemName = record?.fields?.Name || 'Item';
+    showToast(`${emoji} added to "${itemName}"`, 'success');
+
+    // Re-render items to show updated reactions
+    await renderAllItems();
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Reaction ${emoji} added to item ${recordId}`);
+}
+
+// Add a quick comment to an item
+async function addQuickCommentToItem(recordId, comment) {
+    console.log('[Presentation DEBUG] addQuickCommentToItem called:', recordId, comment);
+    if (!recordId || !comment) return;
+
+    // Use the existing comment system if available, otherwise add to notes
+    const itemInfo = state.cart.lockedItems.get(recordId) || state.cart.items.get(recordId);
+    if (itemInfo) {
+        // Append to item notes
+        const existingNote = itemInfo.note || '';
+        const newNote = existingNote ? `${existingNote}\n• ${comment}` : `• ${comment}`;
+        itemInfo.note = newNote;
+    }
+
+    const record = state.records.all.find(r => r.id === recordId);
+    const itemName = record?.fields?.Name || 'Item';
+    showToast(`Comment added to "${itemName}"`, 'success');
+
+    // Re-render items
+    await renderAllItems();
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Quick comment added to item ${recordId}: ${comment}`);
+}
+
+// Open custom comment dialog for an item
+async function openCustomCommentDialog(recordId) {
+    console.log('[Presentation DEBUG] openCustomCommentDialog called:', recordId);
+    if (!recordId) return;
+
+    const record = state.records.all.find(r => r.id === recordId);
+    const itemName = record?.fields?.Name || 'Item';
+
+    // Use prompt for simple implementation (can be enhanced with modal later)
+    const comment = prompt(`Add a comment to "${itemName}":`);
+    if (comment && comment.trim()) {
+        await addQuickCommentToItem(recordId, comment.trim());
+    }
+}
+
+// Open merge dialog for two items
+async function openMergeDialog(sourceRecordId, targetRecordId) {
+    console.log('[Presentation DEBUG] openMergeDialog called:', sourceRecordId, targetRecordId);
+    if (!sourceRecordId || !targetRecordId) return;
+
+    const sourceRecord = state.records.all.find(r => r.id === sourceRecordId);
+    const targetRecord = state.records.all.find(r => r.id === targetRecordId);
+    const sourceName = sourceRecord?.fields?.Name || 'Source item';
+    const targetName = targetRecord?.fields?.Name || 'Target item';
+
+    // Show merge options dialog
+    const choice = confirm(
+        `Merge Options for "${sourceName}" and "${targetName}":\n\n` +
+        `Click OK to create a related category (keeps both items linked).\n` +
+        `Click Cancel to cancel the merge.`
+    );
+
+    if (choice) {
+        await createRelatedCategory(sourceRecordId, targetRecordId);
+    }
+}
+
+// Create a related category linking two items
+async function createRelatedCategory(recordId1, recordId2) {
+    console.log('[Presentation DEBUG] createRelatedCategory called:', recordId1, recordId2);
+
+    // Initialize relatedGroups if not exists
+    if (!state.session.relatedGroups) {
+        state.session.relatedGroups = [];
+    }
+
+    // Create a new group or add to existing group
+    const existingGroup1 = state.session.relatedGroups.find(g => g.includes(recordId1));
+    const existingGroup2 = state.session.relatedGroups.find(g => g.includes(recordId2));
+
+    if (existingGroup1 && existingGroup2 && existingGroup1 === existingGroup2) {
+        // Already in same group
+        showToast('Items are already related', 'info');
+        return;
+    }
+
+    if (existingGroup1 && existingGroup2) {
+        // Merge two groups
+        const mergedGroup = [...new Set([...existingGroup1, ...existingGroup2])];
+        state.session.relatedGroups = state.session.relatedGroups.filter(
+            g => g !== existingGroup1 && g !== existingGroup2
+        );
+        state.session.relatedGroups.push(mergedGroup);
+    } else if (existingGroup1) {
+        existingGroup1.push(recordId2);
+    } else if (existingGroup2) {
+        existingGroup2.push(recordId1);
+    } else {
+        // Create new group
+        state.session.relatedGroups.push([recordId1, recordId2]);
+    }
+
+    const record1 = state.records.all.find(r => r.id === recordId1);
+    const record2 = state.records.all.find(r => r.id === recordId2);
+    showToast(`"${record1?.fields?.Name}" and "${record2?.fields?.Name}" are now related`, 'success');
+
+    // Re-render items
+    await renderAllItems();
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Created related category for ${recordId1} and ${recordId2}`);
 }
 
 // Update the status toggle buttons visibility and state
@@ -7117,6 +8006,45 @@ export async function showPresentationView(listType, startRecordId = null) {
                 display: parentStyle.display
             });
         }
+
+        // DEBUG: Check left and right zones with their children
+        const leftZone = dragBucketsEl.querySelector('.drag-zone-left');
+        const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
+        if (leftZone) {
+            const leftStyle = window.getComputedStyle(leftZone);
+            console.log('[Presentation DEBUG] Left zone at showPresentationView:', {
+                display: leftStyle.display,
+                visibility: leftStyle.visibility,
+                opacity: leftStyle.opacity,
+                position: leftStyle.position,
+                left: leftStyle.left,
+                top: leftStyle.top,
+                transform: leftStyle.transform,
+                pointerEvents: leftStyle.pointerEvents,
+                childrenCount: leftZone.children.length,
+                boundingRect: leftZone.getBoundingClientRect()
+            });
+        } else {
+            console.warn('[Presentation DEBUG] Left zone NOT FOUND at showPresentationView');
+        }
+        if (rightZone) {
+            const rightStyle = window.getComputedStyle(rightZone);
+            console.log('[Presentation DEBUG] Right zone at showPresentationView:', {
+                display: rightStyle.display,
+                visibility: rightStyle.visibility,
+                opacity: rightStyle.opacity,
+                position: rightStyle.position,
+                right: rightStyle.right,
+                top: rightStyle.top,
+                transform: rightStyle.transform,
+                pointerEvents: rightStyle.pointerEvents,
+                childrenCount: rightZone.children.length,
+                boundingRect: rightZone.getBoundingClientRect()
+            });
+        } else {
+            console.warn('[Presentation DEBUG] Right zone NOT FOUND at showPresentationView');
+        }
+
         // Debug: Check individual buckets
         if (dragBucketArchive) {
             const archiveStyle = window.getComputedStyle(dragBucketArchive);
@@ -7136,6 +8064,16 @@ export async function showPresentationView(listType, startRecordId = null) {
                 right: completedStyle.right,
                 position: completedStyle.position,
                 boundingRect: dragBucketCompleted.getBoundingClientRect()
+            });
+        }
+        if (dragBucketReactions) {
+            const reactionsStyle = window.getComputedStyle(dragBucketReactions);
+            console.log('[Presentation DEBUG] Reactions bucket:', {
+                display: reactionsStyle.display,
+                opacity: reactionsStyle.opacity,
+                right: reactionsStyle.right,
+                position: reactionsStyle.position,
+                boundingRect: dragBucketReactions.getBoundingClientRect()
             });
         }
     } else {
