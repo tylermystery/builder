@@ -204,6 +204,16 @@ let hoveredQuickComment = null;
 let potentialMergeTarget = null;
 const DRAG_DELAY_MS = 300; // Delay before drag buckets appear (ms)
 
+// Radial menu state
+let radialMenuContainer = null;
+let radialMenuActive = false;
+let radialMenuOrigin = { x: 0, y: 0 }; // The initial touch/click point
+let initialTouchPoint = null; // Track initial touch for direction detection
+let directionDetected = false; // Whether we've determined horizontal vs vertical
+const DIRECTION_THRESHOLD = 15; // Pixels of movement before deciding direction
+const RADIAL_MENU_RADIUS = 100; // Distance from center to buckets (desktop)
+const RADIAL_MENU_RADIUS_MOBILE = 80; // Distance from center to buckets (mobile)
+
 // Show/hide state for archived and completed items
 let showArchivedItems = true;
 let showCompletedItems = true;
@@ -419,6 +429,8 @@ function ensureDOMElements() {
     dragMergeIndicator = document.getElementById('drag-merge-indicator');
     // Action tooltip
     dragActionTooltip = document.getElementById('drag-action-tooltip');
+    // Radial menu container
+    radialMenuContainer = document.getElementById('radial-menu-container');
     console.log('[Presentation DEBUG] Bucket elements found:', {
         dragBucketsEl: !!dragBucketsEl,
         dragBucketGoal: !!dragBucketGoal,
@@ -2576,6 +2588,10 @@ async function renderAllItems() {
 
     // Initialize drag-and-drop functionality
     initializeItemDragDrop();
+
+    // Initialize radial menu system
+    initializeRadialMenu();
+    attachRadialMenuListeners();
 }
 
 // Load SortableJS dynamically if not already loaded
@@ -2616,12 +2632,20 @@ async function initializeItemDragDrop() {
             chosenClass: 'sortable-chosen',
             dragClass: 'sortable-drag',
             handle: '.itinerary-item-section', // Entire section is draggable
-            delay: 150, // Small delay for touch devices
+            delay: 300, // Increased delay - radial menu should activate first for quick swipes
             delayOnTouchOnly: true,
-            touchStartThreshold: 5,
+            touchStartThreshold: 20, // Require more movement before starting SortableJS drag
 
             onStart: function(evt) {
                 console.log('[Presentation DEBUG] Drag onStart triggered');
+
+                // If radial menu is already active, cancel the SortableJS drag
+                if (radialMenuActive) {
+                    console.log('[Presentation DEBUG] Radial menu is active, cancelling SortableJS drag');
+                    evt.preventDefault && evt.preventDefault();
+                    return false;
+                }
+
                 isDragging = true;
                 // Reset debug counters
                 dragMoveDebugCounter = 0;
@@ -2642,21 +2666,35 @@ async function initializeItemDragDrop() {
                     bucketReactionsExists: !!dragBucketReactions
                 });
 
-                // Start timer to show drag buckets after delay
-                dragDelayTimer = setTimeout(() => {
-                    console.log('[Presentation DEBUG] dragDelayTimer fired, calling showDragBuckets');
-                    showDragBuckets();
-                }, DRAG_DELAY_MS);
+                // For SortableJS drag (long press/hold), show the radial menu at the item position
+                // instead of the old linear buckets
+                const itemRect = evt.item.getBoundingClientRect();
+                const centerX = itemRect.left + itemRect.width / 2;
+                const centerY = itemRect.top + itemRect.height / 2;
+                showRadialMenu(centerX, centerY, evt.item);
 
                 // Add document-level listeners to track drag position
                 document.addEventListener('mousemove', handleDragMove);
                 document.addEventListener('touchmove', handleDragMove, { passive: true });
             },
 
+            onMove: function(evt) {
+                // During SortableJS move, update radial menu hover state
+                if (radialMenuActive) {
+                    const clientX = evt.originalEvent?.touches ? evt.originalEvent.touches[0].clientX : evt.originalEvent?.clientX;
+                    const clientY = evt.originalEvent?.touches ? evt.originalEvent.touches[0].clientY : evt.originalEvent?.clientY;
+                    if (clientX !== undefined && clientY !== undefined) {
+                        checkRadialBucketHover(clientX, clientY);
+                        updateRadialDirectionIndicator(clientX, clientY);
+                    }
+                }
+            },
+
             onEnd: function(evt) {
                 console.log('[Presentation DEBUG] Drag onEnd triggered');
                 console.log('[Presentation DEBUG] onEnd - Final drag state:', {
                     isDragging,
+                    radialMenuActive,
                     hasDragActiveClass: dragBucketsEl ? dragBucketsEl.classList.contains('drag-active') : false,
                     dragMoveEvents: dragMoveDebugCounter,
                     bucketHoverChecks: bucketHoverDebugCounter
@@ -2668,15 +2706,27 @@ async function initializeItemDragDrop() {
                 document.removeEventListener('mousemove', handleDragMove);
                 document.removeEventListener('touchmove', handleDragMove);
 
-                // Check if dropped on a bucket
-                const droppedOnBucket = checkBucketDrop(evt.originalEvent, evt.item);
-                console.log('[Presentation DEBUG] droppedOnBucket:', droppedOnBucket);
-                if (droppedOnBucket) {
+                // Check if dropped on a radial bucket
+                if (radialMenuActive) {
+                    const clientX = evt.originalEvent?.changedTouches ? evt.originalEvent.changedTouches[0].clientX : evt.originalEvent?.clientX;
+                    const clientY = evt.originalEvent?.changedTouches ? evt.originalEvent.changedTouches[0].clientY : evt.originalEvent?.clientY;
+                    if (clientX !== undefined && clientY !== undefined) {
+                        const droppedOnBucket = handleRadialBucketDrop(clientX, clientY);
+                        if (droppedOnBucket) {
+                            return; // Item was moved to bucket, don't update order
+                        }
+                    }
+                    hideRadialMenu();
+                } else {
+                    // Legacy bucket drop check
+                    const droppedOnBucket = checkBucketDrop(evt.originalEvent, evt.item);
+                    console.log('[Presentation DEBUG] droppedOnBucket:', droppedOnBucket);
+                    if (droppedOnBucket) {
+                        hideDragBuckets();
+                        return; // Item was moved to bucket, don't update order
+                    }
                     hideDragBuckets();
-                    return; // Item was moved to bucket, don't update order
                 }
-
-                hideDragBuckets();
 
                 // Update the order in state
                 updateItemOrder();
@@ -2957,6 +3007,447 @@ function hideDragBuckets() {
     hoveredQuickComment = null;
     potentialMergeTarget = null;
 }
+
+// =============================================================================
+// RADIAL MENU FUNCTIONS
+// =============================================================================
+
+// Initialize radial menu with cloned bucket elements
+function initializeRadialMenu() {
+    if (!radialMenuContainer || !dragBucketsEl) {
+        console.log('[Radial Menu] Missing radialMenuContainer or dragBucketsEl');
+        return;
+    }
+
+    // Get all buckets from left and right zones
+    const leftZone = dragBucketsEl.querySelector('.drag-zone-left');
+    const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
+
+    if (!leftZone || !rightZone) {
+        console.log('[Radial Menu] Missing drag zones');
+        return;
+    }
+
+    // Clear any existing cloned buckets (keep center indicator and direction indicator)
+    const existingBuckets = radialMenuContainer.querySelectorAll('.drag-bucket');
+    existingBuckets.forEach(b => b.remove());
+
+    // Clone buckets from both zones
+    const leftBuckets = leftZone.querySelectorAll('.drag-bucket');
+    const rightBuckets = rightZone.querySelectorAll('.drag-bucket');
+
+    // Combine all buckets - left buckets first, then right buckets
+    const allBuckets = [...leftBuckets, ...rightBuckets];
+    const totalBuckets = allBuckets.length;
+
+    console.log('[Radial Menu] Initializing with', totalBuckets, 'buckets');
+
+    // Clone each bucket and position in radial layout
+    allBuckets.forEach((bucket, index) => {
+        const clone = bucket.cloneNode(true);
+        // Remove original ID to avoid duplicates
+        clone.id = 'radial-' + clone.id;
+        // Store original bucket data attribute
+        clone.dataset.originalBucket = bucket.id;
+        radialMenuContainer.appendChild(clone);
+    });
+
+    console.log('[Radial Menu] Initialized successfully');
+}
+
+// Position radial menu buckets around the origin point
+function positionRadialBuckets() {
+    if (!radialMenuContainer) return;
+
+    const buckets = radialMenuContainer.querySelectorAll('.drag-bucket');
+    const totalBuckets = buckets.length;
+
+    if (totalBuckets === 0) return;
+
+    // Determine radius based on viewport
+    const isMobile = window.innerWidth < 768;
+    const radius = isMobile ? RADIAL_MENU_RADIUS_MOBILE : RADIAL_MENU_RADIUS;
+    const bucketSize = isMobile ? 56 : 64;
+    const halfBucket = bucketSize / 2;
+
+    // Calculate angle step - distribute buckets around a circle
+    // Start from top (- PI/2) and go clockwise
+    const startAngle = -Math.PI / 2;
+    const angleStep = (2 * Math.PI) / totalBuckets;
+
+    buckets.forEach((bucket, index) => {
+        const angle = startAngle + (index * angleStep);
+        const x = Math.cos(angle) * radius - halfBucket;
+        const y = Math.sin(angle) * radius - halfBucket;
+
+        bucket.style.left = `${x}px`;
+        bucket.style.top = `${y}px`;
+    });
+}
+
+// Show radial menu at a specific point
+function showRadialMenu(x, y, itemElement) {
+    if (!dragBucketsEl || !radialMenuContainer) {
+        console.log('[Radial Menu] Cannot show - missing elements');
+        return;
+    }
+
+    // Safety check: Only show if presentation view is active
+    if (!document.body.classList.contains('presentation-active')) {
+        console.log('[Radial Menu] Aborted - presentation view is not active');
+        return;
+    }
+
+    // Store origin point
+    radialMenuOrigin = { x, y };
+    radialMenuActive = true;
+
+    // Get viewport dimensions for boundary checks
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const isMobile = viewportWidth < 768;
+    const radius = isMobile ? RADIAL_MENU_RADIUS_MOBILE : RADIAL_MENU_RADIUS;
+    const margin = radius + 40; // Extra margin for buckets
+
+    // Constrain position to keep radial menu within viewport
+    let constrainedX = Math.max(margin, Math.min(viewportWidth - margin, x));
+    let constrainedY = Math.max(margin + 50, Math.min(viewportHeight - margin, y)); // Extra top margin for header
+
+    // Position radial menu container at the touch/click point
+    radialMenuContainer.style.left = `${constrainedX}px`;
+    radialMenuContainer.style.top = `${constrainedY}px`;
+
+    // Show the drag buckets container in radial mode
+    dragBucketsEl.classList.add('buckets-shown', 'drag-active', 'radial-mode');
+
+    // Position buckets in radial layout
+    positionRadialBuckets();
+
+    // Activate the radial menu with animation
+    requestAnimationFrame(() => {
+        radialMenuContainer.classList.add('radial-active');
+    });
+
+    // Store the item element for later
+    if (itemElement) {
+        const article = itemElement.querySelector('.itinerary-item');
+        currentDraggedRecordId = article?.dataset.recordId;
+        currentDraggedItem = itemElement;
+    }
+
+    console.log('[Radial Menu] Shown at', constrainedX, constrainedY, 'for item:', currentDraggedRecordId);
+}
+
+// Hide radial menu
+function hideRadialMenu() {
+    if (!dragBucketsEl || !radialMenuContainer) return;
+
+    radialMenuActive = false;
+
+    // Remove radial-active first for animation
+    radialMenuContainer.classList.remove('radial-active');
+
+    // Remove radial mode classes after a short delay for animation
+    setTimeout(() => {
+        dragBucketsEl.classList.remove('buckets-shown', 'drag-active', 'radial-mode');
+    }, 150);
+
+    // Clear hover states on radial buckets
+    const buckets = radialMenuContainer.querySelectorAll('.drag-bucket');
+    buckets.forEach(b => b.classList.remove('drag-over'));
+
+    // Reset state
+    initialTouchPoint = null;
+    directionDetected = false;
+    hoveredReactionEmoji = null;
+    hoveredQuickComment = null;
+
+    console.log('[Radial Menu] Hidden');
+}
+
+// Update radial direction indicator
+function updateRadialDirectionIndicator(currentX, currentY) {
+    if (!radialMenuContainer || !radialMenuActive) return;
+
+    const indicator = radialMenuContainer.querySelector('.radial-direction-indicator');
+    if (!indicator) return;
+
+    // Calculate angle from center to current position
+    const dx = currentX - radialMenuOrigin.x;
+    const dy = currentY - radialMenuOrigin.y;
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI) + 90; // Convert to degrees, offset by 90
+
+    indicator.style.transform = `rotate(${angle}deg)`;
+}
+
+// Check if pointer is over a radial bucket and update hover state
+function checkRadialBucketHover(clientX, clientY) {
+    if (!radialMenuContainer || !radialMenuActive) return null;
+
+    const buckets = radialMenuContainer.querySelectorAll('.drag-bucket');
+    let hoveredBucket = null;
+
+    buckets.forEach(bucket => {
+        const rect = bucket.getBoundingClientRect();
+        const isOver = isPointInRect(clientX, clientY, rect);
+
+        if (isOver) {
+            bucket.classList.add('drag-over');
+            hoveredBucket = bucket;
+
+            // Check for reaction/comment sub-options
+            const reactionOptions = bucket.querySelectorAll('.reaction-option');
+            const commentOptions = bucket.querySelectorAll('.quick-comment-option');
+
+            reactionOptions.forEach(opt => {
+                const optRect = opt.getBoundingClientRect();
+                if (isPointInRect(clientX, clientY, optRect)) {
+                    opt.classList.add('drag-over');
+                    hoveredReactionEmoji = opt.dataset.emoji;
+                } else {
+                    opt.classList.remove('drag-over');
+                }
+            });
+
+            commentOptions.forEach(opt => {
+                const optRect = opt.getBoundingClientRect();
+                if (isPointInRect(clientX, clientY, optRect)) {
+                    opt.classList.add('drag-over');
+                    hoveredQuickComment = opt.dataset.comment;
+                } else {
+                    opt.classList.remove('drag-over');
+                }
+            });
+        } else {
+            bucket.classList.remove('drag-over');
+            // Clear sub-options
+            const options = bucket.querySelectorAll('.reaction-option, .quick-comment-option');
+            options.forEach(opt => opt.classList.remove('drag-over'));
+        }
+    });
+
+    return hoveredBucket;
+}
+
+// Handle radial bucket selection (on release)
+function handleRadialBucketDrop(clientX, clientY) {
+    if (!radialMenuActive || !currentDraggedRecordId) {
+        hideRadialMenu();
+        return false;
+    }
+
+    const hoveredBucket = checkRadialBucketHover(clientX, clientY);
+
+    if (!hoveredBucket) {
+        hideRadialMenu();
+        return false;
+    }
+
+    // Get the bucket type from the original bucket ID
+    const originalBucketId = hoveredBucket.dataset.originalBucket;
+    console.log('[Radial Menu] Dropped on bucket:', originalBucketId, 'for item:', currentDraggedRecordId);
+
+    // Execute the action based on bucket type
+    switch (originalBucketId) {
+        case 'drag-bucket-goal':
+            setItemAsGoal(currentDraggedRecordId);
+            break;
+        case 'drag-bucket-ideas':
+            moveToIdeas(currentDraggedRecordId);
+            break;
+        case 'drag-bucket-lock':
+            lockItem(currentDraggedRecordId);
+            break;
+        case 'drag-bucket-demote':
+            demoteItem(currentDraggedRecordId);
+            break;
+        case 'drag-bucket-archive':
+            archiveItem(currentDraggedRecordId);
+            break;
+        case 'drag-bucket-delete':
+            deleteItem(currentDraggedRecordId);
+            break;
+        case 'drag-bucket-reactions':
+            if (hoveredReactionEmoji) {
+                addReactionToItem(currentDraggedRecordId, hoveredReactionEmoji);
+            } else {
+                addReactionToItem(currentDraggedRecordId, '👍'); // Default reaction
+            }
+            break;
+        case 'drag-bucket-quick-comment':
+            if (hoveredQuickComment) {
+                addQuickCommentToItem(currentDraggedRecordId, hoveredQuickComment);
+            } else {
+                addQuickCommentToItem(currentDraggedRecordId, 'Great idea'); // Default comment
+            }
+            break;
+        case 'drag-bucket-custom-comment':
+            openCustomCommentDialog(currentDraggedRecordId);
+            break;
+        case 'drag-bucket-completed':
+            completeItem(currentDraggedRecordId);
+            break;
+        default:
+            console.log('[Radial Menu] Unknown bucket:', originalBucketId);
+    }
+
+    hideRadialMenu();
+    currentDraggedItem = null;
+    currentDraggedRecordId = null;
+    return true;
+}
+
+// Touch/mouse event handlers for radial menu direction detection
+let radialTouchMoveHandler = null;
+let radialTouchEndHandler = null;
+let radialMouseMoveHandler = null;
+let radialMouseUpHandler = null;
+
+function handleItemPointerDown(event, itemElement) {
+    // Only handle if presentation is active
+    if (!document.body.classList.contains('presentation-active')) return;
+
+    // Get initial touch/click coordinates
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+    initialTouchPoint = { x: clientX, y: clientY };
+    directionDetected = false;
+
+    console.log('[Radial Menu] Pointer down at', clientX, clientY);
+
+    // Set up move and end handlers
+    if (event.touches) {
+        // Touch events
+        radialTouchMoveHandler = (e) => handleItemPointerMove(e, itemElement);
+        radialTouchEndHandler = (e) => handleItemPointerUp(e);
+
+        document.addEventListener('touchmove', radialTouchMoveHandler, { passive: false });
+        document.addEventListener('touchend', radialTouchEndHandler);
+        document.addEventListener('touchcancel', radialTouchEndHandler);
+    } else {
+        // Mouse events
+        radialMouseMoveHandler = (e) => handleItemPointerMove(e, itemElement);
+        radialMouseUpHandler = (e) => handleItemPointerUp(e);
+
+        document.addEventListener('mousemove', radialMouseMoveHandler);
+        document.addEventListener('mouseup', radialMouseUpHandler);
+    }
+}
+
+function handleItemPointerMove(event, itemElement) {
+    if (!initialTouchPoint) return;
+
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+    // If radial menu is already active, update hover state and direction indicator
+    if (radialMenuActive) {
+        checkRadialBucketHover(clientX, clientY);
+        updateRadialDirectionIndicator(clientX, clientY);
+        return;
+    }
+
+    // Calculate movement delta
+    const deltaX = Math.abs(clientX - initialTouchPoint.x);
+    const deltaY = Math.abs(clientY - initialTouchPoint.y);
+
+    // Check if we've moved enough to determine direction
+    if (!directionDetected && (deltaX > DIRECTION_THRESHOLD || deltaY > DIRECTION_THRESHOLD)) {
+        directionDetected = true;
+
+        if (deltaX > deltaY) {
+            // Horizontal movement - show radial menu
+            console.log('[Radial Menu] Horizontal swipe detected - showing radial menu');
+
+            // Prevent default to stop scrolling
+            if (event.cancelable) {
+                event.preventDefault();
+            }
+
+            // Show radial menu at the initial touch point
+            showRadialMenu(initialTouchPoint.x, initialTouchPoint.y, itemElement);
+        } else {
+            // Vertical movement - allow scrolling, cleanup handlers
+            console.log('[Radial Menu] Vertical swipe detected - allowing scroll');
+            cleanupRadialEventListeners();
+        }
+    }
+
+    // If radial menu is active and we detected horizontal, prevent scroll
+    if (radialMenuActive && event.cancelable) {
+        event.preventDefault();
+    }
+}
+
+function handleItemPointerUp(event) {
+    const clientX = event.changedTouches ? event.changedTouches[0].clientX : event.clientX;
+    const clientY = event.changedTouches ? event.changedTouches[0].clientY : event.clientY;
+
+    console.log('[Radial Menu] Pointer up at', clientX, clientY);
+
+    if (radialMenuActive) {
+        // Check if dropped on a bucket
+        handleRadialBucketDrop(clientX, clientY);
+    }
+
+    cleanupRadialEventListeners();
+}
+
+function cleanupRadialEventListeners() {
+    if (radialTouchMoveHandler) {
+        document.removeEventListener('touchmove', radialTouchMoveHandler);
+        radialTouchMoveHandler = null;
+    }
+    if (radialTouchEndHandler) {
+        document.removeEventListener('touchend', radialTouchEndHandler);
+        document.removeEventListener('touchcancel', radialTouchEndHandler);
+        radialTouchEndHandler = null;
+    }
+    if (radialMouseMoveHandler) {
+        document.removeEventListener('mousemove', radialMouseMoveHandler);
+        radialMouseMoveHandler = null;
+    }
+    if (radialMouseUpHandler) {
+        document.removeEventListener('mouseup', radialMouseUpHandler);
+        radialMouseUpHandler = null;
+    }
+
+    initialTouchPoint = null;
+    directionDetected = false;
+}
+
+// Attach radial menu event listeners to itinerary items
+function attachRadialMenuListeners() {
+    if (!itineraryItemsListEl) return;
+
+    // Use event delegation on the items list
+    itineraryItemsListEl.addEventListener('touchstart', handleRadialTouchStart, { passive: true });
+    itineraryItemsListEl.addEventListener('mousedown', handleRadialMouseDown);
+
+    console.log('[Radial Menu] Event listeners attached');
+}
+
+function handleRadialTouchStart(event) {
+    const itemSection = event.target.closest('.itinerary-item-section');
+    if (itemSection) {
+        handleItemPointerDown(event, itemSection);
+    }
+}
+
+function handleRadialMouseDown(event) {
+    // Only handle left mouse button
+    if (event.button !== 0) return;
+
+    const itemSection = event.target.closest('.itinerary-item-section');
+    if (itemSection) {
+        handleItemPointerDown(event, itemSection);
+    }
+}
+
+// =============================================================================
+// END RADIAL MENU FUNCTIONS
+// =============================================================================
 
 // Clear reaction option hover states
 function clearReactionHoverStates() {
@@ -8262,9 +8753,17 @@ export function hidePresentationView() {
         console.log('[Presentation DEBUG] Hiding drag buckets');
         dragBucketsEl.classList.remove('buckets-shown');
         dragBucketsEl.classList.remove('drag-active');
+        dragBucketsEl.classList.remove('radial-mode'); // Remove radial mode class
         // Explicitly set visibility to ensure elements don't leak through
         dragBucketsEl.style.display = 'none';
         dragBucketsEl.style.visibility = 'hidden';
+    }
+
+    // Hide radial menu and clean up
+    if (radialMenuContainer) {
+        radialMenuContainer.classList.remove('radial-active');
+        radialMenuActive = false;
+        cleanupRadialEventListeners();
     }
 
     // Ensure drag tooltip is hidden
