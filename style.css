@@ -6468,33 +6468,32 @@ body.presentation-active #wtf-plans-panel-overlay {
 
 /* LEFT zone - anchored to left edge of VIEWPORT */
 .drag-zone-left {
-    left: 12px !important;
-    right: auto !important;
+    left: 12px;
+    right: auto;
 }
 
 /* RIGHT zone - anchored to right edge of VIEWPORT */
 .drag-zone-right {
-    right: 12px !important;
-    left: auto !important;
+    right: 12px;
+    left: auto;
 }
 
 .presentation-drag-buckets.drag-active .drag-zone-left,
 .presentation-drag-buckets.drag-active .drag-zone-right {
-    display: flex !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-    pointer-events: auto !important;
-    position: fixed !important;
+    display: flex;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
 }
 
 .presentation-drag-buckets.drag-active .drag-zone-left {
-    left: 12px !important;
-    right: auto !important;
+    left: 12px;
+    right: auto;
 }
 
 .presentation-drag-buckets.drag-active .drag-zone-right {
-    right: 12px !important;
-    left: auto !important;
+    right: 12px;
+    left: auto;
 }
 
 .presentation-drag-buckets.drag-active .drag-bucket {

@@ -392,6 +392,14 @@ function ensureDOMElements() {
 
     // Drag-drop bucket elements
     dragBucketsEl = document.getElementById('presentation-drag-buckets');
+
+    // CRITICAL: Move drag buckets to body level for proper fixed positioning
+    // Fixed positioning doesn't work correctly when inside transformed/positioned ancestors
+    if (dragBucketsEl && dragBucketsEl.parentElement !== document.body) {
+        console.log('[Presentation DEBUG] Moving drag buckets to body for proper fixed positioning');
+        document.body.appendChild(dragBucketsEl);
+    }
+
     // Left side buckets (actions)
     dragBucketGoal = document.getElementById('drag-bucket-goal');
     dragBucketIdeas = document.getElementById('drag-bucket-ideas');
@@ -2692,49 +2700,70 @@ function showDragBuckets() {
         // Apply inline styles as a fallback - using fixed positioning to ensure zones stay at viewport edges
         const applyZoneStyles = () => {
             // Determine if we're on mobile (< 768px)
-            const isMobile = window.innerWidth < 768;
-            const edgeOffset = isMobile ? '8px' : '12px';
+            const viewportWidth = window.innerWidth;
+            const isMobile = viewportWidth < 768;
+            const edgeOffset = isMobile ? 8 : 12;
             const bucketSize = isMobile ? '60px' : '72px';
+
+            console.log('[Presentation DEBUG] Viewport width:', viewportWidth, 'isMobile:', isMobile);
 
             if (leftZone) {
                 // LEFT zone: fixed to left edge of viewport
-                leftZone.style.cssText = `
+                // Clear any existing inline styles first
+                leftZone.style.cssText = '';
+                // Apply new styles using setAttribute for maximum specificity
+                leftZone.setAttribute('style', `
                     position: fixed !important;
-                    left: ${edgeOffset} !important;
+                    left: ${edgeOffset}px !important;
                     right: auto !important;
                     top: 50% !important;
                     transform: translateY(-50%) !important;
                     display: flex !important;
                     flex-direction: column !important;
-                    gap: ${isMobile ? '6px' : '8px'};
+                    gap: ${isMobile ? 6 : 8}px !important;
                     opacity: 1 !important;
                     visibility: visible !important;
                     pointer-events: auto !important;
                     z-index: 10001 !important;
                     background: rgba(0, 0, 0, 0.7) !important;
-                    padding: ${isMobile ? '10px' : '12px'} !important;
+                    padding: ${isMobile ? 10 : 12}px !important;
                     border-radius: 16px !important;
-                `;
+                    max-height: 85vh !important;
+                    overflow-y: auto !important;
+                `);
             }
             if (rightZone) {
-                // RIGHT zone: fixed to right edge of viewport using right property
-                rightZone.style.cssText = `
+                // RIGHT zone: Calculate position from right edge explicitly
+                // Use right property to anchor to right edge
+                rightZone.style.cssText = '';
+                rightZone.setAttribute('style', `
                     position: fixed !important;
-                    right: ${edgeOffset} !important;
+                    right: ${edgeOffset}px !important;
                     left: auto !important;
                     top: 50% !important;
                     transform: translateY(-50%) !important;
                     display: flex !important;
                     flex-direction: column !important;
-                    gap: ${isMobile ? '6px' : '8px'};
+                    gap: ${isMobile ? 6 : 8}px !important;
                     opacity: 1 !important;
                     visibility: visible !important;
                     pointer-events: auto !important;
                     z-index: 10001 !important;
                     background: rgba(0, 0, 0, 0.7) !important;
-                    padding: ${isMobile ? '10px' : '12px'} !important;
+                    padding: ${isMobile ? 10 : 12}px !important;
                     border-radius: 16px !important;
-                `;
+                    max-height: 85vh !important;
+                    overflow-y: auto !important;
+                `);
+
+                // DEBUG: Check computed styles after setting
+                const computedStyle = window.getComputedStyle(rightZone);
+                console.log('[Presentation DEBUG] Right zone computed after style set:', {
+                    position: computedStyle.position,
+                    right: computedStyle.right,
+                    left: computedStyle.left,
+                    inlineRight: rightZone.style.right
+                });
             }
 
             // Force visibility on all bucket elements with increased size
@@ -2783,9 +2812,11 @@ function showDragBuckets() {
             }
             if (rightZone) {
                 const rightRect = rightZone.getBoundingClientRect();
+                const expectedX = window.innerWidth - rightRect.width - 12;
                 console.log('[Presentation DEBUG] Right zone rect: ' +
                     Math.round(rightRect.width) + 'x' + Math.round(rightRect.height) +
-                    ' at (' + Math.round(rightRect.left) + ',' + Math.round(rightRect.top) + ')');
+                    ' at (' + Math.round(rightRect.left) + ',' + Math.round(rightRect.top) + ')' +
+                    ' expected x=' + Math.round(expectedX));
             }
         }, 50);
     }
