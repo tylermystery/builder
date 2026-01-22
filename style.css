@@ -3,23 +3,41 @@
 /*
  * Z-INDEX HIERARCHY REFERENCE (from lowest to highest):
  * =====================================================
- * -1    : Kaleidoscope background canvas
- *  0    : Presentation background canvas (relative to parent)
- *  1    : Presentation content (relative to parent), base content
+ * This is a SIMPLIFIED, TIERED z-index system. Each tier has a clear purpose.
+ *
+ * TIER 0: BACKGROUNDS (-1 to 0)
+ * -1    : Kaleidoscope background canvas (behind everything)
+ *  0    : Presentation background canvas (within presentation)
+ *
+ * TIER 1: BASE CONTENT (1 to 50)
+ *  1    : Presentation content, base content layer
  * 10    : Card overlays, badges, internal component layering
- * 998   : Mobile sidebars (collapsed state)
- * 999   : Mobile sidebars (expanded state)
- * 1000  : Header, hamburger dropdown, presentation view, base modals
- * 1001  : Chat toggle button
+ * 50    : Floating elements within content (tooltips within cards)
+ *
+ * TIER 2: NAVIGATION & SIDEBARS (100 to 500)
+ * 100   : Sticky elements, navigation aids
+ * 400   : Mobile sidebars (collapsed)
+ * 500   : Mobile sidebars (expanded), sticky headers
+ *
+ * TIER 3: PRIMARY UI LAYER (1000 to 1500)
+ * 1000  : Main header, presentation view container, base modals
  * 1010  : Modal close buttons
  * 1050  : Chat widget container
- * 1100  : Modals when presentation is active (elevated above presentation)
- * 2000  : Presentation search content
- * 3000  : Presentation search modal
- * 10000 : Debug panel
- * 10001 : Reaction pickers (always visible above everything)
- * 10002 : Task detail modal (admin)
- * 100000: Netlify identity widget
+ * 1100  : Modals elevated above presentation view
+ * 1200  : Presentation search modal
+ *
+ * TIER 4: DRAG & DROP OVERLAYS (5000 to 6000)
+ * 5000  : Presentation drag buckets container
+ * 5100  : Drag zone panels (left/right)
+ * 5200  : Individual drag buckets
+ * 5500  : Drag action tooltip (follows cursor)
+ * 5600  : Merge indicator overlay
+ *
+ * TIER 5: TOP-LEVEL OVERLAYS (9000+)
+ * 9000  : Debug panel
+ * 9100  : Reaction pickers (always visible above drag operations)
+ * 9500  : Task detail modal (admin)
+ * 99999 : Netlify identity widget (external, must be highest)
  *
  * IMPORTANT: When presentation view is active (body.presentation-active),
  * all modals are elevated to z-index: 1100 to appear above the presentation.
@@ -2132,9 +2150,10 @@ body.presentation-active .modal-overlay.active {
 }
 
 /* Reaction pickers must always appear above modals and presentation */
+/* Z-INDEX: TIER 5 - 9100 (above drag operations) */
 .reaction-picker,
 .comment-reaction-picker {
-    z-index: 10001 !important;
+    z-index: 9100 !important;
 }
 
 /* --- Presentation Full Page View --- */
@@ -4259,6 +4278,7 @@ body.presentation-active #wtf-plans-panel-overlay {
 }
 
 /* Collaborators Modal (expanded full list view) */
+/* Z-INDEX: TIER 3 - 1150 (modal layer, above presentation) */
 .collaborators-modal {
     display: none;
     position: fixed;
@@ -4267,7 +4287,7 @@ body.presentation-active #wtf-plans-panel-overlay {
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.5);
-    z-index: 10000;
+    z-index: 1150;
     align-items: center;
     justify-content: center;
 }
@@ -4742,6 +4762,7 @@ body.presentation-active #wtf-plans-panel-overlay {
 }
 
 /* Expanded Emoji Picker Overlay */
+/* Z-INDEX: TIER 5 - 9100 (above everything except Netlify Identity) */
 .emoji-picker-overlay {
     position: fixed;
     top: 0;
@@ -4749,7 +4770,7 @@ body.presentation-active #wtf-plans-panel-overlay {
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.5);
-    z-index: 10000;
+    z-index: 9100;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -6421,6 +6442,7 @@ body.presentation-active #wtf-plans-panel-overlay {
 /* Drag-and-Drop Styles for Presentation View - Enhanced Version */
 /* Left side: Actions (Goals at top, Archive/Delete at bottom) */
 /* Right side: Reactions and Comments */
+/* Z-INDEX: Uses TIER 4 (5000-6000) for drag/drop overlays */
 .presentation-drag-buckets {
     position: fixed;
     top: 0;
@@ -6430,7 +6452,7 @@ body.presentation-active #wtf-plans-panel-overlay {
     width: 100vw;
     height: 100vh;
     pointer-events: none;
-    z-index: 10000;
+    z-index: 5000; /* TIER 4: Drag container base */
     display: none;
 }
 
@@ -6441,9 +6463,9 @@ body.presentation-active #wtf-plans-panel-overlay {
 
 /* Active during drag - enables pointer events for drop targets */
 .presentation-drag-buckets.drag-active {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+    display: block;
+    visibility: visible;
+    opacity: 1;
 }
 
 /* Left and Right zone containers */
@@ -6458,7 +6480,7 @@ body.presentation-active #wtf-plans-panel-overlay {
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.2s ease;
-    z-index: 10001;
+    z-index: 5100; /* TIER 4: Drag zones above container */
     background: rgba(0, 0, 0, 0.75);
     border-radius: 20px;
     padding: 16px;
@@ -6674,6 +6696,7 @@ body.presentation-active #wtf-plans-panel-overlay {
 
 /* REACTION OPTIONS - revealed on hover/drag-over */
 /* Position to the LEFT of the bucket since right zone is at screen edge */
+/* Z-INDEX: 5300 (above buckets but below tooltip) */
 .reaction-options,
 .quick-comment-options {
     position: absolute;
@@ -6687,7 +6710,7 @@ body.presentation-active #wtf-plans-panel-overlay {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease;
-    z-index: 10002;
+    z-index: 5300;
     background: rgba(0, 0, 0, 0.8);
     padding: 10px;
     border-radius: 12px;
@@ -6745,17 +6768,19 @@ body.presentation-active #wtf-plans-panel-overlay {
 }
 
 /* MERGE INDICATOR */
+/* Z-INDEX: TIER 4 - 5600 (above tooltip, below reaction pickers) */
+/* NOTE: This element lives OUTSIDE the drag-buckets container for proper layering */
 .drag-merge-indicator {
     position: fixed;
     padding: 12px 20px;
     background: linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(56, 142, 60, 0.95));
     border: 2px solid rgba(255, 255, 255, 0.8);
     border-radius: 20px;
-    display: flex;
+    display: none; /* Hidden by default, shown via JS */
     align-items: center;
     gap: 8px;
     pointer-events: none;
-    z-index: 10001;
+    z-index: 5600;
     box-shadow: 0 8px 32px rgba(76, 175, 80, 0.5);
     animation: pulse-merge 1s ease infinite;
 }
@@ -6857,48 +6882,50 @@ body.presentation-active #wtf-plans-panel-overlay {
     /* MOBILE: Force visibility and correct positioning during drag-active state */
     .presentation-drag-buckets.drag-active .drag-zone-left,
     .presentation-drag-buckets.drag-active .drag-zone-right {
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        pointer-events: auto !important;
-        position: fixed !important;
-        top: 50% !important;
-        transform: translateY(-50%) !important;
-        z-index: 10001 !important;
-        flex-direction: column !important;
+        display: flex;
+        visibility: visible;
+        opacity: 1;
+        pointer-events: auto;
+        position: fixed;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 5100; /* TIER 4: Drag zones */
+        flex-direction: column;
     }
 
     .presentation-drag-buckets.drag-active .drag-zone-left {
-        left: 8px !important;
-        right: auto !important;
+        left: 8px;
+        right: auto;
     }
 
     .presentation-drag-buckets.drag-active .drag-zone-right {
-        right: 8px !important;
-        left: auto !important;
+        right: 8px;
+        left: auto;
     }
 
     .presentation-drag-buckets.drag-active .drag-bucket {
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 0.95 !important;
-        pointer-events: auto !important;
+        display: flex;
+        visibility: visible;
+        opacity: 0.95;
+        pointer-events: auto;
     }
 }
 
 /* Drag action tooltip - follows cursor during drag */
+/* Z-INDEX: TIER 4 - 5500 (above drag zones, below reaction pickers) */
+/* NOTE: This element lives OUTSIDE the drag-buckets container for proper layering */
 .drag-action-tooltip {
     position: fixed;
     padding: 10px 16px;
     background: rgba(30, 30, 30, 0.95);
     border-radius: 12px;
-    display: flex;
+    display: none; /* Hidden by default, shown via JS */
     align-items: center;
     gap: 8px;
     pointer-events: none;
-    z-index: 10003;
+    z-index: 5500;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
     border: 2px solid transparent;
     white-space: nowrap;
     font-size: 0.9em;
@@ -6984,10 +7011,11 @@ body.presentation-active #wtf-plans-panel-overlay {
 }
 
 /* Sortable drag styling */
+/* Z-INDEX: TIER 4 - 4900 (below drag bucket zones) */
 .itinerary-item-section.sortable-drag {
     opacity: 1;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-    z-index: 9999;
+    z-index: 4900;
     cursor: grabbing;
 }
 
@@ -10967,6 +10995,7 @@ hr.total-divider {
 }
 
 /* Sessions List Modal */
+/* Z-INDEX: TIER 3 - 1150 (modal layer) */
 .sessions-modal-overlay {
     position: fixed;
     top: 0;
@@ -10977,7 +11006,7 @@ hr.total-divider {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 10000;
+    z-index: 1150;
     animation: fadeIn 0.2s ease-out;
 }
 
@@ -11201,6 +11230,7 @@ hr.total-divider {
 }
 
 /* Confirmation dialog */
+/* Z-INDEX: TIER 3 - 1160 (above other modals) */
 .confirm-dialog-overlay {
     position: fixed;
     top: 0;
@@ -11211,7 +11241,7 @@ hr.total-divider {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 10001;
+    z-index: 1160;
 }
 
 .confirm-dialog {

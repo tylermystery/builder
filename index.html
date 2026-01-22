@@ -3782,19 +3782,20 @@ select:focus-visible,
                     <span class="bucket-label">Done</span>
                 </div>
             </div>
-
-            <!-- Drag action tooltip (follows cursor during drag) -->
-            <div id="drag-action-tooltip" class="drag-action-tooltip" style="display: none;">
-                <span class="tooltip-icon"></span>
-                <span class="tooltip-text">Drag to an action</span>
-            </div>
-
-            <!-- Merge indicator overlay (shown when hovering another item) -->
-            <div id="drag-merge-indicator" class="drag-merge-indicator" style="display: none;">
-                <span class="merge-icon">🔗</span>
-                <span class="merge-label">Drop to Merge</span>
-            </div>
         </div>
+
+        <!-- Drag action tooltip (follows cursor during drag) - OUTSIDE buckets container for proper z-index -->
+        <div id="drag-action-tooltip" class="drag-action-tooltip" style="display: none;">
+            <span class="tooltip-icon"></span>
+            <span class="tooltip-text">Drag to an action</span>
+        </div>
+
+        <!-- Merge indicator overlay (shown when hovering another item) - OUTSIDE buckets container -->
+        <div id="drag-merge-indicator" class="drag-merge-indicator" style="display: none;">
+            <span class="merge-icon">🔗</span>
+            <span class="merge-label">Drop to Merge</span>
+        </div>
+
         <!-- Floating Chat Button for Presentation View -->
         <button id="presentation-floating-chat-btn" title="Jump to Chat">
             <span class="chat-icon">💬</span>

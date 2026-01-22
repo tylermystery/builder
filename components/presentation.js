@@ -2731,7 +2731,7 @@ function showDragBuckets() {
                     opacity: 1 !important;
                     visibility: visible !important;
                     pointer-events: auto !important;
-                    z-index: 10001 !important;
+                    z-index: 5100 !important;
                     background: rgba(0, 0, 0, 0.75) !important;
                     padding: ${zonePadding}px !important;
                     border-radius: 20px !important;
@@ -2755,7 +2755,7 @@ function showDragBuckets() {
                     opacity: 1 !important;
                     visibility: visible !important;
                     pointer-events: auto !important;
-                    z-index: 10001 !important;
+                    z-index: 5100 !important;
                     background: rgba(0, 0, 0, 0.75) !important;
                     padding: ${zonePadding}px !important;
                     border-radius: 20px !important;
