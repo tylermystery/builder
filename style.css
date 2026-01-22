@@ -6427,6 +6427,8 @@ body.presentation-active #wtf-plans-panel-overlay {
     left: 0;
     right: 0;
     bottom: 0;
+    width: 100vw;
+    height: 100vh;
     pointer-events: none;
     z-index: 10000;
     display: none;
@@ -6452,28 +6454,28 @@ body.presentation-active #wtf-plans-panel-overlay {
     transform: translateY(-50%);
     display: none;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.2s ease;
     z-index: 10001;
-    background: rgba(0, 0, 0, 0.5);
-    border-radius: 12px;
-    padding: 8px;
-    max-height: 90vh;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 16px;
+    padding: 12px;
+    max-height: 85vh;
     overflow-y: auto;
 }
 
-/* LEFT zone - anchored to left edge */
+/* LEFT zone - anchored to left edge of VIEWPORT */
 .drag-zone-left {
-    left: 8px;
-    right: auto;
+    left: 12px !important;
+    right: auto !important;
 }
 
-/* RIGHT zone - anchored to right edge */
+/* RIGHT zone - anchored to right edge of VIEWPORT */
 .drag-zone-right {
-    right: 8px;
-    left: auto;
+    right: 12px !important;
+    left: auto !important;
 }
 
 .presentation-drag-buckets.drag-active .drag-zone-left,
@@ -6482,38 +6484,51 @@ body.presentation-active #wtf-plans-panel-overlay {
     opacity: 1 !important;
     visibility: visible !important;
     pointer-events: auto !important;
+    position: fixed !important;
+}
+
+.presentation-drag-buckets.drag-active .drag-zone-left {
+    left: 12px !important;
+    right: auto !important;
+}
+
+.presentation-drag-buckets.drag-active .drag-zone-right {
+    right: 12px !important;
+    left: auto !important;
 }
 
 .presentation-drag-buckets.drag-active .drag-bucket {
     pointer-events: auto !important;
 }
 
-/* Base bucket styles */
+/* Base bucket styles - LARGER for better touch targets */
 .drag-bucket {
     position: relative;
-    width: 60px;
-    height: 60px;
+    width: 72px;
+    height: 72px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
-    border-radius: 12px;
+    gap: 4px;
+    border-radius: 14px;
     backdrop-filter: blur(20px);
     pointer-events: auto;
     transition: all 0.2s ease, transform 0.15s ease;
-    opacity: 0.9;
+    opacity: 0.95;
     cursor: pointer;
+    min-width: 72px;
+    min-height: 72px;
 }
 
 .drag-bucket .bucket-icon {
-    font-size: 1.3em;
+    font-size: 1.5em;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
     line-height: 1;
 }
 
 .drag-bucket .bucket-label {
-    font-size: 0.55em;
+    font-size: 0.6em;
     font-weight: 600;
     color: #fff;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -6663,17 +6678,20 @@ body.presentation-active #wtf-plans-panel-overlay {
 .reaction-options,
 .quick-comment-options {
     position: absolute;
-    right: calc(100% + 8px);
+    right: calc(100% + 12px);
     left: auto;
     top: 50%;
     transform: translateY(-50%);
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease;
     z-index: 10002;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 10px;
+    border-radius: 12px;
 }
 
 .drag-bucket-reactions.drag-over .reaction-options,
@@ -6682,14 +6700,14 @@ body.presentation-active #wtf-plans-panel-overlay {
     pointer-events: auto;
 }
 
-/* Reaction option buttons */
+/* Reaction option buttons - LARGER touch targets */
 .reaction-option {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
-    font-size: 1.3em;
+    width: 44px;
+    height: 44px;
+    font-size: 1.5em;
     background: rgba(255, 255, 255, 0.95);
     border-radius: 50%;
     cursor: pointer;
@@ -6703,17 +6721,17 @@ body.presentation-active #wtf-plans-panel-overlay {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
-/* Quick comment option buttons */
+/* Quick comment option buttons - LARGER touch targets */
 .quick-comment-option {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 6px 10px;
-    font-size: 0.7em;
+    padding: 10px 14px;
+    font-size: 0.8em;
     font-weight: 600;
     color: #333;
     background: rgba(255, 255, 255, 0.95);
-    border-radius: 16px;
+    border-radius: 20px;
     cursor: pointer;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
@@ -6784,52 +6802,60 @@ body.presentation-active #wtf-plans-panel-overlay {
 @media (max-width: 768px) {
     .drag-zone-left,
     .drag-zone-right {
-        gap: 4px;
-        padding: 6px;
+        gap: 6px;
+        padding: 10px;
     }
 
+    /* Mobile bucket sizes - still larger than before for better touch */
     .drag-bucket {
-        width: 48px;
-        height: 48px;
-        border-radius: 10px;
+        width: 60px;
+        height: 60px;
+        min-width: 60px;
+        min-height: 60px;
+        border-radius: 12px;
     }
 
     .drag-bucket .bucket-icon {
-        font-size: 1em;
+        font-size: 1.2em;
     }
 
     .drag-bucket .bucket-label {
-        font-size: 0.45em;
+        font-size: 0.5em;
     }
 
+    /* LEFT zone - ensure fixed to left edge on mobile */
     .drag-zone-left {
-        left: 4px;
+        left: 8px !important;
         right: auto !important;
     }
 
+    /* RIGHT zone - ensure fixed to right edge on mobile */
     .drag-zone-right {
-        right: 4px;
+        right: 8px !important;
         left: auto !important;
     }
 
+    /* Mobile reaction/quick comment options */
     .reaction-option {
-        width: 28px;
-        height: 28px;
-        font-size: 1em;
+        width: 36px;
+        height: 36px;
+        font-size: 1.2em;
     }
 
     .quick-comment-option {
-        padding: 4px 8px;
-        font-size: 0.6em;
+        padding: 8px 10px;
+        font-size: 0.65em;
     }
 
     .reaction-options,
     .quick-comment-options {
-        right: calc(100% + 4px);
+        right: calc(100% + 8px);
         left: auto;
+        padding: 8px;
+        gap: 4px;
     }
 
-    /* MOBILE: Force visibility during drag-active state */
+    /* MOBILE: Force visibility and correct positioning during drag-active state */
     .presentation-drag-buckets.drag-active .drag-zone-left,
     .presentation-drag-buckets.drag-active .drag-zone-right {
         display: flex !important;
@@ -6844,12 +6870,12 @@ body.presentation-active #wtf-plans-panel-overlay {
     }
 
     .presentation-drag-buckets.drag-active .drag-zone-left {
-        left: 4px !important;
+        left: 8px !important;
         right: auto !important;
     }
 
     .presentation-drag-buckets.drag-active .drag-zone-right {
-        right: 4px !important;
+        right: 8px !important;
         left: auto !important;
     }
 
