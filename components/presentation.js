@@ -191,6 +191,9 @@ let dragBucketCustomComment = null;
 let dragBucketCompleted = null;
 // Merge indicator
 let dragMergeIndicator = null;
+// Action tooltip
+let dragActionTooltip = null;
+let currentHoveredAction = null;
 // Drag state
 let isDragging = false;
 let dragDelayTimer = null;
@@ -414,6 +417,8 @@ function ensureDOMElements() {
     dragBucketCompleted = document.getElementById('drag-bucket-completed');
     // Merge indicator
     dragMergeIndicator = document.getElementById('drag-merge-indicator');
+    // Action tooltip
+    dragActionTooltip = document.getElementById('drag-action-tooltip');
     console.log('[Presentation DEBUG] Bucket elements found:', {
         dragBucketsEl: !!dragBucketsEl,
         dragBucketGoal: !!dragBucketGoal,
@@ -2703,7 +2708,9 @@ function showDragBuckets() {
             const viewportWidth = window.innerWidth;
             const isMobile = viewportWidth < 768;
             const edgeOffset = isMobile ? 8 : 12;
-            const bucketSize = isMobile ? '60px' : '72px';
+            const bucketSize = isMobile ? '72px' : '88px';
+            const zoneGap = isMobile ? 8 : 10;
+            const zonePadding = isMobile ? 12 : 16;
 
             console.log('[Presentation DEBUG] Viewport width:', viewportWidth, 'isMobile:', isMobile);
 
@@ -2720,14 +2727,14 @@ function showDragBuckets() {
                     transform: translateY(-50%) !important;
                     display: flex !important;
                     flex-direction: column !important;
-                    gap: ${isMobile ? 6 : 8}px !important;
+                    gap: ${zoneGap}px !important;
                     opacity: 1 !important;
                     visibility: visible !important;
                     pointer-events: auto !important;
                     z-index: 10001 !important;
-                    background: rgba(0, 0, 0, 0.7) !important;
-                    padding: ${isMobile ? 10 : 12}px !important;
-                    border-radius: 16px !important;
+                    background: rgba(0, 0, 0, 0.75) !important;
+                    padding: ${zonePadding}px !important;
+                    border-radius: 20px !important;
                     max-height: 85vh !important;
                     overflow-y: auto !important;
                 `);
@@ -2744,14 +2751,14 @@ function showDragBuckets() {
                     transform: translateY(-50%) !important;
                     display: flex !important;
                     flex-direction: column !important;
-                    gap: ${isMobile ? 6 : 8}px !important;
+                    gap: ${zoneGap}px !important;
                     opacity: 1 !important;
                     visibility: visible !important;
                     pointer-events: auto !important;
                     z-index: 10001 !important;
-                    background: rgba(0, 0, 0, 0.7) !important;
-                    padding: ${isMobile ? 10 : 12}px !important;
-                    border-radius: 16px !important;
+                    background: rgba(0, 0, 0, 0.75) !important;
+                    padding: ${zonePadding}px !important;
+                    border-radius: 20px !important;
                     max-height: 85vh !important;
                     overflow-y: auto !important;
                 `);
@@ -2859,6 +2866,8 @@ function hideDragBuckets() {
         if (dragMergeIndicator) {
             dragMergeIndicator.style.display = 'none';
         }
+        // Hide action tooltip
+        hideDragActionTooltip();
         // Clear merge target
         clearMergeTarget();
     }
@@ -2910,21 +2919,22 @@ function checkBucketHover(event) {
     const clientX = event.touches ? event.touches[0].clientX : event.clientX;
     const clientY = event.touches ? event.touches[0].clientY : event.clientY;
 
-    // All buckets to check
+    // All buckets to check with their display info
     const buckets = [
-        { el: dragBucketGoal, name: 'goal' },
-        { el: dragBucketIdeas, name: 'ideas' },
-        { el: dragBucketLock, name: 'lock' },
-        { el: dragBucketDemote, name: 'demote' },
-        { el: dragBucketArchive, name: 'archive' },
-        { el: dragBucketDelete, name: 'delete' },
-        { el: dragBucketReactions, name: 'reactions' },
-        { el: dragBucketQuickComment, name: 'quick-comment' },
-        { el: dragBucketCustomComment, name: 'custom-comment' },
-        { el: dragBucketCompleted, name: 'completed' }
+        { el: dragBucketGoal, name: 'goal', icon: '⭐', label: 'Set as Goal' },
+        { el: dragBucketIdeas, name: 'ideas', icon: '💡', label: 'Move to Ideas' },
+        { el: dragBucketLock, name: 'lock', icon: '🔒', label: 'Lock Item' },
+        { el: dragBucketDemote, name: 'demote', icon: '↓', label: 'Demote Item' },
+        { el: dragBucketArchive, name: 'archive', icon: '📦', label: 'Archive Item' },
+        { el: dragBucketDelete, name: 'delete', icon: '🗑️', label: 'Delete Item' },
+        { el: dragBucketReactions, name: 'reactions', icon: '👍', label: 'Add Reaction' },
+        { el: dragBucketQuickComment, name: 'quick-comment', icon: '💬', label: 'Quick Comment' },
+        { el: dragBucketCustomComment, name: 'custom-comment', icon: '✏️', label: 'Add Comment' },
+        { el: dragBucketCompleted, name: 'completed', icon: '✓', label: 'Mark Done' }
     ];
 
     let isOverAnyBucket = false;
+    let hoveredBucket = null;
 
     // DEBUG: Log bucket positions periodically
     bucketHoverDebugCounter++;
@@ -2938,7 +2948,8 @@ function checkBucketHover(event) {
         });
     }
 
-    buckets.forEach(({ el, name }) => {
+    buckets.forEach((bucket) => {
+        const { el, name } = bucket;
         if (el) {
             const rect = el.getBoundingClientRect();
             const isOver = isPointInRect(clientX, clientY, rect);
@@ -2956,6 +2967,7 @@ function checkBucketHover(event) {
 
             if (isOver) {
                 isOverAnyBucket = true;
+                hoveredBucket = bucket;
                 console.log(`[Presentation DEBUG] HOVER DETECTED on bucket: ${name}`);
                 // Special handling for reaction and quick comment buckets
                 if (name === 'reactions') {
@@ -2969,6 +2981,9 @@ function checkBucketHover(event) {
         }
     });
 
+    // Update action tooltip
+    updateDragActionTooltip(clientX, clientY, hoveredBucket, isOverAnyBucket);
+
     // If not over any bucket, check for potential merge target
     if (!isOverAnyBucket && currentDraggedRecordId) {
         checkMergeTargetHover(clientX, clientY);
@@ -2978,6 +2993,74 @@ function checkBucketHover(event) {
             dragMergeIndicator.style.display = 'none';
         }
     }
+}
+
+// Update the drag action tooltip based on current position
+function updateDragActionTooltip(clientX, clientY, hoveredBucket, isOverAnyBucket) {
+    if (!dragActionTooltip) return;
+
+    // Position tooltip near cursor (offset to avoid finger/cursor)
+    const tooltipOffset = 25;
+    dragActionTooltip.style.left = `${clientX + tooltipOffset}px`;
+    dragActionTooltip.style.top = `${clientY - tooltipOffset}px`;
+    dragActionTooltip.style.display = 'flex';
+
+    // Get tooltip elements
+    const iconEl = dragActionTooltip.querySelector('.tooltip-icon');
+    const textEl = dragActionTooltip.querySelector('.tooltip-text');
+
+    // Remove all action classes
+    const actionClasses = [
+        'action-goal', 'action-ideas', 'action-lock', 'action-demote',
+        'action-archive', 'action-delete', 'action-reactions',
+        'action-quick-comment', 'action-custom-comment', 'action-completed',
+        'action-merge', 'action-neutral'
+    ];
+    dragActionTooltip.classList.remove(...actionClasses);
+
+    if (hoveredBucket && isOverAnyBucket) {
+        // Show the action for the hovered bucket
+        currentHoveredAction = hoveredBucket.name;
+        dragActionTooltip.classList.add(`action-${hoveredBucket.name}`);
+
+        // Special handling for reactions with specific emoji
+        if (hoveredBucket.name === 'reactions' && hoveredReactionEmoji) {
+            if (iconEl) iconEl.textContent = hoveredReactionEmoji;
+            if (textEl) textEl.textContent = `React with ${hoveredReactionEmoji}`;
+        } else if (hoveredBucket.name === 'quick-comment' && hoveredQuickComment) {
+            if (iconEl) iconEl.textContent = '💬';
+            if (textEl) textEl.textContent = `"${hoveredQuickComment}"`;
+        } else {
+            if (iconEl) iconEl.textContent = hoveredBucket.icon;
+            if (textEl) textEl.textContent = hoveredBucket.label;
+        }
+    } else if (potentialMergeTarget) {
+        // Show merge action
+        currentHoveredAction = 'merge';
+        dragActionTooltip.classList.add('action-merge');
+        if (iconEl) iconEl.textContent = '🔗';
+        if (textEl) textEl.textContent = 'Merge Items';
+    } else {
+        // Default neutral state - drag to edges hint
+        currentHoveredAction = null;
+        dragActionTooltip.classList.add('action-neutral');
+        if (iconEl) iconEl.textContent = '↔';
+        if (textEl) textEl.textContent = 'Drag to sides for actions';
+    }
+}
+
+// Hide the drag action tooltip
+function hideDragActionTooltip() {
+    if (dragActionTooltip) {
+        dragActionTooltip.style.display = 'none';
+        dragActionTooltip.classList.remove(
+            'action-goal', 'action-ideas', 'action-lock', 'action-demote',
+            'action-archive', 'action-delete', 'action-reactions',
+            'action-quick-comment', 'action-custom-comment', 'action-completed',
+            'action-merge', 'action-neutral'
+        );
+    }
+    currentHoveredAction = null;
 }
 
 // Check if hovering over a specific reaction emoji option
