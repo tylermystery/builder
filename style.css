@@ -6505,8 +6505,7 @@ body:not(.presentation-active) .drag-merge-indicator {
 .drag-zone-left,
 .drag-zone-right {
     position: fixed;
-    top: 50%;
-    transform: translateY(-50%);
+    /* Position will be set dynamically by JavaScript to be adjacent to dragged item */
     display: none;
     flex-direction: column;
     gap: 10px;
@@ -6517,17 +6516,17 @@ body:not(.presentation-active) .drag-merge-indicator {
     background: rgba(0, 0, 0, 0.75);
     border-radius: 20px;
     padding: 16px;
-    max-height: 85vh;
+    max-height: 70vh;
     overflow-y: auto;
 }
 
-/* LEFT zone - anchored to left edge of VIEWPORT */
+/* LEFT zone - initial position, overridden by JS for item-relative positioning */
 .drag-zone-left {
     left: 12px;
     right: auto;
 }
 
-/* RIGHT zone - anchored to right edge of VIEWPORT */
+/* RIGHT zone - initial position, overridden by JS for item-relative positioning */
 .drag-zone-right {
     right: 12px;
     left: auto;
@@ -6541,14 +6540,13 @@ body:not(.presentation-active) .drag-merge-indicator {
     pointer-events: auto;
 }
 
+/* Remove fixed positioning rules - JS handles positioning adjacent to dragged item */
 .presentation-drag-buckets.drag-active .drag-zone-left {
-    left: 12px;
-    right: auto;
+    /* JS will set left/top dynamically */
 }
 
 .presentation-drag-buckets.drag-active .drag-zone-right {
-    right: 12px;
-    left: auto;
+    /* JS will set left/top dynamically */
 }
 
 .presentation-drag-buckets.drag-active .drag-bucket {
@@ -6863,6 +6861,7 @@ body:not(.presentation-active) .drag-merge-indicator {
     .drag-zone-right {
         gap: 8px;
         padding: 12px;
+        max-height: 65vh; /* Smaller on mobile to fit near items */
     }
 
     /* Mobile bucket sizes - still larger than before for better touch */
@@ -6882,16 +6881,16 @@ body:not(.presentation-active) .drag-merge-indicator {
         font-size: 0.55em;
     }
 
-    /* LEFT zone - ensure fixed to left edge on mobile */
+    /* Mobile: JS controls positioning to be adjacent to dragged item */
+    /* These are fallback positions only */
     .drag-zone-left {
-        left: 8px !important;
-        right: auto !important;
+        left: 4px;
+        right: auto;
     }
 
-    /* RIGHT zone - ensure fixed to right edge on mobile */
     .drag-zone-right {
-        right: 8px !important;
-        left: auto !important;
+        right: 4px;
+        left: auto;
     }
 
     /* Mobile reaction/quick comment options */
@@ -6914,7 +6913,7 @@ body:not(.presentation-active) .drag-merge-indicator {
         gap: 4px;
     }
 
-    /* MOBILE: Force visibility and correct positioning during drag-active state */
+    /* MOBILE: Force visibility during drag-active state - JS controls positioning */
     .presentation-drag-buckets.drag-active .drag-zone-left,
     .presentation-drag-buckets.drag-active .drag-zone-right {
         display: flex;
@@ -6922,20 +6921,17 @@ body:not(.presentation-active) .drag-merge-indicator {
         opacity: 1;
         pointer-events: auto;
         position: fixed;
-        top: 50%;
-        transform: translateY(-50%);
         z-index: 5100; /* TIER 4: Drag zones */
         flex-direction: column;
+        /* Position set by JS - don't override with transform */
     }
 
     .presentation-drag-buckets.drag-active .drag-zone-left {
-        left: 8px;
-        right: auto;
+        /* JS sets left/top dynamically for item-relative positioning */
     }
 
     .presentation-drag-buckets.drag-active .drag-zone-right {
-        right: 8px;
-        left: auto;
+        /* JS sets left/top dynamically for item-relative positioning */
     }
 
     .presentation-drag-buckets.drag-active .drag-bucket {

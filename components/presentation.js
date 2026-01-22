@@ -2690,6 +2690,76 @@ async function initializeItemDragDrop() {
     }
 }
 
+// Update drag zone positions to be adjacent to the dragged item
+function updateDragZonePositions(itemRect) {
+    if (!dragBucketsEl || !isDragging) return;
+
+    const leftZone = dragBucketsEl.querySelector('.drag-zone-left');
+    const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
+
+    if (!leftZone || !rightZone) return;
+
+    // Get zone dimensions for calculations
+    const leftZoneRect = leftZone.getBoundingClientRect();
+    const rightZoneRect = rightZone.getBoundingClientRect();
+    const leftZoneWidth = leftZoneRect.width || 120; // fallback width
+    const rightZoneWidth = rightZoneRect.width || 120;
+
+    // Determine if we're on mobile (< 768px)
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const isMobile = viewportWidth < 768;
+
+    // Gap between item and zone
+    const itemZoneGap = isMobile ? 8 : 12;
+
+    // Calculate vertical center of the item
+    const itemCenterY = itemRect.top + (itemRect.height / 2);
+
+    // Calculate left zone position - immediately to the left of the item
+    let leftX = itemRect.left - leftZoneWidth - itemZoneGap;
+    // Ensure it doesn't go off the left edge
+    if (leftX < 4) leftX = 4;
+
+    // Calculate right zone position - immediately to the right of the item
+    let rightX = itemRect.right + itemZoneGap;
+    // Ensure it doesn't go off the right edge
+    if (rightX + rightZoneWidth > viewportWidth - 4) {
+        rightX = viewportWidth - rightZoneWidth - 4;
+    }
+
+    // Calculate vertical position (centered on item, but constrained to viewport)
+    const leftZoneHeight = leftZoneRect.height || 400;
+    const rightZoneHeight = rightZoneRect.height || 300;
+
+    let leftTop = itemCenterY - (leftZoneHeight / 2);
+    let rightTop = itemCenterY - (rightZoneHeight / 2);
+
+    // Constrain to viewport bounds with padding
+    const topPadding = 60; // Leave room for header
+    const bottomPadding = 20;
+
+    if (leftTop < topPadding) leftTop = topPadding;
+    if (leftTop + leftZoneHeight > viewportHeight - bottomPadding) {
+        leftTop = viewportHeight - leftZoneHeight - bottomPadding;
+    }
+
+    if (rightTop < topPadding) rightTop = topPadding;
+    if (rightTop + rightZoneHeight > viewportHeight - bottomPadding) {
+        rightTop = viewportHeight - rightZoneHeight - bottomPadding;
+    }
+
+    // Apply positions using left/top instead of transform for precise control
+    leftZone.style.left = `${leftX}px`;
+    leftZone.style.top = `${leftTop}px`;
+    leftZone.style.transform = 'none';
+
+    rightZone.style.left = `${rightX}px`;
+    rightZone.style.right = 'auto';
+    rightZone.style.top = `${rightTop}px`;
+    rightZone.style.transform = 'none';
+}
+
 // Show drag buckets during drag (colorize them)
 function showDragBuckets() {
     console.log('[Presentation DEBUG] showDragBuckets called, isDragging:', isDragging, 'dragBucketsEl:', !!dragBucketsEl);
@@ -2709,75 +2779,57 @@ function showDragBuckets() {
         const leftZone = dragBucketsEl.querySelector('.drag-zone-left');
         const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
 
-        // Apply inline styles as a fallback - using fixed positioning to ensure zones stay at viewport edges
+        // Apply inline styles - position zones adjacent to the dragged item
         const applyZoneStyles = () => {
             // Determine if we're on mobile (< 768px)
             const viewportWidth = window.innerWidth;
             const isMobile = viewportWidth < 768;
-            const edgeOffset = isMobile ? 8 : 12;
             const bucketSize = isMobile ? '72px' : '88px';
             const zoneGap = isMobile ? 8 : 10;
             const zonePadding = isMobile ? 12 : 16;
 
             console.log('[Presentation DEBUG] Viewport width:', viewportWidth, 'isMobile:', isMobile);
 
+            // Get the currently dragged item's position
+            const draggedItem = document.querySelector('.sortable-drag') || currentDraggedItem;
+            let itemRect = null;
+
+            if (draggedItem) {
+                itemRect = draggedItem.getBoundingClientRect();
+                console.log('[Presentation DEBUG] Dragged item rect:', {
+                    left: itemRect.left,
+                    right: itemRect.right,
+                    top: itemRect.top,
+                    bottom: itemRect.bottom,
+                    width: itemRect.width,
+                    height: itemRect.height
+                });
+            }
+
+            // Base styles for both zones
+            const baseZoneStyles = `
+                position: fixed !important;
+                display: flex !important;
+                flex-direction: column !important;
+                gap: ${zoneGap}px !important;
+                opacity: 1 !important;
+                visibility: visible !important;
+                pointer-events: auto !important;
+                z-index: 5100 !important;
+                background: rgba(0, 0, 0, 0.75) !important;
+                padding: ${zonePadding}px !important;
+                border-radius: 20px !important;
+                max-height: 70vh !important;
+                overflow-y: auto !important;
+            `;
+
             if (leftZone) {
-                // LEFT zone: fixed to left edge of viewport
-                // Clear any existing inline styles first
                 leftZone.style.cssText = '';
-                // Apply new styles using setAttribute for maximum specificity
-                leftZone.setAttribute('style', `
-                    position: fixed !important;
-                    left: ${edgeOffset}px !important;
-                    right: auto !important;
-                    top: 50% !important;
-                    transform: translateY(-50%) !important;
-                    display: flex !important;
-                    flex-direction: column !important;
-                    gap: ${zoneGap}px !important;
-                    opacity: 1 !important;
-                    visibility: visible !important;
-                    pointer-events: auto !important;
-                    z-index: 5100 !important;
-                    background: rgba(0, 0, 0, 0.75) !important;
-                    padding: ${zonePadding}px !important;
-                    border-radius: 20px !important;
-                    max-height: 85vh !important;
-                    overflow-y: auto !important;
-                `);
+                leftZone.setAttribute('style', baseZoneStyles);
             }
             if (rightZone) {
-                // RIGHT zone: Calculate position from right edge explicitly
-                // Use right property to anchor to right edge
                 rightZone.style.cssText = '';
-                rightZone.setAttribute('style', `
-                    position: fixed !important;
-                    right: ${edgeOffset}px !important;
-                    left: auto !important;
-                    top: 50% !important;
-                    transform: translateY(-50%) !important;
-                    display: flex !important;
-                    flex-direction: column !important;
-                    gap: ${zoneGap}px !important;
-                    opacity: 1 !important;
-                    visibility: visible !important;
-                    pointer-events: auto !important;
-                    z-index: 5100 !important;
-                    background: rgba(0, 0, 0, 0.75) !important;
-                    padding: ${zonePadding}px !important;
-                    border-radius: 20px !important;
-                    max-height: 85vh !important;
-                    overflow-y: auto !important;
-                `);
-
-                // DEBUG: Check computed styles after setting
-                const computedStyle = window.getComputedStyle(rightZone);
-                console.log('[Presentation DEBUG] Right zone computed after style set:', {
-                    position: computedStyle.position,
-                    right: computedStyle.right,
-                    left: computedStyle.left,
-                    inlineRight: rightZone.style.right
-                });
+                rightZone.setAttribute('style', baseZoneStyles);
             }
 
             // Force visibility on all bucket elements with increased size
@@ -2792,6 +2844,27 @@ function showDragBuckets() {
                 bucket.style.minWidth = bucketSize;
                 bucket.style.minHeight = bucketSize;
             });
+
+            // If we have the dragged item position, position zones adjacent to it
+            if (itemRect) {
+                updateDragZonePositions(itemRect);
+            } else {
+                // Fallback: position at viewport center if item not found yet
+                const viewportHeight = window.innerHeight;
+                const fallbackTop = viewportHeight / 2 - 200;
+
+                if (leftZone) {
+                    leftZone.style.left = '12px';
+                    leftZone.style.top = `${fallbackTop}px`;
+                    leftZone.style.transform = 'none';
+                }
+                if (rightZone) {
+                    rightZone.style.left = 'auto';
+                    rightZone.style.right = '12px';
+                    rightZone.style.top = `${fallbackTop}px`;
+                    rightZone.style.transform = 'none';
+                }
+            }
         };
 
         // Apply immediately
@@ -2826,11 +2899,9 @@ function showDragBuckets() {
             }
             if (rightZone) {
                 const rightRect = rightZone.getBoundingClientRect();
-                const expectedX = window.innerWidth - rightRect.width - 12;
                 console.log('[Presentation DEBUG] Right zone rect: ' +
                     Math.round(rightRect.width) + 'x' + Math.round(rightRect.height) +
-                    ' at (' + Math.round(rightRect.left) + ',' + Math.round(rightRect.top) + ')' +
-                    ' expected x=' + Math.round(expectedX));
+                    ' at (' + Math.round(rightRect.left) + ',' + Math.round(rightRect.top) + ')');
             }
         }, 50);
     }
@@ -3183,6 +3254,16 @@ function handleDragMove(event) {
             hasDragActiveClass: dragBucketsEl ? dragBucketsEl.classList.contains('drag-active') : false
         });
     }
+
+    // Update drag zone positions to follow the dragged item
+    if (isDragging && dragBucketsEl?.classList.contains('drag-active')) {
+        const draggedItem = document.querySelector('.sortable-drag') || currentDraggedItem;
+        if (draggedItem) {
+            const itemRect = draggedItem.getBoundingClientRect();
+            updateDragZonePositions(itemRect);
+        }
+    }
+
     checkBucketHover(event);
 }
 
