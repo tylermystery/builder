@@ -6447,71 +6447,73 @@ body.presentation-active #wtf-plans-panel-overlay {
 /* Left and Right zone containers */
 .drag-zone-left,
 .drag-zone-right {
-    position: absolute;
+    position: fixed;
     top: 50%;
     transform: translateY(-50%);
-    display: flex;
+    display: none;
     flex-direction: column;
-    gap: 8px;
-    pointer-events: auto;
+    gap: 6px;
+    pointer-events: none;
     opacity: 0;
-    transition: opacity 0.2s ease; /* Faster transition for better visibility */
+    transition: opacity 0.2s ease;
+    z-index: 10001;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 12px;
+    padding: 8px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+/* LEFT zone - anchored to left edge */
+.drag-zone-left {
+    left: 8px;
+    right: auto;
+}
+
+/* RIGHT zone - anchored to right edge */
+.drag-zone-right {
+    right: 8px;
+    left: auto;
 }
 
 .presentation-drag-buckets.drag-active .drag-zone-left,
 .presentation-drag-buckets.drag-active .drag-zone-right {
-    /* RESILIENCE: Force ALL visibility-related properties */
+    display: flex !important;
     opacity: 1 !important;
     visibility: visible !important;
-    display: flex !important;
     pointer-events: auto !important;
-    /* Add more visible background to confirm zones are visible during debugging */
-    background: rgba(0, 0, 0, 0.15);
-    border-radius: 8px;
-    padding: 8px;
 }
 
-/* DEBUG: Add outline to buckets during drag to confirm they're rendering */
 .presentation-drag-buckets.drag-active .drag-bucket {
-    outline: 2px dashed rgba(255, 255, 255, 0.3);
-    outline-offset: 2px;
+    pointer-events: auto !important;
 }
 
-.drag-zone-left {
-    left: 8px;
-}
-
-.drag-zone-right {
-    right: 8px;
-}
-
-/* Base bucket styles - now smaller since we have more buckets */
+/* Base bucket styles */
 .drag-bucket {
     position: relative;
-    width: 70px;
-    height: 70px;
+    width: 60px;
+    height: 60px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 2px;
     border-radius: 12px;
     backdrop-filter: blur(20px);
     pointer-events: auto;
-    transition: all 0.25s ease, transform 0.2s ease;
-    opacity: 0.75;
-    filter: grayscale(30%);
+    transition: all 0.2s ease, transform 0.15s ease;
+    opacity: 0.9;
     cursor: pointer;
 }
 
 .drag-bucket .bucket-icon {
-    font-size: 1.4em;
+    font-size: 1.3em;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
     line-height: 1;
 }
 
 .drag-bucket .bucket-label {
-    font-size: 0.65em;
+    font-size: 0.55em;
     font-weight: 600;
     color: #fff;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -6595,17 +6597,11 @@ body.presentation-active #wtf-plans-panel-overlay {
     box-shadow: 0 4px 16px rgba(40, 167, 69, 0.3);
 }
 
-/* Active drag state - full color */
-.presentation-drag-buckets.drag-active .drag-bucket {
-    opacity: 0.9;
-    filter: grayscale(0%);
-}
-
 /* Hover/drag-over state for all buckets */
 .drag-bucket.drag-over {
-    transform: scale(1.15);
+    transform: scale(1.1);
     opacity: 1;
-    filter: grayscale(0%) brightness(1.1);
+    filter: brightness(1.1);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     z-index: 10;
 }
@@ -6663,10 +6659,12 @@ body.presentation-active #wtf-plans-panel-overlay {
 }
 
 /* REACTION OPTIONS - revealed on hover/drag-over */
+/* Position to the LEFT of the bucket since right zone is at screen edge */
 .reaction-options,
 .quick-comment-options {
     position: absolute;
-    left: calc(100% + 8px);
+    right: calc(100% + 8px);
+    left: auto;
     top: 50%;
     transform: translateY(-50%);
     display: flex;
@@ -6674,15 +6672,14 @@ body.presentation-active #wtf-plans-panel-overlay {
     gap: 4px;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.25s ease, transform 0.25s ease;
-    transform-origin: left center;
+    transition: opacity 0.2s ease;
+    z-index: 10002;
 }
 
 .drag-bucket-reactions.drag-over .reaction-options,
 .drag-bucket-quick-comment.drag-over .quick-comment-options {
     opacity: 1;
     pointer-events: auto;
-    transform: translateY(-50%) translateX(0);
 }
 
 /* Reaction option buttons */
@@ -6788,28 +6785,31 @@ body.presentation-active #wtf-plans-panel-overlay {
     .drag-zone-left,
     .drag-zone-right {
         gap: 4px;
+        padding: 6px;
     }
 
     .drag-bucket {
-        width: 52px;
-        height: 52px;
+        width: 48px;
+        height: 48px;
         border-radius: 10px;
     }
 
     .drag-bucket .bucket-icon {
-        font-size: 1.1em;
+        font-size: 1em;
     }
 
     .drag-bucket .bucket-label {
-        font-size: 0.5em;
+        font-size: 0.45em;
     }
 
     .drag-zone-left {
         left: 4px;
+        right: auto !important;
     }
 
     .drag-zone-right {
         right: 4px;
+        left: auto !important;
     }
 
     .reaction-option {
@@ -6825,42 +6825,38 @@ body.presentation-active #wtf-plans-panel-overlay {
 
     .reaction-options,
     .quick-comment-options {
-        left: calc(100% + 4px);
+        right: calc(100% + 4px);
+        left: auto;
     }
 
-    /* MOBILE RESILIENCE: Force visibility during drag-active state on mobile */
-    .presentation-drag-buckets.drag-active {
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        pointer-events: auto !important;
-    }
-
+    /* MOBILE: Force visibility during drag-active state */
     .presentation-drag-buckets.drag-active .drag-zone-left,
     .presentation-drag-buckets.drag-active .drag-zone-right {
         display: flex !important;
         visibility: visible !important;
         opacity: 1 !important;
         pointer-events: auto !important;
-        flex-direction: column !important;
-        position: absolute !important;
+        position: fixed !important;
         top: 50% !important;
         transform: translateY(-50%) !important;
         z-index: 10001 !important;
+        flex-direction: column !important;
     }
 
     .presentation-drag-buckets.drag-active .drag-zone-left {
         left: 4px !important;
+        right: auto !important;
     }
 
     .presentation-drag-buckets.drag-active .drag-zone-right {
         right: 4px !important;
+        left: auto !important;
     }
 
     .presentation-drag-buckets.drag-active .drag-bucket {
         display: flex !important;
         visibility: visible !important;
-        opacity: 0.9 !important;
+        opacity: 0.95 !important;
         pointer-events: auto !important;
     }
 }

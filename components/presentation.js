@@ -2683,63 +2683,55 @@ function showDragBuckets() {
     if (dragBucketsEl && isDragging) {
         console.log('[Presentation DEBUG] Adding drag-active class to buckets');
 
-        // RESILIENCE FIX 1: Force container visibility with inline styles
-        // This overrides any CSS issues including display:none, visibility:hidden, etc.
-        dragBucketsEl.style.display = 'block';
-        dragBucketsEl.style.visibility = 'visible';
-        dragBucketsEl.style.opacity = '1';
-        dragBucketsEl.style.pointerEvents = 'auto';
-
+        // Add drag-active class - let CSS handle the styling
         dragBucketsEl.classList.add('drag-active');
 
         const leftZone = dragBucketsEl.querySelector('.drag-zone-left');
         const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
 
-        // Helper function to apply zone styles - can be called multiple times for retry
+        // Apply inline styles as a fallback - using fixed positioning to ensure zones stay at viewport edges
         const applyZoneStyles = () => {
-            // RESILIENCE FIX 2: Force zone visibility with comprehensive inline styles
-            // Setting ALL properties that could prevent visibility
             if (leftZone) {
-                leftZone.style.cssText = `
-                    opacity: 1 !important;
-                    visibility: visible !important;
-                    display: flex !important;
-                    flex-direction: column !important;
-                    gap: 8px !important;
-                    pointer-events: auto !important;
-                    transform: translateY(-50%) !important;
-                    position: absolute !important;
-                    left: 8px !important;
-                    top: 50% !important;
-                    z-index: 10001 !important;
-                    background: rgba(0, 0, 0, 0.2) !important;
-                    padding: 8px !important;
-                    border-radius: 12px !important;
-                `;
+                // LEFT zone: fixed to left edge of viewport
+                leftZone.style.position = 'fixed';
+                leftZone.style.left = '8px';
+                leftZone.style.right = 'auto';
+                leftZone.style.top = '50%';
+                leftZone.style.transform = 'translateY(-50%)';
+                leftZone.style.display = 'flex';
+                leftZone.style.flexDirection = 'column';
+                leftZone.style.gap = '6px';
+                leftZone.style.opacity = '1';
+                leftZone.style.visibility = 'visible';
+                leftZone.style.pointerEvents = 'auto';
+                leftZone.style.zIndex = '10001';
+                leftZone.style.background = 'rgba(0, 0, 0, 0.5)';
+                leftZone.style.padding = '8px';
+                leftZone.style.borderRadius = '12px';
             }
             if (rightZone) {
-                rightZone.style.cssText = `
-                    opacity: 1 !important;
-                    visibility: visible !important;
-                    display: flex !important;
-                    flex-direction: column !important;
-                    gap: 8px !important;
-                    pointer-events: auto !important;
-                    transform: translateY(-50%) !important;
-                    position: absolute !important;
-                    right: 8px !important;
-                    top: 50% !important;
-                    z-index: 10001 !important;
-                    background: rgba(0, 0, 0, 0.2) !important;
-                    padding: 8px !important;
-                    border-radius: 12px !important;
-                `;
+                // RIGHT zone: fixed to right edge of viewport
+                rightZone.style.position = 'fixed';
+                rightZone.style.right = '8px';
+                rightZone.style.left = 'auto';
+                rightZone.style.top = '50%';
+                rightZone.style.transform = 'translateY(-50%)';
+                rightZone.style.display = 'flex';
+                rightZone.style.flexDirection = 'column';
+                rightZone.style.gap = '6px';
+                rightZone.style.opacity = '1';
+                rightZone.style.visibility = 'visible';
+                rightZone.style.pointerEvents = 'auto';
+                rightZone.style.zIndex = '10001';
+                rightZone.style.background = 'rgba(0, 0, 0, 0.5)';
+                rightZone.style.padding = '8px';
+                rightZone.style.borderRadius = '12px';
             }
 
-            // RESILIENCE FIX 3: Also force visibility on all bucket elements
+            // Force visibility on all bucket elements
             const allBuckets = dragBucketsEl.querySelectorAll('.drag-bucket');
             allBuckets.forEach((bucket) => {
-                bucket.style.opacity = '1';
+                bucket.style.opacity = '0.95';
                 bucket.style.visibility = 'visible';
                 bucket.style.display = 'flex';
                 bucket.style.pointerEvents = 'auto';
@@ -2750,27 +2742,17 @@ function showDragBuckets() {
         applyZoneStyles();
         console.log('[Presentation DEBUG] Zone styles applied directly');
 
-        // RESILIENCE FIX 4: Force a repaint/reflow to ensure browser renders changes
-        // This is crucial on mobile where CSS changes may not apply immediately
+        // Force a repaint/reflow
         void dragBucketsEl.offsetHeight;
         if (leftZone) void leftZone.offsetHeight;
         if (rightZone) void rightZone.offsetHeight;
 
-        // RESILIENCE FIX 5: Use requestAnimationFrame to retry applying styles
-        // This helps with timing issues on mobile browsers
+        // Retry with requestAnimationFrame for timing issues
         requestAnimationFrame(() => {
             applyZoneStyles();
-            console.log('[Presentation DEBUG] Zone styles re-applied via requestAnimationFrame');
-
-            // Double-check with another frame for stubborn browsers
-            requestAnimationFrame(() => {
-                applyZoneStyles();
-                // Force another reflow
-                void dragBucketsEl.offsetHeight;
-            });
         });
 
-        // RESILIENCE FIX 6: Also retry after a small delay as final fallback
+        // Final fallback retry after delay
         setTimeout(() => {
             if (isDragging && dragBucketsEl?.classList.contains('drag-active')) {
                 applyZoneStyles();
@@ -2778,81 +2760,21 @@ function showDragBuckets() {
             }
         }, 100);
 
-        // DEBUG: Log detailed styling info after adding drag-active class (stringified for text export)
+        // DEBUG: Log styling info
         setTimeout(() => {
-            const containerStyle = window.getComputedStyle(dragBucketsEl);
-            const containerRect = dragBucketsEl.getBoundingClientRect();
-            console.log('[Presentation DEBUG] Drag buckets container styling - ' +
-                'classes: [' + Array.from(dragBucketsEl.classList).join(', ') + '], ' +
-                'display: ' + containerStyle.display + ', ' +
-                'visibility: ' + containerStyle.visibility + ', ' +
-                'opacity: ' + containerStyle.opacity + ', ' +
-                'zIndex: ' + containerStyle.zIndex + ', ' +
-                'rect: ' + Math.round(containerRect.width) + 'x' + Math.round(containerRect.height) +
-                ' at (' + Math.round(containerRect.left) + ',' + Math.round(containerRect.top) + ')');
-
-            // DEBUG: Log left zone styling (stringified)
             if (leftZone) {
-                const leftStyle = window.getComputedStyle(leftZone);
                 const leftRect = leftZone.getBoundingClientRect();
-                console.log('[Presentation DEBUG] Left zone - ' +
-                    'display: ' + leftStyle.display + ', ' +
-                    'visibility: ' + leftStyle.visibility + ', ' +
-                    'opacity: ' + leftStyle.opacity + ', ' +
-                    'position: ' + leftStyle.position + ', ' +
-                    'left: ' + leftStyle.left + ', ' +
-                    'rect: ' + Math.round(leftRect.width) + 'x' + Math.round(leftRect.height) +
+                console.log('[Presentation DEBUG] Left zone rect: ' +
+                    Math.round(leftRect.width) + 'x' + Math.round(leftRect.height) +
                     ' at (' + Math.round(leftRect.left) + ',' + Math.round(leftRect.top) + ')');
-            } else {
-                console.warn('[Presentation DEBUG] Left zone NOT FOUND in dragBucketsEl');
             }
-
-            // DEBUG: Log right zone styling (stringified)
             if (rightZone) {
-                const rightStyle = window.getComputedStyle(rightZone);
                 const rightRect = rightZone.getBoundingClientRect();
-                console.log('[Presentation DEBUG] Right zone - ' +
-                    'display: ' + rightStyle.display + ', ' +
-                    'visibility: ' + rightStyle.visibility + ', ' +
-                    'opacity: ' + rightStyle.opacity + ', ' +
-                    'position: ' + rightStyle.position + ', ' +
-                    'right: ' + rightStyle.right + ', ' +
-                    'rect: ' + Math.round(rightRect.width) + 'x' + Math.round(rightRect.height) +
+                console.log('[Presentation DEBUG] Right zone rect: ' +
+                    Math.round(rightRect.width) + 'x' + Math.round(rightRect.height) +
                     ' at (' + Math.round(rightRect.left) + ',' + Math.round(rightRect.top) + ')');
-            } else {
-                console.warn('[Presentation DEBUG] Right zone NOT FOUND in dragBucketsEl');
             }
-
-            // DEBUG: Log individual bucket elements (stringified for text export)
-            const bucketDebugInfo = [
-                { el: dragBucketGoal, name: 'Goal' },
-                { el: dragBucketIdeas, name: 'Ideas' },
-                { el: dragBucketLock, name: 'Lock' },
-                { el: dragBucketDemote, name: 'Demote' },
-                { el: dragBucketArchive, name: 'Archive' },
-                { el: dragBucketDelete, name: 'Delete' },
-                { el: dragBucketReactions, name: 'Reactions' },
-                { el: dragBucketQuickComment, name: 'QuickComment' },
-                { el: dragBucketCustomComment, name: 'CustomComment' },
-                { el: dragBucketCompleted, name: 'Completed' }
-            ];
-
-            console.log('[Presentation DEBUG] Individual bucket elements:');
-            bucketDebugInfo.forEach(({ el, name }) => {
-                if (el) {
-                    const style = window.getComputedStyle(el);
-                    const rect = el.getBoundingClientRect();
-                    console.log('[Presentation DEBUG]   ' + name + ': ' +
-                        'display=' + style.display + ', ' +
-                        'visibility=' + style.visibility + ', ' +
-                        'opacity=' + style.opacity + ', ' +
-                        'rect=' + Math.round(rect.width) + 'x' + Math.round(rect.height) +
-                        ' at (' + Math.round(rect.left) + ',' + Math.round(rect.top) + ')');
-                } else {
-                    console.warn('[Presentation DEBUG]   ' + name + ': ELEMENT NOT FOUND');
-                }
-            });
-        }, 50); // Small delay to allow CSS transitions to start
+        }, 50);
     }
 }
 
@@ -2862,16 +2784,31 @@ function hideDragBuckets() {
     if (dragBucketsEl) {
         dragBucketsEl.classList.remove('drag-active');
 
-        // Clear all inline styles set by showDragBuckets
-        dragBucketsEl.style.display = '';
-        dragBucketsEl.style.visibility = '';
-        dragBucketsEl.style.opacity = '';
-        dragBucketsEl.style.pointerEvents = '';
-
         const leftZone = dragBucketsEl.querySelector('.drag-zone-left');
         const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
-        if (leftZone) leftZone.style.cssText = '';
-        if (rightZone) rightZone.style.cssText = '';
+
+        // Clear inline styles from zones
+        const clearZoneStyles = (zone) => {
+            if (!zone) return;
+            zone.style.position = '';
+            zone.style.left = '';
+            zone.style.right = '';
+            zone.style.top = '';
+            zone.style.transform = '';
+            zone.style.display = '';
+            zone.style.flexDirection = '';
+            zone.style.gap = '';
+            zone.style.opacity = '';
+            zone.style.visibility = '';
+            zone.style.pointerEvents = '';
+            zone.style.zIndex = '';
+            zone.style.background = '';
+            zone.style.padding = '';
+            zone.style.borderRadius = '';
+        };
+
+        clearZoneStyles(leftZone);
+        clearZoneStyles(rightZone);
 
         // Clear inline styles from all bucket elements
         const allBuckets = dragBucketsEl.querySelectorAll('.drag-bucket');
