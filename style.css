@@ -6839,6 +6839,361 @@ body:not(.presentation-active) .drag-merge-indicator {
     outline: 3px solid rgba(76, 175, 80, 0.8);
     outline-offset: 4px;
     background: rgba(76, 175, 80, 0.1);
+    animation: merge-target-pulse 1.5s ease infinite;
+}
+
+@keyframes merge-target-pulse {
+    0%, 100% {
+        outline-color: rgba(76, 175, 80, 0.8);
+        box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4);
+    }
+    50% {
+        outline-color: rgba(76, 175, 80, 1);
+        box-shadow: 0 0 20px 5px rgba(76, 175, 80, 0.3);
+    }
+}
+
+/* =====================================================
+   MERGE OPTIONS DIALOG
+   ===================================================== */
+
+.merge-options-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9200;
+    animation: merge-dialog-fade-in 0.2s ease;
+}
+
+@keyframes merge-dialog-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.merge-options-dialog-content {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border-radius: 20px;
+    padding: 28px;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    position: relative;
+    animation: merge-dialog-slide-up 0.3s ease;
+}
+
+@keyframes merge-dialog-slide-up {
+    from {
+        transform: translateY(30px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.merge-dialog-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(0, 0, 0, 0.1);
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 1.3em;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.merge-dialog-close:hover {
+    background: rgba(220, 53, 69, 0.15);
+    color: #dc3545;
+    transform: scale(1.1);
+}
+
+.merge-dialog-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.merge-dialog-icon {
+    font-size: 1.8em;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.merge-dialog-title {
+    margin: 0;
+    font-size: 1.4em;
+    font-weight: 700;
+    color: #212529;
+}
+
+.merge-dialog-items {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 12px;
+}
+
+.merge-item-preview {
+    flex: 1;
+    background: #fff;
+    border: 2px solid rgba(76, 175, 80, 0.3);
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+    max-width: 150px;
+}
+
+.merge-item-name {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #333;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.merge-plus-icon {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #4CAF50;
+    flex-shrink: 0;
+}
+
+.merge-dialog-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.merge-option-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 16px 20px;
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.merge-option-btn:hover {
+    border-color: #4CAF50;
+    background: rgba(76, 175, 80, 0.05);
+    transform: translateX(4px);
+}
+
+.merge-option-btn:active {
+    transform: translateX(2px);
+}
+
+.merge-option-combine:hover {
+    border-color: #9C27B0;
+    background: rgba(156, 39, 176, 0.05);
+}
+
+.merge-option-group:hover {
+    border-color: #2196F3;
+    background: rgba(33, 150, 243, 0.05);
+}
+
+.merge-option-icon {
+    font-size: 1.4em;
+}
+
+.merge-option-label {
+    font-size: 1em;
+    font-weight: 600;
+    color: #212529;
+}
+
+.merge-option-desc {
+    font-size: 0.8em;
+    color: #6c757d;
+}
+
+.merge-dialog-cancel {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: #f8f9fa;
+    color: #6c757d;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.merge-dialog-cancel:hover {
+    background: #e9ecef;
+    color: #495057;
+}
+
+/* =====================================================
+   GROUPED/COMBINED ITEMS VISUAL INDICATORS
+   ===================================================== */
+
+/* Grouped items indicator badge */
+.item-group-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #1565c0;
+    margin-left: 8px;
+}
+
+.item-group-indicator .group-icon {
+    font-size: 1em;
+}
+
+.item-group-indicator .group-count {
+    background: rgba(21, 101, 192, 0.15);
+    padding: 1px 5px;
+    border-radius: 8px;
+}
+
+/* Combined item indicator (when items are merged into one) */
+.item-combined-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #7b1fa2;
+    margin-left: 8px;
+}
+
+.item-combined-indicator .combined-icon {
+    font-size: 1em;
+}
+
+/* Grouped item section with visual connector */
+.itinerary-item-section.in-group {
+    position: relative;
+    border-left: 3px solid #2196F3;
+    margin-left: 12px;
+}
+
+.itinerary-item-section.in-group::before {
+    content: '';
+    position: absolute;
+    left: -15px;
+    top: 50%;
+    width: 12px;
+    height: 2px;
+    background: #2196F3;
+}
+
+/* Group header styling */
+.item-group-header {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    padding: 12px 16px;
+    border-radius: 12px 12px 0 0;
+    margin-bottom: -4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.item-group-header .group-header-icon {
+    font-size: 1.2em;
+}
+
+.item-group-header .group-header-title {
+    font-weight: 600;
+    color: #1565c0;
+    flex: 1;
+}
+
+.item-group-header .group-header-count {
+    font-size: 0.85em;
+    color: #1976d2;
+    background: rgba(255, 255, 255, 0.7);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+/* Combined item visual enhancement */
+.itinerary-item-section.is-combined {
+    border-left: 3px solid #9C27B0;
+}
+
+.itinerary-item-section.is-combined .itinerary-item {
+    background: linear-gradient(135deg, #faf5fc 0%, #f3e5f5 100%);
+}
+
+/* Source items that have been combined into another (hidden/collapsed) */
+.itinerary-item-section.combined-source {
+    display: none;
+}
+
+/* Expandable combined sources list */
+.combined-sources-section {
+    padding: 8px 16px;
+    background: rgba(156, 39, 176, 0.05);
+    border-top: 1px dashed rgba(156, 39, 176, 0.3);
+}
+
+.combined-sources-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85em;
+    color: #7b1fa2;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.2s ease;
+}
+
+.combined-sources-toggle:hover {
+    background: rgba(156, 39, 176, 0.1);
+}
+
+.combined-sources-list {
+    margin-top: 8px;
+    padding-left: 12px;
+    border-left: 2px solid rgba(156, 39, 176, 0.3);
+}
+
+.combined-source-item {
+    font-size: 0.85em;
+    color: #666;
+    padding: 4px 0;
 }
 
 /* Goal item indicator on rendered items */
@@ -7121,18 +7476,19 @@ body.presentation-active .radial-menu-container .drag-bucket {
 
 /* Radial menu bucket hover state */
 .radial-menu-container .drag-bucket.drag-over {
-    transform: scale(1.2);
+    transform: scale(1.25);
     opacity: 1;
     z-index: 10;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
-/* Radial menu bucket labels - smaller for radial layout */
+/* Radial menu bucket labels - proportionally larger for 2x radial layout */
 .radial-menu-container .drag-bucket .bucket-icon {
-    font-size: 1.4em;
+    font-size: 2.4em;
 }
 
 .radial-menu-container .drag-bucket .bucket-label {
-    font-size: 0.5em;
+    font-size: 0.75em;
     letter-spacing: 0.3px;
 }
 
@@ -7199,18 +7555,18 @@ body.presentation-active .radial-menu-container .drag-bucket {
 /* Mobile adjustments for radial menu */
 @media (max-width: 768px) {
     .radial-menu-container .drag-bucket {
-        width: 56px;
-        height: 56px;
-        min-width: 56px;
-        min-height: 56px;
+        width: 112px;
+        height: 112px;
+        min-width: 112px;
+        min-height: 112px;
     }
 
     .radial-menu-container .drag-bucket .bucket-icon {
-        font-size: 1.2em;
+        font-size: 2em;
     }
 
     .radial-menu-container .drag-bucket .bucket-label {
-        font-size: 0.45em;
+        font-size: 0.65em;
     }
 
     .radial-center-indicator {

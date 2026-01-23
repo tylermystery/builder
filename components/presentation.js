@@ -191,6 +191,12 @@ let dragBucketCustomComment = null;
 let dragBucketCompleted = null;
 // Merge indicator
 let dragMergeIndicator = null;
+// Merge options dialog elements
+let mergeOptionsDialog = null;
+let mergeDialogSourceName = null;
+let mergeDialogTargetName = null;
+let pendingMergeSource = null;
+let pendingMergeTarget = null;
 // Action tooltip
 let dragActionTooltip = null;
 let currentHoveredAction = null;
@@ -211,8 +217,8 @@ let radialMenuOrigin = { x: 0, y: 0 }; // The initial touch/click point
 let initialTouchPoint = null; // Track initial touch for direction detection
 let directionDetected = false; // Whether we've determined horizontal vs vertical
 const DIRECTION_THRESHOLD = 15; // Pixels of movement before deciding direction
-const RADIAL_MENU_RADIUS = 100; // Distance from center to buckets (desktop)
-const RADIAL_MENU_RADIUS_MOBILE = 80; // Distance from center to buckets (mobile)
+const RADIAL_MENU_RADIUS = 200; // Distance from center to buckets (desktop) - 2x size
+const RADIAL_MENU_RADIUS_MOBILE = 160; // Distance from center to buckets (mobile) - 2x size
 
 // Show/hide state for archived and completed items
 let showArchivedItems = true;
@@ -427,6 +433,10 @@ function ensureDOMElements() {
     dragBucketCompleted = document.getElementById('drag-bucket-completed');
     // Merge indicator
     dragMergeIndicator = document.getElementById('drag-merge-indicator');
+    // Merge options dialog
+    mergeOptionsDialog = document.getElementById('merge-options-dialog');
+    mergeDialogSourceName = document.getElementById('merge-source-name');
+    mergeDialogTargetName = document.getElementById('merge-target-name');
     // Action tooltip
     dragActionTooltip = document.getElementById('drag-action-tooltip');
     // Radial menu container
@@ -2319,6 +2329,12 @@ async function renderItineraryItem(item, index) {
         return '';
     }
 
+    // Check if this item has been combined into another item (it's a source)
+    if (isItemCombinedSource(recordId)) {
+        // Don't render combined source items - they're visually merged into target
+        return '';
+    }
+
     const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
     const name = record.fields.Name || 'Untitled Item';
     // Use selections if available, fall back to selectedOptionIndex for legacy
@@ -2386,18 +2402,72 @@ async function renderItineraryItem(item, index) {
         ? `<span class="item-emoji-indicator has-reactions" data-record-id="${recordId}" style="display: inline-flex;"><span class="emoji-indicator-emoji">${summaryEmoji}</span>${reactionCount > 1 ? `<span class="emoji-indicator-count">${reactionCount}</span>` : ''}</span>`
         : `<span class="item-emoji-indicator" data-record-id="${recordId}" style="display: none;"></span>`;
 
+    // Check for combined items indicator
+    const combinedSources = getCombinedSources(recordId);
+    let combinedIndicatorHTML = '';
+    let combinedSourcesHTML = '';
+    let combinedClass = '';
+    if (combinedSources.length > 0) {
+        combinedClass = 'is-combined';
+        const sourceNames = combinedSources.map(sourceId => {
+            const sourceRecord = state.records.all.find(r => r.id === sourceId);
+            return sourceRecord?.fields?.Name || 'Item';
+        });
+        combinedIndicatorHTML = `
+            <span class="item-combined-indicator" title="Combined from: ${sourceNames.join(', ')}">
+                <span class="combined-icon">✨</span>
+                <span>${combinedSources.length + 1} combined</span>
+            </span>
+        `;
+        // Build expandable combined sources section
+        combinedSourcesHTML = `
+            <div class="combined-sources-section">
+                <button class="combined-sources-toggle" data-record-id="${recordId}">
+                    <span>📋</span>
+                    <span>Show ${combinedSources.length} combined item${combinedSources.length > 1 ? 's' : ''}</span>
+                    <span class="toggle-arrow">▼</span>
+                </button>
+                <div class="combined-sources-list" data-record-id="${recordId}" style="display: none;">
+                    ${sourceNames.map((sourceName, idx) => `
+                        <div class="combined-source-item" data-source-id="${combinedSources[idx]}">
+                            <span>• ${sourceName}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // Check for group indicator
+    const itemGroup = getItemGroup(recordId);
+    let groupIndicatorHTML = '';
+    let groupClass = '';
+    if (itemGroup) {
+        const groupItems = Array.isArray(itemGroup) ? itemGroup : (itemGroup.items || []);
+        const groupName = itemGroup.name || `${groupItems.length} Options`;
+        groupClass = 'in-group';
+        groupIndicatorHTML = `
+            <span class="item-group-indicator" title="Part of: ${groupName}">
+                <span class="group-icon">📂</span>
+                <span class="group-count">${groupItems.length}</span>
+            </span>
+        `;
+    }
+
     // Task status button for this item
     const taskStatusButtonHTML = renderTaskStatusButton('item', recordId);
 
     // Each item is wrapped in its own section container for independent layout
     return `
-        <section class="itinerary-section itinerary-item-section ${statusClass} ${goalClass}" data-section="item-${recordId}" data-item-status="${itemStatus}" data-is-goal="${isGoal}">
+        <section class="itinerary-section itinerary-item-section ${statusClass} ${goalClass} ${combinedClass} ${groupClass}" data-section="item-${recordId}" data-item-status="${itemStatus}" data-is-goal="${isGoal}">
             <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}" data-item-name="${escapeHtml(name)}">
                 <div class="item-accordion-header" data-record-id="${recordId}">
                     <div class="item-accordion-title-row">
                         ${taskStatusButtonHTML}
                         <h3 class="item-accordion-title">${name}</h3>
                         ${emojiIndicatorHTML}
+                        ${combinedIndicatorHTML}
+                        ${groupIndicatorHTML}
                         <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
                         <span class="item-accordion-icon"></span>
                     </div>
@@ -2417,6 +2487,7 @@ async function renderItineraryItem(item, index) {
                                     <strong>Note:</strong> ${note}
                                 </div>
                             ` : ''}
+                            ${combinedSourcesHTML}
                             <div class="itinerary-item-reactions" data-record-id="${recordId}"></div>
                             <button class="itinerary-item-expand-btn" data-record-id="${recordId}" title="View full details">
                                 <span class="expand-btn-icon">↗</span>
@@ -2586,12 +2657,38 @@ async function renderAllItems() {
     // Update the event-level emoji indicator
     updateEventEmojiIndicator();
 
+    // Initialize combined sources toggle handlers
+    initializeCombinedSourcesToggles();
+
     // Initialize drag-and-drop functionality
     initializeItemDragDrop();
 
     // Initialize radial menu system
     initializeRadialMenu();
     attachRadialMenuListeners();
+}
+
+// Initialize toggle handlers for combined sources sections
+function initializeCombinedSourcesToggles() {
+    if (!itineraryItemsListEl) return;
+
+    const toggles = itineraryItemsListEl.querySelectorAll('.combined-sources-toggle');
+    toggles.forEach(toggle => {
+        toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const recordId = toggle.dataset.recordId;
+            const sourcesList = itineraryItemsListEl.querySelector(`.combined-sources-list[data-record-id="${recordId}"]`);
+            const arrow = toggle.querySelector('.toggle-arrow');
+
+            if (sourcesList) {
+                const isHidden = sourcesList.style.display === 'none';
+                sourcesList.style.display = isHidden ? 'block' : 'none';
+                if (arrow) {
+                    arrow.textContent = isHidden ? '▲' : '▼';
+                }
+            }
+        });
+    });
 }
 
 // Load SortableJS dynamically if not already loaded
@@ -2990,10 +3087,15 @@ function hideDragBuckets() {
         // Clear reaction/comment hover states
         clearReactionHoverStates();
         clearQuickCommentHoverStates();
-        // Hide merge indicator with explicit inline style reset
+        // Hide merge indicator with robust cssText override (same pattern as radial menu fix)
         if (dragMergeIndicator) {
-            dragMergeIndicator.style.display = 'none';
-            dragMergeIndicator.style.visibility = 'hidden';
+            dragMergeIndicator.style.cssText = `
+                position: fixed !important;
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+            `;
         }
         // Hide action tooltip
         hideDragActionTooltip();
@@ -3015,7 +3117,7 @@ function hideDragBuckets() {
 // Initialize radial menu with cloned bucket elements
 function initializeRadialMenu() {
     if (!radialMenuContainer || !dragBucketsEl) {
-        console.log('[Radial Menu] Missing radialMenuContainer or dragBucketsEl');
+        console.error('[Radial Menu] Missing radialMenuContainer or dragBucketsEl');
         return;
     }
 
@@ -3024,7 +3126,7 @@ function initializeRadialMenu() {
     const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
 
     if (!leftZone || !rightZone) {
-        console.log('[Radial Menu] Missing drag zones');
+        console.error('[Radial Menu] Missing drag zones');
         return;
     }
 
@@ -3067,7 +3169,7 @@ function positionRadialBuckets() {
     // Determine radius based on viewport
     const isMobile = window.innerWidth < 768;
     const radius = isMobile ? RADIAL_MENU_RADIUS_MOBILE : RADIAL_MENU_RADIUS;
-    const bucketSize = isMobile ? 56 : 64;
+    const bucketSize = isMobile ? 112 : 128; // 2x size
     const halfBucket = bucketSize / 2;
 
     // Calculate angle step - distribute buckets around a circle
@@ -3087,26 +3189,27 @@ function positionRadialBuckets() {
 
 // Show radial menu at a specific point
 function showRadialMenu(x, y, itemElement) {
+    console.log('[Radial Menu] showRadialMenu called at:', x, y);
+
     if (!dragBucketsEl || !radialMenuContainer) {
-        console.log('[Radial Menu] Cannot show - missing elements', { dragBucketsEl: !!dragBucketsEl, radialMenuContainer: !!radialMenuContainer });
+        console.error('[Radial Menu] Missing required elements');
         return;
     }
 
     // Safety check: Only show if presentation view is active
     if (!document.body.classList.contains('presentation-active')) {
-        console.log('[Radial Menu] Aborted - presentation view is not active');
+        console.warn('[Radial Menu] Aborted - presentation view is not active');
         return;
     }
 
-    // Check if radial menu has buckets
-    const bucketCount = radialMenuContainer.querySelectorAll('.drag-bucket').length;
-    console.log('[Radial Menu] Bucket count in radial container:', bucketCount);
-
-    // If no buckets, re-initialize
+    // Check if radial menu has buckets, re-initialize if needed
+    let bucketCount = radialMenuContainer.querySelectorAll('.drag-bucket').length;
     if (bucketCount === 0) {
-        console.log('[Radial Menu] No buckets found, re-initializing...');
+        console.log('[Radial Menu] No buckets found, initializing...');
         initializeRadialMenu();
+        bucketCount = radialMenuContainer.querySelectorAll('.drag-bucket').length;
     }
+    console.log('[Radial Menu] Bucket count in radial container:', bucketCount);
 
     // Store origin point
     radialMenuOrigin = { x, y };
@@ -3117,61 +3220,123 @@ function showRadialMenu(x, y, itemElement) {
     const viewportHeight = window.innerHeight;
     const isMobile = viewportWidth < 768;
     const radius = isMobile ? RADIAL_MENU_RADIUS_MOBILE : RADIAL_MENU_RADIUS;
-    const margin = radius + 40; // Extra margin for buckets
+    const margin = radius + 40;
 
     // Constrain position to keep radial menu within viewport
     let constrainedX = Math.max(margin, Math.min(viewportWidth - margin, x));
-    let constrainedY = Math.max(margin + 50, Math.min(viewportHeight - margin, y)); // Extra top margin for header
+    let constrainedY = Math.max(margin + 50, Math.min(viewportHeight - margin, y));
 
-    // Position radial menu container at the touch/click point
-    radialMenuContainer.style.left = `${constrainedX}px`;
-    radialMenuContainer.style.top = `${constrainedY}px`;
+    // === ROBUST VISIBILITY FIX ===
+    // Move radial menu container to document.body to bypass any parent CSS inheritance issues
+    if (radialMenuContainer.parentElement !== document.body) {
+        document.body.appendChild(radialMenuContainer);
+        console.log('[Radial Menu] Moved container to document.body');
+    }
+
+    // Apply comprehensive inline styles to container - use cssText for maximum override
+    radialMenuContainer.style.cssText = `
+        position: fixed !important;
+        left: ${constrainedX}px !important;
+        top: ${constrainedY}px !important;
+        width: 0 !important;
+        height: 0 !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        z-index: 99999 !important;
+        pointer-events: auto !important;
+        overflow: visible !important;
+        clip: auto !important;
+        clip-path: none !important;
+        transform: none !important;
+    `;
 
     // Show the drag buckets container in radial mode
     dragBucketsEl.classList.add('buckets-shown', 'drag-active', 'radial-mode');
 
-    // Debug: Log computed styles after adding classes
-    const computedStyle = window.getComputedStyle(dragBucketsEl);
-    console.log('[Radial Menu] dragBucketsEl after adding classes:', {
-        classes: Array.from(dragBucketsEl.classList),
-        display: computedStyle.display,
-        visibility: computedStyle.visibility,
-        opacity: computedStyle.opacity,
-        zIndex: computedStyle.zIndex
-    });
+    // Hide the left/right drag zones when showing radial menu
+    const leftZone = dragBucketsEl.querySelector('.drag-zone-left');
+    const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
+    if (leftZone) {
+        leftZone.style.cssText = 'display: none !important; visibility: hidden !important; opacity: 0 !important;';
+    }
+    if (rightZone) {
+        rightZone.style.cssText = 'display: none !important; visibility: hidden !important; opacity: 0 !important;';
+    }
 
     // Position buckets in radial layout
     positionRadialBuckets();
 
-    // Activate the radial menu with animation
+    // Activate the radial menu with robust bucket visibility
     requestAnimationFrame(() => {
         radialMenuContainer.classList.add('radial-active');
 
-        // Debug: Log radial container state
-        const containerStyle = window.getComputedStyle(radialMenuContainer);
-        console.log('[Radial Menu] radialMenuContainer after radial-active:', {
-            classes: Array.from(radialMenuContainer.classList),
-            display: containerStyle.display,
-            visibility: containerStyle.visibility,
-            opacity: containerStyle.opacity,
-            zIndex: containerStyle.zIndex,
-            left: containerStyle.left,
-            top: containerStyle.top
+        // Get viewport info for bucket sizing
+        const isMobileBucket = window.innerWidth < 768;
+        const bucketSize = isMobileBucket ? 112 : 128; // 2x size
+
+        // FORCE bucket visibility with comprehensive inline styles
+        const radialBuckets = radialMenuContainer.querySelectorAll('.drag-bucket');
+        console.log('[Radial Menu] Activating', radialBuckets.length, 'buckets');
+
+        radialBuckets.forEach((bucket) => {
+            // Get the original bucket class for background color
+            const originalId = bucket.dataset.originalBucket || bucket.id.replace('radial-', '');
+
+            // Determine background gradient based on bucket type
+            let background = 'rgba(0, 0, 0, 0.85)'; // default
+            if (originalId.includes('goal')) background = 'linear-gradient(135deg, rgba(255, 193, 7, 0.95), rgba(255, 160, 0, 0.95))';
+            else if (originalId.includes('ideas')) background = 'linear-gradient(135deg, rgba(156, 39, 176, 0.95), rgba(123, 31, 162, 0.95))';
+            else if (originalId.includes('lock')) background = 'linear-gradient(135deg, rgba(33, 150, 243, 0.95), rgba(25, 118, 210, 0.95))';
+            else if (originalId.includes('demote')) background = 'linear-gradient(135deg, rgba(255, 152, 0, 0.95), rgba(245, 124, 0, 0.95))';
+            else if (originalId.includes('archive')) background = 'linear-gradient(135deg, rgba(108, 117, 125, 0.95), rgba(73, 80, 87, 0.95))';
+            else if (originalId.includes('delete')) background = 'linear-gradient(135deg, rgba(220, 53, 69, 0.95), rgba(176, 42, 55, 0.95))';
+            else if (originalId.includes('reactions')) background = 'linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(56, 142, 60, 0.95))';
+            else if (originalId.includes('quick-comment')) background = 'linear-gradient(135deg, rgba(0, 188, 212, 0.95), rgba(0, 151, 167, 0.95))';
+            else if (originalId.includes('custom-comment')) background = 'linear-gradient(135deg, rgba(233, 30, 99, 0.95), rgba(194, 24, 91, 0.95))';
+            else if (originalId.includes('completed')) background = 'linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(46, 125, 50, 0.95))';
+
+            // Get existing position from CSS
+            const currentStyle = bucket.getAttribute('style') || '';
+            const leftMatch = currentStyle.match(/left:\s*(-?[\d.]+px)/);
+            const topMatch = currentStyle.match(/top:\s*(-?[\d.]+px)/);
+            const left = leftMatch ? leftMatch[1] : '0px';
+            const top = topMatch ? topMatch[1] : '0px';
+
+            // Apply comprehensive inline styles to FORCE visibility
+            bucket.style.cssText = `
+                position: absolute !important;
+                left: ${left} !important;
+                top: ${top} !important;
+                width: ${bucketSize}px !important;
+                height: ${bucketSize}px !important;
+                min-width: ${bucketSize}px !important;
+                min-height: ${bucketSize}px !important;
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                justify-content: center !important;
+                visibility: visible !important;
+                opacity: 0.95 !important;
+                pointer-events: auto !important;
+                z-index: 100000 !important;
+                transform: scale(1) !important;
+                background: ${background} !important;
+                border: 2px solid rgba(255, 255, 255, 0.5) !important;
+                border-radius: 50% !important;
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+                cursor: pointer !important;
+                transition: transform 0.15s ease-out, opacity 0.15s ease-out, box-shadow 0.15s ease-out !important;
+            `;
         });
 
-        // Debug: Log first bucket state
+        // Log final state for debugging
         const firstBucket = radialMenuContainer.querySelector('.drag-bucket');
         if (firstBucket) {
-            const bucketStyle = window.getComputedStyle(firstBucket);
+            const rect = firstBucket.getBoundingClientRect();
             console.log('[Radial Menu] First bucket state:', {
-                display: bucketStyle.display,
-                visibility: bucketStyle.visibility,
-                opacity: bucketStyle.opacity,
-                transform: bucketStyle.transform,
-                left: bucketStyle.left,
-                top: bucketStyle.top,
-                width: bucketStyle.width,
-                height: bucketStyle.height
+                visible: rect.width > 0 && rect.height > 0,
+                rect: { top: Math.round(rect.top), left: Math.round(rect.left), w: Math.round(rect.width), h: Math.round(rect.height) }
             });
         }
     });
@@ -3188,21 +3353,39 @@ function showRadialMenu(x, y, itemElement) {
 
 // Hide radial menu
 function hideRadialMenu() {
-    if (!dragBucketsEl || !radialMenuContainer) return;
+    console.log('[Radial Menu] Hiding');
+
+    if (!radialMenuContainer) {
+        return;
+    }
 
     radialMenuActive = false;
 
-    // Remove radial-active first for animation
+    // Remove radial-active class for animation
     radialMenuContainer.classList.remove('radial-active');
 
-    // Remove radial mode classes after a short delay for animation
-    setTimeout(() => {
-        dragBucketsEl.classList.remove('buckets-shown', 'drag-active', 'radial-mode');
-    }, 150);
+    // Reset container inline styles completely
+    radialMenuContainer.style.cssText = '';
 
-    // Clear hover states on radial buckets
+    // Restore left/right zones (clear inline styles so CSS controls them)
+    if (dragBucketsEl) {
+        const leftZone = dragBucketsEl.querySelector('.drag-zone-left');
+        const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
+        if (leftZone) leftZone.style.cssText = '';
+        if (rightZone) rightZone.style.cssText = '';
+
+        // Remove radial mode classes after a short delay for animation
+        setTimeout(() => {
+            dragBucketsEl.classList.remove('buckets-shown', 'drag-active', 'radial-mode');
+        }, 150);
+    }
+
+    // Clear hover states on radial buckets and reset their inline styles
     const buckets = radialMenuContainer.querySelectorAll('.drag-bucket');
-    buckets.forEach(b => b.classList.remove('drag-over'));
+    buckets.forEach(b => {
+        b.classList.remove('drag-over');
+        b.style.cssText = '';
+    });
 
     // Reset state
     initialTouchPoint = null;
@@ -3243,6 +3426,11 @@ function checkRadialBucketHover(clientX, clientY) {
             bucket.classList.add('drag-over');
             hoveredBucket = bucket;
 
+            // Dynamic scaling effect - make hovered bucket larger
+            bucket.style.transform = 'scale(1.25)';
+            bucket.style.zIndex = '100001';
+            bucket.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.5)';
+
             // Check for reaction/comment sub-options
             const reactionOptions = bucket.querySelectorAll('.reaction-option');
             const commentOptions = bucket.querySelectorAll('.quick-comment-option');
@@ -3268,6 +3456,10 @@ function checkRadialBucketHover(clientX, clientY) {
             });
         } else {
             bucket.classList.remove('drag-over');
+            // Reset scaling for non-hovered buckets
+            bucket.style.transform = 'scale(1)';
+            bucket.style.zIndex = '100000';
+            bucket.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4)';
             // Clear sub-options
             const options = bucket.querySelectorAll('.reaction-option, .quick-comment-option');
             options.forEach(opt => opt.classList.remove('drag-over'));
@@ -3520,6 +3712,11 @@ function clearMergeTarget() {
     const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
     if (currentTarget) {
         currentTarget.classList.remove('merge-target');
+        // Clear inline styles applied for merge highlighting
+        currentTarget.style.outline = '';
+        currentTarget.style.outlineOffset = '';
+        currentTarget.style.background = '';
+        currentTarget.style.zIndex = '';
     }
     potentialMergeTarget = null;
 }
@@ -3608,7 +3805,14 @@ function checkBucketHover(event) {
     } else {
         clearMergeTarget();
         if (dragMergeIndicator) {
-            dragMergeIndicator.style.display = 'none';
+            // Use robust hide pattern
+            dragMergeIndicator.style.cssText = `
+                position: fixed !important;
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+            `;
         }
     }
 }
@@ -3734,11 +3938,23 @@ function checkQuickCommentOptionHover(clientX, clientY) {
 }
 
 // Check if hovering over another item for potential merge
+let mergeHoverDebugCounter = 0;
 function checkMergeTargetHover(clientX, clientY) {
-    if (!itineraryItemsListEl) return;
+    if (!itineraryItemsListEl) {
+        console.log('[Merge DEBUG] No itineraryItemsListEl available');
+        return;
+    }
 
     const items = itineraryItemsListEl.querySelectorAll('.itinerary-item-section:not(.sortable-drag)');
     let foundTarget = null;
+
+    // Debug every 20th call to avoid console spam
+    mergeHoverDebugCounter++;
+    const shouldLog = mergeHoverDebugCounter % 20 === 0;
+
+    if (shouldLog) {
+        console.log('[Merge DEBUG] Checking merge hover at:', clientX, clientY, 'items count:', items.length, 'currentDraggedRecordId:', currentDraggedRecordId);
+    }
 
     items.forEach(item => {
         const article = item.querySelector('.itinerary-item');
@@ -3750,6 +3966,9 @@ function checkMergeTargetHover(clientX, clientY) {
         const rect = item.getBoundingClientRect();
         if (isPointInRect(clientX, clientY, rect)) {
             foundTarget = { element: item, recordId: itemRecordId };
+            if (shouldLog) {
+                console.log('[Merge DEBUG] Found target item:', itemRecordId);
+            }
         }
     });
 
@@ -3757,22 +3976,69 @@ function checkMergeTargetHover(clientX, clientY) {
     const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
     if (currentTarget && (!foundTarget || currentTarget !== foundTarget.element)) {
         currentTarget.classList.remove('merge-target');
+        // Reset inline styles when removing merge-target
+        currentTarget.style.outline = '';
+        currentTarget.style.outlineOffset = '';
+        currentTarget.style.background = '';
+        currentTarget.style.animation = '';
     }
 
     if (foundTarget) {
         foundTarget.element.classList.add('merge-target');
+        // Apply inline styles for robust visibility (same pattern as radial menu fix)
+        // This ensures the pulsing green outline appears above all other layers
+        foundTarget.element.style.cssText = foundTarget.element.style.cssText + `
+            outline: 3px solid rgba(76, 175, 80, 0.9) !important;
+            outline-offset: 4px !important;
+            background: rgba(76, 175, 80, 0.15) !important;
+            position: relative !important;
+            z-index: 100 !important;
+        `;
         potentialMergeTarget = foundTarget;
+        console.log('[Merge Target] Highlighting item:', foundTarget.recordId);
 
-        // Show merge indicator near cursor
+        // Show merge indicator near cursor with ROBUST VISIBILITY FIX
+        // (Same pattern as radial menu fix to ensure visibility above all layers)
         if (dragMergeIndicator) {
-            dragMergeIndicator.style.display = 'flex';
-            dragMergeIndicator.style.left = `${clientX + 20}px`;
-            dragMergeIndicator.style.top = `${clientY - 20}px`;
+            // Move merge indicator to document.body to bypass any parent CSS inheritance issues
+            if (dragMergeIndicator.parentElement !== document.body) {
+                document.body.appendChild(dragMergeIndicator);
+                console.log('[Merge Indicator] Moved to document.body for proper layering');
+            }
+
+            // Apply comprehensive inline styles - use cssText for maximum override
+            dragMergeIndicator.style.cssText = `
+                position: fixed !important;
+                left: ${clientX + 20}px !important;
+                top: ${clientY - 20}px !important;
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                z-index: 99998 !important;
+                pointer-events: none !important;
+                padding: 12px 20px !important;
+                background: linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(56, 142, 60, 0.95)) !important;
+                border: 2px solid rgba(255, 255, 255, 0.8) !important;
+                border-radius: 20px !important;
+                box-shadow: 0 8px 32px rgba(76, 175, 80, 0.5) !important;
+                align-items: center !important;
+                gap: 8px !important;
+                animation: pulse-merge 1s ease infinite !important;
+            `;
+
+            console.log('[Merge Indicator] Shown at:', clientX + 20, clientY - 20);
         }
     } else {
         potentialMergeTarget = null;
         if (dragMergeIndicator) {
-            dragMergeIndicator.style.display = 'none';
+            // Robust hide with cssText to override all styles
+            dragMergeIndicator.style.cssText = `
+                position: fixed !important;
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+            `;
         }
     }
 }
@@ -4252,64 +4518,364 @@ async function openMergeDialog(sourceRecordId, targetRecordId) {
     const sourceName = sourceRecord?.fields?.Name || 'Source item';
     const targetName = targetRecord?.fields?.Name || 'Target item';
 
-    // Show merge options dialog
-    const choice = confirm(
-        `Merge Options for "${sourceName}" and "${targetName}":\n\n` +
-        `Click OK to create a related category (keeps both items linked).\n` +
-        `Click Cancel to cancel the merge.`
-    );
+    // Store pending merge info
+    pendingMergeSource = sourceRecordId;
+    pendingMergeTarget = targetRecordId;
 
-    if (choice) {
-        await createRelatedCategory(sourceRecordId, targetRecordId);
+    // Update dialog content with item names
+    if (mergeDialogSourceName) {
+        mergeDialogSourceName.textContent = sourceName;
     }
+    if (mergeDialogTargetName) {
+        mergeDialogTargetName.textContent = targetName;
+    }
+
+    // Show the merge options dialog
+    if (mergeOptionsDialog) {
+        mergeOptionsDialog.style.display = 'flex';
+    }
+
+    log('Presentation', `Merge dialog opened for ${sourceRecordId} and ${targetRecordId}`);
 }
 
-// Create a related category linking two items
+// Close the merge options dialog
+function closeMergeDialog() {
+    if (mergeOptionsDialog) {
+        mergeOptionsDialog.style.display = 'none';
+    }
+    pendingMergeSource = null;
+    pendingMergeTarget = null;
+}
+
+// Handle merge option: Combine into single idea
+async function handleMergeCombine() {
+    console.log('[Presentation DEBUG] handleMergeCombine called');
+    if (!pendingMergeSource || !pendingMergeTarget) {
+        closeMergeDialog();
+        return;
+    }
+
+    const sourceId = pendingMergeSource;
+    const targetId = pendingMergeTarget;
+    closeMergeDialog();
+
+    await combineItemsIntoOne(sourceId, targetId);
+}
+
+// Handle merge option: Group as options/category
+async function handleMergeGroup() {
+    console.log('[Presentation DEBUG] handleMergeGroup called');
+    if (!pendingMergeSource || !pendingMergeTarget) {
+        closeMergeDialog();
+        return;
+    }
+
+    const sourceId = pendingMergeSource;
+    const targetId = pendingMergeTarget;
+    closeMergeDialog();
+
+    await createRelatedCategory(sourceId, targetId);
+}
+
+// Combine two items into a single cohesive idea
+async function combineItemsIntoOne(sourceRecordId, targetRecordId) {
+    console.log('[Presentation DEBUG] combineItemsIntoOne called:', sourceRecordId, targetRecordId);
+
+    // Initialize combinedItems if not exists
+    // Structure: Map<targetRecordId, Set<sourceRecordIds>>
+    if (!state.session.combinedItems) {
+        state.session.combinedItems = new Map();
+    }
+
+    const sourceRecord = state.records.all.find(r => r.id === sourceRecordId);
+    const targetRecord = state.records.all.find(r => r.id === targetRecordId);
+    const sourceName = sourceRecord?.fields?.Name || 'Item';
+    const targetName = targetRecord?.fields?.Name || 'Item';
+
+    // Check if source is already combined into something else
+    let actualTarget = targetRecordId;
+    for (const [target, sources] of state.session.combinedItems.entries()) {
+        if (sources.has(sourceRecordId)) {
+            // Source is already a source of another combined item
+            showToast(`"${sourceName}" is already combined with another item`, 'info');
+            return;
+        }
+        if (sources.has(targetRecordId)) {
+            // Target is a source of another combined item - combine into that target instead
+            actualTarget = target;
+            break;
+        }
+    }
+
+    // If target is itself a source in combinedItems, find the real target
+    for (const [target, sources] of state.session.combinedItems.entries()) {
+        if (sources.has(actualTarget)) {
+            actualTarget = target;
+            break;
+        }
+    }
+
+    // Check if source is actually a combined target
+    if (state.session.combinedItems.has(sourceRecordId)) {
+        // Source has items combined into it - merge those into the target
+        const sourcesCombined = state.session.combinedItems.get(sourceRecordId);
+        if (!state.session.combinedItems.has(actualTarget)) {
+            state.session.combinedItems.set(actualTarget, new Set());
+        }
+        const targetSources = state.session.combinedItems.get(actualTarget);
+
+        // Add the source itself and all its combined sources
+        targetSources.add(sourceRecordId);
+        sourcesCombined.forEach(s => targetSources.add(s));
+
+        // Remove the old combined entry
+        state.session.combinedItems.delete(sourceRecordId);
+    } else {
+        // Simple case: just add source to target's combined set
+        if (!state.session.combinedItems.has(actualTarget)) {
+            state.session.combinedItems.set(actualTarget, new Set());
+        }
+        state.session.combinedItems.get(actualTarget).add(sourceRecordId);
+    }
+
+    const finalTargetRecord = state.records.all.find(r => r.id === actualTarget);
+    const finalTargetName = finalTargetRecord?.fields?.Name || 'Item';
+
+    showToast(`"${sourceName}" combined into "${finalTargetName}"`, 'success');
+
+    // Re-render items
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Combined ${sourceRecordId} into ${actualTarget}`);
+}
+
+// Create a related category linking two items (Group as Options)
 async function createRelatedCategory(recordId1, recordId2) {
     console.log('[Presentation DEBUG] createRelatedCategory called:', recordId1, recordId2);
 
     // Initialize relatedGroups if not exists
+    // Structure: Array of { id: string, name: string, items: string[] }
     if (!state.session.relatedGroups) {
         state.session.relatedGroups = [];
     }
 
-    // Create a new group or add to existing group
-    const existingGroup1 = state.session.relatedGroups.find(g => g.includes(recordId1));
-    const existingGroup2 = state.session.relatedGroups.find(g => g.includes(recordId2));
+    const record1 = state.records.all.find(r => r.id === recordId1);
+    const record2 = state.records.all.find(r => r.id === recordId2);
+    const name1 = record1?.fields?.Name || 'Item 1';
+    const name2 = record2?.fields?.Name || 'Item 2';
+
+    // Find existing groups that contain these items
+    const existingGroup1 = state.session.relatedGroups.find(g =>
+        (Array.isArray(g) ? g.includes(recordId1) : g.items?.includes(recordId1))
+    );
+    const existingGroup2 = state.session.relatedGroups.find(g =>
+        (Array.isArray(g) ? g.includes(recordId2) : g.items?.includes(recordId2))
+    );
+
+    // Normalize group format (handle legacy array format)
+    const getGroupItems = (g) => Array.isArray(g) ? g : (g.items || []);
+    const getGroupId = (g) => Array.isArray(g) ? null : g.id;
 
     if (existingGroup1 && existingGroup2 && existingGroup1 === existingGroup2) {
         // Already in same group
-        showToast('Items are already related', 'info');
+        showToast('Items are already grouped together', 'info');
         return;
     }
 
     if (existingGroup1 && existingGroup2) {
         // Merge two groups
-        const mergedGroup = [...new Set([...existingGroup1, ...existingGroup2])];
+        const items1 = getGroupItems(existingGroup1);
+        const items2 = getGroupItems(existingGroup2);
+        const mergedItems = [...new Set([...items1, ...items2])];
+
+        // Create new merged group with combined name
+        const newGroup = {
+            id: `group-${Date.now()}`,
+            name: generateGroupName(mergedItems),
+            items: mergedItems
+        };
+
         state.session.relatedGroups = state.session.relatedGroups.filter(
             g => g !== existingGroup1 && g !== existingGroup2
         );
-        state.session.relatedGroups.push(mergedGroup);
+        state.session.relatedGroups.push(newGroup);
+
+        showToast(`Merged two option groups`, 'success');
     } else if (existingGroup1) {
-        existingGroup1.push(recordId2);
+        // Add to existing group 1
+        const items = getGroupItems(existingGroup1);
+        if (!items.includes(recordId2)) {
+            items.push(recordId2);
+            // Update group structure if needed
+            if (Array.isArray(existingGroup1)) {
+                const idx = state.session.relatedGroups.indexOf(existingGroup1);
+                state.session.relatedGroups[idx] = {
+                    id: `group-${Date.now()}`,
+                    name: generateGroupName(items),
+                    items: items
+                };
+            } else {
+                existingGroup1.items = items;
+                existingGroup1.name = generateGroupName(items);
+            }
+        }
+        showToast(`"${name2}" added to options group`, 'success');
     } else if (existingGroup2) {
-        existingGroup2.push(recordId1);
+        // Add to existing group 2
+        const items = getGroupItems(existingGroup2);
+        if (!items.includes(recordId1)) {
+            items.push(recordId1);
+            // Update group structure if needed
+            if (Array.isArray(existingGroup2)) {
+                const idx = state.session.relatedGroups.indexOf(existingGroup2);
+                state.session.relatedGroups[idx] = {
+                    id: `group-${Date.now()}`,
+                    name: generateGroupName(items),
+                    items: items
+                };
+            } else {
+                existingGroup2.items = items;
+                existingGroup2.name = generateGroupName(items);
+            }
+        }
+        showToast(`"${name1}" added to options group`, 'success');
     } else {
         // Create new group
-        state.session.relatedGroups.push([recordId1, recordId2]);
+        const newGroup = {
+            id: `group-${Date.now()}`,
+            name: generateGroupName([recordId1, recordId2]),
+            items: [recordId1, recordId2]
+        };
+        state.session.relatedGroups.push(newGroup);
+        showToast(`"${name1}" and "${name2}" grouped as options`, 'success');
     }
-
-    const record1 = state.records.all.find(r => r.id === recordId1);
-    const record2 = state.records.all.find(r => r.id === recordId2);
-    showToast(`"${record1?.fields?.Name}" and "${record2?.fields?.Name}" are now related`, 'success');
 
     // Re-render items
     await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
 
     // Save session
     triggerSave();
 
-    log('Presentation', `Created related category for ${recordId1} and ${recordId2}`);
+    log('Presentation', `Created/updated option group for ${recordId1} and ${recordId2}`);
+}
+
+// Generate a name for a group based on its items
+function generateGroupName(itemIds) {
+    if (!itemIds || itemIds.length === 0) return 'Options';
+
+    // Try to find common category or type among items
+    const categories = new Set();
+    const types = new Set();
+
+    itemIds.forEach(id => {
+        const record = state.records.all.find(r => r.id === id);
+        if (record?.fields?.Category) {
+            categories.add(record.fields.Category);
+        }
+        if (record?.fields?.Type) {
+            types.add(record.fields.Type);
+        }
+    });
+
+    // If all items share a category, use it
+    if (categories.size === 1) {
+        return `${[...categories][0]} Options`;
+    }
+
+    // If all items share a type, use it
+    if (types.size === 1) {
+        return `${[...types][0]} Options`;
+    }
+
+    // Default name
+    return `${itemIds.length} Options`;
+}
+
+// Check if an item is a source that has been combined into another item
+function isItemCombinedSource(recordId) {
+    if (!state.session.combinedItems) return false;
+
+    for (const sources of state.session.combinedItems.values()) {
+        if (sources.has(recordId)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Get the combined target for a source item
+function getCombinedTarget(sourceRecordId) {
+    if (!state.session.combinedItems) return null;
+
+    for (const [target, sources] of state.session.combinedItems.entries()) {
+        if (sources.has(sourceRecordId)) {
+            return target;
+        }
+    }
+    return null;
+}
+
+// Get all source items that have been combined into a target
+function getCombinedSources(targetRecordId) {
+    if (!state.session.combinedItems) return [];
+
+    const sources = state.session.combinedItems.get(targetRecordId);
+    return sources ? Array.from(sources) : [];
+}
+
+// Check if an item belongs to a related group
+function getItemGroup(recordId) {
+    if (!state.session.relatedGroups) return null;
+
+    return state.session.relatedGroups.find(g => {
+        const items = Array.isArray(g) ? g : (g.items || []);
+        return items.includes(recordId);
+    });
+}
+
+// Initialize merge dialog event listeners
+function initializeMergeDialogListeners() {
+    // Close button
+    const closeBtn = document.getElementById('merge-dialog-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeMergeDialog);
+    }
+
+    // Cancel button
+    const cancelBtn = document.getElementById('merge-dialog-cancel');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', closeMergeDialog);
+    }
+
+    // Combine option button
+    const combineBtn = document.getElementById('merge-option-combine');
+    if (combineBtn) {
+        combineBtn.addEventListener('click', handleMergeCombine);
+    }
+
+    // Group option button
+    const groupBtn = document.getElementById('merge-option-group');
+    if (groupBtn) {
+        groupBtn.addEventListener('click', handleMergeGroup);
+    }
+
+    // Close on backdrop click
+    if (mergeOptionsDialog) {
+        mergeOptionsDialog.addEventListener('click', (e) => {
+            if (e.target === mergeOptionsDialog) {
+                closeMergeDialog();
+            }
+        });
+    }
+
+    console.log('[Presentation DEBUG] Merge dialog listeners initialized');
 }
 
 // Update the status toggle buttons visibility and state
@@ -8776,6 +9342,9 @@ export async function showPresentationView(listType, startRecordId = null) {
             }, 100);
         }
     }
+
+    // Initialize merge dialog event listeners
+    initializeMergeDialogListeners();
 
     log('Presentation', 'Itinerary view rendered successfully');
 }

@@ -534,6 +534,26 @@ export async function loadSessionFromAirtable(sessionId) {
                 state.session.archivedItems = new Set(savedState.archivedItems || []);
                 state.session.completedItems = new Set(savedState.completedItems || []);
 
+                // Restore combined items: Object<targetId, Array<sourceIds>> -> Map<targetId, Set<sourceIds>>
+                if (savedState.combinedItems && typeof savedState.combinedItems === 'object') {
+                    state.session.combinedItems = new Map(
+                        Object.entries(savedState.combinedItems).map(([target, sources]) => [
+                            target,
+                            new Set(Array.isArray(sources) ? sources : [])
+                        ])
+                    );
+                    console.log('[SESSION-LOAD DEBUG] Restored combinedItems:', {
+                        size: state.session.combinedItems.size,
+                        entries: Array.from(state.session.combinedItems.entries()).map(([t, s]) => [t, Array.from(s)])
+                    });
+                } else {
+                    state.session.combinedItems = new Map();
+                }
+
+                // Restore related groups (grouped options)
+                state.session.relatedGroups = Array.isArray(savedState.relatedGroups) ? savedState.relatedGroups : [];
+                console.log('[SESSION-LOAD DEBUG] Restored relatedGroups:', state.session.relatedGroups);
+
                 // DEBUG: Log restored archived/completed items
                 console.log('[SESSION-LOAD DEBUG] Restored archivedItems:', {
                     rawData: savedState.archivedItems,
@@ -628,6 +648,8 @@ export async function loadSessionFromAirtable(sessionId) {
                 state.session.planItemOrder = [];
                 state.session.archivedItems = new Set();
                 state.session.completedItems = new Set();
+                state.session.combinedItems = new Map();
+                state.session.relatedGroups = [];
             }
         } else {
              log('API', `Session ${sessionId} has no 'Items with Variations' data.`);
@@ -768,6 +790,17 @@ export async function saveSessionToAirtable() {
         planItemOrder: state.session.planItemOrder || [],
         archivedItems: Array.from(state.session.archivedItems || []),
         completedItems: Array.from(state.session.completedItems || []),
+        // Combined items: Map<targetId, Set<sourceIds>> -> Object<targetId, Array<sourceIds>>
+        combinedItems: state.session.combinedItems
+            ? Object.fromEntries(
+                Array.from(state.session.combinedItems.entries()).map(([target, sources]) => [
+                    target,
+                    Array.from(sources)
+                ])
+            )
+            : {},
+        // Related groups (grouped options)
+        relatedGroups: state.session.relatedGroups || [],
         // Store full custom record data for persistence across refreshes
         // Uses 'aiRecords' key for backward compatibility with existing sessions
         // Contains both AI-generated items and manually added items
