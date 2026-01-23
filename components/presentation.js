@@ -3087,10 +3087,15 @@ function hideDragBuckets() {
         // Clear reaction/comment hover states
         clearReactionHoverStates();
         clearQuickCommentHoverStates();
-        // Hide merge indicator with explicit inline style reset
+        // Hide merge indicator with robust cssText override (same pattern as radial menu fix)
         if (dragMergeIndicator) {
-            dragMergeIndicator.style.display = 'none';
-            dragMergeIndicator.style.visibility = 'hidden';
+            dragMergeIndicator.style.cssText = `
+                position: fixed !important;
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+            `;
         }
         // Hide action tooltip
         hideDragActionTooltip();
@@ -3707,6 +3712,11 @@ function clearMergeTarget() {
     const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
     if (currentTarget) {
         currentTarget.classList.remove('merge-target');
+        // Clear inline styles applied for merge highlighting
+        currentTarget.style.outline = '';
+        currentTarget.style.outlineOffset = '';
+        currentTarget.style.background = '';
+        currentTarget.style.zIndex = '';
     }
     potentialMergeTarget = null;
 }
@@ -3795,7 +3805,14 @@ function checkBucketHover(event) {
     } else {
         clearMergeTarget();
         if (dragMergeIndicator) {
-            dragMergeIndicator.style.display = 'none';
+            // Use robust hide pattern
+            dragMergeIndicator.style.cssText = `
+                position: fixed !important;
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+            `;
         }
     }
 }
@@ -3921,11 +3938,23 @@ function checkQuickCommentOptionHover(clientX, clientY) {
 }
 
 // Check if hovering over another item for potential merge
+let mergeHoverDebugCounter = 0;
 function checkMergeTargetHover(clientX, clientY) {
-    if (!itineraryItemsListEl) return;
+    if (!itineraryItemsListEl) {
+        console.log('[Merge DEBUG] No itineraryItemsListEl available');
+        return;
+    }
 
     const items = itineraryItemsListEl.querySelectorAll('.itinerary-item-section:not(.sortable-drag)');
     let foundTarget = null;
+
+    // Debug every 20th call to avoid console spam
+    mergeHoverDebugCounter++;
+    const shouldLog = mergeHoverDebugCounter % 20 === 0;
+
+    if (shouldLog) {
+        console.log('[Merge DEBUG] Checking merge hover at:', clientX, clientY, 'items count:', items.length, 'currentDraggedRecordId:', currentDraggedRecordId);
+    }
 
     items.forEach(item => {
         const article = item.querySelector('.itinerary-item');
@@ -3937,6 +3966,9 @@ function checkMergeTargetHover(clientX, clientY) {
         const rect = item.getBoundingClientRect();
         if (isPointInRect(clientX, clientY, rect)) {
             foundTarget = { element: item, recordId: itemRecordId };
+            if (shouldLog) {
+                console.log('[Merge DEBUG] Found target item:', itemRecordId);
+            }
         }
     });
 
@@ -3944,24 +3976,69 @@ function checkMergeTargetHover(clientX, clientY) {
     const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
     if (currentTarget && (!foundTarget || currentTarget !== foundTarget.element)) {
         currentTarget.classList.remove('merge-target');
+        // Reset inline styles when removing merge-target
+        currentTarget.style.outline = '';
+        currentTarget.style.outlineOffset = '';
+        currentTarget.style.background = '';
+        currentTarget.style.animation = '';
     }
 
     if (foundTarget) {
         foundTarget.element.classList.add('merge-target');
+        // Apply inline styles for robust visibility (same pattern as radial menu fix)
+        // This ensures the pulsing green outline appears above all other layers
+        foundTarget.element.style.cssText = foundTarget.element.style.cssText + `
+            outline: 3px solid rgba(76, 175, 80, 0.9) !important;
+            outline-offset: 4px !important;
+            background: rgba(76, 175, 80, 0.15) !important;
+            position: relative !important;
+            z-index: 100 !important;
+        `;
         potentialMergeTarget = foundTarget;
+        console.log('[Merge Target] Highlighting item:', foundTarget.recordId);
 
-        // Show merge indicator near cursor
+        // Show merge indicator near cursor with ROBUST VISIBILITY FIX
+        // (Same pattern as radial menu fix to ensure visibility above all layers)
         if (dragMergeIndicator) {
-            dragMergeIndicator.style.display = 'flex';
-            dragMergeIndicator.style.visibility = 'visible';
-            dragMergeIndicator.style.left = `${clientX + 20}px`;
-            dragMergeIndicator.style.top = `${clientY - 20}px`;
+            // Move merge indicator to document.body to bypass any parent CSS inheritance issues
+            if (dragMergeIndicator.parentElement !== document.body) {
+                document.body.appendChild(dragMergeIndicator);
+                console.log('[Merge Indicator] Moved to document.body for proper layering');
+            }
+
+            // Apply comprehensive inline styles - use cssText for maximum override
+            dragMergeIndicator.style.cssText = `
+                position: fixed !important;
+                left: ${clientX + 20}px !important;
+                top: ${clientY - 20}px !important;
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                z-index: 99998 !important;
+                pointer-events: none !important;
+                padding: 12px 20px !important;
+                background: linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(56, 142, 60, 0.95)) !important;
+                border: 2px solid rgba(255, 255, 255, 0.8) !important;
+                border-radius: 20px !important;
+                box-shadow: 0 8px 32px rgba(76, 175, 80, 0.5) !important;
+                align-items: center !important;
+                gap: 8px !important;
+                animation: pulse-merge 1s ease infinite !important;
+            `;
+
+            console.log('[Merge Indicator] Shown at:', clientX + 20, clientY - 20);
         }
     } else {
         potentialMergeTarget = null;
         if (dragMergeIndicator) {
-            dragMergeIndicator.style.display = 'none';
-            dragMergeIndicator.style.visibility = 'hidden';
+            // Robust hide with cssText to override all styles
+            dragMergeIndicator.style.cssText = `
+                position: fixed !important;
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+            `;
         }
     }
 }
