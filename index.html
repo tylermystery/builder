@@ -3711,7 +3711,7 @@ select:focus-visible,
                 <div class="radial-direction-indicator"></div>
                 <!-- Buckets will be cloned here dynamically -->
             </div>
-            <!-- LEFT SIDE: Action Zones (vertical strip) -->
+            <!-- LEFT SIDE: Actions and Comments (vertical strip) -->
             <div class="drag-zone-left">
                 <!-- Top: Goal/Inspiration -->
                 <div id="drag-bucket-goal" class="drag-bucket drag-bucket-goal" data-bucket="goal">
@@ -3743,26 +3743,6 @@ select:focus-visible,
                     <span class="bucket-icon">🗑️</span>
                     <span class="bucket-label">Delete</span>
                 </div>
-            </div>
-
-            <!-- RIGHT SIDE: Reaction and Comment Zones (vertical strip) -->
-            <div class="drag-zone-right">
-                <!-- Reaction Zone - emojis appear progressively as drag continues -->
-                <div id="drag-bucket-reactions" class="drag-bucket drag-bucket-reactions" data-bucket="reactions">
-                    <span class="bucket-icon">👍</span>
-                    <span class="bucket-label">React</span>
-                    <!-- Progressive emoji options revealed on hover -->
-                    <div class="reaction-options">
-                        <span class="reaction-option" data-emoji="👍" title="Like">👍</span>
-                        <span class="reaction-option" data-emoji="❤️" title="Love">❤️</span>
-                        <span class="reaction-option" data-emoji="🔥" title="Fire">🔥</span>
-                        <span class="reaction-option" data-emoji="⭐" title="Star">⭐</span>
-                        <span class="reaction-option" data-emoji="😊" title="Happy">😊</span>
-                        <span class="reaction-option" data-emoji="🎉" title="Celebrate">🎉</span>
-                        <span class="reaction-option" data-emoji="👀" title="Eyes">👀</span>
-                        <span class="reaction-option" data-emoji="💯" title="100">💯</span>
-                    </div>
-                </div>
                 <!-- Quick Comments -->
                 <div id="drag-bucket-quick-comment" class="drag-bucket drag-bucket-quick-comment" data-bucket="quick-comment">
                     <span class="bucket-icon">💬</span>
@@ -3782,7 +3762,27 @@ select:focus-visible,
                     <span class="bucket-icon">✏️</span>
                     <span class="bucket-label">Comment</span>
                 </div>
-                <!-- Completed (kept from original) -->
+            </div>
+
+            <!-- RIGHT SIDE: Reactions only (vertical strip) -->
+            <div class="drag-zone-right">
+                <!-- Reaction Zone - emojis appear progressively as drag continues -->
+                <div id="drag-bucket-reactions" class="drag-bucket drag-bucket-reactions" data-bucket="reactions">
+                    <span class="bucket-icon">👍</span>
+                    <span class="bucket-label">React</span>
+                    <!-- Progressive emoji options revealed on hover -->
+                    <div class="reaction-options">
+                        <span class="reaction-option" data-emoji="👍" title="Like">👍</span>
+                        <span class="reaction-option" data-emoji="❤️" title="Love">❤️</span>
+                        <span class="reaction-option" data-emoji="🔥" title="Fire">🔥</span>
+                        <span class="reaction-option" data-emoji="⭐" title="Star">⭐</span>
+                        <span class="reaction-option" data-emoji="😊" title="Happy">😊</span>
+                        <span class="reaction-option" data-emoji="🎉" title="Celebrate">🎉</span>
+                        <span class="reaction-option" data-emoji="👀" title="Eyes">👀</span>
+                        <span class="reaction-option" data-emoji="💯" title="100">💯</span>
+                    </div>
+                </div>
+                <!-- Completed -->
                 <div id="drag-bucket-completed" class="drag-bucket drag-bucket-completed" data-bucket="completed">
                     <span class="bucket-icon">✓</span>
                     <span class="bucket-label">Done</span>

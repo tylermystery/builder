@@ -7121,18 +7121,19 @@ body.presentation-active .radial-menu-container .drag-bucket {
 
 /* Radial menu bucket hover state */
 .radial-menu-container .drag-bucket.drag-over {
-    transform: scale(1.2);
+    transform: scale(1.25);
     opacity: 1;
     z-index: 10;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
-/* Radial menu bucket labels - smaller for radial layout */
+/* Radial menu bucket labels - proportionally larger for 2x radial layout */
 .radial-menu-container .drag-bucket .bucket-icon {
-    font-size: 1.4em;
+    font-size: 2.4em;
 }
 
 .radial-menu-container .drag-bucket .bucket-label {
-    font-size: 0.5em;
+    font-size: 0.75em;
     letter-spacing: 0.3px;
 }
 
@@ -7199,18 +7200,18 @@ body.presentation-active .radial-menu-container .drag-bucket {
 /* Mobile adjustments for radial menu */
 @media (max-width: 768px) {
     .radial-menu-container .drag-bucket {
-        width: 56px;
-        height: 56px;
-        min-width: 56px;
-        min-height: 56px;
+        width: 112px;
+        height: 112px;
+        min-width: 112px;
+        min-height: 112px;
     }
 
     .radial-menu-container .drag-bucket .bucket-icon {
-        font-size: 1.2em;
+        font-size: 2em;
     }
 
     .radial-menu-container .drag-bucket .bucket-label {
-        font-size: 0.45em;
+        font-size: 0.65em;
     }
 
     .radial-center-indicator {

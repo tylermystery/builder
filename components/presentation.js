@@ -211,8 +211,8 @@ let radialMenuOrigin = { x: 0, y: 0 }; // The initial touch/click point
 let initialTouchPoint = null; // Track initial touch for direction detection
 let directionDetected = false; // Whether we've determined horizontal vs vertical
 const DIRECTION_THRESHOLD = 15; // Pixels of movement before deciding direction
-const RADIAL_MENU_RADIUS = 100; // Distance from center to buckets (desktop)
-const RADIAL_MENU_RADIUS_MOBILE = 80; // Distance from center to buckets (mobile)
+const RADIAL_MENU_RADIUS = 200; // Distance from center to buckets (desktop) - 2x size
+const RADIAL_MENU_RADIUS_MOBILE = 160; // Distance from center to buckets (mobile) - 2x size
 
 // Show/hide state for archived and completed items
 let showArchivedItems = true;
@@ -3015,7 +3015,7 @@ function hideDragBuckets() {
 // Initialize radial menu with cloned bucket elements
 function initializeRadialMenu() {
     if (!radialMenuContainer || !dragBucketsEl) {
-        console.log('[Radial Menu] Missing radialMenuContainer or dragBucketsEl');
+        console.error('[Radial Menu] Missing radialMenuContainer or dragBucketsEl');
         return;
     }
 
@@ -3024,7 +3024,7 @@ function initializeRadialMenu() {
     const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
 
     if (!leftZone || !rightZone) {
-        console.log('[Radial Menu] Missing drag zones');
+        console.error('[Radial Menu] Missing drag zones');
         return;
     }
 
@@ -3067,7 +3067,7 @@ function positionRadialBuckets() {
     // Determine radius based on viewport
     const isMobile = window.innerWidth < 768;
     const radius = isMobile ? RADIAL_MENU_RADIUS_MOBILE : RADIAL_MENU_RADIUS;
-    const bucketSize = isMobile ? 56 : 64;
+    const bucketSize = isMobile ? 112 : 128; // 2x size
     const halfBucket = bucketSize / 2;
 
     // Calculate angle step - distribute buckets around a circle
@@ -3087,26 +3087,27 @@ function positionRadialBuckets() {
 
 // Show radial menu at a specific point
 function showRadialMenu(x, y, itemElement) {
+    console.log('[Radial Menu] showRadialMenu called at:', x, y);
+
     if (!dragBucketsEl || !radialMenuContainer) {
-        console.log('[Radial Menu] Cannot show - missing elements', { dragBucketsEl: !!dragBucketsEl, radialMenuContainer: !!radialMenuContainer });
+        console.error('[Radial Menu] Missing required elements');
         return;
     }
 
     // Safety check: Only show if presentation view is active
     if (!document.body.classList.contains('presentation-active')) {
-        console.log('[Radial Menu] Aborted - presentation view is not active');
+        console.warn('[Radial Menu] Aborted - presentation view is not active');
         return;
     }
 
-    // Check if radial menu has buckets
-    const bucketCount = radialMenuContainer.querySelectorAll('.drag-bucket').length;
-    console.log('[Radial Menu] Bucket count in radial container:', bucketCount);
-
-    // If no buckets, re-initialize
+    // Check if radial menu has buckets, re-initialize if needed
+    let bucketCount = radialMenuContainer.querySelectorAll('.drag-bucket').length;
     if (bucketCount === 0) {
-        console.log('[Radial Menu] No buckets found, re-initializing...');
+        console.log('[Radial Menu] No buckets found, initializing...');
         initializeRadialMenu();
+        bucketCount = radialMenuContainer.querySelectorAll('.drag-bucket').length;
     }
+    console.log('[Radial Menu] Bucket count in radial container:', bucketCount);
 
     // Store origin point
     radialMenuOrigin = { x, y };
@@ -3117,61 +3118,123 @@ function showRadialMenu(x, y, itemElement) {
     const viewportHeight = window.innerHeight;
     const isMobile = viewportWidth < 768;
     const radius = isMobile ? RADIAL_MENU_RADIUS_MOBILE : RADIAL_MENU_RADIUS;
-    const margin = radius + 40; // Extra margin for buckets
+    const margin = radius + 40;
 
     // Constrain position to keep radial menu within viewport
     let constrainedX = Math.max(margin, Math.min(viewportWidth - margin, x));
-    let constrainedY = Math.max(margin + 50, Math.min(viewportHeight - margin, y)); // Extra top margin for header
+    let constrainedY = Math.max(margin + 50, Math.min(viewportHeight - margin, y));
 
-    // Position radial menu container at the touch/click point
-    radialMenuContainer.style.left = `${constrainedX}px`;
-    radialMenuContainer.style.top = `${constrainedY}px`;
+    // === ROBUST VISIBILITY FIX ===
+    // Move radial menu container to document.body to bypass any parent CSS inheritance issues
+    if (radialMenuContainer.parentElement !== document.body) {
+        document.body.appendChild(radialMenuContainer);
+        console.log('[Radial Menu] Moved container to document.body');
+    }
+
+    // Apply comprehensive inline styles to container - use cssText for maximum override
+    radialMenuContainer.style.cssText = `
+        position: fixed !important;
+        left: ${constrainedX}px !important;
+        top: ${constrainedY}px !important;
+        width: 0 !important;
+        height: 0 !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        z-index: 99999 !important;
+        pointer-events: auto !important;
+        overflow: visible !important;
+        clip: auto !important;
+        clip-path: none !important;
+        transform: none !important;
+    `;
 
     // Show the drag buckets container in radial mode
     dragBucketsEl.classList.add('buckets-shown', 'drag-active', 'radial-mode');
 
-    // Debug: Log computed styles after adding classes
-    const computedStyle = window.getComputedStyle(dragBucketsEl);
-    console.log('[Radial Menu] dragBucketsEl after adding classes:', {
-        classes: Array.from(dragBucketsEl.classList),
-        display: computedStyle.display,
-        visibility: computedStyle.visibility,
-        opacity: computedStyle.opacity,
-        zIndex: computedStyle.zIndex
-    });
+    // Hide the left/right drag zones when showing radial menu
+    const leftZone = dragBucketsEl.querySelector('.drag-zone-left');
+    const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
+    if (leftZone) {
+        leftZone.style.cssText = 'display: none !important; visibility: hidden !important; opacity: 0 !important;';
+    }
+    if (rightZone) {
+        rightZone.style.cssText = 'display: none !important; visibility: hidden !important; opacity: 0 !important;';
+    }
 
     // Position buckets in radial layout
     positionRadialBuckets();
 
-    // Activate the radial menu with animation
+    // Activate the radial menu with robust bucket visibility
     requestAnimationFrame(() => {
         radialMenuContainer.classList.add('radial-active');
 
-        // Debug: Log radial container state
-        const containerStyle = window.getComputedStyle(radialMenuContainer);
-        console.log('[Radial Menu] radialMenuContainer after radial-active:', {
-            classes: Array.from(radialMenuContainer.classList),
-            display: containerStyle.display,
-            visibility: containerStyle.visibility,
-            opacity: containerStyle.opacity,
-            zIndex: containerStyle.zIndex,
-            left: containerStyle.left,
-            top: containerStyle.top
+        // Get viewport info for bucket sizing
+        const isMobileBucket = window.innerWidth < 768;
+        const bucketSize = isMobileBucket ? 112 : 128; // 2x size
+
+        // FORCE bucket visibility with comprehensive inline styles
+        const radialBuckets = radialMenuContainer.querySelectorAll('.drag-bucket');
+        console.log('[Radial Menu] Activating', radialBuckets.length, 'buckets');
+
+        radialBuckets.forEach((bucket) => {
+            // Get the original bucket class for background color
+            const originalId = bucket.dataset.originalBucket || bucket.id.replace('radial-', '');
+
+            // Determine background gradient based on bucket type
+            let background = 'rgba(0, 0, 0, 0.85)'; // default
+            if (originalId.includes('goal')) background = 'linear-gradient(135deg, rgba(255, 193, 7, 0.95), rgba(255, 160, 0, 0.95))';
+            else if (originalId.includes('ideas')) background = 'linear-gradient(135deg, rgba(156, 39, 176, 0.95), rgba(123, 31, 162, 0.95))';
+            else if (originalId.includes('lock')) background = 'linear-gradient(135deg, rgba(33, 150, 243, 0.95), rgba(25, 118, 210, 0.95))';
+            else if (originalId.includes('demote')) background = 'linear-gradient(135deg, rgba(255, 152, 0, 0.95), rgba(245, 124, 0, 0.95))';
+            else if (originalId.includes('archive')) background = 'linear-gradient(135deg, rgba(108, 117, 125, 0.95), rgba(73, 80, 87, 0.95))';
+            else if (originalId.includes('delete')) background = 'linear-gradient(135deg, rgba(220, 53, 69, 0.95), rgba(176, 42, 55, 0.95))';
+            else if (originalId.includes('reactions')) background = 'linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(56, 142, 60, 0.95))';
+            else if (originalId.includes('quick-comment')) background = 'linear-gradient(135deg, rgba(0, 188, 212, 0.95), rgba(0, 151, 167, 0.95))';
+            else if (originalId.includes('custom-comment')) background = 'linear-gradient(135deg, rgba(233, 30, 99, 0.95), rgba(194, 24, 91, 0.95))';
+            else if (originalId.includes('completed')) background = 'linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(46, 125, 50, 0.95))';
+
+            // Get existing position from CSS
+            const currentStyle = bucket.getAttribute('style') || '';
+            const leftMatch = currentStyle.match(/left:\s*(-?[\d.]+px)/);
+            const topMatch = currentStyle.match(/top:\s*(-?[\d.]+px)/);
+            const left = leftMatch ? leftMatch[1] : '0px';
+            const top = topMatch ? topMatch[1] : '0px';
+
+            // Apply comprehensive inline styles to FORCE visibility
+            bucket.style.cssText = `
+                position: absolute !important;
+                left: ${left} !important;
+                top: ${top} !important;
+                width: ${bucketSize}px !important;
+                height: ${bucketSize}px !important;
+                min-width: ${bucketSize}px !important;
+                min-height: ${bucketSize}px !important;
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                justify-content: center !important;
+                visibility: visible !important;
+                opacity: 0.95 !important;
+                pointer-events: auto !important;
+                z-index: 100000 !important;
+                transform: scale(1) !important;
+                background: ${background} !important;
+                border: 2px solid rgba(255, 255, 255, 0.5) !important;
+                border-radius: 50% !important;
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+                cursor: pointer !important;
+                transition: transform 0.15s ease-out, opacity 0.15s ease-out, box-shadow 0.15s ease-out !important;
+            `;
         });
 
-        // Debug: Log first bucket state
+        // Log final state for debugging
         const firstBucket = radialMenuContainer.querySelector('.drag-bucket');
         if (firstBucket) {
-            const bucketStyle = window.getComputedStyle(firstBucket);
+            const rect = firstBucket.getBoundingClientRect();
             console.log('[Radial Menu] First bucket state:', {
-                display: bucketStyle.display,
-                visibility: bucketStyle.visibility,
-                opacity: bucketStyle.opacity,
-                transform: bucketStyle.transform,
-                left: bucketStyle.left,
-                top: bucketStyle.top,
-                width: bucketStyle.width,
-                height: bucketStyle.height
+                visible: rect.width > 0 && rect.height > 0,
+                rect: { top: Math.round(rect.top), left: Math.round(rect.left), w: Math.round(rect.width), h: Math.round(rect.height) }
             });
         }
     });
@@ -3188,21 +3251,39 @@ function showRadialMenu(x, y, itemElement) {
 
 // Hide radial menu
 function hideRadialMenu() {
-    if (!dragBucketsEl || !radialMenuContainer) return;
+    console.log('[Radial Menu] Hiding');
+
+    if (!radialMenuContainer) {
+        return;
+    }
 
     radialMenuActive = false;
 
-    // Remove radial-active first for animation
+    // Remove radial-active class for animation
     radialMenuContainer.classList.remove('radial-active');
 
-    // Remove radial mode classes after a short delay for animation
-    setTimeout(() => {
-        dragBucketsEl.classList.remove('buckets-shown', 'drag-active', 'radial-mode');
-    }, 150);
+    // Reset container inline styles completely
+    radialMenuContainer.style.cssText = '';
 
-    // Clear hover states on radial buckets
+    // Restore left/right zones (clear inline styles so CSS controls them)
+    if (dragBucketsEl) {
+        const leftZone = dragBucketsEl.querySelector('.drag-zone-left');
+        const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
+        if (leftZone) leftZone.style.cssText = '';
+        if (rightZone) rightZone.style.cssText = '';
+
+        // Remove radial mode classes after a short delay for animation
+        setTimeout(() => {
+            dragBucketsEl.classList.remove('buckets-shown', 'drag-active', 'radial-mode');
+        }, 150);
+    }
+
+    // Clear hover states on radial buckets and reset their inline styles
     const buckets = radialMenuContainer.querySelectorAll('.drag-bucket');
-    buckets.forEach(b => b.classList.remove('drag-over'));
+    buckets.forEach(b => {
+        b.classList.remove('drag-over');
+        b.style.cssText = '';
+    });
 
     // Reset state
     initialTouchPoint = null;
@@ -3243,6 +3324,11 @@ function checkRadialBucketHover(clientX, clientY) {
             bucket.classList.add('drag-over');
             hoveredBucket = bucket;
 
+            // Dynamic scaling effect - make hovered bucket larger
+            bucket.style.transform = 'scale(1.25)';
+            bucket.style.zIndex = '100001';
+            bucket.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.5)';
+
             // Check for reaction/comment sub-options
             const reactionOptions = bucket.querySelectorAll('.reaction-option');
             const commentOptions = bucket.querySelectorAll('.quick-comment-option');
@@ -3268,6 +3354,10 @@ function checkRadialBucketHover(clientX, clientY) {
             });
         } else {
             bucket.classList.remove('drag-over');
+            // Reset scaling for non-hovered buckets
+            bucket.style.transform = 'scale(1)';
+            bucket.style.zIndex = '100000';
+            bucket.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4)';
             // Clear sub-options
             const options = bucket.querySelectorAll('.reaction-option, .quick-comment-option');
             options.forEach(opt => opt.classList.remove('drag-over'));
