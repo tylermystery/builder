@@ -191,6 +191,12 @@ let dragBucketCustomComment = null;
 let dragBucketCompleted = null;
 // Merge indicator
 let dragMergeIndicator = null;
+// Merge options dialog elements
+let mergeOptionsDialog = null;
+let mergeDialogSourceName = null;
+let mergeDialogTargetName = null;
+let pendingMergeSource = null;
+let pendingMergeTarget = null;
 // Action tooltip
 let dragActionTooltip = null;
 let currentHoveredAction = null;
@@ -427,6 +433,10 @@ function ensureDOMElements() {
     dragBucketCompleted = document.getElementById('drag-bucket-completed');
     // Merge indicator
     dragMergeIndicator = document.getElementById('drag-merge-indicator');
+    // Merge options dialog
+    mergeOptionsDialog = document.getElementById('merge-options-dialog');
+    mergeDialogSourceName = document.getElementById('merge-source-name');
+    mergeDialogTargetName = document.getElementById('merge-target-name');
     // Action tooltip
     dragActionTooltip = document.getElementById('drag-action-tooltip');
     // Radial menu container
@@ -2319,6 +2329,12 @@ async function renderItineraryItem(item, index) {
         return '';
     }
 
+    // Check if this item has been combined into another item (it's a source)
+    if (isItemCombinedSource(recordId)) {
+        // Don't render combined source items - they're visually merged into target
+        return '';
+    }
+
     const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
     const name = record.fields.Name || 'Untitled Item';
     // Use selections if available, fall back to selectedOptionIndex for legacy
@@ -2386,18 +2402,72 @@ async function renderItineraryItem(item, index) {
         ? `<span class="item-emoji-indicator has-reactions" data-record-id="${recordId}" style="display: inline-flex;"><span class="emoji-indicator-emoji">${summaryEmoji}</span>${reactionCount > 1 ? `<span class="emoji-indicator-count">${reactionCount}</span>` : ''}</span>`
         : `<span class="item-emoji-indicator" data-record-id="${recordId}" style="display: none;"></span>`;
 
+    // Check for combined items indicator
+    const combinedSources = getCombinedSources(recordId);
+    let combinedIndicatorHTML = '';
+    let combinedSourcesHTML = '';
+    let combinedClass = '';
+    if (combinedSources.length > 0) {
+        combinedClass = 'is-combined';
+        const sourceNames = combinedSources.map(sourceId => {
+            const sourceRecord = state.records.all.find(r => r.id === sourceId);
+            return sourceRecord?.fields?.Name || 'Item';
+        });
+        combinedIndicatorHTML = `
+            <span class="item-combined-indicator" title="Combined from: ${sourceNames.join(', ')}">
+                <span class="combined-icon">✨</span>
+                <span>${combinedSources.length + 1} combined</span>
+            </span>
+        `;
+        // Build expandable combined sources section
+        combinedSourcesHTML = `
+            <div class="combined-sources-section">
+                <button class="combined-sources-toggle" data-record-id="${recordId}">
+                    <span>📋</span>
+                    <span>Show ${combinedSources.length} combined item${combinedSources.length > 1 ? 's' : ''}</span>
+                    <span class="toggle-arrow">▼</span>
+                </button>
+                <div class="combined-sources-list" data-record-id="${recordId}" style="display: none;">
+                    ${sourceNames.map((sourceName, idx) => `
+                        <div class="combined-source-item" data-source-id="${combinedSources[idx]}">
+                            <span>• ${sourceName}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // Check for group indicator
+    const itemGroup = getItemGroup(recordId);
+    let groupIndicatorHTML = '';
+    let groupClass = '';
+    if (itemGroup) {
+        const groupItems = Array.isArray(itemGroup) ? itemGroup : (itemGroup.items || []);
+        const groupName = itemGroup.name || `${groupItems.length} Options`;
+        groupClass = 'in-group';
+        groupIndicatorHTML = `
+            <span class="item-group-indicator" title="Part of: ${groupName}">
+                <span class="group-icon">📂</span>
+                <span class="group-count">${groupItems.length}</span>
+            </span>
+        `;
+    }
+
     // Task status button for this item
     const taskStatusButtonHTML = renderTaskStatusButton('item', recordId);
 
     // Each item is wrapped in its own section container for independent layout
     return `
-        <section class="itinerary-section itinerary-item-section ${statusClass} ${goalClass}" data-section="item-${recordId}" data-item-status="${itemStatus}" data-is-goal="${isGoal}">
+        <section class="itinerary-section itinerary-item-section ${statusClass} ${goalClass} ${combinedClass} ${groupClass}" data-section="item-${recordId}" data-item-status="${itemStatus}" data-is-goal="${isGoal}">
             <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}" data-item-name="${escapeHtml(name)}">
                 <div class="item-accordion-header" data-record-id="${recordId}">
                     <div class="item-accordion-title-row">
                         ${taskStatusButtonHTML}
                         <h3 class="item-accordion-title">${name}</h3>
                         ${emojiIndicatorHTML}
+                        ${combinedIndicatorHTML}
+                        ${groupIndicatorHTML}
                         <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
                         <span class="item-accordion-icon"></span>
                     </div>
@@ -2417,6 +2487,7 @@ async function renderItineraryItem(item, index) {
                                     <strong>Note:</strong> ${note}
                                 </div>
                             ` : ''}
+                            ${combinedSourcesHTML}
                             <div class="itinerary-item-reactions" data-record-id="${recordId}"></div>
                             <button class="itinerary-item-expand-btn" data-record-id="${recordId}" title="View full details">
                                 <span class="expand-btn-icon">↗</span>
@@ -2586,12 +2657,38 @@ async function renderAllItems() {
     // Update the event-level emoji indicator
     updateEventEmojiIndicator();
 
+    // Initialize combined sources toggle handlers
+    initializeCombinedSourcesToggles();
+
     // Initialize drag-and-drop functionality
     initializeItemDragDrop();
 
     // Initialize radial menu system
     initializeRadialMenu();
     attachRadialMenuListeners();
+}
+
+// Initialize toggle handlers for combined sources sections
+function initializeCombinedSourcesToggles() {
+    if (!itineraryItemsListEl) return;
+
+    const toggles = itineraryItemsListEl.querySelectorAll('.combined-sources-toggle');
+    toggles.forEach(toggle => {
+        toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const recordId = toggle.dataset.recordId;
+            const sourcesList = itineraryItemsListEl.querySelector(`.combined-sources-list[data-record-id="${recordId}"]`);
+            const arrow = toggle.querySelector('.toggle-arrow');
+
+            if (sourcesList) {
+                const isHidden = sourcesList.style.display === 'none';
+                sourcesList.style.display = isHidden ? 'block' : 'none';
+                if (arrow) {
+                    arrow.textContent = isHidden ? '▲' : '▼';
+                }
+            }
+        });
+    });
 }
 
 // Load SortableJS dynamically if not already loaded
@@ -3856,6 +3953,7 @@ function checkMergeTargetHover(clientX, clientY) {
         // Show merge indicator near cursor
         if (dragMergeIndicator) {
             dragMergeIndicator.style.display = 'flex';
+            dragMergeIndicator.style.visibility = 'visible';
             dragMergeIndicator.style.left = `${clientX + 20}px`;
             dragMergeIndicator.style.top = `${clientY - 20}px`;
         }
@@ -3863,6 +3961,7 @@ function checkMergeTargetHover(clientX, clientY) {
         potentialMergeTarget = null;
         if (dragMergeIndicator) {
             dragMergeIndicator.style.display = 'none';
+            dragMergeIndicator.style.visibility = 'hidden';
         }
     }
 }
@@ -4342,64 +4441,364 @@ async function openMergeDialog(sourceRecordId, targetRecordId) {
     const sourceName = sourceRecord?.fields?.Name || 'Source item';
     const targetName = targetRecord?.fields?.Name || 'Target item';
 
-    // Show merge options dialog
-    const choice = confirm(
-        `Merge Options for "${sourceName}" and "${targetName}":\n\n` +
-        `Click OK to create a related category (keeps both items linked).\n` +
-        `Click Cancel to cancel the merge.`
-    );
+    // Store pending merge info
+    pendingMergeSource = sourceRecordId;
+    pendingMergeTarget = targetRecordId;
 
-    if (choice) {
-        await createRelatedCategory(sourceRecordId, targetRecordId);
+    // Update dialog content with item names
+    if (mergeDialogSourceName) {
+        mergeDialogSourceName.textContent = sourceName;
     }
+    if (mergeDialogTargetName) {
+        mergeDialogTargetName.textContent = targetName;
+    }
+
+    // Show the merge options dialog
+    if (mergeOptionsDialog) {
+        mergeOptionsDialog.style.display = 'flex';
+    }
+
+    log('Presentation', `Merge dialog opened for ${sourceRecordId} and ${targetRecordId}`);
 }
 
-// Create a related category linking two items
+// Close the merge options dialog
+function closeMergeDialog() {
+    if (mergeOptionsDialog) {
+        mergeOptionsDialog.style.display = 'none';
+    }
+    pendingMergeSource = null;
+    pendingMergeTarget = null;
+}
+
+// Handle merge option: Combine into single idea
+async function handleMergeCombine() {
+    console.log('[Presentation DEBUG] handleMergeCombine called');
+    if (!pendingMergeSource || !pendingMergeTarget) {
+        closeMergeDialog();
+        return;
+    }
+
+    const sourceId = pendingMergeSource;
+    const targetId = pendingMergeTarget;
+    closeMergeDialog();
+
+    await combineItemsIntoOne(sourceId, targetId);
+}
+
+// Handle merge option: Group as options/category
+async function handleMergeGroup() {
+    console.log('[Presentation DEBUG] handleMergeGroup called');
+    if (!pendingMergeSource || !pendingMergeTarget) {
+        closeMergeDialog();
+        return;
+    }
+
+    const sourceId = pendingMergeSource;
+    const targetId = pendingMergeTarget;
+    closeMergeDialog();
+
+    await createRelatedCategory(sourceId, targetId);
+}
+
+// Combine two items into a single cohesive idea
+async function combineItemsIntoOne(sourceRecordId, targetRecordId) {
+    console.log('[Presentation DEBUG] combineItemsIntoOne called:', sourceRecordId, targetRecordId);
+
+    // Initialize combinedItems if not exists
+    // Structure: Map<targetRecordId, Set<sourceRecordIds>>
+    if (!state.session.combinedItems) {
+        state.session.combinedItems = new Map();
+    }
+
+    const sourceRecord = state.records.all.find(r => r.id === sourceRecordId);
+    const targetRecord = state.records.all.find(r => r.id === targetRecordId);
+    const sourceName = sourceRecord?.fields?.Name || 'Item';
+    const targetName = targetRecord?.fields?.Name || 'Item';
+
+    // Check if source is already combined into something else
+    let actualTarget = targetRecordId;
+    for (const [target, sources] of state.session.combinedItems.entries()) {
+        if (sources.has(sourceRecordId)) {
+            // Source is already a source of another combined item
+            showToast(`"${sourceName}" is already combined with another item`, 'info');
+            return;
+        }
+        if (sources.has(targetRecordId)) {
+            // Target is a source of another combined item - combine into that target instead
+            actualTarget = target;
+            break;
+        }
+    }
+
+    // If target is itself a source in combinedItems, find the real target
+    for (const [target, sources] of state.session.combinedItems.entries()) {
+        if (sources.has(actualTarget)) {
+            actualTarget = target;
+            break;
+        }
+    }
+
+    // Check if source is actually a combined target
+    if (state.session.combinedItems.has(sourceRecordId)) {
+        // Source has items combined into it - merge those into the target
+        const sourcesCombined = state.session.combinedItems.get(sourceRecordId);
+        if (!state.session.combinedItems.has(actualTarget)) {
+            state.session.combinedItems.set(actualTarget, new Set());
+        }
+        const targetSources = state.session.combinedItems.get(actualTarget);
+
+        // Add the source itself and all its combined sources
+        targetSources.add(sourceRecordId);
+        sourcesCombined.forEach(s => targetSources.add(s));
+
+        // Remove the old combined entry
+        state.session.combinedItems.delete(sourceRecordId);
+    } else {
+        // Simple case: just add source to target's combined set
+        if (!state.session.combinedItems.has(actualTarget)) {
+            state.session.combinedItems.set(actualTarget, new Set());
+        }
+        state.session.combinedItems.get(actualTarget).add(sourceRecordId);
+    }
+
+    const finalTargetRecord = state.records.all.find(r => r.id === actualTarget);
+    const finalTargetName = finalTargetRecord?.fields?.Name || 'Item';
+
+    showToast(`"${sourceName}" combined into "${finalTargetName}"`, 'success');
+
+    // Re-render items
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Combined ${sourceRecordId} into ${actualTarget}`);
+}
+
+// Create a related category linking two items (Group as Options)
 async function createRelatedCategory(recordId1, recordId2) {
     console.log('[Presentation DEBUG] createRelatedCategory called:', recordId1, recordId2);
 
     // Initialize relatedGroups if not exists
+    // Structure: Array of { id: string, name: string, items: string[] }
     if (!state.session.relatedGroups) {
         state.session.relatedGroups = [];
     }
 
-    // Create a new group or add to existing group
-    const existingGroup1 = state.session.relatedGroups.find(g => g.includes(recordId1));
-    const existingGroup2 = state.session.relatedGroups.find(g => g.includes(recordId2));
+    const record1 = state.records.all.find(r => r.id === recordId1);
+    const record2 = state.records.all.find(r => r.id === recordId2);
+    const name1 = record1?.fields?.Name || 'Item 1';
+    const name2 = record2?.fields?.Name || 'Item 2';
+
+    // Find existing groups that contain these items
+    const existingGroup1 = state.session.relatedGroups.find(g =>
+        (Array.isArray(g) ? g.includes(recordId1) : g.items?.includes(recordId1))
+    );
+    const existingGroup2 = state.session.relatedGroups.find(g =>
+        (Array.isArray(g) ? g.includes(recordId2) : g.items?.includes(recordId2))
+    );
+
+    // Normalize group format (handle legacy array format)
+    const getGroupItems = (g) => Array.isArray(g) ? g : (g.items || []);
+    const getGroupId = (g) => Array.isArray(g) ? null : g.id;
 
     if (existingGroup1 && existingGroup2 && existingGroup1 === existingGroup2) {
         // Already in same group
-        showToast('Items are already related', 'info');
+        showToast('Items are already grouped together', 'info');
         return;
     }
 
     if (existingGroup1 && existingGroup2) {
         // Merge two groups
-        const mergedGroup = [...new Set([...existingGroup1, ...existingGroup2])];
+        const items1 = getGroupItems(existingGroup1);
+        const items2 = getGroupItems(existingGroup2);
+        const mergedItems = [...new Set([...items1, ...items2])];
+
+        // Create new merged group with combined name
+        const newGroup = {
+            id: `group-${Date.now()}`,
+            name: generateGroupName(mergedItems),
+            items: mergedItems
+        };
+
         state.session.relatedGroups = state.session.relatedGroups.filter(
             g => g !== existingGroup1 && g !== existingGroup2
         );
-        state.session.relatedGroups.push(mergedGroup);
+        state.session.relatedGroups.push(newGroup);
+
+        showToast(`Merged two option groups`, 'success');
     } else if (existingGroup1) {
-        existingGroup1.push(recordId2);
+        // Add to existing group 1
+        const items = getGroupItems(existingGroup1);
+        if (!items.includes(recordId2)) {
+            items.push(recordId2);
+            // Update group structure if needed
+            if (Array.isArray(existingGroup1)) {
+                const idx = state.session.relatedGroups.indexOf(existingGroup1);
+                state.session.relatedGroups[idx] = {
+                    id: `group-${Date.now()}`,
+                    name: generateGroupName(items),
+                    items: items
+                };
+            } else {
+                existingGroup1.items = items;
+                existingGroup1.name = generateGroupName(items);
+            }
+        }
+        showToast(`"${name2}" added to options group`, 'success');
     } else if (existingGroup2) {
-        existingGroup2.push(recordId1);
+        // Add to existing group 2
+        const items = getGroupItems(existingGroup2);
+        if (!items.includes(recordId1)) {
+            items.push(recordId1);
+            // Update group structure if needed
+            if (Array.isArray(existingGroup2)) {
+                const idx = state.session.relatedGroups.indexOf(existingGroup2);
+                state.session.relatedGroups[idx] = {
+                    id: `group-${Date.now()}`,
+                    name: generateGroupName(items),
+                    items: items
+                };
+            } else {
+                existingGroup2.items = items;
+                existingGroup2.name = generateGroupName(items);
+            }
+        }
+        showToast(`"${name1}" added to options group`, 'success');
     } else {
         // Create new group
-        state.session.relatedGroups.push([recordId1, recordId2]);
+        const newGroup = {
+            id: `group-${Date.now()}`,
+            name: generateGroupName([recordId1, recordId2]),
+            items: [recordId1, recordId2]
+        };
+        state.session.relatedGroups.push(newGroup);
+        showToast(`"${name1}" and "${name2}" grouped as options`, 'success');
     }
-
-    const record1 = state.records.all.find(r => r.id === recordId1);
-    const record2 = state.records.all.find(r => r.id === recordId2);
-    showToast(`"${record1?.fields?.Name}" and "${record2?.fields?.Name}" are now related`, 'success');
 
     // Re-render items
     await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
 
     // Save session
     triggerSave();
 
-    log('Presentation', `Created related category for ${recordId1} and ${recordId2}`);
+    log('Presentation', `Created/updated option group for ${recordId1} and ${recordId2}`);
+}
+
+// Generate a name for a group based on its items
+function generateGroupName(itemIds) {
+    if (!itemIds || itemIds.length === 0) return 'Options';
+
+    // Try to find common category or type among items
+    const categories = new Set();
+    const types = new Set();
+
+    itemIds.forEach(id => {
+        const record = state.records.all.find(r => r.id === id);
+        if (record?.fields?.Category) {
+            categories.add(record.fields.Category);
+        }
+        if (record?.fields?.Type) {
+            types.add(record.fields.Type);
+        }
+    });
+
+    // If all items share a category, use it
+    if (categories.size === 1) {
+        return `${[...categories][0]} Options`;
+    }
+
+    // If all items share a type, use it
+    if (types.size === 1) {
+        return `${[...types][0]} Options`;
+    }
+
+    // Default name
+    return `${itemIds.length} Options`;
+}
+
+// Check if an item is a source that has been combined into another item
+function isItemCombinedSource(recordId) {
+    if (!state.session.combinedItems) return false;
+
+    for (const sources of state.session.combinedItems.values()) {
+        if (sources.has(recordId)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Get the combined target for a source item
+function getCombinedTarget(sourceRecordId) {
+    if (!state.session.combinedItems) return null;
+
+    for (const [target, sources] of state.session.combinedItems.entries()) {
+        if (sources.has(sourceRecordId)) {
+            return target;
+        }
+    }
+    return null;
+}
+
+// Get all source items that have been combined into a target
+function getCombinedSources(targetRecordId) {
+    if (!state.session.combinedItems) return [];
+
+    const sources = state.session.combinedItems.get(targetRecordId);
+    return sources ? Array.from(sources) : [];
+}
+
+// Check if an item belongs to a related group
+function getItemGroup(recordId) {
+    if (!state.session.relatedGroups) return null;
+
+    return state.session.relatedGroups.find(g => {
+        const items = Array.isArray(g) ? g : (g.items || []);
+        return items.includes(recordId);
+    });
+}
+
+// Initialize merge dialog event listeners
+function initializeMergeDialogListeners() {
+    // Close button
+    const closeBtn = document.getElementById('merge-dialog-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeMergeDialog);
+    }
+
+    // Cancel button
+    const cancelBtn = document.getElementById('merge-dialog-cancel');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', closeMergeDialog);
+    }
+
+    // Combine option button
+    const combineBtn = document.getElementById('merge-option-combine');
+    if (combineBtn) {
+        combineBtn.addEventListener('click', handleMergeCombine);
+    }
+
+    // Group option button
+    const groupBtn = document.getElementById('merge-option-group');
+    if (groupBtn) {
+        groupBtn.addEventListener('click', handleMergeGroup);
+    }
+
+    // Close on backdrop click
+    if (mergeOptionsDialog) {
+        mergeOptionsDialog.addEventListener('click', (e) => {
+            if (e.target === mergeOptionsDialog) {
+                closeMergeDialog();
+            }
+        });
+    }
+
+    console.log('[Presentation DEBUG] Merge dialog listeners initialized');
 }
 
 // Update the status toggle buttons visibility and state
@@ -8866,6 +9265,9 @@ export async function showPresentationView(listType, startRecordId = null) {
             }, 100);
         }
     }
+
+    // Initialize merge dialog event listeners
+    initializeMergeDialogListeners();
 
     log('Presentation', 'Itinerary view rendered successfully');
 }

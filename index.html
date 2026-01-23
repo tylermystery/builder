@@ -3799,7 +3799,40 @@ select:focus-visible,
         <!-- Merge indicator overlay (shown when hovering another item) - OUTSIDE buckets container -->
         <div id="drag-merge-indicator" class="drag-merge-indicator" style="display: none;">
             <span class="merge-icon">🔗</span>
-            <span class="merge-label">Drop to Merge</span>
+            <span class="merge-label">Drop to Combine</span>
+        </div>
+
+        <!-- Merge Options Dialog (shown after dropping item on another) -->
+        <div id="merge-options-dialog" class="merge-options-dialog" style="display: none;">
+            <div class="merge-options-dialog-content">
+                <button class="merge-dialog-close" id="merge-dialog-close" title="Cancel">&times;</button>
+                <div class="merge-dialog-header">
+                    <span class="merge-dialog-icon">🔗</span>
+                    <h3 class="merge-dialog-title">Combine Items</h3>
+                </div>
+                <div class="merge-dialog-items">
+                    <div class="merge-item-preview" id="merge-source-preview">
+                        <span class="merge-item-name" id="merge-source-name">Source Item</span>
+                    </div>
+                    <span class="merge-plus-icon">+</span>
+                    <div class="merge-item-preview" id="merge-target-preview">
+                        <span class="merge-item-name" id="merge-target-name">Target Item</span>
+                    </div>
+                </div>
+                <div class="merge-dialog-options">
+                    <button class="merge-option-btn merge-option-combine" id="merge-option-combine" title="Merge into one cohesive idea">
+                        <span class="merge-option-icon">✨</span>
+                        <span class="merge-option-label">Combine into One</span>
+                        <span class="merge-option-desc">Merge into a single, cohesive idea</span>
+                    </button>
+                    <button class="merge-option-btn merge-option-group" id="merge-option-group" title="Group as alternative options">
+                        <span class="merge-option-icon">📂</span>
+                        <span class="merge-option-label">Group as Options</span>
+                        <span class="merge-option-desc">Keep both as alternatives in a category</span>
+                    </button>
+                </div>
+                <button class="merge-dialog-cancel" id="merge-dialog-cancel">Cancel</button>
+            </div>
         </div>
 
         <!-- Floating Chat Button for Presentation View -->
