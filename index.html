@@ -3819,16 +3819,37 @@ select:focus-visible,
                         <span class="merge-item-name" id="merge-target-name">Target Item</span>
                     </div>
                 </div>
+                <!-- AI Estimation Preview (hidden by default, shown when estimation is fetched) -->
+                <div id="merge-estimation-preview" class="merge-estimation-preview" style="display: none;">
+                    <div class="merge-estimation-loading">
+                        <span class="loading-spinner"></span>
+                        <span class="loading-text">Estimating combination...</span>
+                    </div>
+                    <div class="merge-estimation-result" style="display: none;">
+                        <div class="estimation-section estimation-options" style="display: none;">
+                            <span class="estimation-label">Category:</span>
+                            <span class="estimation-value" id="estimation-category">-</span>
+                            <span class="estimation-label">Description:</span>
+                            <span class="estimation-value estimation-desc" id="estimation-description">-</span>
+                        </div>
+                        <div class="estimation-section estimation-hybrid" style="display: none;">
+                            <span class="estimation-label">Combined Idea:</span>
+                            <span class="estimation-value" id="estimation-hybrid-name">-</span>
+                            <span class="estimation-label">Description:</span>
+                            <span class="estimation-value estimation-desc" id="estimation-hybrid-description">-</span>
+                        </div>
+                    </div>
+                </div>
                 <div class="merge-dialog-options">
-                    <button class="merge-option-btn merge-option-combine" id="merge-option-combine" title="Merge into one cohesive idea">
-                        <span class="merge-option-icon">✨</span>
-                        <span class="merge-option-label">Combine into One</span>
-                        <span class="merge-option-desc">Merge into a single, cohesive idea</span>
-                    </button>
-                    <button class="merge-option-btn merge-option-group" id="merge-option-group" title="Group as alternative options">
+                    <button class="merge-option-btn merge-option-group" id="merge-option-group" title="Group as alternative options with AI-estimated category">
                         <span class="merge-option-icon">📂</span>
-                        <span class="merge-option-label">Group as Options</span>
-                        <span class="merge-option-desc">Keep both as alternatives in a category</span>
+                        <span class="merge-option-label">As Options</span>
+                        <span class="merge-option-desc">Keep both as alternatives in an estimated category</span>
+                    </button>
+                    <button class="merge-option-btn merge-option-combine" id="merge-option-combine" title="Combine into a hybrid idea">
+                        <span class="merge-option-icon">✨</span>
+                        <span class="merge-option-label">As Hybrid</span>
+                        <span class="merge-option-desc">Merge into a single, blended idea</span>
                     </button>
                 </div>
                 <button class="merge-dialog-cancel" id="merge-dialog-cancel">Cancel</button>
