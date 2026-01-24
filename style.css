@@ -6868,8 +6868,9 @@ body:not(.presentation-active) .drag-merge-indicator {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 9200;
+    z-index: 100001; /* Higher than radial menu (99999) and merge indicator (99998) */
     animation: merge-dialog-fade-in 0.2s ease;
+    pointer-events: auto;
 }
 
 @keyframes merge-dialog-fade-in {
@@ -7053,6 +7054,88 @@ body:not(.presentation-active) .drag-merge-indicator {
     color: #495057;
 }
 
+/* Merge Estimation Preview */
+.merge-estimation-preview {
+    margin-bottom: 16px;
+    padding: 16px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.merge-estimation-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px;
+    color: #6c757d;
+}
+
+.merge-estimation-loading .loading-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(76, 175, 80, 0.2);
+    border-top-color: #4CAF50;
+    border-radius: 50%;
+    animation: merge-spinner 0.8s linear infinite;
+}
+
+@keyframes merge-spinner {
+    to { transform: rotate(360deg); }
+}
+
+.merge-estimation-loading .loading-text {
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.merge-estimation-result {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.estimation-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.estimation-label {
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.estimation-value {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #212529;
+    padding: 8px 12px;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.estimation-value.estimation-desc {
+    font-weight: 400;
+    font-size: 0.85em;
+    color: #495057;
+    line-height: 1.4;
+}
+
+/* Estimation section styles for different merge types */
+.estimation-options .estimation-value {
+    border-left: 3px solid #2196F3;
+}
+
+.estimation-hybrid .estimation-value {
+    border-left: 3px solid #9C27B0;
+}
+
 /* =====================================================
    GROUPED/COMBINED ITEMS VISUAL INDICATORS
    ===================================================== */
@@ -7190,10 +7273,40 @@ body:not(.presentation-active) .drag-merge-indicator {
     border-left: 2px solid rgba(156, 39, 176, 0.3);
 }
 
+.combined-hybrid-description {
+    font-size: 0.85em;
+    color: #6c757d;
+    font-style: italic;
+    padding: 8px 0;
+    margin-bottom: 8px;
+    border-bottom: 1px solid rgba(156, 39, 176, 0.15);
+    line-height: 1.4;
+}
+
 .combined-source-item {
     font-size: 0.85em;
     color: #666;
     padding: 4px 0;
+}
+
+/* Hybrid indicator styling */
+.item-combined-indicator.has-hybrid {
+    background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+    border: 1px solid rgba(156, 39, 176, 0.3);
+}
+
+/* Group indicator with name */
+.item-group-indicator .group-name {
+    font-weight: 600;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.item-group-indicator .group-count {
+    font-size: 0.9em;
+    opacity: 0.8;
 }
 
 /* Goal item indicator on rendered items */

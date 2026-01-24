@@ -210,6 +210,12 @@ let hoveredQuickComment = null;
 let potentialMergeTarget = null;
 const DRAG_DELAY_MS = 300; // Delay before drag buckets appear (ms)
 
+// Merge dwell-time tracking - hover over an item for a moment to trigger merge
+let mergeHoverItemId = null;      // The recordId of the item currently being hovered
+let mergeHoverStartTime = null;   // When the hover started
+let mergeHoverTimer = null;       // Timer to activate merge after dwell time
+const MERGE_DWELL_TIME_MS = 250;  // How long to hover before merge activates (ms)
+
 // Radial menu state
 let radialMenuContainer = null;
 let radialMenuActive = false;
@@ -433,10 +439,87 @@ function ensureDOMElements() {
     dragBucketCompleted = document.getElementById('drag-bucket-completed');
     // Merge indicator
     dragMergeIndicator = document.getElementById('drag-merge-indicator');
+
+    // DEBUG: Log merge indicator initialization
+    console.log('[MERGE ZONE DEBUG] ================================================');
+    console.log('[MERGE ZONE DEBUG] MERGE INDICATOR INITIALIZATION');
+    console.log('[MERGE ZONE DEBUG] ================================================');
+    console.log('[MERGE ZONE DEBUG] dragMergeIndicator element:', dragMergeIndicator);
+    if (dragMergeIndicator) {
+        console.log('[MERGE ZONE DEBUG] ✓ dragMergeIndicator FOUND');
+        const indicatorStyle = window.getComputedStyle(dragMergeIndicator);
+        console.log('[MERGE ZONE DEBUG] Initial dragMergeIndicator styles:', {
+            display: indicatorStyle.display,
+            visibility: indicatorStyle.visibility,
+            opacity: indicatorStyle.opacity,
+            zIndex: indicatorStyle.zIndex,
+            position: indicatorStyle.position
+        });
+        console.log('[MERGE ZONE DEBUG] dragMergeIndicator parent:', dragMergeIndicator.parentElement?.tagName, dragMergeIndicator.parentElement?.id);
+    } else {
+        console.log('[MERGE ZONE DEBUG] ✗ ERROR: dragMergeIndicator NOT FOUND - merge indicator will not display!');
+    }
+
     // Merge options dialog
     mergeOptionsDialog = document.getElementById('merge-options-dialog');
     mergeDialogSourceName = document.getElementById('merge-source-name');
     mergeDialogTargetName = document.getElementById('merge-target-name');
+
+    // DEBUG: EXTENSIVE MERGE DIALOG INITIALIZATION LOGGING
+    console.log('[MERGE DEBUG] ================================================');
+    console.log('[MERGE DEBUG] MERGE DIALOG ELEMENTS INITIALIZATION');
+    console.log('[MERGE DEBUG] ================================================');
+    console.log('[MERGE DEBUG] mergeOptionsDialog:', mergeOptionsDialog);
+    console.log('[MERGE DEBUG] mergeDialogSourceName:', mergeDialogSourceName);
+    console.log('[MERGE DEBUG] mergeDialogTargetName:', mergeDialogTargetName);
+
+    if (mergeOptionsDialog) {
+        console.log('[MERGE DEBUG] ✓ Merge dialog element FOUND');
+        // Check initial styles
+        const initialStyle = window.getComputedStyle(mergeOptionsDialog);
+        console.log('[MERGE DEBUG] Initial merge dialog computed styles:', {
+            display: initialStyle.display,
+            visibility: initialStyle.visibility,
+            opacity: initialStyle.opacity,
+            zIndex: initialStyle.zIndex,
+            position: initialStyle.position,
+            top: initialStyle.top,
+            left: initialStyle.left,
+            right: initialStyle.right,
+            bottom: initialStyle.bottom,
+            pointerEvents: initialStyle.pointerEvents
+        });
+        // Check inline style
+        console.log('[MERGE DEBUG] Merge dialog inline style.display:', mergeOptionsDialog.style.display);
+        console.log('[MERGE DEBUG] Merge dialog innerHTML length:', mergeOptionsDialog.innerHTML.length);
+
+        // Check child elements
+        const dialogContent = mergeOptionsDialog.querySelector('.merge-options-dialog-content');
+        const optionsContainer = mergeOptionsDialog.querySelector('.merge-dialog-options');
+        const groupBtn = mergeOptionsDialog.querySelector('#merge-option-group');
+        const combineBtn = mergeOptionsDialog.querySelector('#merge-option-combine');
+        const cancelBtn = mergeOptionsDialog.querySelector('#merge-dialog-cancel');
+
+        console.log('[MERGE DEBUG] Child elements check:', {
+            dialogContent: !!dialogContent,
+            optionsContainer: !!optionsContainer,
+            groupBtn: !!groupBtn,
+            combineBtn: !!combineBtn,
+            cancelBtn: !!cancelBtn
+        });
+
+        if (!groupBtn || !combineBtn) {
+            console.error('[MERGE DEBUG] ✗ CRITICAL: Merge option buttons NOT FOUND in dialog!');
+            console.log('[MERGE DEBUG] Dialog HTML:', mergeOptionsDialog.innerHTML.substring(0, 500));
+        }
+    } else {
+        console.error('[MERGE DEBUG] ✗ CRITICAL: mergeOptionsDialog element NOT FOUND!');
+        console.log('[MERGE DEBUG] Checking if element exists in DOM at all...');
+        const checkDOM = document.getElementById('merge-options-dialog');
+        console.log('[MERGE DEBUG] Direct DOM query result:', checkDOM);
+    }
+    console.log('[MERGE DEBUG] ================================================');
+
     // Action tooltip
     dragActionTooltip = document.getElementById('drag-action-tooltip');
     // Radial menu container
@@ -453,7 +536,8 @@ function ensureDOMElements() {
         dragBucketQuickComment: !!dragBucketQuickComment,
         dragBucketCustomComment: !!dragBucketCustomComment,
         dragBucketCompleted: !!dragBucketCompleted,
-        dragMergeIndicator: !!dragMergeIndicator
+        dragMergeIndicator: !!dragMergeIndicator,
+        mergeOptionsDialog: !!mergeOptionsDialog
     });
 
     // DEBUG: Log initial styling of drag buckets container
@@ -2404,6 +2488,7 @@ async function renderItineraryItem(item, index) {
 
     // Check for combined items indicator
     const combinedSources = getCombinedSources(recordId);
+    const hybridData = getCombinedHybridData(recordId);
     let combinedIndicatorHTML = '';
     let combinedSourcesHTML = '';
     let combinedClass = '';
@@ -2413,10 +2498,14 @@ async function renderItineraryItem(item, index) {
             const sourceRecord = state.records.all.find(r => r.id === sourceId);
             return sourceRecord?.fields?.Name || 'Item';
         });
+        // Use hybrid name if available, otherwise default
+        const hybridName = hybridData?.hybridName;
+        const hybridDesc = hybridData?.hybridDescription;
+        const indicatorLabel = hybridName ? `Hybrid: ${hybridName}` : `${combinedSources.length + 1} combined`;
         combinedIndicatorHTML = `
-            <span class="item-combined-indicator" title="Combined from: ${sourceNames.join(', ')}">
+            <span class="item-combined-indicator ${hybridName ? 'has-hybrid' : ''}" title="${hybridDesc || `Combined from: ${sourceNames.join(', ')}`}">
                 <span class="combined-icon">✨</span>
-                <span>${combinedSources.length + 1} combined</span>
+                <span>${indicatorLabel}</span>
             </span>
         `;
         // Build expandable combined sources section
@@ -2428,6 +2517,7 @@ async function renderItineraryItem(item, index) {
                     <span class="toggle-arrow">▼</span>
                 </button>
                 <div class="combined-sources-list" data-record-id="${recordId}" style="display: none;">
+                    ${hybridDesc ? `<div class="combined-hybrid-description">${hybridDesc}</div>` : ''}
                     ${sourceNames.map((sourceName, idx) => `
                         <div class="combined-source-item" data-source-id="${combinedSources[idx]}">
                             <span>• ${sourceName}</span>
@@ -2445,11 +2535,13 @@ async function renderItineraryItem(item, index) {
     if (itemGroup) {
         const groupItems = Array.isArray(itemGroup) ? itemGroup : (itemGroup.items || []);
         const groupName = itemGroup.name || `${groupItems.length} Options`;
+        const groupDescription = itemGroup.description || '';
         groupClass = 'in-group';
         groupIndicatorHTML = `
-            <span class="item-group-indicator" title="Part of: ${groupName}">
+            <span class="item-group-indicator" title="${groupDescription || `Part of: ${groupName}`}">
                 <span class="group-icon">📂</span>
-                <span class="group-count">${groupItems.length}</span>
+                <span class="group-name">${groupName}</span>
+                <span class="group-count">(${groupItems.length})</span>
             </span>
         `;
     }
@@ -2734,11 +2826,13 @@ async function initializeItemDragDrop() {
             touchStartThreshold: 20, // Require more movement before starting SortableJS drag
 
             onStart: function(evt) {
-                console.log('[Presentation DEBUG] Drag onStart triggered');
+                console.log('[MERGE ZONE DEBUG] ================================================');
+                console.log('[MERGE ZONE DEBUG] DRAG onStart TRIGGERED');
+                console.log('[MERGE ZONE DEBUG] ================================================');
 
                 // If radial menu is already active, cancel the SortableJS drag
                 if (radialMenuActive) {
-                    console.log('[Presentation DEBUG] Radial menu is active, cancelling SortableJS drag');
+                    console.log('[MERGE ZONE DEBUG] Radial menu is active, cancelling SortableJS drag');
                     evt.preventDefault && evt.preventDefault();
                     return false;
                 }
@@ -2747,20 +2841,21 @@ async function initializeItemDragDrop() {
                 // Reset debug counters
                 dragMoveDebugCounter = 0;
                 bucketHoverDebugCounter = 0;
+                mergeHoverDebugCounter = 0; // Reset merge debug counter too
 
                 // Track the currently dragged item
                 currentDraggedItem = evt.item;
                 const article = evt.item.querySelector('.itinerary-item');
                 currentDraggedRecordId = article?.dataset.recordId;
-                console.log('[Presentation DEBUG] Dragging item:', currentDraggedRecordId);
+                console.log('[MERGE ZONE DEBUG] Dragging item recordId:', currentDraggedRecordId);
+                console.log('[MERGE ZONE DEBUG] isDragging set to:', isDragging);
 
                 // DEBUG: Log initial state of drag buckets container
-                console.log('[Presentation DEBUG] onStart - Initial drag bucket state:', {
+                console.log('[MERGE ZONE DEBUG] onStart - Drag bucket state:', {
                     dragBucketsElExists: !!dragBucketsEl,
                     dragBucketsId: dragBucketsEl?.id,
                     currentClasses: dragBucketsEl ? Array.from(dragBucketsEl.classList) : [],
-                    bucketGoalExists: !!dragBucketGoal,
-                    bucketReactionsExists: !!dragBucketReactions
+                    dragMergeIndicatorExists: !!dragMergeIndicator
                 });
 
                 // For SortableJS drag (long press/hold), show the radial menu at the item position
@@ -2777,56 +2872,100 @@ async function initializeItemDragDrop() {
 
             onMove: function(evt) {
                 // During SortableJS move, update radial menu hover state
+                console.log('[MERGE ZONE DEBUG] SortableJS onMove called, radialMenuActive:', radialMenuActive);
                 if (radialMenuActive) {
                     const clientX = evt.originalEvent?.touches ? evt.originalEvent.touches[0].clientX : evt.originalEvent?.clientX;
                     const clientY = evt.originalEvent?.touches ? evt.originalEvent.touches[0].clientY : evt.originalEvent?.clientY;
                     if (clientX !== undefined && clientY !== undefined) {
                         checkRadialBucketHover(clientX, clientY);
                         updateRadialDirectionIndicator(clientX, clientY);
+                        // Also check for merge targets when radial menu is active
+                        console.log('[MERGE ZONE DEBUG] onMove - also checking merge target from radial menu path');
+                        checkMergeTargetHover(clientX, clientY);
                     }
                 }
             },
 
             onEnd: function(evt) {
-                console.log('[Presentation DEBUG] Drag onEnd triggered');
-                console.log('[Presentation DEBUG] onEnd - Final drag state:', {
-                    isDragging,
-                    radialMenuActive,
-                    hasDragActiveClass: dragBucketsEl ? dragBucketsEl.classList.contains('drag-active') : false,
-                    dragMoveEvents: dragMoveDebugCounter,
-                    bucketHoverChecks: bucketHoverDebugCounter
-                });
-                isDragging = false;
-                clearTimeout(dragDelayTimer);
+                console.log('[MERGE DEBUG] ============ onEnd START ============');
 
-                // Remove document-level listeners
-                document.removeEventListener('mousemove', handleDragMove);
-                document.removeEventListener('touchmove', handleDragMove);
+                try {
+                    // Log state atomically to avoid object spread issues
+                    console.log('[MERGE DEBUG] onEnd - isDragging:', isDragging);
+                    console.log('[MERGE DEBUG] onEnd - radialMenuActive:', radialMenuActive);
+                    console.log('[MERGE DEBUG] onEnd - potentialMergeTarget exists:', !!potentialMergeTarget);
+                    console.log('[MERGE DEBUG] onEnd - potentialMergeTarget.recordId:', potentialMergeTarget ? potentialMergeTarget.recordId : 'null');
 
-                // Check if dropped on a radial bucket
-                if (radialMenuActive) {
-                    const clientX = evt.originalEvent?.changedTouches ? evt.originalEvent.changedTouches[0].clientX : evt.originalEvent?.clientX;
-                    const clientY = evt.originalEvent?.changedTouches ? evt.originalEvent.changedTouches[0].clientY : evt.originalEvent?.clientY;
-                    if (clientX !== undefined && clientY !== undefined) {
-                        const droppedOnBucket = handleRadialBucketDrop(clientX, clientY);
+                    // *** CRITICAL FIX: Capture ONLY the recordId (string), not the DOM element ***
+                    // This avoids issues with spreading objects containing DOM references
+                    const capturedMergeTargetId = potentialMergeTarget ? potentialMergeTarget.recordId : null;
+                    console.log('[MERGE DEBUG] onEnd - CAPTURED mergeTargetId:', capturedMergeTargetId);
+
+                    isDragging = false;
+                    clearTimeout(dragDelayTimer);
+
+                    // Clear merge hover state - but we've already captured the ID above
+                    clearMergeHoverState();
+                    deactivateMergeTarget();
+                    console.log('[MERGE DEBUG] onEnd - Merge state cleared, capturedMergeTargetId still:', capturedMergeTargetId);
+
+                    // Remove document-level listeners
+                    document.removeEventListener('mousemove', handleDragMove);
+                    document.removeEventListener('touchmove', handleDragMove);
+
+                    // Check if dropped on a radial bucket
+                    if (radialMenuActive) {
+                        console.log('[MERGE DEBUG] onEnd - Radial menu is active');
+
+                        // Get coordinates from event
+                        let clientX, clientY;
+                        if (evt.originalEvent?.changedTouches && evt.originalEvent.changedTouches.length > 0) {
+                            clientX = evt.originalEvent.changedTouches[0].clientX;
+                            clientY = evt.originalEvent.changedTouches[0].clientY;
+                        } else if (evt.originalEvent) {
+                            clientX = evt.originalEvent.clientX;
+                            clientY = evt.originalEvent.clientY;
+                        }
+
+                        console.log('[MERGE DEBUG] onEnd - Drop coordinates:', clientX, clientY);
+
+                        if (clientX !== undefined && clientY !== undefined) {
+                            // Pass captured merge target ID to the radial handler
+                            console.log('[MERGE DEBUG] onEnd - Calling handleRadialBucketDrop with mergeTargetId:', capturedMergeTargetId);
+                            const droppedOnBucket = handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId);
+                            console.log('[MERGE DEBUG] onEnd - handleRadialBucketDrop returned:', droppedOnBucket);
+                            if (droppedOnBucket) {
+                                console.log('[MERGE DEBUG] onEnd - Dropped on bucket or merge triggered, returning');
+                                return; // Item was moved to bucket or merged, don't update order
+                            }
+                        } else {
+                            console.log('[MERGE DEBUG] onEnd - No valid coordinates, skipping radial drop check');
+                        }
+                        hideRadialMenu();
+                    } else {
+                        console.log('[MERGE DEBUG] onEnd - Legacy bucket path');
+                        // Legacy bucket drop check - pass captured merge target ID
+                        const droppedOnBucket = checkBucketDrop(evt.originalEvent, evt.item, capturedMergeTargetId);
+                        console.log('[MERGE DEBUG] onEnd - checkBucketDrop returned:', droppedOnBucket);
                         if (droppedOnBucket) {
+                            hideDragBuckets();
                             return; // Item was moved to bucket, don't update order
                         }
-                    }
-                    hideRadialMenu();
-                } else {
-                    // Legacy bucket drop check
-                    const droppedOnBucket = checkBucketDrop(evt.originalEvent, evt.item);
-                    console.log('[Presentation DEBUG] droppedOnBucket:', droppedOnBucket);
-                    if (droppedOnBucket) {
                         hideDragBuckets();
-                        return; // Item was moved to bucket, don't update order
                     }
+
+                    // Update the order in state
+                    updateItemOrder();
+                    console.log('[MERGE DEBUG] ============ onEnd COMPLETE ============');
+
+                } catch (error) {
+                    console.error('[MERGE DEBUG] *** EXCEPTION IN onEnd ***:', error);
+                    console.error('[MERGE DEBUG] Error stack:', error.stack);
+                    // Clean up anyway
+                    isDragging = false;
+                    hideRadialMenu();
                     hideDragBuckets();
                 }
-
-                // Update the order in state
-                updateItemOrder();
             }
         });
 
@@ -3097,6 +3236,9 @@ function hideDragBuckets() {
                 pointer-events: none !important;
             `;
         }
+        // Remove any insertion zone indicators
+        const insertionIndicators = document.querySelectorAll('.insertion-zone-indicator');
+        insertionIndicators.forEach(ind => ind.remove());
         // Hide action tooltip
         hideDragActionTooltip();
         // Clear merge target
@@ -3393,6 +3535,10 @@ function hideRadialMenu() {
     hoveredReactionEmoji = null;
     hoveredQuickComment = null;
 
+    // Clear merge hover state
+    clearMergeHoverState();
+    deactivateMergeTarget();
+
     console.log('[Radial Menu] Hidden');
 }
 
@@ -3470,15 +3616,49 @@ function checkRadialBucketHover(clientX, clientY) {
 }
 
 // Handle radial bucket selection (on release)
-function handleRadialBucketDrop(clientX, clientY) {
+// capturedMergeTargetId can be either a string (recordId) or an object with recordId property
+function handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId = null) {
+    // Normalize to string: accept both string ID or object with recordId
+    const mergeTargetId = typeof capturedMergeTargetId === 'string'
+        ? capturedMergeTargetId
+        : (capturedMergeTargetId?.recordId || null);
+
+    console.log('[MERGE DEBUG] handleRadialBucketDrop called');
+    console.log('[MERGE DEBUG] - clientX:', clientX, 'clientY:', clientY);
+    console.log('[MERGE DEBUG] - capturedMergeTargetId (raw):', capturedMergeTargetId);
+    console.log('[MERGE DEBUG] - mergeTargetId (normalized):', mergeTargetId);
+    console.log('[MERGE DEBUG] - radialMenuActive:', radialMenuActive);
+    console.log('[MERGE DEBUG] - currentDraggedRecordId:', currentDraggedRecordId);
+
     if (!radialMenuActive || !currentDraggedRecordId) {
+        console.log('[MERGE DEBUG] handleRadialBucketDrop - early exit: radialMenuActive=' + radialMenuActive + ', currentDraggedRecordId=' + currentDraggedRecordId);
         hideRadialMenu();
         return false;
     }
 
     const hoveredBucket = checkRadialBucketHover(clientX, clientY);
+    console.log('[MERGE DEBUG] handleRadialBucketDrop - hoveredBucket:', hoveredBucket?.dataset?.originalBucket || 'none');
+
+    // *** CRITICAL: If no bucket is hovered but we have a merge target, trigger merge ***
+    if (!hoveredBucket && mergeTargetId) {
+        console.log('[MERGE DEBUG] ================================================');
+        console.log('[MERGE DEBUG] *** MERGE TRIGGERED ***');
+        console.log('[MERGE DEBUG] No bucket hovered, but merge target exists!');
+        console.log('[MERGE DEBUG] Source recordId:', currentDraggedRecordId);
+        console.log('[MERGE DEBUG] Target recordId:', mergeTargetId);
+        console.log('[MERGE DEBUG] Calling openMergeDialog()...');
+        console.log('[MERGE DEBUG] ================================================');
+
+        const sourceId = currentDraggedRecordId;
+        hideRadialMenu();
+        currentDraggedItem = null;
+        currentDraggedRecordId = null;
+        openMergeDialog(sourceId, mergeTargetId);
+        return true;
+    }
 
     if (!hoveredBucket) {
+        console.log('[MERGE DEBUG] handleRadialBucketDrop - no bucket and no merge target');
         hideRadialMenu();
         return false;
     }
@@ -3729,7 +3909,17 @@ function isPointInRect(x, y, rect) {
 // Check if pointer is over a bucket and update hover state
 let bucketHoverDebugCounter = 0;
 function checkBucketHover(event) {
-    if (!dragBucketsEl || !isDragging) return;
+    // DEBUG: Log entry and early exit conditions
+    console.log('[MERGE ZONE DEBUG] checkBucketHover called, guards:', {
+        dragBucketsEl: !!dragBucketsEl,
+        isDragging: isDragging,
+        willEarlyReturn: !dragBucketsEl || !isDragging
+    });
+
+    if (!dragBucketsEl || !isDragging) {
+        console.log('[MERGE ZONE DEBUG] checkBucketHover EARLY RETURN - dragBucketsEl:', !!dragBucketsEl, 'isDragging:', isDragging);
+        return;
+    }
 
     const clientX = event.touches ? event.touches[0].clientX : event.clientX;
     const clientY = event.touches ? event.touches[0].clientY : event.clientY;
@@ -3800,9 +3990,20 @@ function checkBucketHover(event) {
     updateDragActionTooltip(clientX, clientY, hoveredBucket, isOverAnyBucket);
 
     // If not over any bucket, check for potential merge target
+    // DEBUG: Log whether we're entering merge zone check path
+    console.log('[MERGE ZONE DEBUG] checkBucketHover - checking merge path:', {
+        isOverAnyBucket,
+        currentDraggedRecordId,
+        willCheckMerge: !isOverAnyBucket && currentDraggedRecordId,
+        clientX,
+        clientY
+    });
+
     if (!isOverAnyBucket && currentDraggedRecordId) {
+        console.log('[MERGE ZONE DEBUG] >>> Calling checkMergeTargetHover with:', clientX, clientY);
         checkMergeTargetHover(clientX, clientY);
     } else {
+        console.log('[MERGE ZONE DEBUG] Skipping merge check - isOverAnyBucket:', isOverAnyBucket, 'currentDraggedRecordId:', currentDraggedRecordId);
         clearMergeTarget();
         if (dragMergeIndicator) {
             // Use robust hide pattern
@@ -3938,123 +4139,228 @@ function checkQuickCommentOptionHover(clientX, clientY) {
 }
 
 // Check if hovering over another item for potential merge
+// DWELL-TIME BASED MERGE: Hover over an item for MERGE_DWELL_TIME_MS to activate merge
+// This works better with SortableJS since cursor position relative to items changes constantly
+const MERGE_ZONE_THRESHOLD = 0.15; // 15% from top/bottom = central 70% is merge zone (much wider)
 let mergeHoverDebugCounter = 0;
+
 function checkMergeTargetHover(clientX, clientY) {
+    // === MERGE ZONE DEBUG (reduced verbosity) ===
+    mergeHoverDebugCounter++;
+
     if (!itineraryItemsListEl) {
-        console.log('[Merge DEBUG] No itineraryItemsListEl available');
         return;
     }
 
     const items = itineraryItemsListEl.querySelectorAll('.itinerary-item-section:not(.sortable-drag)');
-    let foundTarget = null;
 
-    // Debug every 20th call to avoid console spam
-    mergeHoverDebugCounter++;
-    const shouldLog = mergeHoverDebugCounter % 20 === 0;
+    let foundHoveredItem = null;
+    let foundHoveredItemId = null;
 
-    if (shouldLog) {
-        console.log('[Merge DEBUG] Checking merge hover at:', clientX, clientY, 'items count:', items.length, 'currentDraggedRecordId:', currentDraggedRecordId);
-    }
-
-    items.forEach(item => {
+    items.forEach((item, index) => {
         const article = item.querySelector('.itinerary-item');
         const itemRecordId = article?.dataset.recordId;
 
         // Don't merge with self
-        if (itemRecordId === currentDraggedRecordId) return;
+        if (itemRecordId === currentDraggedRecordId) {
+            return;
+        }
 
         const rect = item.getBoundingClientRect();
-        if (isPointInRect(clientX, clientY, rect)) {
-            foundTarget = { element: item, recordId: itemRecordId };
-            if (shouldLog) {
-                console.log('[Merge DEBUG] Found target item:', itemRecordId);
+        const isInBounds = isPointInRect(clientX, clientY, rect);
+
+        if (isInBounds) {
+            // Calculate where in the item the cursor is (0 = top, 1 = bottom)
+            const relativeY = (clientY - rect.top) / rect.height;
+
+            // Use a very wide merge zone - only extreme edges (15% top/bottom) are insertion zones
+            // This means 70% of the item height is merge zone
+            const isInMergeZone = relativeY >= MERGE_ZONE_THRESHOLD && relativeY <= (1 - MERGE_ZONE_THRESHOLD);
+
+            if (isInMergeZone) {
+                foundHoveredItem = item;
+                foundHoveredItemId = itemRecordId;
             }
         }
     });
 
-    // Update merge target highlighting
+    // DWELL-TIME LOGIC: Track how long we've been hovering over the same item
+    if (foundHoveredItemId && foundHoveredItemId !== mergeHoverItemId) {
+        // Started hovering over a new item - reset the timer
+        console.log(`[MERGE ZONE DEBUG] Started hovering over item: ${foundHoveredItemId}`);
+        mergeHoverItemId = foundHoveredItemId;
+        mergeHoverStartTime = Date.now();
+
+        // Clear any existing timer
+        if (mergeHoverTimer) {
+            clearTimeout(mergeHoverTimer);
+        }
+
+        // Set a timer to activate merge after dwell time
+        mergeHoverTimer = setTimeout(() => {
+            if (mergeHoverItemId === foundHoveredItemId && isDragging) {
+                console.log(`[MERGE ZONE DEBUG] *** DWELL TIME REACHED - ACTIVATING MERGE for ${foundHoveredItemId} ***`);
+                activateMergeTarget(foundHoveredItem, foundHoveredItemId, clientX, clientY);
+            }
+        }, MERGE_DWELL_TIME_MS);
+
+    } else if (!foundHoveredItemId) {
+        // No longer hovering over any valid item - clear merge state
+        if (mergeHoverItemId) {
+            console.log(`[MERGE ZONE DEBUG] Stopped hovering - clearing merge state`);
+        }
+        clearMergeHoverState();
+        deactivateMergeTarget();
+    } else if (foundHoveredItemId === mergeHoverItemId && potentialMergeTarget) {
+        // Still hovering over the same item and merge is active - update indicator position
+        updateMergeIndicatorPosition(clientX, clientY);
+    }
+    // If still hovering over the same item but merge not yet active, the timer will handle activation
+}
+
+// Clear merge hover tracking state
+function clearMergeHoverState() {
+    mergeHoverItemId = null;
+    mergeHoverStartTime = null;
+    if (mergeHoverTimer) {
+        clearTimeout(mergeHoverTimer);
+        mergeHoverTimer = null;
+    }
+}
+
+// Activate merge target with visual feedback
+function activateMergeTarget(element, recordId, clientX, clientY) {
+    console.log('[MERGE ZONE DEBUG] ================================================');
+    console.log('[MERGE ZONE DEBUG] *** ACTIVATING MERGE HIGHLIGHT ***');
+    console.log('[MERGE ZONE DEBUG] Target recordId:', recordId);
+    console.log('[MERGE ZONE DEBUG] Element:', element?.className);
+    console.log('[MERGE ZONE DEBUG] ================================================');
+
+    // Remove highlight from any previous target
     const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
-    if (currentTarget && (!foundTarget || currentTarget !== foundTarget.element)) {
+    if (currentTarget && currentTarget !== element) {
         currentTarget.classList.remove('merge-target');
-        // Reset inline styles when removing merge-target
         currentTarget.style.outline = '';
         currentTarget.style.outlineOffset = '';
         currentTarget.style.background = '';
         currentTarget.style.animation = '';
     }
 
-    if (foundTarget) {
-        foundTarget.element.classList.add('merge-target');
-        // Apply inline styles for robust visibility (same pattern as radial menu fix)
-        // This ensures the pulsing green outline appears above all other layers
-        foundTarget.element.style.cssText = foundTarget.element.style.cssText + `
-            outline: 3px solid rgba(76, 175, 80, 0.9) !important;
-            outline-offset: 4px !important;
-            background: rgba(76, 175, 80, 0.15) !important;
-            position: relative !important;
-            z-index: 100 !important;
+    // Apply merge target styling
+    element.classList.add('merge-target');
+    element.style.cssText = element.style.cssText + `
+        outline: 3px solid rgba(76, 175, 80, 0.9) !important;
+        outline-offset: 4px !important;
+        background: rgba(76, 175, 80, 0.15) !important;
+        position: relative !important;
+        z-index: 100 !important;
+    `;
+
+    potentialMergeTarget = { element, recordId };
+    console.log('[MERGE ZONE DEBUG] ================================================');
+    console.log('[MERGE ZONE DEBUG] potentialMergeTarget set to:', recordId);
+    console.log('[MERGE ZONE DEBUG] potentialMergeTarget object:', potentialMergeTarget);
+    console.log('[MERGE ZONE DEBUG] ================================================');
+
+    // Show merge indicator
+    showMergeIndicator(clientX, clientY);
+}
+
+// Show the merge indicator near the cursor
+function showMergeIndicator(clientX, clientY) {
+    if (!dragMergeIndicator) {
+        console.log('[MERGE ZONE DEBUG] WARNING: dragMergeIndicator is null/undefined!');
+        return;
+    }
+
+    // Move merge indicator to document.body to bypass any parent CSS inheritance issues
+    if (dragMergeIndicator.parentElement !== document.body) {
+        document.body.appendChild(dragMergeIndicator);
+    }
+
+    // Apply comprehensive inline styles
+    const indicatorStyles = `
+        position: fixed !important;
+        left: ${clientX + 20}px !important;
+        top: ${clientY - 20}px !important;
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        z-index: 99998 !important;
+        pointer-events: none !important;
+        padding: 12px 20px !important;
+        background: linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(56, 142, 60, 0.95)) !important;
+        border: 2px solid rgba(255, 255, 255, 0.8) !important;
+        border-radius: 20px !important;
+        box-shadow: 0 8px 32px rgba(76, 175, 80, 0.5) !important;
+        align-items: center !important;
+        gap: 8px !important;
+        color: white !important;
+        font-weight: 600 !important;
+        font-size: 14px !important;
+    `;
+    dragMergeIndicator.style.cssText = indicatorStyles;
+
+    // Update indicator content
+    dragMergeIndicator.innerHTML = '<span style="font-size: 18px;">🔗</span><span>Merge Items</span>';
+
+    console.log('[MERGE ZONE DEBUG] Merge indicator shown');
+}
+
+// Update merge indicator position while hovering
+function updateMergeIndicatorPosition(clientX, clientY) {
+    if (!dragMergeIndicator) return;
+
+    // Just update the position
+    dragMergeIndicator.style.left = `${clientX + 20}px`;
+    dragMergeIndicator.style.top = `${clientY - 20}px`;
+}
+
+// Deactivate merge target and hide indicator
+function deactivateMergeTarget() {
+    console.log('[MERGE ZONE DEBUG] deactivateMergeTarget() called');
+    console.log('[MERGE ZONE DEBUG] potentialMergeTarget BEFORE clearing:', potentialMergeTarget?.recordId);
+
+    // Remove merge-target class from any highlighted item
+    const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
+    if (currentTarget) {
+        currentTarget.classList.remove('merge-target');
+        currentTarget.style.outline = '';
+        currentTarget.style.outlineOffset = '';
+        currentTarget.style.background = '';
+        currentTarget.style.animation = '';
+    }
+
+    potentialMergeTarget = null;
+    console.log('[MERGE ZONE DEBUG] potentialMergeTarget AFTER clearing: null');
+
+    // Hide the merge indicator
+    if (dragMergeIndicator) {
+        dragMergeIndicator.style.cssText = `
+            position: fixed !important;
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
         `;
-        potentialMergeTarget = foundTarget;
-        console.log('[Merge Target] Highlighting item:', foundTarget.recordId);
-
-        // Show merge indicator near cursor with ROBUST VISIBILITY FIX
-        // (Same pattern as radial menu fix to ensure visibility above all layers)
-        if (dragMergeIndicator) {
-            // Move merge indicator to document.body to bypass any parent CSS inheritance issues
-            if (dragMergeIndicator.parentElement !== document.body) {
-                document.body.appendChild(dragMergeIndicator);
-                console.log('[Merge Indicator] Moved to document.body for proper layering');
-            }
-
-            // Apply comprehensive inline styles - use cssText for maximum override
-            dragMergeIndicator.style.cssText = `
-                position: fixed !important;
-                left: ${clientX + 20}px !important;
-                top: ${clientY - 20}px !important;
-                display: flex !important;
-                visibility: visible !important;
-                opacity: 1 !important;
-                z-index: 99998 !important;
-                pointer-events: none !important;
-                padding: 12px 20px !important;
-                background: linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(56, 142, 60, 0.95)) !important;
-                border: 2px solid rgba(255, 255, 255, 0.8) !important;
-                border-radius: 20px !important;
-                box-shadow: 0 8px 32px rgba(76, 175, 80, 0.5) !important;
-                align-items: center !important;
-                gap: 8px !important;
-                animation: pulse-merge 1s ease infinite !important;
-            `;
-
-            console.log('[Merge Indicator] Shown at:', clientX + 20, clientY - 20);
-        }
-    } else {
-        potentialMergeTarget = null;
-        if (dragMergeIndicator) {
-            // Robust hide with cssText to override all styles
-            dragMergeIndicator.style.cssText = `
-                position: fixed !important;
-                display: none !important;
-                visibility: hidden !important;
-                opacity: 0 !important;
-                pointer-events: none !important;
-            `;
-        }
     }
 }
 
 // Handle mouse/touch move during drag
 let dragMoveDebugCounter = 0;
 function handleDragMove(event) {
-    // DEBUG: Log every 30th move event to avoid console spam
+    // DEBUG: Log every 10th move event with merge-specific info
     dragMoveDebugCounter++;
-    if (dragMoveDebugCounter % 30 === 0) {
-        const clientX = event.touches ? event.touches[0].clientX : event.clientX;
-        const clientY = event.touches ? event.touches[0].clientY : event.clientY;
-        console.log('[Presentation DEBUG] handleDragMove:', {
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+    if (dragMoveDebugCounter % 10 === 0) {
+        console.log('[MERGE ZONE DEBUG] handleDragMove #' + dragMoveDebugCounter + ':', {
             clientX,
             clientY,
             isDragging,
+            currentDraggedRecordId,
+            radialMenuActive,
             dragBucketsElExists: !!dragBucketsEl,
             hasDragActiveClass: dragBucketsEl ? dragBucketsEl.classList.contains('drag-active') : false
         });
@@ -4073,8 +4379,15 @@ function handleDragMove(event) {
 }
 
 // Check if item was dropped on a bucket
-function checkBucketDrop(event, item) {
-    console.log('[Presentation DEBUG] checkBucketDrop called, event:', !!event, 'item:', !!item, 'dragBucketsEl:', !!dragBucketsEl);
+function checkBucketDrop(event, item, capturedMergeTargetId = null) {
+    // Normalize to string: accept both string ID or object with recordId
+    const mergeTargetId = typeof capturedMergeTargetId === 'string'
+        ? capturedMergeTargetId
+        : (capturedMergeTargetId?.recordId || null);
+
+    console.log('[MERGE DEBUG] checkBucketDrop called');
+    console.log('[MERGE DEBUG] - capturedMergeTargetId (raw):', capturedMergeTargetId);
+    console.log('[MERGE DEBUG] - mergeTargetId (normalized):', mergeTargetId);
     if (!dragBucketsEl) return false;
 
     const clientX = event?.changedTouches ? event.changedTouches[0].clientX : event?.clientX;
@@ -4182,10 +4495,21 @@ function checkBucketDrop(event, item) {
     }
 
     // Check for merge (drop on another item)
-    if (potentialMergeTarget && potentialMergeTarget.recordId) {
-        console.log('[Presentation DEBUG] Dropped on another item for merge!');
-        openMergeDialog(recordId, potentialMergeTarget.recordId);
+    console.log('[MERGE DEBUG] Checking for merge drop...');
+    console.log('[MERGE DEBUG] mergeTargetId:', mergeTargetId);
+
+    // *** CRITICAL: Use mergeTargetId (captured before clearing) ***
+    if (mergeTargetId) {
+        console.log('[MERGE DEBUG] ================================================');
+        console.log('[MERGE DEBUG] *** MERGE TRIGGERED from legacy path ***');
+        console.log('[MERGE DEBUG] Source recordId:', recordId);
+        console.log('[MERGE DEBUG] Target recordId:', mergeTargetId);
+        console.log('[MERGE DEBUG] Calling openMergeDialog()...');
+        console.log('[MERGE DEBUG] ================================================');
+        openMergeDialog(recordId, mergeTargetId);
         return true;
+    } else {
+        console.log('[MERGE DEBUG] No merge target detected');
     }
 
     return false;
@@ -4508,81 +4832,511 @@ async function openCustomCommentDialog(recordId) {
     }
 }
 
+// Store for pending merge estimations
+let pendingMergeEstimation = null;
+
 // Open merge dialog for two items
 async function openMergeDialog(sourceRecordId, targetRecordId) {
-    console.log('[Presentation DEBUG] openMergeDialog called:', sourceRecordId, targetRecordId);
-    if (!sourceRecordId || !targetRecordId) return;
+    console.log('[MERGE DEBUG] ================================================');
+    console.log('[MERGE DEBUG] openMergeDialog() STARTING');
+    console.log('[MERGE DEBUG] Source Record ID:', sourceRecordId);
+    console.log('[MERGE DEBUG] Target Record ID:', targetRecordId);
+    console.log('[MERGE DEBUG] ================================================');
+
+    if (!sourceRecordId || !targetRecordId) {
+        console.error('[MERGE DEBUG] ✗ ABORTING - Missing record IDs!', { sourceRecordId, targetRecordId });
+        return;
+    }
 
     const sourceRecord = state.records.all.find(r => r.id === sourceRecordId);
     const targetRecord = state.records.all.find(r => r.id === targetRecordId);
     const sourceName = sourceRecord?.fields?.Name || 'Source item';
     const targetName = targetRecord?.fields?.Name || 'Target item';
 
+    console.log('[MERGE DEBUG] Source Record:', sourceRecord?.fields?.Name);
+    console.log('[MERGE DEBUG] Target Record:', targetRecord?.fields?.Name);
+
     // Store pending merge info
     pendingMergeSource = sourceRecordId;
     pendingMergeTarget = targetRecordId;
+    pendingMergeEstimation = null;
 
     // Update dialog content with item names
+    console.log('[MERGE DEBUG] Updating dialog content...');
+    console.log('[MERGE DEBUG] mergeDialogSourceName element:', mergeDialogSourceName);
+    console.log('[MERGE DEBUG] mergeDialogTargetName element:', mergeDialogTargetName);
+
     if (mergeDialogSourceName) {
         mergeDialogSourceName.textContent = sourceName;
+        console.log('[MERGE DEBUG] ✓ Set source name:', sourceName);
+    } else {
+        console.error('[MERGE DEBUG] ✗ mergeDialogSourceName NOT FOUND!');
     }
     if (mergeDialogTargetName) {
         mergeDialogTargetName.textContent = targetName;
+        console.log('[MERGE DEBUG] ✓ Set target name:', targetName);
+    } else {
+        console.error('[MERGE DEBUG] ✗ mergeDialogTargetName NOT FOUND!');
+    }
+
+    // Reset estimation preview
+    const estimationPreview = document.getElementById('merge-estimation-preview');
+    const estimationLoading = estimationPreview?.querySelector('.merge-estimation-loading');
+    const estimationResult = estimationPreview?.querySelector('.merge-estimation-result');
+    const optionsSection = estimationPreview?.querySelector('.estimation-options');
+    const hybridSection = estimationPreview?.querySelector('.estimation-hybrid');
+
+    console.log('[MERGE DEBUG] Estimation preview elements:', {
+        estimationPreview: !!estimationPreview,
+        estimationLoading: !!estimationLoading,
+        estimationResult: !!estimationResult,
+        optionsSection: !!optionsSection,
+        hybridSection: !!hybridSection
+    });
+
+    if (estimationPreview) {
+        estimationPreview.style.display = 'none';
+    }
+    if (estimationLoading) {
+        estimationLoading.style.display = 'flex';
+    }
+    if (estimationResult) {
+        estimationResult.style.display = 'none';
+    }
+    if (optionsSection) {
+        optionsSection.style.display = 'none';
+    }
+    if (hybridSection) {
+        hybridSection.style.display = 'none';
     }
 
     // Show the merge options dialog
+    console.log('[MERGE DEBUG] ================================================');
+    console.log('[MERGE DEBUG] ATTEMPTING TO SHOW MERGE DIALOG');
+    console.log('[MERGE DEBUG] ================================================');
+    console.log('[MERGE DEBUG] mergeOptionsDialog variable:', mergeOptionsDialog);
+
+    // Re-fetch from DOM in case it wasn't cached properly
+    const dialogFromDOM = document.getElementById('merge-options-dialog');
+    console.log('[MERGE DEBUG] Dialog element from DOM:', dialogFromDOM);
+
     if (mergeOptionsDialog) {
+        // DEBUG: Get computed styles BEFORE showing
+        const computedBefore = window.getComputedStyle(mergeOptionsDialog);
+        console.log('[MERGE DEBUG] BEFORE showing - Computed styles:', {
+            display: computedBefore.display,
+            visibility: computedBefore.visibility,
+            opacity: computedBefore.opacity,
+            zIndex: computedBefore.zIndex,
+            position: computedBefore.position,
+            pointerEvents: computedBefore.pointerEvents
+        });
+
+        // Show the dialog
         mergeOptionsDialog.style.display = 'flex';
+        console.log('[MERGE DEBUG] ✓ Set display to flex');
+
+        // DEBUG: Get computed styles AFTER showing
+        const computedAfter = window.getComputedStyle(mergeOptionsDialog);
+        console.log('[MERGE DEBUG] AFTER showing - Computed styles:', {
+            display: computedAfter.display,
+            visibility: computedAfter.visibility,
+            opacity: computedAfter.opacity,
+            zIndex: computedAfter.zIndex,
+            position: computedAfter.position,
+            pointerEvents: computedAfter.pointerEvents
+        });
+
+        // DEBUG: Check bounding rect
+        const rect = mergeOptionsDialog.getBoundingClientRect();
+        console.log('[MERGE DEBUG] Dialog bounding rect:', {
+            top: rect.top,
+            left: rect.left,
+            width: rect.width,
+            height: rect.height,
+            right: rect.right,
+            bottom: rect.bottom
+        });
+
+        // DEBUG: Check parent elements
+        console.log('[MERGE DEBUG] Parent element:', mergeOptionsDialog.parentElement?.id || mergeOptionsDialog.parentElement?.className);
+        console.log('[MERGE DEBUG] Parent tagName:', mergeOptionsDialog.parentElement?.tagName);
+
+        // DEBUG: Check if any parent has overflow:hidden or visibility issues
+        let parent = mergeOptionsDialog.parentElement;
+        let parentChain = [];
+        while (parent && parentChain.length < 10) {
+            const parentStyle = window.getComputedStyle(parent);
+            parentChain.push({
+                tag: parent.tagName,
+                id: parent.id,
+                class: parent.className?.substring?.(0, 50),
+                overflow: parentStyle.overflow,
+                visibility: parentStyle.visibility,
+                display: parentStyle.display,
+                zIndex: parentStyle.zIndex
+            });
+            parent = parent.parentElement;
+        }
+        console.log('[MERGE DEBUG] Parent chain styles:', parentChain);
+
+        // DEBUG: Check dialog content
+        const dialogContent = mergeOptionsDialog.querySelector('.merge-options-dialog-content');
+        if (dialogContent) {
+            const contentStyle = window.getComputedStyle(dialogContent);
+            console.log('[MERGE DEBUG] Dialog content computed styles:', {
+                display: contentStyle.display,
+                visibility: contentStyle.visibility,
+                opacity: contentStyle.opacity,
+                width: contentStyle.width,
+                height: contentStyle.height
+            });
+        }
+
+        // DEBUG: Check merge option buttons visibility
+        const groupBtn = document.getElementById('merge-option-group');
+        const combineBtn = document.getElementById('merge-option-combine');
+        if (groupBtn) {
+            const groupStyle = window.getComputedStyle(groupBtn);
+            console.log('[MERGE DEBUG] Group (As Options) button styles:', {
+                display: groupStyle.display,
+                visibility: groupStyle.visibility,
+                opacity: groupStyle.opacity,
+                width: groupStyle.width,
+                height: groupStyle.height,
+                position: groupStyle.position
+            });
+            console.log('[MERGE DEBUG] Group button bounding rect:', groupBtn.getBoundingClientRect());
+        }
+        if (combineBtn) {
+            const combineStyle = window.getComputedStyle(combineBtn);
+            console.log('[MERGE DEBUG] Combine (As Hybrid) button styles:', {
+                display: combineStyle.display,
+                visibility: combineStyle.visibility,
+                opacity: combineStyle.opacity,
+                width: combineStyle.width,
+                height: combineStyle.height,
+                position: combineStyle.position
+            });
+            console.log('[MERGE DEBUG] Combine button bounding rect:', combineBtn.getBoundingClientRect());
+        }
+
+        // DEBUG: Check merge-dialog-options container
+        const optionsContainer = mergeOptionsDialog.querySelector('.merge-dialog-options');
+        if (optionsContainer) {
+            const optContainerStyle = window.getComputedStyle(optionsContainer);
+            console.log('[MERGE DEBUG] Options container (.merge-dialog-options) styles:', {
+                display: optContainerStyle.display,
+                visibility: optContainerStyle.visibility,
+                opacity: optContainerStyle.opacity,
+                flexDirection: optContainerStyle.flexDirection,
+                gap: optContainerStyle.gap
+            });
+            console.log('[MERGE DEBUG] Options container children:', optionsContainer.children.length);
+        } else {
+            console.error('[MERGE DEBUG] ✗ .merge-dialog-options container NOT FOUND!');
+        }
+
+    } else {
+        console.error('[MERGE DEBUG] ✗ mergeOptionsDialog is NULL/UNDEFINED - DIALOG CANNOT BE SHOWN!');
+        console.log('[MERGE DEBUG] Attempting to use DOM element directly...');
+        if (dialogFromDOM) {
+            dialogFromDOM.style.display = 'flex';
+            console.log('[MERGE DEBUG] ✓ Used DOM element directly to set display');
+        } else {
+            console.error('[MERGE DEBUG] ✗ Dialog element also not found in DOM!');
+        }
     }
 
     log('Presentation', `Merge dialog opened for ${sourceRecordId} and ${targetRecordId}`);
+
+    // DEBUG: Comprehensive layering diagnostic
+    console.log('[MERGE DEBUG] ================================================');
+    console.log('[MERGE DEBUG] COMPREHENSIVE LAYERING DIAGNOSTIC');
+    console.log('[MERGE DEBUG] ================================================');
+
+    // Check all elements with high z-index that might overlap
+    const highZIndexElements = [];
+    document.querySelectorAll('*').forEach(el => {
+        const style = window.getComputedStyle(el);
+        const zIndex = parseInt(style.zIndex);
+        if (!isNaN(zIndex) && zIndex > 1000) {
+            const rect = el.getBoundingClientRect();
+            highZIndexElements.push({
+                id: el.id,
+                class: el.className?.substring?.(0, 40),
+                zIndex: zIndex,
+                display: style.display,
+                visibility: style.visibility,
+                rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
+            });
+        }
+    });
+    console.log('[MERGE DEBUG] Elements with z-index > 1000:', highZIndexElements);
+
+    // Check for any fixed/absolute positioned elements that might overlap
+    const overlappingElements = [];
+    if (mergeOptionsDialog) {
+        const dialogRect = mergeOptionsDialog.getBoundingClientRect();
+        document.querySelectorAll('*').forEach(el => {
+            if (el === mergeOptionsDialog) return;
+            const style = window.getComputedStyle(el);
+            if (style.position === 'fixed' || style.position === 'absolute') {
+                const elRect = el.getBoundingClientRect();
+                // Check if element overlaps with dialog and is visible
+                if (style.display !== 'none' && style.visibility !== 'hidden' &&
+                    elRect.width > 0 && elRect.height > 0 &&
+                    !(elRect.right < dialogRect.left || elRect.left > dialogRect.right ||
+                      elRect.bottom < dialogRect.top || elRect.top > dialogRect.bottom)) {
+                    overlappingElements.push({
+                        id: el.id,
+                        class: el.className?.substring?.(0, 40),
+                        zIndex: style.zIndex,
+                        position: style.position
+                    });
+                }
+            }
+        });
+    }
+    console.log('[MERGE DEBUG] Overlapping fixed/absolute elements:', overlappingElements);
+
+    // Verify buttons are clickable using elementFromPoint
+    setTimeout(() => {
+        console.log('[MERGE DEBUG] ================================================');
+        console.log('[MERGE DEBUG] CLICKABILITY TEST (after 100ms)');
+        console.log('[MERGE DEBUG] ================================================');
+
+        const groupBtn = document.getElementById('merge-option-group');
+        const combineBtn = document.getElementById('merge-option-combine');
+
+        if (groupBtn) {
+            const groupRect = groupBtn.getBoundingClientRect();
+            const groupCenterX = groupRect.left + groupRect.width / 2;
+            const groupCenterY = groupRect.top + groupRect.height / 2;
+            const elementAtGroupCenter = document.elementFromPoint(groupCenterX, groupCenterY);
+            console.log('[MERGE DEBUG] "As Options" button center:', { x: groupCenterX, y: groupCenterY });
+            console.log('[MERGE DEBUG] Element at "As Options" center:', elementAtGroupCenter?.id || elementAtGroupCenter?.className?.substring?.(0, 50));
+            console.log('[MERGE DEBUG] Is it the button or child?', elementAtGroupCenter === groupBtn || groupBtn.contains(elementAtGroupCenter));
+        }
+
+        if (combineBtn) {
+            const combineRect = combineBtn.getBoundingClientRect();
+            const combineCenterX = combineRect.left + combineRect.width / 2;
+            const combineCenterY = combineRect.top + combineRect.height / 2;
+            const elementAtCombineCenter = document.elementFromPoint(combineCenterX, combineCenterY);
+            console.log('[MERGE DEBUG] "As Hybrid" button center:', { x: combineCenterX, y: combineCenterY });
+            console.log('[MERGE DEBUG] Element at "As Hybrid" center:', elementAtCombineCenter?.id || elementAtCombineCenter?.className?.substring?.(0, 50));
+            console.log('[MERGE DEBUG] Is it the button or child?', elementAtCombineCenter === combineBtn || combineBtn.contains(elementAtCombineCenter));
+        }
+
+        // Check dialog center
+        if (mergeOptionsDialog) {
+            const dialogRect = mergeOptionsDialog.getBoundingClientRect();
+            const dialogCenterX = dialogRect.left + dialogRect.width / 2;
+            const dialogCenterY = dialogRect.top + dialogRect.height / 2;
+            const elementAtDialogCenter = document.elementFromPoint(dialogCenterX, dialogCenterY);
+            console.log('[MERGE DEBUG] Dialog center:', { x: dialogCenterX, y: dialogCenterY });
+            console.log('[MERGE DEBUG] Element at dialog center:', elementAtDialogCenter?.id || elementAtDialogCenter?.className?.substring?.(0, 50));
+        }
+
+        console.log('[MERGE DEBUG] ================================================');
+    }, 100);
+
+    console.log('[MERGE DEBUG] ================================================');
+    console.log('[MERGE DEBUG] openMergeDialog() COMPLETE');
+    console.log('[MERGE DEBUG] ================================================');
+
+    // Fetch AI estimation in background
+    fetchMergeEstimation(sourceRecord, targetRecord);
+}
+
+// Fetch AI estimation for merge
+async function fetchMergeEstimation(sourceRecord, targetRecord) {
+    console.log('[MERGE DEBUG] fetchMergeEstimation() STARTING');
+
+    const estimationPreview = document.getElementById('merge-estimation-preview');
+    const estimationLoading = estimationPreview?.querySelector('.merge-estimation-loading');
+    const estimationResult = estimationPreview?.querySelector('.merge-estimation-result');
+    const optionsSection = estimationPreview?.querySelector('.estimation-options');
+    const hybridSection = estimationPreview?.querySelector('.estimation-hybrid');
+
+    console.log('[MERGE DEBUG] Estimation elements found:', {
+        estimationPreview: !!estimationPreview,
+        estimationLoading: !!estimationLoading,
+        estimationResult: !!estimationResult,
+        optionsSection: !!optionsSection,
+        hybridSection: !!hybridSection
+    });
+
+    if (!estimationPreview) {
+        console.warn('[MERGE DEBUG] estimationPreview not found - skipping estimation fetch');
+        return;
+    }
+
+    // Show loading state
+    estimationPreview.style.display = 'block';
+    if (estimationLoading) estimationLoading.style.display = 'flex';
+    if (estimationResult) estimationResult.style.display = 'none';
+    console.log('[MERGE DEBUG] Loading state shown');
+
+    const item1 = {
+        name: sourceRecord?.fields?.Name || 'Item',
+        description: sourceRecord?.fields?.Description || '',
+        category: sourceRecord?.fields?.Category || '',
+        price: sourceRecord?.fields?.Price || ''
+    };
+
+    const item2 = {
+        name: targetRecord?.fields?.Name || 'Item',
+        description: targetRecord?.fields?.Description || '',
+        category: targetRecord?.fields?.Category || '',
+        price: targetRecord?.fields?.Price || ''
+    };
+
+    console.log('[MERGE DEBUG] Fetching estimations for items:', { item1: item1.name, item2: item2.name });
+
+    try {
+        // Fetch both estimations in parallel
+        const [optionsResult, hybridResult] = await Promise.all([
+            fetchEstimation(item1, item2, 'options'),
+            fetchEstimation(item1, item2, 'hybrid')
+        ]);
+
+        console.log('[MERGE DEBUG] Estimation results received:', { optionsResult, hybridResult });
+
+        // Store estimation for use when confirming merge
+        pendingMergeEstimation = {
+            options: optionsResult?.estimation || null,
+            hybrid: hybridResult?.estimation || null
+        };
+        console.log('[MERGE DEBUG] pendingMergeEstimation stored:', pendingMergeEstimation);
+
+        // Update UI with results
+        if (estimationLoading) estimationLoading.style.display = 'none';
+        if (estimationResult) estimationResult.style.display = 'flex';
+        console.log('[MERGE DEBUG] Estimation results UI shown');
+
+        // Update options section
+        if (optionsResult?.estimation && optionsSection) {
+            const categoryEl = document.getElementById('estimation-category');
+            const descEl = document.getElementById('estimation-description');
+            if (categoryEl) categoryEl.textContent = optionsResult.estimation.categoryName || 'Options';
+            if (descEl) descEl.textContent = optionsResult.estimation.categoryDescription || '';
+            optionsSection.style.display = 'flex';
+            console.log('[MERGE DEBUG] Options section updated');
+        }
+
+        // Update hybrid section
+        if (hybridResult?.estimation && hybridSection) {
+            const nameEl = document.getElementById('estimation-hybrid-name');
+            const descEl = document.getElementById('estimation-hybrid-description');
+            if (nameEl) nameEl.textContent = hybridResult.estimation.hybridName || 'Combined Idea';
+            if (descEl) descEl.textContent = hybridResult.estimation.hybridDescription || '';
+            hybridSection.style.display = 'flex';
+            console.log('[MERGE DEBUG] Hybrid section updated');
+        }
+
+        console.log('[MERGE DEBUG] fetchMergeEstimation() COMPLETE SUCCESS');
+
+    } catch (error) {
+        console.error('[MERGE DEBUG] Error fetching merge estimation:', error);
+        console.log('[MERGE DEBUG] Hiding estimation preview due to error - merge buttons should still work');
+        // Hide estimation preview on error - merge will still work with defaults
+        if (estimationPreview) estimationPreview.style.display = 'none';
+    }
+}
+
+// Helper to fetch a single estimation
+async function fetchEstimation(item1, item2, mergeType) {
+    console.log(`[MERGE DEBUG] fetchEstimation() starting for ${mergeType}`);
+    try {
+        const response = await fetch('/.netlify/functions/estimate-merge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item1, item2, mergeType })
+        });
+
+        if (!response.ok) {
+            console.warn(`[MERGE DEBUG] Estimation fetch failed for ${mergeType}: HTTP ${response.status}`);
+            return null;
+        }
+
+        const data = await response.json();
+        console.log(`[MERGE DEBUG] fetchEstimation() success for ${mergeType}:`, data);
+        return data;
+    } catch (error) {
+        console.error(`[MERGE DEBUG] Error fetching ${mergeType} estimation:`, error);
+        return null;
+    }
 }
 
 // Close the merge options dialog
 function closeMergeDialog() {
+    console.log('[MERGE DEBUG] closeMergeDialog() called');
     if (mergeOptionsDialog) {
         mergeOptionsDialog.style.display = 'none';
+        console.log('[MERGE DEBUG] ✓ Dialog display set to none');
+    } else {
+        console.warn('[MERGE DEBUG] mergeOptionsDialog is null in closeMergeDialog');
     }
     pendingMergeSource = null;
     pendingMergeTarget = null;
+    pendingMergeEstimation = null;
+    console.log('[MERGE DEBUG] Pending merge state cleared');
 }
 
-// Handle merge option: Combine into single idea
+// Handle merge option: Combine into single idea (As Hybrid)
 async function handleMergeCombine() {
-    console.log('[Presentation DEBUG] handleMergeCombine called');
+    console.log('[MERGE DEBUG] ================================================');
+    console.log('[MERGE DEBUG] handleMergeCombine() - "As Hybrid" button clicked!');
+    console.log('[MERGE DEBUG] pendingMergeSource:', pendingMergeSource);
+    console.log('[MERGE DEBUG] pendingMergeTarget:', pendingMergeTarget);
+    console.log('[MERGE DEBUG] ================================================');
+
     if (!pendingMergeSource || !pendingMergeTarget) {
+        console.warn('[MERGE DEBUG] No pending merge - closing dialog');
         closeMergeDialog();
         return;
     }
 
     const sourceId = pendingMergeSource;
     const targetId = pendingMergeTarget;
+    const hybridEstimation = pendingMergeEstimation?.hybrid || null;
+    console.log('[MERGE DEBUG] Proceeding with hybrid merge:', { sourceId, targetId, hybridEstimation });
     closeMergeDialog();
 
-    await combineItemsIntoOne(sourceId, targetId);
+    await combineItemsIntoOne(sourceId, targetId, hybridEstimation);
 }
 
-// Handle merge option: Group as options/category
+// Handle merge option: Group as options/category (As Options)
 async function handleMergeGroup() {
-    console.log('[Presentation DEBUG] handleMergeGroup called');
+    console.log('[MERGE DEBUG] ================================================');
+    console.log('[MERGE DEBUG] handleMergeGroup() - "As Options" button clicked!');
+    console.log('[MERGE DEBUG] pendingMergeSource:', pendingMergeSource);
+    console.log('[MERGE DEBUG] pendingMergeTarget:', pendingMergeTarget);
+    console.log('[MERGE DEBUG] ================================================');
+
     if (!pendingMergeSource || !pendingMergeTarget) {
+        console.warn('[MERGE DEBUG] No pending merge - closing dialog');
         closeMergeDialog();
         return;
     }
 
     const sourceId = pendingMergeSource;
     const targetId = pendingMergeTarget;
+    const optionsEstimation = pendingMergeEstimation?.options || null;
+    console.log('[MERGE DEBUG] Proceeding with options group:', { sourceId, targetId, optionsEstimation });
     closeMergeDialog();
 
-    await createRelatedCategory(sourceId, targetId);
+    await createRelatedCategory(sourceId, targetId, optionsEstimation);
 }
 
-// Combine two items into a single cohesive idea
-async function combineItemsIntoOne(sourceRecordId, targetRecordId) {
-    console.log('[Presentation DEBUG] combineItemsIntoOne called:', sourceRecordId, targetRecordId);
+// Combine two items into a single cohesive idea (As Hybrid)
+async function combineItemsIntoOne(sourceRecordId, targetRecordId, hybridEstimation = null) {
+    console.log('[Presentation DEBUG] combineItemsIntoOne called:', sourceRecordId, targetRecordId, hybridEstimation);
 
     // Initialize combinedItems if not exists
-    // Structure: Map<targetRecordId, Set<sourceRecordIds>>
+    // Structure: Map<targetRecordId, { sources: Set<sourceRecordIds>, hybridData: Object|null }>
     if (!state.session.combinedItems) {
         state.session.combinedItems = new Map();
     }
@@ -4594,7 +5348,8 @@ async function combineItemsIntoOne(sourceRecordId, targetRecordId) {
 
     // Check if source is already combined into something else
     let actualTarget = targetRecordId;
-    for (const [target, sources] of state.session.combinedItems.entries()) {
+    for (const [target, data] of state.session.combinedItems.entries()) {
+        const sources = data instanceof Set ? data : (data.sources || new Set());
         if (sources.has(sourceRecordId)) {
             // Source is already a source of another combined item
             showToast(`"${sourceName}" is already combined with another item`, 'info');
@@ -4608,40 +5363,75 @@ async function combineItemsIntoOne(sourceRecordId, targetRecordId) {
     }
 
     // If target is itself a source in combinedItems, find the real target
-    for (const [target, sources] of state.session.combinedItems.entries()) {
+    for (const [target, data] of state.session.combinedItems.entries()) {
+        const sources = data instanceof Set ? data : (data.sources || new Set());
         if (sources.has(actualTarget)) {
             actualTarget = target;
             break;
         }
     }
 
+    // Helper to get sources from combinedItems entry (handles both old Set format and new object format)
+    const getSources = (entry) => {
+        if (entry instanceof Set) return entry;
+        return entry?.sources || new Set();
+    };
+
     // Check if source is actually a combined target
     if (state.session.combinedItems.has(sourceRecordId)) {
         // Source has items combined into it - merge those into the target
-        const sourcesCombined = state.session.combinedItems.get(sourceRecordId);
+        const sourceEntry = state.session.combinedItems.get(sourceRecordId);
+        const sourcesCombined = getSources(sourceEntry);
+
         if (!state.session.combinedItems.has(actualTarget)) {
-            state.session.combinedItems.set(actualTarget, new Set());
+            state.session.combinedItems.set(actualTarget, { sources: new Set(), hybridData: null });
         }
-        const targetSources = state.session.combinedItems.get(actualTarget);
+
+        const targetEntry = state.session.combinedItems.get(actualTarget);
+        const targetSources = targetEntry instanceof Set ? targetEntry : (targetEntry.sources || new Set());
 
         // Add the source itself and all its combined sources
         targetSources.add(sourceRecordId);
         sourcesCombined.forEach(s => targetSources.add(s));
+
+        // Update with hybrid data if available
+        if (targetEntry instanceof Set) {
+            state.session.combinedItems.set(actualTarget, {
+                sources: targetSources,
+                hybridData: hybridEstimation
+            });
+        } else {
+            targetEntry.sources = targetSources;
+            targetEntry.hybridData = hybridEstimation || targetEntry.hybridData;
+        }
 
         // Remove the old combined entry
         state.session.combinedItems.delete(sourceRecordId);
     } else {
         // Simple case: just add source to target's combined set
         if (!state.session.combinedItems.has(actualTarget)) {
-            state.session.combinedItems.set(actualTarget, new Set());
+            state.session.combinedItems.set(actualTarget, { sources: new Set(), hybridData: hybridEstimation });
         }
-        state.session.combinedItems.get(actualTarget).add(sourceRecordId);
+
+        const targetEntry = state.session.combinedItems.get(actualTarget);
+        if (targetEntry instanceof Set) {
+            // Migrate old format to new format
+            targetEntry.add(sourceRecordId);
+            state.session.combinedItems.set(actualTarget, {
+                sources: targetEntry,
+                hybridData: hybridEstimation
+            });
+        } else {
+            targetEntry.sources.add(sourceRecordId);
+            targetEntry.hybridData = hybridEstimation || targetEntry.hybridData;
+        }
     }
 
     const finalTargetRecord = state.records.all.find(r => r.id === actualTarget);
-    const finalTargetName = finalTargetRecord?.fields?.Name || 'Item';
+    const hybridName = hybridEstimation?.hybridName;
+    const finalDisplayName = hybridName || finalTargetRecord?.fields?.Name || 'Item';
 
-    showToast(`"${sourceName}" combined into "${finalTargetName}"`, 'success');
+    showToast(`Created hybrid: "${finalDisplayName}"`, 'success');
 
     // Re-render items
     await renderAllItems();
@@ -4655,11 +5445,11 @@ async function combineItemsIntoOne(sourceRecordId, targetRecordId) {
 }
 
 // Create a related category linking two items (Group as Options)
-async function createRelatedCategory(recordId1, recordId2) {
-    console.log('[Presentation DEBUG] createRelatedCategory called:', recordId1, recordId2);
+async function createRelatedCategory(recordId1, recordId2, optionsEstimation = null) {
+    console.log('[Presentation DEBUG] createRelatedCategory called:', recordId1, recordId2, optionsEstimation);
 
     // Initialize relatedGroups if not exists
-    // Structure: Array of { id: string, name: string, items: string[] }
+    // Structure: Array of { id: string, name: string, description: string, items: string[] }
     if (!state.session.relatedGroups) {
         state.session.relatedGroups = [];
     }
@@ -4668,6 +5458,10 @@ async function createRelatedCategory(recordId1, recordId2) {
     const record2 = state.records.all.find(r => r.id === recordId2);
     const name1 = record1?.fields?.Name || 'Item 1';
     const name2 = record2?.fields?.Name || 'Item 2';
+
+    // Use AI estimation for group name and description if available
+    const estimatedName = optionsEstimation?.categoryName;
+    const estimatedDescription = optionsEstimation?.categoryDescription;
 
     // Find existing groups that contain these items
     const existingGroup1 = state.session.relatedGroups.find(g =>
@@ -4693,10 +5487,11 @@ async function createRelatedCategory(recordId1, recordId2) {
         const items2 = getGroupItems(existingGroup2);
         const mergedItems = [...new Set([...items1, ...items2])];
 
-        // Create new merged group with combined name
+        // Create new merged group with AI-estimated name or generated name
         const newGroup = {
             id: `group-${Date.now()}`,
-            name: generateGroupName(mergedItems),
+            name: estimatedName || generateGroupName(mergedItems),
+            description: estimatedDescription || '',
             items: mergedItems
         };
 
@@ -4705,7 +5500,7 @@ async function createRelatedCategory(recordId1, recordId2) {
         );
         state.session.relatedGroups.push(newGroup);
 
-        showToast(`Merged two option groups`, 'success');
+        showToast(`Merged into "${newGroup.name}"`, 'success');
     } else if (existingGroup1) {
         // Add to existing group 1
         const items = getGroupItems(existingGroup1);
@@ -4716,15 +5511,19 @@ async function createRelatedCategory(recordId1, recordId2) {
                 const idx = state.session.relatedGroups.indexOf(existingGroup1);
                 state.session.relatedGroups[idx] = {
                     id: `group-${Date.now()}`,
-                    name: generateGroupName(items),
+                    name: estimatedName || generateGroupName(items),
+                    description: estimatedDescription || '',
                     items: items
                 };
             } else {
                 existingGroup1.items = items;
-                existingGroup1.name = generateGroupName(items);
+                // Update name and description with estimation if available
+                if (estimatedName) existingGroup1.name = estimatedName;
+                if (estimatedDescription) existingGroup1.description = estimatedDescription;
             }
         }
-        showToast(`"${name2}" added to options group`, 'success');
+        const groupName = existingGroup1.name || 'options group';
+        showToast(`"${name2}" added to "${groupName}"`, 'success');
     } else if (existingGroup2) {
         // Add to existing group 2
         const items = getGroupItems(existingGroup2);
@@ -4735,24 +5534,29 @@ async function createRelatedCategory(recordId1, recordId2) {
                 const idx = state.session.relatedGroups.indexOf(existingGroup2);
                 state.session.relatedGroups[idx] = {
                     id: `group-${Date.now()}`,
-                    name: generateGroupName(items),
+                    name: estimatedName || generateGroupName(items),
+                    description: estimatedDescription || '',
                     items: items
                 };
             } else {
                 existingGroup2.items = items;
-                existingGroup2.name = generateGroupName(items);
+                // Update name and description with estimation if available
+                if (estimatedName) existingGroup2.name = estimatedName;
+                if (estimatedDescription) existingGroup2.description = estimatedDescription;
             }
         }
-        showToast(`"${name1}" added to options group`, 'success');
+        const groupName = existingGroup2.name || 'options group';
+        showToast(`"${name1}" added to "${groupName}"`, 'success');
     } else {
-        // Create new group
+        // Create new group with AI estimation or fallback to generated name
         const newGroup = {
             id: `group-${Date.now()}`,
-            name: generateGroupName([recordId1, recordId2]),
+            name: estimatedName || generateGroupName([recordId1, recordId2]),
+            description: estimatedDescription || '',
             items: [recordId1, recordId2]
         };
         state.session.relatedGroups.push(newGroup);
-        showToast(`"${name1}" and "${name2}" grouped as options`, 'success');
+        showToast(`Created category: "${newGroup.name}"`, 'success');
     }
 
     // Re-render items
@@ -4798,11 +5602,19 @@ function generateGroupName(itemIds) {
     return `${itemIds.length} Options`;
 }
 
+// Helper to get sources Set from combinedItems entry (handles both old Set format and new object format)
+function getSourcesFromEntry(entry) {
+    if (!entry) return new Set();
+    if (entry instanceof Set) return entry;
+    return entry.sources || new Set();
+}
+
 // Check if an item is a source that has been combined into another item
 function isItemCombinedSource(recordId) {
     if (!state.session.combinedItems) return false;
 
-    for (const sources of state.session.combinedItems.values()) {
+    for (const entry of state.session.combinedItems.values()) {
+        const sources = getSourcesFromEntry(entry);
         if (sources.has(recordId)) {
             return true;
         }
@@ -4814,7 +5626,8 @@ function isItemCombinedSource(recordId) {
 function getCombinedTarget(sourceRecordId) {
     if (!state.session.combinedItems) return null;
 
-    for (const [target, sources] of state.session.combinedItems.entries()) {
+    for (const [target, entry] of state.session.combinedItems.entries()) {
+        const sources = getSourcesFromEntry(entry);
         if (sources.has(sourceRecordId)) {
             return target;
         }
@@ -4826,8 +5639,18 @@ function getCombinedTarget(sourceRecordId) {
 function getCombinedSources(targetRecordId) {
     if (!state.session.combinedItems) return [];
 
-    const sources = state.session.combinedItems.get(targetRecordId);
+    const entry = state.session.combinedItems.get(targetRecordId);
+    const sources = getSourcesFromEntry(entry);
     return sources ? Array.from(sources) : [];
+}
+
+// Get hybrid data for a combined item target
+function getCombinedHybridData(targetRecordId) {
+    if (!state.session.combinedItems) return null;
+
+    const entry = state.session.combinedItems.get(targetRecordId);
+    if (!entry || entry instanceof Set) return null;
+    return entry.hybridData || null;
 }
 
 // Check if an item belongs to a related group
@@ -4842,40 +5665,86 @@ function getItemGroup(recordId) {
 
 // Initialize merge dialog event listeners
 function initializeMergeDialogListeners() {
+    console.log('[MERGE DEBUG] ========================================');
+    console.log('[MERGE DEBUG] initializeMergeDialogListeners() STARTING');
+    console.log('[MERGE DEBUG] ========================================');
+
+    // Debug: Check if mergeOptionsDialog is available
+    console.log('[MERGE DEBUG] mergeOptionsDialog variable:', mergeOptionsDialog);
+    console.log('[MERGE DEBUG] mergeOptionsDialog from DOM:', document.getElementById('merge-options-dialog'));
+
     // Close button
     const closeBtn = document.getElementById('merge-dialog-close');
+    console.log('[MERGE DEBUG] Close button element:', closeBtn);
     if (closeBtn) {
         closeBtn.addEventListener('click', closeMergeDialog);
+        console.log('[MERGE DEBUG] ✓ Close button listener attached');
+    } else {
+        console.error('[MERGE DEBUG] ✗ Close button NOT FOUND!');
     }
 
     // Cancel button
     const cancelBtn = document.getElementById('merge-dialog-cancel');
+    console.log('[MERGE DEBUG] Cancel button element:', cancelBtn);
     if (cancelBtn) {
         cancelBtn.addEventListener('click', closeMergeDialog);
+        console.log('[MERGE DEBUG] ✓ Cancel button listener attached');
+    } else {
+        console.error('[MERGE DEBUG] ✗ Cancel button NOT FOUND!');
     }
 
-    // Combine option button
+    // Combine option button (As Hybrid)
     const combineBtn = document.getElementById('merge-option-combine');
+    console.log('[MERGE DEBUG] Combine button element:', combineBtn);
     if (combineBtn) {
         combineBtn.addEventListener('click', handleMergeCombine);
+        console.log('[MERGE DEBUG] ✓ Combine (As Hybrid) button listener attached');
+    } else {
+        console.error('[MERGE DEBUG] ✗ Combine (As Hybrid) button NOT FOUND!');
     }
 
-    // Group option button
+    // Group option button (As Options)
     const groupBtn = document.getElementById('merge-option-group');
+    console.log('[MERGE DEBUG] Group button element:', groupBtn);
     if (groupBtn) {
         groupBtn.addEventListener('click', handleMergeGroup);
+        console.log('[MERGE DEBUG] ✓ Group (As Options) button listener attached');
+    } else {
+        console.error('[MERGE DEBUG] ✗ Group (As Options) button NOT FOUND!');
     }
 
     // Close on backdrop click
     if (mergeOptionsDialog) {
         mergeOptionsDialog.addEventListener('click', (e) => {
             if (e.target === mergeOptionsDialog) {
+                console.log('[MERGE DEBUG] Backdrop clicked - closing dialog');
                 closeMergeDialog();
             }
         });
+        console.log('[MERGE DEBUG] ✓ Backdrop click listener attached');
+    } else {
+        console.error('[MERGE DEBUG] ✗ mergeOptionsDialog NOT FOUND - backdrop listener NOT attached!');
     }
 
-    console.log('[Presentation DEBUG] Merge dialog listeners initialized');
+    // Debug: List all merge-related elements found
+    console.log('[MERGE DEBUG] --- All merge-related elements check ---');
+    const mergeElements = {
+        'merge-options-dialog': document.getElementById('merge-options-dialog'),
+        'merge-dialog-close': document.getElementById('merge-dialog-close'),
+        'merge-dialog-cancel': document.getElementById('merge-dialog-cancel'),
+        'merge-option-combine': document.getElementById('merge-option-combine'),
+        'merge-option-group': document.getElementById('merge-option-group'),
+        'merge-source-name': document.getElementById('merge-source-name'),
+        'merge-target-name': document.getElementById('merge-target-name'),
+        'merge-estimation-preview': document.getElementById('merge-estimation-preview')
+    };
+    Object.entries(mergeElements).forEach(([id, el]) => {
+        console.log(`[MERGE DEBUG] #${id}: ${el ? '✓ EXISTS' : '✗ MISSING'}`);
+    });
+
+    console.log('[MERGE DEBUG] ========================================');
+    console.log('[MERGE DEBUG] initializeMergeDialogListeners() COMPLETE');
+    console.log('[MERGE DEBUG] ========================================');
 }
 
 // Update the status toggle buttons visibility and state

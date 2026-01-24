@@ -161,6 +161,9 @@ export const CONSTANTS = {
         // Popups and pickers
         REACTION_PICKER: 10001,         // Reaction picker popup (very high to ensure visibility)
 
+        // Merge dialog (must be above radial menu which uses 99999)
+        MERGE_DIALOG: 100001,           // Merge options dialog
+
         // Search modal in presentation
         PRESENTATION_SEARCH: 3000,      // Presentation search modal
         PRESENTATION_SEARCH_CONTENT: 2000, // Presentation search content
