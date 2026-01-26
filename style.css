@@ -3,23 +3,41 @@
 /*
  * Z-INDEX HIERARCHY REFERENCE (from lowest to highest):
  * =====================================================
- * -1    : Kaleidoscope background canvas
- *  0    : Presentation background canvas (relative to parent)
- *  1    : Presentation content (relative to parent), base content
+ * This is a SIMPLIFIED, TIERED z-index system. Each tier has a clear purpose.
+ *
+ * TIER 0: BACKGROUNDS (-1 to 0)
+ * -1    : Kaleidoscope background canvas (behind everything)
+ *  0    : Presentation background canvas (within presentation)
+ *
+ * TIER 1: BASE CONTENT (1 to 50)
+ *  1    : Presentation content, base content layer
  * 10    : Card overlays, badges, internal component layering
- * 998   : Mobile sidebars (collapsed state)
- * 999   : Mobile sidebars (expanded state)
- * 1000  : Header, hamburger dropdown, presentation view, base modals
- * 1001  : Chat toggle button
+ * 50    : Floating elements within content (tooltips within cards)
+ *
+ * TIER 2: NAVIGATION & SIDEBARS (100 to 500)
+ * 100   : Sticky elements, navigation aids
+ * 400   : Mobile sidebars (collapsed)
+ * 500   : Mobile sidebars (expanded), sticky headers
+ *
+ * TIER 3: PRIMARY UI LAYER (1000 to 1500)
+ * 1000  : Main header, presentation view container, base modals
  * 1010  : Modal close buttons
  * 1050  : Chat widget container
- * 1100  : Modals when presentation is active (elevated above presentation)
- * 2000  : Presentation search content
- * 3000  : Presentation search modal
- * 10000 : Debug panel
- * 10001 : Reaction pickers (always visible above everything)
- * 10002 : Task detail modal (admin)
- * 100000: Netlify identity widget
+ * 1100  : Modals elevated above presentation view
+ * 1200  : Presentation search modal
+ *
+ * TIER 4: DRAG & DROP OVERLAYS (5000 to 6000)
+ * 5000  : Presentation drag buckets container
+ * 5100  : Drag zone panels (left/right)
+ * 5200  : Individual drag buckets
+ * 5500  : Drag action tooltip (follows cursor)
+ * 5600  : Merge indicator overlay
+ *
+ * TIER 5: TOP-LEVEL OVERLAYS (9000+)
+ * 9000  : Debug panel
+ * 9100  : Reaction pickers (always visible above drag operations)
+ * 9500  : Task detail modal (admin)
+ * 99999 : Netlify identity widget (external, must be highest)
  *
  * IMPORTANT: When presentation view is active (body.presentation-active),
  * all modals are elevated to z-index: 1100 to appear above the presentation.
@@ -2132,9 +2150,10 @@ body.presentation-active .modal-overlay.active {
 }
 
 /* Reaction pickers must always appear above modals and presentation */
+/* Z-INDEX: TIER 5 - 9100 (above drag operations) */
 .reaction-picker,
 .comment-reaction-picker {
-    z-index: 10001 !important;
+    z-index: 9100 !important;
 }
 
 /* --- Presentation Full Page View --- */
@@ -4259,6 +4278,7 @@ body.presentation-active #wtf-plans-panel-overlay {
 }
 
 /* Collaborators Modal (expanded full list view) */
+/* Z-INDEX: TIER 3 - 1150 (modal layer, above presentation) */
 .collaborators-modal {
     display: none;
     position: fixed;
@@ -4267,7 +4287,7 @@ body.presentation-active #wtf-plans-panel-overlay {
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.5);
-    z-index: 10000;
+    z-index: 1150;
     align-items: center;
     justify-content: center;
 }
@@ -4742,6 +4762,7 @@ body.presentation-active #wtf-plans-panel-overlay {
 }
 
 /* Expanded Emoji Picker Overlay */
+/* Z-INDEX: TIER 5 - 9100 (above everything except Netlify Identity) */
 .emoji-picker-overlay {
     position: fixed;
     top: 0;
@@ -4749,7 +4770,7 @@ body.presentation-active #wtf-plans-panel-overlay {
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.5);
-    z-index: 10000;
+    z-index: 9100;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -6418,133 +6439,807 @@ body.presentation-active #wtf-plans-panel-overlay {
     opacity: 1;
 }
 
-/* Drag-and-Drop Styles for Presentation View */
-/* Buckets are always visible when presentation modal is open, grayed out by default */
+/* Drag-and-Drop Styles for Presentation View - Enhanced Version */
+/* Left side: Actions (Goals at top, Archive/Delete at bottom) */
+/* Right side: Reactions and Comments */
+/* Z-INDEX: Uses TIER 4 (5000-6000) for drag/drop overlays */
+
+/*
+ * CRITICAL FIX: Prevent drag bucket elements from appearing outside presentation view
+ * Issue: Fixed-position elements can "escape" their parent's display:none in some browsers
+ * Solution: Use multiple hiding mechanisms (display, visibility, opacity, clip) as fail-safes
+ */
+
+/* BASE STATE: Always hidden by default - multiple hiding mechanisms for safety */
 .presentation-drag-buckets {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
+    width: 100vw;
+    height: 100vh;
     pointer-events: none;
-    z-index: 10000;
-    display: none; /* Hidden by default, shown via JS when modal is open */
+    z-index: 5000; /* TIER 4: Drag container base */
+    display: none;
+    visibility: hidden;
+    opacity: 0;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(100%);
+}
+
+/* GUARD RAIL: When presentation is NOT active, force ALL drag elements to be hidden */
+/* This prevents any CSS specificity issues from showing these elements */
+body:not(.presentation-active) .presentation-drag-buckets,
+body:not(.presentation-active) .presentation-drag-buckets *,
+body:not(.presentation-active) .drag-zone-left,
+body:not(.presentation-active) .drag-zone-right,
+body:not(.presentation-active) .drag-bucket,
+body:not(.presentation-active) .drag-action-tooltip,
+body:not(.presentation-active) .drag-merge-indicator {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
 }
 
 /* When presentation modal is open, buckets container is shown */
 .presentation-drag-buckets.buckets-shown {
     display: block;
+    visibility: visible;
+    opacity: 1;
+    clip: auto;
+    clip-path: none;
 }
 
 /* Active during drag - enables pointer events for drop targets */
 .presentation-drag-buckets.drag-active {
     display: block;
+    visibility: visible;
+    opacity: 1;
+    clip: auto;
+    clip-path: none;
 }
 
+/* Left and Right zone containers */
+.drag-zone-left,
+.drag-zone-right {
+    position: fixed;
+    /* Position will be set dynamically by JavaScript to be adjacent to dragged item */
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 5100; /* TIER 4: Drag zones above container */
+    background: rgba(0, 0, 0, 0.75);
+    border-radius: 20px;
+    padding: 16px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+/* LEFT zone - initial position, overridden by JS for item-relative positioning */
+.drag-zone-left {
+    left: 12px;
+    right: auto;
+}
+
+/* RIGHT zone - initial position, overridden by JS for item-relative positioning */
+.drag-zone-right {
+    right: 12px;
+    left: auto;
+}
+
+.presentation-drag-buckets.drag-active .drag-zone-left,
+.presentation-drag-buckets.drag-active .drag-zone-right {
+    display: flex;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+/* Remove fixed positioning rules - JS handles positioning adjacent to dragged item */
+.presentation-drag-buckets.drag-active .drag-zone-left {
+    /* JS will set left/top dynamically */
+}
+
+.presentation-drag-buckets.drag-active .drag-zone-right {
+    /* JS will set left/top dynamically */
+}
+
+.presentation-drag-buckets.drag-active .drag-bucket {
+    pointer-events: auto !important;
+}
+
+/* Base bucket styles - LARGER for better touch targets */
 .drag-bucket {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 100px;
-    height: 160px;
+    position: relative;
+    width: 88px;
+    height: 88px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 4px;
     border-radius: 16px;
     backdrop-filter: blur(20px);
     pointer-events: auto;
-    transition: all 0.3s ease, transform 0.2s ease;
-    /* Dormant state: more visible than before (was 0.35, now 0.6) */
-    opacity: 0.6;
-    filter: grayscale(50%);
-}
-
-/* Archive bucket - subtle gray/blue tint in dormant state */
-.drag-bucket-archive {
-    left: 16px;
-    background: linear-gradient(135deg, rgba(108, 117, 145, 0.85), rgba(73, 80, 107, 0.85));
-    border: 3px solid rgba(100, 150, 200, 0.8);
-    box-shadow: 0 4px 20px rgba(100, 150, 200, 0.4);
-}
-
-/* Completed bucket - subtle gray/green tint in dormant state */
-.drag-bucket-completed {
-    right: 16px;
-    background: linear-gradient(135deg, rgba(108, 167, 125, 0.85), rgba(73, 130, 87, 0.85));
-    border: 3px solid rgba(100, 200, 150, 0.8);
-    box-shadow: 0 4px 20px rgba(100, 200, 150, 0.4);
-}
-
-/* Active drag state - colorize buckets */
-.presentation-drag-buckets.drag-active .drag-bucket {
-    opacity: 0.85;
-    filter: grayscale(0%);
-}
-
-.presentation-drag-buckets.drag-active .drag-bucket-archive {
-    background: linear-gradient(135deg, rgba(108, 117, 125, 0.9), rgba(73, 80, 87, 0.9));
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-.presentation-drag-buckets.drag-active .drag-bucket-completed {
-    background: linear-gradient(135deg, rgba(40, 167, 69, 0.9), rgba(25, 135, 84, 0.9));
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease, transform 0.15s ease;
+    opacity: 0.95;
+    cursor: pointer;
+    min-width: 88px;
+    min-height: 88px;
 }
 
 .drag-bucket .bucket-icon {
-    font-size: 2em;
+    font-size: 1.8em;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    line-height: 1;
 }
 
 .drag-bucket .bucket-label {
+    font-size: 0.65em;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* LEFT SIDE ACTION BUCKETS */
+
+/* Goal bucket - gold/yellow gradient */
+.drag-bucket-goal {
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.9), rgba(255, 160, 0, 0.9));
+    border: 2px solid rgba(255, 215, 0, 0.8);
+    box-shadow: 0 4px 16px rgba(255, 193, 7, 0.3);
+}
+
+/* Ideas bucket - purple/violet gradient */
+.drag-bucket-ideas {
+    background: linear-gradient(135deg, rgba(156, 39, 176, 0.9), rgba(123, 31, 162, 0.9));
+    border: 2px solid rgba(186, 104, 200, 0.8);
+    box-shadow: 0 4px 16px rgba(156, 39, 176, 0.3);
+}
+
+/* Lock bucket - blue gradient */
+.drag-bucket-lock {
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.9), rgba(25, 118, 210, 0.9));
+    border: 2px solid rgba(100, 181, 246, 0.8);
+    box-shadow: 0 4px 16px rgba(33, 150, 243, 0.3);
+}
+
+/* Demote bucket - orange gradient */
+.drag-bucket-demote {
+    background: linear-gradient(135deg, rgba(255, 152, 0, 0.9), rgba(245, 124, 0, 0.9));
+    border: 2px solid rgba(255, 183, 77, 0.8);
+    box-shadow: 0 4px 16px rgba(255, 152, 0, 0.3);
+}
+
+/* Archive bucket - gray gradient */
+.drag-bucket-archive {
+    background: linear-gradient(135deg, rgba(108, 117, 125, 0.9), rgba(73, 80, 87, 0.9));
+    border: 2px solid rgba(134, 142, 150, 0.8);
+    box-shadow: 0 4px 16px rgba(108, 117, 125, 0.3);
+}
+
+/* Delete bucket - red gradient */
+.drag-bucket-delete {
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.9), rgba(176, 42, 55, 0.9));
+    border: 2px solid rgba(245, 108, 108, 0.8);
+    box-shadow: 0 4px 16px rgba(220, 53, 69, 0.3);
+}
+
+/* RIGHT SIDE REACTION/COMMENT BUCKETS */
+
+/* Reactions bucket - pink/red gradient */
+.drag-bucket-reactions {
+    background: linear-gradient(135deg, rgba(233, 30, 99, 0.9), rgba(194, 24, 91, 0.9));
+    border: 2px solid rgba(240, 98, 146, 0.8);
+    box-shadow: 0 4px 16px rgba(233, 30, 99, 0.3);
+    overflow: visible;
+}
+
+/* Quick comment bucket - teal gradient */
+.drag-bucket-quick-comment {
+    background: linear-gradient(135deg, rgba(0, 150, 136, 0.9), rgba(0, 121, 107, 0.9));
+    border: 2px solid rgba(77, 182, 172, 0.8);
+    box-shadow: 0 4px 16px rgba(0, 150, 136, 0.3);
+    overflow: visible;
+}
+
+/* Custom comment bucket - indigo gradient */
+.drag-bucket-custom-comment {
+    background: linear-gradient(135deg, rgba(63, 81, 181, 0.9), rgba(48, 63, 159, 0.9));
+    border: 2px solid rgba(121, 134, 203, 0.8);
+    box-shadow: 0 4px 16px rgba(63, 81, 181, 0.3);
+}
+
+/* Completed bucket - green gradient */
+.drag-bucket-completed {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.9), rgba(25, 135, 84, 0.9));
+    border: 2px solid rgba(100, 200, 150, 0.8);
+    box-shadow: 0 4px 16px rgba(40, 167, 69, 0.3);
+}
+
+/* Hover/drag-over state for all buckets */
+.drag-bucket.drag-over {
+    transform: scale(1.1);
+    opacity: 1;
+    filter: brightness(1.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    z-index: 10;
+}
+
+/* Specific hover states for left side buckets */
+.drag-bucket-goal.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(255, 193, 7, 0.6);
+}
+
+.drag-bucket-ideas.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(156, 39, 176, 0.6);
+}
+
+.drag-bucket-lock.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(33, 150, 243, 0.6);
+}
+
+.drag-bucket-demote.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(255, 152, 0, 0.6);
+}
+
+.drag-bucket-archive.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(108, 117, 125, 0.6);
+}
+
+.drag-bucket-delete.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(220, 53, 69, 0.6);
+}
+
+/* Specific hover states for right side buckets */
+.drag-bucket-reactions.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(233, 30, 99, 0.6);
+}
+
+.drag-bucket-quick-comment.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(0, 150, 136, 0.6);
+}
+
+.drag-bucket-custom-comment.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(63, 81, 181, 0.6);
+}
+
+.drag-bucket-completed.drag-over {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(40, 167, 69, 0.6);
+}
+
+/* REACTION OPTIONS - revealed on hover/drag-over */
+/* Position to the LEFT of the bucket since right zone is at screen edge */
+/* Z-INDEX: 5300 (above buckets but below tooltip) */
+.reaction-options,
+.quick-comment-options {
+    position: absolute;
+    right: calc(100% + 12px);
+    left: auto;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 5300;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 10px;
+    border-radius: 12px;
+}
+
+.drag-bucket-reactions.drag-over .reaction-options,
+.drag-bucket-quick-comment.drag-over .quick-comment-options {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Reaction option buttons - LARGER touch targets */
+.reaction-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    font-size: 1.5em;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.reaction-option:hover,
+.reaction-option.drag-over {
+    transform: scale(1.2);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* Quick comment option buttons - LARGER touch targets */
+.quick-comment-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 14px;
+    font-size: 0.8em;
+    font-weight: 600;
+    color: #333;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    white-space: nowrap;
+}
+
+.quick-comment-option:hover,
+.quick-comment-option.drag-over {
+    transform: scale(1.1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    background: #fff;
+}
+
+/* MERGE INDICATOR */
+/* Z-INDEX: TIER 4 - 5600 (above tooltip, below reaction pickers) */
+/* NOTE: This element lives OUTSIDE the drag-buckets container for proper layering */
+/* CRITICAL: Must be explicitly hidden when presentation view is not active */
+.drag-merge-indicator {
+    position: fixed;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(56, 142, 60, 0.95));
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    border-radius: 20px;
+    display: none; /* Hidden by default, shown via JS */
+    visibility: hidden; /* Additional safety: hidden even if display is overridden */
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+    z-index: 5600;
+    box-shadow: 0 8px 32px rgba(76, 175, 80, 0.5);
+    animation: pulse-merge 1s ease infinite;
+}
+
+.drag-merge-indicator .merge-icon {
+    font-size: 1.2em;
+}
+
+.drag-merge-indicator .merge-label {
     font-size: 0.85em;
     font-weight: 600;
     color: #fff;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
-/* Hover/drag-over state for buckets */
-.drag-bucket.drag-over {
-    transform: translateY(-50%) scale(1.15);
-    opacity: 1;
-    filter: grayscale(0%);
-    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+@keyframes pulse-merge {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
 }
 
-.drag-bucket-archive.drag-over {
-    background: linear-gradient(135deg, rgba(108, 117, 125, 1), rgba(73, 80, 87, 1));
-    border-color: rgba(255, 255, 255, 0.6);
+/* Item being merged onto - highlight state */
+.itinerary-item-section.merge-target {
+    outline: 3px solid rgba(76, 175, 80, 0.8);
+    outline-offset: 4px;
+    background: rgba(76, 175, 80, 0.1);
 }
 
-.drag-bucket-completed.drag-over {
-    background: linear-gradient(135deg, rgba(40, 167, 69, 1), rgba(25, 135, 84, 1));
-    border-color: rgba(255, 255, 255, 0.6);
+/* Goal item indicator on rendered items */
+.itinerary-item-section.item-status-goal {
+    border-left: 4px solid #ffc107;
 }
 
-/* Mobile-friendly bucket sizing */
+.itinerary-item-section.item-status-goal::after {
+    content: '⭐';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 1.2em;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+/* Mobile-friendly adjustments for enhanced drag zones */
 @media (max-width: 768px) {
+    .drag-zone-left,
+    .drag-zone-right {
+        gap: 8px;
+        padding: 12px;
+        max-height: 65vh; /* Smaller on mobile to fit near items */
+    }
+
+    /* Mobile bucket sizes - still larger than before for better touch */
     .drag-bucket {
-        width: 70px;
-        height: 100px;
+        width: 72px;
+        height: 72px;
+        min-width: 72px;
+        min-height: 72px;
+        border-radius: 14px;
+    }
+
+    .drag-bucket .bucket-icon {
+        font-size: 1.5em;
+    }
+
+    .drag-bucket .bucket-label {
+        font-size: 0.55em;
+    }
+
+    /* Mobile: JS controls positioning to be adjacent to dragged item */
+    /* These are fallback positions only */
+    .drag-zone-left {
+        left: 4px;
+        right: auto;
+    }
+
+    .drag-zone-right {
+        right: 4px;
+        left: auto;
+    }
+
+    /* Mobile reaction/quick comment options */
+    .reaction-option {
+        width: 36px;
+        height: 36px;
+        font-size: 1.2em;
+    }
+
+    .quick-comment-option {
+        padding: 8px 10px;
+        font-size: 0.65em;
+    }
+
+    .reaction-options,
+    .quick-comment-options {
+        right: calc(100% + 8px);
+        left: auto;
+        padding: 8px;
         gap: 4px;
     }
-    .drag-bucket-archive {
-        left: 8px;
+
+    /* MOBILE: Force visibility during drag-active state - JS controls positioning */
+    .presentation-drag-buckets.drag-active .drag-zone-left,
+    .presentation-drag-buckets.drag-active .drag-zone-right {
+        display: flex;
+        visibility: visible;
+        opacity: 1;
+        pointer-events: auto;
+        position: fixed;
+        z-index: 5100; /* TIER 4: Drag zones */
+        flex-direction: column;
+        /* Position set by JS - don't override with transform */
     }
-    .drag-bucket-completed {
-        right: 8px;
+
+    .presentation-drag-buckets.drag-active .drag-zone-left {
+        /* JS sets left/top dynamically for item-relative positioning */
     }
-    .drag-bucket .bucket-icon {
-        font-size: 1.4em;
+
+    .presentation-drag-buckets.drag-active .drag-zone-right {
+        /* JS sets left/top dynamically for item-relative positioning */
     }
-    .drag-bucket .bucket-label {
-        font-size: 0.7em;
+
+    .presentation-drag-buckets.drag-active .drag-bucket {
+        display: flex;
+        visibility: visible;
+        opacity: 0.95;
+        pointer-events: auto;
     }
 }
+
+/* Drag action tooltip - follows cursor during drag */
+/* Z-INDEX: TIER 4 - 5500 (above drag zones, below reaction pickers) */
+/* NOTE: This element lives OUTSIDE the drag-buckets container for proper layering */
+/* CRITICAL: Must be explicitly hidden when presentation view is not active */
+.drag-action-tooltip {
+    position: fixed;
+    padding: 10px 16px;
+    background: rgba(30, 30, 30, 0.95);
+    border-radius: 12px;
+    display: none; /* Hidden by default, shown via JS */
+    visibility: hidden; /* Additional safety: hidden even if display is overridden */
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+    z-index: 5500;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+    border: 2px solid transparent;
+    white-space: nowrap;
+    font-size: 0.9em;
+}
+
+.drag-action-tooltip .tooltip-icon {
+    font-size: 1.2em;
+    line-height: 1;
+}
+
+.drag-action-tooltip .tooltip-text {
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Tooltip states based on hovered action */
+.drag-action-tooltip.action-goal {
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.95), rgba(255, 160, 0, 0.95));
+    border-color: rgba(255, 215, 0, 0.8);
+}
+
+.drag-action-tooltip.action-ideas {
+    background: linear-gradient(135deg, rgba(156, 39, 176, 0.95), rgba(123, 31, 162, 0.95));
+    border-color: rgba(186, 104, 200, 0.8);
+}
+
+.drag-action-tooltip.action-lock {
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.95), rgba(25, 118, 210, 0.95));
+    border-color: rgba(100, 181, 246, 0.8);
+}
+
+.drag-action-tooltip.action-demote {
+    background: linear-gradient(135deg, rgba(255, 152, 0, 0.95), rgba(245, 124, 0, 0.95));
+    border-color: rgba(255, 183, 77, 0.8);
+}
+
+.drag-action-tooltip.action-archive {
+    background: linear-gradient(135deg, rgba(108, 117, 125, 0.95), rgba(73, 80, 87, 0.95));
+    border-color: rgba(134, 142, 150, 0.8);
+}
+
+.drag-action-tooltip.action-delete {
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.95), rgba(176, 42, 55, 0.95));
+    border-color: rgba(245, 108, 108, 0.8);
+}
+
+.drag-action-tooltip.action-reactions {
+    background: linear-gradient(135deg, rgba(233, 30, 99, 0.95), rgba(194, 24, 91, 0.95));
+    border-color: rgba(240, 98, 146, 0.8);
+}
+
+.drag-action-tooltip.action-quick-comment {
+    background: linear-gradient(135deg, rgba(0, 150, 136, 0.95), rgba(0, 121, 107, 0.95));
+    border-color: rgba(77, 182, 172, 0.8);
+}
+
+.drag-action-tooltip.action-custom-comment {
+    background: linear-gradient(135deg, rgba(63, 81, 181, 0.95), rgba(48, 63, 159, 0.95));
+    border-color: rgba(121, 134, 203, 0.8);
+}
+
+.drag-action-tooltip.action-completed {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.95), rgba(25, 135, 84, 0.95));
+    border-color: rgba(100, 200, 150, 0.8);
+}
+
+.drag-action-tooltip.action-merge {
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(56, 142, 60, 0.95));
+    border-color: rgba(129, 199, 132, 0.8);
+}
+
+/* Default/neutral state - drag anywhere hint */
+.drag-action-tooltip.action-neutral {
+    background: rgba(30, 30, 30, 0.9);
+    border-color: rgba(100, 100, 100, 0.5);
+}
+
+/* ==========================================================================
+   RADIAL MENU STYLES
+   ========================================================================== */
+
+/* Radial menu mode - transforms drag buckets into a circular radial menu */
+.presentation-drag-buckets.radial-mode {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    clip: auto !important;
+    clip-path: none !important;
+    pointer-events: auto !important;
+}
+
+/* CRITICAL: Override guard rail for radial menu buckets when presentation is active */
+body.presentation-active .radial-menu-container .drag-bucket {
+    display: flex !important;
+}
+
+/* Radial menu container - positioned at touch/click point */
+.radial-menu-container {
+    position: fixed;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    z-index: 10000; /* TIER 5: Above all other drag elements and modals */
+    /* Center point set via JS */
+}
+
+/* Hide standard drag zones in radial mode */
+.presentation-drag-buckets.radial-mode .drag-zone-left,
+.presentation-drag-buckets.radial-mode .drag-zone-right {
+    display: none !important;
+}
+
+/* Show radial menu container in radial mode */
+.presentation-drag-buckets.radial-mode .radial-menu-container {
+    display: block;
+    pointer-events: auto;
+    visibility: visible !important;
+}
+
+/* Radial menu items arranged in a circle */
+.radial-menu-container .drag-bucket {
+    position: absolute;
+    transform-origin: center center;
+    pointer-events: auto;
+    opacity: 0;
+    transform: scale(0.3);
+    transition: opacity 0.15s ease-out, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), visibility 0s linear 0.15s;
+    /* Size adjustments for radial layout */
+    width: 64px;
+    height: 64px;
+    min-width: 64px;
+    min-height: 64px;
+    /* Ensure buckets can become visible - override any inherited hiding */
+    visibility: hidden;
+    display: flex !important;
+    z-index: 10001; /* Above the radial container */
+}
+
+/* Radial menu active - show items with animation */
+.radial-menu-container.radial-active .drag-bucket {
+    opacity: 0.95;
+    transform: scale(1);
+    visibility: visible !important;
+    display: flex !important;
+    transition: opacity 0.15s ease-out, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), visibility 0s linear 0s;
+}
+
+/* Staggered animation for radial menu items - use nth-of-type to skip indicator elements */
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(1) { transition-delay: 0ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(2) { transition-delay: 15ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(3) { transition-delay: 30ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(4) { transition-delay: 45ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(5) { transition-delay: 60ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(6) { transition-delay: 75ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(7) { transition-delay: 90ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(8) { transition-delay: 105ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(9) { transition-delay: 120ms; }
+.radial-menu-container.radial-active .drag-bucket:nth-of-type(10) { transition-delay: 135ms; }
+
+/* Radial menu bucket hover state */
+.radial-menu-container .drag-bucket.drag-over {
+    transform: scale(1.2);
+    opacity: 1;
+    z-index: 10;
+}
+
+/* Radial menu bucket labels - smaller for radial layout */
+.radial-menu-container .drag-bucket .bucket-icon {
+    font-size: 1.4em;
+}
+
+.radial-menu-container .drag-bucket .bucket-label {
+    font-size: 0.5em;
+    letter-spacing: 0.3px;
+}
+
+/* Radial center indicator - shows the touch point */
+.radial-center-indicator {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    left: -16px;
+    top: -16px;
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 10002; /* Above radial buckets */
+    animation: radial-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes radial-pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.6;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 0.3;
+    }
+}
+
+/* Radial direction indicator - shows current drag direction */
+.radial-direction-indicator {
+    position: absolute;
+    width: 4px;
+    height: 40px;
+    left: -2px;
+    top: 0;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.8), transparent);
+    border-radius: 2px;
+    pointer-events: none;
+    z-index: 10002; /* Above radial buckets */
+    transform-origin: center top;
+    opacity: 0;
+    transition: opacity 0.1s ease;
+}
+
+.radial-menu-container.radial-active .radial-direction-indicator {
+    opacity: 0.5;
+}
+
+/* Reaction options position adjustment for radial mode */
+.radial-menu-container .reaction-options,
+.radial-menu-container .quick-comment-options {
+    position: absolute;
+    left: calc(100% + 8px);
+    right: auto;
+    top: 50%;
+    transform: translateY(-50%);
+    flex-direction: row;
+    flex-wrap: wrap;
+    max-width: 180px;
+    gap: 4px;
+}
+
+/* Mobile adjustments for radial menu */
+@media (max-width: 768px) {
+    .radial-menu-container .drag-bucket {
+        width: 56px;
+        height: 56px;
+        min-width: 56px;
+        min-height: 56px;
+    }
+
+    .radial-menu-container .drag-bucket .bucket-icon {
+        font-size: 1.2em;
+    }
+
+    .radial-menu-container .drag-bucket .bucket-label {
+        font-size: 0.45em;
+    }
+
+    .radial-center-indicator {
+        width: 24px;
+        height: 24px;
+        left: -12px;
+        top: -12px;
+    }
+
+    .radial-menu-container .reaction-options,
+    .radial-menu-container .quick-comment-options {
+        max-width: 140px;
+    }
+
+    .radial-menu-container .reaction-option {
+        width: 32px;
+        height: 32px;
+        font-size: 1em;
+    }
+
+    .radial-menu-container .quick-comment-option {
+        padding: 6px 8px;
+        font-size: 0.55em;
+    }
+}
+
+/* ==========================================================================
+   END RADIAL MENU STYLES
+   ========================================================================== */
 
 /* Sortable ghost styling */
 .itinerary-item-section.sortable-ghost {
@@ -6553,10 +7248,11 @@ body.presentation-active #wtf-plans-panel-overlay {
 }
 
 /* Sortable drag styling */
+/* Z-INDEX: TIER 4 - 4900 (below drag bucket zones) */
 .itinerary-item-section.sortable-drag {
     opacity: 1;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-    z-index: 9999;
+    z-index: 4900;
     cursor: grabbing;
 }
 
@@ -6588,30 +7284,6 @@ body.presentation-active #wtf-plans-panel-overlay {
 
 .itinerary-item-section:hover::before {
     opacity: 1;
-}
-
-/* Mobile adjustments for drag buckets */
-@media (max-width: 768px) {
-    .drag-bucket {
-        width: 80px;
-        height: 120px;
-    }
-
-    .drag-bucket-archive {
-        left: 8px;
-    }
-
-    .drag-bucket-completed {
-        right: 8px;
-    }
-
-    .drag-bucket .bucket-icon {
-        font-size: 1.5em;
-    }
-
-    .drag-bucket .bucket-label {
-        font-size: 0.75em;
-    }
 }
 
 /* Empty state section */
@@ -10560,6 +11232,7 @@ hr.total-divider {
 }
 
 /* Sessions List Modal */
+/* Z-INDEX: TIER 3 - 1150 (modal layer) */
 .sessions-modal-overlay {
     position: fixed;
     top: 0;
@@ -10570,7 +11243,7 @@ hr.total-divider {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 10000;
+    z-index: 1150;
     animation: fadeIn 0.2s ease-out;
 }
 
@@ -10794,6 +11467,7 @@ hr.total-divider {
 }
 
 /* Confirmation dialog */
+/* Z-INDEX: TIER 3 - 1160 (above other modals) */
 .confirm-dialog-overlay {
     position: fixed;
     top: 0;
@@ -10804,7 +11478,7 @@ hr.total-divider {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 10001;
+    z-index: 1160;
 }
 
 .confirm-dialog {

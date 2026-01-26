@@ -208,6 +208,11 @@ export function getModalZIndex(type = 'modal') {
 export function debugZIndex() {
     const elements = [
         { selector: '#presentation-modal-overlay', name: 'Presentation View' },
+        { selector: '#presentation-drag-buckets', name: 'Drag Buckets Container' },
+        { selector: '.drag-zone-left', name: 'Drag Zone Left' },
+        { selector: '.drag-zone-right', name: 'Drag Zone Right' },
+        { selector: '#drag-action-tooltip', name: 'Drag Action Tooltip' },
+        { selector: '#drag-merge-indicator', name: 'Drag Merge Indicator' },
         { selector: '#detail-modal-overlay', name: 'Detail Modal' },
         { selector: '#checkout-modal-overlay', name: 'Checkout Modal' },
         { selector: '.reaction-picker', name: 'Reaction Picker' },
@@ -226,14 +231,22 @@ export function debugZIndex() {
         if (el) {
             const computed = window.getComputedStyle(el);
             const isActive = el.classList.contains('active');
+            const hasBucketsShown = el.classList.contains('buckets-shown');
+            const hasDragActive = el.classList.contains('drag-active');
             console.log(`${name} (${selector}):`, {
                 zIndex: computed.zIndex,
                 inlineZIndex: el.style.zIndex || 'none',
                 display: computed.display,
+                visibility: computed.visibility,
+                opacity: computed.opacity,
                 position: computed.position,
                 isActive,
+                hasBucketsShown,
+                hasDragActive,
                 visible: computed.display !== 'none' && computed.visibility !== 'hidden'
             });
+        } else {
+            console.log(`${name} (${selector}): NOT FOUND`);
         }
     });
 
@@ -241,7 +254,88 @@ export function debugZIndex() {
     return 'Z-index debug complete. Check console for details.';
 }
 
+/**
+ * Debug function specifically for drag element visibility issues
+ * Call this from console: window.debugDragElements()
+ * Use when drag bucket text appears in unexpected places
+ */
+export function debugDragElements() {
+    console.group('[DRAG DEBUG] Comprehensive drag element analysis:');
+
+    // Check body state
+    console.log('Body State:', {
+        presentationActive: document.body.classList.contains('presentation-active'),
+        modalOpen: document.body.classList.contains('modal-open'),
+        classList: Array.from(document.body.classList)
+    });
+
+    // Check all drag-related elements
+    const dragElements = [
+        '#presentation-drag-buckets',
+        '.drag-zone-left',
+        '.drag-zone-right',
+        '#drag-action-tooltip',
+        '#drag-merge-indicator',
+        '.drag-bucket'
+    ];
+
+    dragElements.forEach(selector => {
+        const elements = document.querySelectorAll(selector);
+        if (elements.length === 0) {
+            console.log(`${selector}: NOT FOUND`);
+            return;
+        }
+
+        elements.forEach((el, index) => {
+            const computed = window.getComputedStyle(el);
+            const rect = el.getBoundingClientRect();
+            const isVisible = computed.display !== 'none' &&
+                              computed.visibility !== 'hidden' &&
+                              parseFloat(computed.opacity) > 0;
+
+            console.log(`${selector}${elements.length > 1 ? `[${index}]` : ''}:`, {
+                display: computed.display,
+                visibility: computed.visibility,
+                opacity: computed.opacity,
+                zIndex: computed.zIndex,
+                position: computed.position,
+                inlineStyle: el.style.cssText || 'none',
+                classList: Array.from(el.classList),
+                boundingRect: {
+                    top: Math.round(rect.top),
+                    left: Math.round(rect.left),
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height)
+                },
+                isEffectivelyVisible: isVisible,
+                isInViewport: rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0
+            });
+
+            // If element appears visible when it shouldn't be
+            if (isVisible && !document.body.classList.contains('presentation-active')) {
+                console.warn(`⚠️ ${selector} IS VISIBLE but presentation is NOT active!`);
+            }
+        });
+    });
+
+    // Check parent presentation modal
+    const presentationModal = document.getElementById('presentation-modal-overlay');
+    if (presentationModal) {
+        const modalComputed = window.getComputedStyle(presentationModal);
+        console.log('Presentation Modal Container:', {
+            display: modalComputed.display,
+            visibility: modalComputed.visibility,
+            hasActiveClass: presentationModal.classList.contains('active'),
+            inlineStyle: presentationModal.style.cssText || 'none'
+        });
+    }
+
+    console.groupEnd();
+    return 'Drag debug complete. Check console for details.';
+}
+
 // Expose debug function globally for console access
 if (typeof window !== 'undefined') {
     window.debugZIndex = debugZIndex;
+    window.debugDragElements = debugDragElements;
 }

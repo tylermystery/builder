@@ -3701,18 +3701,107 @@ select:focus-visible,
 
             </div>
         </div>
-        <!-- Drag-and-Drop Buckets for Presentation View (Archive/Completed) -->
-        <!-- Always visible when presentation modal is open, grayed out until dragging -->
+        <!-- Drag-and-Drop Zones for Presentation View (Enhanced) -->
+        <!-- Left side: Actions (Goals at top, Archive/Delete at bottom) -->
+        <!-- Right side: Reactions and Comments -->
         <div id="presentation-drag-buckets" class="presentation-drag-buckets">
-            <div id="drag-bucket-archive" class="drag-bucket drag-bucket-archive" data-bucket="archive">
-                <span class="bucket-icon">📦</span>
-                <span class="bucket-label">Archive</span>
+            <!-- RADIAL MENU CONTAINER (populated dynamically by JS) -->
+            <div id="radial-menu-container" class="radial-menu-container">
+                <div class="radial-center-indicator"></div>
+                <div class="radial-direction-indicator"></div>
+                <!-- Buckets will be cloned here dynamically -->
             </div>
-            <div id="drag-bucket-completed" class="drag-bucket drag-bucket-completed" data-bucket="completed">
-                <span class="bucket-icon">✓</span>
-                <span class="bucket-label">Completed</span>
+            <!-- LEFT SIDE: Action Zones (vertical strip) -->
+            <div class="drag-zone-left">
+                <!-- Top: Goal/Inspiration -->
+                <div id="drag-bucket-goal" class="drag-bucket drag-bucket-goal" data-bucket="goal">
+                    <span class="bucket-icon">⭐</span>
+                    <span class="bucket-label">Goal</span>
+                </div>
+                <!-- Ideas bucket (move to idea pool) -->
+                <div id="drag-bucket-ideas" class="drag-bucket drag-bucket-ideas" data-bucket="ideas">
+                    <span class="bucket-icon">💡</span>
+                    <span class="bucket-label">Ideas</span>
+                </div>
+                <!-- Lock in plan -->
+                <div id="drag-bucket-lock" class="drag-bucket drag-bucket-lock" data-bucket="lock">
+                    <span class="bucket-icon">🔒</span>
+                    <span class="bucket-label">Lock</span>
+                </div>
+                <!-- Demote (from locked to idea in plan view) -->
+                <div id="drag-bucket-demote" class="drag-bucket drag-bucket-demote" data-bucket="demote">
+                    <span class="bucket-icon">↓</span>
+                    <span class="bucket-label">Demote</span>
+                </div>
+                <!-- Archive -->
+                <div id="drag-bucket-archive" class="drag-bucket drag-bucket-archive" data-bucket="archive">
+                    <span class="bucket-icon">📦</span>
+                    <span class="bucket-label">Archive</span>
+                </div>
+                <!-- Delete -->
+                <div id="drag-bucket-delete" class="drag-bucket drag-bucket-delete" data-bucket="delete">
+                    <span class="bucket-icon">🗑️</span>
+                    <span class="bucket-label">Delete</span>
+                </div>
+            </div>
+
+            <!-- RIGHT SIDE: Reaction and Comment Zones (vertical strip) -->
+            <div class="drag-zone-right">
+                <!-- Reaction Zone - emojis appear progressively as drag continues -->
+                <div id="drag-bucket-reactions" class="drag-bucket drag-bucket-reactions" data-bucket="reactions">
+                    <span class="bucket-icon">👍</span>
+                    <span class="bucket-label">React</span>
+                    <!-- Progressive emoji options revealed on hover -->
+                    <div class="reaction-options">
+                        <span class="reaction-option" data-emoji="👍" title="Like">👍</span>
+                        <span class="reaction-option" data-emoji="❤️" title="Love">❤️</span>
+                        <span class="reaction-option" data-emoji="🔥" title="Fire">🔥</span>
+                        <span class="reaction-option" data-emoji="⭐" title="Star">⭐</span>
+                        <span class="reaction-option" data-emoji="😊" title="Happy">😊</span>
+                        <span class="reaction-option" data-emoji="🎉" title="Celebrate">🎉</span>
+                        <span class="reaction-option" data-emoji="👀" title="Eyes">👀</span>
+                        <span class="reaction-option" data-emoji="💯" title="100">💯</span>
+                    </div>
+                </div>
+                <!-- Quick Comments -->
+                <div id="drag-bucket-quick-comment" class="drag-bucket drag-bucket-quick-comment" data-bucket="quick-comment">
+                    <span class="bucket-icon">💬</span>
+                    <span class="bucket-label">Quick</span>
+                    <!-- Quick comment options revealed on hover -->
+                    <div class="quick-comment-options">
+                        <span class="quick-comment-option" data-comment="Love this!" title="Love this!">Love this!</span>
+                        <span class="quick-comment-option" data-comment="Great idea" title="Great idea">Great idea</span>
+                        <span class="quick-comment-option" data-comment="Let's do it!" title="Let's do it!">Let's do it!</span>
+                        <span class="quick-comment-option" data-comment="Maybe later" title="Maybe later">Maybe later</span>
+                        <span class="quick-comment-option" data-comment="Need more info" title="Need more info">Need info</span>
+                        <span class="quick-comment-option" data-comment="Too expensive" title="Too expensive">Too $$$</span>
+                    </div>
+                </div>
+                <!-- Custom Comment -->
+                <div id="drag-bucket-custom-comment" class="drag-bucket drag-bucket-custom-comment" data-bucket="custom-comment">
+                    <span class="bucket-icon">✏️</span>
+                    <span class="bucket-label">Comment</span>
+                </div>
+                <!-- Completed (kept from original) -->
+                <div id="drag-bucket-completed" class="drag-bucket drag-bucket-completed" data-bucket="completed">
+                    <span class="bucket-icon">✓</span>
+                    <span class="bucket-label">Done</span>
+                </div>
             </div>
         </div>
+
+        <!-- Drag action tooltip (follows cursor during drag) - OUTSIDE buckets container for proper z-index -->
+        <div id="drag-action-tooltip" class="drag-action-tooltip" style="display: none;">
+            <span class="tooltip-icon"></span>
+            <span class="tooltip-text">Drag to an action</span>
+        </div>
+
+        <!-- Merge indicator overlay (shown when hovering another item) - OUTSIDE buckets container -->
+        <div id="drag-merge-indicator" class="drag-merge-indicator" style="display: none;">
+            <span class="merge-icon">🔗</span>
+            <span class="merge-label">Drop to Merge</span>
+        </div>
+
         <!-- Floating Chat Button for Presentation View -->
         <button id="presentation-floating-chat-btn" title="Jump to Chat">
             <span class="chat-icon">💬</span>
