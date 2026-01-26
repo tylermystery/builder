@@ -255,7 +255,8 @@ function initializeComponentSelector() {
 
     // Show selector when there are items
     const chatSelectorContainer = document.getElementById('stream-component-selector');
-    if (chatSelectorContainer && planItems.length > 0) {
+    const allPlanItems = state.records?.all || [];
+    if (chatSelectorContainer && allPlanItems.length > 0) {
         chatSelectorContainer.style.display = 'flex';
     }
 

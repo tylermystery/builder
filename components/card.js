@@ -247,8 +247,8 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             const placeholder = getLowQualityPlaceholder(imageUrlToLoad);
             imageContainerHTML += `<div class="collage-image lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}"></div>`;
         }
-        imageContainerHTML += `<div class="heart-icon" data-record-id="${record.id}"></div>`;
-        imageContainerHTML += `<button class="availability-btn" title="Select a date range to check availability">📅</button>`;
+        imageContainerHTML += `<button class="heart-icon" data-record-id="${record.id}" aria-label="Like this item" tabindex="0"></button>`;
+        imageContainerHTML += `<button class="availability-btn" title="Select a date range to check availability" aria-label="Check availability">📅</button>`;
         // Add AI badge to grouping cards
         if (isAISourced) {
             imageContainerHTML += aiDiscoveryBadge;
@@ -310,8 +310,8 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
 
         eventCard.innerHTML = `
             <div class="event-card-image-container lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
-                <div class="heart-icon" data-record-id="${record.id}"></div>
-                <button class="availability-btn" title="Select a date range to check availability">📅</button>
+                <button class="heart-icon" data-record-id="${record.id}" aria-label="Like this event" tabindex="0"></button>
+                <button class="availability-btn" title="Select a date range to check availability" aria-label="Check availability">📅</button>
                 ${partnerBadge}
                 ${aiDiscoveryBadge}
                 ${scoreBanner}
@@ -415,8 +415,8 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             imageContainerHTML += `<div class="collage-image lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}"></div>`;
         }
         imageContainerHTML += `<div class="package-badge">📦 Package</div>`;
-        imageContainerHTML += `<div class="heart-icon" data-record-id="${record.id}"></div>`;
-        imageContainerHTML += `<button class="availability-btn" title="Select a date range to check availability">📅</button>`;
+        imageContainerHTML += `<button class="heart-icon" data-record-id="${record.id}" aria-label="Like this package" tabindex="0"></button>`;
+        imageContainerHTML += `<button class="availability-btn" title="Select a date range to check availability" aria-label="Check availability">📅</button>`;
         imageContainerHTML += `</div>`;
 
         // DYNAMIC PRICING: Calculate package price from current component item prices
@@ -433,9 +433,9 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 <div class="package-headcount-selector">
                     <label>Guests:</label>
                     <div class="quantity-selector package-quantity">
-                        <button type="button" class="quantity-btn minus">-</button>
-                        <input type="number" class="quantity-input package-headcount-input" value="${defaultHeadcount}" min="${defaultHeadcount}" step="1">
-                        <button type="button" class="quantity-btn plus">+</button>
+                        <button type="button" class="quantity-btn minus" aria-label="Decrease guest count">-</button>
+                        <input type="number" class="quantity-input package-headcount-input" value="${defaultHeadcount}" min="${defaultHeadcount}" step="1" aria-label="Number of guests">
+                        <button type="button" class="quantity-btn plus" aria-label="Increase guest count">+</button>
                     </div>
                 </div>
             `;
@@ -573,7 +573,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const itemState = ui.getItemState(record.id);
     const effectiveMin = getEffectiveMinQuantity(record);
     const isLocked = state.cart.lockedItems.has(record.id);
-    const quantitySelectorHTML = `<div class="quantity-selector"><button type="button" class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${effectiveMin}" step="1"><button type="button" class="quantity-btn plus">+</button></div>`;
+    const quantitySelectorHTML = `<div class="quantity-selector"><button type="button" class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${effectiveMin}" step="1" aria-label="Quantity"><button type="button" class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
     const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex);
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
@@ -602,8 +602,8 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
 
     eventCard.innerHTML = `
         <div class="event-card-image-container lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
-            <div class="heart-icon" data-record-id="${record.id}"></div>
-            <button class="availability-btn" title="Select a date range to check availability">📅</button>
+            <button class="heart-icon" data-record-id="${record.id}" aria-label="Like this item" tabindex="0"></button>
+            <button class="availability-btn" title="Select a date range to check availability" aria-label="Check availability">📅</button>
             ${partnerBadge}
             ${aiDiscoveryBadge}
             ${imageSourceIndicator}

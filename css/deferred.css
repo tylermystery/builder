@@ -1154,11 +1154,23 @@
     -webkit-backdrop-filter: blur(4px);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Reset button styles for semantic accessibility */
+    border: none;
+    font: inherit;
+    color: inherit;
+    line-height: 1;
 }
 .heart-icon:hover {
     transform: scale(1.15);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     background: rgba(255, 255, 255, 1);
+}
+.heart-icon:focus {
+    outline: 2px solid #007bff;
+    outline-offset: 2px;
+}
+.heart-icon:focus:not(:focus-visible) {
+    outline: none;
 }
 .heart-icon:active {
     transform: scale(0.95);
@@ -1240,6 +1252,15 @@
     transform: scale(0.95);
 }
 
+.availability-btn:focus {
+    outline: 2px solid #007bff;
+    outline-offset: 2px;
+}
+
+.availability-btn:focus:not(:focus-visible) {
+    outline: none;
+}
+
 /* Make card content sit above the shimmer */
 .event-card-content, .card-footer {
     position: relative;
@@ -1317,6 +1338,14 @@
 .card-footer .quantity-btn:active {
     background-color: #dee2e6;
     transform: scale(0.95);
+}
+.card-footer .quantity-btn:focus {
+    outline: 2px solid #007bff;
+    outline-offset: 1px;
+    z-index: 1;
+}
+.card-footer .quantity-btn:focus:not(:focus-visible) {
+    outline: none;
 }
 .card-footer .quantity-input {
     width: 45px;
@@ -1699,6 +1728,14 @@
 #modal-quantity-selector .quantity-btn:active {
     background-color: #dee2e6;
     transform: scale(0.95);
+}
+#modal-quantity-selector .quantity-btn:focus {
+    outline: 2px solid #007bff;
+    outline-offset: 1px;
+    z-index: 1;
+}
+#modal-quantity-selector .quantity-btn:focus:not(:focus-visible) {
+    outline: none;
 }
 #modal-quantity-selector .quantity-input {
     width: 60px;
@@ -10762,4 +10799,60 @@ hr.total-divider {
 
 /* ============================================
    END UNIFIED STREAM FEATURE
+   ============================================ */
+
+/* ============================================
+   REDUCED MOTION - ACCESSIBILITY
+   Respects user's motion preferences for
+   vestibular disorders and motion sensitivity
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+    /* Disable all animations */
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    /* Keep essential visual feedback with minimal motion */
+    .heart-icon:hover,
+    .heart-icon:active {
+        transform: none;
+    }
+
+    .modal-content {
+        transform: none;
+    }
+
+    .modal-overlay.active .modal-content {
+        transform: none;
+    }
+
+    /* Disable skeleton loading animation */
+    .skeleton,
+    .skeleton-image {
+        animation: none;
+        background: #e0e0e0;
+    }
+
+    /* Disable heart pulse animation */
+    .heart-icon.hearted svg {
+        animation: none;
+    }
+
+    /* Disable emoji animations */
+    .event-emoji {
+        animation: none;
+    }
+
+    /* Disable smooth scrolling */
+    html {
+        scroll-behavior: auto;
+    }
+}
+/* ============================================
+   END REDUCED MOTION ACCESSIBILITY
    ============================================ */

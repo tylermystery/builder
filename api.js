@@ -1663,7 +1663,8 @@ export async function fetchChatMessages(sessionId) {
          log('API', 'fetchChatMessages: Invalid or missing sessionId.');
          return [];
     }
-    // Fetch messages linked specifically to this Session record
+
+    // First, try filtering server-side with SessionID_Rollup (if it exists in Airtable)
     const formula = `FIND('${sessionId}', {SessionID_Rollup})`;
     const encodedFormula = encodeURIComponent(formula);
     // Sort by timestamp ascending (oldest first)
@@ -1674,16 +1675,62 @@ export async function fetchChatMessages(sessionId) {
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
 
+        // If the filter failed (likely because SessionID_Rollup field doesn't exist),
+        // fall back to fetching all messages and filtering client-side
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(`Failed to fetch chat messages for session ${sessionId}: ${errorData?.error?.message || response.statusText}`);
+            console.log('[CHAT DEBUG] Server-side filter failed, falling back to client-side filtering...');
+            return await fetchChatMessagesWithClientSideFilter(sessionId);
         }
-        const data = await response.json();
 
+        const data = await response.json();
         log('API', `Fetched ${data.records.length} chat messages for session ${sessionId}.`);
         return data.records;
     } catch (error) {
         log('API', `Error fetching chat messages: ${error.message}`);
+        console.log('[CHAT DEBUG] Falling back to client-side filtering after error...');
+        return await fetchChatMessagesWithClientSideFilter(sessionId);
+    }
+}
+
+/**
+ * Fallback function to fetch all messages and filter client-side by SessionID
+ * Used when the server-side filter doesn't work (e.g., SessionID_Rollup field doesn't exist)
+ * @param {string} sessionId - The session ID to filter by
+ * @returns {Promise<Array>} - Array of message records for this session
+ */
+async function fetchChatMessagesWithClientSideFilter(sessionId) {
+    console.log('[CHAT DEBUG] ========== CLIENT-SIDE FILTER ==========');
+    console.log('[CHAT DEBUG] Fetching all messages and filtering client-side for session:', sessionId);
+
+    // Fetch all messages without a filter, sorted by timestamp
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[CHAT DEBUG] Client-side filter fetch failed:', errorText);
+            return [];
+        }
+
+        const data = await response.json();
+        console.log('[CHAT DEBUG] Total messages in table:', data.records.length);
+
+        // Filter client-side by checking if SessionID array contains our sessionId
+        const filteredMessages = data.records.filter(record => {
+            const sessionIds = record.fields.SessionID || [];
+            return sessionIds.includes(sessionId);
+        });
+
+        console.log('[CHAT DEBUG] Messages matching session after client-side filter:', filteredMessages.length);
+        log('API', `Fetched ${filteredMessages.length} chat messages for session ${sessionId} (client-side filter).`);
+
+        return filteredMessages;
+    } catch (error) {
+        console.error('[CHAT DEBUG] Client-side filter error:', error.message);
         return [];
     }
 }
@@ -2395,10 +2442,9 @@ export async function fetchComponentComments(sessionId, componentType, component
         console.log('[ComponentComment DEBUG] Response status:', response.status, response.statusText);
 
         if (!response.ok) {
-            const errorData = await response.json();
-            console.log('[ComponentComment DEBUG] ❌ Error response:', JSON.stringify(errorData, null, 2));
-            log('API', `Failed to fetch component comments for ${componentType}:${componentId}`);
-            return [];
+            // If filter failed (likely SessionID_Rollup doesn't exist), fall back to client-side filtering
+            console.log('[ComponentComment DEBUG] Server-side filter failed, falling back to client-side filtering...');
+            return await fetchComponentCommentsWithClientSideFilter(sessionId, componentType, componentId);
         }
 
         const data = await response.json();
@@ -2419,7 +2465,68 @@ export async function fetchComponentComments(sessionId, componentType, component
         return filteredRecords;
     } catch (error) {
         console.log('[ComponentComment DEBUG] ❌ Exception:', error.message);
-        log('API', `Error fetching component comments: ${error.message}`);
+        console.log('[ComponentComment DEBUG] Falling back to client-side filtering after error...');
+        return await fetchComponentCommentsWithClientSideFilter(sessionId, componentType, componentId);
+    }
+}
+
+/**
+ * Fallback function to fetch component comments with client-side filtering.
+ * Used when SessionID_Rollup field doesn't exist in Airtable.
+ */
+async function fetchComponentCommentsWithClientSideFilter(sessionId, componentType, componentId = null) {
+    console.log('[ComponentComment DEBUG] ========== CLIENT-SIDE FILTER ==========');
+    console.log('[ComponentComment DEBUG] Fetching all messages and filtering client-side for session:', sessionId);
+
+    // Fetch all messages without a filter, sorted by timestamp
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            console.error('[ComponentComment DEBUG] Client-side filter fetch failed');
+            return [];
+        }
+
+        const data = await response.json();
+        console.log('[ComponentComment DEBUG] Total messages in table:', data.records.length);
+
+        // Filter client-side by SessionID
+        let filteredRecords = data.records.filter(record => {
+            const sessionIds = record.fields.SessionID || [];
+            return sessionIds.includes(sessionId);
+        });
+
+        // Further filter by component type and ID
+        if (componentType === COMPONENT_TYPES.ITEM && componentId && componentId.startsWith('rec')) {
+            // Item comments: must have Item Link containing componentId
+            filteredRecords = filteredRecords.filter(record => {
+                const itemLinks = record.fields['Item Link'] || [];
+                return itemLinks.includes(componentId);
+            });
+        } else if (componentType === COMPONENT_TYPES.ITEM && componentId) {
+            // Manual item comments: content must contain [PLAN_COMMENT:item:componentId]
+            filteredRecords = filteredRecords.filter(record => {
+                const content = record.fields.Content || '';
+                return content.includes(`[PLAN_COMMENT:item:${componentId}]`);
+            });
+        } else {
+            // Header/general comments: content must contain [PLAN_COMMENT:componentType]
+            filteredRecords = filteredRecords.filter(record => {
+                const content = record.fields.Content || '';
+                return content.includes(`[PLAN_COMMENT:${componentType}]`);
+            });
+        }
+
+        console.log('[ComponentComment DEBUG] Messages matching filter after client-side filter:', filteredRecords.length);
+        log('API', `Fetched ${filteredRecords.length} component comments (client-side filter).`);
+
+        return filteredRecords;
+    } catch (error) {
+        console.error('[ComponentComment DEBUG] Client-side filter error:', error.message);
         return [];
     }
 }
@@ -2461,10 +2568,9 @@ export async function fetchAllComponentComments(sessionId) {
         console.log('[ComponentComment DEBUG] Response status:', response.status, response.statusText);
 
         if (!response.ok) {
-            const errorData = await response.json();
-            console.log('[ComponentComment DEBUG] ❌ Error response:', JSON.stringify(errorData, null, 2));
-            log('API', `Failed to fetch all component comments for session ${sessionId}`);
-            return [];
+            // If filter failed (likely SessionID_Rollup doesn't exist), fall back to client-side filtering
+            console.log('[ComponentComment DEBUG] Server-side filter failed, falling back to client-side filtering...');
+            return await fetchAllComponentCommentsWithClientSideFilter(sessionId);
         }
 
         const data = await response.json();
@@ -2473,7 +2579,51 @@ export async function fetchAllComponentComments(sessionId) {
         return data.records;
     } catch (error) {
         console.log('[ComponentComment DEBUG] ❌ Exception:', error.message);
-        log('API', `Error fetching all component comments: ${error.message}`);
+        console.log('[ComponentComment DEBUG] Falling back to client-side filtering after error...');
+        return await fetchAllComponentCommentsWithClientSideFilter(sessionId);
+    }
+}
+
+/**
+ * Fallback function to fetch all component comments with client-side filtering.
+ * Used when SessionID_Rollup field doesn't exist in Airtable.
+ */
+async function fetchAllComponentCommentsWithClientSideFilter(sessionId) {
+    console.log('[ComponentComment DEBUG] ========== CLIENT-SIDE FILTER FOR ALL ==========');
+    console.log('[ComponentComment DEBUG] Fetching all messages and filtering client-side for session:', sessionId);
+
+    // Fetch all messages without a filter, sorted by timestamp
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            console.error('[ComponentComment DEBUG] Client-side filter fetch failed');
+            return [];
+        }
+
+        const data = await response.json();
+        console.log('[ComponentComment DEBUG] Total messages in table:', data.records.length);
+
+        // Filter client-side: SessionID matches AND (has Item Link OR has PLAN_COMMENT prefix)
+        const filteredRecords = data.records.filter(record => {
+            const sessionIds = record.fields.SessionID || [];
+            if (!sessionIds.includes(sessionId)) return false;
+
+            const itemLinks = record.fields['Item Link'] || [];
+            const content = record.fields.Content || '';
+            return itemLinks.length > 0 || content.includes('[PLAN_COMMENT:');
+        });
+
+        console.log('[ComponentComment DEBUG] Component comments matching filter after client-side filter:', filteredRecords.length);
+        log('API', `Fetched ${filteredRecords.length} total component comments (client-side filter).`);
+
+        return filteredRecords;
+    } catch (error) {
+        console.error('[ComponentComment DEBUG] Client-side filter error:', error.message);
         return [];
     }
 }

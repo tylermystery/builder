@@ -3,10 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="WTFun - Event Planning and Activity Discovery">
+    <meta name="description" content="Discover and plan amazing events and activities with WTFun. Browse curated experiences, book unique activities, and create unforgettable memories.">
     <meta name="theme-color" content="#007bff">
-    <title>WTFun</title>
+    <meta name="robots" content="index, follow">
+    <meta name="author" content="WTFun">
+    <meta name="keywords" content="event planning, activities, experiences, party planning, events, booking, entertainment">
+    <title>WTFun - Event Planning and Activity Discovery</title>
+    <link rel="canonical" href="https://whatthefun.wtf/">
     <link rel="icon" href="data:;" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://whatthefun.wtf/">
+    <meta property="og:title" content="WTFun - Event Planning and Activity Discovery">
+    <meta property="og:description" content="Discover and plan amazing events and activities with WTFun. Browse curated experiences, book unique activities, and create unforgettable memories.">
+    <meta property="og:image" content="https://res.cloudinary.com/dxvlilrqq/image/upload/v1/wtfun/og-image.jpg">
+    <meta property="og:site_name" content="WTFun">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://whatthefun.wtf/">
+    <meta name="twitter:title" content="WTFun - Event Planning and Activity Discovery">
+    <meta name="twitter:description" content="Discover and plan amazing events and activities with WTFun. Browse curated experiences, book unique activities, and create unforgettable memories.">
+    <meta name="twitter:image" content="https://res.cloudinary.com/dxvlilrqq/image/upload/v1/wtfun/og-image.jpg">
+
+    <!-- JSON-LD Structured Data for Organization -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "WTFun",
+        "url": "https://whatthefun.wtf/",
+        "description": "Discover and plan amazing events and activities with WTFun.",
+        "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://whatthefun.wtf/?search={search_term_string}",
+            "query-input": "required name=search_term_string"
+        }
+    }
+    </script>
 
     <!-- Preconnect to critical third-party origins for faster resource loading -->
     <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
@@ -2483,6 +2518,36 @@ html.presentation-active {
     #mobile-filter-trigger {
         display: none;
     }
+}
+
+/* Reduced motion - respect user accessibility preferences */
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+    .modal-overlay {
+        transition: none;
+    }
+    .modal-content {
+        transition: none;
+        transform: none;
+    }
+    .modal-overlay.active .modal-content {
+        transform: none;
+    }
+    .skeleton, .skeleton-image {
+        animation: none;
+    }
+}
+
+/* Focus styles for keyboard accessibility */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid #007bff;
+    outline-offset: 2px;
 }
     </style>
 

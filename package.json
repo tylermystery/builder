@@ -2,15 +2,18 @@
   "name": "tmt-catalog-functions",
   "version": "1.0.0",
   "dependencies": {
-    "node-fetch": "^2.6.7",
-    "pusher": "^5.2.0",
-    "stripe": "^13.2.0",
     "@sendgrid/mail": "^8.1.3",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
+    "node-fetch": "^2.6.7",
+    "pusher": "^5.2.0",
+    "stripe": "^13.2.0",
     "twilio": "^5.2.0"
   },
   "scripts": {
     "build": "node build.js"
+  },
+  "devDependencies": {
+    "@netlify/edge-functions": "^3.0.3"
   }
 }

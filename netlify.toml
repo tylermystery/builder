@@ -1,9 +1,16 @@
 [build]
   functions = "netlify/functions"
+  edge_functions = "netlify/edge-functions"
 
 # Allow remote images from Cloudinary for Netlify Image CDN
 [images]
   remote_images = ["https://res.cloudinary.com/.*"]
+
+# Edge function for SEO prerendering of item pages
+# This runs BEFORE redirects and injects meta tags for crawlers
+[[edge_functions]]
+  path = "/item/*"
+  function = "seo-prerender"
 
 [[redirects]]
   from = "/api/update-user-prefs"
