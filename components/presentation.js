@@ -10866,11 +10866,25 @@ async function performPresentationSearch(searchTerm) {
             aiData.children.forEach((child, index) => {
                 const childId = `ai-presentation-${timestamp}-${index}`;
                 const record = buildAIRecord(child, childId, searchTerm);
+                console.log('[DEBUG Presentation] Built AI record from grouping child:', {
+                    id: record.id,
+                    name: record.fields?.Name,
+                    isAI: record.isAI,
+                    _aiConfidence: record.fields?._aiConfidence,
+                    sourceConfidence: child.Confidence || child.confidence
+                });
                 aiRecords.push(record);
             });
         } else if (aiData.Name || aiData.name) {
             // Single AI result
             const record = buildAIRecord(aiData, `ai-presentation-${timestamp}-0`, searchTerm);
+            console.log('[DEBUG Presentation] Built single AI record:', {
+                id: record.id,
+                name: record.fields?.Name,
+                isAI: record.isAI,
+                _aiConfidence: record.fields?._aiConfidence,
+                sourceConfidence: aiData.Confidence || aiData.confidence
+            });
             aiRecords.push(record);
         }
 
@@ -11056,6 +11070,14 @@ function createPresentationManualAddOption(searchTerm) {
  * Creates a result section with carousel
  */
 async function createPresentationResultSection(title, subtitle, records, isAI = false) {
+    console.log('[DEBUG Presentation] createPresentationResultSection called:', {
+        title,
+        isAI,
+        recordCount: records.length,
+        recordIds: records.map(r => r.id),
+        recordsHaveIsAI: records.map(r => ({ id: r.id, isAI: r.isAI, confidence: r.fields?._aiConfidence }))
+    });
+
     const section = document.createElement('div');
     section.className = `presentation-result-section${isAI ? ' ai-section' : ''}`;
 
@@ -11080,6 +11102,7 @@ async function createPresentationResultSection(title, subtitle, records, isAI = 
 
     // Create cards for each record (await since image fetching is async)
     for (const record of records) {
+        console.log('[DEBUG Presentation] Creating card for record:', { id: record.id, isAI_param: isAI, record_isAI: record.isAI });
         const card = await createPresentationResultCard(record, isAI);
         carousel.appendChild(card);
     }
@@ -11136,6 +11159,16 @@ async function createPresentationResultSection(title, subtitle, records, isAI = 
  * Creates a single result card
  */
 async function createPresentationResultCard(record, isAI = false) {
+    console.log('[DEBUG Presentation] createPresentationResultCard called:', {
+        recordId: record.id,
+        recordName: record.fields?.Name,
+        isAI_param: isAI,
+        record_isAI: record.isAI,
+        fields_aiConfidence: record.fields?._aiConfidence,
+        record_aiConfidence: record._aiConfidence,
+        researchData: record._researchData
+    });
+
     const card = document.createElement('div');
     card.className = 'presentation-result-card';
     card.dataset.recordId = record.id;
@@ -11145,12 +11178,82 @@ async function createPresentationResultCard(record, isAI = false) {
 
     const fields = record.fields;
 
+    // Get confidence level for AI items (0.0-1.0)
+    // Check multiple possible sources for confidence data
+    const confidence = isAI ? (
+        record._researchData?.confidence ??
+        record._aiConfidence ??
+        fields._aiConfidence ??
+        null
+    ) : null;
+
+    console.log('[DEBUG Presentation] Confidence resolved for', record.id, ':', {
+        confidence,
+        confidenceType: typeof confidence,
+        isAI
+    });
+
+    // Determine confidence class based on score:
+    // < 50%: pencil (sketchy, draft-like)
+    // 50-75%: pen (handwritten but cleaner)
+    // 75-95%: typed (clean, professional)
+    // 95-100%: premium (elegant typography)
+    let confidenceClass = '';
+    let confidenceLabel = '';
+    let confidenceIndicatorClass = '';
+
+    if (isAI) {
+        if (confidence === null || confidence === undefined) {
+            // Unknown confidence - show as pencil (draft)
+            confidenceClass = 'confidence-pencil';
+            confidenceLabel = 'Draft';
+            confidenceIndicatorClass = 'pencil';
+        } else if (confidence < 0.5) {
+            confidenceClass = 'confidence-pencil';
+            confidenceLabel = `~${Math.round(confidence * 100)}%`;
+            confidenceIndicatorClass = 'pencil';
+        } else if (confidence < 0.75) {
+            confidenceClass = 'confidence-pen';
+            confidenceLabel = `~${Math.round(confidence * 100)}%`;
+            confidenceIndicatorClass = 'pen';
+        } else if (confidence < 0.95) {
+            confidenceClass = 'confidence-typed';
+            confidenceLabel = `${Math.round(confidence * 100)}%`;
+            confidenceIndicatorClass = 'typed';
+        } else {
+            confidenceClass = 'confidence-premium';
+            confidenceLabel = `${Math.round(confidence * 100)}%`;
+            confidenceIndicatorClass = 'premium';
+        }
+        card.classList.add(confidenceClass);
+        console.log('[DEBUG Presentation] Applied confidence class to card:', {
+            recordId: record.id,
+            confidenceClass,
+            confidenceLabel,
+            confidenceIndicatorClass,
+            cardClassList: card.className
+        });
+    }
+
     // Fetch image using the multi-tier approach (website scraping, logo, etc.)
     let imageUrl = '';
+    let imageSource = null; // Track where the image came from for AI indicator
     try {
-        const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+        console.log('[AI IMAGE DEBUG] About to fetch images for record:', {
+            recordId: record.id,
+            isAI: isAI,
+            recordFields: Object.keys(record.fields || {})
+        });
+        const { imageUrls, status } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+        console.log('[AI IMAGE DEBUG] fetchImagesForRecord returned:', {
+            recordId: record.id,
+            imageUrlsCount: imageUrls?.length,
+            status: status,
+            firstImageUrl: imageUrls?.[0]?.substring(0, 80)
+        });
         if (imageUrls && imageUrls.length > 0) {
             imageUrl = imageUrls[0];
+            imageSource = status; // 'ai_approximation', 'placeholder', 'website', 'curated', 'media_tags', etc.
         }
     } catch (e) {
         console.warn('Failed to fetch image for presentation card:', record.id, e);
@@ -11166,8 +11269,88 @@ async function createPresentationResultCard(record, isAI = false) {
                      state.cart.items.has(record.id) ||
                      state.session.user.likedItemIds.has(record.id);
 
+    // Check if item has been researched (has research data with confidence)
+    const hasBeenResearched = record._researchData?.confidence != null;
+
+    // Build AI image source indicator for AI items
+    let aiImageSourceHtml = '';
+    if (isAI) {
+        const isPolished = imageSource && imageSource !== 'ai_approximation' && imageSource !== 'placeholder';
+        console.log('[AI IMAGE DEBUG] Building AI image source indicator:', {
+            recordId: record.id,
+            isAI: isAI,
+            imageSource: imageSource,
+            isPolished: isPolished,
+            imageUrl: imageUrl?.substring(0, 80)
+        });
+        aiImageSourceHtml = `
+            <span class="ai-image-source ${isPolished ? 'polished' : 'approximation'}"
+                  title="${isPolished ? `Image from: ${imageSource}` : 'AI-approximated image - click Dig Into for better results'}">
+                ${isPolished ? '✓ Verified' : 'AI Approx'}
+            </span>
+        `;
+        console.log('[AI IMAGE DEBUG] Built aiImageSourceHtml:', aiImageSourceHtml.trim());
+    } else {
+        console.log('[AI IMAGE DEBUG] NOT building AI image indicator because isAI is false:', {
+            recordId: record.id,
+            isAI: isAI
+        });
+    }
+
+    // Build confidence style text for AI items (shows pencil/pen/typed/premium)
+    let confidenceStyleTextHtml = '';
+    if (isAI) {
+        // Generate style description text based on confidence tier
+        let styleText;
+        if (confidenceIndicatorClass === 'pencil') {
+            styleText = confidence === null || confidence === undefined ? 'Pencil Draft' : `Pencil (~${Math.round(confidence * 100)}%)`;
+        } else if (confidenceIndicatorClass === 'pen') {
+            styleText = `Pen (~${Math.round(confidence * 100)}%)`;
+        } else if (confidenceIndicatorClass === 'typed') {
+            styleText = `Typed (${Math.round(confidence * 100)}%)`;
+        } else {
+            styleText = `Premium (${Math.round(confidence * 100)}%)`;
+        }
+
+        confidenceStyleTextHtml = `
+            <span class="confidence-style-text confidence-style-${confidenceIndicatorClass}" title="Confidence level: ${confidenceLabel}">
+                ${styleText}
+            </span>
+        `;
+        console.log('[DEBUG Presentation] Built confidence style text for', record.id, ':', confidenceIndicatorClass, styleText);
+    }
+
+    // Build dig button or accuracy badge HTML for AI items
+    let digButtonHtml = '';
+    if (isAI) {
+        if (hasBeenResearched) {
+            // Show accuracy badge for researched items
+            const accuracyPercent = Math.round(record._researchData.confidence * 100);
+            const accuracyLevel = accuracyPercent >= 80 ? 'high' : accuracyPercent >= 50 ? 'medium' : 'low';
+            digButtonHtml = `
+                <span class="presentation-accuracy-badge ${accuracyLevel}" title="Research accuracy: ${accuracyPercent}%">
+                    ✓ ${accuracyPercent}%
+                </span>
+            `;
+            console.log('[DEBUG Presentation] Built accuracy badge for researched item', record.id);
+        } else {
+            // Show dig button for unresearched AI items
+            digButtonHtml = `
+                <button class="presentation-dig-btn" data-record-id="${record.id}" title="Research this item to improve accuracy">
+                    <span class="dig-icon">🔍</span> Dig Into
+                </button>
+            `;
+            console.log('[DEBUG Presentation] Built dig button for AI item', record.id);
+        }
+    } else {
+        console.log('[DEBUG Presentation] NOT building dig button for', record.id, '- isAI:', isAI);
+    }
+
     card.innerHTML = `
-        <div class="presentation-result-card-image${isAI ? ' ai-item' : ''}" style="${imageUrl ? `background-image: url('${imageUrl}')` : ''}"></div>
+        ${confidenceStyleTextHtml}
+        <div class="presentation-result-card-image${isAI ? ' ai-item' : ''}" style="${imageUrl ? `background-image: url('${imageUrl}')` : ''}">
+            ${aiImageSourceHtml}
+        </div>
         <div class="presentation-result-card-content">
             <h5 class="presentation-result-card-name">${name}</h5>
             <div class="presentation-result-card-meta">
@@ -11180,11 +11363,12 @@ async function createPresentationResultCard(record, isAI = false) {
                 ${isInPlan ? '✓ Added' : '+ Quick Add'}
             </button>
         </div>
+        ${digButtonHtml}
     `;
 
     // Click on card (not button) opens detail modal
     card.addEventListener('click', (e) => {
-        if (e.target.closest('.presentation-quick-add-btn')) return;
+        if (e.target.closest('.presentation-quick-add-btn') || e.target.closest('.presentation-dig-btn')) return;
         handleCardClick(record, isAI);
     });
 
@@ -11194,6 +11378,15 @@ async function createPresentationResultCard(record, isAI = false) {
         e.stopPropagation();
         handleQuickAdd(record, quickAddBtn, isAI);
     });
+
+    // Dig Into button handler for AI items
+    const digBtn = card.querySelector('.presentation-dig-btn');
+    if (digBtn) {
+        digBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await handleDigInto(record, digBtn, card);
+        });
+    }
 
     return card;
 }
@@ -11278,6 +11471,234 @@ async function handleQuickAdd(record, button, isAI) {
         log('Presentation', `Error adding item: ${error.message}`);
         button.disabled = false;
         button.textContent = '+ Quick Add';
+    }
+}
+
+/**
+ * Handles "Dig Into" button click for AI items to research and improve accuracy
+ */
+async function handleDigInto(record, button, card) {
+    log('Presentation', `Digging into AI item: ${record.fields.Name}`);
+
+    // Update button to show loading state
+    const originalContent = button.innerHTML;
+    button.innerHTML = '<span class="dig-icon">⏳</span> Researching...';
+    button.classList.add('researching');
+    button.disabled = true;
+
+    try {
+        // Prepare the solution data for research
+        const solutionData = {
+            name: record.fields.Name || 'Unknown Item',
+            description: record.fields.Description || '',
+            category: record.fields.Category || '',
+            price: record.fields.Price || null
+        };
+
+        // Call the API to research the item
+        const result = await api.digSolutionDetails({
+            fields: solutionData,
+            id: record.id
+        });
+
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to research item');
+        }
+
+        const research = result.research;
+        log('Presentation', `Successfully researched ${record.fields.Name} with confidence ${research.confidence}`);
+
+        // Update the record with research data
+        record._researchData = research;
+        record._aiConfidence = research.confidence;
+
+        // Update fields with researched information
+        if (research.name) record.fields.Name = research.name;
+        if (research.description) record.fields.Description = research.description;
+        if (research.price?.estimate) record.fields.Price = research.price.estimate;
+
+        // Add location details
+        if (research.location?.serviceArea) {
+            record.fields['Location Details'] = research.location.serviceArea;
+            if (research.location.type) {
+                record.fields['Location Details'] += ` (${research.location.type} service)`;
+            }
+        }
+
+        // Add rankings
+        if (research.rankings) {
+            const rankingsData = {
+                profileSource: 'ai_presentation_research',
+                Fun: research.rankings.Fun || 0,
+                Social: research.rankings.Social || 0,
+                Active: research.rankings.Active || 0,
+                Creative: research.rankings.Creative || 0,
+                Learning: research.rankings.Learning || 0,
+                Relaxing: research.rankings.Relaxing || 0,
+                Tags: research.imageKeywords || []
+            };
+            record.fields.Rankings = JSON.stringify(rankingsData);
+        }
+
+        // Add media tags for image searching
+        if (research.imageKeywords && research.imageKeywords.length > 0) {
+            record.fields['Media Tags'] = research.imageKeywords.join(' ');
+        }
+
+        // Update the record in state if present
+        const stateIndex = state.records.all.findIndex(r => r.id === record.id);
+        if (stateIndex !== -1) {
+            state.records.all[stateIndex] = record;
+        }
+
+        // ============================================================
+        // REFRESH IMAGE: Use improved keywords from research to find a better image
+        // ============================================================
+        const imageContainer = card.querySelector('.presentation-result-card-image');
+        if (imageContainer) {
+            console.log('[DEBUG Presentation] Refreshing image after dig research for:', record.id);
+
+            // Clear the image cache for this record so we get fresh results
+            // Note: api.fetchImagesForRecord uses an internal cache, so we need to re-fetch
+            try {
+                // Update record confidence so the placeholder reflects new confidence level
+                record._aiConfidence = research.confidence;
+                record.fields._aiConfidence = research.confidence;
+
+                // Fetch new image with updated keywords/confidence
+                const { imageUrls, status } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+
+                if (imageUrls && imageUrls.length > 0) {
+                    const newImageUrl = imageUrls[0];
+                    imageContainer.style.backgroundImage = `url('${newImageUrl}')`;
+
+                    // Update or add the image source indicator
+                    let sourceIndicator = imageContainer.querySelector('.ai-image-source');
+                    if (!sourceIndicator) {
+                        sourceIndicator = document.createElement('span');
+                        sourceIndicator.className = 'ai-image-source';
+                        imageContainer.appendChild(sourceIndicator);
+                    }
+
+                    // Update source indicator based on where image came from
+                    const isPolished = status !== 'ai_approximation' && status !== 'placeholder';
+                    sourceIndicator.className = `ai-image-source ${isPolished ? 'polished' : 'approximation'}`;
+                    sourceIndicator.textContent = isPolished ? '✓ Verified' : 'AI Approx';
+                    sourceIndicator.title = isPolished
+                        ? `Image from: ${status}`
+                        : 'AI-approximated image - click Dig Into for better results';
+
+                    console.log('[DEBUG Presentation] Image refreshed after dig:', {
+                        recordId: record.id,
+                        imageSource: status,
+                        isPolished
+                    });
+                }
+            } catch (imgError) {
+                console.warn('[DEBUG Presentation] Failed to refresh image after dig:', imgError);
+            }
+        }
+
+        // Determine new confidence class
+        const confidence = research.confidence;
+        let newConfidenceClass = '';
+        let newConfidenceIndicatorClass = '';
+        let newConfidenceLabel = '';
+
+        if (confidence < 0.5) {
+            newConfidenceClass = 'confidence-pencil';
+            newConfidenceIndicatorClass = 'pencil';
+            newConfidenceLabel = `~${Math.round(confidence * 100)}%`;
+        } else if (confidence < 0.75) {
+            newConfidenceClass = 'confidence-pen';
+            newConfidenceIndicatorClass = 'pen';
+            newConfidenceLabel = `~${Math.round(confidence * 100)}%`;
+        } else if (confidence < 0.95) {
+            newConfidenceClass = 'confidence-typed';
+            newConfidenceIndicatorClass = 'typed';
+            newConfidenceLabel = `${Math.round(confidence * 100)}%`;
+        } else {
+            newConfidenceClass = 'confidence-premium';
+            newConfidenceIndicatorClass = 'premium';
+            newConfidenceLabel = `${Math.round(confidence * 100)}%`;
+        }
+
+        // Remove old confidence classes and add new one
+        card.classList.remove('confidence-pencil', 'confidence-pen', 'confidence-typed', 'confidence-premium');
+        card.classList.add(newConfidenceClass);
+
+        // Update confidence style text element
+        const confidenceStyleText = card.querySelector('.confidence-style-text');
+        if (confidenceStyleText) {
+            // Generate new style text
+            let newStyleText;
+            if (newConfidenceIndicatorClass === 'pencil') {
+                newStyleText = `Pencil (~${Math.round(confidence * 100)}%)`;
+            } else if (newConfidenceIndicatorClass === 'pen') {
+                newStyleText = `Pen (~${Math.round(confidence * 100)}%)`;
+            } else if (newConfidenceIndicatorClass === 'typed') {
+                newStyleText = `Typed (${Math.round(confidence * 100)}%)`;
+            } else {
+                newStyleText = `Premium (${Math.round(confidence * 100)}%)`;
+            }
+
+            confidenceStyleText.className = `confidence-style-text confidence-style-${newConfidenceIndicatorClass}`;
+            confidenceStyleText.title = `Confidence level: ${newConfidenceLabel}`;
+            confidenceStyleText.textContent = newStyleText;
+            console.log('[DEBUG Presentation] Updated confidence style text after dig:', newStyleText);
+        }
+
+        // Legacy: Update confidence indicator if still present
+        const confidenceIndicator = card.querySelector('.confidence-indicator');
+        if (confidenceIndicator) {
+            confidenceIndicator.className = `confidence-indicator ${newConfidenceIndicatorClass}`;
+            confidenceIndicator.title = `Confidence: ${newConfidenceLabel}`;
+            confidenceIndicator.innerHTML = `
+                ${newConfidenceIndicatorClass === 'pencil' ? '✏️' : newConfidenceIndicatorClass === 'pen' ? '🖊️' : newConfidenceIndicatorClass === 'typed' ? '⌨️' : '✨'}
+                ${newConfidenceLabel}
+            `;
+        }
+
+        // Update the name in the card if it changed
+        const nameEl = card.querySelector('.presentation-result-card-name');
+        if (nameEl && research.name) {
+            nameEl.textContent = research.name;
+        }
+
+        // Update the price in the card if it changed
+        const priceEl = card.querySelector('.presentation-result-card-price');
+        if (priceEl && research.price?.estimate) {
+            priceEl.textContent = `$${research.price.estimate.toFixed(2)} (Est.)`;
+        }
+
+        // Replace dig button with accuracy badge
+        const accuracyPercent = Math.round(confidence * 100);
+        const accuracyLevel = accuracyPercent >= 80 ? 'high' : accuracyPercent >= 50 ? 'medium' : 'low';
+        button.outerHTML = `
+            <span class="presentation-accuracy-badge ${accuracyLevel}" title="Research accuracy: ${accuracyPercent}%">
+                ✓ ${accuracyPercent}%
+            </span>
+        `;
+
+        // Show success toast
+        showToast(`Research complete! Accuracy: ${accuracyPercent}%`);
+
+        // Trigger save to persist the research data
+        triggerSave();
+
+        log('Presentation', `Dig Into complete for ${record.fields.Name}, new confidence: ${confidence}`);
+
+    } catch (error) {
+        console.error('Error researching AI item:', error);
+        log('Presentation', `Error digging into item: ${error.message}`);
+
+        // Restore button
+        button.innerHTML = originalContent;
+        button.classList.remove('researching');
+        button.disabled = false;
+
+        // Show error toast
+        showToast('Failed to research item. Try again.');
     }
 }
 

@@ -1510,6 +1510,51 @@ function getDeterministicPlaceholder(record) {
     return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/w_600,h_520,c_fill,b_rgb:${bgColor}/l_text:Arial_36_bold:${encodedName},co_rgb:FFFFFF,g_center/${placeholderPublicID}.jpg`;
 }
 
+/**
+ * Generates an AI-approximated placeholder image with distinct visual styling
+ * Uses Cloudinary transformations to create a sketch/pencil-style effect
+ * indicating this is an AI approximation that may improve with "Dig Into"
+ */
+function getAIApproximatedPlaceholder(record) {
+    const name = record.fields?.Name || 'Unknown Item';
+    const mediaKeywords = record.fields?.[CONSTANTS.FIELD_NAMES.MEDIA_TAGS] || '';
+    const category = record.fields?.Category || '';
+    const confidence = record.fields?._aiConfidence ?? record._aiConfidence ?? null;
+
+    // Generate a color based on the name (for visual variety)
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+        hash = ((hash << 5) - hash) + name.charCodeAt(i);
+        hash = hash & hash;
+    }
+
+    // Purple/blue gradient palette for AI items (reflects AI theme)
+    const aiColors = ['667eea', '764ba2', '6c5ce7', '74b9ff', '81ecec', 'a29bfe', 'fd79a8', 'fdcb6e'];
+    const bgColor = aiColors[Math.abs(hash) % aiColors.length];
+
+    // Shortened name for overlay (first 18 chars to leave room for AI badge)
+    const shortName = name.length > 18 ? name.substring(0, 18) + '...' : name;
+    const encodedName = encodeURIComponent(shortName);
+
+    // Cloudinary placeholder with AI-specific styling
+    // Uses cartoonify effect for a sketched/draft look that indicates AI approximation
+    const placeholderPublicID = 'ww71meppejsewxsxr4x7';
+
+    // Apply visual effect based on confidence level
+    let effectTransform = 'e_cartoonify:30'; // Default sketchy effect
+    if (confidence !== null) {
+        if (confidence >= 0.75) {
+            effectTransform = 'e_improve'; // Cleaner look for higher confidence
+        } else if (confidence >= 0.5) {
+            effectTransform = 'e_cartoonify:15,e_sharpen:50'; // Semi-polished
+        } else {
+            effectTransform = 'e_cartoonify:50,e_grayscale'; // Very sketchy for low confidence
+        }
+    }
+
+    return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/w_600,h_520,c_fill,${effectTransform},b_rgb:${bgColor}/l_text:Arial_32_bold:${encodedName},co_rgb:FFFFFF,g_center/${placeholderPublicID}.jpg`;
+}
+
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
     // === IMAGE DEBUG: Log entry to fetchImagesForRecord ===
     const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.isAI === true;
@@ -1653,16 +1698,23 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         log('API', `No images found for ${record.id} after all checks, using placeholder.`);
 
         if (isAIRecord) {
+            updateImageStatus(record.id, 'using_ai_placeholder', 'Using AI approximated image');
+            // Use AI-specific placeholder with visual styling
+            imageUrls = [getAIApproximatedPlaceholder(record)];
+            imageSource = 'ai_approximation';
+            console.log('[IMAGE DEBUG] Step 4 - Using AI approximated placeholder:', {
+                recordId: record.id,
+                placeholderUrl: imageUrls[0]
+            });
+        } else {
             updateImageStatus(record.id, 'using_placeholder', 'Using placeholder image');
+            imageUrls = [getDeterministicPlaceholder(record)];
+            imageSource = 'placeholder';
+            console.log('[IMAGE DEBUG] Step 4 - Using deterministic placeholder:', {
+                recordId: record.id,
+                placeholderUrl: imageUrls[0]
+            });
         }
-
-        imageUrls = [getDeterministicPlaceholder(record)];
-        imageSource = 'placeholder';
-
-        console.log('[IMAGE DEBUG] Step 4 - Using deterministic placeholder:', {
-            recordId: record.id,
-            placeholderUrl: imageUrls[0]
-        });
     }
 
     console.log('[IMAGE DEBUG] fetchImagesForRecord COMPLETE:', {

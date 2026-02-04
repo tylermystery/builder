@@ -90,23 +90,31 @@ async function createLockedInItemElement(record, itemInfo) {
 
     // Check if this is a solution item (AI-generated from concept) or a manually added item
     // Manual items (manual-add-*, manual-presentation-*) are also researchable - they are user concepts
+    // AI items (ai-child-*, ai-presentation-*, ai-search-*) are also researchable
     const isSolutionItem = record.id.startsWith('solution-') || record.isSolution === true;
     const isManualItem = record.id.startsWith('manual-add-') ||
                          record.id.startsWith('manual-presentation-') ||
                          record.isManual === true;
-    const isResearchableItem = isSolutionItem || isManualItem;
+    const isAIItem = record.id.startsWith('ai-child-') ||
+                     record.id.startsWith('ai-presentation-') ||
+                     record.id.startsWith('ai-search-');
+    const isResearchableItem = isSolutionItem || isManualItem || isAIItem;
 
     // === DIG INFO DEBUG START ===
     console.log('[DIG-INFO DEBUG] Solution item check:', {
         recordId: record.id,
         isSolutionItem: isSolutionItem,
         isManualItem: isManualItem,
+        isAIItem: isAIItem,
         isResearchableItem: isResearchableItem,
         checkResult1_startsWithSolution: record.id.startsWith('solution-'),
         checkResult2_isSolutionTrue: record.isSolution === true,
         checkResult3_startsWithManualAdd: record.id.startsWith('manual-add-'),
         checkResult4_startsWithManualPresentation: record.id.startsWith('manual-presentation-'),
-        checkResult5_isManualTrue: record.isManual === true
+        checkResult5_isManualTrue: record.isManual === true,
+        checkResult6_startsWithAiChild: record.id.startsWith('ai-child-'),
+        checkResult7_startsWithAiPresentation: record.id.startsWith('ai-presentation-'),
+        checkResult8_startsWithAiSearch: record.id.startsWith('ai-search-')
     });
     // === DIG INFO DEBUG END ===
 

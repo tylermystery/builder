@@ -2081,9 +2081,22 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
     // Fetch images for all items (including AI-sourced items)
     let imageUrls = [];
+    let imageSource = null; // Track where the image came from for AI indicator
     try {
-        const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+        console.log('[AI IMAGE DEBUG Modal] About to fetch images for modal record:', {
+            recordId: record?.id,
+            recordName: record?.fields?.Name,
+            isAI: record?.id?.startsWith('ai-') || record?.isAI
+        });
+        const { imageUrls: fetchedUrls, status } = await api.fetchImagesForRecord(record, state.records.all, new Map());
         imageUrls = fetchedUrls || [];
+        imageSource = status;
+        console.log('[AI IMAGE DEBUG Modal] fetchImagesForRecord returned:', {
+            recordId: record?.id,
+            imageUrlsCount: imageUrls.length,
+            imageSource: imageSource,
+            firstImageUrl: imageUrls[0]?.substring(0, 80)
+        });
     } catch (e) {
         console.warn('Failed to fetch images for record:', record.id, e);
     }
@@ -2103,6 +2116,10 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                     existingImageCount: imageUrls.length
                 });
                 imageUrls = [...imageUrls, ...commentImages];
+                // If we added comment images, the source is now mixed
+                if (imageSource === 'ai_approximation' || imageSource === 'placeholder') {
+                    imageSource = 'mixed';
+                }
             }
         }
     }
@@ -2129,48 +2146,73 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
     // Display AI confidence badge for AI-parsed items
     const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.id?.startsWith('ai-presentation-') || record?.isAI === true;
+    console.log('[DEBUG Modal] showDetailModal called:', {
+        recordId: record?.id,
+        isAIRecord,
+        fields_aiConfidence: record?.fields?.['_aiConfidence'],
+        record_aiConfidence: record?._aiConfidence,
+        record_isAI: record?.isAI
+    });
+
     const existingConfidenceBadge = document.querySelector('.ai-confidence-badge');
     if (existingConfidenceBadge) existingConfidenceBadge.remove();
 
+    // Also remove any existing confidence text indicator
+    const existingConfidenceText = document.querySelector('.ai-confidence-text');
+    if (existingConfidenceText) existingConfidenceText.remove();
+
+    // Get the modal container to apply confidence styling to the entire modal
+    const modalContainer = document.getElementById('detail-modal');
+
+    // Remove previous confidence classes from modal
+    if (modalContainer) {
+        modalContainer.classList.remove('modal-confidence-pencil', 'modal-confidence-pen', 'modal-confidence-typed', 'modal-confidence-premium');
+    }
+
     if (isAIRecord) {
-        const confidence = record.fields?.['_aiConfidence'];
-        const confidenceBadge = document.createElement('div');
-        confidenceBadge.className = 'ai-confidence-badge';
+        const confidence = record.fields?.['_aiConfidence'] ?? record._aiConfidence ?? null;
+        console.log('[DEBUG Modal] AI record confidence:', { confidence, type: typeof confidence });
 
-        if (confidence !== null && confidence !== undefined) {
-            const confidencePercent = Math.round(confidence * 100);
-            let confidenceLevel, confidenceLabel, confidenceTooltip;
+        // Determine confidence style tier
+        let confidenceStyle, confidenceStyleText, confidenceTooltip;
 
-            if (confidence >= 0.8) {
-                confidenceLevel = 'high';
-                confidenceLabel = 'Verified';
-                confidenceTooltip = `${confidencePercent}% confident - Well-known business with verified details`;
-            } else if (confidence >= 0.6) {
-                confidenceLevel = 'moderate';
-                confidenceLabel = 'Likely';
-                confidenceTooltip = `${confidencePercent}% confident - Details should be accurate`;
-            } else if (confidence >= 0.4) {
-                confidenceLevel = 'low';
-                confidenceLabel = 'Estimated';
-                confidenceTooltip = `${confidencePercent}% confident - Some details may be estimates`;
-            } else {
-                confidenceLevel = 'very-low';
-                confidenceLabel = 'Draft';
-                confidenceTooltip = `${confidencePercent}% confident - Placeholder info, please verify`;
-            }
-
-            confidenceBadge.className = `ai-confidence-badge confidence-${confidenceLevel}`;
-            confidenceBadge.innerHTML = `<span class="confidence-icon">✨</span> AI ${confidenceLabel} <span class="confidence-score">${confidencePercent}%</span>`;
-            confidenceBadge.title = confidenceTooltip;
+        if (confidence === null || confidence === undefined) {
+            confidenceStyle = 'pencil';
+            confidenceStyleText = 'Pencil Draft';
+            confidenceTooltip = 'Draft information - please verify all details';
+        } else if (confidence < 0.5) {
+            confidenceStyle = 'pencil';
+            confidenceStyleText = `Pencil (~${Math.round(confidence * 100)}%)`;
+            confidenceTooltip = `${Math.round(confidence * 100)}% confident - Sketchy draft, please verify details`;
+        } else if (confidence < 0.75) {
+            confidenceStyle = 'pen';
+            confidenceStyleText = `Pen (~${Math.round(confidence * 100)}%)`;
+            confidenceTooltip = `${Math.round(confidence * 100)}% confident - Handwritten quality, some details may need verification`;
+        } else if (confidence < 0.95) {
+            confidenceStyle = 'typed';
+            confidenceStyleText = `Typed (${Math.round(confidence * 100)}%)`;
+            confidenceTooltip = `${Math.round(confidence * 100)}% confident - Typed quality, reliable information`;
         } else {
-            // No confidence score - show generic AI badge
-            confidenceBadge.className = 'ai-confidence-badge confidence-unknown';
-            confidenceBadge.innerHTML = '<span class="confidence-icon">✨</span> AI Suggested';
-            confidenceBadge.title = 'AI-generated suggestion - verify details before booking';
+            confidenceStyle = 'premium';
+            confidenceStyleText = `Premium (${Math.round(confidence * 100)}%)`;
+            confidenceTooltip = `${Math.round(confidence * 100)}% confident - Premium verified information`;
         }
 
-        // Insert badge after the item name
-        modalItemName.parentNode.insertBefore(confidenceBadge, modalItemName.nextSibling);
+        console.log('[DEBUG Modal] Applying confidence style to modal:', { confidenceStyle, confidenceStyleText });
+
+        // Apply confidence class to the entire modal
+        if (modalContainer) {
+            modalContainer.classList.add(`modal-confidence-${confidenceStyle}`);
+        }
+
+        // Create confidence text indicator (not badge)
+        const confidenceTextEl = document.createElement('div');
+        confidenceTextEl.className = `ai-confidence-text confidence-style-${confidenceStyle}`;
+        confidenceTextEl.innerHTML = `<span class="confidence-style-label">${confidenceStyleText}</span>`;
+        confidenceTextEl.title = confidenceTooltip;
+
+        // Insert after the item name
+        modalItemName.parentNode.insertBefore(confidenceTextEl, modalItemName.nextSibling);
     }
 
     // Display solution badge for AI-generated solution items
@@ -3039,6 +3081,42 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         ? applyCloudinaryTransform(imageUrls[currentPhotoIndex], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
         : imageUrls[currentPhotoIndex];
     modalMainImage.style.backgroundImage = `url('${optimizedMainImage}')`;
+
+    // Add AI image source indicator for AI items
+    const existingAiImageSource = modalMainImage.querySelector('.ai-image-source-modal');
+    if (existingAiImageSource) existingAiImageSource.remove();
+
+    console.log('[AI IMAGE DEBUG Modal] Checking whether to show AI image indicator:', {
+        isAIRecord: isAIRecord,
+        imageSource: imageSource,
+        recordId: record?.id,
+        willShowIndicator: isAIRecord && imageSource,
+        modalMainImageExists: !!modalMainImage
+    });
+
+    if (isAIRecord && imageSource) {
+        const isPolished = imageSource !== 'ai_approximation' && imageSource !== 'placeholder';
+        console.log('[AI IMAGE DEBUG Modal] Creating AI image indicator:', {
+            isPolished: isPolished,
+            imageSource: imageSource,
+            cssClass: `ai-image-source-modal ${isPolished ? 'polished' : 'approximation'}`
+        });
+        const aiImageSourceIndicator = document.createElement('span');
+        aiImageSourceIndicator.className = `ai-image-source-modal ${isPolished ? 'polished' : 'approximation'}`;
+        aiImageSourceIndicator.textContent = isPolished ? '✓ Verified Image' : 'AI Approximated';
+        aiImageSourceIndicator.title = isPolished
+            ? `Image source: ${imageSource}`
+            : 'This is an AI-approximated placeholder. Use "Dig Into" to find better images.';
+        modalMainImage.appendChild(aiImageSourceIndicator);
+        console.log('[AI IMAGE DEBUG Modal] Appended AI image indicator to modalMainImage');
+    } else {
+        console.log('[AI IMAGE DEBUG Modal] NOT showing AI image indicator because:', {
+            isAIRecord: isAIRecord,
+            imageSource: imageSource,
+            reason: !isAIRecord ? 'not an AI record' : (!imageSource ? 'no imageSource' : 'unknown')
+        });
+    }
+
     modalThumbnailStrip.innerHTML = '';
     imageUrls.forEach((url, index) => {
         const thumb = document.createElement('div');
@@ -3441,12 +3519,16 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         }
     });
 
-    // Add "Dig Info" button for AI-generated solution items
+    // Add "Dig Info" button for AI-generated solution items and AI items
     // This allows users to research the solution and get detailed information with accuracy scores
     const isSolutionItem = record.isSolution === true || record.id?.startsWith('solution-');
-    const hasResearchData = isSolutionItem && record._researchData?.confidence != null;
+    const isAIItem = record.id?.startsWith('ai-child-') ||
+                     record.id?.startsWith('ai-presentation-') ||
+                     record.id?.startsWith('ai-search-');
+    const isResearchableItem = isSolutionItem || isAIItem;
+    const hasResearchData = isResearchableItem && record._researchData?.confidence != null;
 
-    if (isSolutionItem) {
+    if (isResearchableItem) {
         if (hasResearchData) {
             // Show accuracy badge for already-researched solutions
             const confidenceScore = Math.round(record._researchData.confidence * 100);
@@ -3482,9 +3564,9 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 });
             }
 
-            log('Modal', `Showing accuracy badge for researched solution: ${record.id} (${confidenceScore}%)`);
+            log('Modal', `Showing accuracy badge for researched item: ${record.id} (${confidenceScore}%)`);
         } else {
-            // Show "Dig Info" button for unresearched solutions
+            // Show "Dig Info" button for unresearched AI/solution items
             const digInfoBtn = document.createElement('button');
             digInfoBtn.className = 'card-action-btn modal-dig-info-btn dig-solution-btn';
             digInfoBtn.id = 'modal-dig-info-btn';
@@ -3662,7 +3744,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 }
             });
 
-            log('Modal', `Showing Dig Info button for unresearched solution: ${record.id}`);
+            log('Modal', `Showing Dig Info button for unresearched item: ${record.id}`);
         }
     }
 
@@ -4229,7 +4311,20 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 <button class="ai-options-close-btn" style="background: none; border: none; cursor: pointer; font-size: 1.2em; color: #666;">×</button>
             </div>
             ${isConceptItem ? `
-                <div class="ai-solutions-container"></div>
+                <div class="ai-solutions-edit-mode" style="display: none;">
+                    <textarea class="ai-solutions-editor" placeholder="Edit solutions as JSON..." style="width: 100%; min-height: 200px; font-family: monospace; font-size: 0.85em; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;"></textarea>
+                    <div class="ai-solutions-edit-actions" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="ai-solutions-apply-btn" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Apply Solutions</button>
+                        <button class="ai-solutions-cancel-edit-btn" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+                        <button class="ai-solutions-add-btn" style="padding: 8px 16px; background: #17a2b8; color: white; border: none; border-radius: 4px; cursor: pointer;">+ Add Solution</button>
+                    </div>
+                </div>
+                <div class="ai-solutions-preview-mode">
+                    <div class="ai-solutions-container"></div>
+                    <div class="ai-solutions-preview-actions" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="ai-solutions-edit-all-btn" style="padding: 6px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">✏️ Edit All</button>
+                    </div>
+                </div>
                 <span class="ai-options-status" style="display: block; margin-top: 10px; font-size: 0.85em; color: #666;"></span>
             ` : `
                 <textarea class="ai-options-editor" placeholder="Loading..." style="width: 100%; min-height: 120px; font-family: monospace; font-size: 0.9em; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;"></textarea>
@@ -4252,6 +4347,53 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     const aiOptionsStatus = aiOptionsContainer.querySelector('.ai-options-status');
     const aiSolutionsContainer = aiOptionsContainer.querySelector('.ai-solutions-container');
 
+    // New solution editing elements
+    const aiSolutionsEditMode = aiOptionsContainer.querySelector('.ai-solutions-edit-mode');
+    const aiSolutionsPreviewMode = aiOptionsContainer.querySelector('.ai-solutions-preview-mode');
+    const aiSolutionsEditor = aiOptionsContainer.querySelector('.ai-solutions-editor');
+    const aiSolutionsApplyBtn = aiOptionsContainer.querySelector('.ai-solutions-apply-btn');
+    const aiSolutionsCancelEditBtn = aiOptionsContainer.querySelector('.ai-solutions-cancel-edit-btn');
+    const aiSolutionsAddBtn = aiOptionsContainer.querySelector('.ai-solutions-add-btn');
+    const aiSolutionsEditAllBtn = aiOptionsContainer.querySelector('.ai-solutions-edit-all-btn');
+
+    // Helper function to convert solutions array to editable JSON text
+    const solutionsToEditableText = (solutions) => {
+        return JSON.stringify(solutions, null, 2);
+    };
+
+    // Helper function to parse edited JSON text back to solutions array
+    const parseEditedSolutions = (text) => {
+        try {
+            const parsed = JSON.parse(text);
+            if (!Array.isArray(parsed)) {
+                throw new Error('Solutions must be an array');
+            }
+            // Validate each solution has required fields
+            return parsed.map(s => ({
+                name: s.name || 'Unnamed Solution',
+                description: s.description || '',
+                estimatedPrice: s.estimatedPrice || '$0',
+                confidence: s.confidence || 'medium',
+                searchTerms: s.searchTerms || []
+            }));
+        } catch (e) {
+            throw new Error(`Invalid JSON: ${e.message}`);
+        }
+    };
+
+    // Helper function to switch between edit and preview modes
+    const setEditMode = (editModeActive) => {
+        if (aiSolutionsEditMode && aiSolutionsPreviewMode) {
+            if (editModeActive) {
+                aiSolutionsEditMode.style.display = 'block';
+                aiSolutionsPreviewMode.style.display = 'none';
+            } else {
+                aiSolutionsEditMode.style.display = 'none';
+                aiSolutionsPreviewMode.style.display = 'block';
+            }
+        }
+    };
+
     // Helper function to render solutions as rectangular badges
     const renderSolutions = (solutions) => {
         if (!aiSolutionsContainer) return;
@@ -4259,9 +4401,14 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         aiSolutionsContainer.innerHTML = '';
 
         solutions.forEach((solution, index) => {
+            const solutionWrapper = document.createElement('div');
+            solutionWrapper.className = 'solution-item-wrapper';
+            solutionWrapper.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 8px;';
+
             const solutionBadge = document.createElement('button');
             solutionBadge.className = 'solution-item-badge';
             solutionBadge.dataset.solutionIndex = index;
+            solutionBadge.style.cssText = 'flex: 1;';
 
             // Confidence badge color
             const confidenceColors = {
@@ -4320,7 +4467,46 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 showDetailModal(solutionRecord);
             });
 
-            aiSolutionsContainer.appendChild(solutionBadge);
+            // Edit button for individual solution
+            const editBtn = document.createElement('button');
+            editBtn.className = 'solution-edit-btn';
+            editBtn.innerHTML = '✏️';
+            editBtn.title = 'Edit this solution';
+            editBtn.style.cssText = 'padding: 6px 10px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 0.9em;';
+            editBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // Switch to edit mode with just this solution
+                if (aiSolutionsEditor) {
+                    aiSolutionsEditor.value = JSON.stringify([solution], null, 2);
+                    aiSolutionsEditor.dataset.editIndex = index; // Track which solution is being edited
+                    setEditMode(true);
+                    aiOptionsStatus.textContent = 'Editing solution...';
+                    aiOptionsStatus.style.color = '#666';
+                }
+            });
+
+            // Delete button for individual solution
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'solution-delete-btn';
+            deleteBtn.innerHTML = '🗑️';
+            deleteBtn.title = 'Remove this solution';
+            deleteBtn.style.cssText = 'padding: 6px 10px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 0.9em;';
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm(`Remove "${solution.name}" from solutions?`)) {
+                    const updatedSolutions = [...(record._generatedSolutions || [])];
+                    updatedSolutions.splice(index, 1);
+                    record._generatedSolutions = updatedSolutions;
+                    renderSolutions(updatedSolutions);
+                    aiOptionsStatus.textContent = 'Solution removed.';
+                    aiOptionsStatus.style.color = '#666';
+                }
+            });
+
+            solutionWrapper.appendChild(solutionBadge);
+            solutionWrapper.appendChild(editBtn);
+            solutionWrapper.appendChild(deleteBtn);
+            aiSolutionsContainer.appendChild(solutionWrapper);
         });
     };
 
@@ -4342,15 +4528,21 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             if (aiSolutionsContainer) {
                 aiSolutionsContainer.innerHTML = '<div class="solutions-loading">Searching for solutions...</div>';
             }
+            // Show loading in edit mode area too
+            setEditMode(false);
 
             try {
                 const result = await api.generateConceptSolutions(record);
                 if (result.success && result.solutions && result.solutions.length > 0) {
-                    // Store solutions on record for persistence
-                    record._generatedSolutions = result.solutions;
-                    renderSolutions(result.solutions);
-                    aiOptionsStatus.textContent = `Found ${result.solutions.length} solutions! Click one to explore.`;
-                    aiOptionsStatus.style.color = '#28a745';
+                    // Instead of immediately rendering, show in edit mode first for user to modify
+                    if (aiSolutionsEditor) {
+                        aiSolutionsEditor.value = solutionsToEditableText(result.solutions);
+                        delete aiSolutionsEditor.dataset.editIndex; // Clear any single-edit tracking
+                    }
+                    // Switch to edit mode to let user review/modify before applying
+                    setEditMode(true);
+                    aiOptionsStatus.textContent = `Found ${result.solutions.length} solutions! Review and edit below, then click "Apply Solutions".`;
+                    aiOptionsStatus.style.color = '#17a2b8';
                 } else {
                     throw new Error(result.error || 'No solutions found');
                 }
@@ -4358,6 +4550,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 if (aiSolutionsContainer) {
                     aiSolutionsContainer.innerHTML = '';
                 }
+                setEditMode(false);
                 aiOptionsStatus.textContent = `Error: ${error.message}`;
                 aiOptionsStatus.style.color = '#dc3545';
                 console.error('AI solutions generation failed:', error);
@@ -4403,6 +4596,113 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     aiOptionsCloseBtn.addEventListener('click', () => {
         aiOptionsResult.style.display = 'none';
     });
+
+    // Solutions editing buttons (for concept items)
+    // "Edit All" button - switches to edit mode with all solutions
+    if (aiSolutionsEditAllBtn) {
+        aiSolutionsEditAllBtn.addEventListener('click', () => {
+            if (aiSolutionsEditor && record._generatedSolutions) {
+                aiSolutionsEditor.value = solutionsToEditableText(record._generatedSolutions);
+                delete aiSolutionsEditor.dataset.editIndex; // Clear any single-edit tracking
+                setEditMode(true);
+                aiOptionsStatus.textContent = 'Edit solutions below, then click "Apply Solutions".';
+                aiOptionsStatus.style.color = '#666';
+            }
+        });
+    }
+
+    // "Apply Solutions" button - parses edited JSON and updates solutions
+    if (aiSolutionsApplyBtn) {
+        aiSolutionsApplyBtn.addEventListener('click', () => {
+            const editorText = aiSolutionsEditor?.value;
+            if (!editorText?.trim()) {
+                aiOptionsStatus.textContent = 'No solutions to apply';
+                aiOptionsStatus.style.color = '#dc3545';
+                return;
+            }
+
+            try {
+                const parsedSolutions = parseEditedSolutions(editorText);
+
+                // Check if we're editing a single solution or all solutions
+                const editIndex = aiSolutionsEditor?.dataset.editIndex;
+                if (editIndex !== undefined && editIndex !== '') {
+                    // Single solution edit - merge back into the array
+                    const idx = parseInt(editIndex, 10);
+                    const existingSolutions = [...(record._generatedSolutions || [])];
+                    if (parsedSolutions.length === 1) {
+                        existingSolutions[idx] = parsedSolutions[0];
+                    } else {
+                        // User added more solutions in single-edit mode, splice them in
+                        existingSolutions.splice(idx, 1, ...parsedSolutions);
+                    }
+                    record._generatedSolutions = existingSolutions;
+                } else {
+                    // Bulk edit - replace all solutions
+                    record._generatedSolutions = parsedSolutions;
+                }
+
+                // Re-render the badges and switch back to preview mode
+                renderSolutions(record._generatedSolutions);
+                setEditMode(false);
+                aiOptionsStatus.textContent = `Applied ${record._generatedSolutions.length} solutions! Click one to explore.`;
+                aiOptionsStatus.style.color = '#28a745';
+                log('Modal', `Applied ${record._generatedSolutions.length} edited solutions`);
+            } catch (error) {
+                aiOptionsStatus.textContent = `Error: ${error.message}`;
+                aiOptionsStatus.style.color = '#dc3545';
+                console.error('Failed to parse edited solutions:', error);
+            }
+        });
+    }
+
+    // "Cancel" button - switches back to preview mode without saving
+    if (aiSolutionsCancelEditBtn) {
+        aiSolutionsCancelEditBtn.addEventListener('click', () => {
+            setEditMode(false);
+            // Re-render existing solutions (if any)
+            if (record._generatedSolutions && record._generatedSolutions.length > 0) {
+                renderSolutions(record._generatedSolutions);
+                aiOptionsStatus.textContent = `${record._generatedSolutions.length} solutions. Click one to explore.`;
+                aiOptionsStatus.style.color = '#666';
+            } else {
+                aiOptionsStatus.textContent = 'Edit cancelled. No solutions applied.';
+                aiOptionsStatus.style.color = '#666';
+            }
+        });
+    }
+
+    // "Add Solution" button - adds a template solution to the editor
+    if (aiSolutionsAddBtn) {
+        aiSolutionsAddBtn.addEventListener('click', () => {
+            try {
+                const currentText = aiSolutionsEditor?.value?.trim() || '[]';
+                let currentSolutions = [];
+                try {
+                    currentSolutions = JSON.parse(currentText);
+                    if (!Array.isArray(currentSolutions)) currentSolutions = [];
+                } catch (e) {
+                    currentSolutions = [];
+                }
+
+                // Add a template solution
+                currentSolutions.push({
+                    name: "New Solution",
+                    description: "Describe this solution...",
+                    estimatedPrice: "$0",
+                    confidence: "medium",
+                    searchTerms: []
+                });
+
+                aiSolutionsEditor.value = solutionsToEditableText(currentSolutions);
+                aiOptionsStatus.textContent = 'New solution added. Edit and apply when ready.';
+                aiOptionsStatus.style.color = '#17a2b8';
+            } catch (error) {
+                aiOptionsStatus.textContent = 'Error adding solution';
+                aiOptionsStatus.style.color = '#dc3545';
+            }
+        });
+    }
 
     // Apply to item (works for all users - updates locally for this session)
     // Only for non-concept items (product variations)

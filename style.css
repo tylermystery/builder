@@ -2264,6 +2264,7 @@ body.presentation-active #wtf-plans-panel-overlay {
     background-size: cover;
     background-position: center;
     border-right: 1px solid #eee;
+    position: relative; /* Required for positioning ai-image-source-modal */
 }
 #modal-thumbnail-strip {
     display: flex;
