@@ -2788,6 +2788,30 @@ select:focus-visible,
 
     <!-- Netlify Identity loaded on demand when auth is needed -->
     <script>
+    // Handle Netlify Identity hash tokens early to prevent "Link Disabled" errors
+    // This catches users clicking old Identity confirmation emails
+    (function() {
+      var hash = window.location.hash;
+      if (hash) {
+        // Check for Netlify Identity tokens in hash
+        var identityTokens = ['confirmation_token', 'recovery_token', 'invite_token', 'access_token'];
+        var hasIdentityToken = identityTokens.some(function(token) {
+          return hash.includes(token + '=');
+        });
+
+        if (hasIdentityToken) {
+          console.log('[Identity Redirect] Detected Netlify Identity hash token, clearing hash to prevent interference');
+          // Clear the hash to prevent the identity widget from processing an invalid token
+          // This prevents the "Link Disabled" error
+          if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          }
+          // Show a user-friendly message
+          console.warn('[Auth] Old or invalid Netlify Identity link detected. Please use the email sign-in form to request a new link.');
+        }
+      }
+    })();
+
     window.loadNetlifyIdentity = function() {
       if (window._identityLoading) return window._identityLoading;
       window._identityLoading = new Promise((resolve) => {
