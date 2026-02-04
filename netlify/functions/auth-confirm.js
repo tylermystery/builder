@@ -6,6 +6,17 @@ const jwt = require('jsonwebtoken');
 const Pusher = require("pusher");
 const { AIRTABLE_PAT, BASE_ID, JWT_SECRET, PUSHER_APP_ID, PUSHER_KEY, PUSHER_SECRET, PUSHER_CLUSTER } = process.env;
 
+// Debug: Log environment variable availability at cold start
+console.log('[auth-confirm] Cold start - checking env vars:', {
+    hasAirtablePat: !!AIRTABLE_PAT,
+    hasBaseId: !!BASE_ID,
+    hasJwtSecret: !!JWT_SECRET,
+    hasPusherAppId: !!PUSHER_APP_ID,
+    hasPusherKey: !!PUSHER_KEY,
+    hasPusherSecret: !!PUSHER_SECRET,
+    hasPusherCluster: !!PUSHER_CLUSTER
+});
+
 // Define table/field names as constants for consistency
 const USERS_TABLE = 'Users';
 const SESSIONS_TABLE = 'Sessions';
@@ -13,20 +24,45 @@ const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD';
 const LIKED_BY_FIELD = 'Liked By Users';
 const RSVPS_FIELD = 'RSVPs';
 
-const pusher = new Pusher({
-    appId: PUSHER_APP_ID,
-    key: PUSHER_KEY,
-    secret: PUSHER_SECRET,
-    cluster: PUSHER_CLUSTER,
-    useTLS: true,
-});
+// Only initialize Pusher if all required vars are present
+let pusher = null;
+if (PUSHER_APP_ID && PUSHER_KEY && PUSHER_SECRET && PUSHER_CLUSTER) {
+    pusher = new Pusher({
+        appId: PUSHER_APP_ID,
+        key: PUSHER_KEY,
+        secret: PUSHER_SECRET,
+        cluster: PUSHER_CLUSTER,
+        useTLS: true,
+    });
+}
 
 exports.handler = async (event) => {
+    console.log('[auth-confirm] Function invoked');
+
     try {
+        // Check for required environment variables early
+        if (!AIRTABLE_PAT || !BASE_ID || !JWT_SECRET) {
+            console.error('[auth-confirm] Missing required environment variables');
+            return {
+                statusCode: 500,
+                headers: { 'Content-Type': 'text/html' },
+                body: `<div style="font-family: sans-serif; text-align: center; padding-top: 50px;"><h1>Server Configuration Error</h1><p>Please contact support.</p></div>`
+            };
+        }
+
+        if (!pusher) {
+            console.error('[auth-confirm] Pusher not initialized - missing environment variables');
+            return {
+                statusCode: 500,
+                headers: { 'Content-Type': 'text/html' },
+                body: `<div style="font-family: sans-serif; text-align: center; padding-top: 50px;"><h1>Server Configuration Error</h1><p>Real-time service unavailable. Please contact support.</p></div>`
+            };
+        }
+
         const { token } = event.queryStringParameters;
         if (!token) throw new Error('Token is required.');
 
-        console.log('[auth-confirm] Processing magic link confirmation');
+        console.log('[auth-confirm] Processing magic link confirmation for token:', token.substring(0, 8) + '...');
 
         const findTokenUrl = `https://api.airtable.com/v0/${BASE_ID}/Magic%20Links?filterByFormula=AND({Token}='${token}')`;
         const tokenRes = await fetch(findTokenUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });

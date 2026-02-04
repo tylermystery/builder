@@ -176,12 +176,17 @@ async function handleSignIn(e) {
     signinMessage.style.color = '#333';
     signinMessage.textContent = `Sending confirmation email...`;
     try {
+        log('Auth', 'Calling /api/auth-start endpoint');
         const response = await fetch('/api/auth-start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: email, siteUrl: window.location.origin }),
         });
+
+        log('Auth', `auth-start response status: ${response.status}`);
         const data = await response.json();
+        log('Auth', `auth-start response data:`, data);
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to send confirmation email.');
         }
@@ -213,8 +218,10 @@ async function handleSignIn(e) {
         });
 
     } catch (error) {
+        console.error('[Auth] Sign-in error:', error);
+        log('Auth', `Sign-in failed: ${error.message}`);
         signinMessage.style.color = '#dc3545';
-        signinMessage.textContent = error.message;
+        signinMessage.textContent = error.message || 'Unable to sign in. Please try again.';
     }
 }
 
