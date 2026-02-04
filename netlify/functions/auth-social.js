@@ -190,6 +190,8 @@ exports.handler = async (event, context) => {
                     id: userRecord.id,
                     name: userRecord.fields[NAME_FIELD] || name,
                     email: email,
+                    phoneNumber: userRecord.fields.Phone || '',
+                    notificationFrequency: userRecord.fields.NotificationFrequency || 'None',
                     likedItemIds: likedItemIds,
                     rsvpdItemIds: rsvpdItemIds,
                     associatedSessions: associatedSessions
