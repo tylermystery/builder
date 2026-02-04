@@ -584,20 +584,18 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     // Build image source indicator for AI items
     let imageSourceIndicator = '';
     if (isAISourced && status) {
-        const sourceLabels = {
-            'og:image': 'Website',
-            'twitter:image': 'Website',
-            'link:image_src': 'Website',
-            'website': 'Website',
-            'clearbit_logo': 'Logo',
-            'google_favicon': 'Favicon',
-            'curated': 'Curated',
-            'media_tags': 'Catalog',
-            'placeholder': 'AI'
-        };
-        const sourceLabel = sourceLabels[status] || status;
-        const sourceClass = status === 'placeholder' ? 'source-placeholder' : 'source-found';
-        imageSourceIndicator = `<span class="image-source-indicator ${sourceClass}">${sourceLabel}</span>`;
+        // Determine if the image is verified (from website, curated, etc.) or AI-approximated
+        const verifiedSources = ['og:image', 'twitter:image', 'link:image_src', 'website', 'clearbit_logo', 'google_favicon', 'curated', 'media_tags'];
+        const isVerified = verifiedSources.includes(status);
+        const isApproximate = status === 'placeholder' || status === 'ai_approximation';
+
+        if (isVerified) {
+            // Show "Verified" badge for images found from real sources
+            imageSourceIndicator = `<span class="ai-image-source polished">✓ Verified</span>`;
+        } else if (isApproximate) {
+            // Show "AI Approx" badge with pulse animation for AI-approximated images
+            imageSourceIndicator = `<span class="ai-image-source approximation">AI Approx</span>`;
+        }
     }
 
     eventCard.innerHTML = `
