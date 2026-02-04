@@ -98,7 +98,12 @@ async function _handleSuccessfulLogin(payload) {
     hideUserModal();
 }
 
-export function showUserModal() {
+/**
+ * Show the user modal with optional specific view
+ * @param {Object} options - Optional configuration
+ * @param {string} options.section - Which section to show: 'phone' opens to phone sign-in for Twilio verification
+ */
+export function showUserModal(options = {}) {
     const user = state.session.user;
     const ownerDashboardLink = document.getElementById('owner-dashboard-link');
 
@@ -130,6 +135,15 @@ export function showUserModal() {
         // Refresh biometric section visibility when showing signin view
         // This ensures passkey login option appears if user has created one
         refreshBiometricSectionVisibility();
+
+        // If specific section requested, expand it (e.g., 'phone' for Twilio verification)
+        if (options.section === 'phone') {
+            const phoneDetails = signinView.querySelector('details');
+            if (phoneDetails) {
+                phoneDetails.open = true;
+                log('Auth', 'Opened phone sign-in section for direct link access');
+            }
+        }
     }
 
     // Populate Background Effects dropdown (only once)
