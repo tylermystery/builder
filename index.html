@@ -3888,21 +3888,19 @@ select:focus-visible,
                     <p id="signin-message" style="margin-top: 10px;"></p>
                 </div>
 
-                <!-- DORMANT FEATURE: Phone/SMS Authentication - hidden until fully functional
-                     TODO: Re-enable phone authentication when SMS carrier approval is complete
+                <!-- Phone/SMS Authentication -->
                 <details style="margin-bottom: 15px;">
-                    <summary style="cursor: pointer; padding: 10px; background: #f5f5f5; border-radius: 4px;">Sign In with Phone (Currently Limited)</summary>
+                    <summary style="cursor: pointer; padding: 10px; background: #f5f5f5; border-radius: 4px;">Sign In with Phone</summary>
                     <div style="padding: 15px 0;">
-                        <p style="margin-bottom: 10px; color: #ff9800; font-size: 0.9em;">Note: SMS authentication is currently pending carrier approval. Email authentication is more reliable.</p>
                         <form id="sms-signin-form">
                             <div class="form-row">
                                 <label for="signin-phone">Phone Number (with country code)</label>
                                 <input type="tel" id="signin-phone" placeholder="+1234567890" autocomplete="tel">
                             </div>
                             <div class="form-row" style="margin-top: 15px;">
-                                <label style="display: flex; align-items: flex-start; cursor: pointer; font-size: 0.9em;">
-                                    <input type="checkbox" id="sms-consent-checkbox" style="margin-right: 8px; margin-top: 3px; cursor: pointer;">
-                                    <span style="line-height: 1.4;">I agree to receive text messages for authentication purposes. Message and data rates may apply. Reply STOP to opt out. <a href="/privacy-policy.html" target="_blank" style="color: #007bff; text-decoration: underline;">Privacy Policy</a></span>
+                                <label style="display: flex; align-items: flex-start; cursor: pointer; font-size: 0.85em; line-height: 1.5;">
+                                    <input type="checkbox" id="sms-consent-checkbox" style="margin-right: 10px; margin-top: 4px; cursor: pointer; flex-shrink: 0;">
+                                    <span>I agree to receive automated operational and transactional text messages (e.g., project updates, task reminders, and MFA codes) from WTFun at the number provided. Consent is not a condition of purchase. Message frequency varies. Message and data rates may apply. Reply STOP to opt-out, HELP for help. View our <a href="/privacy-policy.html" target="_blank" style="color: #007bff; text-decoration: underline;">Privacy Policy</a> and <a href="/terms-of-service.html" target="_blank" style="color: #007bff; text-decoration: underline;">Terms of Service</a>.</span>
                                 </label>
                             </div>
                             <button class="primary-action-btn" type="submit" style="background-color: #4CAF50;">Send SMS Code</button>
@@ -3919,7 +3917,6 @@ select:focus-visible,
                         <p id="sms-message" style="margin-top: 10px;"></p>
                     </div>
                 </details>
-                END DORMANT FEATURE: Phone/SMS -->
 
                 <!-- DORMANT FEATURE: Google SSO - temporarily disabled until fully functional
                      TODO: Re-enable Google SSO when authentication issues are resolved
