@@ -93,17 +93,42 @@ exports.handler = async (event) => {
         console.log('[auth-start] Sending email via SendGrid to:', email.substring(0, 3) + '***');
 
         try {
-            await sgMail.send(msg);
-            console.log('[auth-start] Email sent successfully');
-        } catch (sendgridError) {
-            console.error('[auth-start] SendGrid error:', {
-                message: sendgridError.message,
-                code: sendgridError.code,
-                response: sendgridError.response?.body
+            console.log('[auth-start] About to call sgMail.send with msg:', {
+                to: msg.to ? msg.to.substring(0, 3) + '***' : 'missing',
+                from: msg.from,
+                subject: msg.subject
             });
+            const sendResult = await sgMail.send(msg);
+            console.log('[auth-start] Email sent successfully, result:', JSON.stringify(sendResult));
+        } catch (sendgridError) {
+            // Comprehensive SendGrid error logging
+            console.error('[auth-start] SendGrid error occurred');
+            console.error('[auth-start] Error name:', sendgridError.name);
+            console.error('[auth-start] Error message:', sendgridError.message);
+            console.error('[auth-start] Error code:', sendgridError.code);
+            console.error('[auth-start] Error stack:', sendgridError.stack);
+
+            // SendGrid specific error details
+            if (sendgridError.response) {
+                console.error('[auth-start] SendGrid response status:', sendgridError.response.statusCode);
+                console.error('[auth-start] SendGrid response headers:', JSON.stringify(sendgridError.response.headers));
+                console.error('[auth-start] SendGrid response body:', JSON.stringify(sendgridError.response.body));
+            }
+
+            // Extract a user-friendly error message
+            let userErrorMessage = 'Failed to send confirmation email. Please try again.';
+            if (sendgridError.response?.body?.errors) {
+                const errors = sendgridError.response.body.errors;
+                console.error('[auth-start] SendGrid specific errors:', JSON.stringify(errors));
+                if (errors[0]?.message) {
+                    // Log the specific error but don't expose it to the user
+                    console.error('[auth-start] First error message:', errors[0].message);
+                }
+            }
+
             return {
                 statusCode: 500,
-                body: JSON.stringify({ error: 'Failed to send confirmation email. Please try again.' })
+                body: JSON.stringify({ error: userErrorMessage })
             };
         }
 
