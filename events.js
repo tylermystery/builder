@@ -166,15 +166,33 @@ export async function updateAllCardAvailabilityIcons() {
 
     const cards = document.querySelectorAll('.event-card');
 
+    // Build a Map for O(1) record lookups instead of O(n) .find() per card
+    const recordMap = new Map(state.records.all.map(r => [r.id, r]));
+
+    // Collect all card data for parallel processing
+    const cardDataList = [];
     for (const card of cards) {
         const recordId = card.dataset.recordId;
-        const record = state.records.all.find(r => r.id === recordId);
+        const record = recordMap.get(recordId);
         if (!record) continue;
-
-        const busyTimes = await api.fetchCalendarForRecord(record);
-        const rangeStatus = getRangeStatus(startDate, requestedEnd, record, busyTimes);
         const icon = card.querySelector('.availability-btn');
         if (icon) {
+            cardDataList.push({ record, icon });
+        }
+    }
+
+    // Fetch all calendars in parallel (batched) instead of one-at-a-time
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < cardDataList.length; i += BATCH_SIZE) {
+        const batch = cardDataList.slice(i, i + BATCH_SIZE);
+        const busyTimesResults = await Promise.all(
+            batch.map(({ record }) => api.fetchCalendarForRecord(record))
+        );
+
+        busyTimesResults.forEach((busyTimes, idx) => {
+            const { record, icon } = batch[idx];
+            const rangeStatus = getRangeStatus(startDate, requestedEnd, record, busyTimes);
+
             if (icon._tippy) icon._tippy.destroy();
             let statusIcon;
             switch (rangeStatus.status) {
@@ -183,13 +201,13 @@ export async function updateAllCardAvailabilityIcons() {
                 case AVAILABILITY_STATUS.NONE: statusIcon = '❌'; break;
                 default: statusIcon = '📅';
             }
-            
+
             const dateRangeString = `${startDate.toLocaleDateString()} - ${requestedEnd.toLocaleDateString()}`;
             const tooltipContent = `<div style="text-align: left;"><strong>${dateRangeString}</strong><hr style="margin: 2px 0 5px;"><span>${statusIcon} ${record.fields.Name}: ${rangeStatus.reason}</span></div>`;
             tippy(icon, { content: tooltipContent, allowHTML: true, placement: 'top', arrow: true });
             icon.title = rangeStatus.reason;
             icon.textContent = statusIcon;
-        }
+        });
     }
 }
 

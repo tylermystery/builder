@@ -461,6 +461,41 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         return;
     }
 
+    // Set up delegated event listeners once for quantity buttons (avoids per-card listeners)
+    if (!catalogContainer._delegatedListenersAttached) {
+        catalogContainer._delegatedListenersAttached = true;
+
+        catalogContainer.addEventListener('click', (e) => {
+            const plusBtn = e.target.closest('.quantity-btn.plus');
+            const minusBtn = e.target.closest('.quantity-btn.minus');
+
+            if (plusBtn) {
+                e.stopPropagation();
+                e.preventDefault();
+                const selector = plusBtn.closest('.quantity-selector');
+                if (!selector) return;
+                const input = selector.querySelector('.quantity-input');
+                if (!input) return;
+                const currentValue = parseInt(input.value, 10) || 1;
+                input.value = currentValue + 1;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            } else if (minusBtn) {
+                e.stopPropagation();
+                e.preventDefault();
+                const selector = minusBtn.closest('.quantity-selector');
+                if (!selector) return;
+                const input = selector.querySelector('.quantity-input');
+                if (!input) return;
+                const currentValue = parseInt(input.value, 10) || 1;
+                const minValue = parseInt(input.min, 10) || 1;
+                if (currentValue > minValue) {
+                    input.value = currentValue - 1;
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+        });
+    }
+
     if (!append) {
         // Show skeleton cards immediately for better perceived performance
         catalogContainer.innerHTML = '';

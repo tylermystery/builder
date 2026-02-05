@@ -2815,10 +2815,13 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const ideaComponentIds = ideasHistory.map(item => item.id).filter(id => id);
 
         // Fetch any missing component items (ghost items) that aren't in state.records.all
+        // Use Sets for O(1) lookups instead of O(n) .some() calls
         const allComponentIds = [...lockedComponentIds, ...ideaComponentIds];
+        const recordIdSet = new Set(state.records.all.map(r => r.id));
+        const archiveIdSet = state.records.archive ? new Set(state.records.archive.map(r => r.id)) : null;
         const missingItemIds = allComponentIds.filter(id =>
-            !state.records.all.some(r => r.id === id) &&
-            (!state.records.archive || !state.records.archive.some(r => r.id === id)) &&
+            !recordIdSet.has(id) &&
+            (!archiveIdSet || !archiveIdSet.has(id)) &&
             id.startsWith('rec') // Only fetch real Airtable IDs, not custom items
         );
 
@@ -2839,38 +2842,40 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
         if (lockedComponentIds.length > 0 || ideaComponentIds.length > 0) {
             // Collect all component records for the carousel
+            // Build Maps for O(1) lookups instead of repeated O(n) .find() calls
+            const recordMap = new Map(state.records.all.map(r => [r.id, r]));
+            const archiveMap = state.records.archive ? new Map(state.records.archive.map(r => [r.id, r])) : null;
+            const lockedHistoryMap = new Map(lockedInHistory.map(item => [item.id, item]));
+            const ideasHistoryMap = new Map(ideasHistory.map(item => [item.id, item]));
+
             const allComponentRecords = [];
             const componentHistoryMap = new Map();
 
             // Process locked items
             for (const componentId of lockedComponentIds) {
-                let componentRecord = state.records.all.find(r => r.id === componentId);
-                if (!componentRecord && state.records.archive) {
-                    componentRecord = state.records.archive.find(r => r.id === componentId);
-                }
+                const componentRecord = recordMap.get(componentId) || (archiveMap && archiveMap.get(componentId));
                 if (componentRecord) {
+                    const history = lockedHistoryMap.get(componentId);
                     allComponentRecords.push({
                         record: componentRecord,
                         type: 'locked',
-                        history: lockedInHistory.find(item => item.id === componentId)
+                        history
                     });
-                    componentHistoryMap.set(componentId, lockedInHistory.find(item => item.id === componentId));
+                    componentHistoryMap.set(componentId, history);
                 }
             }
 
             // Process idea items
             for (const ideaId of ideaComponentIds) {
-                let ideaRecord = state.records.all.find(r => r.id === ideaId);
-                if (!ideaRecord && state.records.archive) {
-                    ideaRecord = state.records.archive.find(r => r.id === ideaId);
-                }
+                const ideaRecord = recordMap.get(ideaId) || (archiveMap && archiveMap.get(ideaId));
                 if (ideaRecord) {
+                    const history = ideasHistoryMap.get(ideaId);
                     allComponentRecords.push({
                         record: ideaRecord,
                         type: 'idea',
-                        history: ideasHistory.find(item => item.id === ideaId)
+                        history
                     });
-                    componentHistoryMap.set(ideaId, ideasHistory.find(item => item.id === ideaId));
+                    componentHistoryMap.set(ideaId, history);
                 }
             }
 

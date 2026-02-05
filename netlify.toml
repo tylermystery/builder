@@ -2,6 +2,22 @@
   functions = "netlify/functions"
   edge_functions = "netlify/edge-functions"
 
+# Cache headers for static assets - improves repeat visit performance
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=3600, stale-while-revalidate=86400"
+
+[[headers]]
+  for = "/css/*"
+  [headers.values]
+    Cache-Control = "public, max-age=3600, stale-while-revalidate=86400"
+
+[[headers]]
+  for = "/*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=3600, stale-while-revalidate=86400"
+
 # Allow remote images from Cloudinary for Netlify Image CDN
 [images]
   remote_images = ["https://res.cloudinary.com/.*"]

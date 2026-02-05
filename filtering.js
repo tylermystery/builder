@@ -7,6 +7,36 @@ import * as api from './api.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions, getTempLikes } from './utils.js';
 import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore } from './availability.js';
 
+// --- Performance: Cached record metadata to avoid re-parsing on every filter pass ---
+const _recordMetaCache = new WeakMap();
+
+/**
+ * Get or compute cached metadata for a record (categories, price, etc.)
+ * Uses WeakMap so entries are garbage collected when records are removed from state.
+ */
+function getRecordMeta(record) {
+    if (_recordMetaCache.has(record)) return _recordMetaCache.get(record);
+
+    const fields = record.fields || {};
+    const categoriesRaw = fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '';
+    const subcategoriesRaw = fields.Subcategories || '';
+    const parentName = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+    const meta = {
+        categoriesLower: categoriesRaw.split(',').map(c => c.trim().toLowerCase().replace(/\s+/g, ' ')).filter(Boolean),
+        subcategoriesLower: subcategoriesRaw.split(',').map(s => s.trim().toLowerCase().replace(/\s+/g, ' ')).filter(Boolean),
+        parentNameLower: parentName,
+        nameLower: (fields[CONSTANTS.FIELD_NAMES.NAME] || '').toLowerCase(),
+        descriptionLower: (fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '').toLowerCase(),
+        price: getGroupPriceRange(record)?.min ?? parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, "")),
+        capacity: parseCapacity(fields['Capacity']),
+        locationLower: (fields['Location'] || '').toLowerCase()
+    };
+
+    _recordMetaCache.set(record, meta);
+    return meta;
+}
+
 
 // --- HELPER FUNCTIONS (Non-Scoring, kept local) ---
 
@@ -58,38 +88,20 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
         // Defensive: ensure record has fields
         if (!record || !record.fields) return false;
 
-        const fields = record.fields;
-        const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase().replace(/\s+/g, ' ');
-        const itemCategories = (fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '')
-            .split(',')
-            .map(cat => cat.trim().toLowerCase().replace(/\s+/g, ' '))
-            .filter(Boolean);
-        const itemSubcategoriesForCategoryCheck = (fields.Subcategories || '')
-            .split(',')
-            .map(sc => sc.trim().toLowerCase().replace(/\s+/g, ' '))
-            .filter(Boolean);
-
-        const matches = itemCategories.includes(selectedCategoryLower) ||
-               parentNameLower === selectedCategoryLower ||
-               itemSubcategoriesForCategoryCheck.includes(selectedCategoryLower);
-
-        return matches;
+        const meta = getRecordMeta(record);
+        return meta.categoriesLower.includes(selectedCategoryLower) ||
+               meta.parentNameLower === selectedCategoryLower ||
+               meta.subcategoriesLower.includes(selectedCategoryLower);
     });
 
     if (activeSubcategories.length > 0) {
         const subcategoryFilteredRecords = categoryFilteredRecords.filter(record => {
             if (!record || !record.fields) return false;
 
-            const fields = record.fields;
-            const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase().replace(/\s+/g, ' ');
-            const itemSubcategories = (fields.Subcategories || '')
-                .split(',')
-                .map(sc => sc.trim().toLowerCase().replace(/\s+/g, ' '))
-                .filter(Boolean);
-
+            const meta = getRecordMeta(record);
             return activeSubcategories.some(activeSubcat =>
-                itemSubcategories.includes(activeSubcat) ||
-                parentNameLower === activeSubcat
+                meta.subcategoriesLower.includes(activeSubcat) ||
+                meta.parentNameLower === activeSubcat
             );
         });
         return subcategoryFilteredRecords;
@@ -140,8 +152,8 @@ function filterByHeadcount(records, headcountFilter, customHeadcount) {
 
     return records.filter(record => {
         if (!record || !record.fields) return false;
-        const capacity = parseCapacity(record.fields['Capacity']);
-        return filterMin <= capacity.max && filterMax >= capacity.min;
+        const meta = getRecordMeta(record);
+        return filterMin <= meta.capacity.max && filterMax >= meta.capacity.min;
     });
 }
 
@@ -204,7 +216,8 @@ function filterByBudget(records, budgetFilter) {
 
     return records.filter(record => {
         if (!record || !record.fields) return false;
-        const price = getGroupPriceRange(record)?.min ?? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+        const meta = getRecordMeta(record);
+        const price = meta.price;
         return !isNaN(price) && price >= range.min && price <= range.max;
     });
 }
@@ -224,10 +237,9 @@ function filterBySearchTerm(records, searchTerm) {
         if (!record || !record.fields) return;
 
         let score = 0;
+        const meta = getRecordMeta(record);
         const fields = record.fields;
 
-        const name = (fields[CONSTANTS.FIELD_NAMES.NAME] || '').toLowerCase();
-        const description = (fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '').toLowerCase();
         const optionNames = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]).map(opt => opt.name).join(' ').toLowerCase();
         const allOtherText = [
             fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '',
@@ -238,9 +250,9 @@ function filterBySearchTerm(records, searchTerm) {
             optionNames
         ].join(' ').toLowerCase();
 
-        if (name.includes(lowerSearchTerm)) {
+        if (meta.nameLower.includes(lowerSearchTerm)) {
             score = 3;
-        } else if (description.includes(lowerSearchTerm)) {
+        } else if (meta.descriptionLower.includes(lowerSearchTerm)) {
             score = 2;
         } else if (allOtherText.includes(lowerSearchTerm)) {
             score = 1;
@@ -286,16 +298,14 @@ function sortRecords(records, sortBy, goalBucket) {
             return 1;
         }
 
-        const aPrice = getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
-        const bPrice = getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
-        const aName = a.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
-        const bName = b.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
+        const aMeta = getRecordMeta(a);
+        const bMeta = getRecordMeta(b);
 
         switch (sortBy) {
-            case 'price-asc': return aPrice - bPrice;
-            case 'price-desc': return bPrice - aPrice;
-            case 'name-asc': return aName.localeCompare(bName);
-            default: return aName.localeCompare(bName); 
+            case 'price-asc': return aMeta.price - bMeta.price;
+            case 'price-desc': return bMeta.price - aMeta.price;
+            case 'name-asc': return aMeta.nameLower.localeCompare(bMeta.nameLower);
+            default: return aMeta.nameLower.localeCompare(bMeta.nameLower);
         }
     });
 }

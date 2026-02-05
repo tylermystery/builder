@@ -10,6 +10,9 @@ import { CONSTANTS } from '../config.js';
 import { getRecordPrice, getTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { log } from '../utils/debug.js';
 
+// Shared SVG constant - avoids re-creating the string for each card/icon update
+const HEART_SVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
+
 // Helper to generate optimized Cloudinary URLs with responsive sizing
 function getOptimizedImageUrl(url, width = 600, quality = 'auto') {
     if (!url || !url.includes('cloudinary')) return url;
@@ -94,10 +97,8 @@ export function updateCardIcon(recordId) {
         isLiked = getTempLikes().has(recordId);
     }
 
-    const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
-
     const elements = document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`);
-    
+
     elements.forEach(icon => {
         if (!icon) return;
 
@@ -105,14 +106,14 @@ export function updateCardIcon(recordId) {
             icon.className = 'heart-icon hearted';
             icon.title = 'Unlike this item';
             icon.setAttribute('aria-label', 'Unlike this item');
-            icon.innerHTML = heartSVG;
+            icon.innerHTML = HEART_SVG;
             icon.style.display = 'block';
             icon.style.pointerEvents = 'auto';
         } else {
             icon.className = 'heart-icon';
             icon.title = 'Like this item';
             icon.setAttribute('aria-label', 'Like this item');
-            icon.innerHTML = heartSVG;
+            icon.innerHTML = HEART_SVG;
             icon.style.display = 'block';
             icon.style.pointerEvents = 'auto';
         }
@@ -123,20 +124,18 @@ export function batchUpdateCardIcons(recordIds) {
     const likedItems = state.session.user.isAuthenticated 
         ? state.session.user.likedItemIds
         : getTempLikes();
-    
-    const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
-    
+
     recordIds.forEach(recordId => {
         const isLiked = likedItems.has(recordId);
         const elements = document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`);
-        
+
         elements.forEach(icon => {
             if (!icon) return;
-            
+
             icon.className = isLiked ? 'heart-icon hearted' : 'heart-icon';
             icon.title = isLiked ? 'Unlike this item' : 'Like this item';
             icon.setAttribute('aria-label', isLiked ? 'Unlike this item' : 'Like this item');
-            icon.innerHTML = heartSVG;
+            icon.innerHTML = HEART_SVG;
             icon.style.display = 'block';
             icon.style.pointerEvents = 'auto';
         });
@@ -621,37 +620,8 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         </div>
     `;
 
-    const plusBtn = eventCard.querySelector('.quantity-btn.plus');
-    const minusBtn = eventCard.querySelector('.quantity-btn.minus');
-    const quantityInput = eventCard.querySelector('.quantity-input');
-    if (plusBtn && minusBtn && quantityInput) {
-        const handlePlus = (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            const currentValue = parseInt(quantityInput.value, 10) || 1;
-            quantityInput.value = currentValue + 1;
-            quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
-        };
-        const handleMinus = (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            const currentValue = parseInt(quantityInput.value, 10) || 1;
-            const minValue = parseInt(quantityInput.min, 10) || 1;
-            if (currentValue > minValue) {
-                quantityInput.value = currentValue - 1;
-                quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-        };
-        const handleTouchEnd = (e) => {
-            e.preventDefault();
-            const handler = e.currentTarget === plusBtn ? handlePlus : handleMinus;
-            handler(e);
-        };
-        plusBtn.addEventListener('click', handlePlus);
-        plusBtn.addEventListener('touchend', handleTouchEnd, { passive: false });
-        minusBtn.addEventListener('click', handleMinus);
-        minusBtn.addEventListener('touchend', handleTouchEnd, { passive: false });
-    }
+    // Quantity buttons are handled via event delegation on the catalog container
+    // in ui.js renderRecords() for better performance (avoids per-card listeners)
 
     return eventCard;
 }

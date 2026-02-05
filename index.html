@@ -50,7 +50,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
     <!-- Fonts for confidence-based visual styling (pencil, pen, typed appearance) -->
-    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&family=Dancing+Script:wght@400;500;600&family=Satisfy&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&family=Dancing+Script:wght@400;500;600&family=Satisfy&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&family=Dancing+Script:wght@400;500;600&family=Satisfy&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
 
     <!-- DNS prefetch for domains used conditionally (lazy-loaded) -->
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
@@ -2569,170 +2570,40 @@ select:focus-visible,
     </script>
 
     <!-- Load Deferred CSS Asynchronously -->
-    <link rel="preload" href="/css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet';window.__deferredCssRelChanged=true;console.log('[CSS DEBUG] Deferred CSS loaded and applied as stylesheet at:', performance.now().toFixed(2), 'ms');">
+    <link rel="preload" href="/css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet';window.__deferredCssRelChanged=true;">
     <noscript><link rel="stylesheet" href="/css/deferred.css"></noscript>
     <script>
-    // CSS Loading Debug - tracks CSS loading state for modal URL debugging
+    // Lightweight CSS loading state tracker (used by main.js for direct modal URL access)
     (function() {
-        // Helper to check if deferred.css rules are actually parsed and accessible
         function areDeferredCssRulesParsed() {
             try {
                 var sheets = document.styleSheets;
                 for (var i = 0; i < sheets.length; i++) {
-                    var sheet = sheets[i];
-                    if (sheet.href && sheet.href.includes('deferred.css')) {
-                        // Try to access rules - this throws if CSS isn't fully loaded
-                        var rules = sheet.cssRules || sheet.rules;
+                    if (sheets[i].href && sheets[i].href.includes('deferred.css')) {
+                        var rules = sheets[i].cssRules || sheets[i].rules;
                         return rules && rules.length > 0;
                     }
                 }
-            } catch (e) {
-                // CORS or not-yet-loaded will throw
-                return false;
-            }
+            } catch (e) { return false; }
             return false;
         }
 
-        // Helper to check computed styles on key elements
-        function getKeyElementStyles() {
-            var eventPlanPanel = document.getElementById('event-plan-panel');
-            var filterControls = document.getElementById('filter-controls');
-            var sidebarContainer = document.getElementById('sidebar-container');
-            var catalogContainer = document.getElementById('catalog-container');
-
-            var styles = {};
-
-            if (eventPlanPanel) {
-                var eps = window.getComputedStyle(eventPlanPanel);
-                styles.eventPlanPanel = {
-                    backgroundColor: eps.backgroundColor,
-                    backdropFilter: eps.backdropFilter || eps.webkitBackdropFilter,
-                    display: eps.display
-                };
-            }
-
-            if (filterControls) {
-                var fcs = window.getComputedStyle(filterControls);
-                styles.filterControls = {
-                    backgroundColor: fcs.backgroundColor,
-                    backdropFilter: fcs.backdropFilter || fcs.webkitBackdropFilter,
-                    display: fcs.display
-                };
-            }
-
-            if (sidebarContainer) {
-                var scs = window.getComputedStyle(sidebarContainer);
-                styles.sidebarContainer = {
-                    display: scs.display,
-                    width: scs.width
-                };
-            }
-
-            if (catalogContainer) {
-                var ccs = window.getComputedStyle(catalogContainer);
-                styles.catalogContainer = {
-                    display: ccs.display
-                };
-            }
-
-            return styles;
-        }
-
-        var cssDebug = {
-            deferredCssStartTime: performance.now(),
+        window.__cssDebug = {
             isDirectModalUrl: window.location.pathname.includes('/item/') || new URLSearchParams(window.location.search).has('openItem'),
             cssRulesApplied: false,
             logState: function(label) {
                 var deferredLink = document.querySelector('link[href*="deferred.css"]');
-                var rulesAccessible = areDeferredCssRulesParsed();
-                var keyStyles = getKeyElementStyles();
-                var state = {
+                return {
                     label: label,
-                    timestamp: performance.now().toFixed(2) + 'ms',
-                    isDirectModalUrl: this.isDirectModalUrl,
-                    deferredCssRel: deferredLink ? deferredLink.rel : 'not found',
                     deferredCssRelIsStylesheet: deferredLink && deferredLink.rel === 'stylesheet',
-                    cssRulesAccessible: rulesAccessible,
-                    documentReadyState: document.readyState,
-                    stylesheetCount: document.styleSheets.length,
-                    inlineStyleCount: document.querySelectorAll('style').length,
-                    keyElementStyles: keyStyles
+                    cssRulesAccessible: areDeferredCssRulesParsed()
                 };
-                console.log('[CSS DEBUG]', state);
-                return state;
             },
-            // Returns true when CSS rules are actually parsed and element styles show frosted glass effect
             areCssStylesApplied: function() {
-                var rulesAccessible = areDeferredCssRulesParsed();
-                var keyStyles = getKeyElementStyles();
-
-                // Check if event-plan-panel has the frosted glass background from deferred.css
-                // deferred.css sets: background-color: rgba(255, 255, 255, 0.7)
-                var hasCorrectBg = false;
-                if (keyStyles.eventPlanPanel) {
-                    var bg = keyStyles.eventPlanPanel.backgroundColor;
-                    // Check for rgba(255, 255, 255, 0.7) which is the frosted glass style
-                    hasCorrectBg = bg && (bg.includes('rgba(255') || bg.includes('rgb(255'));
-                }
-
-                this.cssRulesApplied = rulesAccessible && hasCorrectBg;
+                this.cssRulesApplied = areDeferredCssRulesParsed();
                 return this.cssRulesApplied;
             }
         };
-        window.__cssDebug = cssDebug;
-
-        // Log initial state
-        cssDebug.logState('Initial (inline script)');
-
-        // Monitor CSS loading via MutationObserver
-        if (cssDebug.isDirectModalUrl) {
-            console.log('[CSS DEBUG] Direct modal URL detected - enabling enhanced CSS tracking');
-            var observer = new MutationObserver(function(mutations) {
-                mutations.forEach(function(mutation) {
-                    if (mutation.type === 'attributes' && mutation.attributeName === 'rel') {
-                        var target = mutation.target;
-                        if (target.href && target.href.includes('deferred.css')) {
-                            console.log('[CSS DEBUG] Deferred CSS rel attribute changed to:', target.rel);
-                            cssDebug.logState('After deferred CSS rel change');
-
-                            // Check if styles are actually applied after a short delay
-                            setTimeout(function() {
-                                var stylesApplied = cssDebug.areCssStylesApplied();
-                                console.log('[CSS DEBUG] Styles applied check (50ms after rel change):', stylesApplied);
-                                cssDebug.logState('50ms after rel change');
-                            }, 50);
-                        }
-                    }
-                });
-            });
-
-            // Start observing once head is available
-            var startObserving = function() {
-                var links = document.querySelectorAll('link[href*="deferred.css"]');
-                links.forEach(function(link) {
-                    observer.observe(link, { attributes: true });
-                });
-            };
-
-            if (document.head) {
-                startObserving();
-            } else {
-                document.addEventListener('DOMContentLoaded', startObserving);
-            }
-        }
-
-        // Log state at key document lifecycle points
-        document.addEventListener('DOMContentLoaded', function() {
-            cssDebug.logState('DOMContentLoaded');
-        });
-
-        window.addEventListener('load', function() {
-            cssDebug.logState('Window load');
-            // Final check of styles applied
-            setTimeout(function() {
-                cssDebug.logState('Window load + 100ms');
-            }, 100);
-        });
     })();
     </script>
 
