@@ -1,13 +1,13 @@
 /**
  * AI Image Generation Function
  * Generates an AI-approximated image for manually added items based on their name, description, and metadata.
- * Uses Together AI's FLUX model for fast, high-quality image generation.
+ * Uses Google's Imagen 4 Fast model via Gemini API for quick, high-quality image generation.
  * Uploads the result to Cloudinary for persistent storage.
  */
 
 const crypto = require('crypto');
 
-const { TOGETHER_API_KEY, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, CLOUDINARY_CLOUD_NAME } = process.env;
+const { GEMINI_API_KEY, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, CLOUDINARY_CLOUD_NAME } = process.env;
 
 /**
  * Generate a descriptive prompt for image generation based on item metadata
@@ -49,44 +49,48 @@ function buildImagePrompt(itemData) {
 }
 
 /**
- * Generate an image using Together AI's FLUX model
+ * Generate an image using Google's Imagen 4 Fast model via Gemini API
  */
-async function generateImageWithTogether(prompt) {
-    console.log('[AI IMAGE] Generating image with Together AI...');
+async function generateImageWithImagen(prompt) {
+    console.log('[AI IMAGE] Generating image with Google Imagen 4 Fast...');
     console.log('[AI IMAGE] Prompt:', prompt);
 
-    const response = await fetch('https://api.together.xyz/v1/images/generations', {
+    // Use Imagen 4 Fast for quick generation (ideal for high-volume, low-latency)
+    const modelId = 'imagen-4.0-fast-generate-001';
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:predict`;
+
+    const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-            'Authorization': `Bearer ${TOGETHER_API_KEY}`,
+            'x-goog-api-key': GEMINI_API_KEY,
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            model: 'black-forest-labs/FLUX.1-schnell-Free',
-            prompt: prompt,
-            width: 768,
-            height: 768,
-            steps: 4,
-            n: 1,
-            response_format: 'b64_json'
+            instances: [{ prompt: prompt }],
+            parameters: {
+                sampleCount: 1,
+                aspectRatio: '1:1',
+                personGeneration: 'allow_adult'
+            }
         })
     });
 
     if (!response.ok) {
         const errorText = await response.text();
-        console.error('[AI IMAGE] Together AI error:', response.status, errorText);
-        throw new Error(`Together AI API error: ${response.status} - ${errorText}`);
+        console.error('[AI IMAGE] Imagen API error:', response.status, errorText);
+        throw new Error(`Imagen API error: ${response.status} - ${errorText}`);
     }
 
     const result = await response.json();
-    console.log('[AI IMAGE] Together AI response received');
+    console.log('[AI IMAGE] Imagen API response received');
 
-    if (!result.data || !result.data[0] || !result.data[0].b64_json) {
-        console.error('[AI IMAGE] Unexpected response structure:', JSON.stringify(result).substring(0, 200));
-        throw new Error('Invalid response from Together AI - no image data');
+    // Extract the base64 image data from the response
+    if (!result.predictions || !result.predictions[0] || !result.predictions[0].bytesBase64Encoded) {
+        console.error('[AI IMAGE] Unexpected response structure:', JSON.stringify(result).substring(0, 500));
+        throw new Error('Invalid response from Imagen API - no image data');
     }
 
-    return result.data[0].b64_json;
+    return result.predictions[0].bytesBase64Encoded;
 }
 
 /**
@@ -185,15 +189,15 @@ exports.handler = async function(event, context) {
     }
 
     // Check required environment variables
-    if (!TOGETHER_API_KEY) {
-        console.error('[AI IMAGE] Missing TOGETHER_API_KEY');
+    if (!GEMINI_API_KEY) {
+        console.error('[AI IMAGE] Missing GEMINI_API_KEY');
         return {
             statusCode: 500,
             headers: {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            body: JSON.stringify({ error: 'AI image generation not configured - missing API key' })
+            body: JSON.stringify({ error: 'AI image generation not configured - missing Gemini API key' })
         };
     }
 
@@ -249,8 +253,8 @@ exports.handler = async function(event, context) {
         // Build the image generation prompt
         const prompt = buildImagePrompt({ name, description, category, serviceType, tags });
 
-        // Generate the image
-        const base64Image = await generateImageWithTogether(prompt);
+        // Generate the image using Imagen
+        const base64Image = await generateImageWithImagen(prompt);
 
         // Upload to Cloudinary
         const cloudinaryResult = await uploadToCloudinary(base64Image, itemId, sessionId);

@@ -3178,31 +3178,43 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         : imageUrls[currentPhotoIndex];
     modalMainImage.style.backgroundImage = `url('${optimizedMainImage}')`;
 
-    // Add AI image source indicator for AI items
+    // Add AI image source indicator for AI items or manually added items with AI-generated images
     const existingAiImageSource = modalMainImage.querySelector('.ai-image-source-modal');
     if (existingAiImageSource) existingAiImageSource.remove();
+
+    // Check if this item has AI-generated images (either AI-sourced record or manual item with AI image)
+    const hasAIGeneratedImage = record?.fields?._hasAIGeneratedImage === true ||
+                                imageSource === 'ai_generated' ||
+                                imageSource === 'mixed_ai_custom';
+    const shouldShowAIIndicator = (isAIRecord && imageSource) || hasAIGeneratedImage;
 
     console.log('[AI IMAGE DEBUG Modal] Checking whether to show AI image indicator:', {
         isAIRecord: isAIRecord,
         imageSource: imageSource,
+        hasAIGeneratedImage: hasAIGeneratedImage,
         recordId: record?.id,
-        willShowIndicator: isAIRecord && imageSource,
+        willShowIndicator: shouldShowAIIndicator,
         modalMainImageExists: !!modalMainImage
     });
 
-    if (isAIRecord && imageSource) {
-        const isPolished = imageSource !== 'ai_approximation' && imageSource !== 'placeholder';
+    if (shouldShowAIIndicator) {
+        // For manually added items with AI images, always show as "AI Generated"
+        // For AI-sourced items, check if the image is polished (from a real source)
+        const isPolished = !hasAIGeneratedImage && imageSource !== 'ai_approximation' && imageSource !== 'placeholder';
         console.log('[AI IMAGE DEBUG Modal] Creating AI image indicator:', {
             isPolished: isPolished,
+            hasAIGeneratedImage: hasAIGeneratedImage,
             imageSource: imageSource,
             cssClass: `ai-image-source-modal ${isPolished ? 'polished' : 'approximation'}`
         });
         const aiImageSourceIndicator = document.createElement('span');
         aiImageSourceIndicator.className = `ai-image-source-modal ${isPolished ? 'polished' : 'approximation'}`;
-        aiImageSourceIndicator.textContent = isPolished ? '✓ Verified Image' : 'AI Approximated';
-        aiImageSourceIndicator.title = isPolished
-            ? `Image source: ${imageSource}`
-            : 'This is an AI-approximated placeholder. Use "Dig Into" to find better images.';
+        aiImageSourceIndicator.textContent = hasAIGeneratedImage ? 'AI Generated' : (isPolished ? '✓ Verified Image' : 'AI Approximated');
+        aiImageSourceIndicator.title = hasAIGeneratedImage
+            ? 'This image was AI-generated based on item details. Upload your own photos to replace it.'
+            : (isPolished
+                ? `Image source: ${imageSource}`
+                : 'This is an AI-approximated placeholder. Use "Dig Into" to find better images.');
         modalMainImage.appendChild(aiImageSourceIndicator);
         console.log('[AI IMAGE DEBUG Modal] Appended AI image indicator to modalMainImage');
     } else {

@@ -1600,7 +1600,7 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         imageCache.set(cacheKey, imageUrls);
         return {
             imageUrls,
-            status: 'success',
+            status: imageSource, // Use the image source as status for consistency with other return paths
             source: imageSource,
             isAIGenerated: hasAIGeneratedImage,
             // Return the full custom images array for components that need AI metadata
