@@ -1582,14 +1582,29 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     // STEP 0: Check for custom user-uploaded images first (highest priority)
     // ============================================================
     const customImages = record.fields?._customImages;
+
+    // DEBUG: Log the raw custom images data
+    console.log('[AI IMAGE DEBUG API] === Checking custom images for record ===');
+    console.log('[AI IMAGE DEBUG API] Record ID:', record.id);
+    console.log('[AI IMAGE DEBUG API] record.fields._customImages exists:', !!customImages);
+    console.log('[AI IMAGE DEBUG API] record.fields._customImages type:', typeof customImages);
+    console.log('[AI IMAGE DEBUG API] record.fields._customImages is Array:', Array.isArray(customImages));
+    console.log('[AI IMAGE DEBUG API] record.fields._customImages length:', customImages?.length || 0);
+    console.log('[AI IMAGE DEBUG API] record.fields._customImages raw:', JSON.stringify(customImages));
+    console.log('[AI IMAGE DEBUG API] record.fields._hasAIGeneratedImage:', record.fields?._hasAIGeneratedImage);
+
     if (customImages && Array.isArray(customImages) && customImages.length > 0) {
         // Check if any of the custom images are AI-generated
         const hasAIGeneratedImage = customImages.some(img => img.isAIGenerated === true);
 
-        console.log('[IMAGE DEBUG] Found custom images:', {
+        console.log('[AI IMAGE DEBUG API] Processing custom images:', {
             recordId: record.id,
             customImageCount: customImages.length,
-            hasAIGeneratedImage: hasAIGeneratedImage
+            hasAIGeneratedImage: hasAIGeneratedImage,
+            images: customImages.map(img => ({
+                url: (img.url || img).substring(0, 80) + '...',
+                isAIGenerated: img.isAIGenerated
+            }))
         });
 
         imageUrls = customImages.map(img => img.url || img);
@@ -1597,8 +1612,12 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         imageSource = hasAIGeneratedImage && customImages.every(img => img.isAIGenerated)
             ? 'ai_generated'
             : (hasAIGeneratedImage ? 'mixed_ai_custom' : 'custom_upload');
+
+        console.log('[AI IMAGE DEBUG API] Image source determined:', imageSource);
+        console.log('[AI IMAGE DEBUG API] Image URLs:', imageUrls);
+
         imageCache.set(cacheKey, imageUrls);
-        return {
+        const returnValue = {
             imageUrls,
             status: imageSource, // Use the image source as status for consistency with other return paths
             source: imageSource,
@@ -1606,6 +1625,10 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
             // Return the full custom images array for components that need AI metadata
             customImagesData: customImages
         };
+        console.log('[AI IMAGE DEBUG API] Returning:', JSON.stringify(returnValue));
+        return returnValue;
+    } else {
+        console.log('[AI IMAGE DEBUG API] No custom images found for record', record.id);
     }
 
     // ============================================================

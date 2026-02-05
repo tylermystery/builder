@@ -1293,7 +1293,18 @@ function enableItemEditMode(record, nameEl, descEl) {
             // AI IMAGE APPROXIMATION: Generate AI image if no photos provided
             // ============================================================
             let aiGeneratedImage = null;
+
+            // DEBUG: Log the decision-making process for AI image generation
+            console.log('[AI IMAGE DEBUG] === AI Image Generation Decision ===');
+            console.log('[AI IMAGE DEBUG] allPhotos.length:', allPhotos.length);
+            console.log('[AI IMAGE DEBUG] allPhotos contents:', JSON.stringify(allPhotos));
+            console.log('[AI IMAGE DEBUG] record.id:', record.id);
+            console.log('[AI IMAGE DEBUG] record.isManual:', record.isManual);
+            console.log('[AI IMAGE DEBUG] photosContainerEl._existingPhotosToKeep:', photosContainerEl?._existingPhotosToKeep?.length || 0);
+            console.log('[AI IMAGE DEBUG] photosContainerEl._pendingPhotos:', photosContainerEl?._pendingPhotos?.length || 0);
+
             if (allPhotos.length === 0) {
+                console.log('[AI IMAGE DEBUG] No photos detected - checking if manual item');
                 // Check if this is a manual item that could benefit from AI image
                 const isManualItem = record.isManual === true ||
                                      record.id?.startsWith('manual-add-') ||
@@ -1301,27 +1312,45 @@ function enableItemEditMode(record, nameEl, descEl) {
                                      record.id?.startsWith('ai-search-') ||
                                      record.id?.startsWith('ai-presentation-');
 
+                console.log('[AI IMAGE DEBUG] isManualItem check:', {
+                    'record.isManual': record.isManual,
+                    'starts with manual-add-': record.id?.startsWith('manual-add-'),
+                    'starts with manual-presentation-': record.id?.startsWith('manual-presentation-'),
+                    'starts with ai-search-': record.id?.startsWith('ai-search-'),
+                    'starts with ai-presentation-': record.id?.startsWith('ai-presentation-'),
+                    'final isManualItem': isManualItem
+                });
+
                 if (isManualItem) {
                     log('Modal', `No photos provided for manual item "${newName}" - generating AI image approximation...`);
+                    console.log('[AI IMAGE DEBUG] TRIGGERING AI image generation for:', newName);
                     saveBtn.textContent = 'Generating AI image...';
 
                     try {
+                        const requestPayload = {
+                            name: newName,
+                            description: newDesc,
+                            category: record.fields?.Category || '',
+                            serviceType: record.fields?.ServiceType || record.fields?.['Service Type'] || '',
+                            tags: record.fields?.['Media Tags'] || '',
+                            itemId: record.id,
+                            sessionId: state.session?.id || 'unsaved'
+                        };
+                        console.log('[AI IMAGE DEBUG] Request payload:', JSON.stringify(requestPayload));
+                        console.log('[AI IMAGE DEBUG] Calling /.netlify/functions/generate-ai-image');
+
                         const aiImageResponse = await fetch('/.netlify/functions/generate-ai-image', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                name: newName,
-                                description: newDesc,
-                                category: record.fields?.Category || '',
-                                serviceType: record.fields?.ServiceType || record.fields?.['Service Type'] || '',
-                                tags: record.fields?.['Media Tags'] || '',
-                                itemId: record.id,
-                                sessionId: state.session?.id || 'unsaved'
-                            })
+                            body: JSON.stringify(requestPayload)
                         });
+
+                        console.log('[AI IMAGE DEBUG] Response status:', aiImageResponse.status);
+                        console.log('[AI IMAGE DEBUG] Response ok:', aiImageResponse.ok);
 
                         if (aiImageResponse.ok) {
                             const aiImageResult = await aiImageResponse.json();
+                            console.log('[AI IMAGE DEBUG] Response JSON:', JSON.stringify(aiImageResult));
                             if (aiImageResult.success && aiImageResult.imageUrl) {
                                 aiGeneratedImage = {
                                     url: aiImageResult.imageUrl,
@@ -1329,20 +1358,30 @@ function enableItemEditMode(record, nameEl, descEl) {
                                     prompt: aiImageResult.prompt
                                 };
                                 allPhotos.push(aiGeneratedImage);
+                                console.log('[AI IMAGE DEBUG] SUCCESS - AI image added to allPhotos:', aiGeneratedImage.url);
                                 log('Modal', `AI image generated successfully: ${aiImageResult.imageUrl}`);
+                            } else {
+                                console.log('[AI IMAGE DEBUG] Response OK but missing success or imageUrl:', aiImageResult);
                             }
                         } else {
                             const errorText = await aiImageResponse.text();
+                            console.warn('[AI IMAGE DEBUG] FAILED - AI image generation failed:', errorText);
                             console.warn('[Modal] AI image generation failed:', errorText);
                             // Continue without AI image - not a critical failure
                         }
                     } catch (aiError) {
+                        console.warn('[AI IMAGE DEBUG] EXCEPTION:', aiError.message);
+                        console.warn('[AI IMAGE DEBUG] EXCEPTION stack:', aiError.stack);
                         console.warn('[Modal] AI image generation error:', aiError.message);
                         // Continue without AI image - not a critical failure
                     }
 
                     saveBtn.textContent = 'Saving...';
+                } else {
+                    console.log('[AI IMAGE DEBUG] NOT a manual item - skipping AI image generation');
                 }
+            } else {
+                console.log('[AI IMAGE DEBUG] Photos already exist - skipping AI image generation');
             }
 
             // Update the record in state.records.all

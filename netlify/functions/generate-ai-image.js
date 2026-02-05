@@ -164,8 +164,20 @@ async function uploadToCloudinary(base64Image, itemId, sessionId) {
 
 // Main Handler
 exports.handler = async function(event, context) {
+    console.log('[AI IMAGE FUNC] ====== generate-ai-image function called ======');
+    console.log('[AI IMAGE FUNC] HTTP Method:', event.httpMethod);
+    console.log('[AI IMAGE FUNC] Path:', event.path);
+    console.log('[AI IMAGE FUNC] Headers:', JSON.stringify(event.headers));
+    console.log('[AI IMAGE FUNC] Body length:', event.body?.length || 0);
+    console.log('[AI IMAGE FUNC] isBase64Encoded:', event.isBase64Encoded);
+    console.log('[AI IMAGE FUNC] GEMINI_API_KEY set:', !!GEMINI_API_KEY);
+    console.log('[AI IMAGE FUNC] CLOUDINARY_CLOUD_NAME set:', !!CLOUDINARY_CLOUD_NAME);
+    console.log('[AI IMAGE FUNC] CLOUDINARY_API_KEY set:', !!CLOUDINARY_API_KEY);
+    console.log('[AI IMAGE FUNC] CLOUDINARY_API_SECRET set:', !!CLOUDINARY_API_SECRET);
+
     // Handle CORS preflight
     if (event.httpMethod === 'OPTIONS') {
+        console.log('[AI IMAGE FUNC] Handling OPTIONS preflight');
         return {
             statusCode: 200,
             headers: {
@@ -178,6 +190,7 @@ exports.handler = async function(event, context) {
     }
 
     if (event.httpMethod !== 'POST') {
+        console.log('[AI IMAGE FUNC] Invalid method, rejecting');
         return {
             statusCode: 405,
             headers: {
@@ -218,11 +231,15 @@ exports.handler = async function(event, context) {
         let body;
         try {
             let rawBody = event.body;
+            console.log('[AI IMAGE FUNC] Raw body (first 200 chars):', rawBody?.substring(0, 200));
             if (event.isBase64Encoded && event.body) {
                 rawBody = Buffer.from(event.body, 'base64').toString('utf-8');
+                console.log('[AI IMAGE FUNC] Decoded base64 body (first 200 chars):', rawBody?.substring(0, 200));
             }
             body = JSON.parse(rawBody);
+            console.log('[AI IMAGE FUNC] Parsed body:', JSON.stringify(body));
         } catch (parseError) {
+            console.error('[AI IMAGE FUNC] JSON parse error:', parseError.message);
             return {
                 statusCode: 400,
                 headers: {
@@ -234,8 +251,10 @@ exports.handler = async function(event, context) {
         }
 
         const { name, description, category, serviceType, tags, itemId, sessionId } = body;
+        console.log('[AI IMAGE FUNC] Extracted fields:', { name, description: description?.substring(0, 50), category, serviceType, tags, itemId, sessionId });
 
         if (!name) {
+            console.error('[AI IMAGE FUNC] Missing name field');
             return {
                 statusCode: 400,
                 headers: {
@@ -246,6 +265,7 @@ exports.handler = async function(event, context) {
             };
         }
 
+        console.log('[AI IMAGE FUNC] Starting image generation for:', name);
         console.log('[AI IMAGE] Generating image for:', name);
         console.log('[AI IMAGE] Item ID:', itemId);
         console.log('[AI IMAGE] Description:', description?.substring(0, 100));
