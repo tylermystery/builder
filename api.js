@@ -1583,14 +1583,29 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     // ============================================================
     const customImages = record.fields?._customImages;
     if (customImages && Array.isArray(customImages) && customImages.length > 0) {
-        console.log('[IMAGE DEBUG] Found custom user-uploaded images:', {
+        // Check if any of the custom images are AI-generated
+        const hasAIGeneratedImage = customImages.some(img => img.isAIGenerated === true);
+
+        console.log('[IMAGE DEBUG] Found custom images:', {
             recordId: record.id,
-            customImageCount: customImages.length
+            customImageCount: customImages.length,
+            hasAIGeneratedImage: hasAIGeneratedImage
         });
+
         imageUrls = customImages.map(img => img.url || img);
-        imageSource = 'custom_upload';
+        // Use 'ai_generated' source if all images are AI-generated, otherwise 'custom_upload'
+        imageSource = hasAIGeneratedImage && customImages.every(img => img.isAIGenerated)
+            ? 'ai_generated'
+            : (hasAIGeneratedImage ? 'mixed_ai_custom' : 'custom_upload');
         imageCache.set(cacheKey, imageUrls);
-        return { imageUrls, status: 'success', source: imageSource };
+        return {
+            imageUrls,
+            status: 'success',
+            source: imageSource,
+            isAIGenerated: hasAIGeneratedImage,
+            // Return the full custom images array for components that need AI metadata
+            customImagesData: customImages
+        };
     }
 
     // ============================================================
