@@ -481,17 +481,29 @@ export async function applyFiltersAndSort(imageCache) {
          const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
          const hasStoreCategories = activeShop && activeShop.fields && activeShop.fields.Items && activeShop.fields.Items.length > 0;
 
-         // If on landing page (no category selected) AND store has categories, include the Grouping records
-         if (selectedCategory === 'all' && hasStoreCategories) {
-             const storeItemIds = Array.isArray(activeShop.fields.Items)
-                 ? activeShop.fields.Items
-                 : activeShop.fields.Items.split(',').map(id => id.trim());
+         // If on landing page (no category selected), include Grouping records for carousel display
+         if (selectedCategory === 'all') {
+             let storeCategoryRecords = [];
 
-             // Get the actual category (Grouping) records that the store defines
-             const storeCategoryRecords = storeItemIds
-                 .filter(id => id.startsWith('rec'))
-                 .map(id => state.records.all.find(r => r.id === id))
-                 .filter(r => r && r.fields['Item Type'] === 'Grouping');
+             if (hasStoreCategories) {
+                 const storeItemIds = Array.isArray(activeShop.fields.Items)
+                     ? activeShop.fields.Items
+                     : activeShop.fields.Items.split(',').map(id => id.trim());
+
+                 // Get the actual category (Grouping) records that the store defines
+                 storeCategoryRecords = storeItemIds
+                     .filter(id => id.startsWith('rec'))
+                     .map(id => state.records.all.find(r => r.id === id))
+                     .filter(r => r && r.fields['Item Type'] === 'Grouping');
+             }
+
+             // Also include any Grouping-type records from the base store items
+             // that aren't already in storeCategoryRecords
+             const existingIds = new Set(storeCategoryRecords.map(r => r.id));
+             const additionalGroupings = baseRecordsToFilter.filter(
+                 r => r.fields['Item Type'] === 'Grouping' && !existingIds.has(r.id)
+             );
+             storeCategoryRecords = [...storeCategoryRecords, ...additionalGroupings];
 
              // Get all items that belong to this store (excluding Groupings from base filter)
              const storeItems = baseRecordsToFilter.filter(r => r.fields['Item Type'] !== 'Grouping');
@@ -503,14 +515,30 @@ export async function applyFiltersAndSort(imageCache) {
          }
 
          // Standard filters apply to ALL views except 'My Plan'/'My Likes'
-         recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
-         recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
-         recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
-         recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
+         // On the landing page (no category, no search), preserve Grouping records through filters
+         // so they always appear as carousels. Otherwise, filter them normally.
+         const isLandingPage = selectedCategory === 'all' && !searchTerm;
+         let groupingRecords = [];
+         let filteredItems;
+
+         if (isLandingPage) {
+             groupingRecords = recordsToDisplay.filter(r => r.fields['Item Type'] === 'Grouping');
+             filteredItems = recordsToDisplay.filter(r => r.fields['Item Type'] !== 'Grouping');
+         } else {
+             filteredItems = recordsToDisplay;
+         }
+
+         filteredItems = filterByStatus(filteredItems, statusFilter);
+         filteredItems = filterByHeadcount(filteredItems, headcountFilter, customHeadcount);
+         filteredItems = filterByLocation(filteredItems, locationFilter);
+         filteredItems = filterByBudget(filteredItems, budgetFilter);
 
          if (searchTerm) {
-             recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
+             filteredItems = filterBySearchTerm(filteredItems, searchTerm);
          }
+
+         // Recombine: groupings first (if on landing page), then filtered items
+         recordsToDisplay = [...groupingRecords, ...filteredItems];
     }
 
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy, goalBucket);
@@ -520,11 +548,66 @@ export async function applyFiltersAndSort(imageCache) {
 
     if (catalogContainer) catalogContainer.innerHTML = '';
 
-    const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
+    // Determine if we're on the carousel landing page (no category/subcategory/view filters active)
+    // Search switches to grid mode, but other filters (status, headcount, etc.) keep carousels
+    const isCarouselLandingPage = selectedCategory === 'all' && !params.get('subcategory') && !view && !searchTerm;
+    const groupingsInResults = recordsToDisplay.filter(r => r.fields['Item Type'] === 'Grouping');
+    const nonGroupingsInResults = recordsToDisplay.filter(r => r.fields['Item Type'] !== 'Grouping');
 
-    ui.renderRecords(initialRecords, imageCache, false).then(() => {
-        state.ui.recordsCurrentlyDisplayed = initialRecords.length;
-    });
+    if (isCarouselLandingPage && groupingsInResults.length > 0) {
+        // On the carousel landing page, render ALL groupings upfront (no pagination limit for groupings).
+        // Also discover categories from items that don't have explicit Grouping records and create
+        // virtual grouping records for them so they also appear as carousels.
+        const existingGroupingNames = new Set(
+            groupingsInResults.map(g => g.fields.Name.toLowerCase().replace(/\s+/g, ' '))
+        );
+
+        // Find category names from items that don't have a matching Grouping record
+        const discoveredCategories = new Set();
+        nonGroupingsInResults.forEach(record => {
+            const cats = (record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '')
+                .split(',')
+                .map(c => c.trim())
+                .filter(Boolean);
+            cats.forEach(cat => {
+                const catLower = cat.toLowerCase().replace(/\s+/g, ' ');
+                if (!existingGroupingNames.has(catLower)) {
+                    discoveredCategories.add(cat); // Keep original casing for display
+                }
+            });
+        });
+
+        // Create virtual Grouping records for discovered categories
+        const virtualGroupings = Array.from(discoveredCategories).map(catName => ({
+            id: `virtual-grouping-${catName.toLowerCase().replace(/\s+/g, '-')}`,
+            fields: {
+                Name: catName,
+                'Item Type': 'Grouping',
+                Description: '',
+                Categories: ''
+            },
+            isVirtualGrouping: true
+        }));
+
+        // Combine all groupings (real + virtual), then non-groupings
+        const allGroupings = [...groupingsInResults, ...virtualGroupings];
+        recordsToDisplay = [...allGroupings, ...nonGroupingsInResults];
+        state.records.filtered = recordsToDisplay;
+
+        // Render all groupings plus first batch of ungrouped items
+        const initialNonGroupings = nonGroupingsInResults.slice(0, RECORDS_PER_LOAD);
+        const initialRecords = [...allGroupings, ...initialNonGroupings];
+
+        ui.renderRecords(initialRecords, imageCache, false).then(() => {
+            state.ui.recordsCurrentlyDisplayed = allGroupings.length + initialNonGroupings.length;
+        });
+    } else {
+        const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
+
+        ui.renderRecords(initialRecords, imageCache, false).then(() => {
+            state.ui.recordsCurrentlyDisplayed = initialRecords.length;
+        });
+    }
 
     ui.updateCatalogHeader(); // This function will now build breadcrumbs from the URL
 }

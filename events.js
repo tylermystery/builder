@@ -97,13 +97,18 @@ function loadMoreRecords(imageCache) {
     if (state.ui.isLoadingMore) return;
     const start = state.ui.recordsCurrentlyDisplayed;
     const end = start + RECORDS_PER_LOAD;
-    const recordsToLoad = state.records.filtered.slice(start, end);
+    let recordsToLoad = state.records.filtered.slice(start, end);
+    // Skip any Grouping records in load-more batches — they are rendered as carousels in the initial render
+    recordsToLoad = recordsToLoad.filter(r => r.fields['Item Type'] !== 'Grouping');
     if (recordsToLoad.length > 0) {
         state.ui.isLoadingMore = true;
         ui.renderRecords(recordsToLoad, imageCache, true).then(() => {
-            state.ui.recordsCurrentlyDisplayed += recordsToLoad.length;
+            state.ui.recordsCurrentlyDisplayed = end;
             state.ui.isLoadingMore = false;
         });
+    } else {
+        // If only groupings were in this batch, advance the counter and try next batch
+        state.ui.recordsCurrentlyDisplayed = end;
     }
 }
 
