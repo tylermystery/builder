@@ -954,7 +954,14 @@ function resetModalState() {
     for (const key in elements) {
         if (elements[key]) {
             if (key === 'modalItemNote') elements[key].value = '';
-            else if (key === 'modalMainImage') elements[key].style.backgroundImage = '';
+            else if (key === 'modalMainImage') {
+                elements[key].style.backgroundImage = '';
+                // Remove any package collage overlays or component name overlays
+                const collageOverlay = elements[key].querySelector('.package-collage-overlay');
+                if (collageOverlay) collageOverlay.remove();
+                const nameOverlay = elements[key].querySelector('.package-component-name-overlay');
+                if (nameOverlay) nameOverlay.remove();
+            }
             else elements[key].innerHTML = '';
         }
     }
@@ -3502,8 +3509,16 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             const optimizedClickImage = imageUrls[index].includes('cloudinary')
                 ? applyCloudinaryTransform(imageUrls[index], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
                 : imageUrls[index];
+            // Remove any package collage overlay when switching to a regular thumbnail
+            const existingCollage = modalMainImage.querySelector('.package-collage-overlay');
+            if (existingCollage) existingCollage.remove();
+            const existingNameOverlay = modalMainImage.querySelector('.package-component-name-overlay');
+            if (existingNameOverlay) existingNameOverlay.style.display = 'none';
+            // Restore AI image indicator if present
+            const aiIndicator = modalMainImage.querySelector('.ai-image-source-modal');
+            if (aiIndicator) aiIndicator.style.display = '';
             modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
-            modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
+            modalThumbnailStrip.querySelectorAll('.active').forEach(t => t.classList.remove('active'));
             thumb.classList.add('active');
             // Update "Set as Cover" button visibility
             updateSetCoverButton(index);
@@ -3513,6 +3528,177 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
     // Initialize the "Set as Cover" button state
     updateSetCoverButton(currentPhotoIndex);
+
+    // ============================================================
+    // PACKAGE COMPONENT COLLAGES: For packages, fetch images for each
+    // included component and add collage thumbnails to the media carousel
+    // ============================================================
+    if (isPackage && packageContents) {
+        const includedItems = packageContents.includedItems || [];
+        const addOnItems = packageContents.addOnItems || [];
+        const allPackageItems = [...includedItems, ...addOnItems];
+
+        if (allPackageItems.length > 0) {
+            // Add a separator label before component collages
+            const separator = document.createElement('div');
+            separator.className = 'thumbnail-separator';
+            separator.textContent = 'Included Items';
+            modalThumbnailStrip.appendChild(separator);
+
+            // Track all component collage data for main image display
+            const componentCollages = [];
+
+            // Fetch images for each component in parallel
+            const componentImagePromises = allPackageItems.map(async (itemRef) => {
+                const itemId = itemRef.id || itemRef;
+                const itemRecord = state.records.all.find(r => r.id === itemId);
+                if (!itemRecord) return null;
+
+                let componentImageUrls = [];
+                try {
+                    const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(itemRecord, state.records.all, new Map());
+                    componentImageUrls = fetchedUrls || [];
+                } catch (e) {
+                    console.warn('Failed to fetch images for package component:', itemId, e);
+                }
+                if (componentImageUrls.length === 0) {
+                    componentImageUrls = [ui.getPlaceholderImage([])];
+                }
+
+                return {
+                    record: itemRecord,
+                    imageUrls: componentImageUrls,
+                    isAddOn: addOnItems.some(a => (a.id || a) === itemId)
+                };
+            });
+
+            const componentResults = await Promise.all(componentImagePromises);
+
+            for (const compData of componentResults) {
+                if (!compData) continue;
+
+                const { record: compRecord, imageUrls: compImages, isAddOn } = compData;
+                const collageIndex = componentCollages.length;
+
+                componentCollages.push({
+                    record: compRecord,
+                    imageUrls: compImages,
+                    isAddOn
+                });
+
+                // Create a collage thumbnail for this component
+                const thumb = document.createElement('div');
+                thumb.className = 'thumbnail-img thumbnail-collage' + (isAddOn ? ' thumbnail-addon' : '');
+                thumb.title = compRecord.fields.Name || 'Component';
+
+                // Build collage preview inside thumbnail
+                if (compImages.length === 1) {
+                    const optimizedUrl = compImages[0].includes('cloudinary')
+                        ? applyCloudinaryTransform(compImages[0], 'w_150,h_150,c_fill,f_auto,q_auto')
+                        : compImages[0];
+                    thumb.style.backgroundImage = `url('${optimizedUrl}')`;
+                } else {
+                    // Multi-image collage thumbnail
+                    thumb.style.backgroundImage = 'none';
+                    const miniCollage = document.createElement('div');
+                    miniCollage.className = 'thumbnail-mini-collage';
+                    const collageClass = compImages.length === 2 ? 'two-images' : compImages.length === 3 ? 'three-images' : '';
+                    miniCollage.classList.add(collageClass || 'four-images');
+
+                    compImages.slice(0, 4).forEach((url) => {
+                        const img = document.createElement('img');
+                        img.className = 'mini-collage-img';
+                        img.src = url.includes('cloudinary')
+                            ? applyCloudinaryTransform(url, 'w_80,h_80,c_fill,f_auto,q_auto')
+                            : url;
+                        img.loading = 'lazy';
+                        miniCollage.appendChild(img);
+                    });
+                    thumb.appendChild(miniCollage);
+                }
+
+                // Add component name label
+                const label = document.createElement('span');
+                label.className = 'thumbnail-collage-label';
+                label.textContent = compRecord.fields.Name || '';
+                thumb.appendChild(label);
+
+                // Click handler: show component collage in main image area
+                thumb.addEventListener('click', () => {
+                    // Remove active state from all thumbnails
+                    modalThumbnailStrip.querySelectorAll('.active').forEach(t => t.classList.remove('active'));
+                    thumb.classList.add('active');
+
+                    // Build collage display in the main image area
+                    const collageData = componentCollages[collageIndex];
+                    const mainImages = collageData.imageUrls;
+
+                    // Clear any existing collage overlay
+                    const existingCollage = modalMainImage.querySelector('.package-collage-overlay');
+                    if (existingCollage) existingCollage.remove();
+
+                    // Hide AI image indicator when showing component images
+                    const aiIndicator = modalMainImage.querySelector('.ai-image-source-modal');
+                    if (aiIndicator) aiIndicator.style.display = 'none';
+
+                    if (mainImages.length === 1) {
+                        // Single image: just set as background
+                        const optimizedUrl = mainImages[0].includes('cloudinary')
+                            ? applyCloudinaryTransform(mainImages[0], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+                            : mainImages[0];
+                        modalMainImage.style.backgroundImage = `url('${optimizedUrl}')`;
+                    } else {
+                        // Multiple images: show collage grid overlay
+                        modalMainImage.style.backgroundImage = 'none';
+                        const collageOverlay = document.createElement('div');
+                        collageOverlay.className = 'package-collage-overlay';
+                        const gridClass = mainImages.length === 2 ? 'two-images' : mainImages.length === 3 ? 'three-images' : '';
+                        collageOverlay.classList.add(gridClass || 'four-plus-images');
+
+                        mainImages.slice(0, 4).forEach((url) => {
+                            const img = document.createElement('img');
+                            img.className = 'package-collage-img';
+                            img.src = url.includes('cloudinary')
+                                ? applyCloudinaryTransform(url, 'w_600,h_500,c_fill,f_auto,q_auto')
+                                : url;
+                            collageOverlay.appendChild(img);
+                        });
+
+                        // If more than 4 images, show count badge
+                        if (mainImages.length > 4) {
+                            const badge = document.createElement('span');
+                            badge.className = 'package-collage-count';
+                            badge.textContent = `+${mainImages.length - 4}`;
+                            collageOverlay.appendChild(badge);
+                        }
+
+                        modalMainImage.appendChild(collageOverlay);
+                    }
+
+                    // Show component name overlay on main image
+                    let nameOverlay = modalMainImage.querySelector('.package-component-name-overlay');
+                    if (!nameOverlay) {
+                        nameOverlay = document.createElement('div');
+                        nameOverlay.className = 'package-component-name-overlay';
+                        modalMainImage.appendChild(nameOverlay);
+                    }
+                    nameOverlay.textContent = collageData.record.fields.Name || '';
+                    nameOverlay.style.display = 'block';
+                });
+
+                modalThumbnailStrip.appendChild(thumb);
+            }
+
+            // Auto-select the first component collage if the package itself only has a placeholder
+            if (componentCollages.length > 0 && (imageSource === 'placeholder' || imageSource === 'using_placeholder' || imageSource === 'ai_approximation')) {
+                // Click the first component collage thumbnail to show it
+                const firstCollageThumb = modalThumbnailStrip.querySelector('.thumbnail-collage');
+                if (firstCollageThumb) {
+                    firstCollageThumb.click();
+                }
+            }
+        }
+    }
 
     // Setup "Search More Photos" button for AI-sourced items
     const searchPhotosContainer = document.getElementById('modal-search-photos-container');
