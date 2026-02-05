@@ -2236,6 +2236,118 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         console.warn('Failed to fetch images for record:', record.id, e);
     }
 
+    // ============================================================
+    // AUTO AI IMAGE GENERATION: For manual items with only placeholders
+    // ============================================================
+    // Track records that have already attempted AI generation to prevent repeated attempts
+    if (!window._aiImageGenerationAttempted) {
+        window._aiImageGenerationAttempted = new Set();
+    }
+    if (!window._aiImageGenerationInProgress) {
+        window._aiImageGenerationInProgress = new Set();
+    }
+
+    const isManualItemForAutoGen = record.isManual === true ||
+                                    record.id?.startsWith('manual-add-') ||
+                                    record.id?.startsWith('manual-presentation-') ||
+                                    record.id?.startsWith('solution-');
+    const hasOnlyPlaceholder = imageSource === 'placeholder' || imageSource === 'using_placeholder';
+    const hasNoCustomImages = !record.fields?._customImages || record.fields._customImages.length === 0;
+    const alreadyAttempted = window._aiImageGenerationAttempted.has(record.id);
+    const inProgress = window._aiImageGenerationInProgress.has(record.id);
+
+    console.log('[AI IMAGE AUTO-GEN] Checking if auto-generation needed:', {
+        recordId: record.id,
+        isManualItemForAutoGen,
+        hasOnlyPlaceholder,
+        hasNoCustomImages,
+        alreadyAttempted,
+        inProgress,
+        imageSource,
+        _customImages: record.fields?._customImages
+    });
+
+    if (isManualItemForAutoGen && hasOnlyPlaceholder && hasNoCustomImages && !alreadyAttempted && !inProgress) {
+        console.log('[AI IMAGE AUTO-GEN] TRIGGERING auto AI image generation for:', record.fields?.Name);
+
+        // Mark as in-progress to prevent duplicate attempts
+        window._aiImageGenerationInProgress.add(record.id);
+
+        try {
+            const requestPayload = {
+                name: record.fields?.Name || 'Unnamed Item',
+                description: record.fields?.Description || '',
+                category: record.fields?.Category || '',
+                serviceType: record.fields?.ServiceType || record.fields?.['Service Type'] || '',
+                tags: record.fields?.['Media Tags'] || '',
+                itemId: record.id,
+                sessionId: state.session?.id || 'unsaved'
+            };
+
+            console.log('[AI IMAGE AUTO-GEN] Request payload:', JSON.stringify(requestPayload));
+
+            const aiImageResponse = await fetch('/.netlify/functions/generate-ai-image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestPayload)
+            });
+
+            console.log('[AI IMAGE AUTO-GEN] Response status:', aiImageResponse.status);
+
+            if (aiImageResponse.ok) {
+                const aiImageResult = await aiImageResponse.json();
+                console.log('[AI IMAGE AUTO-GEN] Response JSON:', JSON.stringify(aiImageResult));
+
+                if (aiImageResult.success && aiImageResult.imageUrl) {
+                    // Update imageUrls with the AI-generated image
+                    imageUrls = [aiImageResult.imageUrl];
+                    imageSource = 'ai_generated';
+
+                    // Store the AI image in the record so it persists
+                    const aiGeneratedImage = {
+                        url: aiImageResult.imageUrl,
+                        isAIGenerated: true,
+                        prompt: aiImageResult.prompt
+                    };
+
+                    // Update record in state
+                    const recordIndex = state.records.all.findIndex(r => r.id === record.id);
+                    if (recordIndex !== -1) {
+                        state.records.all[recordIndex].fields._customImages = [aiGeneratedImage];
+                        state.records.all[recordIndex].fields._hasAIGeneratedImage = true;
+                    }
+                    record.fields._customImages = [aiGeneratedImage];
+                    record.fields._hasAIGeneratedImage = true;
+
+                    // Trigger save to persist the AI image
+                    if (typeof triggerSave === 'function') {
+                        triggerSave();
+                    }
+
+                    console.log('[AI IMAGE AUTO-GEN] SUCCESS - AI image stored:', aiImageResult.imageUrl);
+                    log('Modal', `AI image auto-generated for ${record.fields?.Name}: ${aiImageResult.imageUrl}`);
+                } else {
+                    console.log('[AI IMAGE AUTO-GEN] Response OK but missing success or imageUrl:', aiImageResult);
+                    // Mark as attempted even if no image returned (to prevent retry loops)
+                    window._aiImageGenerationAttempted.add(record.id);
+                }
+            } else {
+                const errorText = await aiImageResponse.text();
+                console.warn('[AI IMAGE AUTO-GEN] FAILED:', errorText);
+                // Mark as attempted to prevent retry on failure
+                window._aiImageGenerationAttempted.add(record.id);
+            }
+        } catch (aiError) {
+            console.warn('[AI IMAGE AUTO-GEN] EXCEPTION:', aiError.message);
+            console.warn('[AI IMAGE AUTO-GEN] Stack:', aiError.stack);
+            // Mark as attempted to prevent retry on exception
+            window._aiImageGenerationAttempted.add(record.id);
+        } finally {
+            // Always remove from in-progress when done
+            window._aiImageGenerationInProgress.delete(record.id);
+        }
+    }
+
     // Merge comment-uploaded images from presentation view's itemImagesCache
     // These are images uploaded via comments that aren't stored in the record
     if (typeof window.itemImagesCache !== 'undefined' && window.itemImagesCache.has(record.id)) {
