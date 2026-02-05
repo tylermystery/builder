@@ -1172,6 +1172,21 @@ function enableItemEditMode(record, nameEl, descEl) {
             return;
         }
 
+        // Track if description/name changed for AI regeneration purposes
+        const descriptionChanged = newDesc !== originalDescription;
+        const nameChanged = newName !== originalName;
+        const detailsChanged = descriptionChanged || nameChanged;
+
+        console.log('[AI IMAGE REGEN] Details change detection:', {
+            nameChanged,
+            descriptionChanged,
+            detailsChanged,
+            originalName,
+            newName,
+            originalDescription: originalDescription?.substring(0, 50) + '...',
+            newDesc: newDesc?.substring(0, 50) + '...'
+        });
+
         saveBtn.disabled = true;
         saveBtn.textContent = 'Saving...';
 
@@ -1381,7 +1396,99 @@ function enableItemEditMode(record, nameEl, descEl) {
                     console.log('[AI IMAGE DEBUG] NOT a manual item - skipping AI image generation');
                 }
             } else {
-                console.log('[AI IMAGE DEBUG] Photos already exist - skipping AI image generation');
+                console.log('[AI IMAGE DEBUG] Photos already exist - skipping initial AI image generation');
+
+                // ============================================================
+                // AI IMAGE REGENERATION: If description/name changed and item has AI image, regenerate it
+                // ============================================================
+                if (detailsChanged) {
+                    // Check if current images include an AI-generated one
+                    const hasExistingAIImage = allPhotos.some(p => p.isAIGenerated === true) ||
+                                               record.fields._hasAIGeneratedImage === true;
+
+                    console.log('[AI IMAGE REGEN] Checking for AI image regeneration:', {
+                        detailsChanged,
+                        hasExistingAIImage,
+                        allPhotosCount: allPhotos.length
+                    });
+
+                    if (hasExistingAIImage) {
+                        console.log('[AI IMAGE REGEN] TRIGGERING AI image regeneration due to description/name change');
+                        saveBtn.textContent = 'Regenerating AI image...';
+
+                        try {
+                            const requestPayload = {
+                                name: newName,
+                                description: newDesc,
+                                category: record.fields?.Category || '',
+                                serviceType: record.fields?.ServiceType || record.fields?.['Service Type'] || '',
+                                tags: record.fields?.['Media Tags'] || '',
+                                itemId: record.id,
+                                sessionId: state.session?.id || 'unsaved'
+                            };
+                            console.log('[AI IMAGE REGEN] Request payload:', JSON.stringify(requestPayload));
+
+                            const aiImageResponse = await fetch('/.netlify/functions/generate-ai-image', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(requestPayload)
+                            });
+
+                            console.log('[AI IMAGE REGEN] Response status:', aiImageResponse.status);
+
+                            if (aiImageResponse.ok) {
+                                const aiImageResult = await aiImageResponse.json();
+                                console.log('[AI IMAGE REGEN] Response body:', aiImageResult);
+                                if (aiImageResult.success && aiImageResult.imageUrl) {
+                                    const newAIImage = {
+                                        url: aiImageResult.imageUrl,
+                                        isAIGenerated: true,
+                                        prompt: aiImageResult.prompt
+                                    };
+
+                                    // Replace the old AI image in allPhotos
+                                    const aiImageIndex = allPhotos.findIndex(p => p.isAIGenerated === true);
+                                    if (aiImageIndex !== -1) {
+                                        allPhotos[aiImageIndex] = newAIImage;
+                                        console.log('[AI IMAGE REGEN] Replaced existing AI image at index', aiImageIndex);
+                                    } else {
+                                        // Add as first image if no AI image found (edge case)
+                                        allPhotos.unshift(newAIImage);
+                                        console.log('[AI IMAGE REGEN] Added new AI image as first image');
+                                    }
+
+                                    aiGeneratedImage = newAIImage;
+                                    console.log('[AI IMAGE REGEN] SUCCESS - New AI image:', newAIImage.url);
+                                    log('Modal', `AI image regenerated for updated details: ${aiImageResult.imageUrl}`);
+                                } else {
+                                    console.log('[AI IMAGE REGEN] Response OK but missing success or imageUrl:', aiImageResult);
+                                }
+                            } else {
+                                const errorText = await aiImageResponse.text();
+                                console.warn('[AI IMAGE REGEN] FAILED:', errorText);
+                            }
+                        } catch (aiRegenError) {
+                            console.warn('[AI IMAGE REGEN] EXCEPTION:', aiRegenError.message);
+                            // Continue without regeneration - not a critical failure
+                        }
+
+                        saveBtn.textContent = 'Saving...';
+                    }
+                }
+            }
+
+            // ============================================================
+            // INVALIDATE CACHED SOLUTIONS: Clear when description changes
+            // ============================================================
+            if (detailsChanged && record._generatedSolutions && record._generatedSolutions.length > 0) {
+                console.log('[SOLUTIONS] Description/name changed - marking solutions as stale');
+                // Store original description to track staleness
+                record._solutionsGeneratedWith = {
+                    name: originalName,
+                    description: originalDescription
+                };
+                record._solutionsStale = true;
+                log('Modal', `Solutions marked stale due to description/name change for: ${record.id}`);
             }
 
             // Update the record in state.records.all
@@ -4543,6 +4650,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
     // Check if this item already has solutions stored
     const hasExistingSolutions = record._generatedSolutions && record._generatedSolutions.length > 0;
+    const solutionsAreStale = record._solutionsStale === true;
 
     // Create the AI top options button container
     const aiOptionsContainer = document.createElement('div');
@@ -4553,8 +4661,13 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     let buttonText;
     let buttonTitle;
     if (isConceptItem) {
-        buttonText = hasExistingSolutions ? '✨ Re-Find Solutions' : '✨ Find Solutions';
-        buttonTitle = 'Use AI to find specific solutions for this concept';
+        if (solutionsAreStale) {
+            buttonText = '⚠️ Re-Find Solutions (Stale)';
+            buttonTitle = 'Description changed - click to regenerate solutions with updated details';
+        } else {
+            buttonText = hasExistingSolutions ? '✨ Re-Find Solutions' : '✨ Find Solutions';
+            buttonTitle = 'Use AI to find specific solutions for this concept';
+        }
     } else {
         buttonText = hasExistingOptions ? '✨ Re-Estimate Options' : '✨ Estimate Options';
         buttonTitle = 'Use AI to estimate recommended options/variations';
@@ -4773,6 +4886,15 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     if (isConceptItem && hasExistingSolutions) {
         aiOptionsResult.style.display = 'block';
         renderSolutions(record._generatedSolutions);
+        // Show stale indicator if description changed since solutions were generated
+        if (solutionsAreStale) {
+            aiOptionsStatus.textContent = '⚠️ Item details changed - solutions may be outdated. Click "Re-Find Solutions" to regenerate based on updated description.';
+            aiOptionsStatus.style.color = '#856404';
+            aiOptionsStatus.style.backgroundColor = '#fff3cd';
+            aiOptionsStatus.style.padding = '8px 12px';
+            aiOptionsStatus.style.borderRadius = '4px';
+            aiOptionsStatus.style.marginTop = '10px';
+        }
     }
 
     // Generate AI options/solutions on click
@@ -4791,8 +4913,20 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             setEditMode(false);
 
             try {
+                // Log the current record description being used for solution generation
+                console.log('[SOLUTIONS] Generating solutions with current record data:', {
+                    name: record.fields?.Name,
+                    description: record.fields?.Description?.substring(0, 100) + '...',
+                    category: record.fields?.Category
+                });
+
                 const result = await api.generateConceptSolutions(record);
                 if (result.success && result.solutions && result.solutions.length > 0) {
+                    // Clear the stale flag since we just regenerated with current data
+                    record._solutionsStale = false;
+                    delete record._solutionsGeneratedWith;
+                    console.log('[SOLUTIONS] Cleared stale flag after successful generation');
+
                     // Instead of immediately rendering, show in edit mode first for user to modify
                     if (aiSolutionsEditor) {
                         aiSolutionsEditor.value = solutionsToEditableText(result.solutions);
@@ -4815,6 +4949,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 console.error('AI solutions generation failed:', error);
             } finally {
                 aiOptionsBtn.disabled = false;
+                // Update button text - now without stale indicator since we just regenerated
                 aiOptionsBtn.textContent = hasExistingSolutions || record._generatedSolutions?.length > 0
                     ? '✨ Re-Find Solutions'
                     : '✨ Find Solutions';
