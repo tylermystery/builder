@@ -3227,7 +3227,48 @@ select:focus-visible,
 
                 <h2 id="modal-item-name"></h2>
 
-                <p id="modal-item-price" class="price"></p>
+                <div id="modal-price-action-row">
+                    <p id="modal-item-price" class="price"></p>
+                    <div id="modal-price-actions">
+                        <button id="modal-rapid-pay-btn" class="price-action-btn rapid-pay-btn" title="Quick checkout">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                            <span class="price-action-label">Rapid Pay</span>
+                        </button>
+                        <button id="modal-chip-in-btn" class="price-action-btn chip-in-btn" title="Chip in to help make this free for someone in need">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                            <span class="price-action-label">Chip In</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="modal-donation-meter" style="display: none;">
+                    <div class="donation-meter-header">
+                        <span class="donation-meter-title">Community Fund</span>
+                        <span class="donation-meter-stats"></span>
+                    </div>
+                    <div class="donation-meter-bar-container">
+                        <div class="donation-meter-bar-bg">
+                            <div class="donation-meter-bar-fill"></div>
+                        </div>
+                    </div>
+                    <p class="donation-meter-description">Chip in to help make this available for free to those most in need.</p>
+                    <div class="donation-meter-actions">
+                        <div class="donation-amount-presets">
+                            <button class="donation-preset-btn" data-amount="1">$1</button>
+                            <button class="donation-preset-btn" data-amount="5">$5</button>
+                            <button class="donation-preset-btn" data-amount="10">$10</button>
+                            <button class="donation-preset-btn active" data-amount="custom">Custom</button>
+                        </div>
+                        <div class="donation-custom-input">
+                            <span class="donation-currency">$</span>
+                            <input type="number" class="donation-amount-input" placeholder="0.00" min="0.01" step="0.01" value="">
+                        </div>
+                        <button id="modal-donate-submit-btn" class="donation-submit-btn">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                            Donate & Pay It Forward
+                        </button>
+                    </div>
+                </div>
 
                 <p id="modal-item-description"></p>
 

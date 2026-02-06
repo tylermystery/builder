@@ -1641,10 +1641,10 @@
 #modal-item-name { 
     margin-top: 0;
 }
-#modal-item-price { 
+#modal-item-price {
     font-size: 1.5em;
-    font-weight: bold; 
-    margin: 10px 0;
+    font-weight: bold;
+    margin: 0;
 }
 #modal-options-container { 
     margin: 20px 0;
@@ -6465,6 +6465,333 @@ hr.total-divider {
     font-size: 0.75em;
     color: #28a745;
     font-weight: 500;
+}
+
+/* =========================
+   Price Action Row
+   ========================= */
+#modal-price-action-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 10px 0;
+    flex-wrap: wrap;
+}
+
+#modal-price-action-row #modal-item-price {
+    margin: 0;
+    flex-shrink: 0;
+}
+
+#modal-price-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+#modal-price-actions.hidden {
+    display: none;
+}
+
+.price-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border: 1.5px solid transparent;
+    border-radius: 20px;
+    font-size: 0.78em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    line-height: 1;
+}
+
+.price-action-btn svg {
+    flex-shrink: 0;
+}
+
+/* Rapid Pay button */
+.rapid-pay-btn {
+    background: linear-gradient(135deg, #6D1ED4, #3D95CE);
+    color: #fff;
+    border-color: transparent;
+}
+
+.rapid-pay-btn:hover {
+    background: linear-gradient(135deg, #5a19b3, #3385b8);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(109, 30, 212, 0.3);
+}
+
+.rapid-pay-btn:active {
+    transform: translateY(0);
+}
+
+/* Chip In button */
+.chip-in-btn {
+    background: #fff;
+    color: #e25555;
+    border-color: #e25555;
+}
+
+.chip-in-btn:hover {
+    background: #e25555;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(226, 85, 85, 0.3);
+}
+
+.chip-in-btn:active {
+    transform: translateY(0);
+}
+
+.chip-in-btn.active {
+    background: #e25555;
+    color: #fff;
+}
+
+/* =========================
+   Donation Meter
+   ========================= */
+#modal-donation-meter {
+    background: linear-gradient(135deg, #fef7f7 0%, #fff5f0 100%);
+    border: 1px solid #f0d4d4;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 15px;
+    animation: donationMeterSlideIn 0.3s ease-out;
+}
+
+@keyframes donationMeterSlideIn {
+    from {
+        opacity: 0;
+        max-height: 0;
+        padding: 0 16px;
+        margin-bottom: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        max-height: 500px;
+        padding: 16px;
+        margin-bottom: 15px;
+        transform: translateY(0);
+    }
+}
+
+.donation-meter-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.donation-meter-title {
+    font-weight: 700;
+    font-size: 0.9em;
+    color: #c0392b;
+    letter-spacing: 0.02em;
+}
+
+.donation-meter-stats {
+    font-size: 0.82em;
+    font-weight: 600;
+    color: #555;
+}
+
+.donation-meter-bar-container {
+    margin-bottom: 10px;
+}
+
+.donation-meter-bar-bg {
+    width: 100%;
+    height: 10px;
+    background: #e8d5d5;
+    border-radius: 5px;
+    overflow: hidden;
+    position: relative;
+}
+
+.donation-meter-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #e25555, #ff7b7b);
+    border-radius: 5px;
+    width: 0%;
+    transition: width 0.8s ease-out;
+    position: relative;
+}
+
+.donation-meter-bar-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255,255,255,0.3) 50%,
+        transparent 100%
+    );
+    animation: donationShimmer 2s ease-in-out infinite;
+}
+
+@keyframes donationShimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.donation-meter-description {
+    font-size: 0.82em;
+    color: #777;
+    margin: 0 0 12px 0;
+    line-height: 1.4;
+}
+
+.donation-meter-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.donation-amount-presets {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.donation-preset-btn {
+    flex: 1 1 auto;
+    min-width: 48px;
+    padding: 7px 10px;
+    border: 1.5px solid #e0c4c4;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 0.82em;
+    font-weight: 600;
+    color: #c0392b;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.donation-preset-btn:hover {
+    border-color: #e25555;
+    background: #fff0f0;
+}
+
+.donation-preset-btn.active {
+    border-color: #e25555;
+    background: #e25555;
+    color: #fff;
+}
+
+.donation-custom-input {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    background: #fff;
+    border: 1.5px solid #e0c4c4;
+    border-radius: 8px;
+}
+
+.donation-currency {
+    font-weight: 700;
+    color: #c0392b;
+    font-size: 1em;
+}
+
+.donation-amount-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 0.95em;
+    font-weight: 500;
+    color: #333;
+    background: transparent;
+    min-width: 0;
+}
+
+.donation-amount-input::placeholder {
+    color: #bbb;
+}
+
+.donation-amount-input::-webkit-outer-spin-button,
+.donation-amount-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.donation-amount-input[type=number] {
+    -moz-appearance: textfield;
+}
+
+.donation-submit-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 16px;
+    background: linear-gradient(135deg, #e25555, #ff7b7b);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.donation-submit-btn:hover {
+    background: linear-gradient(135deg, #c0392b, #e25555);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(226, 85, 85, 0.3);
+}
+
+.donation-submit-btn:active {
+    transform: translateY(0);
+}
+
+.donation-meter-full-message {
+    text-align: center;
+    padding: 8px;
+    background: linear-gradient(135deg, #d4edda, #c3e6cb);
+    border-radius: 8px;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #155724;
+}
+
+/* Mobile responsive */
+@media (max-width: 480px) {
+    #modal-price-action-row {
+        gap: 8px;
+    }
+    .price-action-btn {
+        padding: 5px 10px;
+        font-size: 0.72em;
+    }
+    .price-action-label {
+        display: none;
+    }
+    .price-action-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+    .donation-amount-presets {
+        gap: 4px;
+    }
+    .donation-preset-btn {
+        min-width: 40px;
+        padding: 6px 8px;
+        font-size: 0.78em;
+    }
 }
 
 /* =========================

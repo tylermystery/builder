@@ -737,6 +737,144 @@ export function hasQuickPayOptions() {
     return options && Object.keys(options).length > 0;
 }
 
+/**
+ * Sets up the donation meter for an item, showing community fund progress
+ * and allowing users to chip in toward making the item free for someone in need.
+ * Donation state is stored per-item in localStorage.
+ * @param {Object} record - The item record
+ * @param {Object} paymentOptions - Store payment options
+ * @param {Object} itemState - Current item state (quantity, options, etc.)
+ */
+function setupDonationMeter(record, paymentOptions, itemState) {
+    const donationMeter = document.getElementById('modal-donation-meter');
+    if (!donationMeter) return;
+
+    const price = getRecordPrice(record, itemState.selectedOptionIndex);
+    // Goal is the item price (to fund one free giveaway), minimum $5 for free items
+    const goalAmount = price > 0 ? price : 5;
+
+    // Load donation progress from localStorage (per-item tracking)
+    const donationKey = `donation_fund_${record.id}`;
+    let donationData = { raised: 0, contributors: 0 };
+    try {
+        const stored = localStorage.getItem(donationKey);
+        if (stored) donationData = JSON.parse(stored);
+    } catch (e) { /* ignore parse errors */ }
+
+    const raised = donationData.raised || 0;
+    const contributors = donationData.contributors || 0;
+    const percent = Math.min(100, (raised / goalAmount) * 100);
+
+    // Update meter display
+    const statsEl = donationMeter.querySelector('.donation-meter-stats');
+    const barFill = donationMeter.querySelector('.donation-meter-bar-fill');
+    const descEl = donationMeter.querySelector('.donation-meter-description');
+
+    if (statsEl) {
+        statsEl.textContent = `$${raised.toFixed(2)} / $${goalAmount.toFixed(2)}`;
+    }
+    if (barFill) {
+        // Small delay so animation plays visibly
+        requestAnimationFrame(() => {
+            barFill.style.width = `${percent}%`;
+        });
+    }
+
+    if (descEl) {
+        if (percent >= 100) {
+            descEl.textContent = 'Goal reached! This item can be given to someone in need.';
+        } else {
+            const remaining = (goalAmount - raised).toFixed(2);
+            descEl.textContent = `$${remaining} more to fund a free giveaway for someone in need. ${contributors > 0 ? `${contributors} ${contributors === 1 ? 'person has' : 'people have'} chipped in.` : 'Be the first to chip in!'}`;
+        }
+    }
+
+    // Setup preset buttons
+    const presetBtns = donationMeter.querySelectorAll('.donation-preset-btn');
+    const customInput = donationMeter.querySelector('.donation-custom-input');
+    const amountInput = donationMeter.querySelector('.donation-amount-input');
+
+    presetBtns.forEach(btn => {
+        // Clone to remove old listeners
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+
+        newBtn.addEventListener('click', () => {
+            donationMeter.querySelectorAll('.donation-preset-btn').forEach(b => b.classList.remove('active'));
+            newBtn.classList.add('active');
+
+            const presetAmount = newBtn.dataset.amount;
+            if (presetAmount === 'custom') {
+                customInput.style.display = 'flex';
+                amountInput.focus();
+            } else {
+                customInput.style.display = 'none';
+                amountInput.value = parseFloat(presetAmount).toFixed(2);
+            }
+        });
+    });
+
+    // Setup donate/submit button
+    const submitBtn = donationMeter.querySelector('.donation-submit-btn');
+    if (submitBtn) {
+        const newSubmitBtn = submitBtn.cloneNode(true);
+        submitBtn.parentNode.replaceChild(newSubmitBtn, submitBtn);
+
+        newSubmitBtn.addEventListener('click', () => {
+            // Determine donation amount
+            const activePreset = donationMeter.querySelector('.donation-preset-btn.active');
+            let donationAmount = 0;
+
+            if (activePreset && activePreset.dataset.amount !== 'custom') {
+                donationAmount = parseFloat(activePreset.dataset.amount) || 0;
+            } else {
+                donationAmount = parseFloat(amountInput.value) || 0;
+            }
+
+            if (donationAmount <= 0) {
+                // Shake the input to indicate an amount is needed
+                const inputEl = customInput.style.display !== 'none' ? customInput : donationMeter.querySelector('.donation-amount-presets');
+                inputEl.style.animation = 'none';
+                requestAnimationFrame(() => {
+                    inputEl.style.animation = 'donationMeterSlideIn 0.3s ease-out';
+                });
+                return;
+            }
+
+            // Open quick pay modal with the donation amount
+            const itemName = `Donation: ${record.fields.Name || 'Item'} (Community Fund)`;
+            showQuickPayModal(paymentOptions, donationAmount, itemName, 1);
+
+            // Update local donation tracking (optimistic - user is going to pay)
+            donationData.raised = (donationData.raised || 0) + donationAmount;
+            donationData.contributors = (donationData.contributors || 0) + 1;
+            try {
+                localStorage.setItem(donationKey, JSON.stringify(donationData));
+            } catch (e) { /* storage full, ignore */ }
+
+            // Refresh the meter display
+            const newPercent = Math.min(100, (donationData.raised / goalAmount) * 100);
+            if (statsEl) {
+                statsEl.textContent = `$${donationData.raised.toFixed(2)} / $${goalAmount.toFixed(2)}`;
+            }
+            if (barFill) {
+                barFill.style.width = `${newPercent}%`;
+            }
+            if (descEl) {
+                if (newPercent >= 100) {
+                    descEl.textContent = 'Goal reached! This item can be given to someone in need.';
+                } else {
+                    const remaining = (goalAmount - donationData.raised).toFixed(2);
+                    descEl.textContent = `$${remaining} more to fund a free giveaway for someone in need. ${donationData.contributors} ${donationData.contributors === 1 ? 'person has' : 'people have'} chipped in.`;
+                }
+            }
+        });
+    }
+
+    // Initialize - show custom input by default since "Custom" is active initially
+    if (customInput) customInput.style.display = 'flex';
+}
+
 function closeDetailModal() {
     updateUrl({ openItem: null });
     hideDetailModal();
@@ -978,6 +1116,14 @@ function resetModalState() {
     // Also remove edit mode UI elements
     const editModeElements = document.querySelectorAll('.item-edit-container, .item-edit-save-container');
     editModeElements.forEach(el => el.remove());
+
+    // Reset donation meter and price action buttons
+    const donationMeter = document.getElementById('modal-donation-meter');
+    if (donationMeter) donationMeter.style.display = 'none';
+    const chipInBtn = document.getElementById('modal-chip-in-btn');
+    if (chipInBtn) chipInBtn.classList.remove('active');
+    const priceActions = document.getElementById('modal-price-actions');
+    if (priceActions) priceActions.classList.add('hidden');
 
     log('Modal', 'Reset modal state.');
 }
@@ -2267,28 +2413,29 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         }
     }
 
-    // Add Quick Pay button if store has payment options (but not for packages, which use dynamic pricing)
-    const existingQuickPayBtn = document.getElementById('modal-quick-pay-btn');
-    if (existingQuickPayBtn) {
-        existingQuickPayBtn.remove();
-    }
+    // Setup Price Action Row buttons (Rapid Pay + Chip In) next to price
+    const rapidPayBtn = document.getElementById('modal-rapid-pay-btn');
+    const chipInBtn = document.getElementById('modal-chip-in-btn');
+    const priceActionsContainer = document.getElementById('modal-price-actions');
+    const donationMeter = document.getElementById('modal-donation-meter');
 
     const paymentOptions = getStorePaymentOptions();
-    if (paymentOptions && Object.keys(paymentOptions).length > 0 && !isPackageItem) {
-        const quickPayBtn = document.createElement('button');
-        quickPayBtn.id = 'modal-quick-pay-btn';
-        quickPayBtn.className = 'quick-pay-btn';
+    const hasPaymentOptions = paymentOptions && Object.keys(paymentOptions).length > 0;
 
-        // Calculate initial amount for button text
+    if (hasPaymentOptions && !isPackageItem) {
+        // Show price action buttons
+        if (priceActionsContainer) priceActionsContainer.classList.remove('hidden');
+
+        // Calculate initial amount for rapid pay
         const initialPrice = getRecordPrice(record, itemState.selectedOptionIndex);
         const initialQuantity = itemState.quantity || 1;
         const initialAmount = initialPrice * initialQuantity;
 
-        // Update button text with amount
-        const updateQuickPayButtonText = () => {
+        // Update Rapid Pay button label dynamically
+        const updateRapidPayLabel = () => {
+            if (!rapidPayBtn) return;
             const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
             const currentQuantity = quantityInput ? parseInt(quantityInput.value, 10) || 1 : 1;
-            // Get current selected option index from the modal's option selector
             const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
             let selectedOptionIndex = itemState.selectedOptionIndex || 0;
             if (optionRadios.length > 0) {
@@ -2297,46 +2444,63 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             }
             const currentPrice = getRecordPrice(record, selectedOptionIndex);
             const currentAmount = currentPrice * currentQuantity;
-            if (currentAmount > 0) {
-                quickPayBtn.innerHTML = `<span>Quick Pay $${currentAmount.toFixed(2)}</span>`;
-            } else {
-                // Free event - show "Donations Welcome"
-                quickPayBtn.innerHTML = '<span>Donations Welcome</span>';
+            const labelEl = rapidPayBtn.querySelector('.price-action-label');
+            if (labelEl) {
+                labelEl.textContent = currentAmount > 0 ? `Rapid Pay` : 'Rapid Pay';
             }
         };
 
-        // Set initial button text
-        if (initialAmount > 0) {
-            quickPayBtn.innerHTML = `<span>Quick Pay $${initialAmount.toFixed(2)}</span>`;
-        } else {
-            // Free event - show "Donations Welcome"
-            quickPayBtn.innerHTML = '<span>Donations Welcome</span>';
+        // Store update function for quantity/option change handlers
+        if (rapidPayBtn) {
+            rapidPayBtn._updateText = updateRapidPayLabel;
         }
 
-        quickPayBtn.addEventListener('click', () => {
-            // Get current quantity from the quantity input
-            const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
-            const quantity = quantityInput ? parseInt(quantityInput.value, 10) || 1 : 1;
-            // Get current selected option index
-            const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
-            let selectedOptionIndex = itemState.selectedOptionIndex || 0;
-            if (optionRadios.length > 0) {
-                const selectedValue = optionRadios[0].value;
-                selectedOptionIndex = parseInt(selectedValue, 10) || 0;
-            }
-            const price = getRecordPrice(record, selectedOptionIndex);
-            const amount = price * quantity;
-            const itemName = record.fields.Name || 'Item';
-            showQuickPayModal(paymentOptions, amount, itemName, quantity);
-        });
+        // Rapid Pay click - opens quick pay modal
+        if (rapidPayBtn) {
+            // Remove old listeners by cloning
+            const newRapidPayBtn = rapidPayBtn.cloneNode(true);
+            rapidPayBtn.parentNode.replaceChild(newRapidPayBtn, rapidPayBtn);
+            newRapidPayBtn._updateText = updateRapidPayLabel;
 
-        // Store reference to update function for quantity/option change handlers
-        quickPayBtn._updateText = updateQuickPayButtonText;
-
-        // Insert after Add to Plan button
-        if (addToPlanBtn && addToPlanBtn.parentNode) {
-            addToPlanBtn.parentNode.insertBefore(quickPayBtn, addToPlanBtn.nextSibling);
+            newRapidPayBtn.addEventListener('click', () => {
+                const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
+                const quantity = quantityInput ? parseInt(quantityInput.value, 10) || 1 : 1;
+                const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
+                let selectedOptionIndex = itemState.selectedOptionIndex || 0;
+                if (optionRadios.length > 0) {
+                    const selectedValue = optionRadios[0].value;
+                    selectedOptionIndex = parseInt(selectedValue, 10) || 0;
+                }
+                const price = getRecordPrice(record, selectedOptionIndex);
+                const amount = price * quantity;
+                const itemName = record.fields.Name || 'Item';
+                showQuickPayModal(paymentOptions, amount, itemName, quantity);
+            });
         }
+
+        // Chip In click - toggles donation meter
+        if (chipInBtn) {
+            const newChipInBtn = chipInBtn.cloneNode(true);
+            chipInBtn.parentNode.replaceChild(newChipInBtn, chipInBtn);
+
+            newChipInBtn.addEventListener('click', () => {
+                if (donationMeter) {
+                    const isVisible = donationMeter.style.display !== 'none';
+                    if (isVisible) {
+                        donationMeter.style.display = 'none';
+                        newChipInBtn.classList.remove('active');
+                    } else {
+                        donationMeter.style.display = 'block';
+                        newChipInBtn.classList.add('active');
+                        setupDonationMeter(record, paymentOptions, itemState);
+                    }
+                }
+            });
+        }
+    } else {
+        // No payment options or is a package - hide action buttons
+        if (priceActionsContainer) priceActionsContainer.classList.add('hidden');
+        if (donationMeter) donationMeter.style.display = 'none';
     }
 
     // Fetch images for all items (including AI-sourced items)
@@ -4876,10 +5040,10 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                         // Update UI reactively
                         updateOptionsUI();
 
-                        // Update Quick Pay button text when option changes
-                        const quickPayBtn = document.getElementById('modal-quick-pay-btn');
-                        if (quickPayBtn && quickPayBtn._updateText) {
-                            quickPayBtn._updateText();
+                        // Update Rapid Pay button text when option changes
+                        const rapidPayBtnRef = document.getElementById('modal-rapid-pay-btn');
+                        if (rapidPayBtnRef && rapidPayBtnRef._updateText) {
+                            rapidPayBtnRef._updateText();
                         }
                     });
                 }
@@ -5581,10 +5745,10 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 input.value = currentValue + 1;
                 input.dispatchEvent(new Event('change', { bubbles: true }));
                 updateProTipVisibility();
-                // Update Quick Pay button text
-                const quickPayBtn = document.getElementById('modal-quick-pay-btn');
-                if (quickPayBtn && quickPayBtn._updateText) {
-                    quickPayBtn._updateText();
+                // Update Rapid Pay button text
+                const rapidPayBtnPlus = document.getElementById('modal-rapid-pay-btn');
+                if (rapidPayBtnPlus && rapidPayBtnPlus._updateText) {
+                    rapidPayBtnPlus._updateText();
                 }
             };
             const handleMinus = (e) => {
@@ -5596,10 +5760,10 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                     input.value = currentValue - 1;
                     input.dispatchEvent(new Event('change', { bubbles: true }));
                     updateProTipVisibility();
-                    // Update Quick Pay button text
-                    const quickPayBtn = document.getElementById('modal-quick-pay-btn');
-                    if (quickPayBtn && quickPayBtn._updateText) {
-                        quickPayBtn._updateText();
+                    // Update Rapid Pay button text
+                    const rapidPayBtnMinus = document.getElementById('modal-rapid-pay-btn');
+                    if (rapidPayBtnMinus && rapidPayBtnMinus._updateText) {
+                        rapidPayBtnMinus._updateText();
                     }
                 }
             };
@@ -6144,6 +6308,10 @@ export async function showGroupDetailModal(group, allRecords) {
 
     // Clear sections not needed for group view
     if (modalItemPrice) modalItemPrice.innerHTML = '';
+    const priceActionsGroup = document.getElementById('modal-price-actions');
+    if (priceActionsGroup) priceActionsGroup.classList.add('hidden');
+    const donationMeterGroup = document.getElementById('modal-donation-meter');
+    if (donationMeterGroup) donationMeterGroup.style.display = 'none';
     if (modalQuantitySelector) modalQuantitySelector.innerHTML = '';
     if (modalNotesContainer) modalNotesContainer.style.display = 'none';
     if (modalCalendarContainer) modalCalendarContainer.innerHTML = '';
