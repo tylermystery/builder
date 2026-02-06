@@ -476,13 +476,17 @@ export async function loadSessionFromAirtable(sessionId) {
                 state.session.archivedItems = new Set(savedState.archivedItems || []);
                 state.session.completedItems = new Set(savedState.completedItems || []);
 
-                // Restore combined items: Object<targetId, Array<sourceIds>> -> Map<targetId, Set<sourceIds>>
+                // Restore combined items: Object<targetId, { sources: Array, hybridData: Object }> -> Map<targetId, { sources: Set, hybridData: Object }>
                 if (savedState.combinedItems && typeof savedState.combinedItems === 'object') {
                     state.session.combinedItems = new Map(
-                        Object.entries(savedState.combinedItems).map(([target, sources]) => [
-                            target,
-                            new Set(Array.isArray(sources) ? sources : [])
-                        ])
+                        Object.entries(savedState.combinedItems).map(([target, entry]) => {
+                            // Handle both old format (plain array) and new format (object with sources + hybridData)
+                            if (Array.isArray(entry)) {
+                                return [target, { sources: new Set(entry), hybridData: null }];
+                            }
+                            const sources = Array.isArray(entry.sources) ? new Set(entry.sources) : new Set();
+                            return [target, { sources, hybridData: entry.hybridData || null }];
+                        })
                     );
                     console.log('[SESSION-LOAD DEBUG] Restored combinedItems:', {
                         size: state.session.combinedItems.size,
@@ -732,13 +736,17 @@ export async function saveSessionToAirtable() {
         planItemOrder: state.session.planItemOrder || [],
         archivedItems: Array.from(state.session.archivedItems || []),
         completedItems: Array.from(state.session.completedItems || []),
-        // Combined items: Map<targetId, Set<sourceIds>> -> Object<targetId, Array<sourceIds>>
+        // Combined items: Map<targetId, { sources: Set, hybridData: Object }> -> Object<targetId, { sources: Array, hybridData: Object }>
         combinedItems: state.session.combinedItems
             ? Object.fromEntries(
-                Array.from(state.session.combinedItems.entries()).map(([target, sources]) => [
-                    target,
-                    Array.from(sources)
-                ])
+                Array.from(state.session.combinedItems.entries()).map(([target, entry]) => {
+                    // Handle both old Set format and new object format
+                    if (entry instanceof Set) {
+                        return [target, { sources: Array.from(entry), hybridData: null }];
+                    }
+                    const sources = entry.sources instanceof Set ? Array.from(entry.sources) : (Array.isArray(entry.sources) ? entry.sources : []);
+                    return [target, { sources, hybridData: entry.hybridData || null }];
+                })
             )
             : {},
         // Related groups (grouped options)

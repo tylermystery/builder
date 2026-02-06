@@ -465,61 +465,6 @@ function ensureDOMElements() {
     mergeDialogSourceName = document.getElementById('merge-source-name');
     mergeDialogTargetName = document.getElementById('merge-target-name');
 
-    // DEBUG: EXTENSIVE MERGE DIALOG INITIALIZATION LOGGING
-    console.log('[MERGE DEBUG] ================================================');
-    console.log('[MERGE DEBUG] MERGE DIALOG ELEMENTS INITIALIZATION');
-    console.log('[MERGE DEBUG] ================================================');
-    console.log('[MERGE DEBUG] mergeOptionsDialog:', mergeOptionsDialog);
-    console.log('[MERGE DEBUG] mergeDialogSourceName:', mergeDialogSourceName);
-    console.log('[MERGE DEBUG] mergeDialogTargetName:', mergeDialogTargetName);
-
-    if (mergeOptionsDialog) {
-        console.log('[MERGE DEBUG] ✓ Merge dialog element FOUND');
-        // Check initial styles
-        const initialStyle = window.getComputedStyle(mergeOptionsDialog);
-        console.log('[MERGE DEBUG] Initial merge dialog computed styles:', {
-            display: initialStyle.display,
-            visibility: initialStyle.visibility,
-            opacity: initialStyle.opacity,
-            zIndex: initialStyle.zIndex,
-            position: initialStyle.position,
-            top: initialStyle.top,
-            left: initialStyle.left,
-            right: initialStyle.right,
-            bottom: initialStyle.bottom,
-            pointerEvents: initialStyle.pointerEvents
-        });
-        // Check inline style
-        console.log('[MERGE DEBUG] Merge dialog inline style.display:', mergeOptionsDialog.style.display);
-        console.log('[MERGE DEBUG] Merge dialog innerHTML length:', mergeOptionsDialog.innerHTML.length);
-
-        // Check child elements
-        const dialogContent = mergeOptionsDialog.querySelector('.merge-options-dialog-content');
-        const optionsContainer = mergeOptionsDialog.querySelector('.merge-dialog-options');
-        const groupBtn = mergeOptionsDialog.querySelector('#merge-option-group');
-        const combineBtn = mergeOptionsDialog.querySelector('#merge-option-combine');
-        const cancelBtn = mergeOptionsDialog.querySelector('#merge-dialog-cancel');
-
-        console.log('[MERGE DEBUG] Child elements check:', {
-            dialogContent: !!dialogContent,
-            optionsContainer: !!optionsContainer,
-            groupBtn: !!groupBtn,
-            combineBtn: !!combineBtn,
-            cancelBtn: !!cancelBtn
-        });
-
-        if (!groupBtn || !combineBtn) {
-            console.error('[MERGE DEBUG] ✗ CRITICAL: Merge option buttons NOT FOUND in dialog!');
-            console.log('[MERGE DEBUG] Dialog HTML:', mergeOptionsDialog.innerHTML.substring(0, 500));
-        }
-    } else {
-        console.error('[MERGE DEBUG] ✗ CRITICAL: mergeOptionsDialog element NOT FOUND!');
-        console.log('[MERGE DEBUG] Checking if element exists in DOM at all...');
-        const checkDOM = document.getElementById('merge-options-dialog');
-        console.log('[MERGE DEBUG] Direct DOM query result:', checkDOM);
-    }
-    console.log('[MERGE DEBUG] ================================================');
-
     // Action tooltip
     dragActionTooltip = document.getElementById('drag-action-tooltip');
     // Radial menu container
@@ -2508,19 +2453,25 @@ async function renderItineraryItem(item, index) {
                 <span>${indicatorLabel}</span>
             </span>
         `;
-        // Build expandable combined sources section
+        // Build expandable combined sources section with uncombine actions
         combinedSourcesHTML = `
             <div class="combined-sources-section">
-                <button class="combined-sources-toggle" data-record-id="${recordId}">
-                    <span>📋</span>
-                    <span>Show ${combinedSources.length} combined item${combinedSources.length > 1 ? 's' : ''}</span>
-                    <span class="toggle-arrow">▼</span>
-                </button>
+                <div class="combined-sources-header">
+                    <button class="combined-sources-toggle" data-record-id="${recordId}">
+                        <span>📋</span>
+                        <span>Show ${combinedSources.length} combined item${combinedSources.length > 1 ? 's' : ''}</span>
+                        <span class="toggle-arrow">▼</span>
+                    </button>
+                    <button class="uncombine-all-btn" data-target-id="${recordId}" title="Split all items apart">
+                        Split All
+                    </button>
+                </div>
                 <div class="combined-sources-list" data-record-id="${recordId}" style="display: none;">
                     ${hybridDesc ? `<div class="combined-hybrid-description">${hybridDesc}</div>` : ''}
                     ${sourceNames.map((sourceName, idx) => `
                         <div class="combined-source-item" data-source-id="${combinedSources[idx]}">
                             <span>• ${sourceName}</span>
+                            <button class="uncombine-source-btn" data-source-id="${combinedSources[idx]}" data-target-id="${recordId}" title="Remove from hybrid">✕</button>
                         </div>
                     `).join('')}
                 </div>
@@ -2536,12 +2487,14 @@ async function renderItineraryItem(item, index) {
         const groupItems = Array.isArray(itemGroup) ? itemGroup : (itemGroup.items || []);
         const groupName = itemGroup.name || `${groupItems.length} Options`;
         const groupDescription = itemGroup.description || '';
+        const groupId = itemGroup.id || '';
         groupClass = 'in-group';
         groupIndicatorHTML = `
-            <span class="item-group-indicator" title="${groupDescription || `Part of: ${groupName}`}">
+            <span class="item-group-indicator" title="${groupDescription || `Part of: ${groupName}`}" data-group-id="${groupId}">
                 <span class="group-icon">📂</span>
                 <span class="group-name">${groupName}</span>
                 <span class="group-count">(${groupItems.length})</span>
+                <button class="leave-group-btn" data-record-id="${recordId}" data-group-id="${groupId}" title="Remove from group">✕</button>
             </span>
         `;
     }
@@ -2724,12 +2677,62 @@ async function renderAllItems() {
 
     itineraryItemsListEl.innerHTML = '<p class="itinerary-loading">Loading items...</p>';
 
-    // Render all items
+    // Build rendering order, grouping related items together with group headers
+    const relatedGroups = state.session.relatedGroups || [];
+    const renderedGroupIds = new Set(); // Track which groups we've already rendered
     const itemsHTML = [];
+
     for (let i = 0; i < combinedList.length; i++) {
-        const html = await renderItineraryItem(combinedList[i], i);
-        if (html) {
-            itemsHTML.push(html);
+        const item = combinedList[i];
+
+        // Check if this item belongs to a related group
+        const itemGroup = relatedGroups.find(g => {
+            const gItems = Array.isArray(g) ? g : (g.items || []);
+            return gItems.includes(item.recordId);
+        });
+
+        if (itemGroup && itemGroup.id && !renderedGroupIds.has(itemGroup.id)) {
+            // First time seeing this group - render group header + all group items together
+            renderedGroupIds.add(itemGroup.id);
+            const groupItems = Array.isArray(itemGroup) ? itemGroup : (itemGroup.items || []);
+            const groupName = itemGroup.name || `${groupItems.length} Options`;
+            const groupDesc = itemGroup.description || '';
+
+            // Group header
+            itemsHTML.push(`
+                <div class="options-group-wrapper" data-group-id="${itemGroup.id}">
+                    <div class="options-group-header" data-group-id="${itemGroup.id}">
+                        <span class="options-group-header-icon">📂</span>
+                        <span class="options-group-header-title">${groupName}</span>
+                        ${groupDesc ? `<span class="options-group-header-desc">${groupDesc}</span>` : ''}
+                        <span class="options-group-header-count">${groupItems.length} options</span>
+                        <button class="options-group-dissolve-btn" data-group-id="${itemGroup.id}" title="Dissolve group">Ungroup</button>
+                    </div>
+                    <div class="options-group-items">
+            `);
+
+            // Render all items in this group in their original order
+            for (const groupItemId of groupItems) {
+                const groupItem = combinedList.find(ci => ci.recordId === groupItemId);
+                if (groupItem) {
+                    const html = await renderItineraryItem(groupItem, i);
+                    if (html) itemsHTML.push(html);
+                }
+            }
+
+            itemsHTML.push(`
+                    </div>
+                </div>
+            `);
+        } else if (itemGroup && itemGroup.id && renderedGroupIds.has(itemGroup.id)) {
+            // Already rendered this group's items in the block above - skip
+            continue;
+        } else {
+            // Ungrouped item - render normally
+            const html = await renderItineraryItem(item, i);
+            if (html) {
+                itemsHTML.push(html);
+            }
         }
     }
 
@@ -2764,6 +2767,7 @@ async function renderAllItems() {
 function initializeCombinedSourcesToggles() {
     if (!itineraryItemsListEl) return;
 
+    // Combined sources expand/collapse toggles
     const toggles = itineraryItemsListEl.querySelectorAll('.combined-sources-toggle');
     toggles.forEach(toggle => {
         toggle.addEventListener('click', (e) => {
@@ -2778,6 +2782,57 @@ function initializeCombinedSourcesToggles() {
                 if (arrow) {
                     arrow.textContent = isHidden ? '▲' : '▼';
                 }
+            }
+        });
+    });
+
+    // Uncombine individual source buttons
+    const uncombineSourceBtns = itineraryItemsListEl.querySelectorAll('.uncombine-source-btn');
+    uncombineSourceBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const sourceId = btn.dataset.sourceId;
+            const targetId = btn.dataset.targetId;
+            if (sourceId && targetId) {
+                uncombineSource(sourceId, targetId);
+            }
+        });
+    });
+
+    // Uncombine all (split all) buttons
+    const uncombineAllBtns = itineraryItemsListEl.querySelectorAll('.uncombine-all-btn');
+    uncombineAllBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const targetId = btn.dataset.targetId;
+            if (targetId) {
+                uncombineAll(targetId);
+            }
+        });
+    });
+
+    // Leave group buttons
+    const leaveGroupBtns = itineraryItemsListEl.querySelectorAll('.leave-group-btn');
+    leaveGroupBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            const recordId = btn.dataset.recordId;
+            const groupId = btn.dataset.groupId;
+            if (recordId && groupId) {
+                removeFromGroup(recordId, groupId);
+            }
+        });
+    });
+
+    // Dissolve group buttons (in group headers)
+    const dissolveBtns = itineraryItemsListEl.querySelectorAll('.options-group-dissolve-btn');
+    dissolveBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const groupId = btn.dataset.groupId;
+            if (groupId) {
+                dissolveGroup(groupId);
             }
         });
     });
@@ -2887,19 +2942,9 @@ async function initializeItemDragDrop() {
             },
 
             onEnd: function(evt) {
-                console.log('[MERGE DEBUG] ============ onEnd START ============');
-
                 try {
-                    // Log state atomically to avoid object spread issues
-                    console.log('[MERGE DEBUG] onEnd - isDragging:', isDragging);
-                    console.log('[MERGE DEBUG] onEnd - radialMenuActive:', radialMenuActive);
-                    console.log('[MERGE DEBUG] onEnd - potentialMergeTarget exists:', !!potentialMergeTarget);
-                    console.log('[MERGE DEBUG] onEnd - potentialMergeTarget.recordId:', potentialMergeTarget ? potentialMergeTarget.recordId : 'null');
-
-                    // *** CRITICAL FIX: Capture ONLY the recordId (string), not the DOM element ***
-                    // This avoids issues with spreading objects containing DOM references
+                    // Capture merge target ID (string) before clearing state
                     const capturedMergeTargetId = potentialMergeTarget ? potentialMergeTarget.recordId : null;
-                    console.log('[MERGE DEBUG] onEnd - CAPTURED mergeTargetId:', capturedMergeTargetId);
 
                     isDragging = false;
                     clearTimeout(dragDelayTimer);
@@ -2907,7 +2952,6 @@ async function initializeItemDragDrop() {
                     // Clear merge hover state - but we've already captured the ID above
                     clearMergeHoverState();
                     deactivateMergeTarget();
-                    console.log('[MERGE DEBUG] onEnd - Merge state cleared, capturedMergeTargetId still:', capturedMergeTargetId);
 
                     // Remove document-level listeners
                     document.removeEventListener('mousemove', handleDragMove);
@@ -2915,8 +2959,6 @@ async function initializeItemDragDrop() {
 
                     // Check if dropped on a radial bucket
                     if (radialMenuActive) {
-                        console.log('[MERGE DEBUG] onEnd - Radial menu is active');
-
                         // Get coordinates from event
                         let clientX, clientY;
                         if (evt.originalEvent?.changedTouches && evt.originalEvent.changedTouches.length > 0) {
@@ -2927,26 +2969,16 @@ async function initializeItemDragDrop() {
                             clientY = evt.originalEvent.clientY;
                         }
 
-                        console.log('[MERGE DEBUG] onEnd - Drop coordinates:', clientX, clientY);
-
                         if (clientX !== undefined && clientY !== undefined) {
-                            // Pass captured merge target ID to the radial handler
-                            console.log('[MERGE DEBUG] onEnd - Calling handleRadialBucketDrop with mergeTargetId:', capturedMergeTargetId);
                             const droppedOnBucket = handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId);
-                            console.log('[MERGE DEBUG] onEnd - handleRadialBucketDrop returned:', droppedOnBucket);
                             if (droppedOnBucket) {
-                                console.log('[MERGE DEBUG] onEnd - Dropped on bucket or merge triggered, returning');
                                 return; // Item was moved to bucket or merged, don't update order
                             }
-                        } else {
-                            console.log('[MERGE DEBUG] onEnd - No valid coordinates, skipping radial drop check');
                         }
                         hideRadialMenu();
                     } else {
-                        console.log('[MERGE DEBUG] onEnd - Legacy bucket path');
                         // Legacy bucket drop check - pass captured merge target ID
                         const droppedOnBucket = checkBucketDrop(evt.originalEvent, evt.item, capturedMergeTargetId);
-                        console.log('[MERGE DEBUG] onEnd - checkBucketDrop returned:', droppedOnBucket);
                         if (droppedOnBucket) {
                             hideDragBuckets();
                             return; // Item was moved to bucket, don't update order
@@ -2956,11 +2988,9 @@ async function initializeItemDragDrop() {
 
                     // Update the order in state
                     updateItemOrder();
-                    console.log('[MERGE DEBUG] ============ onEnd COMPLETE ============');
 
                 } catch (error) {
-                    console.error('[MERGE DEBUG] *** EXCEPTION IN onEnd ***:', error);
-                    console.error('[MERGE DEBUG] Error stack:', error.stack);
+                    console.error('[Presentation] Exception in drag onEnd:', error);
                     // Clean up anyway
                     isDragging = false;
                     hideRadialMenu();
@@ -3623,32 +3653,15 @@ function handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId = null) 
         ? capturedMergeTargetId
         : (capturedMergeTargetId?.recordId || null);
 
-    console.log('[MERGE DEBUG] handleRadialBucketDrop called');
-    console.log('[MERGE DEBUG] - clientX:', clientX, 'clientY:', clientY);
-    console.log('[MERGE DEBUG] - capturedMergeTargetId (raw):', capturedMergeTargetId);
-    console.log('[MERGE DEBUG] - mergeTargetId (normalized):', mergeTargetId);
-    console.log('[MERGE DEBUG] - radialMenuActive:', radialMenuActive);
-    console.log('[MERGE DEBUG] - currentDraggedRecordId:', currentDraggedRecordId);
-
     if (!radialMenuActive || !currentDraggedRecordId) {
-        console.log('[MERGE DEBUG] handleRadialBucketDrop - early exit: radialMenuActive=' + radialMenuActive + ', currentDraggedRecordId=' + currentDraggedRecordId);
         hideRadialMenu();
         return false;
     }
 
     const hoveredBucket = checkRadialBucketHover(clientX, clientY);
-    console.log('[MERGE DEBUG] handleRadialBucketDrop - hoveredBucket:', hoveredBucket?.dataset?.originalBucket || 'none');
 
-    // *** CRITICAL: If no bucket is hovered but we have a merge target, trigger merge ***
+    // If no bucket is hovered but we have a merge target, trigger merge
     if (!hoveredBucket && mergeTargetId) {
-        console.log('[MERGE DEBUG] ================================================');
-        console.log('[MERGE DEBUG] *** MERGE TRIGGERED ***');
-        console.log('[MERGE DEBUG] No bucket hovered, but merge target exists!');
-        console.log('[MERGE DEBUG] Source recordId:', currentDraggedRecordId);
-        console.log('[MERGE DEBUG] Target recordId:', mergeTargetId);
-        console.log('[MERGE DEBUG] Calling openMergeDialog()...');
-        console.log('[MERGE DEBUG] ================================================');
-
         const sourceId = currentDraggedRecordId;
         hideRadialMenu();
         currentDraggedItem = null;
@@ -3658,7 +3671,6 @@ function handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId = null) 
     }
 
     if (!hoveredBucket) {
-        console.log('[MERGE DEBUG] handleRadialBucketDrop - no bucket and no merge target');
         hideRadialMenu();
         return false;
     }
@@ -4385,9 +4397,6 @@ function checkBucketDrop(event, item, capturedMergeTargetId = null) {
         ? capturedMergeTargetId
         : (capturedMergeTargetId?.recordId || null);
 
-    console.log('[MERGE DEBUG] checkBucketDrop called');
-    console.log('[MERGE DEBUG] - capturedMergeTargetId (raw):', capturedMergeTargetId);
-    console.log('[MERGE DEBUG] - mergeTargetId (normalized):', mergeTargetId);
     if (!dragBucketsEl) return false;
 
     const clientX = event?.changedTouches ? event.changedTouches[0].clientX : event?.clientX;
@@ -4495,21 +4504,9 @@ function checkBucketDrop(event, item, capturedMergeTargetId = null) {
     }
 
     // Check for merge (drop on another item)
-    console.log('[MERGE DEBUG] Checking for merge drop...');
-    console.log('[MERGE DEBUG] mergeTargetId:', mergeTargetId);
-
-    // *** CRITICAL: Use mergeTargetId (captured before clearing) ***
     if (mergeTargetId) {
-        console.log('[MERGE DEBUG] ================================================');
-        console.log('[MERGE DEBUG] *** MERGE TRIGGERED from legacy path ***');
-        console.log('[MERGE DEBUG] Source recordId:', recordId);
-        console.log('[MERGE DEBUG] Target recordId:', mergeTargetId);
-        console.log('[MERGE DEBUG] Calling openMergeDialog()...');
-        console.log('[MERGE DEBUG] ================================================');
         openMergeDialog(recordId, mergeTargetId);
         return true;
-    } else {
-        console.log('[MERGE DEBUG] No merge target detected');
     }
 
     return false;
@@ -4837,24 +4834,12 @@ let pendingMergeEstimation = null;
 
 // Open merge dialog for two items
 async function openMergeDialog(sourceRecordId, targetRecordId) {
-    console.log('[MERGE DEBUG] ================================================');
-    console.log('[MERGE DEBUG] openMergeDialog() STARTING');
-    console.log('[MERGE DEBUG] Source Record ID:', sourceRecordId);
-    console.log('[MERGE DEBUG] Target Record ID:', targetRecordId);
-    console.log('[MERGE DEBUG] ================================================');
-
-    if (!sourceRecordId || !targetRecordId) {
-        console.error('[MERGE DEBUG] ✗ ABORTING - Missing record IDs!', { sourceRecordId, targetRecordId });
-        return;
-    }
+    if (!sourceRecordId || !targetRecordId) return;
 
     const sourceRecord = state.records.all.find(r => r.id === sourceRecordId);
     const targetRecord = state.records.all.find(r => r.id === targetRecordId);
     const sourceName = sourceRecord?.fields?.Name || 'Source item';
     const targetName = targetRecord?.fields?.Name || 'Target item';
-
-    console.log('[MERGE DEBUG] Source Record:', sourceRecord?.fields?.Name);
-    console.log('[MERGE DEBUG] Target Record:', targetRecord?.fields?.Name);
 
     // Store pending merge info
     pendingMergeSource = sourceRecordId;
@@ -4862,323 +4847,45 @@ async function openMergeDialog(sourceRecordId, targetRecordId) {
     pendingMergeEstimation = null;
 
     // Update dialog content with item names
-    console.log('[MERGE DEBUG] Updating dialog content...');
-    console.log('[MERGE DEBUG] mergeDialogSourceName element:', mergeDialogSourceName);
-    console.log('[MERGE DEBUG] mergeDialogTargetName element:', mergeDialogTargetName);
+    if (mergeDialogSourceName) mergeDialogSourceName.textContent = sourceName;
+    if (mergeDialogTargetName) mergeDialogTargetName.textContent = targetName;
 
-    if (mergeDialogSourceName) {
-        mergeDialogSourceName.textContent = sourceName;
-        console.log('[MERGE DEBUG] ✓ Set source name:', sourceName);
-    } else {
-        console.error('[MERGE DEBUG] ✗ mergeDialogSourceName NOT FOUND!');
-    }
-    if (mergeDialogTargetName) {
-        mergeDialogTargetName.textContent = targetName;
-        console.log('[MERGE DEBUG] ✓ Set target name:', targetName);
-    } else {
-        console.error('[MERGE DEBUG] ✗ mergeDialogTargetName NOT FOUND!');
-    }
+    // Reset tabs to default (Options tab active)
+    const optionsTab = document.getElementById('merge-tab-options');
+    const hybridTab = document.getElementById('merge-tab-hybrid');
+    const optionsContent = document.getElementById('merge-tab-content-options');
+    const hybridContent = document.getElementById('merge-tab-content-hybrid');
 
-    // Reset estimation preview
-    const estimationPreview = document.getElementById('merge-estimation-preview');
-    const estimationLoading = estimationPreview?.querySelector('.merge-estimation-loading');
-    const estimationResult = estimationPreview?.querySelector('.merge-estimation-result');
-    const optionsSection = estimationPreview?.querySelector('.estimation-options');
-    const hybridSection = estimationPreview?.querySelector('.estimation-hybrid');
+    if (optionsTab) optionsTab.classList.add('active');
+    if (hybridTab) hybridTab.classList.remove('active');
+    if (optionsContent) optionsContent.classList.add('active');
+    if (hybridContent) hybridContent.classList.remove('active');
 
-    console.log('[MERGE DEBUG] Estimation preview elements:', {
-        estimationPreview: !!estimationPreview,
-        estimationLoading: !!estimationLoading,
-        estimationResult: !!estimationResult,
-        optionsSection: !!optionsSection,
-        hybridSection: !!hybridSection
+    // Reset both estimation panels to loading state
+    ['options', 'hybrid'].forEach(type => {
+        const panel = document.getElementById(`merge-estimation-${type}`);
+        if (panel) {
+            const loading = panel.querySelector('.merge-estimation-loading');
+            const result = panel.querySelector('.merge-estimation-result');
+            if (loading) loading.style.display = 'flex';
+            if (result) result.style.display = 'none';
+        }
     });
 
-    if (estimationPreview) {
-        estimationPreview.style.display = 'none';
-    }
-    if (estimationLoading) {
-        estimationLoading.style.display = 'flex';
-    }
-    if (estimationResult) {
-        estimationResult.style.display = 'none';
-    }
-    if (optionsSection) {
-        optionsSection.style.display = 'none';
-    }
-    if (hybridSection) {
-        hybridSection.style.display = 'none';
-    }
-
-    // Show the merge options dialog
-    console.log('[MERGE DEBUG] ================================================');
-    console.log('[MERGE DEBUG] ATTEMPTING TO SHOW MERGE DIALOG');
-    console.log('[MERGE DEBUG] ================================================');
-    console.log('[MERGE DEBUG] mergeOptionsDialog variable:', mergeOptionsDialog);
-
-    // Re-fetch from DOM in case it wasn't cached properly
-    const dialogFromDOM = document.getElementById('merge-options-dialog');
-    console.log('[MERGE DEBUG] Dialog element from DOM:', dialogFromDOM);
-
-    if (mergeOptionsDialog) {
-        // DEBUG: Get computed styles BEFORE showing
-        const computedBefore = window.getComputedStyle(mergeOptionsDialog);
-        console.log('[MERGE DEBUG] BEFORE showing - Computed styles:', {
-            display: computedBefore.display,
-            visibility: computedBefore.visibility,
-            opacity: computedBefore.opacity,
-            zIndex: computedBefore.zIndex,
-            position: computedBefore.position,
-            pointerEvents: computedBefore.pointerEvents
-        });
-
-        // Show the dialog
-        mergeOptionsDialog.style.display = 'flex';
-        console.log('[MERGE DEBUG] ✓ Set display to flex');
-
-        // DEBUG: Get computed styles AFTER showing
-        const computedAfter = window.getComputedStyle(mergeOptionsDialog);
-        console.log('[MERGE DEBUG] AFTER showing - Computed styles:', {
-            display: computedAfter.display,
-            visibility: computedAfter.visibility,
-            opacity: computedAfter.opacity,
-            zIndex: computedAfter.zIndex,
-            position: computedAfter.position,
-            pointerEvents: computedAfter.pointerEvents
-        });
-
-        // DEBUG: Check bounding rect
-        const rect = mergeOptionsDialog.getBoundingClientRect();
-        console.log('[MERGE DEBUG] Dialog bounding rect:', {
-            top: rect.top,
-            left: rect.left,
-            width: rect.width,
-            height: rect.height,
-            right: rect.right,
-            bottom: rect.bottom
-        });
-
-        // DEBUG: Check parent elements
-        console.log('[MERGE DEBUG] Parent element:', mergeOptionsDialog.parentElement?.id || mergeOptionsDialog.parentElement?.className);
-        console.log('[MERGE DEBUG] Parent tagName:', mergeOptionsDialog.parentElement?.tagName);
-
-        // DEBUG: Check if any parent has overflow:hidden or visibility issues
-        let parent = mergeOptionsDialog.parentElement;
-        let parentChain = [];
-        while (parent && parentChain.length < 10) {
-            const parentStyle = window.getComputedStyle(parent);
-            parentChain.push({
-                tag: parent.tagName,
-                id: parent.id,
-                class: parent.className?.substring?.(0, 50),
-                overflow: parentStyle.overflow,
-                visibility: parentStyle.visibility,
-                display: parentStyle.display,
-                zIndex: parentStyle.zIndex
-            });
-            parent = parent.parentElement;
-        }
-        console.log('[MERGE DEBUG] Parent chain styles:', parentChain);
-
-        // DEBUG: Check dialog content
-        const dialogContent = mergeOptionsDialog.querySelector('.merge-options-dialog-content');
-        if (dialogContent) {
-            const contentStyle = window.getComputedStyle(dialogContent);
-            console.log('[MERGE DEBUG] Dialog content computed styles:', {
-                display: contentStyle.display,
-                visibility: contentStyle.visibility,
-                opacity: contentStyle.opacity,
-                width: contentStyle.width,
-                height: contentStyle.height
-            });
-        }
-
-        // DEBUG: Check merge option buttons visibility
-        const groupBtn = document.getElementById('merge-option-group');
-        const combineBtn = document.getElementById('merge-option-combine');
-        if (groupBtn) {
-            const groupStyle = window.getComputedStyle(groupBtn);
-            console.log('[MERGE DEBUG] Group (As Options) button styles:', {
-                display: groupStyle.display,
-                visibility: groupStyle.visibility,
-                opacity: groupStyle.opacity,
-                width: groupStyle.width,
-                height: groupStyle.height,
-                position: groupStyle.position
-            });
-            console.log('[MERGE DEBUG] Group button bounding rect:', groupBtn.getBoundingClientRect());
-        }
-        if (combineBtn) {
-            const combineStyle = window.getComputedStyle(combineBtn);
-            console.log('[MERGE DEBUG] Combine (As Hybrid) button styles:', {
-                display: combineStyle.display,
-                visibility: combineStyle.visibility,
-                opacity: combineStyle.opacity,
-                width: combineStyle.width,
-                height: combineStyle.height,
-                position: combineStyle.position
-            });
-            console.log('[MERGE DEBUG] Combine button bounding rect:', combineBtn.getBoundingClientRect());
-        }
-
-        // DEBUG: Check merge-dialog-options container
-        const optionsContainer = mergeOptionsDialog.querySelector('.merge-dialog-options');
-        if (optionsContainer) {
-            const optContainerStyle = window.getComputedStyle(optionsContainer);
-            console.log('[MERGE DEBUG] Options container (.merge-dialog-options) styles:', {
-                display: optContainerStyle.display,
-                visibility: optContainerStyle.visibility,
-                opacity: optContainerStyle.opacity,
-                flexDirection: optContainerStyle.flexDirection,
-                gap: optContainerStyle.gap
-            });
-            console.log('[MERGE DEBUG] Options container children:', optionsContainer.children.length);
-        } else {
-            console.error('[MERGE DEBUG] ✗ .merge-dialog-options container NOT FOUND!');
-        }
-
-    } else {
-        console.error('[MERGE DEBUG] ✗ mergeOptionsDialog is NULL/UNDEFINED - DIALOG CANNOT BE SHOWN!');
-        console.log('[MERGE DEBUG] Attempting to use DOM element directly...');
-        if (dialogFromDOM) {
-            dialogFromDOM.style.display = 'flex';
-            console.log('[MERGE DEBUG] ✓ Used DOM element directly to set display');
-        } else {
-            console.error('[MERGE DEBUG] ✗ Dialog element also not found in DOM!');
-        }
+    // Show the dialog
+    const dialog = mergeOptionsDialog || document.getElementById('merge-options-dialog');
+    if (dialog) {
+        dialog.style.display = 'flex';
     }
 
     log('Presentation', `Merge dialog opened for ${sourceRecordId} and ${targetRecordId}`);
-
-    // DEBUG: Comprehensive layering diagnostic
-    console.log('[MERGE DEBUG] ================================================');
-    console.log('[MERGE DEBUG] COMPREHENSIVE LAYERING DIAGNOSTIC');
-    console.log('[MERGE DEBUG] ================================================');
-
-    // Check all elements with high z-index that might overlap
-    const highZIndexElements = [];
-    document.querySelectorAll('*').forEach(el => {
-        const style = window.getComputedStyle(el);
-        const zIndex = parseInt(style.zIndex);
-        if (!isNaN(zIndex) && zIndex > 1000) {
-            const rect = el.getBoundingClientRect();
-            highZIndexElements.push({
-                id: el.id,
-                class: el.className?.substring?.(0, 40),
-                zIndex: zIndex,
-                display: style.display,
-                visibility: style.visibility,
-                rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
-            });
-        }
-    });
-    console.log('[MERGE DEBUG] Elements with z-index > 1000:', highZIndexElements);
-
-    // Check for any fixed/absolute positioned elements that might overlap
-    const overlappingElements = [];
-    if (mergeOptionsDialog) {
-        const dialogRect = mergeOptionsDialog.getBoundingClientRect();
-        document.querySelectorAll('*').forEach(el => {
-            if (el === mergeOptionsDialog) return;
-            const style = window.getComputedStyle(el);
-            if (style.position === 'fixed' || style.position === 'absolute') {
-                const elRect = el.getBoundingClientRect();
-                // Check if element overlaps with dialog and is visible
-                if (style.display !== 'none' && style.visibility !== 'hidden' &&
-                    elRect.width > 0 && elRect.height > 0 &&
-                    !(elRect.right < dialogRect.left || elRect.left > dialogRect.right ||
-                      elRect.bottom < dialogRect.top || elRect.top > dialogRect.bottom)) {
-                    overlappingElements.push({
-                        id: el.id,
-                        class: el.className?.substring?.(0, 40),
-                        zIndex: style.zIndex,
-                        position: style.position
-                    });
-                }
-            }
-        });
-    }
-    console.log('[MERGE DEBUG] Overlapping fixed/absolute elements:', overlappingElements);
-
-    // Verify buttons are clickable using elementFromPoint
-    setTimeout(() => {
-        console.log('[MERGE DEBUG] ================================================');
-        console.log('[MERGE DEBUG] CLICKABILITY TEST (after 100ms)');
-        console.log('[MERGE DEBUG] ================================================');
-
-        const groupBtn = document.getElementById('merge-option-group');
-        const combineBtn = document.getElementById('merge-option-combine');
-
-        if (groupBtn) {
-            const groupRect = groupBtn.getBoundingClientRect();
-            const groupCenterX = groupRect.left + groupRect.width / 2;
-            const groupCenterY = groupRect.top + groupRect.height / 2;
-            const elementAtGroupCenter = document.elementFromPoint(groupCenterX, groupCenterY);
-            console.log('[MERGE DEBUG] "As Options" button center:', { x: groupCenterX, y: groupCenterY });
-            console.log('[MERGE DEBUG] Element at "As Options" center:', elementAtGroupCenter?.id || elementAtGroupCenter?.className?.substring?.(0, 50));
-            console.log('[MERGE DEBUG] Is it the button or child?', elementAtGroupCenter === groupBtn || groupBtn.contains(elementAtGroupCenter));
-        }
-
-        if (combineBtn) {
-            const combineRect = combineBtn.getBoundingClientRect();
-            const combineCenterX = combineRect.left + combineRect.width / 2;
-            const combineCenterY = combineRect.top + combineRect.height / 2;
-            const elementAtCombineCenter = document.elementFromPoint(combineCenterX, combineCenterY);
-            console.log('[MERGE DEBUG] "As Hybrid" button center:', { x: combineCenterX, y: combineCenterY });
-            console.log('[MERGE DEBUG] Element at "As Hybrid" center:', elementAtCombineCenter?.id || elementAtCombineCenter?.className?.substring?.(0, 50));
-            console.log('[MERGE DEBUG] Is it the button or child?', elementAtCombineCenter === combineBtn || combineBtn.contains(elementAtCombineCenter));
-        }
-
-        // Check dialog center
-        if (mergeOptionsDialog) {
-            const dialogRect = mergeOptionsDialog.getBoundingClientRect();
-            const dialogCenterX = dialogRect.left + dialogRect.width / 2;
-            const dialogCenterY = dialogRect.top + dialogRect.height / 2;
-            const elementAtDialogCenter = document.elementFromPoint(dialogCenterX, dialogCenterY);
-            console.log('[MERGE DEBUG] Dialog center:', { x: dialogCenterX, y: dialogCenterY });
-            console.log('[MERGE DEBUG] Element at dialog center:', elementAtDialogCenter?.id || elementAtDialogCenter?.className?.substring?.(0, 50));
-        }
-
-        console.log('[MERGE DEBUG] ================================================');
-    }, 100);
-
-    console.log('[MERGE DEBUG] ================================================');
-    console.log('[MERGE DEBUG] openMergeDialog() COMPLETE');
-    console.log('[MERGE DEBUG] ================================================');
 
     // Fetch AI estimation in background
     fetchMergeEstimation(sourceRecord, targetRecord);
 }
 
-// Fetch AI estimation for merge
+// Fetch AI estimation for merge - updates both tab panels
 async function fetchMergeEstimation(sourceRecord, targetRecord) {
-    console.log('[MERGE DEBUG] fetchMergeEstimation() STARTING');
-
-    const estimationPreview = document.getElementById('merge-estimation-preview');
-    const estimationLoading = estimationPreview?.querySelector('.merge-estimation-loading');
-    const estimationResult = estimationPreview?.querySelector('.merge-estimation-result');
-    const optionsSection = estimationPreview?.querySelector('.estimation-options');
-    const hybridSection = estimationPreview?.querySelector('.estimation-hybrid');
-
-    console.log('[MERGE DEBUG] Estimation elements found:', {
-        estimationPreview: !!estimationPreview,
-        estimationLoading: !!estimationLoading,
-        estimationResult: !!estimationResult,
-        optionsSection: !!optionsSection,
-        hybridSection: !!hybridSection
-    });
-
-    if (!estimationPreview) {
-        console.warn('[MERGE DEBUG] estimationPreview not found - skipping estimation fetch');
-        return;
-    }
-
-    // Show loading state
-    estimationPreview.style.display = 'block';
-    if (estimationLoading) estimationLoading.style.display = 'flex';
-    if (estimationResult) estimationResult.style.display = 'none';
-    console.log('[MERGE DEBUG] Loading state shown');
-
     const item1 = {
         name: sourceRecord?.fields?.Name || 'Item',
         description: sourceRecord?.fields?.Description || '',
@@ -5193,8 +4900,6 @@ async function fetchMergeEstimation(sourceRecord, targetRecord) {
         price: targetRecord?.fields?.Price || ''
     };
 
-    console.log('[MERGE DEBUG] Fetching estimations for items:', { item1: item1.name, item2: item2.name });
-
     try {
         // Fetch both estimations in parallel
         const [optionsResult, hybridResult] = await Promise.all([
@@ -5202,53 +4907,91 @@ async function fetchMergeEstimation(sourceRecord, targetRecord) {
             fetchEstimation(item1, item2, 'hybrid')
         ]);
 
-        console.log('[MERGE DEBUG] Estimation results received:', { optionsResult, hybridResult });
-
         // Store estimation for use when confirming merge
         pendingMergeEstimation = {
             options: optionsResult?.estimation || null,
             hybrid: hybridResult?.estimation || null
         };
-        console.log('[MERGE DEBUG] pendingMergeEstimation stored:', pendingMergeEstimation);
 
-        // Update UI with results
-        if (estimationLoading) estimationLoading.style.display = 'none';
-        if (estimationResult) estimationResult.style.display = 'flex';
-        console.log('[MERGE DEBUG] Estimation results UI shown');
+        // Update Options tab panel
+        const optionsPanel = document.getElementById('merge-estimation-options');
+        if (optionsPanel) {
+            const loading = optionsPanel.querySelector('.merge-estimation-loading');
+            const result = optionsPanel.querySelector('.merge-estimation-result');
+            if (loading) loading.style.display = 'none';
+            if (result) result.style.display = 'flex';
 
-        // Update options section
-        if (optionsResult?.estimation && optionsSection) {
-            const categoryEl = document.getElementById('estimation-category');
-            const descEl = document.getElementById('estimation-description');
-            if (categoryEl) categoryEl.textContent = optionsResult.estimation.categoryName || 'Options';
-            if (descEl) descEl.textContent = optionsResult.estimation.categoryDescription || '';
-            optionsSection.style.display = 'flex';
-            console.log('[MERGE DEBUG] Options section updated');
+            if (optionsResult?.estimation) {
+                const categoryEl = document.getElementById('estimation-category');
+                const descEl = document.getElementById('estimation-description');
+                if (categoryEl) categoryEl.textContent = optionsResult.estimation.categoryName || 'Options';
+                if (descEl) descEl.textContent = optionsResult.estimation.categoryDescription || '';
+
+                // Show confidence
+                const confidenceField = document.getElementById('estimation-options-confidence-field');
+                const confidenceFill = document.getElementById('estimation-options-confidence');
+                if (confidenceField && optionsResult.estimation.confidence) {
+                    confidenceField.style.display = 'flex';
+                    const pct = Math.round(optionsResult.estimation.confidence * 100);
+                    if (confidenceFill) {
+                        confidenceFill.style.width = pct + '%';
+                        confidenceFill.style.background = pct >= 70 ? '#4CAF50' : pct >= 40 ? '#FF9800' : '#f44336';
+                    }
+                }
+            }
         }
 
-        // Update hybrid section
-        if (hybridResult?.estimation && hybridSection) {
-            const nameEl = document.getElementById('estimation-hybrid-name');
-            const descEl = document.getElementById('estimation-hybrid-description');
-            if (nameEl) nameEl.textContent = hybridResult.estimation.hybridName || 'Combined Idea';
-            if (descEl) descEl.textContent = hybridResult.estimation.hybridDescription || '';
-            hybridSection.style.display = 'flex';
-            console.log('[MERGE DEBUG] Hybrid section updated');
-        }
+        // Update Hybrid tab panel
+        const hybridPanel = document.getElementById('merge-estimation-hybrid');
+        if (hybridPanel) {
+            const loading = hybridPanel.querySelector('.merge-estimation-loading');
+            const result = hybridPanel.querySelector('.merge-estimation-result');
+            if (loading) loading.style.display = 'none';
+            if (result) result.style.display = 'flex';
 
-        console.log('[MERGE DEBUG] fetchMergeEstimation() COMPLETE SUCCESS');
+            if (hybridResult?.estimation) {
+                const nameEl = document.getElementById('estimation-hybrid-name');
+                const descEl = document.getElementById('estimation-hybrid-description');
+                if (nameEl) nameEl.textContent = hybridResult.estimation.hybridName || 'Combined Idea';
+                if (descEl) descEl.textContent = hybridResult.estimation.hybridDescription || '';
+
+                // Show reasoning
+                const reasoningField = document.getElementById('estimation-hybrid-reasoning-field');
+                const reasoningEl = document.getElementById('estimation-hybrid-reasoning');
+                if (reasoningField && hybridResult.estimation.reasoning) {
+                    reasoningField.style.display = 'flex';
+                    if (reasoningEl) reasoningEl.textContent = hybridResult.estimation.reasoning;
+                }
+
+                // Show confidence
+                const confidenceField = document.getElementById('estimation-hybrid-confidence-field');
+                const confidenceFill = document.getElementById('estimation-hybrid-confidence');
+                if (confidenceField && hybridResult.estimation.confidence) {
+                    confidenceField.style.display = 'flex';
+                    const pct = Math.round(hybridResult.estimation.confidence * 100);
+                    if (confidenceFill) {
+                        confidenceFill.style.width = pct + '%';
+                        confidenceFill.style.background = pct >= 70 ? '#4CAF50' : pct >= 40 ? '#FF9800' : '#f44336';
+                    }
+                }
+            }
+        }
 
     } catch (error) {
-        console.error('[MERGE DEBUG] Error fetching merge estimation:', error);
-        console.log('[MERGE DEBUG] Hiding estimation preview due to error - merge buttons should still work');
-        // Hide estimation preview on error - merge will still work with defaults
-        if (estimationPreview) estimationPreview.style.display = 'none';
+        console.error('[Presentation] Error fetching merge estimation:', error);
+        // Hide loading spinners on error
+        ['options', 'hybrid'].forEach(type => {
+            const panel = document.getElementById(`merge-estimation-${type}`);
+            if (panel) {
+                const loading = panel.querySelector('.merge-estimation-loading');
+                if (loading) loading.style.display = 'none';
+            }
+        });
     }
 }
 
 // Helper to fetch a single estimation
 async function fetchEstimation(item1, item2, mergeType) {
-    console.log(`[MERGE DEBUG] fetchEstimation() starting for ${mergeType}`);
     try {
         const response = await fetch('/.netlify/functions/estimate-merge', {
             method: 'POST',
@@ -5256,45 +4999,27 @@ async function fetchEstimation(item1, item2, mergeType) {
             body: JSON.stringify({ item1, item2, mergeType })
         });
 
-        if (!response.ok) {
-            console.warn(`[MERGE DEBUG] Estimation fetch failed for ${mergeType}: HTTP ${response.status}`);
-            return null;
-        }
-
-        const data = await response.json();
-        console.log(`[MERGE DEBUG] fetchEstimation() success for ${mergeType}:`, data);
-        return data;
+        if (!response.ok) return null;
+        return await response.json();
     } catch (error) {
-        console.error(`[MERGE DEBUG] Error fetching ${mergeType} estimation:`, error);
+        console.warn(`[Presentation] Estimation fetch failed for ${mergeType}:`, error.message);
         return null;
     }
 }
 
 // Close the merge options dialog
 function closeMergeDialog() {
-    console.log('[MERGE DEBUG] closeMergeDialog() called');
     if (mergeOptionsDialog) {
         mergeOptionsDialog.style.display = 'none';
-        console.log('[MERGE DEBUG] ✓ Dialog display set to none');
-    } else {
-        console.warn('[MERGE DEBUG] mergeOptionsDialog is null in closeMergeDialog');
     }
     pendingMergeSource = null;
     pendingMergeTarget = null;
     pendingMergeEstimation = null;
-    console.log('[MERGE DEBUG] Pending merge state cleared');
 }
 
 // Handle merge option: Combine into single idea (As Hybrid)
 async function handleMergeCombine() {
-    console.log('[MERGE DEBUG] ================================================');
-    console.log('[MERGE DEBUG] handleMergeCombine() - "As Hybrid" button clicked!');
-    console.log('[MERGE DEBUG] pendingMergeSource:', pendingMergeSource);
-    console.log('[MERGE DEBUG] pendingMergeTarget:', pendingMergeTarget);
-    console.log('[MERGE DEBUG] ================================================');
-
     if (!pendingMergeSource || !pendingMergeTarget) {
-        console.warn('[MERGE DEBUG] No pending merge - closing dialog');
         closeMergeDialog();
         return;
     }
@@ -5302,7 +5027,6 @@ async function handleMergeCombine() {
     const sourceId = pendingMergeSource;
     const targetId = pendingMergeTarget;
     const hybridEstimation = pendingMergeEstimation?.hybrid || null;
-    console.log('[MERGE DEBUG] Proceeding with hybrid merge:', { sourceId, targetId, hybridEstimation });
     closeMergeDialog();
 
     await combineItemsIntoOne(sourceId, targetId, hybridEstimation);
@@ -5310,14 +5034,7 @@ async function handleMergeCombine() {
 
 // Handle merge option: Group as options/category (As Options)
 async function handleMergeGroup() {
-    console.log('[MERGE DEBUG] ================================================');
-    console.log('[MERGE DEBUG] handleMergeGroup() - "As Options" button clicked!');
-    console.log('[MERGE DEBUG] pendingMergeSource:', pendingMergeSource);
-    console.log('[MERGE DEBUG] pendingMergeTarget:', pendingMergeTarget);
-    console.log('[MERGE DEBUG] ================================================');
-
     if (!pendingMergeSource || !pendingMergeTarget) {
-        console.warn('[MERGE DEBUG] No pending merge - closing dialog');
         closeMergeDialog();
         return;
     }
@@ -5325,7 +5042,6 @@ async function handleMergeGroup() {
     const sourceId = pendingMergeSource;
     const targetId = pendingMergeTarget;
     const optionsEstimation = pendingMergeEstimation?.options || null;
-    console.log('[MERGE DEBUG] Proceeding with options group:', { sourceId, targetId, optionsEstimation });
     closeMergeDialog();
 
     await createRelatedCategory(sourceId, targetId, optionsEstimation);
@@ -5333,8 +5049,6 @@ async function handleMergeGroup() {
 
 // Combine two items into a single cohesive idea (As Hybrid)
 async function combineItemsIntoOne(sourceRecordId, targetRecordId, hybridEstimation = null) {
-    console.log('[Presentation DEBUG] combineItemsIntoOne called:', sourceRecordId, targetRecordId, hybridEstimation);
-
     // Initialize combinedItems if not exists
     // Structure: Map<targetRecordId, { sources: Set<sourceRecordIds>, hybridData: Object|null }>
     if (!state.session.combinedItems) {
@@ -5446,8 +5160,6 @@ async function combineItemsIntoOne(sourceRecordId, targetRecordId, hybridEstimat
 
 // Create a related category linking two items (Group as Options)
 async function createRelatedCategory(recordId1, recordId2, optionsEstimation = null) {
-    console.log('[Presentation DEBUG] createRelatedCategory called:', recordId1, recordId2, optionsEstimation);
-
     // Initialize relatedGroups if not exists
     // Structure: Array of { id: string, name: string, description: string, items: string[] }
     if (!state.session.relatedGroups) {
@@ -5663,88 +5375,150 @@ function getItemGroup(recordId) {
     });
 }
 
+// Uncombine a single source item from a hybrid merge
+async function uncombineSource(sourceId, targetId) {
+    if (!state.session.combinedItems) return;
+
+    const entry = state.session.combinedItems.get(targetId);
+    if (!entry) return;
+
+    const sources = getSourcesFromEntry(entry);
+    if (!sources.has(sourceId)) return;
+
+    sources.delete(sourceId);
+
+    const sourceRecord = state.records.all.find(r => r.id === sourceId);
+    const sourceName = sourceRecord?.fields?.Name || 'Item';
+
+    // If no more sources, remove the combined entry entirely
+    if (sources.size === 0) {
+        state.session.combinedItems.delete(targetId);
+    }
+
+    showToast(`"${sourceName}" separated from hybrid`, 'success');
+
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+    triggerSave();
+}
+
+// Uncombine all sources from a hybrid merge (split all apart)
+async function uncombineAll(targetId) {
+    if (!state.session.combinedItems) return;
+
+    state.session.combinedItems.delete(targetId);
+
+    showToast('Hybrid split apart', 'success');
+
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+    triggerSave();
+}
+
+// Remove an item from its related group
+async function removeFromGroup(recordId, groupId) {
+    if (!state.session.relatedGroups) return;
+
+    const groupIndex = state.session.relatedGroups.findIndex(g => g.id === groupId);
+    if (groupIndex === -1) return;
+
+    const group = state.session.relatedGroups[groupIndex];
+    const items = Array.isArray(group) ? group : (group.items || []);
+    const itemIndex = items.indexOf(recordId);
+    if (itemIndex === -1) return;
+
+    items.splice(itemIndex, 1);
+
+    const record = state.records.all.find(r => r.id === recordId);
+    const itemName = record?.fields?.Name || 'Item';
+
+    // If group has fewer than 2 items, dissolve it
+    if (items.length < 2) {
+        state.session.relatedGroups.splice(groupIndex, 1);
+        showToast(`"${itemName}" removed, group dissolved`, 'success');
+    } else {
+        if (!Array.isArray(group)) {
+            group.items = items;
+        }
+        showToast(`"${itemName}" removed from group`, 'success');
+    }
+
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+    triggerSave();
+}
+
+// Dissolve an entire related group (ungroup all items)
+async function dissolveGroup(groupId) {
+    if (!state.session.relatedGroups) return;
+
+    const groupIndex = state.session.relatedGroups.findIndex(g => g.id === groupId);
+    if (groupIndex === -1) return;
+
+    const group = state.session.relatedGroups[groupIndex];
+    const groupName = group.name || 'Group';
+    state.session.relatedGroups.splice(groupIndex, 1);
+
+    showToast(`"${groupName}" dissolved`, 'success');
+
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+    triggerSave();
+}
+
 // Initialize merge dialog event listeners
 function initializeMergeDialogListeners() {
-    console.log('[MERGE DEBUG] ========================================');
-    console.log('[MERGE DEBUG] initializeMergeDialogListeners() STARTING');
-    console.log('[MERGE DEBUG] ========================================');
-
-    // Debug: Check if mergeOptionsDialog is available
-    console.log('[MERGE DEBUG] mergeOptionsDialog variable:', mergeOptionsDialog);
-    console.log('[MERGE DEBUG] mergeOptionsDialog from DOM:', document.getElementById('merge-options-dialog'));
-
     // Close button
     const closeBtn = document.getElementById('merge-dialog-close');
-    console.log('[MERGE DEBUG] Close button element:', closeBtn);
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeMergeDialog);
-        console.log('[MERGE DEBUG] ✓ Close button listener attached');
-    } else {
-        console.error('[MERGE DEBUG] ✗ Close button NOT FOUND!');
-    }
+    if (closeBtn) closeBtn.addEventListener('click', closeMergeDialog);
 
     // Cancel button
     const cancelBtn = document.getElementById('merge-dialog-cancel');
-    console.log('[MERGE DEBUG] Cancel button element:', cancelBtn);
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', closeMergeDialog);
-        console.log('[MERGE DEBUG] ✓ Cancel button listener attached');
-    } else {
-        console.error('[MERGE DEBUG] ✗ Cancel button NOT FOUND!');
-    }
+    if (cancelBtn) cancelBtn.addEventListener('click', closeMergeDialog);
 
     // Combine option button (As Hybrid)
     const combineBtn = document.getElementById('merge-option-combine');
-    console.log('[MERGE DEBUG] Combine button element:', combineBtn);
-    if (combineBtn) {
-        combineBtn.addEventListener('click', handleMergeCombine);
-        console.log('[MERGE DEBUG] ✓ Combine (As Hybrid) button listener attached');
-    } else {
-        console.error('[MERGE DEBUG] ✗ Combine (As Hybrid) button NOT FOUND!');
-    }
+    if (combineBtn) combineBtn.addEventListener('click', handleMergeCombine);
 
     // Group option button (As Options)
     const groupBtn = document.getElementById('merge-option-group');
-    console.log('[MERGE DEBUG] Group button element:', groupBtn);
-    if (groupBtn) {
-        groupBtn.addEventListener('click', handleMergeGroup);
-        console.log('[MERGE DEBUG] ✓ Group (As Options) button listener attached');
-    } else {
-        console.error('[MERGE DEBUG] ✗ Group (As Options) button NOT FOUND!');
+    if (groupBtn) groupBtn.addEventListener('click', handleMergeGroup);
+
+    // Tab switching
+    const optionsTab = document.getElementById('merge-tab-options');
+    const hybridTab = document.getElementById('merge-tab-hybrid');
+    const optionsContent = document.getElementById('merge-tab-content-options');
+    const hybridContent = document.getElementById('merge-tab-content-hybrid');
+
+    if (optionsTab) {
+        optionsTab.addEventListener('click', () => {
+            optionsTab.classList.add('active');
+            hybridTab?.classList.remove('active');
+            optionsContent?.classList.add('active');
+            hybridContent?.classList.remove('active');
+        });
+    }
+    if (hybridTab) {
+        hybridTab.addEventListener('click', () => {
+            hybridTab.classList.add('active');
+            optionsTab?.classList.remove('active');
+            hybridContent?.classList.add('active');
+            optionsContent?.classList.remove('active');
+        });
     }
 
     // Close on backdrop click
     if (mergeOptionsDialog) {
         mergeOptionsDialog.addEventListener('click', (e) => {
             if (e.target === mergeOptionsDialog) {
-                console.log('[MERGE DEBUG] Backdrop clicked - closing dialog');
                 closeMergeDialog();
             }
         });
-        console.log('[MERGE DEBUG] ✓ Backdrop click listener attached');
-    } else {
-        console.error('[MERGE DEBUG] ✗ mergeOptionsDialog NOT FOUND - backdrop listener NOT attached!');
     }
-
-    // Debug: List all merge-related elements found
-    console.log('[MERGE DEBUG] --- All merge-related elements check ---');
-    const mergeElements = {
-        'merge-options-dialog': document.getElementById('merge-options-dialog'),
-        'merge-dialog-close': document.getElementById('merge-dialog-close'),
-        'merge-dialog-cancel': document.getElementById('merge-dialog-cancel'),
-        'merge-option-combine': document.getElementById('merge-option-combine'),
-        'merge-option-group': document.getElementById('merge-option-group'),
-        'merge-source-name': document.getElementById('merge-source-name'),
-        'merge-target-name': document.getElementById('merge-target-name'),
-        'merge-estimation-preview': document.getElementById('merge-estimation-preview')
-    };
-    Object.entries(mergeElements).forEach(([id, el]) => {
-        console.log(`[MERGE DEBUG] #${id}: ${el ? '✓ EXISTS' : '✗ MISSING'}`);
-    });
-
-    console.log('[MERGE DEBUG] ========================================');
-    console.log('[MERGE DEBUG] initializeMergeDialogListeners() COMPLETE');
-    console.log('[MERGE DEBUG] ========================================');
 }
 
 // Update the status toggle buttons visibility and state
