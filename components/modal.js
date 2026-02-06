@@ -6349,6 +6349,7 @@ export async function showGroupDetailModal(group, allRecords) {
     isModalRendering = false;
 }
 
+function hideDetailModal() {
     console.log('[hideDetailModal] Called.');
     // Reset the rendering guard when modal is closed
     isModalRendering = false;
