@@ -2298,7 +2298,9 @@ async function renderItineraryItem(item, index) {
     }
 
     const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
-    const name = record.fields.Name || 'Untitled Item';
+    // Use hybrid name as the display name if this is a combined item
+    const hybridDataForName = getCombinedHybridData(recordId);
+    const name = hybridDataForName?.hybridName || record.fields.Name || 'Untitled Item';
     // Use selections if available, fall back to selectedOptionIndex for legacy
     const selectionsOrIndex = itemInfo?.selections || itemInfo?.selectedOptionIndex;
     const price = getRecordPrice(record, selectionsOrIndex);
@@ -2376,10 +2378,10 @@ async function renderItineraryItem(item, index) {
             const sourceRecord = state.records.all.find(r => r.id === sourceId);
             return sourceRecord?.fields?.Name || 'Item';
         });
-        // Use hybrid name if available, otherwise default
+        // Show hybrid indicator badge (name is now shown as the main title)
         const hybridName = hybridData?.hybridName;
         const hybridDesc = hybridData?.hybridDescription;
-        const indicatorLabel = hybridName ? `Hybrid: ${hybridName}` : `${combinedSources.length + 1} combined`;
+        const indicatorLabel = hybridName ? `Hybrid` : `${combinedSources.length + 1} combined`;
         combinedIndicatorHTML = `
             <span class="item-combined-indicator ${hybridName ? 'has-hybrid' : ''}" title="${hybridDesc || `Combined from: ${sourceNames.join(', ')}`}">
                 <span class="combined-icon">✨</span>
@@ -4914,6 +4916,27 @@ async function combineItemsIntoOne(sourceRecordId, targetRecordId, hybridEstimat
     triggerSave();
 
     log('Presentation', `Combined ${sourceRecordId} into ${actualTarget}`);
+
+    // Create collage image from all combined items' photos (runs in background)
+    const allSources = getCombinedSources(actualTarget);
+    createCollageImage(actualTarget, allSources).then(collageUrl => {
+        if (collageUrl && finalTargetRecord) {
+            // Store the collage as the target item's custom image
+            const collageImage = {
+                url: collageUrl,
+                isCollage: true
+            };
+            finalTargetRecord.fields._customImages = [collageImage];
+
+            // Update the image cache so presentation view picks it up
+            itemImagesCache.set(actualTarget, { images: [collageUrl], currentIndex: 0 });
+
+            // Re-render to show the collage
+            renderAllItems();
+            triggerSave();
+            log('Presentation', `Collage image set for hybrid: ${actualTarget}`);
+        }
+    });
 }
 
 // Create a related category linking two items (Group as Options)
@@ -5121,6 +5144,187 @@ function getCombinedHybridData(targetRecordId) {
     const entry = state.session.combinedItems.get(targetRecordId);
     if (!entry || entry instanceof Set) return null;
     return entry.hybridData || null;
+}
+
+/**
+ * Create a collage image from multiple item images using Canvas.
+ * Collects images from all items involved in a merge (target + sources),
+ * draws them into a grid layout on a canvas, and uploads the result to Cloudinary.
+ * @param {string} targetRecordId - The target (combined) item's record ID
+ * @param {string[]} sourceRecordIds - Array of source item record IDs
+ * @returns {Promise<string|null>} - The collage image URL, or null on failure
+ */
+async function createCollageImage(targetRecordId, sourceRecordIds) {
+    try {
+        // Gather all record IDs involved (target + sources)
+        const allRecordIds = [targetRecordId, ...sourceRecordIds];
+        const imageUrls = [];
+
+        // Fetch the first image for each item
+        for (const recordId of allRecordIds) {
+            const record = state.records.all.find(r => r.id === recordId);
+            if (!record) continue;
+
+            let urls = [];
+            // Check the presentation image cache first
+            if (itemImagesCache.has(recordId)) {
+                urls = itemImagesCache.get(recordId).images || [];
+            } else {
+                const result = await api.fetchImagesForRecord(record, state.records.all, new Map());
+                urls = result.imageUrls || [];
+            }
+
+            if (urls.length > 0) {
+                imageUrls.push(urls[0]);
+            }
+        }
+
+        if (imageUrls.length < 2) {
+            log('Presentation', 'Not enough images to create collage');
+            return null;
+        }
+
+        // Load all images
+        const loadImage = (url) => {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+                img.src = url;
+            });
+        };
+
+        const images = [];
+        for (const url of imageUrls) {
+            try {
+                const img = await loadImage(url);
+                images.push(img);
+            } catch (e) {
+                log('Presentation', `Skipping image that failed to load: ${e.message}`);
+            }
+        }
+
+        if (images.length < 2) {
+            log('Presentation', 'Not enough images loaded for collage');
+            return null;
+        }
+
+        // Create canvas and draw collage
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const collageSize = 800;
+        canvas.width = collageSize;
+        canvas.height = collageSize;
+
+        // Fill background
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillRect(0, 0, collageSize, collageSize);
+
+        const count = images.length;
+        const gap = 4;
+
+        // Determine grid layout based on image count
+        let cols, rows;
+        if (count === 2) {
+            cols = 2; rows = 1;
+        } else if (count === 3) {
+            cols = 2; rows = 2; // 2 top, 1 bottom centered
+        } else {
+            cols = 2; rows = 2; // 2x2 grid for 4+
+        }
+
+        const cellWidth = (collageSize - gap * (cols + 1)) / cols;
+        const cellHeight = (collageSize - gap * (rows + 1)) / rows;
+
+        // Draw images into grid cells
+        const drawImageCover = (img, x, y, w, h) => {
+            const imgRatio = img.width / img.height;
+            const cellRatio = w / h;
+            let sx, sy, sw, sh;
+            if (imgRatio > cellRatio) {
+                sh = img.height;
+                sw = sh * cellRatio;
+                sx = (img.width - sw) / 2;
+                sy = 0;
+            } else {
+                sw = img.width;
+                sh = sw / cellRatio;
+                sx = 0;
+                sy = (img.height - sh) / 2;
+            }
+            // Draw with rounded corners
+            ctx.save();
+            const radius = 8;
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + w - radius, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+            ctx.lineTo(x + w, y + h - radius);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+            ctx.lineTo(x + radius, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+            ctx.clip();
+            ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+            ctx.restore();
+        };
+
+        if (count === 2) {
+            // Side by side, full height
+            const h = collageSize - gap * 2;
+            drawImageCover(images[0], gap, gap, cellWidth, h);
+            drawImageCover(images[1], gap * 2 + cellWidth, gap, cellWidth, h);
+        } else if (count === 3) {
+            // 2 on top, 1 centered on bottom
+            drawImageCover(images[0], gap, gap, cellWidth, cellHeight);
+            drawImageCover(images[1], gap * 2 + cellWidth, gap, cellWidth, cellHeight);
+            const bottomX = (collageSize - cellWidth) / 2;
+            drawImageCover(images[2], bottomX, gap * 2 + cellHeight, cellWidth, cellHeight);
+        } else {
+            // 2x2 grid (use first 4 images)
+            const displayImages = images.slice(0, 4);
+            for (let i = 0; i < displayImages.length; i++) {
+                const col = i % 2;
+                const row = Math.floor(i / 2);
+                const x = gap + col * (cellWidth + gap);
+                const y = gap + row * (cellHeight + gap);
+                drawImageCover(displayImages[i], x, y, cellWidth, cellHeight);
+            }
+        }
+
+        // Convert canvas to data URL
+        const collageDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+        // Upload to Cloudinary via existing endpoint
+        const uploadResponse = await fetch('/.netlify/functions/cloudinary-upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                imageData: collageDataUrl,
+                sessionId: state.session?.id || 'unsaved',
+                itemId: `collage-${targetRecordId}`
+            })
+        });
+
+        if (!uploadResponse.ok) {
+            log('Presentation', `Collage upload failed: ${uploadResponse.status}`);
+            return null;
+        }
+
+        const uploadResult = await uploadResponse.json();
+        if (uploadResult.success && uploadResult.secure_url) {
+            log('Presentation', `Collage created and uploaded: ${uploadResult.secure_url}`);
+            return uploadResult.secure_url;
+        }
+
+        return null;
+    } catch (error) {
+        log('Presentation', `Error creating collage: ${error.message}`);
+        return null;
+    }
 }
 
 // Check if an item belongs to a related group

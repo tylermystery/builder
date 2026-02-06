@@ -2502,8 +2502,49 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         }
     }
 
-    modalItemName.textContent = record.fields.Name || 'Untitled';
-    modalItemDescription.textContent = record.fields.Description || '';
+    // Check if this item is a hybrid merge target — use AI-generated name and description
+    let displayName = record.fields.Name || 'Untitled';
+    let displayDescription = record.fields.Description || '';
+    const combinedEntry = state.session?.combinedItems?.get(record.id);
+    if (combinedEntry && !(combinedEntry instanceof Set) && combinedEntry.hybridData) {
+        if (combinedEntry.hybridData.hybridName) {
+            displayName = combinedEntry.hybridData.hybridName;
+        }
+        if (combinedEntry.hybridData.hybridDescription) {
+            displayDescription = combinedEntry.hybridData.hybridDescription;
+        }
+    }
+
+    modalItemName.textContent = displayName;
+    modalItemDescription.textContent = displayDescription;
+
+    // Show "Combined from" indicator for hybrid merged items
+    const existingMergeInfo = document.querySelector('.modal-merge-info');
+    if (existingMergeInfo) existingMergeInfo.remove();
+
+    if (combinedEntry && !(combinedEntry instanceof Set) && combinedEntry.sources) {
+        const sourceIds = combinedEntry.sources instanceof Set
+            ? Array.from(combinedEntry.sources)
+            : (Array.isArray(combinedEntry.sources) ? combinedEntry.sources : []);
+
+        if (sourceIds.length > 0) {
+            const sourceNames = sourceIds.map(sourceId => {
+                const sourceRecord = state.records?.all?.find(r => r.id === sourceId);
+                return sourceRecord?.fields?.Name || 'Item';
+            });
+            // Include the target item's original name
+            const targetOriginalName = record.fields.Name || 'Item';
+            const allNames = [targetOriginalName, ...sourceNames];
+
+            const mergeInfoEl = document.createElement('div');
+            mergeInfoEl.className = 'modal-merge-info';
+            mergeInfoEl.innerHTML = `
+                <span class="merge-info-icon">✨</span>
+                <span class="merge-info-text">Combined from: ${allNames.join(' + ')}</span>
+            `;
+            modalItemDescription.parentNode.insertBefore(mergeInfoEl, modalItemDescription.nextSibling);
+        }
+    }
 
     // Display AI confidence badge for AI-parsed items
     const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.id?.startsWith('ai-presentation-') || record?.isAI === true;
