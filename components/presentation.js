@@ -15,11 +15,6 @@ import { showToast } from '../ui.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { refreshForumData, onNewItemReceived } from './forumPanel.js';
 
-console.log('[Presentation DEBUG] presentation.js module loaded');
-console.log('[Presentation DEBUG] QUICK_REACTIONS available:', ['👍', '❤️', '😂', '😮', '😢', '🎉']);
-console.log('[Presentation DEBUG] EMOJI_CATEGORIES imported:', EMOJI_CATEGORIES ? 'yes' : 'no');
-console.log('[Presentation DEBUG] EMOJI_REACTIONS imported:', EMOJI_REACTIONS);
-
 // Quick emoji reactions available for messages and comments
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 
@@ -70,8 +65,6 @@ let catalogNeedsRender = false;
  * @param {Object} changeData - Details about the change
  */
 async function handlePlanSyncUpdate(changeType, summary, changeData) {
-    // console.log('[Presentation DEBUG] Received sync update:', changeType, changeData);
-
     switch (changeType) {
         case 'itemAdded':
         case 'itemRemoved':
@@ -98,7 +91,6 @@ async function handlePlanSyncUpdate(changeType, summary, changeData) {
             updatePresentationHeaderTotal();
             break;
         default:
-            // console.log('[Presentation DEBUG] Unknown sync change type:', changeType);
     }
 }
 
@@ -421,7 +413,6 @@ function ensureDOMElements() {
     // CRITICAL: Move drag buckets to body level for proper fixed positioning
     // Fixed positioning doesn't work correctly when inside transformed/positioned ancestors
     if (dragBucketsEl && dragBucketsEl.parentElement !== document.body) {
-        console.log('[Presentation DEBUG] Moving drag buckets to body for proper fixed positioning');
         document.body.appendChild(dragBucketsEl);
     }
 
@@ -440,26 +431,6 @@ function ensureDOMElements() {
     // Merge indicator
     dragMergeIndicator = document.getElementById('drag-merge-indicator');
 
-    // DEBUG: Log merge indicator initialization
-    console.log('[MERGE ZONE DEBUG] ================================================');
-    console.log('[MERGE ZONE DEBUG] MERGE INDICATOR INITIALIZATION');
-    console.log('[MERGE ZONE DEBUG] ================================================');
-    console.log('[MERGE ZONE DEBUG] dragMergeIndicator element:', dragMergeIndicator);
-    if (dragMergeIndicator) {
-        console.log('[MERGE ZONE DEBUG] ✓ dragMergeIndicator FOUND');
-        const indicatorStyle = window.getComputedStyle(dragMergeIndicator);
-        console.log('[MERGE ZONE DEBUG] Initial dragMergeIndicator styles:', {
-            display: indicatorStyle.display,
-            visibility: indicatorStyle.visibility,
-            opacity: indicatorStyle.opacity,
-            zIndex: indicatorStyle.zIndex,
-            position: indicatorStyle.position
-        });
-        console.log('[MERGE ZONE DEBUG] dragMergeIndicator parent:', dragMergeIndicator.parentElement?.tagName, dragMergeIndicator.parentElement?.id);
-    } else {
-        console.log('[MERGE ZONE DEBUG] ✗ ERROR: dragMergeIndicator NOT FOUND - merge indicator will not display!');
-    }
-
     // Merge options dialog
     mergeOptionsDialog = document.getElementById('merge-options-dialog');
     mergeDialogSourceName = document.getElementById('merge-source-name');
@@ -469,44 +440,6 @@ function ensureDOMElements() {
     dragActionTooltip = document.getElementById('drag-action-tooltip');
     // Radial menu container
     radialMenuContainer = document.getElementById('radial-menu-container');
-    console.log('[Presentation DEBUG] Bucket elements found:', {
-        dragBucketsEl: !!dragBucketsEl,
-        dragBucketGoal: !!dragBucketGoal,
-        dragBucketIdeas: !!dragBucketIdeas,
-        dragBucketLock: !!dragBucketLock,
-        dragBucketDemote: !!dragBucketDemote,
-        dragBucketArchive: !!dragBucketArchive,
-        dragBucketDelete: !!dragBucketDelete,
-        dragBucketReactions: !!dragBucketReactions,
-        dragBucketQuickComment: !!dragBucketQuickComment,
-        dragBucketCustomComment: !!dragBucketCustomComment,
-        dragBucketCompleted: !!dragBucketCompleted,
-        dragMergeIndicator: !!dragMergeIndicator,
-        mergeOptionsDialog: !!mergeOptionsDialog
-    });
-
-    // DEBUG: Log initial styling of drag buckets container
-    if (dragBucketsEl) {
-        const style = window.getComputedStyle(dragBucketsEl);
-        console.log('[Presentation DEBUG] Initial drag buckets container styling:', {
-            display: style.display,
-            visibility: style.visibility,
-            opacity: style.opacity,
-            position: style.position,
-            zIndex: style.zIndex,
-            pointerEvents: style.pointerEvents
-        });
-
-        // Check for left/right zones
-        const leftZone = dragBucketsEl.querySelector('.drag-zone-left');
-        const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
-        console.log('[Presentation DEBUG] Drag zones found:', {
-            leftZone: !!leftZone,
-            rightZone: !!rightZone,
-            leftZoneChildren: leftZone ? leftZone.children.length : 0,
-            rightZoneChildren: rightZone ? rightZone.children.length : 0
-        });
-    }
 
     /* DEBUG: DOM elements after init
     console.log('[Accordion DEBUG] DOM elements after init:', {
@@ -2587,19 +2520,6 @@ async function renderAllItems() {
     const archivedItems = state.session.archivedItems || new Set();
     const completedItems = state.session.completedItems || new Set();
 
-    // DEBUG: Log archived and completed items state
-    console.log('[Presentation DEBUG] renderAllItems - archivedItems Set:', {
-        exists: !!state.session.archivedItems,
-        size: archivedItems.size,
-        items: Array.from(archivedItems)
-    });
-    console.log('[Presentation DEBUG] renderAllItems - completedItems Set:', {
-        exists: !!state.session.completedItems,
-        size: completedItems.size,
-        items: Array.from(completedItems)
-    });
-    console.log('[Presentation DEBUG] renderAllItems - combinedList count:', combinedList.length);
-
     // Add status to each item (active, archived, or completed)
     combinedList = combinedList.map(item => {
         let itemStatus = 'active';
@@ -2611,20 +2531,12 @@ async function renderAllItems() {
         return { ...item, itemStatus };
     });
 
-    // DEBUG: Log item status distribution
-    const statusCounts = { active: 0, archived: 0, completed: 0 };
-    combinedList.forEach(item => statusCounts[item.itemStatus]++);
-    console.log('[Presentation DEBUG] Item status distribution BEFORE filter:', statusCounts);
-
     // Filter based on show/hide toggles
     combinedList = combinedList.filter(item => {
         if (item.itemStatus === 'archived' && !showArchivedItems) return false;
         if (item.itemStatus === 'completed' && !showCompletedItems) return false;
         return true;
     });
-
-    // DEBUG: Log filtered list
-    console.log('[Presentation DEBUG] After filter - combinedList count:', combinedList.length, 'showArchivedItems:', showArchivedItems, 'showCompletedItems:', showCompletedItems);
 
     // Apply custom ordering if available
     const customOrder = state.session.planItemOrder || [];
@@ -2854,9 +2766,7 @@ async function loadSortableJS() {
 
 // Initialize drag-and-drop for plan items
 async function initializeItemDragDrop() {
-    console.log('[Presentation DEBUG] initializeItemDragDrop called, itineraryItemsListEl:', !!itineraryItemsListEl);
     if (!itineraryItemsListEl) {
-        console.log('[Presentation DEBUG] No itineraryItemsListEl, exiting initializeItemDragDrop');
         return;
     }
 
@@ -2868,7 +2778,6 @@ async function initializeItemDragDrop() {
 
     try {
         const Sortable = await loadSortableJS();
-        console.log('[Presentation DEBUG] SortableJS loaded:', !!Sortable);
 
         sortableInstance = new Sortable(itineraryItemsListEl, {
             animation: 200,
@@ -2881,13 +2790,9 @@ async function initializeItemDragDrop() {
             touchStartThreshold: 20, // Require more movement before starting SortableJS drag
 
             onStart: function(evt) {
-                console.log('[MERGE ZONE DEBUG] ================================================');
-                console.log('[MERGE ZONE DEBUG] DRAG onStart TRIGGERED');
-                console.log('[MERGE ZONE DEBUG] ================================================');
 
                 // If radial menu is already active, cancel the SortableJS drag
                 if (radialMenuActive) {
-                    console.log('[MERGE ZONE DEBUG] Radial menu is active, cancelling SortableJS drag');
                     evt.preventDefault && evt.preventDefault();
                     return false;
                 }
@@ -2902,16 +2807,6 @@ async function initializeItemDragDrop() {
                 currentDraggedItem = evt.item;
                 const article = evt.item.querySelector('.itinerary-item');
                 currentDraggedRecordId = article?.dataset.recordId;
-                console.log('[MERGE ZONE DEBUG] Dragging item recordId:', currentDraggedRecordId);
-                console.log('[MERGE ZONE DEBUG] isDragging set to:', isDragging);
-
-                // DEBUG: Log initial state of drag buckets container
-                console.log('[MERGE ZONE DEBUG] onStart - Drag bucket state:', {
-                    dragBucketsElExists: !!dragBucketsEl,
-                    dragBucketsId: dragBucketsEl?.id,
-                    currentClasses: dragBucketsEl ? Array.from(dragBucketsEl.classList) : [],
-                    dragMergeIndicatorExists: !!dragMergeIndicator
-                });
 
                 // For SortableJS drag (long press/hold), show the radial menu at the item position
                 // instead of the old linear buckets
@@ -2927,7 +2822,6 @@ async function initializeItemDragDrop() {
 
             onMove: function(evt) {
                 // During SortableJS move, update radial menu hover state
-                console.log('[MERGE ZONE DEBUG] SortableJS onMove called, radialMenuActive:', radialMenuActive);
                 if (radialMenuActive) {
                     const clientX = evt.originalEvent?.touches ? evt.originalEvent.touches[0].clientX : evt.originalEvent?.clientX;
                     const clientY = evt.originalEvent?.touches ? evt.originalEvent.touches[0].clientY : evt.originalEvent?.clientY;
@@ -2935,7 +2829,6 @@ async function initializeItemDragDrop() {
                         checkRadialBucketHover(clientX, clientY);
                         updateRadialDirectionIndicator(clientX, clientY);
                         // Also check for merge targets when radial menu is active
-                        console.log('[MERGE ZONE DEBUG] onMove - also checking merge target from radial menu path');
                         checkMergeTargetHover(clientX, clientY);
                     }
                 }
@@ -2999,7 +2892,6 @@ async function initializeItemDragDrop() {
             }
         });
 
-        console.log('[Presentation DEBUG] Sortable instance created');
         log('Presentation', 'Drag-drop initialized for plan items');
     } catch (error) {
         console.error('[Presentation] Failed to initialize drag-drop:', error);
@@ -3078,16 +2970,13 @@ function updateDragZonePositions(itemRect) {
 
 // Show drag buckets during drag (colorize them)
 function showDragBuckets() {
-    console.log('[Presentation DEBUG] showDragBuckets called, isDragging:', isDragging, 'dragBucketsEl:', !!dragBucketsEl);
 
     // Safety check: Only show drag buckets if presentation view is active
     if (!document.body.classList.contains('presentation-active')) {
-        console.log('[Presentation DEBUG] showDragBuckets aborted - presentation view is not active');
         return;
     }
 
     if (dragBucketsEl && isDragging) {
-        console.log('[Presentation DEBUG] Adding drag-active class to buckets');
 
         // Add drag-active class - let CSS handle the styling
         dragBucketsEl.classList.add('drag-active');
@@ -3104,22 +2993,12 @@ function showDragBuckets() {
             const zoneGap = isMobile ? 8 : 10;
             const zonePadding = isMobile ? 12 : 16;
 
-            console.log('[Presentation DEBUG] Viewport width:', viewportWidth, 'isMobile:', isMobile);
-
             // Get the currently dragged item's position
             const draggedItem = document.querySelector('.sortable-drag') || currentDraggedItem;
             let itemRect = null;
 
             if (draggedItem) {
                 itemRect = draggedItem.getBoundingClientRect();
-                console.log('[Presentation DEBUG] Dragged item rect:', {
-                    left: itemRect.left,
-                    right: itemRect.right,
-                    top: itemRect.top,
-                    bottom: itemRect.bottom,
-                    width: itemRect.width,
-                    height: itemRect.height
-                });
             }
 
             // Base styles for both zones
@@ -3185,7 +3064,6 @@ function showDragBuckets() {
 
         // Apply immediately
         applyZoneStyles();
-        console.log('[Presentation DEBUG] Zone styles applied directly');
 
         // Force a repaint/reflow
         void dragBucketsEl.offsetHeight;
@@ -3201,31 +3079,13 @@ function showDragBuckets() {
         setTimeout(() => {
             if (isDragging && dragBucketsEl?.classList.contains('drag-active')) {
                 applyZoneStyles();
-                console.log('[Presentation DEBUG] Zone styles re-applied via setTimeout fallback');
             }
         }, 100);
-
-        // DEBUG: Log styling info
-        setTimeout(() => {
-            if (leftZone) {
-                const leftRect = leftZone.getBoundingClientRect();
-                console.log('[Presentation DEBUG] Left zone rect: ' +
-                    Math.round(leftRect.width) + 'x' + Math.round(leftRect.height) +
-                    ' at (' + Math.round(leftRect.left) + ',' + Math.round(leftRect.top) + ')');
-            }
-            if (rightZone) {
-                const rightRect = rightZone.getBoundingClientRect();
-                console.log('[Presentation DEBUG] Right zone rect: ' +
-                    Math.round(rightRect.width) + 'x' + Math.round(rightRect.height) +
-                    ' at (' + Math.round(rightRect.left) + ',' + Math.round(rightRect.top) + ')');
-            }
-        }, 50);
     }
 }
 
 // Hide drag buckets (decolorize them, but keep visible)
 function hideDragBuckets() {
-    console.log('[Presentation DEBUG] hideDragBuckets called, dragBucketsEl:', !!dragBucketsEl);
     if (dragBucketsEl) {
         dragBucketsEl.classList.remove('drag-active');
 
@@ -3921,15 +3781,8 @@ function isPointInRect(x, y, rect) {
 // Check if pointer is over a bucket and update hover state
 let bucketHoverDebugCounter = 0;
 function checkBucketHover(event) {
-    // DEBUG: Log entry and early exit conditions
-    console.log('[MERGE ZONE DEBUG] checkBucketHover called, guards:', {
-        dragBucketsEl: !!dragBucketsEl,
-        isDragging: isDragging,
-        willEarlyReturn: !dragBucketsEl || !isDragging
-    });
 
     if (!dragBucketsEl || !isDragging) {
-        console.log('[MERGE ZONE DEBUG] checkBucketHover EARLY RETURN - dragBucketsEl:', !!dragBucketsEl, 'isDragging:', isDragging);
         return;
     }
 
@@ -3953,18 +3806,6 @@ function checkBucketHover(event) {
     let isOverAnyBucket = false;
     let hoveredBucket = null;
 
-    // DEBUG: Log bucket positions periodically
-    bucketHoverDebugCounter++;
-    const shouldLogDebug = bucketHoverDebugCounter % 60 === 0;
-
-    if (shouldLogDebug) {
-        console.log('[Presentation DEBUG] checkBucketHover - Pointer at:', { clientX, clientY });
-        console.log('[Presentation DEBUG] Window dimensions:', {
-            innerWidth: window.innerWidth,
-            innerHeight: window.innerHeight
-        });
-    }
-
     buckets.forEach((bucket) => {
         const { el, name } = bucket;
         if (el) {
@@ -3972,20 +3813,9 @@ function checkBucketHover(event) {
             const isOver = isPointInRect(clientX, clientY, rect);
             el.classList.toggle('drag-over', isOver);
 
-            // DEBUG: Log each bucket's position periodically
-            if (shouldLogDebug) {
-                console.log(`[Presentation DEBUG]   Bucket "${name}":`, {
-                    exists: true,
-                    rect: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height },
-                    isOver,
-                    isVisible: rect.width > 0 && rect.height > 0
-                });
-            }
-
             if (isOver) {
                 isOverAnyBucket = true;
                 hoveredBucket = bucket;
-                console.log(`[Presentation DEBUG] HOVER DETECTED on bucket: ${name}`);
                 // Special handling for reaction and quick comment buckets
                 if (name === 'reactions') {
                     checkReactionOptionHover(clientX, clientY);
@@ -3993,8 +3823,6 @@ function checkBucketHover(event) {
                     checkQuickCommentOptionHover(clientX, clientY);
                 }
             }
-        } else if (shouldLogDebug) {
-            console.warn(`[Presentation DEBUG]   Bucket "${name}": ELEMENT NOT FOUND`);
         }
     });
 
@@ -4002,20 +3830,9 @@ function checkBucketHover(event) {
     updateDragActionTooltip(clientX, clientY, hoveredBucket, isOverAnyBucket);
 
     // If not over any bucket, check for potential merge target
-    // DEBUG: Log whether we're entering merge zone check path
-    console.log('[MERGE ZONE DEBUG] checkBucketHover - checking merge path:', {
-        isOverAnyBucket,
-        currentDraggedRecordId,
-        willCheckMerge: !isOverAnyBucket && currentDraggedRecordId,
-        clientX,
-        clientY
-    });
-
     if (!isOverAnyBucket && currentDraggedRecordId) {
-        console.log('[MERGE ZONE DEBUG] >>> Calling checkMergeTargetHover with:', clientX, clientY);
         checkMergeTargetHover(clientX, clientY);
     } else {
-        console.log('[MERGE ZONE DEBUG] Skipping merge check - isOverAnyBucket:', isOverAnyBucket, 'currentDraggedRecordId:', currentDraggedRecordId);
         clearMergeTarget();
         if (dragMergeIndicator) {
             // Use robust hide pattern
@@ -4199,7 +4016,6 @@ function checkMergeTargetHover(clientX, clientY) {
     // DWELL-TIME LOGIC: Track how long we've been hovering over the same item
     if (foundHoveredItemId && foundHoveredItemId !== mergeHoverItemId) {
         // Started hovering over a new item - reset the timer
-        console.log(`[MERGE ZONE DEBUG] Started hovering over item: ${foundHoveredItemId}`);
         mergeHoverItemId = foundHoveredItemId;
         mergeHoverStartTime = Date.now();
 
@@ -4211,16 +4027,12 @@ function checkMergeTargetHover(clientX, clientY) {
         // Set a timer to activate merge after dwell time
         mergeHoverTimer = setTimeout(() => {
             if (mergeHoverItemId === foundHoveredItemId && isDragging) {
-                console.log(`[MERGE ZONE DEBUG] *** DWELL TIME REACHED - ACTIVATING MERGE for ${foundHoveredItemId} ***`);
                 activateMergeTarget(foundHoveredItem, foundHoveredItemId, clientX, clientY);
             }
         }, MERGE_DWELL_TIME_MS);
 
     } else if (!foundHoveredItemId) {
         // No longer hovering over any valid item - clear merge state
-        if (mergeHoverItemId) {
-            console.log(`[MERGE ZONE DEBUG] Stopped hovering - clearing merge state`);
-        }
         clearMergeHoverState();
         deactivateMergeTarget();
     } else if (foundHoveredItemId === mergeHoverItemId && potentialMergeTarget) {
@@ -4242,11 +4054,6 @@ function clearMergeHoverState() {
 
 // Activate merge target with visual feedback
 function activateMergeTarget(element, recordId, clientX, clientY) {
-    console.log('[MERGE ZONE DEBUG] ================================================');
-    console.log('[MERGE ZONE DEBUG] *** ACTIVATING MERGE HIGHLIGHT ***');
-    console.log('[MERGE ZONE DEBUG] Target recordId:', recordId);
-    console.log('[MERGE ZONE DEBUG] Element:', element?.className);
-    console.log('[MERGE ZONE DEBUG] ================================================');
 
     // Remove highlight from any previous target
     const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
@@ -4269,10 +4076,6 @@ function activateMergeTarget(element, recordId, clientX, clientY) {
     `;
 
     potentialMergeTarget = { element, recordId };
-    console.log('[MERGE ZONE DEBUG] ================================================');
-    console.log('[MERGE ZONE DEBUG] potentialMergeTarget set to:', recordId);
-    console.log('[MERGE ZONE DEBUG] potentialMergeTarget object:', potentialMergeTarget);
-    console.log('[MERGE ZONE DEBUG] ================================================');
 
     // Show merge indicator
     showMergeIndicator(clientX, clientY);
@@ -4281,7 +4084,6 @@ function activateMergeTarget(element, recordId, clientX, clientY) {
 // Show the merge indicator near the cursor
 function showMergeIndicator(clientX, clientY) {
     if (!dragMergeIndicator) {
-        console.log('[MERGE ZONE DEBUG] WARNING: dragMergeIndicator is null/undefined!');
         return;
     }
 
@@ -4315,8 +4117,6 @@ function showMergeIndicator(clientX, clientY) {
 
     // Update indicator content
     dragMergeIndicator.innerHTML = '<span style="font-size: 18px;">🔗</span><span>Merge Items</span>';
-
-    console.log('[MERGE ZONE DEBUG] Merge indicator shown');
 }
 
 // Update merge indicator position while hovering
@@ -4330,8 +4130,6 @@ function updateMergeIndicatorPosition(clientX, clientY) {
 
 // Deactivate merge target and hide indicator
 function deactivateMergeTarget() {
-    console.log('[MERGE ZONE DEBUG] deactivateMergeTarget() called');
-    console.log('[MERGE ZONE DEBUG] potentialMergeTarget BEFORE clearing:', potentialMergeTarget?.recordId);
 
     // Remove merge-target class from any highlighted item
     const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
@@ -4344,7 +4142,6 @@ function deactivateMergeTarget() {
     }
 
     potentialMergeTarget = null;
-    console.log('[MERGE ZONE DEBUG] potentialMergeTarget AFTER clearing: null');
 
     // Hide the merge indicator
     if (dragMergeIndicator) {
@@ -4361,22 +4158,9 @@ function deactivateMergeTarget() {
 // Handle mouse/touch move during drag
 let dragMoveDebugCounter = 0;
 function handleDragMove(event) {
-    // DEBUG: Log every 10th move event with merge-specific info
     dragMoveDebugCounter++;
     const clientX = event.touches ? event.touches[0].clientX : event.clientX;
     const clientY = event.touches ? event.touches[0].clientY : event.clientY;
-
-    if (dragMoveDebugCounter % 10 === 0) {
-        console.log('[MERGE ZONE DEBUG] handleDragMove #' + dragMoveDebugCounter + ':', {
-            clientX,
-            clientY,
-            isDragging,
-            currentDraggedRecordId,
-            radialMenuActive,
-            dragBucketsElExists: !!dragBucketsEl,
-            hasDragActiveClass: dragBucketsEl ? dragBucketsEl.classList.contains('drag-active') : false
-        });
-    }
 
     // Update drag zone positions to follow the dragged item
     if (isDragging && dragBucketsEl?.classList.contains('drag-active')) {
@@ -4401,13 +4185,11 @@ function checkBucketDrop(event, item, capturedMergeTargetId = null) {
 
     const clientX = event?.changedTouches ? event.changedTouches[0].clientX : event?.clientX;
     const clientY = event?.changedTouches ? event.changedTouches[0].clientY : event?.clientY;
-    console.log('[Presentation DEBUG] Drop coordinates:', { clientX, clientY });
 
     // Get record ID from the dragged item
     const itemSection = item.closest('.itinerary-item-section');
     const article = itemSection?.querySelector('.itinerary-item');
     const recordId = article?.dataset.recordId;
-    console.log('[Presentation DEBUG] recordId from item:', recordId);
 
     if (!recordId) return false;
 
@@ -4422,42 +4204,36 @@ function checkBucketDrop(event, item, capturedMergeTargetId = null) {
 
     // Check goal bucket
     if (checkDropOnBucket(dragBucketGoal)) {
-        console.log('[Presentation DEBUG] Dropped on goal bucket!');
         setItemAsGoal(recordId);
         return true;
     }
 
     // Check ideas bucket
     if (checkDropOnBucket(dragBucketIdeas)) {
-        console.log('[Presentation DEBUG] Dropped on ideas bucket!');
         moveToIdeas(recordId);
         return true;
     }
 
     // Check lock bucket
     if (checkDropOnBucket(dragBucketLock)) {
-        console.log('[Presentation DEBUG] Dropped on lock bucket!');
         lockItem(recordId);
         return true;
     }
 
     // Check demote bucket
     if (checkDropOnBucket(dragBucketDemote)) {
-        console.log('[Presentation DEBUG] Dropped on demote bucket!');
         demoteItem(recordId);
         return true;
     }
 
     // Check archive bucket
     if (checkDropOnBucket(dragBucketArchive)) {
-        console.log('[Presentation DEBUG] Dropped on archive bucket!');
         archiveItem(recordId);
         return true;
     }
 
     // Check delete bucket
     if (checkDropOnBucket(dragBucketDelete)) {
-        console.log('[Presentation DEBUG] Dropped on delete bucket!');
         deleteItem(recordId);
         return true;
     }
@@ -4466,7 +4242,6 @@ function checkBucketDrop(event, item, capturedMergeTargetId = null) {
 
     // Check reactions bucket (check individual emoji options first)
     if (checkDropOnBucket(dragBucketReactions)) {
-        console.log('[Presentation DEBUG] Dropped on reactions bucket!');
         // Check if dropped on a specific emoji option
         if (hoveredReactionEmoji) {
             addReactionToItem(recordId, hoveredReactionEmoji);
@@ -4479,7 +4254,6 @@ function checkBucketDrop(event, item, capturedMergeTargetId = null) {
 
     // Check quick comment bucket (check individual comment options first)
     if (checkDropOnBucket(dragBucketQuickComment)) {
-        console.log('[Presentation DEBUG] Dropped on quick comment bucket!');
         if (hoveredQuickComment) {
             addQuickCommentToItem(recordId, hoveredQuickComment);
         } else {
@@ -4491,14 +4265,12 @@ function checkBucketDrop(event, item, capturedMergeTargetId = null) {
 
     // Check custom comment bucket
     if (checkDropOnBucket(dragBucketCustomComment)) {
-        console.log('[Presentation DEBUG] Dropped on custom comment bucket!');
         openCustomCommentDialog(recordId);
         return true;
     }
 
     // Check completed bucket
     if (checkDropOnBucket(dragBucketCompleted)) {
-        console.log('[Presentation DEBUG] Dropped on completed bucket!');
         completeItem(recordId);
         return true;
     }
@@ -4514,18 +4286,15 @@ function checkBucketDrop(event, item, capturedMergeTargetId = null) {
 
 // Archive an item
 async function archiveItem(recordId) {
-    console.log('[Presentation DEBUG] archiveItem called with recordId:', recordId);
     if (!recordId) return;
 
     // Initialize archivedItems if not exists
     if (!state.session.archivedItems) {
-        console.log('[Presentation DEBUG] Initializing archivedItems Set');
         state.session.archivedItems = new Set();
     }
 
     // Add to archived items (item stays in its position, just changes status)
     state.session.archivedItems.add(recordId);
-    console.log('[Presentation DEBUG] Added to archivedItems, new size:', state.session.archivedItems.size);
 
     // Get item name for toast
     const record = state.records.all.find(r => r.id === recordId);
@@ -4547,18 +4316,15 @@ async function archiveItem(recordId) {
 
 // Mark an item as completed
 async function completeItem(recordId) {
-    console.log('[Presentation DEBUG] completeItem called with recordId:', recordId);
     if (!recordId) return;
 
     // Initialize completedItems if not exists
     if (!state.session.completedItems) {
-        console.log('[Presentation DEBUG] Initializing completedItems Set');
         state.session.completedItems = new Set();
     }
 
     // Add to completed items (item stays in its position, just changes status)
     state.session.completedItems.add(recordId);
-    console.log('[Presentation DEBUG] Added to completedItems, new size:', state.session.completedItems.size);
 
     // Get item name for toast
     const record = state.records.all.find(r => r.id === recordId);
@@ -4584,7 +4350,6 @@ async function completeItem(recordId) {
 
 // Set item as a goal/inspiration (top-ranked target)
 async function setItemAsGoal(recordId) {
-    console.log('[Presentation DEBUG] setItemAsGoal called with recordId:', recordId);
     if (!recordId) return;
 
     // Initialize goalItems if not exists
@@ -4616,7 +4381,6 @@ async function setItemAsGoal(recordId) {
 
 // Move item to Ideas bucket (from lockedItems to items)
 async function moveToIdeas(recordId) {
-    console.log('[Presentation DEBUG] moveToIdeas called with recordId:', recordId);
     if (!recordId) return;
 
     // Check if item is currently in lockedItems
@@ -4648,7 +4412,6 @@ async function moveToIdeas(recordId) {
 
 // Lock an item (move from items to lockedItems if not already)
 async function lockItem(recordId) {
-    console.log('[Presentation DEBUG] lockItem called with recordId:', recordId);
     if (!recordId) return;
 
     // Check if item is in items (Ideas)
@@ -4684,7 +4447,6 @@ async function lockItem(recordId) {
 
 // Demote an item (move from locked to idea status while keeping in view)
 async function demoteItem(recordId) {
-    console.log('[Presentation DEBUG] demoteItem called with recordId:', recordId);
     if (!recordId) return;
 
     // Move from lockedItems to items if applicable
@@ -4713,7 +4475,6 @@ async function demoteItem(recordId) {
 
 // Delete an item (remove from plan entirely with confirmation)
 async function deleteItem(recordId) {
-    console.log('[Presentation DEBUG] deleteItem called with recordId:', recordId);
     if (!recordId) return;
 
     // Get item name for confirmation
@@ -4752,7 +4513,6 @@ async function deleteItem(recordId) {
 
 // Add a reaction to an item
 async function addReactionToItem(recordId, emoji) {
-    console.log('[Presentation DEBUG] addReactionToItem called:', recordId, emoji);
     if (!recordId || !emoji) return;
 
     // Initialize reactions map if not exists
@@ -4789,7 +4549,6 @@ async function addReactionToItem(recordId, emoji) {
 
 // Add a quick comment to an item
 async function addQuickCommentToItem(recordId, comment) {
-    console.log('[Presentation DEBUG] addQuickCommentToItem called:', recordId, comment);
     if (!recordId || !comment) return;
 
     // Use the existing comment system if available, otherwise add to notes
@@ -4816,7 +4575,6 @@ async function addQuickCommentToItem(recordId, comment) {
 
 // Open custom comment dialog for an item
 async function openCustomCommentDialog(recordId) {
-    console.log('[Presentation DEBUG] openCustomCommentDialog called:', recordId);
     if (!recordId) return;
 
     const record = state.records.all.find(r => r.id === recordId);
@@ -5523,22 +5281,8 @@ function initializeMergeDialogListeners() {
 
 // Update the status toggle buttons visibility and state
 function updateStatusToggles(archivedCount, completedCount) {
-    // DEBUG: Log toggle update calls
-    console.log('[Presentation DEBUG] updateStatusToggles called:', {
-        archivedCount,
-        completedCount,
-        showArchivedItems,
-        showCompletedItems
-    });
-
     const archivedToggle = document.getElementById('presentation-toggle-archived');
     const completedToggle = document.getElementById('presentation-toggle-completed');
-
-    // DEBUG: Log toggle element existence
-    console.log('[Presentation DEBUG] Toggle elements found:', {
-        archivedToggle: !!archivedToggle,
-        completedToggle: !!completedToggle
-    });
 
     // Show/hide archived toggle based on whether there are archived items
     if (archivedToggle) {
@@ -5547,10 +5291,8 @@ function updateStatusToggles(archivedCount, completedCount) {
             archivedToggle.classList.toggle('active', showArchivedItems);
             const countEl = archivedToggle.querySelector('.toggle-count');
             if (countEl) countEl.textContent = archivedCount;
-            console.log('[Presentation DEBUG] Archived toggle shown with count:', archivedCount);
         } else {
             archivedToggle.style.display = 'none';
-            console.log('[Presentation DEBUG] Archived toggle hidden (count is 0)');
         }
     }
 
@@ -5561,10 +5303,8 @@ function updateStatusToggles(archivedCount, completedCount) {
             completedToggle.classList.toggle('active', showCompletedItems);
             const countEl = completedToggle.querySelector('.toggle-count');
             if (countEl) countEl.textContent = completedCount;
-            console.log('[Presentation DEBUG] Completed toggle shown with count:', completedCount);
         } else {
             completedToggle.style.display = 'none';
-            console.log('[Presentation DEBUG] Completed toggle hidden (count is 0)');
         }
     }
 }
@@ -5995,15 +5735,6 @@ function showTaskDetailPopup(elementType, elementId, elementName) {
     const canEditByOwnership = state.session.isOwned === true;
     const canUserEdit = (!isLoading && canEditByRole) || canEditByOwnership;
 
-    console.log('[Presentation DEBUG] showTaskDetailPopup permission check:', {
-        currentRole,
-        isLoading,
-        canEditByRole,
-        canEditByOwnership,
-        canUserEdit,
-        sessionIsOwned: state.session.isOwned
-    });
-
     // Build affiliated tasks list
     const projectTasks = state.tasks.byProject.get(state.session.id) || [];
     const affiliatableTasksHTML = projectTasks.length > 0 ? `
@@ -6309,16 +6040,6 @@ async function createTaskFromComment(commentId, commentContent, componentId = nu
     const canEditByOwnership = state.session.isOwned === true;
     const canUserEdit = (!isLoading && canEditByRole) || canEditByOwnership;
 
-    console.log('[Presentation DEBUG] createTaskFromComment permission check:', {
-        currentRole,
-        isLoading,
-        canEditByRole,
-        canEditByOwnership,
-        canUserEdit,
-        permissionsState: state.permissions,
-        sessionIsOwned: state.session.isOwned
-    });
-
     if (!canUserEdit) {
         showToast('You do not have permission to create tasks', 3000);
         return;
@@ -6354,7 +6075,6 @@ async function createTaskFromComment(commentId, commentContent, componentId = nu
             const itemName = itemRecord.fields?.Name || itemRecord.fields?.['Item Name'] || 'AI Item';
             // Prefix the task name with the item name for context
             taskData.Name = `[${itemName}] ${taskData.Name}`;
-            console.log('[Presentation DEBUG] Task created from AI item - storing item name in task title:', itemName);
         }
     }
 
@@ -6474,7 +6194,6 @@ function addPresentationMessageToUI(sender, message, isSent, timestamp, senderId
     reactionBtn.innerHTML = '😀';
     reactionBtn.title = 'Add reaction';
     reactionBtn.addEventListener('click', (e) => {
-        console.log('[Presentation DEBUG] Reaction button clicked!');
         e.stopPropagation();
         e.preventDefault();
         showPresentationReactionPicker(wrapper, messageId, senderId);
@@ -9766,7 +9485,6 @@ export async function showPresentationView(listType, startRecordId = null) {
 
     // Load user permissions if not already loaded (handles direct URL access)
     if (state.permissions?.isLoading !== false && state.session.id && state.session.user?.isAuthenticated && state.session.user?.id) {
-        console.log('[Presentation DEBUG] Permissions not loaded, fetching user role...');
         try {
             const { role, permissionRecord } = await api.fetchUserRole(state.session.id, state.session.user.id);
             setState({
@@ -9776,7 +9494,6 @@ export async function showPresentationView(listType, startRecordId = null) {
                     permissionRecord: permissionRecord
                 }
             });
-            console.log('[Presentation DEBUG] Permissions loaded:', { role, permissionRecord });
         } catch (error) {
             console.error('[Presentation DEBUG] Error loading permissions:', error);
             // On error, set isLoading to false so fallback (isOwned) can be used
@@ -9792,13 +9509,11 @@ export async function showPresentationView(listType, startRecordId = null) {
 
     // Register sync callback to handle updates from other views
     registerSyncCallback('presentation', handlePlanSyncUpdate);
-    // console.log('[Presentation DEBUG] Registered plan sync callback');
 
     // Fetch tasks for this project if not already loaded (critical for comment-task linking)
     // This ensures comment-created tasks are visible when page is refreshed or link is shared
     const projectId = state.session.id;
     if (projectId && !state.tasks.byProject.has(projectId)) {
-        console.log('[Presentation DEBUG] Tasks not loaded for project, fetching...');
         try {
             const tasks = await api.fetchTasks(projectId);
             if (Array.isArray(tasks)) {
@@ -9808,7 +9523,6 @@ export async function showPresentationView(listType, startRecordId = null) {
                 });
                 // Update tasks.byProject map
                 state.tasks.byProject.set(projectId, tasks);
-                console.log(`[Presentation DEBUG] Loaded ${tasks.length} tasks for project ${projectId}`);
 
                 // IMPORTANT: After tasks are loaded, restore comment-to-task links from session storage
                 // This applies SourceCommentId to task objects so the UI shows linked tasks correctly
@@ -9819,7 +9533,6 @@ export async function showPresentationView(listType, startRecordId = null) {
             // Non-blocking - comments will still render, just without task links
         }
     } else {
-        console.log('[Presentation DEBUG] Tasks already loaded for project:', projectId);
         // Even if tasks were already loaded, restore comment-to-task links
         loadCommentTaskLinks();
     }
@@ -9866,108 +9579,10 @@ export async function showPresentationView(listType, startRecordId = null) {
 
     // Show drag buckets (grayed out initially, colorize on drag)
     if (dragBucketsEl) {
-        console.log('[Presentation DEBUG] Showing drag buckets (grayed out)');
         // Reset any inline styles that might have been set when hiding
         dragBucketsEl.style.display = '';
         dragBucketsEl.style.visibility = '';
         dragBucketsEl.classList.add('buckets-shown');
-        // Debug: Log the bucket element state after adding class
-        const computedStyle = window.getComputedStyle(dragBucketsEl);
-        console.log('[Presentation DEBUG] Bucket container after adding buckets-shown:', {
-            classList: Array.from(dragBucketsEl.classList),
-            display: computedStyle.display,
-            visibility: computedStyle.visibility,
-            opacity: computedStyle.opacity,
-            zIndex: computedStyle.zIndex,
-            position: computedStyle.position,
-            boundingRect: dragBucketsEl.getBoundingClientRect()
-        });
-        // Debug: Check parent element's overflow and position
-        const parentEl = dragBucketsEl.parentElement;
-        if (parentEl) {
-            const parentStyle = window.getComputedStyle(parentEl);
-            console.log('[Presentation DEBUG] Bucket parent element:', {
-                id: parentEl.id,
-                overflow: parentStyle.overflow,
-                overflowX: parentStyle.overflowX,
-                overflowY: parentStyle.overflowY,
-                position: parentStyle.position,
-                zIndex: parentStyle.zIndex,
-                display: parentStyle.display
-            });
-        }
-
-        // DEBUG: Check left and right zones with their children
-        const leftZone = dragBucketsEl.querySelector('.drag-zone-left');
-        const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
-        if (leftZone) {
-            const leftStyle = window.getComputedStyle(leftZone);
-            console.log('[Presentation DEBUG] Left zone at showPresentationView:', {
-                display: leftStyle.display,
-                visibility: leftStyle.visibility,
-                opacity: leftStyle.opacity,
-                position: leftStyle.position,
-                left: leftStyle.left,
-                top: leftStyle.top,
-                transform: leftStyle.transform,
-                pointerEvents: leftStyle.pointerEvents,
-                childrenCount: leftZone.children.length,
-                boundingRect: leftZone.getBoundingClientRect()
-            });
-        } else {
-            console.warn('[Presentation DEBUG] Left zone NOT FOUND at showPresentationView');
-        }
-        if (rightZone) {
-            const rightStyle = window.getComputedStyle(rightZone);
-            console.log('[Presentation DEBUG] Right zone at showPresentationView:', {
-                display: rightStyle.display,
-                visibility: rightStyle.visibility,
-                opacity: rightStyle.opacity,
-                position: rightStyle.position,
-                right: rightStyle.right,
-                top: rightStyle.top,
-                transform: rightStyle.transform,
-                pointerEvents: rightStyle.pointerEvents,
-                childrenCount: rightZone.children.length,
-                boundingRect: rightZone.getBoundingClientRect()
-            });
-        } else {
-            console.warn('[Presentation DEBUG] Right zone NOT FOUND at showPresentationView');
-        }
-
-        // Debug: Check individual buckets
-        if (dragBucketArchive) {
-            const archiveStyle = window.getComputedStyle(dragBucketArchive);
-            console.log('[Presentation DEBUG] Archive bucket:', {
-                display: archiveStyle.display,
-                opacity: archiveStyle.opacity,
-                left: archiveStyle.left,
-                position: archiveStyle.position,
-                boundingRect: dragBucketArchive.getBoundingClientRect()
-            });
-        }
-        if (dragBucketCompleted) {
-            const completedStyle = window.getComputedStyle(dragBucketCompleted);
-            console.log('[Presentation DEBUG] Completed bucket:', {
-                display: completedStyle.display,
-                opacity: completedStyle.opacity,
-                right: completedStyle.right,
-                position: completedStyle.position,
-                boundingRect: dragBucketCompleted.getBoundingClientRect()
-            });
-        }
-        if (dragBucketReactions) {
-            const reactionsStyle = window.getComputedStyle(dragBucketReactions);
-            console.log('[Presentation DEBUG] Reactions bucket:', {
-                display: reactionsStyle.display,
-                opacity: reactionsStyle.opacity,
-                right: reactionsStyle.right,
-                position: reactionsStyle.position,
-                boundingRect: dragBucketReactions.getBoundingClientRect()
-            });
-        }
-    } else {
-        console.log('[Presentation DEBUG] dragBucketsEl not found when opening modal');
     }
 
     // Start the background animation
@@ -9997,7 +9612,6 @@ export function hidePresentationView() {
 
     // Unregister sync callback when closing presentation view
     unregisterSyncCallback('presentation');
-    // console.log('[Presentation DEBUG] Unregistered plan sync callback');
 
     // Stop the background animation
     stopPresentationBackgroundAnimation();
@@ -10010,7 +9624,6 @@ export function hidePresentationView() {
 
     // Hide drag buckets and related elements - comprehensive cleanup
     if (dragBucketsEl) {
-        console.log('[Presentation DEBUG] Hiding drag buckets');
         dragBucketsEl.classList.remove('buckets-shown');
         dragBucketsEl.classList.remove('drag-active');
         dragBucketsEl.classList.remove('radial-mode'); // Remove radial mode class

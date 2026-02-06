@@ -11636,3 +11636,755 @@ hr.total-divider {
 /* ============================================
    END REDUCED MOTION ACCESSIBILITY
    ============================================ */
+
+/* =====================================================
+   DRAG MERGE INDICATOR
+   ===================================================== */
+
+.drag-merge-indicator {
+    position: fixed;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(56, 142, 60, 0.95));
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    border-radius: 20px;
+    display: none;
+    visibility: hidden;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+    z-index: 5600;
+    box-shadow: 0 8px 32px rgba(76, 175, 80, 0.5);
+    animation: pulse-merge 1s ease infinite;
+}
+
+.drag-merge-indicator .merge-icon {
+    font-size: 1.2em;
+}
+
+.drag-merge-indicator .merge-label {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes pulse-merge {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+/* Item being merged onto - highlight state */
+.itinerary-item-section.merge-target {
+    outline: 3px solid rgba(76, 175, 80, 0.8);
+    outline-offset: 4px;
+    background: rgba(76, 175, 80, 0.1);
+    animation: merge-target-pulse 1.5s ease infinite;
+}
+
+@keyframes merge-target-pulse {
+    0%, 100% {
+        outline-color: rgba(76, 175, 80, 0.8);
+        box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4);
+    }
+    50% {
+        outline-color: rgba(76, 175, 80, 1);
+        box-shadow: 0 0 20px 5px rgba(76, 175, 80, 0.3);
+    }
+}
+
+/* =====================================================
+   MERGE OPTIONS DIALOG
+   ===================================================== */
+
+.merge-options-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100001;
+    animation: merge-dialog-fade-in 0.2s ease;
+    pointer-events: auto;
+}
+
+@keyframes merge-dialog-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.merge-options-dialog-content {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border-radius: 20px;
+    padding: 28px;
+    max-width: 460px;
+    width: 92%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    position: relative;
+    animation: merge-dialog-slide-up 0.3s ease;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+@keyframes merge-dialog-slide-up {
+    from {
+        transform: translateY(30px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.merge-dialog-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(0, 0, 0, 0.1);
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 1.3em;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.merge-dialog-close:hover {
+    background: rgba(220, 53, 69, 0.15);
+    color: #dc3545;
+    transform: scale(1.1);
+}
+
+.merge-dialog-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.merge-dialog-icon {
+    font-size: 1.8em;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.merge-dialog-title {
+    margin: 0;
+    font-size: 1.4em;
+    font-weight: 700;
+    color: #212529;
+}
+
+.merge-dialog-items {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding: 14px;
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 12px;
+}
+
+.merge-item-preview {
+    flex: 1;
+    background: #fff;
+    border: 2px solid rgba(76, 175, 80, 0.3);
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+    max-width: 160px;
+}
+
+.merge-item-name {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #333;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.merge-plus-icon {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #4CAF50;
+    flex-shrink: 0;
+}
+
+/* Merge tabs */
+.merge-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 0;
+    background: #f1f3f5;
+    border-radius: 12px 12px 0 0;
+    padding: 4px 4px 0;
+}
+
+.merge-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 10px 10px 0 0;
+    background: transparent;
+    color: #6c757d;
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.merge-tab:hover {
+    color: #495057;
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.merge-tab.active {
+    background: #fff;
+    color: #212529;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.merge-tab.active[data-merge-type="options"] {
+    color: #1565c0;
+}
+
+.merge-tab.active[data-merge-type="hybrid"] {
+    color: #7b1fa2;
+}
+
+.merge-tab-icon {
+    font-size: 1.1em;
+}
+
+.merge-tab-label {
+    font-size: 0.9em;
+}
+
+/* Merge tab content */
+.merge-tab-content {
+    display: none;
+    background: #fff;
+    border-radius: 0 0 12px 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    border: 1px solid #e9ecef;
+    border-top: none;
+}
+
+.merge-tab-content.active {
+    display: block;
+}
+
+.merge-tab-description {
+    font-size: 0.85em;
+    color: #6c757d;
+    margin-bottom: 16px;
+    line-height: 1.4;
+}
+
+/* Merge estimation panel (inside each tab) */
+.merge-estimation-panel {
+    margin-bottom: 16px;
+    padding: 14px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    min-height: 60px;
+}
+
+.merge-estimation-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px;
+    color: #6c757d;
+}
+
+.merge-estimation-loading .loading-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(76, 175, 80, 0.2);
+    border-top-color: #4CAF50;
+    border-radius: 50%;
+    animation: merge-spinner 0.8s linear infinite;
+}
+
+@keyframes merge-spinner {
+    to { transform: rotate(360deg); }
+}
+
+.merge-estimation-loading .loading-text {
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.merge-estimation-result {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.estimation-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.estimation-label {
+    font-size: 0.72em;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.estimation-value {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #212529;
+    padding: 8px 12px;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.estimation-value.estimation-desc {
+    font-weight: 400;
+    font-size: 0.85em;
+    color: #495057;
+    line-height: 1.4;
+}
+
+/* Estimation values color by type */
+#merge-tab-content-options .estimation-value {
+    border-left: 3px solid #2196F3;
+}
+
+#merge-tab-content-hybrid .estimation-value {
+    border-left: 3px solid #9C27B0;
+}
+
+/* Confidence bar */
+.estimation-confidence-bar {
+    height: 6px;
+    background: #e9ecef;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.estimation-confidence-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+    background: #4CAF50;
+}
+
+/* Merge confirm buttons */
+.merge-confirm-btn {
+    width: 100%;
+    padding: 14px 20px;
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #212529;
+}
+
+.merge-confirm-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.merge-confirm-options {
+    border-color: #2196F3;
+    color: #1565c0;
+    background: linear-gradient(135deg, #e3f2fd 0%, #fff 100%);
+}
+
+.merge-confirm-options:hover {
+    background: linear-gradient(135deg, #bbdefb 0%, #e3f2fd 100%);
+}
+
+.merge-confirm-hybrid {
+    border-color: #9C27B0;
+    color: #7b1fa2;
+    background: linear-gradient(135deg, #f3e5f5 0%, #fff 100%);
+}
+
+.merge-confirm-hybrid:hover {
+    background: linear-gradient(135deg, #e1bee7 0%, #f3e5f5 100%);
+}
+
+.merge-dialog-cancel {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: #f8f9fa;
+    color: #6c757d;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.merge-dialog-cancel:hover {
+    background: #e9ecef;
+    color: #495057;
+}
+
+/* =====================================================
+   GROUPED/COMBINED ITEMS VISUAL INDICATORS
+   ===================================================== */
+
+/* Grouped items indicator badge */
+.item-group-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #1565c0;
+    margin-left: 8px;
+}
+
+.item-group-indicator .group-icon {
+    font-size: 1em;
+}
+
+.item-group-indicator .group-count {
+    background: rgba(21, 101, 192, 0.15);
+    padding: 1px 5px;
+    border-radius: 8px;
+}
+
+/* Combined item indicator (when items are merged into one) */
+.item-combined-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #7b1fa2;
+    margin-left: 8px;
+}
+
+.item-combined-indicator .combined-icon {
+    font-size: 1em;
+}
+
+/* Grouped item section with visual connector */
+.itinerary-item-section.in-group {
+    position: relative;
+    border-left: 3px solid #2196F3;
+    margin-left: 12px;
+}
+
+.itinerary-item-section.in-group::before {
+    content: '';
+    position: absolute;
+    left: -15px;
+    top: 50%;
+    width: 12px;
+    height: 2px;
+    background: #2196F3;
+}
+
+/* Group header styling */
+.item-group-header {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    padding: 12px 16px;
+    border-radius: 12px 12px 0 0;
+    margin-bottom: -4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.item-group-header .group-header-icon {
+    font-size: 1.2em;
+}
+
+.item-group-header .group-header-title {
+    font-weight: 600;
+    color: #1565c0;
+    flex: 1;
+}
+
+.item-group-header .group-header-count {
+    font-size: 0.85em;
+    color: #1976d2;
+    background: rgba(255, 255, 255, 0.7);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+/* Options group wrapper (grouped items rendered together) */
+.options-group-wrapper {
+    border: 2px solid #bbdefb;
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #f5f9ff 0%, #eef5ff 100%);
+}
+
+.options-group-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    flex-wrap: wrap;
+}
+
+.options-group-header-icon {
+    font-size: 1.2em;
+}
+
+.options-group-header-title {
+    font-weight: 700;
+    font-size: 0.95em;
+    color: #1565c0;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.options-group-header-desc {
+    font-size: 0.8em;
+    color: #1976d2;
+    opacity: 0.8;
+    width: 100%;
+    order: 10;
+    line-height: 1.3;
+}
+
+.options-group-header-count {
+    font-size: 0.8em;
+    color: #1976d2;
+    background: rgba(255, 255, 255, 0.7);
+    padding: 2px 10px;
+    border-radius: 10px;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.options-group-dissolve-btn {
+    font-size: 0.78em;
+    color: #c62828;
+    background: rgba(198, 40, 40, 0.08);
+    border: 1px solid rgba(198, 40, 40, 0.2);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.options-group-dissolve-btn:hover {
+    background: rgba(198, 40, 40, 0.15);
+    border-color: rgba(198, 40, 40, 0.4);
+}
+
+.options-group-items {
+    padding: 8px;
+}
+
+.options-group-items .itinerary-item-section {
+    margin-left: 0;
+    border-left-color: transparent;
+}
+
+.options-group-items .itinerary-item-section::before {
+    display: none;
+}
+
+/* Combined item visual enhancement */
+.itinerary-item-section.is-combined {
+    border-left: 3px solid #9C27B0;
+}
+
+.itinerary-item-section.is-combined .itinerary-item {
+    background: linear-gradient(135deg, #faf5fc 0%, #f3e5f5 100%);
+}
+
+/* Source items that have been combined into another (hidden/collapsed) */
+.itinerary-item-section.combined-source {
+    display: none;
+}
+
+/* Expandable combined sources list */
+.combined-sources-section {
+    padding: 8px 16px;
+    background: rgba(156, 39, 176, 0.05);
+    border-top: 1px dashed rgba(156, 39, 176, 0.3);
+}
+
+.combined-sources-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85em;
+    color: #7b1fa2;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.2s ease;
+}
+
+.combined-sources-toggle:hover {
+    background: rgba(156, 39, 176, 0.1);
+}
+
+.combined-sources-list {
+    margin-top: 8px;
+    padding-left: 12px;
+    border-left: 2px solid rgba(156, 39, 176, 0.3);
+}
+
+.combined-hybrid-description {
+    font-size: 0.85em;
+    color: #6c757d;
+    font-style: italic;
+    padding: 8px 0;
+    margin-bottom: 8px;
+    border-bottom: 1px solid rgba(156, 39, 176, 0.15);
+    line-height: 1.4;
+}
+
+/* Combined sources header with split action */
+.combined-sources-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.uncombine-all-btn {
+    font-size: 0.78em;
+    color: #dc3545;
+    background: rgba(220, 53, 69, 0.08);
+    border: 1px solid rgba(220, 53, 69, 0.2);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.uncombine-all-btn:hover {
+    background: rgba(220, 53, 69, 0.15);
+    border-color: rgba(220, 53, 69, 0.4);
+}
+
+/* Uncombine individual source button */
+.uncombine-source-btn {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid rgba(156, 39, 176, 0.25);
+    background: rgba(156, 39, 176, 0.06);
+    color: #7b1fa2;
+    font-size: 0.75em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+    line-height: 1;
+}
+
+.uncombine-source-btn:hover {
+    background: rgba(220, 53, 69, 0.15);
+    border-color: rgba(220, 53, 69, 0.4);
+    color: #dc3545;
+}
+
+.combined-source-item {
+    font-size: 0.85em;
+    color: #666;
+    padding: 4px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+/* Leave group button (inside group indicator) */
+.leave-group-btn {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid rgba(21, 101, 192, 0.25);
+    background: rgba(21, 101, 192, 0.06);
+    color: #1565c0;
+    font-size: 0.65em;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+    line-height: 1;
+    margin-left: 2px;
+}
+
+.leave-group-btn:hover {
+    background: rgba(220, 53, 69, 0.15);
+    border-color: rgba(220, 53, 69, 0.4);
+    color: #dc3545;
+}
+
+/* Hybrid indicator styling */
+.item-combined-indicator.has-hybrid {
+    background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+    border: 1px solid rgba(156, 39, 176, 0.3);
+}
+
+/* Group indicator with name */
+.item-group-indicator .group-name {
+    font-weight: 600;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.item-group-indicator .group-count {
+    font-size: 0.9em;
+    opacity: 0.8;
+}
