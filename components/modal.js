@@ -6147,7 +6147,7 @@ export async function showGroupDetailModal(group, allRecords) {
     if (modalQuantitySelector) modalQuantitySelector.innerHTML = '';
     if (modalNotesContainer) modalNotesContainer.style.display = 'none';
     if (modalCalendarContainer) modalCalendarContainer.innerHTML = '';
-    if (modalActionsContainer) modalActionsContainer.innerHTML = '';
+    if (modalActionsContainer) modalActionsContainer.style.display = 'none';
     if (modalAdditionalDetails) modalAdditionalDetails.innerHTML = '';
     if (modalHeaderActions) modalHeaderActions.innerHTML = '';
 
