@@ -2135,7 +2135,7 @@ async function initializePlanCarousel(componentRecords) {
 // Guard to prevent concurrent modal rendering
 let isModalRendering = false;
 
-export async function showDetailModal(record, startPhotoIndex = 0) {
+export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = null) {
     // Prevent concurrent modal renders that could cause duplicate content
     if (isModalRendering) {
         log('Modal', 'Modal is already rendering, skipping duplicate call');
@@ -4036,8 +4036,28 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     modalHeaderActions.innerHTML = '';
     const breadcrumbs = getBreadcrumbs(record);
 
-    // For solution items, add a back navigation to parent concept
-    if (record.isSolution && record.parentConceptRecord) {
+    // If opened from a group detail modal, show breadcrumb back to group
+    if (fromGroup && fromGroup.id) {
+        const groupName = fromGroup.name || 'Options';
+        modalBreadcrumbs.innerHTML = `
+            <a class="group-back-link" data-group-id="${fromGroup.id}" title="Back to ${groupName}">
+                ← ${groupName}
+            </a>
+            <span class="breadcrumb-separator">›</span>
+            <span class="breadcrumb-current">${record.fields.Name}</span>
+        `;
+
+        // Add click handler for back navigation to group
+        const groupBackLink = modalBreadcrumbs.querySelector('.group-back-link');
+        if (groupBackLink) {
+            groupBackLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                log('Modal', `Navigating back to options group: ${groupName}`);
+                showGroupDetailModal(fromGroup, state.records.all);
+            });
+        }
+    } else if (record.isSolution && record.parentConceptRecord) {
         // Solution items get special breadcrumb with back arrow to parent concept
         const parentConcept = record.parentConceptRecord;
         modalBreadcrumbs.innerHTML = `
@@ -6071,7 +6091,264 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     isModalRendering = false;
 }
 
-export function hideDetailModal() {
+/**
+ * Show the detail modal for an options group, displaying each item as a selectable option.
+ * @param {Object} group - The group object { id, name, description, items: string[] }
+ * @param {Object[]} allRecords - All records for looking up item details
+ */
+export async function showGroupDetailModal(group, allRecords) {
+    if (!group || !group.items || group.items.length === 0) return;
+
+    // Prevent concurrent modal renders
+    if (isModalRendering) {
+        log('Modal', 'Modal is already rendering, skipping duplicate call');
+        return;
+    }
+    isModalRendering = true;
+
+    log('Modal', `Showing group detail modal for: ${group.name}`);
+
+    const modalHeaderActions = document.getElementById('modal-header-actions');
+    const modalItemName = document.getElementById('modal-item-name');
+    const modalItemPrice = document.getElementById('modal-item-price');
+    const modalItemDescription = document.getElementById('modal-item-description');
+    const modalMainImage = document.getElementById('modal-main-image');
+    const modalThumbnailStrip = document.getElementById('modal-thumbnail-strip');
+    const modalOptionsContainer = document.getElementById('modal-options-container');
+    const modalQuantitySelector = document.getElementById('modal-quantity-selector');
+    const modalNotesContainer = document.getElementById('modal-notes-container');
+    const modalCalendarContainer = document.getElementById('modal-calendar-container');
+    const modalActionsContainer = document.getElementById('modal-actions-container');
+    const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
+    const modalAdditionalDetails = document.getElementById('modal-additional-details');
+
+    // Reset modal state first
+    resetModalState();
+
+    // Set the group name and description
+    modalItemName.textContent = group.name || 'Options';
+    modalItemDescription.textContent = group.description || 'Choose from the available options below.';
+
+    // Clear sections not needed for group view
+    if (modalItemPrice) modalItemPrice.innerHTML = '';
+    if (modalQuantitySelector) modalQuantitySelector.innerHTML = '';
+    if (modalNotesContainer) modalNotesContainer.style.display = 'none';
+    if (modalCalendarContainer) modalCalendarContainer.innerHTML = '';
+    if (modalActionsContainer) modalActionsContainer.innerHTML = '';
+    if (modalAdditionalDetails) modalAdditionalDetails.innerHTML = '';
+    if (modalHeaderActions) modalHeaderActions.innerHTML = '';
+
+    // Clear breadcrumbs for group view (this is the top-level group)
+    if (modalBreadcrumbs) {
+        modalBreadcrumbs.innerHTML = `
+            <span class="breadcrumb-current group-breadcrumb-label">📂 Options Group</span>
+        `;
+    }
+
+    // Build a collage/grid of images from the group's items
+    const imageUrls = [];
+    const groupRecords = [];
+    for (const itemId of group.items) {
+        const record = allRecords.find(r => r.id === itemId);
+        if (record) {
+            groupRecords.push(record);
+            // Get images from cache or fetch
+            if (window.itemImagesCache && window.itemImagesCache.has(itemId)) {
+                const cached = window.itemImagesCache.get(itemId);
+                if (cached.images && cached.images.length > 0) {
+                    imageUrls.push(cached.images[cached.currentIndex || 0]);
+                }
+            } else {
+                try {
+                    const { imageUrls: fetched } = await api.fetchImagesForRecord(record, allRecords, new Map());
+                    if (fetched && fetched.length > 0) {
+                        imageUrls.push(fetched[0]);
+                        if (window.itemImagesCache) {
+                            window.itemImagesCache.set(itemId, { images: fetched, currentIndex: 0 });
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Failed to fetch images for group item:', itemId, err);
+                }
+            }
+        }
+    }
+
+    // Show a grid of images in the main image area
+    if (modalMainImage) {
+        if (imageUrls.length > 0) {
+            const gridClass = imageUrls.length === 1 ? 'single' : imageUrls.length === 2 ? 'two' : 'multi';
+            modalMainImage.innerHTML = `
+                <div class="group-modal-image-grid ${gridClass}">
+                    ${imageUrls.slice(0, 4).map(url => `
+                        <div class="group-modal-image-cell" style="background-image: url('${url}');"></div>
+                    `).join('')}
+                </div>
+            `;
+        } else {
+            modalMainImage.innerHTML = `
+                <div class="group-modal-image-placeholder">
+                    <span class="group-modal-image-placeholder-icon">📂</span>
+                    <span>Options Group</span>
+                </div>
+            `;
+        }
+    }
+    if (modalThumbnailStrip) modalThumbnailStrip.innerHTML = '';
+
+    // Build the options list - each item as a clickable option card
+    if (modalOptionsContainer) {
+        const optionCardsHTML = groupRecords.map((record, idx) => {
+            const name = record.fields.Name || 'Untitled';
+            const desc = record.fields.Description || '';
+            const truncDesc = desc.length > 80 ? desc.substring(0, 80) + '...' : desc;
+            const price = record.fields.Price ? `$${parseFloat(record.fields.Price).toFixed(2)}` : '';
+            const imgUrl = imageUrls[idx] || '';
+            const imgStyle = imgUrl ? `background-image: url('${imgUrl}');` : '';
+
+            return `
+                <div class="group-option-card" data-record-id="${record.id}" data-group-id="${group.id}" role="button" tabindex="0">
+                    <div class="group-option-card-image" style="${imgStyle}">
+                        ${!imgUrl ? '<span class="group-option-card-no-img">📷</span>' : ''}
+                    </div>
+                    <div class="group-option-card-info">
+                        <div class="group-option-card-name">${name}</div>
+                        ${truncDesc ? `<div class="group-option-card-desc">${truncDesc}</div>` : ''}
+                        ${price ? `<div class="group-option-card-price">${price}</div>` : ''}
+                    </div>
+                    <div class="group-option-card-arrow">→</div>
+                </div>
+            `;
+        }).join('');
+
+        modalOptionsContainer.innerHTML = `
+            <div class="group-options-container">
+                <div class="group-options-label">${group.items.length} options available</div>
+                ${optionCardsHTML}
+                <button class="group-dissolve-modal-btn" data-group-id="${group.id}">Ungroup All</button>
+            </div>
+        `;
+
+        // Add click handlers for option cards
+        const optionCards = modalOptionsContainer.querySelectorAll('.group-option-card');
+        optionCards.forEach(card => {
+            card.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const recordId = card.dataset.recordId;
+                const record = allRecords.find(r => r.id === recordId);
+                if (record) {
+                    log('Modal', `Navigating to option item: ${record.fields.Name}`);
+                    // Open item detail with group breadcrumb context
+                    showDetailModal(record, 0, group);
+                }
+            });
+            // Keyboard support
+            card.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    card.click();
+                }
+            });
+        });
+
+        // Add dissolve/ungroup button handler
+        const dissolveBtn = modalOptionsContainer.querySelector('.group-dissolve-modal-btn');
+        if (dissolveBtn) {
+            dissolveBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const groupId = dissolveBtn.dataset.groupId;
+                if (groupId && state.session.relatedGroups) {
+                    state.session.relatedGroups = state.session.relatedGroups.filter(g => g.id !== groupId);
+                    hideDetailModal();
+                    // Trigger re-render (the presentation module will handle this via event)
+                    window.dispatchEvent(new CustomEvent('groupDissolved', { detail: { groupId } }));
+                }
+            });
+        }
+    }
+
+    // Show the modal
+    const isPresentationActive = document.querySelector('.presentation-overlay')?.classList.contains('active');
+    const modalZIndex = isPresentationActive ? getModalZIndex() : 1000;
+
+    modalOverlay.classList.add('active');
+    modalOverlay.style.cssText = `
+        display: flex;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.6);
+        z-index: ${modalZIndex};
+        justify-content: center;
+        align-items: center;
+        opacity: 1;
+        pointer-events: auto;
+    `;
+
+    const modalContentEl = modalOverlay.querySelector('.modal-content');
+    if (modalContentEl) {
+        const isMobile = window.innerWidth <= 768;
+        if (isMobile) {
+            modalContentEl.style.cssText = `
+                background: #fff;
+                border-radius: 12px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                width: 90%;
+                max-width: 1100px;
+                height: auto;
+                max-height: 95vh;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                position: relative;
+                color: #333;
+                transform: scale(1);
+                opacity: 1;
+                pointer-events: auto;
+            `;
+        } else {
+            modalContentEl.style.cssText = `
+                background: #fff;
+                border-radius: 12px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                width: 90%;
+                max-width: 1100px;
+                height: 90vh;
+                max-height: 700px;
+                display: flex;
+                overflow: hidden;
+                position: relative;
+                color: #333;
+                transform: scale(1);
+                opacity: 1;
+                pointer-events: auto;
+            `;
+        }
+    }
+
+    document.body.classList.add('modal-open');
+
+    // Set up close handlers
+    const closeBtn = document.getElementById('modal-close-btn');
+    if (closeBtn) {
+        closeBtn.onclick = closeDetailModal;
+    }
+    modalOverlay.addEventListener('click', handleOverlayClick);
+    document.addEventListener('keydown', handleEscapeKey);
+
+    // Hide search photos container
+    const searchPhotosContainer = document.getElementById('modal-search-photos-container');
+    if (searchPhotosContainer) searchPhotosContainer.style.display = 'none';
+
+    // Hide set cover photo container
+    const setCoverPhotoContainer = document.getElementById('set-cover-photo-container');
+    if (setCoverPhotoContainer) setCoverPhotoContainer.style.display = 'none';
+
+    isModalRendering = false;
+}
+
     console.log('[hideDetailModal] Called.');
     // Reset the rendering guard when modal is closed
     isModalRendering = false;

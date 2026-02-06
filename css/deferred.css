@@ -12252,6 +12252,336 @@ hr.total-divider {
     display: none;
 }
 
+/* === Options Group Card (Collapsed Single-Item Display) === */
+.options-group-card-section {
+    border-left: 3px solid #2196F3;
+}
+
+.options-group-card {
+    background: linear-gradient(135deg, #f5f9ff 0%, #eef5ff 100%);
+    border: 1px solid #bbdefb;
+}
+
+.options-group-card-header {
+    cursor: pointer;
+}
+
+.options-group-card-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border: 1px solid rgba(33, 150, 243, 0.3);
+    border-radius: 12px;
+    font-size: 0.78em;
+    font-weight: 600;
+    color: #1565c0;
+    white-space: nowrap;
+}
+
+.options-group-card-content {
+    cursor: pointer;
+}
+
+/* Stacked image preview for group card */
+.options-group-card-images {
+    position: relative;
+    width: 100%;
+    height: 140px;
+    margin-bottom: 10px;
+}
+
+.options-group-card-images.single {
+    height: 140px;
+}
+
+.options-group-card-images .options-group-card-img {
+    position: absolute;
+    width: 75%;
+    height: 100px;
+    background-size: cover;
+    background-position: center;
+    border-radius: 10px;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    transition: transform 0.2s ease;
+}
+
+.options-group-card-images .options-group-card-img:nth-child(1) {
+    top: 0;
+    left: 0;
+    transform: rotate(-3deg);
+}
+
+.options-group-card-images .options-group-card-img:nth-child(2) {
+    top: 10px;
+    left: 15%;
+    transform: rotate(2deg);
+}
+
+.options-group-card-images .options-group-card-img:nth-child(3) {
+    top: 20px;
+    left: 8%;
+    transform: rotate(-1deg);
+}
+
+.options-group-card-images.single .options-group-card-img {
+    width: 100%;
+    height: 140px;
+    position: relative;
+    transform: none;
+}
+
+.options-group-card-images.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(33, 150, 243, 0.06);
+    border-radius: 10px;
+    border: 2px dashed rgba(33, 150, 243, 0.2);
+}
+
+.options-group-card-img-placeholder {
+    font-size: 2.5em;
+    opacity: 0.4;
+}
+
+.options-group-card-desc {
+    font-size: 0.85em;
+    color: #555;
+    line-height: 1.4;
+    margin-bottom: 8px;
+}
+
+.options-group-card-items-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.options-group-card-item-chip {
+    display: inline-block;
+    padding: 4px 10px;
+    background: rgba(33, 150, 243, 0.1);
+    border: 1px solid rgba(33, 150, 243, 0.2);
+    border-radius: 16px;
+    font-size: 0.78em;
+    color: #1565c0;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
+.options-group-expand-btn {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border: 1px solid rgba(33, 150, 243, 0.3);
+    color: #1565c0;
+}
+
+.options-group-expand-btn:hover {
+    background: linear-gradient(135deg, #bbdefb 0%, #90caf9 100%);
+    border-color: rgba(33, 150, 243, 0.5);
+}
+
+/* === Group Detail Modal Styles === */
+.group-modal-image-grid {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    gap: 4px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.group-modal-image-grid.single {
+    grid-template-columns: 1fr;
+}
+
+.group-modal-image-grid.two {
+    grid-template-columns: 1fr 1fr;
+}
+
+.group-modal-image-grid.multi {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+}
+
+.group-modal-image-cell {
+    background-size: cover;
+    background-position: center;
+    min-height: 120px;
+}
+
+.group-modal-image-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #f5f9ff 0%, #eef5ff 100%);
+    color: #90a4ae;
+    font-size: 0.9em;
+}
+
+.group-modal-image-placeholder-icon {
+    font-size: 3em;
+    opacity: 0.5;
+}
+
+/* Group options container in modal */
+.group-options-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 0;
+}
+
+.group-options-label {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #1565c0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding-bottom: 4px;
+    border-bottom: 2px solid #e3f2fd;
+}
+
+/* Individual option card in group modal */
+.group-option-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.group-option-card:hover {
+    border-color: #2196F3;
+    background: linear-gradient(135deg, #f5f9ff 0%, #eef5ff 100%);
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.15);
+    transform: translateX(2px);
+}
+
+.group-option-card:focus {
+    outline: 2px solid #2196F3;
+    outline-offset: 2px;
+}
+
+.group-option-card-image {
+    width: 56px;
+    height: 56px;
+    border-radius: 8px;
+    background-size: cover;
+    background-position: center;
+    background-color: #f5f5f5;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.group-option-card-no-img {
+    font-size: 1.4em;
+    opacity: 0.3;
+}
+
+.group-option-card-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.group-option-card-name {
+    font-weight: 600;
+    font-size: 0.92em;
+    color: #333;
+    margin-bottom: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.group-option-card-desc {
+    font-size: 0.78em;
+    color: #777;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.group-option-card-price {
+    font-size: 0.82em;
+    font-weight: 600;
+    color: #2e7d32;
+    margin-top: 2px;
+}
+
+.group-option-card-arrow {
+    font-size: 1.1em;
+    color: #bbb;
+    flex-shrink: 0;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.group-option-card:hover .group-option-card-arrow {
+    color: #2196F3;
+    transform: translateX(3px);
+}
+
+/* Dissolve button inside group modal */
+.group-dissolve-modal-btn {
+    padding: 8px 16px;
+    background: rgba(198, 40, 40, 0.06);
+    border: 1px solid rgba(198, 40, 40, 0.2);
+    border-radius: 8px;
+    color: #c62828;
+    font-size: 0.82em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 4px;
+    align-self: center;
+    width: 100%;
+    text-align: center;
+}
+
+.group-dissolve-modal-btn:hover {
+    background: rgba(198, 40, 40, 0.12);
+    border-color: rgba(198, 40, 40, 0.4);
+}
+
+/* Group breadcrumb styling */
+.group-breadcrumb-label {
+    color: #1565c0;
+    font-weight: 500;
+    font-size: 0.85em;
+}
+
+.group-back-link {
+    color: #1565c0;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.85em;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.group-back-link:hover {
+    color: #0d47a1;
+    text-decoration: underline;
+}
+
 /* Combined item visual enhancement */
 .itinerary-item-section.is-combined {
     border-left: 3px solid #9C27B0;

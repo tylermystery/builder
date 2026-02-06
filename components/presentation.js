@@ -5,7 +5,7 @@ import { updateUrl, getRecordPrice, parseOptions, flattenOptionGroups } from '..
 import { log } from '../utils/debug.js';
 import { getCurrentUser, sendMessage as sendChatMessage, getReplyingToMessage, clearReplyState } from '../chat.js';
 import { triggerSave } from '../events.js';
-import { showDetailModal, showCheckoutModal, getShopSettings } from './modal.js';
+import { showDetailModal, showGroupDetailModal, showCheckoutModal, getShopSettings } from './modal.js';
 import { Shader } from '../utils/shader.js';
 import { showWtfPlansPanel } from './wtfPlansPanel.js';
 import { updateEventPlanSection, updateIdeasCarousel } from './sidebar.js';
@@ -2606,37 +2606,87 @@ async function renderAllItems() {
         });
 
         if (itemGroup && itemGroup.id && !renderedGroupIds.has(itemGroup.id)) {
-            // First time seeing this group - render group header + all group items together
+            // First time seeing this group - render as a single collapsed card
             renderedGroupIds.add(itemGroup.id);
             const groupItems = Array.isArray(itemGroup) ? itemGroup : (itemGroup.items || []);
             const groupName = itemGroup.name || `${groupItems.length} Options`;
             const groupDesc = itemGroup.description || '';
 
-            // Group header
-            itemsHTML.push(`
-                <div class="options-group-wrapper" data-group-id="${itemGroup.id}">
-                    <div class="options-group-header" data-group-id="${itemGroup.id}">
-                        <span class="options-group-header-icon">📂</span>
-                        <span class="options-group-header-title">${groupName}</span>
-                        ${groupDesc ? `<span class="options-group-header-desc">${groupDesc}</span>` : ''}
-                        <span class="options-group-header-count">${groupItems.length} options</span>
-                        <button class="options-group-dissolve-btn" data-group-id="${itemGroup.id}" title="Dissolve group">Ungroup</button>
-                    </div>
-                    <div class="options-group-items">
-            `);
-
-            // Render all items in this group in their original order
-            for (const groupItemId of groupItems) {
-                const groupItem = combinedList.find(ci => ci.recordId === groupItemId);
-                if (groupItem) {
-                    const html = await renderItineraryItem(groupItem, i);
-                    if (html) itemsHTML.push(html);
+            // Build a stacked image preview from the first few items in the group
+            const groupImagePreviews = [];
+            for (let gi = 0; gi < Math.min(groupItems.length, 3); gi++) {
+                const gItemId = groupItems[gi];
+                const gRecord = state.records.all.find(r => r.id === gItemId);
+                if (gRecord) {
+                    if (!itemImagesCache.has(gItemId)) {
+                        const { imageUrls } = await api.fetchImagesForRecord(gRecord, state.records.all, new Map());
+                        itemImagesCache.set(gItemId, { images: imageUrls || [], currentIndex: 0 });
+                    }
+                    const cached = itemImagesCache.get(gItemId);
+                    if (cached && cached.images.length > 0) {
+                        groupImagePreviews.push(cached.images[cached.currentIndex || 0]);
+                    }
                 }
             }
 
-            itemsHTML.push(`
+            // Create stacked image HTML
+            let groupImageHTML = '';
+            if (groupImagePreviews.length >= 2) {
+                groupImageHTML = `
+                    <div class="options-group-card-images">
+                        ${groupImagePreviews.map((url, idx) => `
+                            <div class="options-group-card-img" style="background-image: url('${url}'); z-index: ${groupImagePreviews.length - idx};"></div>
+                        `).join('')}
                     </div>
-                </div>
+                `;
+            } else if (groupImagePreviews.length === 1) {
+                groupImageHTML = `
+                    <div class="options-group-card-images single">
+                        <div class="options-group-card-img" style="background-image: url('${groupImagePreviews[0]}');"></div>
+                    </div>
+                `;
+            } else {
+                groupImageHTML = `<div class="options-group-card-images empty"><div class="options-group-card-img-placeholder">📂</div></div>`;
+            }
+
+            // Get item names for subtitle
+            const itemNames = groupItems.map(gId => {
+                const gRec = state.records.all.find(r => r.id === gId);
+                return gRec?.fields?.Name || 'Item';
+            });
+            const itemNamesPreview = itemNames.length <= 3
+                ? itemNames.join(', ')
+                : itemNames.slice(0, 2).join(', ') + ` +${itemNames.length - 2} more`;
+
+            // Render as a single card that looks like an item
+            itemsHTML.push(`
+                <section class="itinerary-section itinerary-item-section options-group-card-section" data-section="group-${itemGroup.id}">
+                    <article class="itinerary-item item-accordion expanded options-group-card" data-group-id="${itemGroup.id}" data-group-name="${escapeHtml(groupName)}">
+                        <div class="item-accordion-header options-group-card-header" data-group-id="${itemGroup.id}">
+                            <div class="item-accordion-title-row">
+                                <h3 class="item-accordion-title">${escapeHtml(groupName)}</h3>
+                                <span class="options-group-card-badge">${groupItems.length} options</span>
+                                <span class="item-accordion-icon"></span>
+                            </div>
+                            <p class="item-accordion-summary">${escapeHtml(itemNamesPreview)}</p>
+                        </div>
+                        <div class="item-accordion-content options-group-card-content" data-group-id="${itemGroup.id}">
+                            <div class="itinerary-item-content">
+                                ${groupImageHTML}
+                                <div class="itinerary-item-details">
+                                    ${groupDesc ? `<p class="options-group-card-desc">${escapeHtml(groupDesc)}</p>` : ''}
+                                    <div class="options-group-card-items-preview">
+                                        ${itemNames.map(name => `<span class="options-group-card-item-chip">${escapeHtml(name)}</span>`).join('')}
+                                    </div>
+                                    <button class="itinerary-item-expand-btn options-group-expand-btn" data-group-id="${itemGroup.id}" title="View options">
+                                        <span class="expand-btn-icon">↗</span>
+                                        <span class="expand-btn-text">View Options</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+                </section>
             `);
         } else if (itemGroup && itemGroup.id && renderedGroupIds.has(itemGroup.id)) {
             // Already rendered this group's items in the block above - skip
@@ -2747,6 +2797,32 @@ function initializeCombinedSourcesToggles() {
             const groupId = btn.dataset.groupId;
             if (groupId) {
                 dissolveGroup(groupId);
+            }
+        });
+    });
+
+    // Options group card - "View Options" button click
+    const groupExpandBtns = itineraryItemsListEl.querySelectorAll('.options-group-expand-btn');
+    groupExpandBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            const groupId = btn.dataset.groupId;
+            if (groupId) {
+                openGroupDetailModal(groupId);
+            }
+        });
+    });
+
+    // Options group card - content area click
+    const groupCardContents = itineraryItemsListEl.querySelectorAll('.options-group-card-content');
+    groupCardContents.forEach(el => {
+        el.addEventListener('click', (e) => {
+            if (e.target.closest('.options-group-expand-btn')) return;
+            e.stopPropagation();
+            const groupId = el.dataset.groupId;
+            if (groupId) {
+                openGroupDetailModal(groupId);
             }
         });
     });
@@ -5335,6 +5411,17 @@ function getItemGroup(recordId) {
         const items = Array.isArray(g) ? g : (g.items || []);
         return items.includes(recordId);
     });
+}
+
+// Open the group detail modal for an options group by its ID
+function openGroupDetailModal(groupId) {
+    if (!state.session.relatedGroups) return;
+    const group = state.session.relatedGroups.find(g => g.id === groupId);
+    if (!group) {
+        log('Presentation', `Group not found for ID: ${groupId}`);
+        return;
+    }
+    showGroupDetailModal(group, state.records.all);
 }
 
 // Uncombine a single source item from a hybrid merge
@@ -10002,6 +10089,15 @@ export function setupPresentationEventListeners() {
     // Handle task status button clicks on items
     console.log('[Events DEBUG] Adding handleTaskStatusClick listener to itineraryItemsListEl:', itineraryItemsListEl);
     itineraryItemsListEl.addEventListener('click', handleTaskStatusClick);
+
+    // Handle group dissolved events from modal
+    window.addEventListener('groupDissolved', async (e) => {
+        log('Presentation', `Group dissolved from modal: ${e.detail?.groupId}`);
+        await renderAllItems();
+        generateItemsSummary();
+        updatePresentationHeaderTotal();
+        triggerSave();
+    });
 
     // Handle task status button clicks on event details (date, goals, etc.)
     const headerAccordionContent = modal.querySelector('.itinerary-header .itinerary-accordion-content');
