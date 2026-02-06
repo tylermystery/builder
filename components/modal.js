@@ -6320,8 +6320,7 @@ export async function showGroupDetailModal(group, allRecords) {
     }
 
     // Show the modal
-    const isPresentationActive = document.querySelector('.presentation-overlay')?.classList.contains('active');
-    const modalZIndex = isPresentationActive ? getModalZIndex() : 1000;
+    const modalZIndex = getModalZIndex('detail');
 
     modalOverlay.classList.add('active');
     modalOverlay.style.cssText = `
