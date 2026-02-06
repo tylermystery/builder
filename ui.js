@@ -1,4 +1,5 @@
 // FILE: ui.js (REPLACE ENTIRE FILE)
+console.log('[MODULE DEBUG] ui.js module starting to load...', performance.now().toFixed(2) + 'ms');
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { log } from './utils/debug.js';
@@ -12,6 +13,12 @@ import { showPresentationView, hidePresentationView, setupPresentationEventListe
 import { addEnergy, updateProgress } from './components/backgroundEngine.js';
 import { shouldUseNetlifyImageCDN, optimizeImageUrl, applyCloudinaryTransform, hasCloudinaryTransformations } from './utils/imageOptimizer.js';
 
+console.log('[MODULE DEBUG] ui.js imports resolved. Checking key imports...');
+console.log('[MODULE DEBUG] ui.js: createInteractiveCard:', typeof createInteractiveCard);
+console.log('[MODULE DEBUG] ui.js: showPresentationView:', typeof showPresentationView);
+console.log('[MODULE DEBUG] ui.js: hidePresentationView:', typeof hidePresentationView);
+console.log('[MODULE DEBUG] ui.js: showItineraryModal:', typeof showItineraryModal);
+
 
 // Re-export functions from component modules
 export * from './components/card.js';
@@ -24,6 +31,8 @@ export { showPresentationView, hidePresentationView, setupPresentationEventListe
 export { updateFooter, initializeFooter } from './components/footer.js';
 // Phase 3a: Task Manager exports
 export { initTaskManager, getCurrentProjectId, getCurrentTasks } from './components/taskManager.js';
+
+console.log('[MODULE DEBUG] ui.js re-exports defined successfully.', performance.now().toFixed(2) + 'ms');
 
 
 // Optimized lazy loading with Netlify Image CDN, responsive images and modern format support
@@ -452,6 +461,15 @@ async function createGroupingCarouselSection(groupingRecord, childItems, allReco
 }
 
 export async function renderRecords(recordsToRender, imageCache, append = false) {
+    console.log('[CATALOG DEBUG] renderRecords called.', {
+        recordCount: recordsToRender?.length,
+        append,
+        hasImageCache: !!imageCache,
+        catalogContainerExists: !!document.getElementById('catalog-container'),
+        stateRecordsAll: state.records.all?.length,
+        stateRecordsFiltered: state.records.filtered?.length,
+        activeShopId: state.ui.activeShopId
+    });
     log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
 
     const catalogContainer = document.getElementById('catalog-container');

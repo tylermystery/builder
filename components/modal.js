@@ -1,4 +1,5 @@
 // REPLACE THE ENTIRE CONTENTS of components/modal.js
+console.log('[MODULE DEBUG] modal.js module starting to load...', performance.now().toFixed(2) + 'ms');
 
 import { state } from '../state.js';
 import * as ui from '../ui.js';
@@ -10,6 +11,8 @@ import { log } from '../utils/debug.js';
 import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { triggerSave } from '../events.js';
+
+console.log('[MODULE DEBUG] modal.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
 /**
  * Helper to create or update a meta tag
@@ -335,6 +338,7 @@ let currentProcessingFee = 0; // To store the current fee
 
 let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
+console.log('[MODAL DEBUG] modalOverlay initialized at module load:', !!modalOverlay);
 
 /**
  * Get shop settings from the current active shop
@@ -937,6 +941,7 @@ function getBreadcrumbs(record) {
 }
 
 function resetModalState() {
+    console.log('[MODAL DEBUG] resetModalState called.');
     const elements = {
         modalHeaderActions: document.getElementById('modal-header-actions'),
         modalItemName: document.getElementById('modal-item-name'),
@@ -2136,9 +2141,15 @@ async function initializePlanCarousel(componentRecords) {
 let isModalRendering = false;
 
 export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = null) {
+    console.log('[MODAL DEBUG] ========== showDetailModal called ==========');
+    console.log('[MODAL DEBUG] record:', record?.id, record?.fields?.Name);
+    console.log('[MODAL DEBUG] modalOverlay element:', !!modalOverlay);
+    console.log('[MODAL DEBUG] isModalRendering:', isModalRendering);
+
     // Prevent concurrent modal renders that could cause duplicate content
     if (isModalRendering) {
         log('Modal', 'Modal is already rendering, skipping duplicate call');
+        console.log('[MODAL DEBUG] BLOCKED: Modal is already rendering, skipping.');
         return;
     }
     isModalRendering = true;
@@ -5865,6 +5876,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     });
 
     modalOverlay.classList.add('active');
+    console.log('[MODAL DEBUG] Detail modal overlay activated (classList.add active)');
 
     // CRITICAL FIX: Apply essential overlay styles inline to ensure they work
     // even if CSS hasn't fully loaded (direct URL access scenario)
@@ -6097,6 +6109,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
  * @param {Object[]} allRecords - All records for looking up item details
  */
 export async function showGroupDetailModal(group, allRecords) {
+    console.log('[MODAL DEBUG] showGroupDetailModal called. group:', group?.name, 'items:', group?.items?.length);
     if (!group || !group.items || group.items.length === 0) return;
 
     // Prevent concurrent modal renders
@@ -6350,7 +6363,7 @@ export async function showGroupDetailModal(group, allRecords) {
 }
 
 export function hideDetailModal() {
-    console.log('[hideDetailModal] Called.');
+    console.log('[MODAL DEBUG] hideDetailModal called. modalOverlay:', !!modalOverlay, 'isActive:', modalOverlay?.classList?.contains('active'));
     // Reset the rendering guard when modal is closed
     isModalRendering = false;
 

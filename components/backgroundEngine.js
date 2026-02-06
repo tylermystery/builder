@@ -137,44 +137,62 @@ function updateSettings(newSettings) {
 }
 
 export function loadEffect(effect, controlsContainer) {
+    console.log('[BG-ENGINE DEBUG] loadEffect called.', {
+        effectName: effect?.name,
+        effectType: effect?.type,
+        hasInit: typeof effect?.init === 'function',
+        hasDraw: typeof effect?.draw === 'function',
+        canvasReady: !!canvas
+    });
     log('BG-Engine', `Loading effect: ${effect.name}`);
-    
+
     currentEffect = effect;
     settings = {};
-    
+
     if (!canvas) {
-        console.error('[BG-Engine] FATAL: Canvas not initialized before loadEffect!');
+        console.error('[BG-ENGINE DEBUG] FATAL: Canvas not initialized before loadEffect!');
         return;
     }
-    
+
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-            
+
     if (currentEffect.type === 'webgl') {
         gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
         ctx_2d = null;
-        
+
         if (!gl) {
-            console.error('[BG-Engine] FATAL: Could not get WebGL context!');
+            console.error('[BG-ENGINE DEBUG] FATAL: Could not get WebGL context!');
             return;
         }
-        
+        console.log('[BG-ENGINE DEBUG] WebGL context obtained successfully.');
+
         if (typeof currentEffect.init === 'function') {
             gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-            currentEffect.init(gl);
-            currentEffect.initialized = true;
+            try {
+                currentEffect.init(gl);
+                currentEffect.initialized = true;
+                console.log('[BG-ENGINE DEBUG] WebGL effect initialized successfully.');
+            } catch (e) {
+                console.error('[BG-ENGINE DEBUG] WebGL effect init FAILED:', e.message, e.stack);
+            }
         } else {
-            console.error('[BG-Engine] Effect has no init function!');
+            console.error('[BG-ENGINE DEBUG] Effect has no init function!');
         }
     } else if (currentEffect.type === 'canvas') {
         ctx_2d = canvas.getContext('2d');
         gl = null;
         if (ctx_2d && typeof currentEffect.init === 'function') {
             ctx_2d.globalAlpha = 0.4;
-            currentEffect.init(ctx_2d, canvas.width, canvas.height);
-            currentEffect.initialized = true;
+            try {
+                currentEffect.init(ctx_2d, canvas.width, canvas.height);
+                currentEffect.initialized = true;
+                console.log('[BG-ENGINE DEBUG] Canvas 2D effect initialized successfully.');
+            } catch (e) {
+                console.error('[BG-ENGINE DEBUG] Canvas 2D effect init FAILED:', e.message, e.stack);
+            }
         } else if (!ctx_2d) {
-            console.error('[BG-Engine] FATAL: Could not get 2D context!');
+            console.error('[BG-ENGINE DEBUG] FATAL: Could not get 2D context!');
         }
     }
 
@@ -227,11 +245,14 @@ export function loadEffect(effect, controlsContainer) {
 }
 
 export function initBackgroundEngine() {
+    console.log('[BG-ENGINE DEBUG] initBackgroundEngine called.');
     canvas = document.getElementById('kaleidoscope-bg');
     if (!canvas) {
-        console.error('[BG-Engine] FATAL: Background canvas not found in DOM!');
+        console.error('[BG-ENGINE DEBUG] FATAL: Background canvas #kaleidoscope-bg not found in DOM!');
+        console.error('[BG-ENGINE DEBUG] Available canvas elements:', document.querySelectorAll('canvas').length);
         return;
     }
+    console.log('[BG-ENGINE DEBUG] Canvas found:', { width: canvas.width, height: canvas.height, id: canvas.id });
 
     const resizeCanvas = () => {
         canvas.width = window.innerWidth;
@@ -267,6 +288,7 @@ export function initBackgroundEngine() {
 
     initDebugPanel();
 
+    console.log('[BG-ENGINE DEBUG] Hybrid WebGL/2D Engine Initialized. animationFrameId:', animationFrameId);
     log('BG-Engine', 'Hybrid WebGL/2D Engine Initialized with Page Visibility optimization.');
 }
 

@@ -3989,6 +3989,18 @@ select:focus-visible,
     </div>
 
 
+    <!-- Global error handler to catch module loading failures -->
+    <script>
+    window.addEventListener('error', function(event) {
+        console.error('[GLOBAL ERROR]', event.message, 'at', event.filename, ':', event.lineno, ':', event.colno);
+        console.error('[GLOBAL ERROR] Error object:', event.error);
+    });
+    window.addEventListener('unhandledrejection', function(event) {
+        console.error('[GLOBAL PROMISE REJECTION]', event.reason);
+    });
+    console.log('[GLOBAL DEBUG] Error handlers installed.', performance.now().toFixed(2) + 'ms');
+    </script>
+
     <script type="module" src="/main.js"></script>
     <!-- SortableJS and calendarExport will be loaded on-demand when needed -->
 

@@ -312,6 +312,12 @@ function sortRecords(records, sortBy, goalBucket) {
 
 
 export async function applyFiltersAndSort(imageCache) {
+    console.log('[FILTER DEBUG] applyFiltersAndSort called.', {
+        hasImageCache: !!imageCache,
+        totalRecords: state.records.all?.length,
+        activeShopId: state.ui.activeShopId,
+        url: window.location.search
+    });
     const catalogContainer = document.getElementById('catalog-container');
 
     const params = new URLSearchParams(window.location.search);
@@ -555,6 +561,13 @@ export async function applyFiltersAndSort(imageCache) {
 
     state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
+    console.log('[FILTER DEBUG] Filtering complete.', {
+        filteredCount: recordsToDisplay.length,
+        selectedCategory,
+        activeSubcategories,
+        view,
+        searchTerm: searchTerm || '(none)'
+    });
 
     if (catalogContainer) catalogContainer.innerHTML = '';
 

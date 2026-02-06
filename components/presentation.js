@@ -1,3 +1,4 @@
+console.log('[MODULE DEBUG] presentation.js module starting to load...', performance.now().toFixed(2) + 'ms');
 import { state, setState } from '../state.js';
 import * as api from '../api.js';
 import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, REACTION_SCORES, getModalZIndex } from '../config.js';
@@ -363,11 +364,18 @@ function resizePresentationBackground() {
 }
 
 function ensureDOMElements() {
-    // console.log('[Accordion DEBUG] ensureDOMElements called, modal already set:', !!modal);
+    console.log('[PRESENTATION DEBUG] ensureDOMElements called, modal already set:', !!modal);
     if (modal) return true; // Already initialized
 
     modal = document.getElementById('presentation-modal-overlay');
     closeBtn = document.getElementById('presentation-close-btn');
+    console.log('[PRESENTATION DEBUG] DOM lookup results:', {
+        modal: !!modal,
+        closeBtn: !!closeBtn,
+        itemsList: !!document.getElementById('itinerary-items-list'),
+        collaboratorsList: !!document.getElementById('itinerary-collaborators-list'),
+        summaryDateEl: !!document.getElementById('summary-event-date')
+    });
     // summaryEventNameEl removed - event name is now only in header
     summaryEventNotesEl = document.getElementById('summary-event-notes');
     summaryEventDateEl = document.getElementById('summary-event-date');
@@ -2514,6 +2522,12 @@ async function renderItineraryItem(item, index) {
 }
 
 async function renderAllItems() {
+    console.log('[PRESENTATION DEBUG] renderAllItems called.', {
+        lockedItemCount: state.cart.lockedItems.size,
+        ideaItemCount: state.cart.items.size,
+        lockedItemIds: Array.from(state.cart.lockedItems.keys()).slice(0, 5),
+        ideaItemIds: Array.from(state.cart.items.keys()).slice(0, 5)
+    });
     const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
     const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
     let combinedList = [...locked, ...favorites]; // Confirmed items first, then ideas
@@ -9764,6 +9778,16 @@ function handleKeyDown(e) {
 }
 
 export async function showPresentationView(listType, startRecordId = null) {
+    console.log('[PRESENTATION DEBUG] ========== showPresentationView called ==========');
+    console.log('[PRESENTATION DEBUG] listType:', listType, 'startRecordId:', startRecordId);
+    console.log('[PRESENTATION DEBUG] state.cart.lockedItems.size:', state.cart.lockedItems.size);
+    console.log('[PRESENTATION DEBUG] state.cart.items.size:', state.cart.items.size);
+    console.log('[PRESENTATION DEBUG] state.session.id:', state.session.id);
+    console.log('[PRESENTATION DEBUG] DOM check:', {
+        modalExists: !!document.getElementById('presentation-modal-overlay'),
+        closeBtnExists: !!document.getElementById('presentation-close-btn'),
+        itemsListExists: !!document.getElementById('itinerary-items-list')
+    });
     log('Presentation', `Showing itinerary presentation`);
     // console.log('[Accordion DEBUG] showPresentationView called');
 
@@ -9863,6 +9887,7 @@ export async function showPresentationView(listType, startRecordId = null) {
     document.body.classList.add('modal-open');
     document.body.classList.add('presentation-active');
     document.documentElement.classList.add('presentation-active');
+    console.log('[PRESENTATION DEBUG] Modal shown. Classes:', modal.className, 'Display:', modal.style.display);
     // Remove early-loading optimization class now that presentation is properly initialized
     document.body.classList.remove('presentation-loading');
     document.documentElement.classList.remove('presentation-loading');
@@ -9896,9 +9921,11 @@ export async function showPresentationView(listType, startRecordId = null) {
     initializeMergeDialogListeners();
 
     log('Presentation', 'Itinerary view rendered successfully');
+    console.log('[PRESENTATION DEBUG] ========== showPresentationView COMPLETE ==========');
 }
 
 export function hidePresentationView() {
+    console.log('[PRESENTATION DEBUG] hidePresentationView called. modal:', !!modal);
     if (!modal) return;
 
     // Unregister sync callback when closing presentation view
@@ -9962,13 +9989,12 @@ export function hidePresentationView() {
 }
 
 export function setupPresentationEventListeners() {
-    // console.log('[Accordion DEBUG] setupPresentationEventListeners called');
+    console.log('[PRESENTATION DEBUG] setupPresentationEventListeners called.');
     if (!ensureDOMElements()) {
-        console.error('[Presentation] Cannot setup event listeners - DOM elements not available');
-        // console.error('[Accordion DEBUG] ensureDOMElements failed in setupPresentationEventListeners');
+        console.error('[PRESENTATION DEBUG] Cannot setup event listeners - DOM elements not available');
         return;
     }
-    // console.log('[Accordion DEBUG] ensureDOMElements succeeded in setupPresentationEventListeners');
+    console.log('[PRESENTATION DEBUG] DOM elements available for event listener setup.');
 
     // Listen for user login/logout events to update the account button and collaborators
     document.addEventListener('userLoggedIn', handlePresentationUserLogin);

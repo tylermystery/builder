@@ -1,6 +1,8 @@
 // In: main.js
 // Action: REPLACE THE ENTIRE FILE
 
+console.log('[MODULE DEBUG] main.js module starting to load...', performance.now().toFixed(2) + 'ms');
+
 import { state, setState } from './state.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
@@ -22,7 +24,7 @@ import { initializeWtfPlansPanel, syncWtfPlansPanelWithUrl } from './components/
 import { initializeForumPanel, syncForumPanelWithUrl } from './components/forumPanel.js';
 import { applyCloudinaryTransform } from './utils/imageOptimizer.js';
 
-
+console.log('[MODULE DEBUG] main.js all imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 const imageCache = new Map();
 window.imageCache = imageCache;
 
@@ -129,6 +131,8 @@ function waitForDeferredCss(maxWait = 500) {
 
 function syncUiWithUrl() {
     const params = new URLSearchParams(window.location.search);
+    console.log('[SYNC-URL DEBUG] syncUiWithUrl called. URL params:', Object.fromEntries(params.entries()));
+    console.log('[SYNC-URL DEBUG] state.records.all.length:', state.records.all.length, 'state.cart.lockedItems.size:', state.cart.lockedItems.size);
 
     // Support both query param (?openItem=recXYZ) and pretty URL (/item/slug-recXYZ)
     let openItemId = params.get('openItem');
@@ -182,9 +186,23 @@ function syncUiWithUrl() {
     const isDirectModalAccess = !!openItemId && !document.querySelector('#detail-modal-overlay.active');
 
     // Close any open overlays first
-    ui.hideDetailModal();
-    ui.hideItineraryModal();
-    ui.hidePresentationView();
+    console.log('[SYNC-URL DEBUG] Closing open overlays (hideDetailModal, hideItineraryModal, hidePresentationView)...');
+    try {
+        ui.hideDetailModal();
+        console.log('[SYNC-URL DEBUG] hideDetailModal completed.');
+    } catch (e) {
+        console.error('[SYNC-URL DEBUG] hideDetailModal FAILED:', e.message, e.stack);
+    }
+    try {
+        ui.hideItineraryModal();
+    } catch (e) {
+        console.error('[SYNC-URL DEBUG] hideItineraryModal FAILED:', e.message, e.stack);
+    }
+    try {
+        ui.hidePresentationView();
+    } catch (e) {
+        console.error('[SYNC-URL DEBUG] hidePresentationView FAILED:', e.message, e.stack);
+    }
 
     // Sync WTF Plans panel state with URL (for browser back/forward navigation)
     syncWtfPlansPanelWithUrl(params);
@@ -227,7 +245,9 @@ function syncUiWithUrl() {
     // --- Handle opening modals/views based on URL ---
     // For direct modal URL access, wait for deferred CSS before showing modal
     const handleModalOrViewFromUrl = async () => {
+        console.log('[SYNC-URL DEBUG] handleModalOrViewFromUrl called. view:', view, 'openItemId:', openItemId);
         if (view === 'present') {
+            console.log('[SYNC-URL DEBUG] Opening presentation view...');
             ui.showPresentationView('ideas');
         } else if (view === 'itinerary') {
             ui.showItineraryModal();
@@ -265,6 +285,9 @@ function syncUiWithUrl() {
 
 
 async function initialize() {
+    console.log('[INIT DEBUG] ========== APP INITIALIZATION STARTED ==========');
+    console.log('[INIT DEBUG] URL:', window.location.href);
+    console.log('[INIT DEBUG] Timestamp:', performance.now().toFixed(2) + 'ms');
     log('Main', '1. Initialization started.');
 
     // Early detection of presentation mode for optimized initialization
@@ -272,10 +295,22 @@ async function initialize() {
                              new URLSearchParams(window.location.search).has('openItem');
     const urlParamsEarly = new URLSearchParams(window.location.search);
     const isInPresentationMode = urlParamsEarly.get('view') === 'present';
+    console.log('[INIT DEBUG] Mode detection:', { isDirectModalUrl, isInPresentationMode, view: urlParamsEarly.get('view'), session: urlParamsEarly.get('session') });
     if (isInPresentationMode) {
         log('Main', 'Presentation mode detected - optimizing initialization for faster load');
     }
 
+    console.log('[INIT DEBUG] Checking ui module exports...');
+    console.log('[INIT DEBUG] ui.initStateHelpers:', typeof ui.initStateHelpers);
+    console.log('[INIT DEBUG] ui.renderRecords:', typeof ui.renderRecords);
+    console.log('[INIT DEBUG] ui.showDetailModal:', typeof ui.showDetailModal);
+    console.log('[INIT DEBUG] ui.hideDetailModal:', typeof ui.hideDetailModal);
+    console.log('[INIT DEBUG] ui.showPresentationView:', typeof ui.showPresentationView);
+    console.log('[INIT DEBUG] ui.hidePresentationView:', typeof ui.hidePresentationView);
+    console.log('[INIT DEBUG] ui.updateEventPlanSection:', typeof ui.updateEventPlanSection);
+    console.log('[INIT DEBUG] ui.toggleLoading:', typeof ui.toggleLoading);
+    console.log('[INIT DEBUG] ui.showGroupDetailModal:', typeof ui.showGroupDetailModal);
+    console.log('[INIT DEBUG] ui.createInteractiveCard:', typeof ui.createInteractiveCard);
     ui.initStateHelpers({ getItemState: ui.getItemState });
 
      document.addEventListener('userLoggedIn', () => {
@@ -367,8 +402,12 @@ async function initialize() {
 
     ui.toggleLoading(true);
     try {
-        console.log('[MAIN DEBUG] ========== FETCHING INITIAL DATA ==========');
+        console.log('[INIT DEBUG] ========== FETCHING INITIAL DATA ==========');
+        console.log('[INIT DEBUG] Calling api.fetchAllStores and api.fetchAllRecords...');
+        const fetchStart = performance.now();
         const [stores, records] = await Promise.all([api.fetchAllStores(), api.fetchAllRecords()]);
+        const fetchEnd = performance.now();
+        console.log(`[INIT DEBUG] Data fetched in ${(fetchEnd - fetchStart).toFixed(0)}ms: ${stores.length} stores, ${records.length} records`);
         log('Main', `Fetched ${stores.length} stores and ${records.length} records.`);
 
         // Prioritize AI-generated Rankings over default profiles
@@ -402,6 +441,7 @@ async function initialize() {
             stores: { all: stores },
             records: { all: records }
         });
+        console.log('[INIT DEBUG] State updated with stores and records. state.records.all.length:', state.records.all.length, 'state.stores.all.length:', state.stores.all.length);
         log('Main', `Fetched ${stores.length} stores and ${records.length} items. Applied AI-generated Rankings where available.`);
 
     } catch (error) {
@@ -602,7 +642,9 @@ async function initialize() {
             }
         }
         ui.applyCartLabels(shopSettings.cartLabels);
+        console.log('[INIT DEBUG] Calling initializeEventListeners...');
         initializeEventListeners(imageCache, window.flatpickr, shopSettings);
+        console.log('[INIT DEBUG] initializeEventListeners completed.');
 
         // Skip footer update in presentation mode (footer not visible)
         if (!isInPresentationMode) {
@@ -743,18 +785,27 @@ async function initialize() {
             if (menuProjectsBtn) menuProjectsBtn.style.display = 'flex';
         }
 
+        console.log('[INIT DEBUG] Calling syncUiWithUrl...');
         syncUiWithUrl();
+        console.log('[INIT DEBUG] syncUiWithUrl completed.');
         window.addEventListener('popstate', syncUiWithUrl);
 
         setState({ ui: { ...state.ui, isInitializing: false }});
+        console.log('[INIT DEBUG] isInitializing set to false.');
 
         // Skip main catalog background in presentation mode (presentation has its own background)
         if (!isInPresentationMode) {
             // Initialize background animation immediately so it loads first
+            console.log('[INIT DEBUG] Initializing background engine...');
             backgroundEngine.initBackgroundEngine();
+            console.log('[INIT DEBUG] Background engine initialized, loading fluid effect...');
             backgroundEngine.loadEffect(fluidEffect, null);
+            console.log('[INIT DEBUG] Fluid effect loaded.');
+        } else {
+            console.log('[INIT DEBUG] Skipping background engine (presentation mode).');
         }
 
+        console.log('[INIT DEBUG] ========== APP INITIALIZATION COMPLETE ==========');
         log('Main', 'Initialization complete.');
 
     } else {

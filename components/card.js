@@ -1,4 +1,5 @@
 // REPLACE THE ENTIRE CONTENTS of components/card.js
+console.log('[MODULE DEBUG] card.js module starting to load...', performance.now().toFixed(2) + 'ms');
 
 import { state } from '../state.js';
 import * as ui from '../ui.js';

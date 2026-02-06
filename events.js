@@ -1,4 +1,5 @@
 // REPLACE THE ENTIRE CONTENTS of events.js
+console.log('[MODULE DEBUG] events.js module starting to load...', performance.now().toFixed(2) + 'ms');
 
 import { state, setState } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -19,6 +20,8 @@ import { initializeProjectSelector, wasLongPress, resetLongPress } from './compo
 import { broadcastItemAdded, broadcastItemRemoved } from './utils/realtimeUpdates.js';
 import { showWtfPlansPanel, initializeWtfPlansPanel } from './components/wtfPlansPanel.js';
 import { syncPlanState, initializePlanStateSync } from './utils/planStateSync.js';
+
+console.log('[MODULE DEBUG] events.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
 let mainDatePicker = null;
 let saveTimeout = null;
@@ -966,6 +969,12 @@ function clearRefinementChips() {
 
 
 export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
+    console.log('[EVENTS DEBUG] initializeEventListeners called.', {
+        hasImageCache: !!imageCache,
+        hasFlatpickr: !!flatpickr,
+        hasShopSettings: !!shopSettings,
+        shopType: shopSettings?.shopType
+    });
     const mainContent = document.querySelector('.main-content');
     const searchBarContainer = document.getElementById('search-bar-container');
     const leftSidebar = document.getElementById('left-sidebar');
@@ -1744,7 +1753,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     });
 
     document.body.addEventListener('click', async (e) => {
-        if (state.ui.isInitializing) return;
+        if (state.ui.isInitializing) {
+            console.log('[EVENTS DEBUG] Body click ignored - still initializing');
+            return;
+        }
 
         const card = e.target.closest('.event-card');
         const heartIcon = e.target.closest('.heart-icon');
@@ -2640,6 +2652,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             }, 300);
         } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn, .availability-btn')) {
             const recordId = card.dataset.recordId;
+            console.log('[EVENTS DEBUG] Card clicked (detail modal trigger), recordId:', recordId);
 
             // First try to find in state.records.all
             let record = state.records.all.find(r => r.id === recordId);
@@ -2650,8 +2663,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             }
 
             if (!record) {
+                console.warn('[EVENTS DEBUG] Card clicked but record NOT FOUND. recordId:', recordId, 'state.records.all.length:', state.records.all.length);
                 return;
             }
+
+            console.log('[EVENTS DEBUG] Record found:', { id: record.id, name: record.fields?.Name, itemType: record.fields?.['Item Type'] });
 
             if (record.id.startsWith('ai-search-')) {
                 return;
@@ -2694,10 +2710,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             } else {
                 // Small progress for viewing item details
                 updateProgress(0.00001);
+                console.log('[EVENTS DEBUG] Opening detail modal for:', record.fields?.Name, record.id);
                 ui.showDetailModal(record);
             }
         } else if (lockedItemCard && !e.target.closest('.demote-locked-item-btn, .edit-btn, .dig-solution-btn')) {
             const recordId = lockedItemCard.dataset.recordId;
+            console.log('[EVENTS DEBUG] Locked item card clicked, recordId:', recordId);
             let record = state.records.all.find(r => r.id === recordId);
             // Check solution records registry for AI-generated solution items
             if (!record && recordId && recordId.startsWith('solution-') && window._solutionRecords) {
