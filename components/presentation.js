@@ -8038,6 +8038,21 @@ function handleItemClick(e) {
         return;
     }
 
+    // Handle clicks on options group card content area (open group detail modal)
+    const groupCardContent = e.target.closest('.options-group-card-content');
+    if (groupCardContent) {
+        // Don't open modal when clicking on interactive elements inside the card
+        if (e.target.closest('.options-group-members-section') ||
+            e.target.closest('.options-group-dissolve-btn') ||
+            e.target.closest('.leave-group-btn')) return;
+        e.stopPropagation();
+        const groupId = groupCardContent.dataset.groupId;
+        if (groupId) {
+            openGroupDetailModal(groupId);
+        }
+        return;
+    }
+
     const itemElement = e.target.closest('.itinerary-item-clickable');
     if (!itemElement) return;
 
@@ -8061,6 +8076,15 @@ function handleExpandButtonClick(e) {
 
     e.stopPropagation();
     e.preventDefault();
+
+    // If this is an options group expand button, open the group detail modal
+    if (expandBtn.classList.contains('options-group-expand-btn')) {
+        const groupId = expandBtn.dataset.groupId;
+        if (groupId) {
+            openGroupDetailModal(groupId);
+        }
+        return;
+    }
 
     const recordId = expandBtn.dataset.recordId;
     if (!recordId) return;
