@@ -12252,7 +12252,7 @@ hr.total-divider {
     display: none;
 }
 
-/* === Options Group Card (Collapsed Single-Item Display) === */
+/* === Options Group Card (Matches Standard Presentation Item Layout) === */
 .options-group-card-section {
     border-left: 3px solid #2196F3;
 }
@@ -12284,96 +12284,127 @@ hr.total-divider {
     cursor: pointer;
 }
 
-/* Stacked image preview for group card */
-.options-group-card-images {
-    position: relative;
-    width: 100%;
-    height: 140px;
-    margin-bottom: 10px;
-}
-
-.options-group-card-images.single {
-    height: 140px;
-}
-
-.options-group-card-images .options-group-card-img {
-    position: absolute;
-    width: 75%;
-    height: 100px;
-    background-size: cover;
-    background-position: center;
-    border-radius: 10px;
-    border: 2px solid #fff;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-    transition: transform 0.2s ease;
-}
-
-.options-group-card-images .options-group-card-img:nth-child(1) {
-    top: 0;
-    left: 0;
-    transform: rotate(-3deg);
-}
-
-.options-group-card-images .options-group-card-img:nth-child(2) {
-    top: 10px;
-    left: 15%;
-    transform: rotate(2deg);
-}
-
-.options-group-card-images .options-group-card-img:nth-child(3) {
-    top: 20px;
-    left: 8%;
-    transform: rotate(-1deg);
-}
-
-.options-group-card-images.single .options-group-card-img {
-    width: 100%;
-    height: 140px;
-    position: relative;
-    transform: none;
-}
-
-.options-group-card-images.empty {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(33, 150, 243, 0.06);
-    border-radius: 10px;
-    border: 2px dashed rgba(33, 150, 243, 0.2);
-}
-
-.options-group-card-img-placeholder {
-    font-size: 2.5em;
-    opacity: 0.4;
-}
-
-.options-group-card-desc {
-    font-size: 0.85em;
-    color: #555;
-    line-height: 1.4;
+/* Group Members Section (expandable list inside card) */
+.options-group-members-section {
+    margin-top: 8px;
     margin-bottom: 8px;
 }
 
-.options-group-card-items-preview {
+.options-group-members-header {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 10px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
 
-.options-group-card-item-chip {
-    display: inline-block;
-    padding: 4px 10px;
-    background: rgba(33, 150, 243, 0.1);
+.options-group-members-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
     border: 1px solid rgba(33, 150, 243, 0.2);
-    border-radius: 16px;
-    font-size: 0.78em;
+    border-radius: 8px;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 0.82em;
     color: #1565c0;
     font-weight: 500;
-    white-space: nowrap;
+    transition: background 0.15s ease;
+}
+
+.options-group-members-toggle:hover {
+    background: rgba(33, 150, 243, 0.06);
+}
+
+.options-group-members-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    background: #2196F3;
+    color: #fff;
+    border-radius: 10px;
+    font-size: 0.85em;
+    font-weight: 700;
+}
+
+.options-group-members-list {
+    margin-top: 6px;
+    padding: 8px;
+    background: rgba(33, 150, 243, 0.03);
+    border: 1px solid rgba(33, 150, 243, 0.1);
+    border-radius: 8px;
+}
+
+.options-group-members-desc {
+    font-size: 0.82em;
+    color: #555;
+    line-height: 1.4;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(33, 150, 243, 0.1);
+}
+
+.options-group-member-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 6px;
+    border-radius: 6px;
+    transition: background 0.15s ease;
+}
+
+.options-group-member-item:hover {
+    background: rgba(33, 150, 243, 0.06);
+}
+
+.options-group-member-name {
+    font-size: 0.85em;
+    color: #333;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 150px;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+
+.options-group-members-section .leave-group-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: rgba(198, 40, 40, 0.08);
+    color: #c62828;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.75em;
+    flex-shrink: 0;
+    transition: background 0.15s ease;
+}
+
+.options-group-members-section .leave-group-btn:hover {
+    background: rgba(198, 40, 40, 0.2);
+}
+
+.options-group-members-section .options-group-dissolve-btn {
+    padding: 4px 10px;
+    background: rgba(198, 40, 40, 0.06);
+    border: 1px solid rgba(198, 40, 40, 0.15);
+    border-radius: 8px;
+    color: #c62828;
+    font-size: 0.78em;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease;
+}
+
+.options-group-members-section .options-group-dissolve-btn:hover {
+    background: rgba(198, 40, 40, 0.12);
 }
 
 .options-group-expand-btn {
@@ -12537,6 +12568,33 @@ hr.total-divider {
 .group-option-card:hover .group-option-card-arrow {
     color: #2196F3;
     transform: translateX(3px);
+}
+
+/* Remove button inside group option card in modal */
+.group-option-card-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: 1px solid rgba(198, 40, 40, 0.15);
+    background: rgba(198, 40, 40, 0.06);
+    color: #c62828;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.8em;
+    flex-shrink: 0;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    opacity: 0;
+}
+
+.group-option-card:hover .group-option-card-remove {
+    opacity: 1;
+}
+
+.group-option-card-remove:hover {
+    background: rgba(198, 40, 40, 0.18);
+    border-color: rgba(198, 40, 40, 0.3);
 }
 
 /* Dissolve button inside group modal */

@@ -6229,6 +6229,7 @@ export async function showGroupDetailModal(group, allRecords) {
                         ${truncDesc ? `<div class="group-option-card-desc">${truncDesc}</div>` : ''}
                         ${price ? `<div class="group-option-card-price">${price}</div>` : ''}
                     </div>
+                    <button class="group-option-card-remove" data-record-id="${record.id}" data-group-id="${group.id}" title="Remove from group">✕</button>
                     <div class="group-option-card-arrow">→</div>
                 </div>
             `;
@@ -6246,6 +6247,8 @@ export async function showGroupDetailModal(group, allRecords) {
         const optionCards = modalOptionsContainer.querySelectorAll('.group-option-card');
         optionCards.forEach(card => {
             card.addEventListener('click', (e) => {
+                // Don't navigate if clicking the remove button
+                if (e.target.closest('.group-option-card-remove')) return;
                 e.stopPropagation();
                 const recordId = card.dataset.recordId;
                 const record = allRecords.find(r => r.id === recordId);
@@ -6260,6 +6263,42 @@ export async function showGroupDetailModal(group, allRecords) {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     card.click();
+                }
+            });
+        });
+
+        // Add remove-from-group button handlers
+        const removeBtns = modalOptionsContainer.querySelectorAll('.group-option-card-remove');
+        removeBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const recordId = btn.dataset.recordId;
+                const groupId = btn.dataset.groupId;
+                if (recordId && groupId && state.session.relatedGroups) {
+                    const grp = state.session.relatedGroups.find(g => g.id === groupId);
+                    if (!grp) return;
+                    const items = Array.isArray(grp) ? grp : (grp.items || []);
+                    const itemIndex = items.indexOf(recordId);
+                    if (itemIndex === -1) return;
+                    items.splice(itemIndex, 1);
+
+                    const removedRecord = allRecords.find(r => r.id === recordId);
+                    const removedName = removedRecord?.fields?.Name || 'Item';
+
+                    // If fewer than 2 items remain, dissolve the group
+                    if (items.length < 2) {
+                        state.session.relatedGroups = state.session.relatedGroups.filter(g => g.id !== groupId);
+                        hideDetailModal();
+                        window.dispatchEvent(new CustomEvent('groupDissolved', { detail: { groupId } }));
+                    } else {
+                        if (!Array.isArray(grp)) {
+                            grp.items = items;
+                        }
+                        // Re-render the modal with updated group
+                        hideDetailModal();
+                        window.dispatchEvent(new CustomEvent('groupItemRemoved', { detail: { groupId, recordId } }));
+                    }
                 }
             });
         });
