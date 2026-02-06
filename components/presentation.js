@@ -201,12 +201,14 @@ let currentDraggedRecordId = null;
 let hoveredReactionEmoji = null;
 let hoveredQuickComment = null;
 let potentialMergeTarget = null;
+let potentialMergeZone = null; // 'hybrid' (dropped on name/header) or 'options' (dropped on content/details)
 const DRAG_DELAY_MS = 300; // Delay before drag buckets appear (ms)
 
 // Merge dwell-time tracking - hover over an item for a moment to trigger merge
 let mergeHoverItemId = null;      // The recordId of the item currently being hovered
 let mergeHoverStartTime = null;   // When the hover started
 let mergeHoverTimer = null;       // Timer to activate merge after dwell time
+let mergeHoverZone = null;        // Which zone of the item is being hovered: 'hybrid' or 'options'
 const MERGE_DWELL_TIME_MS = 250;  // How long to hover before merge activates (ms)
 
 // Radial menu state
@@ -2976,13 +2978,14 @@ async function initializeItemDragDrop() {
 
             onEnd: function(evt) {
                 try {
-                    // Capture merge target ID (string) before clearing state
+                    // Capture merge target ID and zone (string) before clearing state
                     const capturedMergeTargetId = potentialMergeTarget ? potentialMergeTarget.recordId : null;
+                    const capturedMergeZone = potentialMergeZone;
 
                     isDragging = false;
                     clearTimeout(dragDelayTimer);
 
-                    // Clear merge hover state - but we've already captured the ID above
+                    // Clear merge hover state - but we've already captured the ID and zone above
                     clearMergeHoverState();
                     deactivateMergeTarget();
 
@@ -3003,15 +3006,15 @@ async function initializeItemDragDrop() {
                         }
 
                         if (clientX !== undefined && clientY !== undefined) {
-                            const droppedOnBucket = handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId);
+                            const droppedOnBucket = handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId, capturedMergeZone);
                             if (droppedOnBucket) {
                                 return; // Item was moved to bucket or merged, don't update order
                             }
                         }
                         hideRadialMenu();
                     } else {
-                        // Legacy bucket drop check - pass captured merge target ID
-                        const droppedOnBucket = checkBucketDrop(evt.originalEvent, evt.item, capturedMergeTargetId);
+                        // Legacy bucket drop check - pass captured merge target ID and zone
+                        const droppedOnBucket = checkBucketDrop(evt.originalEvent, evt.item, capturedMergeTargetId, capturedMergeZone);
                         if (droppedOnBucket) {
                             hideDragBuckets();
                             return; // Item was moved to bucket, don't update order
@@ -3050,7 +3053,7 @@ function updateDragZonePositions(itemRect) {
     // Get zone dimensions for calculations
     const leftZoneRect = leftZone.getBoundingClientRect();
     const rightZoneRect = rightZone.getBoundingClientRect();
-    const leftZoneWidth = leftZoneRect.width || 120; // fallback width
+    const leftZoneWidth = leftZoneRect.width || 120;
     const rightZoneWidth = rightZoneRect.width || 120;
 
     // Determine if we're on mobile (< 768px)
@@ -3058,35 +3061,22 @@ function updateDragZonePositions(itemRect) {
     const viewportHeight = window.innerHeight;
     const isMobile = viewportWidth < 768;
 
-    // Gap between item and zone
-    const itemZoneGap = isMobile ? 8 : 12;
+    // Fixed positioning: zones stay at screen edges, vertically centered
+    const edgeGap = isMobile ? 4 : 8;
+    const leftX = edgeGap;
+    const rightX = viewportWidth - rightZoneWidth - edgeGap;
 
-    // Calculate vertical center of the item
-    const itemCenterY = itemRect.top + (itemRect.height / 2);
-
-    // Calculate left zone position - immediately to the left of the item
-    let leftX = itemRect.left - leftZoneWidth - itemZoneGap;
-    // Ensure it doesn't go off the left edge
-    if (leftX < 4) leftX = 4;
-
-    // Calculate right zone position - immediately to the right of the item
-    let rightX = itemRect.right + itemZoneGap;
-    // Ensure it doesn't go off the right edge
-    if (rightX + rightZoneWidth > viewportWidth - 4) {
-        rightX = viewportWidth - rightZoneWidth - 4;
-    }
-
-    // Calculate vertical position (centered on item, but constrained to viewport)
+    // Vertically centered in viewport
     const leftZoneHeight = leftZoneRect.height || 400;
     const rightZoneHeight = rightZoneRect.height || 300;
 
-    let leftTop = itemCenterY - (leftZoneHeight / 2);
-    let rightTop = itemCenterY - (rightZoneHeight / 2);
-
-    // Constrain to viewport bounds with padding
     const topPadding = 60; // Leave room for header
     const bottomPadding = 20;
 
+    let leftTop = (viewportHeight - leftZoneHeight) / 2;
+    let rightTop = (viewportHeight - rightZoneHeight) / 2;
+
+    // Constrain to viewport bounds with padding
     if (leftTop < topPadding) leftTop = topPadding;
     if (leftTop + leftZoneHeight > viewportHeight - bottomPadding) {
         leftTop = viewportHeight - leftZoneHeight - bottomPadding;
@@ -3097,7 +3087,7 @@ function updateDragZonePositions(itemRect) {
         rightTop = viewportHeight - rightZoneHeight - bottomPadding;
     }
 
-    // Apply positions using left/top instead of transform for precise control
+    // Apply fixed positions (not relative to item)
     leftZone.style.left = `${leftX}px`;
     leftZone.style.top = `${leftTop}px`;
     leftZone.style.transform = 'none';
@@ -3124,22 +3114,15 @@ function showDragBuckets() {
         const leftZone = dragBucketsEl.querySelector('.drag-zone-left');
         const rightZone = dragBucketsEl.querySelector('.drag-zone-right');
 
-        // Apply inline styles - position zones adjacent to the dragged item
+        // Apply inline styles - position zones at fixed screen edges
         const applyZoneStyles = () => {
             // Determine if we're on mobile (< 768px)
             const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
             const isMobile = viewportWidth < 768;
             const bucketSize = isMobile ? '72px' : '88px';
             const zoneGap = isMobile ? 8 : 10;
             const zonePadding = isMobile ? 12 : 16;
-
-            // Get the currently dragged item's position
-            const draggedItem = document.querySelector('.sortable-drag') || currentDraggedItem;
-            let itemRect = null;
-
-            if (draggedItem) {
-                itemRect = draggedItem.getBoundingClientRect();
-            }
 
             // Base styles for both zones
             const baseZoneStyles = `
@@ -3180,26 +3163,8 @@ function showDragBuckets() {
                 bucket.style.minHeight = bucketSize;
             });
 
-            // If we have the dragged item position, position zones adjacent to it
-            if (itemRect) {
-                updateDragZonePositions(itemRect);
-            } else {
-                // Fallback: position at viewport center if item not found yet
-                const viewportHeight = window.innerHeight;
-                const fallbackTop = viewportHeight / 2 - 200;
-
-                if (leftZone) {
-                    leftZone.style.left = '12px';
-                    leftZone.style.top = `${fallbackTop}px`;
-                    leftZone.style.transform = 'none';
-                }
-                if (rightZone) {
-                    rightZone.style.left = 'auto';
-                    rightZone.style.right = '12px';
-                    rightZone.style.top = `${fallbackTop}px`;
-                    rightZone.style.transform = 'none';
-                }
-            }
+            // Fixed positioning: zones at screen edges, vertically centered
+            updateDragZonePositions(null);
         };
 
         // Apply immediately
@@ -3280,6 +3245,7 @@ function hideDragBuckets() {
     hoveredReactionEmoji = null;
     hoveredQuickComment = null;
     potentialMergeTarget = null;
+    potentialMergeZone = null;
 }
 
 // =============================================================================
@@ -3647,7 +3613,7 @@ function checkRadialBucketHover(clientX, clientY) {
 
 // Handle radial bucket selection (on release)
 // capturedMergeTargetId can be either a string (recordId) or an object with recordId property
-function handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId = null) {
+function handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId = null, capturedMergeZone = null) {
     // Normalize to string: accept both string ID or object with recordId
     const mergeTargetId = typeof capturedMergeTargetId === 'string'
         ? capturedMergeTargetId
@@ -3660,13 +3626,14 @@ function handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId = null) 
 
     const hoveredBucket = checkRadialBucketHover(clientX, clientY);
 
-    // If no bucket is hovered but we have a merge target, trigger merge
+    // If no bucket is hovered but we have a merge target, trigger merge directly based on zone
     if (!hoveredBucket && mergeTargetId) {
         const sourceId = currentDraggedRecordId;
+        const mergeZone = capturedMergeZone || 'hybrid';
         hideRadialMenu();
         currentDraggedItem = null;
         currentDraggedRecordId = null;
-        openMergeDialog(sourceId, mergeTargetId);
+        executeMergeByZone(sourceId, mergeTargetId, mergeZone);
         return true;
     }
 
@@ -3819,8 +3786,11 @@ function handleItemPointerUp(event) {
     console.log('[Radial Menu] Pointer up at', clientX, clientY);
 
     if (radialMenuActive) {
+        // Capture merge state before it gets cleared
+        const capturedMergeTargetId = potentialMergeTarget ? potentialMergeTarget.recordId : null;
+        const capturedMergeZone = potentialMergeZone;
         // Check if dropped on a bucket
-        handleRadialBucketDrop(clientX, clientY);
+        handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId, capturedMergeZone);
     }
 
     cleanupRadialEventListeners();
@@ -3903,14 +3873,20 @@ function clearQuickCommentHoverStates() {
 function clearMergeTarget() {
     const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
     if (currentTarget) {
-        currentTarget.classList.remove('merge-target');
+        currentTarget.classList.remove('merge-target', 'merge-target-hybrid', 'merge-target-options');
         // Clear inline styles applied for merge highlighting
         currentTarget.style.outline = '';
         currentTarget.style.outlineOffset = '';
         currentTarget.style.background = '';
         currentTarget.style.zIndex = '';
+        // Clear sub-zone highlights
+        const header = currentTarget.querySelector('.item-accordion-header');
+        const content = currentTarget.querySelector('.item-accordion-content');
+        if (header) { header.style.background = ''; header.style.borderRadius = ''; }
+        if (content) { content.style.background = ''; content.style.borderRadius = ''; }
     }
     potentialMergeTarget = null;
+    potentialMergeZone = null;
 }
 
 // Helper to check if point is within a rect
@@ -4125,6 +4101,7 @@ function checkMergeTargetHover(clientX, clientY) {
 
     let foundHoveredItem = null;
     let foundHoveredItemId = null;
+    let foundHoveredZone = null; // 'hybrid' or 'options'
 
     items.forEach((item, index) => {
         const article = item.querySelector('.itinerary-item');
@@ -4149,6 +4126,20 @@ function checkMergeTargetHover(clientX, clientY) {
             if (isInMergeZone) {
                 foundHoveredItem = item;
                 foundHoveredItemId = itemRecordId;
+
+                // Determine which zone: header (name) = hybrid, content (description/details) = options
+                const header = item.querySelector('.item-accordion-header');
+                if (header) {
+                    const headerRect = header.getBoundingClientRect();
+                    if (clientY <= headerRect.bottom) {
+                        foundHoveredZone = 'hybrid';
+                    } else {
+                        foundHoveredZone = 'options';
+                    }
+                } else {
+                    // Fallback: top half = hybrid, bottom half = options
+                    foundHoveredZone = relativeY < 0.5 ? 'hybrid' : 'options';
+                }
             }
         }
     });
@@ -4158,6 +4149,7 @@ function checkMergeTargetHover(clientX, clientY) {
         // Started hovering over a new item - reset the timer
         mergeHoverItemId = foundHoveredItemId;
         mergeHoverStartTime = Date.now();
+        mergeHoverZone = foundHoveredZone;
 
         // Clear any existing timer
         if (mergeHoverTimer) {
@@ -4167,7 +4159,7 @@ function checkMergeTargetHover(clientX, clientY) {
         // Set a timer to activate merge after dwell time
         mergeHoverTimer = setTimeout(() => {
             if (mergeHoverItemId === foundHoveredItemId && isDragging) {
-                activateMergeTarget(foundHoveredItem, foundHoveredItemId, clientX, clientY);
+                activateMergeTarget(foundHoveredItem, foundHoveredItemId, clientX, clientY, mergeHoverZone);
             }
         }, MERGE_DWELL_TIME_MS);
 
@@ -4176,7 +4168,13 @@ function checkMergeTargetHover(clientX, clientY) {
         clearMergeHoverState();
         deactivateMergeTarget();
     } else if (foundHoveredItemId === mergeHoverItemId && potentialMergeTarget) {
-        // Still hovering over the same item and merge is active - update indicator position
+        // Still hovering over the same item and merge is active - update indicator position and zone
+        if (foundHoveredZone !== potentialMergeZone) {
+            // Zone changed within same item - update visual feedback
+            potentialMergeZone = foundHoveredZone;
+            updateMergeTargetZoneVisual(potentialMergeTarget.element, foundHoveredZone);
+            updateMergeIndicatorContent(foundHoveredZone);
+        }
         updateMergeIndicatorPosition(clientX, clientY);
     }
     // If still hovering over the same item but merge not yet active, the timer will handle activation
@@ -4186,6 +4184,7 @@ function checkMergeTargetHover(clientX, clientY) {
 function clearMergeHoverState() {
     mergeHoverItemId = null;
     mergeHoverStartTime = null;
+    mergeHoverZone = null;
     if (mergeHoverTimer) {
         clearTimeout(mergeHoverTimer);
         mergeHoverTimer = null;
@@ -4193,36 +4192,51 @@ function clearMergeHoverState() {
 }
 
 // Activate merge target with visual feedback
-function activateMergeTarget(element, recordId, clientX, clientY) {
+function activateMergeTarget(element, recordId, clientX, clientY, zone = 'hybrid') {
 
     // Remove highlight from any previous target
     const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
     if (currentTarget && currentTarget !== element) {
-        currentTarget.classList.remove('merge-target');
+        currentTarget.classList.remove('merge-target', 'merge-target-hybrid', 'merge-target-options');
         currentTarget.style.outline = '';
         currentTarget.style.outlineOffset = '';
         currentTarget.style.background = '';
         currentTarget.style.animation = '';
+        // Clear sub-zone highlights
+        const prevHeader = currentTarget.querySelector('.item-accordion-header');
+        const prevContent = currentTarget.querySelector('.item-accordion-content');
+        if (prevHeader) prevHeader.style.cssText = prevHeader.style.cssText.replace(/background:[^;]*;?/g, '');
+        if (prevContent) prevContent.style.cssText = prevContent.style.cssText.replace(/background:[^;]*;?/g, '');
     }
 
     // Apply merge target styling
     element.classList.add('merge-target');
+
+    // Zone-specific colors
+    const isHybrid = zone === 'hybrid';
+    const color = isHybrid ? 'rgba(156, 39, 176, 0.9)' : 'rgba(76, 175, 80, 0.9)';
+    const bgColor = isHybrid ? 'rgba(156, 39, 176, 0.1)' : 'rgba(76, 175, 80, 0.1)';
+
     element.style.cssText = element.style.cssText + `
-        outline: 3px solid rgba(76, 175, 80, 0.9) !important;
+        outline: 3px solid ${color} !important;
         outline-offset: 4px !important;
-        background: rgba(76, 175, 80, 0.15) !important;
+        background: ${bgColor} !important;
         position: relative !important;
         z-index: 100 !important;
     `;
 
-    potentialMergeTarget = { element, recordId };
+    // Highlight the specific zone within the item
+    updateMergeTargetZoneVisual(element, zone);
 
-    // Show merge indicator
-    showMergeIndicator(clientX, clientY);
+    potentialMergeTarget = { element, recordId };
+    potentialMergeZone = zone;
+
+    // Show merge indicator with zone-appropriate content
+    showMergeIndicator(clientX, clientY, zone);
 }
 
 // Show the merge indicator near the cursor
-function showMergeIndicator(clientX, clientY) {
+function showMergeIndicator(clientX, clientY, zone = 'hybrid') {
     if (!dragMergeIndicator) {
         return;
     }
@@ -4231,6 +4245,12 @@ function showMergeIndicator(clientX, clientY) {
     if (dragMergeIndicator.parentElement !== document.body) {
         document.body.appendChild(dragMergeIndicator);
     }
+
+    const isHybrid = zone === 'hybrid';
+    const bgGrad = isHybrid
+        ? 'linear-gradient(135deg, rgba(156, 39, 176, 0.95), rgba(123, 31, 162, 0.95))'
+        : 'linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(56, 142, 60, 0.95))';
+    const shadowColor = isHybrid ? 'rgba(156, 39, 176, 0.5)' : 'rgba(76, 175, 80, 0.5)';
 
     // Apply comprehensive inline styles
     const indicatorStyles = `
@@ -4243,10 +4263,10 @@ function showMergeIndicator(clientX, clientY) {
         z-index: 99998 !important;
         pointer-events: none !important;
         padding: 12px 20px !important;
-        background: linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(56, 142, 60, 0.95)) !important;
+        background: ${bgGrad} !important;
         border: 2px solid rgba(255, 255, 255, 0.8) !important;
         border-radius: 20px !important;
-        box-shadow: 0 8px 32px rgba(76, 175, 80, 0.5) !important;
+        box-shadow: 0 8px 32px ${shadowColor} !important;
         align-items: center !important;
         gap: 8px !important;
         color: white !important;
@@ -4255,8 +4275,49 @@ function showMergeIndicator(clientX, clientY) {
     `;
     dragMergeIndicator.style.cssText = indicatorStyles;
 
-    // Update indicator content
-    dragMergeIndicator.innerHTML = '<span style="font-size: 18px;">🔗</span><span>Merge Items</span>';
+    // Update indicator content based on zone
+    updateMergeIndicatorContent(zone);
+}
+
+// Update merge indicator text to reflect current zone
+function updateMergeIndicatorContent(zone) {
+    if (!dragMergeIndicator) return;
+    const isHybrid = zone === 'hybrid';
+    const icon = isHybrid ? '✨' : '📂';
+    const label = isHybrid ? 'Merge as Hybrid' : 'Add as Option';
+    dragMergeIndicator.innerHTML = `<span style="font-size: 18px;">${icon}</span><span>${label}</span>`;
+
+    // Update colors when zone changes
+    const bgGrad = isHybrid
+        ? 'linear-gradient(135deg, rgba(156, 39, 176, 0.95), rgba(123, 31, 162, 0.95))'
+        : 'linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(56, 142, 60, 0.95))';
+    const shadowColor = isHybrid ? 'rgba(156, 39, 176, 0.5)' : 'rgba(76, 175, 80, 0.5)';
+    dragMergeIndicator.style.background = bgGrad;
+    dragMergeIndicator.style.boxShadow = `0 8px 32px ${shadowColor}`;
+}
+
+// Update the visual highlight on sub-zones of the merge target
+function updateMergeTargetZoneVisual(element, zone) {
+    const header = element.querySelector('.item-accordion-header');
+    const content = element.querySelector('.item-accordion-content');
+
+    const isHybrid = zone === 'hybrid';
+    const activeColor = isHybrid ? 'rgba(156, 39, 176, 0.2)' : 'rgba(76, 175, 80, 0.2)';
+    const outlineColor = isHybrid ? 'rgba(156, 39, 176, 0.9)' : 'rgba(76, 175, 80, 0.9)';
+
+    // Update the outer outline color
+    element.style.outline = `3px solid ${outlineColor}`;
+
+    if (header) {
+        header.style.background = isHybrid ? activeColor : 'transparent';
+        header.style.borderRadius = '8px';
+        header.style.transition = 'background 0.15s ease';
+    }
+    if (content) {
+        content.style.background = isHybrid ? 'transparent' : activeColor;
+        content.style.borderRadius = '8px';
+        content.style.transition = 'background 0.15s ease';
+    }
 }
 
 // Update merge indicator position while hovering
@@ -4274,14 +4335,20 @@ function deactivateMergeTarget() {
     // Remove merge-target class from any highlighted item
     const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
     if (currentTarget) {
-        currentTarget.classList.remove('merge-target');
+        currentTarget.classList.remove('merge-target', 'merge-target-hybrid', 'merge-target-options');
         currentTarget.style.outline = '';
         currentTarget.style.outlineOffset = '';
         currentTarget.style.background = '';
         currentTarget.style.animation = '';
+        // Clear sub-zone highlights
+        const header = currentTarget.querySelector('.item-accordion-header');
+        const content = currentTarget.querySelector('.item-accordion-content');
+        if (header) { header.style.background = ''; header.style.borderRadius = ''; }
+        if (content) { content.style.background = ''; content.style.borderRadius = ''; }
     }
 
     potentialMergeTarget = null;
+    potentialMergeZone = null;
 
     // Hide the merge indicator
     if (dragMergeIndicator) {
@@ -4302,20 +4369,13 @@ function handleDragMove(event) {
     const clientX = event.touches ? event.touches[0].clientX : event.clientX;
     const clientY = event.touches ? event.touches[0].clientY : event.clientY;
 
-    // Update drag zone positions to follow the dragged item
-    if (isDragging && dragBucketsEl?.classList.contains('drag-active')) {
-        const draggedItem = document.querySelector('.sortable-drag') || currentDraggedItem;
-        if (draggedItem) {
-            const itemRect = draggedItem.getBoundingClientRect();
-            updateDragZonePositions(itemRect);
-        }
-    }
+    // Drag zones are fixed at screen edges - no need to update positions during drag
 
     checkBucketHover(event);
 }
 
 // Check if item was dropped on a bucket
-function checkBucketDrop(event, item, capturedMergeTargetId = null) {
+function checkBucketDrop(event, item, capturedMergeTargetId = null, capturedMergeZone = null) {
     // Normalize to string: accept both string ID or object with recordId
     const mergeTargetId = typeof capturedMergeTargetId === 'string'
         ? capturedMergeTargetId
@@ -4415,9 +4475,10 @@ function checkBucketDrop(event, item, capturedMergeTargetId = null) {
         return true;
     }
 
-    // Check for merge (drop on another item)
+    // Check for merge (drop on another item) - execute directly based on zone
     if (mergeTargetId) {
-        openMergeDialog(recordId, mergeTargetId);
+        const mergeZone = capturedMergeZone || 'hybrid';
+        executeMergeByZone(recordId, mergeTargetId, mergeZone);
         return true;
     }
 
@@ -4729,6 +4790,82 @@ async function openCustomCommentDialog(recordId) {
 
 // Store for pending merge estimations
 let pendingMergeEstimation = null;
+
+// Execute merge directly based on the drop zone (no dialog)
+// zone: 'hybrid' = merge as hybrid, 'options' = add as option
+async function executeMergeByZone(sourceRecordId, targetRecordId, zone) {
+    if (!sourceRecordId || !targetRecordId) return;
+
+    const sourceRecord = state.records.all.find(r => r.id === sourceRecordId);
+    const targetRecord = state.records.all.find(r => r.id === targetRecordId);
+    const sourceName = sourceRecord?.fields?.Name || 'Item';
+    const targetName = targetRecord?.fields?.Name || 'Item';
+
+    if (zone === 'hybrid') {
+        // Merge as hybrid - execute immediately, fetch AI estimation in background
+
+        // Execute combine immediately without estimation
+        await combineItemsIntoOne(sourceRecordId, targetRecordId, null);
+
+        // Fetch AI estimation in background and update the hybrid data
+        fetchEstimation(
+            { name: sourceName, description: sourceRecord?.fields?.Description || '', category: sourceRecord?.fields?.Category || '', price: sourceRecord?.fields?.Price || '' },
+            { name: targetName, description: targetRecord?.fields?.Description || '', category: targetRecord?.fields?.Category || '', price: targetRecord?.fields?.Price || '' },
+            'hybrid'
+        ).then(result => {
+            if (result?.estimation && state.session.combinedItems) {
+                // Find the actual target (may have been redirected during combine)
+                let actualTarget = targetRecordId;
+                for (const [target, data] of state.session.combinedItems.entries()) {
+                    const sources = data instanceof Set ? data : (data.sources || new Set());
+                    if (sources.has(targetRecordId)) {
+                        actualTarget = target;
+                        break;
+                    }
+                }
+                const entry = state.session.combinedItems.get(actualTarget);
+                if (entry && !(entry instanceof Set)) {
+                    entry.hybridData = result.estimation;
+                    renderAllItems();
+                    triggerSave();
+                    log('Presentation', `Updated hybrid "${actualTarget}" with AI estimation`);
+                }
+            }
+        }).catch(err => {
+            console.warn('[Presentation] Background hybrid estimation failed:', err.message);
+        });
+
+    } else {
+        // Add as option - execute immediately, fetch AI estimation in background
+
+        // Execute group creation immediately without estimation
+        await createRelatedCategory(sourceRecordId, targetRecordId, null);
+
+        // Fetch AI estimation in background and update the group
+        fetchEstimation(
+            { name: sourceName, description: sourceRecord?.fields?.Description || '', category: sourceRecord?.fields?.Category || '', price: sourceRecord?.fields?.Price || '' },
+            { name: targetName, description: targetRecord?.fields?.Description || '', category: targetRecord?.fields?.Category || '', price: targetRecord?.fields?.Price || '' },
+            'options'
+        ).then(result => {
+            if (result?.estimation && state.session.relatedGroups) {
+                // Find the group that contains both items
+                const group = state.session.relatedGroups.find(g => {
+                    const items = Array.isArray(g) ? g : (g.items || []);
+                    return items.includes(sourceRecordId) && items.includes(targetRecordId);
+                });
+                if (group && !Array.isArray(group)) {
+                    if (result.estimation.categoryName) group.name = result.estimation.categoryName;
+                    if (result.estimation.categoryDescription) group.description = result.estimation.categoryDescription;
+                    renderAllItems();
+                    triggerSave();
+                    log('Presentation', `Updated options group with AI estimation`);
+                }
+            }
+        }).catch(err => {
+            console.warn('[Presentation] Background options estimation failed:', err.message);
+        });
+    }
+}
 
 // Open merge dialog for two items
 async function openMergeDialog(sourceRecordId, targetRecordId) {
