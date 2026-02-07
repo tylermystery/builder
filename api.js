@@ -1507,7 +1507,7 @@ function getAIApproximatedPlaceholder(record) {
 
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
     // === IMAGE DEBUG: Log entry to fetchImagesForRecord ===
-    const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.isAI === true;
+    const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.id?.startsWith('ai-presentation-') || record?.isAI === true;
     console.log('[IMAGE DEBUG] fetchImagesForRecord CALLED for:', {
         recordId: record?.id,
         recordName: record?.fields?.Name,

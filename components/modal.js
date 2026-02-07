@@ -1483,6 +1483,7 @@ function enableItemEditMode(record, nameEl, descEl) {
                                      record.id?.startsWith('manual-add-') ||
                                      record.id?.startsWith('manual-presentation-') ||
                                      record.id?.startsWith('ai-search-') ||
+                                     record.id?.startsWith('ai-child-') ||
                                      record.id?.startsWith('ai-presentation-');
 
                 console.log('[AI IMAGE DEBUG] isManualItem check:', {
@@ -1490,6 +1491,7 @@ function enableItemEditMode(record, nameEl, descEl) {
                     'starts with manual-add-': record.id?.startsWith('manual-add-'),
                     'starts with manual-presentation-': record.id?.startsWith('manual-presentation-'),
                     'starts with ai-search-': record.id?.startsWith('ai-search-'),
+                    'starts with ai-child-': record.id?.startsWith('ai-child-'),
                     'starts with ai-presentation-': record.id?.startsWith('ai-presentation-'),
                     'final isManualItem': isManualItem
                 });
@@ -2540,7 +2542,11 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                                     record.id?.startsWith('manual-add-') ||
                                     record.id?.startsWith('manual-presentation-') ||
                                     record.id?.startsWith('solution-');
-    const hasOnlyPlaceholder = imageSource === 'placeholder' || imageSource === 'using_placeholder';
+    const isAIDiscoveryForAutoGen = record.id?.startsWith('ai-search-') ||
+                                     record.id?.startsWith('ai-child-') ||
+                                     record.id?.startsWith('ai-presentation-');
+    const needsAutoGen = isManualItemForAutoGen || isAIDiscoveryForAutoGen;
+    const hasOnlyPlaceholder = imageSource === 'placeholder' || imageSource === 'using_placeholder' || imageSource === 'ai_approximation';
     const hasNoCustomImages = !record.fields?._customImages || record.fields._customImages.length === 0;
     const alreadyAttempted = window._aiImageGenerationAttempted.has(record.id);
     const inProgress = window._aiImageGenerationInProgress.has(record.id);
@@ -2548,6 +2554,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     console.log('[AI IMAGE AUTO-GEN] Checking if auto-generation needed:', {
         recordId: record.id,
         isManualItemForAutoGen,
+        isAIDiscoveryForAutoGen,
+        needsAutoGen,
         hasOnlyPlaceholder,
         hasNoCustomImages,
         alreadyAttempted,
@@ -2556,7 +2564,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         _customImages: record.fields?._customImages
     });
 
-    if (isManualItemForAutoGen && hasOnlyPlaceholder && hasNoCustomImages && !alreadyAttempted && !inProgress) {
+    if (needsAutoGen && hasOnlyPlaceholder && hasNoCustomImages && !alreadyAttempted && !inProgress) {
         console.log('[AI IMAGE AUTO-GEN] TRIGGERING auto AI image generation for:', record.fields?.Name);
 
         // Mark as in-progress to prevent duplicate attempts
