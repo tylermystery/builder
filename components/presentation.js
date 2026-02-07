@@ -1,5 +1,7 @@
-console.log('[MODULE DEBUG] presentation.js module starting to load...', performance.now().toFixed(2) + 'ms');
-import { state, setState } from '../state.js';
+// Debug flag: set to true (or window.__PRES_DEBUG__) for verbose logging in hot paths
+const PRES_DEBUG = typeof window !== 'undefined' && window.__PRES_DEBUG__;
+
+import { state, setState, getRecordById, invalidateRecordsIndex } from '../state.js';
 import * as api from '../api.js';
 import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, REACTION_SCORES, getModalZIndex } from '../config.js';
 import { updateUrl, getRecordPrice, parseOptions, flattenOptionGroups } from '../utils.js';
@@ -198,6 +200,10 @@ let isDragging = false;
 let dragDelayTimer = null;
 let currentDraggedItem = null;
 let currentDraggedRecordId = null;
+
+// Cached bucket bounding rects - rebuilt when drag buckets are shown, avoids
+// calling getBoundingClientRect() on every mousemove (60fps)
+let cachedBucketRects = null;
 let hoveredReactionEmoji = null;
 let hoveredQuickComment = null;
 let potentialMergeTarget = null;
@@ -366,12 +372,12 @@ function resizePresentationBackground() {
 }
 
 function ensureDOMElements() {
-    console.log('[PRESENTATION DEBUG] ensureDOMElements called, modal already set:', !!modal);
+    if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] ensureDOMElements called, modal already set:', !!modal);
     if (modal) return true; // Already initialized
 
     modal = document.getElementById('presentation-modal-overlay');
     closeBtn = document.getElementById('presentation-close-btn');
-    console.log('[PRESENTATION DEBUG] DOM lookup results:', {
+    if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] DOM lookup results:', {
         modal: !!modal,
         closeBtn: !!closeBtn,
         itemsList: !!document.getElementById('itinerary-items-list'),
@@ -550,7 +556,7 @@ function updatePresentationHeaderTotal() {
 
     let subtotal = 0;
     state.cart.lockedItems.forEach((itemInfo, recordId) => {
-        const record = state.records.all.find(r => r.id === recordId);
+        const record = getRecordById(recordId);
         if (!record) return;
 
         // Use selections for price if available, otherwise fall back to selectedOptionIndex
@@ -798,7 +804,7 @@ async function renderRsvpSection() {
 
     if (eventIdFromUrl) {
         // Look for the event in state.records.all
-        eventRecord = state.records.all.find(r => r.id === eventIdFromUrl);
+        eventRecord = getRecordById(eventIdFromUrl);
         if (!eventRecord) {
             // Try fetching the event if not in state
             try {
@@ -819,7 +825,7 @@ async function renderRsvpSection() {
             const sessionData = await api.fetchSessionById(state.session.id);
             if (sessionData?.fields?.LinkedItem?.length > 0) {
                 const linkedItemId = sessionData.fields.LinkedItem[0];
-                eventRecord = state.records.all.find(r => r.id === linkedItemId);
+                eventRecord = getRecordById(linkedItemId);
                 if (!eventRecord) {
                     const fetchedItems = await api.fetchGhostItems([linkedItemId]);
                     if (fetchedItems && fetchedItems.length > 0) {
@@ -1008,7 +1014,7 @@ async function handlePresentationRsvpClick(e) {
             linkedEventRecord.fields.RSVPNo = result.RSVPNo || [];
 
             // Also update in state.records.all if it exists there
-            const stateRecord = state.records.all.find(r => r.id === recordId);
+            const stateRecord = getRecordById(recordId);
             if (stateRecord) {
                 stateRecord.fields.RSVPs = result.RSVPs || [];
                 stateRecord.fields.RSVPMaybe = result.RSVPMaybe || [];
@@ -1426,7 +1432,7 @@ function createSentimentPopupHTML() {
 
     // Calculate scores for all items
     const itemsWithScores = combinedList.map(item => {
-        const record = state.records.all.find(r => r.id === item.recordId);
+        const record = getRecordById(item.recordId);
         const name = record?.fields.Name || 'Unknown Item';
         const reactions = state.session.reactions.get(item.recordId);
         const reactionCount = reactions instanceof Map ? reactions.size : 0;
@@ -2295,7 +2301,7 @@ function generateItemSummary(record, itemInfo, type) {
 
 async function renderItineraryItem(item, index) {
     const { recordId, type, itemStatus = 'active' } = item;
-    const record = state.records.all.find(r => r.id === recordId);
+    const record = getRecordById(recordId);
 
     if (!record) {
         return '';
@@ -2385,7 +2391,7 @@ async function renderItineraryItem(item, index) {
     if (combinedSources.length > 0) {
         combinedClass = 'is-combined';
         const sourceNames = combinedSources.map(sourceId => {
-            const sourceRecord = state.records.all.find(r => r.id === sourceId);
+            const sourceRecord = getRecordById(sourceId);
             return sourceRecord?.fields?.Name || 'Item';
         });
         // Show hybrid indicator badge (name is now shown as the main title)
@@ -2523,8 +2529,20 @@ async function renderItineraryItem(item, index) {
     `;
 }
 
+// Debounced version of renderAllItems - coalesces rapid successive calls
+// Use this for non-critical re-renders (action handlers, background updates).
+// Use renderAllItems() directly for initial render where timing matters.
+let renderDebounceTimer = null;
+function scheduleRenderAllItems() {
+    if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
+    renderDebounceTimer = setTimeout(() => {
+        renderDebounceTimer = null;
+        renderAllItems();
+    }, 50);
+}
+
 async function renderAllItems() {
-    console.log('[PRESENTATION DEBUG] renderAllItems called.', {
+    if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] renderAllItems called.', {
         lockedItemCount: state.cart.lockedItems.size,
         ideaItemCount: state.cart.items.size,
         lockedItemIds: Array.from(state.cart.lockedItems.keys()).slice(0, 5),
@@ -2612,14 +2630,20 @@ async function renderAllItems() {
     const renderedGroupIds = new Set(); // Track which groups we've already rendered
     const itemsHTML = [];
 
+    // Pre-build a lookup map: recordId -> group for O(1) group membership checks
+    const itemToGroupMap = new Map();
+    for (const g of relatedGroups) {
+        const gItems = Array.isArray(g) ? g : (g.items || []);
+        for (const gId of gItems) {
+            itemToGroupMap.set(gId, g);
+        }
+    }
+
     for (let i = 0; i < combinedList.length; i++) {
         const item = combinedList[i];
 
-        // Check if this item belongs to a related group
-        const itemGroup = relatedGroups.find(g => {
-            const gItems = Array.isArray(g) ? g : (g.items || []);
-            return gItems.includes(item.recordId);
-        });
+        // Check if this item belongs to a related group (O(1) lookup)
+        const itemGroup = itemToGroupMap.get(item.recordId);
 
         if (itemGroup && itemGroup.id && !renderedGroupIds.has(itemGroup.id)) {
             // First time seeing this group - render as a card matching the standard item layout
@@ -2630,7 +2654,7 @@ async function renderAllItems() {
 
             // Use the first item in the group as the "representative" for images
             const firstItemId = groupItems[0];
-            const firstRecord = state.records.all.find(r => r.id === firstItemId);
+            const firstRecord = getRecordById(firstItemId);
             if (firstRecord && !itemImagesCache.has(firstItemId)) {
                 const { imageUrls } = await api.fetchImagesForRecord(firstRecord, state.records.all, new Map());
                 itemImagesCache.set(firstItemId, { images: imageUrls || [], currentIndex: 0 });
@@ -2642,7 +2666,7 @@ async function renderAllItems() {
 
             // Compute price range across all group items
             const groupPrices = groupItems.map(gId => {
-                const gRec = state.records.all.find(r => r.id === gId);
+                const gRec = getRecordById(gId);
                 if (!gRec) return null;
                 const gInfo = state.cart.lockedItems.get(gId) || state.cart.items.get(gId);
                 const selectionsOrIdx = gInfo?.selections || gInfo?.selectedOptionIndex;
@@ -2660,7 +2684,7 @@ async function renderAllItems() {
 
             // Get item names for the summary line
             const itemNames = groupItems.map(gId => {
-                const gRec = state.records.all.find(r => r.id === gId);
+                const gRec = getRecordById(gId);
                 return gRec?.fields?.Name || 'Item';
             });
             const itemNamesPreview = itemNames.length <= 3
@@ -2688,7 +2712,7 @@ async function renderAllItems() {
                     <div class="options-group-members-list" data-group-id="${itemGroup.id}" style="display: none;">
                         ${groupDesc ? `<div class="options-group-members-desc">${escapeHtml(groupDesc)}</div>` : ''}
                         ${groupItems.map(gId => {
-                            const gRec = state.records.all.find(r => r.id === gId);
+                            const gRec = getRecordById(gId);
                             const gName = gRec?.fields?.Name || 'Item';
                             return `
                                 <div class="options-group-member-item" data-record-id="${gId}">
@@ -3170,27 +3194,41 @@ function showDragBuckets() {
         // Apply immediately
         applyZoneStyles();
 
-        // Force a repaint/reflow
+        // Force a repaint/reflow to ensure styles are applied
         void dragBucketsEl.offsetHeight;
-        if (leftZone) void leftZone.offsetHeight;
-        if (rightZone) void rightZone.offsetHeight;
 
-        // Retry with requestAnimationFrame for timing issues
+        // Build cached bucket rects after layout settles
         requestAnimationFrame(() => {
-            applyZoneStyles();
+            cacheBucketRects();
         });
+    }
+}
 
-        // Final fallback retry after delay
-        setTimeout(() => {
-            if (isDragging && dragBucketsEl?.classList.contains('drag-active')) {
-                applyZoneStyles();
-            }
-        }, 100);
+// Cache bucket bounding rects for use during drag hover checks
+function cacheBucketRects() {
+    const bucketEls = [
+        { el: dragBucketGoal, name: 'goal' },
+        { el: dragBucketIdeas, name: 'ideas' },
+        { el: dragBucketLock, name: 'lock' },
+        { el: dragBucketDemote, name: 'demote' },
+        { el: dragBucketArchive, name: 'archive' },
+        { el: dragBucketDelete, name: 'delete' },
+        { el: dragBucketReactions, name: 'reactions' },
+        { el: dragBucketQuickComment, name: 'quick-comment' },
+        { el: dragBucketCustomComment, name: 'custom-comment' },
+        { el: dragBucketCompleted, name: 'completed' }
+    ];
+    cachedBucketRects = new Map();
+    for (const { el, name } of bucketEls) {
+        if (el) {
+            cachedBucketRects.set(name, el.getBoundingClientRect());
+        }
     }
 }
 
 // Hide drag buckets (decolorize them, but keep visible)
 function hideDragBuckets() {
+    cachedBucketRects = null;
     if (dragBucketsEl) {
         dragBucketsEl.classList.remove('drag-active');
 
@@ -3820,14 +3858,16 @@ function cleanupRadialEventListeners() {
 }
 
 // Attach radial menu event listeners to itinerary items
+let radialListenersAttached = false;
 function attachRadialMenuListeners() {
     if (!itineraryItemsListEl) return;
+    // Guard: only attach once since we use event delegation on a persistent element
+    if (radialListenersAttached) return;
+    radialListenersAttached = true;
 
     // Use event delegation on the items list
     itineraryItemsListEl.addEventListener('touchstart', handleRadialTouchStart, { passive: true });
     itineraryItemsListEl.addEventListener('mousedown', handleRadialMouseDown);
-
-    console.log('[Radial Menu] Event listeners attached');
 }
 
 function handleRadialTouchStart(event) {
@@ -3925,7 +3965,8 @@ function checkBucketHover(event) {
     buckets.forEach((bucket) => {
         const { el, name } = bucket;
         if (el) {
-            const rect = el.getBoundingClientRect();
+            // Use cached rects when available (buckets are fixed during drag)
+            const rect = cachedBucketRects?.get(name) || el.getBoundingClientRect();
             const isOver = isPointInRect(clientX, clientY, rect);
             el.classList.toggle('drag-over', isOver);
 
@@ -4362,16 +4403,22 @@ function deactivateMergeTarget() {
     }
 }
 
-// Handle mouse/touch move during drag
+// Handle mouse/touch move during drag - throttled with rAF
 let dragMoveDebugCounter = 0;
+let dragRafPending = false;
+let lastDragEvent = null;
 function handleDragMove(event) {
     dragMoveDebugCounter++;
-    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
-    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
-
-    // Drag zones are fixed at screen edges - no need to update positions during drag
-
-    checkBucketHover(event);
+    // Store the latest event and schedule a rAF if not already pending
+    lastDragEvent = event;
+    if (dragRafPending) return;
+    dragRafPending = true;
+    requestAnimationFrame(() => {
+        dragRafPending = false;
+        if (lastDragEvent) {
+            checkBucketHover(lastDragEvent);
+        }
+    });
 }
 
 // Check if item was dropped on a bucket
@@ -4498,7 +4545,7 @@ async function archiveItem(recordId) {
     state.session.archivedItems.add(recordId);
 
     // Get item name for toast
-    const record = state.records.all.find(r => r.id === recordId);
+    const record = getRecordById(recordId);
     const itemName = record?.fields?.Name || 'Item';
 
     // Re-render items
@@ -4528,7 +4575,7 @@ async function completeItem(recordId) {
     state.session.completedItems.add(recordId);
 
     // Get item name for toast
-    const record = state.records.all.find(r => r.id === recordId);
+    const record = getRecordById(recordId);
     const itemName = record?.fields?.Name || 'Item';
 
     // Re-render items
@@ -4564,7 +4611,7 @@ async function setItemAsGoal(recordId) {
         showToast('Removed from goals', 'info');
     } else {
         state.session.goalItems.add(recordId);
-        const record = state.records.all.find(r => r.id === recordId);
+        const record = getRecordById(recordId);
         const itemName = record?.fields?.Name || 'Item';
         showToast(`"${itemName}" set as goal`, 'success');
     }
@@ -4592,7 +4639,7 @@ async function moveToIdeas(recordId) {
         state.cart.items.set(recordId, itemInfo);
 
         // Get item name for toast
-        const record = state.records.all.find(r => r.id === recordId);
+        const record = getRecordById(recordId);
         const itemName = record?.fields?.Name || 'Item';
         showToast(`"${itemName}" moved to Ideas`, 'info');
     } else {
@@ -4622,7 +4669,7 @@ async function lockItem(recordId) {
         state.cart.items.delete(recordId);
         state.cart.lockedItems.set(recordId, itemInfo);
 
-        const record = state.records.all.find(r => r.id === recordId);
+        const record = getRecordById(recordId);
         const itemName = record?.fields?.Name || 'Item';
         showToast(`"${itemName}" locked in plan`, 'success');
     } else if (state.cart.lockedItems.has(recordId)) {
@@ -4630,7 +4677,7 @@ async function lockItem(recordId) {
     } else {
         // Item not found, add it to locked
         state.cart.lockedItems.set(recordId, { quantity: 1, selections: {} });
-        const record = state.records.all.find(r => r.id === recordId);
+        const record = getRecordById(recordId);
         const itemName = record?.fields?.Name || 'Item';
         showToast(`"${itemName}" locked in plan`, 'success');
     }
@@ -4656,7 +4703,7 @@ async function demoteItem(recordId) {
         state.cart.lockedItems.delete(recordId);
         state.cart.items.set(recordId, itemInfo);
 
-        const record = state.records.all.find(r => r.id === recordId);
+        const record = getRecordById(recordId);
         const itemName = record?.fields?.Name || 'Item';
         showToast(`"${itemName}" demoted to idea`, 'info');
     } else {
@@ -4679,7 +4726,7 @@ async function deleteItem(recordId) {
     if (!recordId) return;
 
     // Get item name for confirmation
-    const record = state.records.all.find(r => r.id === recordId);
+    const record = getRecordById(recordId);
     const itemName = record?.fields?.Name || 'Item';
 
     // Show confirmation dialog
@@ -4735,7 +4782,7 @@ async function addReactionToItem(recordId, emoji) {
     itemReactions.set(userId, emoji);
 
     // Get item name for toast
-    const record = state.records.all.find(r => r.id === recordId);
+    const record = getRecordById(recordId);
     const itemName = record?.fields?.Name || 'Item';
     showToast(`${emoji} added to "${itemName}"`, 'success');
 
@@ -4761,7 +4808,7 @@ async function addQuickCommentToItem(recordId, comment) {
         itemInfo.note = newNote;
     }
 
-    const record = state.records.all.find(r => r.id === recordId);
+    const record = getRecordById(recordId);
     const itemName = record?.fields?.Name || 'Item';
     showToast(`Comment added to "${itemName}"`, 'success');
 
@@ -4778,7 +4825,7 @@ async function addQuickCommentToItem(recordId, comment) {
 async function openCustomCommentDialog(recordId) {
     if (!recordId) return;
 
-    const record = state.records.all.find(r => r.id === recordId);
+    const record = getRecordById(recordId);
     const itemName = record?.fields?.Name || 'Item';
 
     // Use prompt for simple implementation (can be enhanced with modal later)
@@ -4796,8 +4843,8 @@ let pendingMergeEstimation = null;
 async function executeMergeByZone(sourceRecordId, targetRecordId, zone) {
     if (!sourceRecordId || !targetRecordId) return;
 
-    const sourceRecord = state.records.all.find(r => r.id === sourceRecordId);
-    const targetRecord = state.records.all.find(r => r.id === targetRecordId);
+    const sourceRecord = getRecordById(sourceRecordId);
+    const targetRecord = getRecordById(targetRecordId);
     const sourceName = sourceRecord?.fields?.Name || 'Item';
     const targetName = targetRecord?.fields?.Name || 'Item';
 
@@ -4826,7 +4873,7 @@ async function executeMergeByZone(sourceRecordId, targetRecordId, zone) {
                 const entry = state.session.combinedItems.get(actualTarget);
                 if (entry && !(entry instanceof Set)) {
                     entry.hybridData = result.estimation;
-                    renderAllItems();
+                    scheduleRenderAllItems();
                     triggerSave();
                     log('Presentation', `Updated hybrid "${actualTarget}" with AI estimation`);
                 }
@@ -4856,7 +4903,7 @@ async function executeMergeByZone(sourceRecordId, targetRecordId, zone) {
                 if (group && !Array.isArray(group)) {
                     if (result.estimation.categoryName) group.name = result.estimation.categoryName;
                     if (result.estimation.categoryDescription) group.description = result.estimation.categoryDescription;
-                    renderAllItems();
+                    scheduleRenderAllItems();
                     triggerSave();
                     log('Presentation', `Updated options group with AI estimation`);
                 }
@@ -4871,8 +4918,8 @@ async function executeMergeByZone(sourceRecordId, targetRecordId, zone) {
 async function openMergeDialog(sourceRecordId, targetRecordId) {
     if (!sourceRecordId || !targetRecordId) return;
 
-    const sourceRecord = state.records.all.find(r => r.id === sourceRecordId);
-    const targetRecord = state.records.all.find(r => r.id === targetRecordId);
+    const sourceRecord = getRecordById(sourceRecordId);
+    const targetRecord = getRecordById(targetRecordId);
     const sourceName = sourceRecord?.fields?.Name || 'Source item';
     const targetName = targetRecord?.fields?.Name || 'Target item';
 
@@ -5090,8 +5137,8 @@ async function combineItemsIntoOne(sourceRecordId, targetRecordId, hybridEstimat
         state.session.combinedItems = new Map();
     }
 
-    const sourceRecord = state.records.all.find(r => r.id === sourceRecordId);
-    const targetRecord = state.records.all.find(r => r.id === targetRecordId);
+    const sourceRecord = getRecordById(sourceRecordId);
+    const targetRecord = getRecordById(targetRecordId);
     const sourceName = sourceRecord?.fields?.Name || 'Item';
     const targetName = targetRecord?.fields?.Name || 'Item';
 
@@ -5176,7 +5223,7 @@ async function combineItemsIntoOne(sourceRecordId, targetRecordId, hybridEstimat
         }
     }
 
-    const finalTargetRecord = state.records.all.find(r => r.id === actualTarget);
+    const finalTargetRecord = getRecordById(actualTarget);
     const hybridName = hybridEstimation?.hybridName;
     const finalDisplayName = hybridName || finalTargetRecord?.fields?.Name || 'Item';
 
@@ -5207,7 +5254,7 @@ async function combineItemsIntoOne(sourceRecordId, targetRecordId, hybridEstimat
             itemImagesCache.set(actualTarget, { images: [collageUrl], currentIndex: 0 });
 
             // Re-render to show the collage
-            renderAllItems();
+            scheduleRenderAllItems();
             triggerSave();
             log('Presentation', `Collage image set for hybrid: ${actualTarget}`);
         }
@@ -5222,8 +5269,8 @@ async function createRelatedCategory(recordId1, recordId2, optionsEstimation = n
         state.session.relatedGroups = [];
     }
 
-    const record1 = state.records.all.find(r => r.id === recordId1);
-    const record2 = state.records.all.find(r => r.id === recordId2);
+    const record1 = getRecordById(recordId1);
+    const record2 = getRecordById(recordId2);
     const name1 = record1?.fields?.Name || 'Item 1';
     const name2 = record2?.fields?.Name || 'Item 2';
 
@@ -5347,7 +5394,7 @@ function generateGroupName(itemIds) {
     const types = new Set();
 
     itemIds.forEach(id => {
-        const record = state.records.all.find(r => r.id === id);
+        const record = getRecordById(id);
         if (record?.fields?.Category) {
             categories.add(record.fields.Category);
         }
@@ -5437,7 +5484,7 @@ async function createCollageImage(targetRecordId, sourceRecordIds) {
 
         // Fetch the first image for each item
         for (const recordId of allRecordIds) {
-            const record = state.records.all.find(r => r.id === recordId);
+            const record = getRecordById(recordId);
             if (!record) continue;
 
             let urls = [];
@@ -5635,7 +5682,7 @@ async function uncombineSource(sourceId, targetId) {
 
     sources.delete(sourceId);
 
-    const sourceRecord = state.records.all.find(r => r.id === sourceId);
+    const sourceRecord = getRecordById(sourceId);
     const sourceName = sourceRecord?.fields?.Name || 'Item';
 
     // If no more sources, remove the combined entry entirely
@@ -5679,7 +5726,7 @@ async function removeFromGroup(recordId, groupId) {
 
     items.splice(itemIndex, 1);
 
-    const record = state.records.all.find(r => r.id === recordId);
+    const record = getRecordById(recordId);
     const itemName = record?.fields?.Name || 'Item';
 
     // If group has fewer than 2 items, dissolve it
@@ -5945,19 +5992,39 @@ function renderReactionsSummary() {
 }
 
 /**
- * Update all item emoji indicator tooltips with current ranking info
+ * Update all item emoji indicator tooltips with current ranking info.
+ * Computes rankings once and looks up each item in the result map (O(n) total).
  */
 function updateAllItemEmojiTooltips() {
+    const rankings = calculateReactionRankings();
+    const rankingsMap = new Map(rankings.map(r => [r.recordId, r]));
+
     const emojiIndicators = document.querySelectorAll('.item-emoji-indicator[data-record-id]');
     emojiIndicators.forEach(indicator => {
         const recordId = indicator.dataset.recordId;
-        const tooltip = getItemRankingTooltip(recordId);
-        if (tooltip) {
-            indicator.title = tooltip;
+        const itemRanking = rankingsMap.get(recordId);
+        if (itemRanking) {
+            indicator.title = formatRankingTooltip(itemRanking);
         } else {
             indicator.removeAttribute('title');
         }
     });
+}
+
+/**
+ * Format a ranking object into a tooltip string.
+ * Extracted from getItemRankingTooltip to avoid redundant recalculation.
+ */
+function formatRankingTooltip(itemRanking) {
+    const emojiBreakdownStr = Object.entries(itemRanking.emojiBreakdown)
+        .map(([emoji, count]) => `${emoji}${count > 1 ? '\u00d7' + count : ''}`)
+        .join(' ');
+    let medal = '';
+    if (itemRanking.rank === 1) medal = '\ud83e\udd47 ';
+    else if (itemRanking.rank === 2) medal = '\ud83e\udd48 ';
+    else if (itemRanking.rank === 3) medal = '\ud83e\udd49 ';
+    const scoreStr = itemRanking.score > 0 ? `+${itemRanking.score}` : itemRanking.score.toString();
+    return `${medal}Rank #${itemRanking.rank} of ${itemRanking.totalItems} | Score: ${scoreStr} | ${emojiBreakdownStr}`;
 }
 
 // =============================================================================
@@ -6560,7 +6627,7 @@ async function createTaskFromComment(commentId, commentContent, componentId = nu
         taskData.LinkedItem = componentId;
     } else if (componentId) {
         // For AI-generated items, store the item name in the task name/description instead
-        const itemRecord = state.records.all.find(r => r.id === componentId);
+        const itemRecord = getRecordById(componentId);
         if (itemRecord) {
             const itemName = itemRecord.fields?.Name || itemRecord.fields?.['Item Name'] || 'AI Item';
             // Prefix the task name with the item name for context
@@ -7228,7 +7295,7 @@ async function initializePresentationChat() {
                 let componentInfo = null;
                 if (itemLink && itemLink.length > 0) {
                     const componentId = itemLink[0];
-                    const componentRecord = state.records.all.find(r => r.id === componentId);
+                    const componentRecord = getRecordById(componentId);
                     componentInfo = {
                         id: componentId,
                         name: componentRecord?.fields?.Name || 'Unknown Item'
@@ -7421,7 +7488,7 @@ async function initializePresentationChat() {
 
             // Also add the comment to the chat area with @component tag
             if (chatMessagesEl && data.comment) {
-                const componentRecord = state.records.all.find(r => r.id === componentId);
+                const componentRecord = getRecordById(componentId);
                 const componentInfo = {
                     id: componentId,
                     name: componentRecord?.fields?.Name || 'Unknown Item'
@@ -7751,7 +7818,7 @@ function generateItemsSummary() {
     // Get first few item names for preview
     const allItems = [...state.cart.lockedItems.keys(), ...state.cart.items.keys()];
     const itemNames = allItems.slice(0, 3).map(id => {
-        const record = state.records.all.find(r => r.id === id);
+        const record = getRecordById(id);
         return record?.fields?.Name || 'Item';
     });
 
@@ -8196,7 +8263,7 @@ function handleItemClick(e) {
     const recordId = itemElement.dataset.recordId;
     if (!recordId) return;
 
-    const record = state.records.all.find(r => r.id === recordId);
+    const record = getRecordById(recordId);
     if (!record) {
         log('Presentation', `Record not found for ID: ${recordId}`);
         return;
@@ -8226,7 +8293,7 @@ function handleExpandButtonClick(e) {
     const recordId = expandBtn.dataset.recordId;
     if (!recordId) return;
 
-    const record = state.records.all.find(r => r.id === recordId);
+    const record = getRecordById(recordId);
     if (!record) {
         log('Presentation', `Record not found for ID: ${recordId}`);
         return;
@@ -8913,7 +8980,7 @@ async function submitComponentComment(componentId) {
 
             // Also add to the chat area with @component tag
             if (chatMessagesEl) {
-                const componentRecord = state.records.all.find(r => r.id === componentId);
+                const componentRecord = getRecordById(componentId);
                 const componentInfo = {
                     id: componentId,
                     name: componentRecord?.fields?.Name || 'Unknown Item'
@@ -9062,7 +9129,7 @@ async function handleCreateTaskFromComment(commentId) {
             elementName = accordion.dataset.itemName || 'Unknown Item';
         } else {
             // Fallback: try to get from locked/cart items
-            const itemRecord = state.records.all.find(r => r.id === componentId);
+            const itemRecord = getRecordById(componentId);
             if (itemRecord) {
                 elementName = itemRecord.fields?.Name || itemRecord.fields?.['Item Name'] || 'Unknown Item';
             }
@@ -9413,7 +9480,7 @@ function showCreateTaskFromCommentPopup(commentId, commentContent, componentId, 
                 taskData.LinkedItem = componentId;
             } else if (componentId) {
                 // For AI-generated items, include the item name in the task name
-                const itemRecord = state.records.all.find(r => r.id === componentId);
+                const itemRecord = getRecordById(componentId);
                 if (itemRecord) {
                     const itemName = itemRecord.fields?.Name || itemRecord.fields?.['Item Name'] || 'AI Item';
                     if (!taskName.includes(`[${itemName}]`)) {
@@ -9987,16 +10054,18 @@ function handleKeyDown(e) {
 }
 
 export async function showPresentationView(listType, startRecordId = null) {
-    console.log('[PRESENTATION DEBUG] ========== showPresentationView called ==========');
-    console.log('[PRESENTATION DEBUG] listType:', listType, 'startRecordId:', startRecordId);
-    console.log('[PRESENTATION DEBUG] state.cart.lockedItems.size:', state.cart.lockedItems.size);
-    console.log('[PRESENTATION DEBUG] state.cart.items.size:', state.cart.items.size);
-    console.log('[PRESENTATION DEBUG] state.session.id:', state.session.id);
-    console.log('[PRESENTATION DEBUG] DOM check:', {
-        modalExists: !!document.getElementById('presentation-modal-overlay'),
-        closeBtnExists: !!document.getElementById('presentation-close-btn'),
-        itemsListExists: !!document.getElementById('itinerary-items-list')
-    });
+    if (PRES_DEBUG) {
+        console.log('[PRESENTATION DEBUG] ========== showPresentationView called ==========');
+        console.log('[PRESENTATION DEBUG] listType:', listType, 'startRecordId:', startRecordId);
+        console.log('[PRESENTATION DEBUG] state.cart.lockedItems.size:', state.cart.lockedItems.size);
+        console.log('[PRESENTATION DEBUG] state.cart.items.size:', state.cart.items.size);
+        console.log('[PRESENTATION DEBUG] state.session.id:', state.session.id);
+        console.log('[PRESENTATION DEBUG] DOM check:', {
+            modalExists: !!document.getElementById('presentation-modal-overlay'),
+            closeBtnExists: !!document.getElementById('presentation-close-btn'),
+            itemsListExists: !!document.getElementById('itinerary-items-list')
+        });
+    }
     log('Presentation', `Showing itinerary presentation`);
     // console.log('[Accordion DEBUG] showPresentationView called');
 
@@ -10096,7 +10165,7 @@ export async function showPresentationView(listType, startRecordId = null) {
     document.body.classList.add('modal-open');
     document.body.classList.add('presentation-active');
     document.documentElement.classList.add('presentation-active');
-    console.log('[PRESENTATION DEBUG] Modal shown. Classes:', modal.className, 'Display:', modal.style.display);
+    if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] Modal shown. Classes:', modal.className, 'Display:', modal.style.display);
     // Remove early-loading optimization class now that presentation is properly initialized
     document.body.classList.remove('presentation-loading');
     document.documentElement.classList.remove('presentation-loading');
@@ -10130,11 +10199,11 @@ export async function showPresentationView(listType, startRecordId = null) {
     initializeMergeDialogListeners();
 
     log('Presentation', 'Itinerary view rendered successfully');
-    console.log('[PRESENTATION DEBUG] ========== showPresentationView COMPLETE ==========');
+    if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] ========== showPresentationView COMPLETE ==========');
 }
 
 export function hidePresentationView() {
-    console.log('[PRESENTATION DEBUG] hidePresentationView called. modal:', !!modal);
+    if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] hidePresentationView called. modal:', !!modal);
     if (!modal) return;
 
     // Unregister sync callback when closing presentation view
@@ -10164,6 +10233,12 @@ export function hidePresentationView() {
         radialMenuContainer.classList.remove('radial-active');
         radialMenuActive = false;
         cleanupRadialEventListeners();
+    }
+    // Remove delegated radial listeners so they can be re-attached on next open
+    if (itineraryItemsListEl && radialListenersAttached) {
+        itineraryItemsListEl.removeEventListener('touchstart', handleRadialTouchStart);
+        itineraryItemsListEl.removeEventListener('mousedown', handleRadialMouseDown);
+        radialListenersAttached = false;
     }
 
     // Ensure drag tooltip is hidden
@@ -10198,12 +10273,12 @@ export function hidePresentationView() {
 }
 
 export function setupPresentationEventListeners() {
-    console.log('[PRESENTATION DEBUG] setupPresentationEventListeners called.');
+    if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] setupPresentationEventListeners called.');
     if (!ensureDOMElements()) {
         console.error('[PRESENTATION DEBUG] Cannot setup event listeners - DOM elements not available');
         return;
     }
-    console.log('[PRESENTATION DEBUG] DOM elements available for event listener setup.');
+    if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] DOM elements available for event listener setup.');
 
     // Listen for user login/logout events to update the account button and collaborators
     document.addEventListener('userLoggedIn', handlePresentationUserLogin);
@@ -10952,7 +11027,7 @@ function createPresentationManualAddOption(searchTerm) {
 
             // Add to records
             state.records.all.push(manualRecord);
-
+            invalidateRecordsIndex();
             // Add to plan (cart.items as idea first)
             state.cart.items.set(manualId, {
                 quantity: 1,
@@ -11356,6 +11431,7 @@ function handleCardClick(record, isAI) {
         const existingIndex = state.records.all.findIndex(r => r.id === record.id);
         if (existingIndex === -1) {
             state.records.all.push(record);
+            invalidateRecordsIndex();
         }
     }
 
@@ -11381,6 +11457,7 @@ async function handleQuickAdd(record, button, isAI) {
             const existingIndex = state.records.all.findIndex(r => r.id === record.id);
             if (existingIndex === -1) {
                 state.records.all.push(record);
+                invalidateRecordsIndex();
             }
         }
 

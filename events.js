@@ -1,7 +1,7 @@
 // REPLACE THE ENTIRE CONTENTS of events.js
 console.log('[MODULE DEBUG] events.js module starting to load...', performance.now().toFixed(2) + 'ms');
 
-import { state, setState } from './state.js';
+import { state, setState, invalidateRecordsIndex } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
@@ -601,6 +601,7 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
 
                 aiRecords.push(childRecord);
                 state.records.all.push(childRecord);
+                invalidateRecordsIndex();
             });
         } else if (aiData.Name) {
             // Handle SPECIFIC type - single AI result
@@ -689,6 +690,7 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
 
             aiRecords.push(liveRecord);
             state.records.all.push(liveRecord);
+            invalidateRecordsIndex();
         }
 
         // Display AI results in their own carousel
@@ -873,7 +875,7 @@ function createManualAddOption(searchTerm) {
 
         // Add to records
         state.records.all.push(manualRecord);
-
+        invalidateRecordsIndex();
         // Add to plan
         state.cart.lockedItems.set(manualId, {
             quantity: 1,

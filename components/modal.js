@@ -1,7 +1,7 @@
 // REPLACE THE ENTIRE CONTENTS of components/modal.js
 console.log('[MODULE DEBUG] modal.js module starting to load...', performance.now().toFixed(2) + 'ms');
 
-import { state } from '../state.js';
+import { state, getRecordById } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex } from '../config.js';
@@ -2204,7 +2204,7 @@ async function initializePlanCarousel(componentRecords) {
         // Update item details
         const quantity = history?.quantity || 1;
         const note = history?.note || '';
-        const isGhost = !state.records.all.find(r => r.id === record.id);
+        const isGhost = !getRecordById(record.id);
 
         let detailsHTML = '';
         if (quantity > 1) {
@@ -3772,7 +3772,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             // Fetch images for each component in parallel
             const componentImagePromises = allPackageItems.map(async (itemRef) => {
                 const itemId = itemRef.id || itemRef;
-                const itemRecord = state.records.all.find(r => r.id === itemId);
+                const itemRecord = getRecordById(itemId);
                 if (!itemRecord) return null;
 
                 let componentImageUrls = [];
@@ -4653,7 +4653,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
             // Also check state.records.all for catalog items
             if (!itemRecord.fields && state.records.all) {
-                const stateRecord = state.records.all.find(r => r.id === record.id);
+                const stateRecord = getRecordById(record.id);
                 if (stateRecord) {
                     itemRecord = stateRecord;
                 }
@@ -5794,7 +5794,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
         for (const itemRef of includedItems) {
             const itemId = itemRef.id || itemRef;
-            const itemRecord = state.records.all.find(r => r.id === itemId);
+            const itemRecord = getRecordById(itemId);
             if (itemRecord) {
                 const itemName = itemRecord.fields[CONSTANTS.FIELD_NAMES.NAME] || 'Unknown Item';
                 const itemQty = itemRef.quantity || 1;
@@ -5811,7 +5811,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             packageContentsHTML += '<ul class="package-addon-list">';
             for (const itemRef of addOnItems) {
                 const itemId = itemRef.id || itemRef;
-                const itemRecord = state.records.all.find(r => r.id === itemId);
+                const itemRecord = getRecordById(itemId);
                 if (itemRecord) {
                     const itemName = itemRecord.fields[CONSTANTS.FIELD_NAMES.NAME] || 'Unknown Item';
                     packageContentsHTML += `<li class="package-item package-addon-item">${itemName}</li>`;
@@ -6694,7 +6694,7 @@ export async function showCheckoutModal(shopSettings) {
     // Check if UMW is in plan
     let isUmwInPlan = false;
     for (const [id] of state.cart.lockedItems) {
-        const lockedRecord = state.records.all.find(r => r.id === id);
+        const lockedRecord = getRecordById(id);
         if (lockedRecord && lockedRecord.fields.Name && lockedRecord.fields.Name.includes("Union Machine Works")) {
             isUmwInPlan = true;
             break;
@@ -6702,7 +6702,7 @@ export async function showCheckoutModal(shopSettings) {
     }
 
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
-        const record = state.records.all.find(r => r.id === recordId);
+        const record = getRecordById(recordId);
         if (!record) continue;
 
         // Use selections if available, otherwise fall back to selectedOptionIndex

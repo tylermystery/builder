@@ -1,6 +1,6 @@
 // FILE: api.js (REPLACE ENTIRE FILE)
 
-import { state } from './state.js';
+import { state, invalidateRecordsIndex } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
@@ -538,7 +538,7 @@ export async function loadSessionFromAirtable(sessionId) {
                                 log('API', `Restored solution record to registry: ${customRecord.id}`);
                             }
                             state.records.all.push(customRecord);
-                        }
+                            invalidateRecordsIndex();
                     }
                     log('API', `Restored ${customRecordsToRestore.length} custom items from session data`);
                     console.log(`[SESSION-LOAD] Restored ${customRecordsToRestore.length} custom items (AI + manual + solution)`);
