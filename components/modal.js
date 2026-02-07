@@ -2747,7 +2747,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     if (existingConfidenceText) existingConfidenceText.remove();
 
     // Get the modal container to apply confidence styling to the entire modal
-    const modalContainer = document.getElementById('detail-modal');
+    const modalContainer = document.getElementById('detail-modal-overlay');
 
     // Remove previous confidence classes from modal
     if (modalContainer) {
@@ -2759,45 +2759,37 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         console.log('[DEBUG Modal] AI record confidence:', { confidence, type: typeof confidence });
 
         // Determine confidence style tier
-        let confidenceStyle, confidenceStyleText, confidenceTooltip;
+        let confidenceStyle, confidenceTooltip;
 
         if (confidence === null || confidence === undefined) {
             confidenceStyle = 'pencil';
-            confidenceStyleText = 'Pencil Draft';
             confidenceTooltip = 'Draft information - please verify all details';
         } else if (confidence < 0.5) {
             confidenceStyle = 'pencil';
-            confidenceStyleText = `Pencil (~${Math.round(confidence * 100)}%)`;
             confidenceTooltip = `${Math.round(confidence * 100)}% confident - Sketchy draft, please verify details`;
         } else if (confidence < 0.75) {
             confidenceStyle = 'pen';
-            confidenceStyleText = `Pen (~${Math.round(confidence * 100)}%)`;
             confidenceTooltip = `${Math.round(confidence * 100)}% confident - Handwritten quality, some details may need verification`;
         } else if (confidence < 0.95) {
             confidenceStyle = 'typed';
-            confidenceStyleText = `Typed (${Math.round(confidence * 100)}%)`;
             confidenceTooltip = `${Math.round(confidence * 100)}% confident - Typed quality, reliable information`;
         } else {
             confidenceStyle = 'premium';
-            confidenceStyleText = `Premium (${Math.round(confidence * 100)}%)`;
             confidenceTooltip = `${Math.round(confidence * 100)}% confident - Premium verified information`;
         }
 
-        console.log('[DEBUG Modal] Applying confidence style to modal:', { confidenceStyle, confidenceStyleText });
+        console.log('[DEBUG Modal] Applying confidence style to modal:', { confidenceStyle });
 
-        // Apply confidence class to the entire modal
+        // Apply confidence class to the entire modal — this drives visual styling
+        // of the title, description, and background (no explicit text label needed)
         if (modalContainer) {
             modalContainer.classList.add(`modal-confidence-${confidenceStyle}`);
         }
 
-        // Create confidence text indicator (not badge)
-        const confidenceTextEl = document.createElement('div');
-        confidenceTextEl.className = `ai-confidence-text confidence-style-${confidenceStyle}`;
-        confidenceTextEl.innerHTML = `<span class="confidence-style-label">${confidenceStyleText}</span>`;
-        confidenceTextEl.title = confidenceTooltip;
-
-        // Insert after the item name
-        modalItemName.parentNode.insertBefore(confidenceTextEl, modalItemName.nextSibling);
+        // Set tooltip on the item name so users can hover to see confidence info
+        if (modalItemName) {
+            modalItemName.title = confidenceTooltip;
+        }
     }
 
     // Display solution badge for AI-generated solution items

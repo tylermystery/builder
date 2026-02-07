@@ -2323,6 +2323,30 @@ async function renderItineraryItem(item, index) {
     const quantity = itemInfo?.quantity || 1;
     const note = itemInfo?.note || '';
 
+    // --- AI Confidence tier for itinerary board items ---
+    const isAIItem = recordId.startsWith('custom-') ||
+                     recordId.startsWith('ai-search-') ||
+                     recordId.startsWith('ai-group-') ||
+                     recordId.startsWith('ai-child-');
+    let itineraryConfidenceClass = '';
+    if (isAIItem) {
+        const confidence = record._researchData?.confidence ??
+            record._aiConfidence ??
+            record.fields?._aiConfidence ??
+            null;
+        if (confidence === null || confidence === undefined) {
+            itineraryConfidenceClass = 'confidence-pencil';
+        } else if (confidence < 0.5) {
+            itineraryConfidenceClass = 'confidence-pencil';
+        } else if (confidence < 0.75) {
+            itineraryConfidenceClass = 'confidence-pen';
+        } else if (confidence < 0.95) {
+            itineraryConfidenceClass = 'confidence-typed';
+        } else {
+            itineraryConfidenceClass = 'confidence-premium';
+        }
+    }
+
     // Get selected options for expanded view
     const selectedOptions = getSelectedOptionsDisplay(record, itemInfo);
 
@@ -2455,8 +2479,8 @@ async function renderItineraryItem(item, index) {
 
     // Each item is wrapped in its own section container for independent layout
     return `
-        <section class="itinerary-section itinerary-item-section ${statusClass} ${goalClass} ${combinedClass} ${groupClass}" data-section="item-${recordId}" data-item-status="${itemStatus}" data-is-goal="${isGoal}">
-            <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}" data-item-name="${escapeHtml(name)}">
+        <section class="itinerary-section itinerary-item-section ${statusClass} ${goalClass} ${combinedClass} ${groupClass} ${itineraryConfidenceClass}" data-section="item-${recordId}" data-item-status="${itemStatus}" data-is-goal="${isGoal}">
+            <article class="itinerary-item item-accordion expanded ${itineraryConfidenceClass}" data-record-id="${recordId}" data-index="${index}" data-item-name="${escapeHtml(name)}">
                 <div class="item-accordion-header" data-record-id="${recordId}">
                     <div class="item-accordion-title-row">
                         ${taskStatusButtonHTML}
@@ -11440,27 +11464,11 @@ async function createPresentationResultCard(record, isAI = false) {
         });
     }
 
-    // Build confidence style text for AI items (shows pencil/pen/typed/premium)
+    // Confidence is now communicated purely through visual styling of the card
+    // (font, color, background, borders) — no text label badge needed
     let confidenceStyleTextHtml = '';
     if (isAI) {
-        // Generate style description text based on confidence tier
-        let styleText;
-        if (confidenceIndicatorClass === 'pencil') {
-            styleText = confidence === null || confidence === undefined ? 'Pencil Draft' : `Pencil (~${Math.round(confidence * 100)}%)`;
-        } else if (confidenceIndicatorClass === 'pen') {
-            styleText = `Pen (~${Math.round(confidence * 100)}%)`;
-        } else if (confidenceIndicatorClass === 'typed') {
-            styleText = `Typed (${Math.round(confidence * 100)}%)`;
-        } else {
-            styleText = `Premium (${Math.round(confidence * 100)}%)`;
-        }
-
-        confidenceStyleTextHtml = `
-            <span class="confidence-style-text confidence-style-${confidenceIndicatorClass}" title="Confidence level: ${confidenceLabel}">
-                ${styleText}
-            </span>
-        `;
-        console.log('[DEBUG Presentation] Built confidence style text for', record.id, ':', confidenceIndicatorClass, styleText);
+        console.log('[DEBUG Presentation] Confidence tier for', record.id, ':', confidenceIndicatorClass, '- expressed via card styling');
     }
 
     // Build dig button or accuracy badge HTML for AI items

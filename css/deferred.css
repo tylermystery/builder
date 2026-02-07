@@ -9085,55 +9085,73 @@ hr.total-divider {
    - 75-100% confidence: Typed (professional, finalized)
    ============================================================================= */
 
-/* Base confidence styling - applied to AI cards */
+/* Base confidence styling - applied to AI cards (catalog and presentation) */
 .presentation-result-card.confidence-pencil,
 .presentation-result-card.confidence-pen,
 .presentation-result-card.confidence-typed,
-.presentation-result-card.confidence-premium {
+.presentation-result-card.confidence-premium,
+.event-card.confidence-pencil,
+.event-card.confidence-pen,
+.event-card.confidence-typed,
+.event-card.confidence-premium {
     position: relative;
 }
 
-/* Pencil style (< 50% confidence) - Sketchy, draft-like appearance */
-.presentation-result-card.confidence-pencil {
-    background: repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 22px,
-        rgba(100, 100, 100, 0.03) 22px,
-        rgba(100, 100, 100, 0.03) 23px
-    ), #fdfcf8;
-    border: 1px dashed #c0b8a8;
+/* Pencil style (< 50% confidence) - Sketchy, draft-like on ruled paper */
+.presentation-result-card.confidence-pencil,
+.event-card.confidence-pencil {
+    background:
+        /* Blue ruled lines like notebook paper */
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 22px,
+            rgba(180, 200, 230, 0.18) 22px,
+            rgba(180, 200, 230, 0.18) 23px
+        ),
+        /* Red margin line */
+        linear-gradient(
+            90deg,
+            transparent 38px,
+            rgba(220, 120, 120, 0.12) 38px,
+            rgba(220, 120, 120, 0.12) 39px,
+            transparent 39px
+        ),
+        /* Warm paper base */
+        #f5f2ea;
+    border: 1px dashed #b8b0a0;
     box-shadow: none;
     transform: rotate(-0.3deg);
 }
 
 .presentation-result-card.confidence-pencil .presentation-result-card-name {
-    font-family: 'Caveat', cursive;
-    font-size: 1.25em;
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.25em !important;
     font-weight: 500;
-    color: #555;
+    color: #8a8a8a !important;
     letter-spacing: 0.3px;
-    opacity: 0.85;
+    opacity: 0.78;
 }
 
 .presentation-result-card.confidence-pencil .presentation-result-card-price {
-    font-family: 'Caveat', cursive;
-    font-size: 1.1em;
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.1em !important;
     font-weight: 500;
-    color: #666;
-    opacity: 0.8;
+    color: #999 !important;
+    opacity: 0.75;
 }
 
 .presentation-result-card.confidence-pencil .presentation-result-card-category {
-    font-family: 'Caveat', cursive;
+    font-family: 'Caveat', cursive !important;
     font-size: 0.95em;
-    background: rgba(200, 190, 170, 0.2);
+    background: rgba(200, 190, 170, 0.15);
     border: 1px dashed #c0b8a8;
+    color: #999 !important;
 }
 
 .presentation-result-card.confidence-pencil .presentation-result-card-image {
-    filter: grayscale(30%) brightness(0.95);
-    opacity: 0.85;
+    filter: grayscale(55%) brightness(0.92) contrast(0.9);
+    opacity: 0.7;
 }
 
 .presentation-result-card.confidence-pencil::before {
@@ -9158,22 +9176,22 @@ hr.total-divider {
 }
 
 .presentation-result-card.confidence-pen .presentation-result-card-name {
-    font-family: 'Dancing Script', cursive;
-    font-size: 1.2em;
+    font-family: 'Dancing Script', cursive !important;
+    font-size: 1.2em !important;
     font-weight: 600;
-    color: #2c3e50;
+    color: #2c3e50 !important;
     letter-spacing: 0.2px;
 }
 
 .presentation-result-card.confidence-pen .presentation-result-card-price {
-    font-family: 'Dancing Script', cursive;
-    font-size: 1.05em;
+    font-family: 'Dancing Script', cursive !important;
+    font-size: 1.05em !important;
     font-weight: 600;
-    color: #27ae60;
+    color: #27ae60 !important;
 }
 
 .presentation-result-card.confidence-pen .presentation-result-card-category {
-    font-family: 'Dancing Script', cursive;
+    font-family: 'Dancing Script', cursive !important;
     font-size: 0.9em;
     background: rgba(176, 196, 222, 0.2);
     border: 1px solid #b0c4de;
@@ -9192,17 +9210,17 @@ hr.total-divider {
 }
 
 .presentation-result-card.confidence-typed .presentation-result-card-name {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     font-size: 0.95em;
     font-weight: 600;
-    color: #333;
+    color: #333 !important;
 }
 
 .presentation-result-card.confidence-typed .presentation-result-card-price {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     font-size: 0.9em;
     font-weight: 600;
-    color: #27ae60;
+    color: #27ae60 !important;
 }
 
 /* Premium style (100% or very high confidence) - Elegant typography */
@@ -9213,24 +9231,152 @@ hr.total-divider {
 }
 
 .presentation-result-card.confidence-premium .presentation-result-card-name {
-    font-family: 'Playfair Display', Georgia, serif;
+    font-family: 'Playfair Display', Georgia, serif !important;
     font-size: 1em;
     font-weight: 600;
-    color: #1a1a1a;
+    color: #1a1a1a !important;
     letter-spacing: 0.1px;
 }
 
 .presentation-result-card.confidence-premium .presentation-result-card-price {
-    font-family: 'Playfair Display', Georgia, serif;
+    font-family: 'Playfair Display', Georgia, serif !important;
     font-size: 0.95em;
     font-weight: 600;
-    color: #1a7a4c;
+    color: #1a7a4c !important;
 }
 
 .presentation-result-card.confidence-premium .presentation-result-card-category {
     background: linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(212, 175, 55, 0.05) 100%);
     border: 1px solid rgba(212, 175, 55, 0.3);
-    color: #8b7355;
+    color: #8b7355 !important;
+}
+
+/* =====================================================
+   CATALOG CARD (event-card) CONFIDENCE STYLING
+   Mirrors presentation-result-card tiers for the
+   main catalog/browse view
+   ===================================================== */
+
+/* Pencil catalog card — gray pencil on notebook paper */
+.event-card.confidence-pencil .event-card-content h3 {
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.25em !important;
+    font-weight: 500;
+    color: #8a8a8a !important;
+    letter-spacing: 0.3px;
+    opacity: 0.78;
+}
+
+.event-card.confidence-pencil .event-card-content .description {
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.05em !important;
+    color: #999 !important;
+    opacity: 0.75;
+    line-height: 1.4;
+}
+
+.event-card.confidence-pencil .card-footer .price {
+    font-family: 'Caveat', cursive !important;
+    color: #999 !important;
+    opacity: 0.75;
+}
+
+.event-card.confidence-pencil .event-card-image-container {
+    filter: grayscale(55%) brightness(0.92) contrast(0.9);
+    opacity: 0.7;
+}
+
+.event-card.confidence-pencil::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cpath d='M0 0 L100 100 M100 0 L0 100' stroke='%23ddd' stroke-width='0.3' fill='none' opacity='0.3'/%3E%3C/svg%3E");
+    pointer-events: none;
+    border-radius: inherit;
+    z-index: 1;
+}
+
+/* Pen catalog card — ink-written, cleaner than pencil */
+.event-card.confidence-pen {
+    background: linear-gradient(to bottom, #fff 0%, #fafafa 100%);
+    border: 1px solid #b0c4de;
+    box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.event-card.confidence-pen .event-card-content h3 {
+    font-family: 'Dancing Script', cursive !important;
+    font-size: 1.2em !important;
+    font-weight: 600;
+    color: #2c3e50 !important;
+    letter-spacing: 0.2px;
+}
+
+.event-card.confidence-pen .event-card-content .description {
+    font-family: 'Dancing Script', cursive !important;
+    font-size: 1em !important;
+    color: #3d566e !important;
+    line-height: 1.4;
+}
+
+.event-card.confidence-pen .card-footer .price {
+    font-family: 'Dancing Script', cursive !important;
+    color: #27ae60 !important;
+}
+
+.event-card.confidence-pen .event-card-image-container {
+    filter: none;
+    opacity: 0.95;
+}
+
+/* Typed catalog card — clean, professional */
+.event-card.confidence-typed {
+    background: white;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.event-card.confidence-typed .event-card-content h3 {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    font-weight: 600;
+    color: #333 !important;
+}
+
+.event-card.confidence-typed .event-card-content .description {
+    color: #444 !important;
+}
+
+.event-card.confidence-typed .card-footer .price {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    font-weight: 600;
+    color: #27ae60 !important;
+}
+
+/* Premium catalog card — elegant typography */
+.event-card.confidence-premium {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border: 1px solid #d4af37;
+    box-shadow: 0 4px 12px rgba(212, 175, 55, 0.15);
+}
+
+.event-card.confidence-premium .event-card-content h3 {
+    font-family: 'Playfair Display', Georgia, serif !important;
+    font-weight: 600;
+    color: #1a1a1a !important;
+    letter-spacing: 0.1px;
+}
+
+.event-card.confidence-premium .event-card-content .description {
+    font-family: 'Playfair Display', Georgia, serif !important;
+    color: #2c2c2c !important;
+}
+
+.event-card.confidence-premium .card-footer .price {
+    font-family: 'Playfair Display', Georgia, serif !important;
+    font-weight: 600;
+    color: #1a7a4c !important;
 }
 
 /* Confidence indicator badge in corner of card */
@@ -9392,25 +9538,29 @@ hr.total-divider {
 }
 
 /* Hover effects per confidence level */
-.presentation-result-card.confidence-pencil:hover {
+.presentation-result-card.confidence-pencil:hover,
+.event-card.confidence-pencil:hover {
     border-color: #a09080;
     box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.08);
     transform: rotate(-0.3deg) translateY(-2px);
 }
 
-.presentation-result-card.confidence-pen:hover {
+.presentation-result-card.confidence-pen:hover,
+.event-card.confidence-pen:hover {
     border-color: #8fa8c8;
     box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.1);
     transform: rotate(0.1deg) translateY(-3px);
 }
 
-.presentation-result-card.confidence-typed:hover {
+.presentation-result-card.confidence-typed:hover,
+.event-card.confidence-typed:hover {
     border-color: #3498db;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
     transform: translateY(-3px);
 }
 
-.presentation-result-card.confidence-premium:hover {
+.presentation-result-card.confidence-premium:hover,
+.event-card.confidence-premium:hover {
     border-color: #c9a227;
     box-shadow: 0 8px 25px rgba(212, 175, 55, 0.25);
     transform: translateY(-4px);
@@ -9463,95 +9613,247 @@ hr.total-divider {
     border: 1px solid #d4af37;
 }
 
-/* Pencil style modal - Sketchy, draft-like appearance */
-#detail-modal.modal-confidence-pencil {
+/* Pencil style modal - Gray pencil on ruled notebook paper */
+#detail-modal-overlay.modal-confidence-pencil {
     font-family: 'Caveat', cursive;
 }
 
-#detail-modal.modal-confidence-pencil .modal-body {
-    background: repeating-linear-gradient(
-        transparent,
-        transparent 27px,
-        rgba(200, 200, 255, 0.15) 27px,
-        rgba(200, 200, 255, 0.15) 28px
-    );
+#detail-modal-overlay.modal-confidence-pencil .modal-content {
+    background:
+        /* Blue ruled lines like notebook paper */
+        repeating-linear-gradient(
+            transparent,
+            transparent 27px,
+            rgba(180, 200, 230, 0.2) 27px,
+            rgba(180, 200, 230, 0.2) 28px
+        ),
+        /* Red margin line */
+        linear-gradient(
+            90deg,
+            transparent 58px,
+            rgba(220, 120, 120, 0.15) 58px,
+            rgba(220, 120, 120, 0.15) 59px,
+            transparent 59px
+        ),
+        /* Warm paper base */
+        #f7f4ec;
 }
 
-#detail-modal.modal-confidence-pencil h2,
-#detail-modal.modal-confidence-pencil h3,
-#detail-modal.modal-confidence-pencil .modal-item-name {
-    font-family: 'Caveat', cursive;
-    font-size: 1.6em;
+#detail-modal-overlay.modal-confidence-pencil #modal-item-name,
+#detail-modal-overlay.modal-confidence-pencil h2,
+#detail-modal-overlay.modal-confidence-pencil h3 {
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.6em !important;
     letter-spacing: 0.5px;
+    color: #8a8a8a !important;
+    opacity: 0.82;
 }
 
-#detail-modal.modal-confidence-pencil .modal-item-description,
-#detail-modal.modal-confidence-pencil p {
-    font-family: 'Caveat', cursive;
-    font-size: 1.2em;
+#detail-modal-overlay.modal-confidence-pencil #modal-item-description,
+#detail-modal-overlay.modal-confidence-pencil .modal-sidebar-column p {
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.2em !important;
     line-height: 1.5;
+    color: #999 !important;
+    opacity: 0.78;
 }
 
-#detail-modal.modal-confidence-pencil .modal-item-price {
-    font-family: 'Caveat', cursive;
-    font-size: 1.4em;
+#detail-modal-overlay.modal-confidence-pencil #modal-item-price {
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.4em !important;
+    color: #999 !important;
+    opacity: 0.78;
 }
 
-/* Pen style modal - Handwritten but cleaner */
-#detail-modal.modal-confidence-pen {
+/* Pencil modal images - faded sketch look */
+#detail-modal-overlay.modal-confidence-pencil .modal-main-column img,
+#detail-modal-overlay.modal-confidence-pencil #modal-main-image img,
+#detail-modal-overlay.modal-confidence-pencil .image-collage img {
+    filter: grayscale(50%) brightness(0.95) contrast(0.85);
+    opacity: 0.75;
+}
+
+/* Pen modal images - slightly more vivid than pencil */
+#detail-modal-overlay.modal-confidence-pen .modal-main-column img,
+#detail-modal-overlay.modal-confidence-pen #modal-main-image img,
+#detail-modal-overlay.modal-confidence-pen .image-collage img {
+    filter: grayscale(15%) brightness(0.98);
+    opacity: 0.9;
+}
+
+/* Pen style modal - Ink-written, cleaner than pencil */
+#detail-modal-overlay.modal-confidence-pen {
     font-family: 'Dancing Script', cursive;
 }
 
-#detail-modal.modal-confidence-pen h2,
-#detail-modal.modal-confidence-pen h3,
-#detail-modal.modal-confidence-pen .modal-item-name {
-    font-family: 'Dancing Script', cursive;
-    font-size: 1.5em;
+#detail-modal-overlay.modal-confidence-pen #modal-item-name,
+#detail-modal-overlay.modal-confidence-pen h2,
+#detail-modal-overlay.modal-confidence-pen h3 {
+    font-family: 'Dancing Script', cursive !important;
+    font-size: 1.5em !important;
+    color: #2c3e50 !important;
 }
 
-#detail-modal.modal-confidence-pen .modal-item-description,
-#detail-modal.modal-confidence-pen p {
-    font-family: 'Dancing Script', cursive;
-    font-size: 1.15em;
+#detail-modal-overlay.modal-confidence-pen #modal-item-description,
+#detail-modal-overlay.modal-confidence-pen .modal-sidebar-column p {
+    font-family: 'Dancing Script', cursive !important;
+    font-size: 1.15em !important;
     line-height: 1.5;
+    color: #3d566e !important;
 }
 
-#detail-modal.modal-confidence-pen .modal-item-price {
-    font-family: 'Dancing Script', cursive;
-    font-size: 1.3em;
+#detail-modal-overlay.modal-confidence-pen #modal-item-price {
+    font-family: 'Dancing Script', cursive !important;
+    font-size: 1.3em !important;
+    color: #27ae60 !important;
 }
 
-/* Typed style modal - Clean, professional */
-#detail-modal.modal-confidence-typed {
+/* Typed style modal - Clean, professional, fully legible */
+#detail-modal-overlay.modal-confidence-typed {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-#detail-modal.modal-confidence-typed h2,
-#detail-modal.modal-confidence-typed h3,
-#detail-modal.modal-confidence-typed .modal-item-name {
+#detail-modal-overlay.modal-confidence-typed #modal-item-name,
+#detail-modal-overlay.modal-confidence-typed h2,
+#detail-modal-overlay.modal-confidence-typed h3 {
     font-family: inherit;
+    color: #222 !important;
+    font-weight: 600;
+}
+
+#detail-modal-overlay.modal-confidence-typed #modal-item-description,
+#detail-modal-overlay.modal-confidence-typed .modal-sidebar-column p {
+    color: #333 !important;
 }
 
 /* Premium style modal - Elegant typography */
-#detail-modal.modal-confidence-premium {
+#detail-modal-overlay.modal-confidence-premium {
     font-family: 'Playfair Display', serif;
 }
 
-#detail-modal.modal-confidence-premium .modal-body {
+#detail-modal-overlay.modal-confidence-premium .modal-content {
     border-left: 3px solid #d4af37;
 }
 
-#detail-modal.modal-confidence-premium h2,
-#detail-modal.modal-confidence-premium h3,
-#detail-modal.modal-confidence-premium .modal-item-name {
-    font-family: 'Playfair Display', serif;
+#detail-modal-overlay.modal-confidence-premium #modal-item-name,
+#detail-modal-overlay.modal-confidence-premium h2,
+#detail-modal-overlay.modal-confidence-premium h3 {
+    font-family: 'Playfair Display', serif !important;
     font-weight: 600;
-    color: #2c2c2c;
+    color: #2c2c2c !important;
 }
 
-#detail-modal.modal-confidence-premium .modal-item-price {
-    font-family: 'Playfair Display', serif;
-    color: #9a7b4f;
+#detail-modal-overlay.modal-confidence-premium #modal-item-price {
+    font-family: 'Playfair Display', serif !important;
+    color: #9a7b4f !important;
+}
+
+/* =====================================================
+   ITINERARY BOARD ITEM CONFIDENCE STYLING
+   Applies confidence-based visual styling to itinerary
+   items on the main presentation board
+   ===================================================== */
+
+/* Pencil itinerary item — sketchy draft on notebook paper */
+.itinerary-item.confidence-pencil {
+    background:
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 22px,
+            rgba(180, 200, 230, 0.18) 22px,
+            rgba(180, 200, 230, 0.18) 23px
+        ),
+        linear-gradient(
+            90deg,
+            transparent 38px,
+            rgba(220, 120, 120, 0.12) 38px,
+            rgba(220, 120, 120, 0.12) 39px,
+            transparent 39px
+        ),
+        #f5f2ea !important;
+    border: 1px dashed #b8b0a0 !important;
+}
+
+.itinerary-item.confidence-pencil .item-accordion-title {
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.3em !important;
+    color: #8a8a8a !important;
+    opacity: 0.82;
+}
+
+.itinerary-item.confidence-pencil .item-accordion-summary {
+    font-family: 'Caveat', cursive !important;
+    color: #999 !important;
+    opacity: 0.75;
+}
+
+.itinerary-item.confidence-pencil .itinerary-item-price {
+    font-family: 'Caveat', cursive !important;
+    color: #999 !important;
+    opacity: 0.75;
+}
+
+/* Pen itinerary item — handwritten ink */
+.itinerary-item.confidence-pen {
+    background: linear-gradient(to bottom, #fff 0%, #fafafa 100%) !important;
+    border: 1px solid #b0c4de !important;
+}
+
+.itinerary-item.confidence-pen .item-accordion-title {
+    font-family: 'Dancing Script', cursive !important;
+    font-size: 1.2em !important;
+    color: #2c3e50 !important;
+}
+
+.itinerary-item.confidence-pen .item-accordion-summary {
+    font-family: 'Dancing Script', cursive !important;
+    color: #3d566e !important;
+}
+
+.itinerary-item.confidence-pen .itinerary-item-price {
+    font-family: 'Dancing Script', cursive !important;
+    color: #27ae60 !important;
+}
+
+/* Typed itinerary item — clean professional */
+.itinerary-item.confidence-typed {
+    background: white !important;
+    border: 1px solid #e0e0e0 !important;
+}
+
+.itinerary-item.confidence-typed .item-accordion-title {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    font-weight: 600;
+    color: #333 !important;
+}
+
+.itinerary-item.confidence-typed .itinerary-item-price {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    color: #27ae60 !important;
+}
+
+/* Premium itinerary item — elegant serif with gold */
+.itinerary-item.confidence-premium {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%) !important;
+    border: 1px solid #d4af37 !important;
+    box-shadow: 0 4px 12px rgba(212, 175, 55, 0.15);
+}
+
+.itinerary-item.confidence-premium .item-accordion-title {
+    font-family: 'Playfair Display', Georgia, serif !important;
+    font-weight: 600;
+    color: #1a1a1a !important;
+}
+
+.itinerary-item.confidence-premium .item-accordion-summary {
+    font-family: 'Playfair Display', Georgia, serif !important;
+    color: #2c2c2c !important;
+}
+
+.itinerary-item.confidence-premium .itinerary-item-price {
+    font-family: 'Playfair Display', Georgia, serif !important;
+    color: #1a7a4c !important;
 }
 
 /* No Results State */

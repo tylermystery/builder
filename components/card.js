@@ -183,6 +183,27 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                         record.id.startsWith('ai-child-');
     const isAIGrouping = record.id.startsWith('ai-group-');
 
+    // --- AI CONFIDENCE TIER (drives visual text styling) ---
+    let confidenceClass = '';
+    if (isAISourced) {
+        const confidence = record._researchData?.confidence ??
+            record._aiConfidence ??
+            fields._aiConfidence ??
+            null;
+
+        if (confidence === null || confidence === undefined) {
+            confidenceClass = 'confidence-pencil';
+        } else if (confidence < 0.5) {
+            confidenceClass = 'confidence-pencil';
+        } else if (confidence < 0.75) {
+            confidenceClass = 'confidence-pen';
+        } else if (confidence < 0.95) {
+            confidenceClass = 'confidence-typed';
+        } else {
+            confidenceClass = 'confidence-premium';
+        }
+    }
+
     // Build AI badge HTML
     let aiDiscoveryBadge = '';
     if (isAISourced) {
@@ -221,7 +242,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const groupingCard = eventCard;
         // Apply AI-sourced styling if this is an AI-generated grouping
         const aiGroupingClass = isAISourced ? ' ai-sourced-card ai-grouping-card' : '';
-        groupingCard.className = 'event-card grouping-card' + aiGroupingClass;
+        groupingCard.className = 'event-card grouping-card' + aiGroupingClass + (confidenceClass ? ` ${confidenceClass}` : '');
         groupingCard.dataset.categoryName = fields.Name;
         const groupingNameForFilter = fields.Name.toLowerCase().replace(/\s+/g, ' ');
         const childItems = allRecords.filter(r => {
@@ -271,7 +292,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     if (fields['Item Type'] === 'Event') {
         // Apply AI-sourced styling if this is an AI-generated event
         const aiEventClass = isAISourced ? ' ai-sourced-card' : '';
-        eventCard.className = 'event-card event-type-card' + aiEventClass;
+        eventCard.className = 'event-card event-type-card' + aiEventClass + (confidenceClass ? ` ${confidenceClass}` : '');
         const eventDate = fields.Date ? new Date(fields.Date + 'T00:00:00') : null;
         const month = eventDate ? eventDate.toLocaleString('default', { month: 'short' }).toUpperCase() : 'TBD';
         const day = eventDate ? eventDate.getDate() : '??';
@@ -569,7 +590,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
 
     // Apply AI-sourced styling if this is an AI-generated bookable item
     const aiBookableClass = isAISourced ? ' ai-sourced-card' : '';
-    eventCard.className = 'event-card' + aiBookableClass;
+    eventCard.className = 'event-card' + aiBookableClass + (confidenceClass ? ` ${confidenceClass}` : '');
     const itemState = ui.getItemState(record.id);
     const effectiveMin = getEffectiveMinQuantity(record);
     const isLocked = state.cart.lockedItems.has(record.id);
