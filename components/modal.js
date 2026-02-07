@@ -4736,11 +4736,12 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         log('Modal', `Showing Categorize button for item: ${record.id}`);
     }
 
-    // Add Edit Item button for manual/custom items (items added via manual add feature)
+    // Add Edit Item button for manual/custom items and AI discovery items
     const isManualItem = record.isManual === true ||
                          record.id?.startsWith('manual-add-') ||
                          record.id?.startsWith('manual-presentation-') ||
                          record.id?.startsWith('ai-search-') ||
+                         record.id?.startsWith('ai-child-') ||
                          record.id?.startsWith('ai-presentation-');
 
     if (isManualItem) {
