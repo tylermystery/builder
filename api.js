@@ -539,6 +539,7 @@ export async function loadSessionFromAirtable(sessionId) {
                             }
                             state.records.all.push(customRecord);
                             invalidateRecordsIndex();
+                        }
                     }
                     log('API', `Restored ${customRecordsToRestore.length} custom items from session data`);
                     console.log(`[SESSION-LOAD] Restored ${customRecordsToRestore.length} custom items (AI + manual + solution)`);
