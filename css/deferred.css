@@ -3494,6 +3494,23 @@ html.presentation-active {
     margin: 0 auto;
 }
 
+.board-empty-state {
+    max-width: 560px;
+    padding: 80px 30px;
+}
+
+.board-empty-icon {
+    font-size: 3em;
+    margin-bottom: 16px;
+    opacity: 0.6;
+    animation: board-empty-float 3s ease-in-out infinite;
+}
+
+@keyframes board-empty-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
 .itinerary-empty-title {
     font-size: 1.4em;
     font-weight: 600;
@@ -3509,6 +3526,14 @@ html.presentation-active {
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     margin: 0 0 25px 0;
     font-style: normal;
+    line-height: 1.5;
+}
+
+.board-empty-hint {
+    font-size: 0.82em;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 28px;
+    font-style: italic;
 }
 
 .presentation-suggestions {
@@ -3521,23 +3546,40 @@ html.presentation-active {
 .presentation-suggestion-btn {
     padding: 12px 18px;
     font-size: 0.95em;
-    border-radius: 8px;
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
-    color: #fff;
-    border: none;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+    transition: transform 0.2s, box-shadow 0.2s, background 0.2s, border-color 0.2s;
     font-weight: 500;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 110px;
+}
+
+.suggestion-btn-icon {
+    font-size: 1.4em;
 }
 
 .presentation-suggestion-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
-    background: linear-gradient(135deg, #0056b3 0%, #003d82 100%);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.3);
 }
 
 .presentation-suggestion-btn:active {
     transform: translateY(0);
+}
+
+.presentation-suggestion-btn:focus-visible {
+    outline: 2px solid rgba(99, 102, 241, 0.8);
+    outline-offset: 2px;
 }
 
 /* Mobile responsive for itinerary */
@@ -12257,6 +12299,22 @@ hr.total-divider {
         animation: none;
     }
 
+    /* Disable board view card entrance animations */
+    .board-view .compact-card {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
+
+    .board-empty-icon {
+        animation: none;
+    }
+
+    .single-item-nudge-content {
+        animation: none;
+        opacity: 1;
+    }
+
     /* Disable smooth scrolling */
     html {
         scroll-behavior: auto;
@@ -14097,4 +14155,198 @@ hr.total-divider {
 
 .board-view .compact-card:active {
     cursor: grabbing;
+}
+
+/* =============================================================================
+   PHASE 5: Polish, Responsiveness, and Edge Cases
+   ============================================================================= */
+
+/* --- Card Entrance Animation --- */
+@keyframes board-card-enter {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.board-view .compact-card {
+    animation: board-card-enter 0.3s ease-out both;
+}
+
+/* Staggered entrance — each card delays slightly after the previous */
+.board-view .compact-card:nth-child(1) { animation-delay: 0s; }
+.board-view .compact-card:nth-child(2) { animation-delay: 0.04s; }
+.board-view .compact-card:nth-child(3) { animation-delay: 0.08s; }
+.board-view .compact-card:nth-child(4) { animation-delay: 0.12s; }
+.board-view .compact-card:nth-child(5) { animation-delay: 0.16s; }
+.board-view .compact-card:nth-child(6) { animation-delay: 0.2s; }
+.board-view .compact-card:nth-child(7) { animation-delay: 0.24s; }
+.board-view .compact-card:nth-child(8) { animation-delay: 0.28s; }
+.board-view .compact-card:nth-child(n+9) { animation-delay: 0.32s; }
+
+/* --- Single-Item Nudge --- */
+.board-single-item-nudge {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+    padding: 20px 16px;
+}
+
+.single-item-nudge-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 24px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    max-width: 500px;
+    animation: board-card-enter 0.4s ease-out 0.2s both;
+}
+
+.nudge-icon {
+    font-size: 1.3em;
+    flex-shrink: 0;
+}
+
+.nudge-text {
+    margin: 0;
+    font-size: 0.85em;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.4;
+}
+
+/* --- Focus Visible for Keyboard Navigation --- */
+.compact-card:focus-visible {
+    outline: 2px solid rgba(99, 102, 241, 0.8);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+}
+
+/* Remove default outline for mouse users */
+.compact-card:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* --- Enhanced Touch Targets for Mobile --- */
+@media (max-width: 480px) {
+    .compact-card-body {
+        padding: 10px;
+    }
+
+    .compact-card-meta {
+        margin-top: 6px;
+        padding-top: 6px;
+        gap: 6px;
+    }
+
+    .compact-card-name {
+        font-size: 0.9em;
+    }
+
+    .compact-card-status {
+        padding: 4px 10px;
+        font-size: 0.68em;
+    }
+
+    .compact-card-lifecycle-badge {
+        padding: 3px 10px;
+        font-size: 0.64em;
+    }
+
+    .compact-reaction-pill {
+        padding: 3px 8px;
+        font-size: 0.82em;
+    }
+
+    .compact-badge-pill {
+        padding: 3px 8px;
+        font-size: 0.72em;
+    }
+
+    /* Ensure touch targets are at least 44px */
+    .presentation-suggestion-btn {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 14px 16px;
+    }
+
+    .board-empty-state {
+        padding: 50px 20px;
+    }
+
+    .board-empty-icon {
+        font-size: 2.5em;
+    }
+
+    .single-item-nudge-content {
+        flex-direction: column;
+        text-align: center;
+        padding: 16px;
+    }
+}
+
+/* --- Tablet Responsiveness --- */
+@media (min-width: 481px) and (max-width: 768px) {
+    .compact-card-photo {
+        aspect-ratio: 16 / 9;
+    }
+
+    .board-empty-state {
+        padding: 60px 24px;
+    }
+}
+
+/* --- Large Desktop (3+ columns) --- */
+@media (min-width: 1200px) {
+    .itinerary-items-list.board-view {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+    }
+}
+
+/* --- Performance: GPU-accelerated transforms --- */
+.compact-card {
+    will-change: transform;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+}
+
+/* Remove will-change after animation settles to free GPU memory */
+.compact-card.settled {
+    will-change: auto;
+}
+
+/* --- Sortable interaction during drag: disable pointer events on non-drag cards --- */
+.board-view.is-sorting .compact-card:not(.sortable-drag):not(.sortable-chosen) {
+    pointer-events: none;
+}
+
+/* --- Smooth photo loading --- */
+.compact-card-photo {
+    background-color: rgba(255, 255, 255, 0.04);
+    transition: background-image 0.2s ease;
+}
+
+/* --- High contrast mode support --- */
+@media (forced-colors: active) {
+    .compact-card {
+        border: 2px solid ButtonText;
+    }
+
+    .compact-card:focus-visible {
+        outline: 3px solid Highlight;
+    }
+
+    .compact-card-name {
+        color: ButtonText;
+    }
+
+    .compact-badge-pill {
+        border: 1px solid ButtonText;
+    }
 }

@@ -2810,7 +2810,7 @@ async function renderCompactCard(item) {
     const noPhotoClass = !optimizedPhoto ? 'compact-card-no-photo' : '';
 
     return `
-        <div class="compact-card ${lifecycleClass} ${confidenceClass} ${noPhotoClass}" data-record-id="${recordId}" data-item-type="${type}" data-item-status="${itemStatus}">
+        <div class="compact-card ${lifecycleClass} ${confidenceClass} ${noPhotoClass}" data-record-id="${recordId}" data-item-type="${type}" data-item-status="${itemStatus}" role="article" tabindex="0" aria-label="${escapeHtml(name)}${showStatus ? ', ' + taskConfig.label : ''}">
             <div class="compact-card-photo" style="${photoStyle}">
                 ${statusOverlayHTML}
                 ${emojiOverlayHTML}
@@ -2972,7 +2972,7 @@ async function renderCompactGroupCard(group) {
     const noPhotoClass = !optimizedPhoto ? 'compact-card-no-photo' : '';
 
     return `
-        <div class="compact-card compact-card-group ${groupLifecycleClass} ${noPhotoClass}" data-group-id="${groupId}" data-item-type="${firstItemType}">
+        <div class="compact-card compact-card-group ${groupLifecycleClass} ${noPhotoClass}" data-group-id="${groupId}" data-item-type="${firstItemType}" role="article" tabindex="0" aria-label="${escapeHtml(groupName)}, ${groupItems.length} options">
             <div class="compact-card-photo" style="${photoStyle}">
                 <span class="compact-card-group-badge">${groupItems.length} options</span>
             </div>
@@ -3052,28 +3052,32 @@ async function renderAllItems() {
     updateStatusToggles(archivedCount, completedCount);
 
     if (combinedList.length === 0) {
-        // Show recommendations when no items exist
-        // All 4 pillars are shown as suggestions since there are no items
+        // Show enhanced empty state when no items exist
         const allCategories = ["Activities", "Food & Drink", "Venues", "Extras"];
+        const categoryIcons = { "Activities": "🎯", "Food & Drink": "🍽️", "Venues": "📍", "Extras": "✨" };
         let emptyStateHTML = `
-            <section class="itinerary-section itinerary-empty-section" data-section="empty">
-                <div class="presentation-empty-state">
-                    <p class="itinerary-empty-title">Start Building Your Event Plan</p>
-                    <p class="itinerary-empty-subtitle">Add items from these categories to create your perfect event:</p>
-                    <div class="presentation-suggestions">
+            <section class="itinerary-section itinerary-empty-section" data-section="empty" role="status" aria-label="Empty plan board">
+                <div class="presentation-empty-state board-empty-state">
+                    <div class="board-empty-icon" aria-hidden="true">📋</div>
+                    <p class="itinerary-empty-title">Your Plan Board is Empty</p>
+                    <p class="itinerary-empty-subtitle">Start by browsing items from a category below, or use the search to find something specific.</p>
+                    <div class="presentation-suggestions" role="group" aria-label="Category suggestions">
         `;
 
         allCategories.forEach(cat => {
             const filterTag = cat.toLowerCase().replace(/\s+/g, ' ');
+            const icon = categoryIcons[cat] || '📦';
             emptyStateHTML += `
-                <button class="filter-btn presentation-suggestion-btn" data-category-filter="${filterTag}">
-                    + Add ${cat}
+                <button class="filter-btn presentation-suggestion-btn" data-category-filter="${filterTag}" aria-label="Browse ${cat}">
+                    <span class="suggestion-btn-icon" aria-hidden="true">${icon}</span>
+                    <span class="suggestion-btn-text">${cat}</span>
                 </button>
             `;
         });
 
         emptyStateHTML += `
                     </div>
+                    <p class="board-empty-hint">Tip: Swipe horizontally on any card to access quick actions</p>
                 </div>
             </section>
         `;
@@ -3082,10 +3086,15 @@ async function renderAllItems() {
         return;
     }
 
-    itineraryItemsListEl.innerHTML = '<p class="itinerary-loading">Loading items...</p>';
+    // Single item state — show a contextual nudge below the card
+    const showSingleItemNudge = combinedList.length === 1;
+
+    itineraryItemsListEl.innerHTML = '<p class="itinerary-loading" role="status" aria-live="polite">Loading items...</p>';
 
     // --- BOARD VIEW (compact card grid) ---
     itineraryItemsListEl.classList.add('board-view');
+    itineraryItemsListEl.setAttribute('role', 'list');
+    itineraryItemsListEl.setAttribute('aria-label', 'Plan board items');
 
     const relatedGroups = state.session.relatedGroups || [];
     const renderedGroupIds = new Set();
@@ -3116,7 +3125,25 @@ async function renderAllItems() {
         }
     }
 
+    // Add single-item nudge if only one card on the board
+    if (showSingleItemNudge) {
+        itemsHTML.push(`
+            <div class="board-single-item-nudge" role="status" aria-label="Add more items suggestion">
+                <div class="single-item-nudge-content">
+                    <span class="nudge-icon" aria-hidden="true">💡</span>
+                    <p class="nudge-text">Add more items to compare options, merge ideas, and build your perfect plan.</p>
+                </div>
+            </div>
+        `);
+    }
+
     itineraryItemsListEl.innerHTML = itemsHTML.join('');
+
+    // After entrance animations complete, remove will-change to free GPU memory
+    setTimeout(() => {
+        const cards = itineraryItemsListEl.querySelectorAll('.compact-card');
+        cards.forEach(card => card.classList.add('settled'));
+    }, 600);
 
     // Attach click handlers for compact cards
     initializeCompactCardClicks();
@@ -3135,7 +3162,7 @@ async function renderAllItems() {
 function initializeCompactCardClicks() {
     if (!itineraryItemsListEl) return;
 
-    // Regular item cards - open detail modal
+    // Regular item cards - open detail modal on click or Enter/Space key
     const itemCards = itineraryItemsListEl.querySelectorAll('.compact-card[data-record-id]');
     itemCards.forEach(card => {
         card.addEventListener('click', (e) => {
@@ -3147,15 +3174,34 @@ function initializeCompactCardClicks() {
                 showDetailModal(record);
             }
         });
+        card.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                const recordId = card.dataset.recordId;
+                const record = getRecordById(recordId);
+                if (record) {
+                    showDetailModal(record);
+                }
+            }
+        });
     });
 
-    // Group cards - open group detail modal
+    // Group cards - open group detail modal on click or Enter/Space key
     const groupCards = itineraryItemsListEl.querySelectorAll('.compact-card-group[data-group-id]');
     groupCards.forEach(card => {
         card.addEventListener('click', (e) => {
             const groupId = card.dataset.groupId;
             if (groupId) {
                 openGroupDetailModal(groupId);
+            }
+        });
+        card.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                const groupId = card.dataset.groupId;
+                if (groupId) {
+                    openGroupDetailModal(groupId);
+                }
             }
         });
     });
@@ -3336,6 +3382,8 @@ async function initializeItemDragDrop() {
                 }
 
                 isDragging = true;
+                // Add sorting class to board for CSS pointer-events optimization
+                if (isBoardView) itineraryItemsListEl.classList.add('is-sorting');
                 // Reset debug counters
                 dragMoveDebugCounter = 0;
                 bucketHoverDebugCounter = 0;
@@ -3385,6 +3433,8 @@ async function initializeItemDragDrop() {
                     const capturedMergeZone = potentialMergeZone;
 
                     isDragging = false;
+                    // Remove sorting class from board
+                    if (isBoardView) itineraryItemsListEl.classList.remove('is-sorting');
                     clearTimeout(dragDelayTimer);
 
                     // Clear merge hover state - but we've already captured the ID and zone above
@@ -3431,6 +3481,7 @@ async function initializeItemDragDrop() {
                     console.error('[Presentation] Exception in drag onEnd:', error);
                     // Clean up anyway
                     isDragging = false;
+                    if (isBoardView) itineraryItemsListEl.classList.remove('is-sorting');
                     hideRadialMenu();
                     hideDragBuckets();
                 }
