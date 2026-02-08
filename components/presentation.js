@@ -236,17 +236,6 @@ let showArchivedItems = true;
 let showCompletedItems = true;
 const PRESENTATION_SEARCH_DEBOUNCE = 300;
 
-// Board view mode: 'board' (compact card grid) or 'list' (accordion, legacy default)
-let boardViewMode = (typeof localStorage !== 'undefined' && localStorage.getItem('wtf-view-mode')) || 'board';
-
-function getBoardViewMode() { return boardViewMode; }
-function setBoardViewMode(mode) {
-    boardViewMode = mode;
-    if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('wtf-view-mode', mode);
-    }
-}
-
 // --- Presentation Background Engine ---
 // WebGL Shader code for the fluid effect (same as catalog background)
 const vsSource = `
@@ -2928,64 +2917,14 @@ async function renderAllItems() {
 
     itineraryItemsListEl.innerHTML = '<p class="itinerary-loading">Loading items...</p>';
 
-    // --- BOARD VIEW MODE (compact card grid) ---
-    if (boardViewMode === 'board') {
-        itineraryItemsListEl.classList.add('board-view');
+    // --- BOARD VIEW (compact card grid) ---
+    itineraryItemsListEl.classList.add('board-view');
 
-        const relatedGroups = state.session.relatedGroups || [];
-        const renderedGroupIds = new Set();
-        const itemsHTML = [];
-
-        // Pre-build a lookup map: recordId -> group
-        const itemToGroupMap = new Map();
-        for (const g of relatedGroups) {
-            const gItems = Array.isArray(g) ? g : (g.items || []);
-            for (const gId of gItems) {
-                itemToGroupMap.set(gId, g);
-            }
-        }
-
-        for (let i = 0; i < combinedList.length; i++) {
-            const item = combinedList[i];
-            const itemGroup = itemToGroupMap.get(item.recordId);
-
-            if (itemGroup && itemGroup.id && !renderedGroupIds.has(itemGroup.id)) {
-                renderedGroupIds.add(itemGroup.id);
-                const html = await renderCompactGroupCard(itemGroup);
-                if (html) itemsHTML.push(html);
-            } else if (itemGroup && itemGroup.id && renderedGroupIds.has(itemGroup.id)) {
-                continue; // Already rendered this group
-            } else {
-                const html = await renderCompactCard(item);
-                if (html) itemsHTML.push(html);
-            }
-        }
-
-        itineraryItemsListEl.innerHTML = itemsHTML.join('');
-
-        // Attach click handlers for compact cards
-        initializeCompactCardClicks();
-
-        // Render the reactions summary after items
-        renderReactionsSummary();
-        updateEventEmojiIndicator();
-
-        // Initialize drag-and-drop (will work in grid mode for reordering)
-        initializeItemDragDrop();
-        initializeRadialMenu();
-        attachRadialMenuListeners();
-        return;
-    }
-
-    // --- LIST VIEW MODE (existing accordion) ---
-    itineraryItemsListEl.classList.remove('board-view');
-
-    // Build rendering order, grouping related items together with group headers
     const relatedGroups = state.session.relatedGroups || [];
-    const renderedGroupIds = new Set(); // Track which groups we've already rendered
+    const renderedGroupIds = new Set();
     const itemsHTML = [];
 
-    // Pre-build a lookup map: recordId -> group for O(1) group membership checks
+    // Pre-build a lookup map: recordId -> group
     const itemToGroupMap = new Map();
     for (const g of relatedGroups) {
         const gItems = Array.isArray(g) ? g : (g.items || []);
@@ -2996,154 +2935,31 @@ async function renderAllItems() {
 
     for (let i = 0; i < combinedList.length; i++) {
         const item = combinedList[i];
-
-        // Check if this item belongs to a related group (O(1) lookup)
         const itemGroup = itemToGroupMap.get(item.recordId);
 
         if (itemGroup && itemGroup.id && !renderedGroupIds.has(itemGroup.id)) {
-            // First time seeing this group - render as a card matching the standard item layout
             renderedGroupIds.add(itemGroup.id);
-            const groupItems = Array.isArray(itemGroup) ? itemGroup : (itemGroup.items || []);
-            const groupName = itemGroup.name || `${groupItems.length} Options`;
-            const groupDesc = itemGroup.description || '';
-
-            // Use the first item in the group as the "representative" for images
-            const firstItemId = groupItems[0];
-            const firstRecord = getRecordById(firstItemId);
-            if (firstRecord && !itemImagesCache.has(firstItemId)) {
-                const { imageUrls } = await api.fetchImagesForRecord(firstRecord, state.records.all, new Map());
-                itemImagesCache.set(firstItemId, { images: imageUrls || [], currentIndex: 0 });
-            }
-
-            // Build media carousel from the first item's images (matches standard item layout)
-            const cachedImages = itemImagesCache.get(firstItemId);
-            const mediaCarouselHTML = cachedImages ? createMediaCarousel(cachedImages.images, firstItemId) : '<div class="itinerary-item-no-images">No images available</div>';
-
-            // Compute price range across all group items
-            const groupPrices = groupItems.map(gId => {
-                const gRec = getRecordById(gId);
-                if (!gRec) return null;
-                const gInfo = state.cart.lockedItems.get(gId) || state.cart.items.get(gId);
-                const selectionsOrIdx = gInfo?.selections || gInfo?.selectedOptionIndex;
-                return getRecordPrice(gRec, selectionsOrIdx);
-            }).filter(p => p !== null && p > 0);
-
-            let priceHTML = '';
-            if (groupPrices.length > 0) {
-                const minPrice = Math.min(...groupPrices);
-                const maxPrice = Math.max(...groupPrices);
-                priceHTML = minPrice === maxPrice
-                    ? `<span class="itinerary-item-price">$${minPrice.toFixed(2)}</span>`
-                    : `<span class="itinerary-item-price">$${minPrice.toFixed(2)} – $${maxPrice.toFixed(2)}</span>`;
-            }
-
-            // Get item names for the summary line
-            const itemNames = groupItems.map(gId => {
-                const gRec = getRecordById(gId);
-                return gRec?.fields?.Name || 'Item';
-            });
-            const itemNamesPreview = itemNames.length <= 3
-                ? itemNames.join(', ')
-                : itemNames.slice(0, 2).join(', ') + ` +${itemNames.length - 2} more`;
-
-            // Determine the type of the first item in the group for status labeling
-            const firstItemType = state.cart.lockedItems.has(firstItemId) ? 'locked' : 'favorites';
-            const typeLabel = firstItemType === 'favorites' ? 'Idea' : 'Confirmed';
-            const typeClass = firstItemType === 'favorites' ? 'item-type-idea' : 'item-type-confirmed';
-
-            // Build group member list section (each member with a remove button)
-            const groupMembersHTML = `
-                <div class="options-group-members-section" data-group-id="${itemGroup.id}">
-                    <div class="options-group-members-header">
-                        <button class="options-group-members-toggle" data-group-id="${itemGroup.id}">
-                            <span>Options</span>
-                            <span class="options-group-members-count">${groupItems.length}</span>
-                            <span class="toggle-arrow">▼</span>
-                        </button>
-                        <button class="options-group-dissolve-btn" data-group-id="${itemGroup.id}" title="Dissolve group">
-                            Split All
-                        </button>
-                    </div>
-                    <div class="options-group-members-list" data-group-id="${itemGroup.id}" style="display: none;">
-                        ${groupDesc ? `<div class="options-group-members-desc">${escapeHtml(groupDesc)}</div>` : ''}
-                        ${groupItems.map(gId => {
-                            const gRec = getRecordById(gId);
-                            const gName = gRec?.fields?.Name || 'Item';
-                            return `
-                                <div class="options-group-member-item" data-record-id="${gId}">
-                                    <span class="options-group-member-name">${escapeHtml(gName)}</span>
-                                    <button class="leave-group-btn" data-record-id="${gId}" data-group-id="${itemGroup.id}" title="Remove from group">✕</button>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                </div>
-            `;
-
-            // Render as a card matching the standard presentation item layout
-            itemsHTML.push(`
-                <section class="itinerary-section itinerary-item-section options-group-card-section" data-section="group-${itemGroup.id}">
-                    <article class="itinerary-item item-accordion expanded options-group-card" data-group-id="${itemGroup.id}" data-group-name="${escapeHtml(groupName)}">
-                        <div class="item-accordion-header options-group-card-header" data-group-id="${itemGroup.id}">
-                            <div class="item-accordion-title-row">
-                                <h3 class="item-accordion-title">${escapeHtml(groupName)}</h3>
-                                <span class="options-group-card-badge">${groupItems.length} options</span>
-                                <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
-                                <span class="item-accordion-icon"></span>
-                            </div>
-                            <p class="item-accordion-summary">${escapeHtml(itemNamesPreview)}</p>
-                        </div>
-                        <div class="item-accordion-content options-group-card-content" data-group-id="${itemGroup.id}">
-                            <div class="itinerary-item-content">
-                                ${mediaCarouselHTML}
-                                <div class="itinerary-item-details">
-                                    ${priceHTML ? `<div class="itinerary-item-price-qty">${priceHTML}</div>` : ''}
-                                    ${groupMembersHTML}
-                                    <button class="itinerary-item-expand-btn options-group-expand-btn" data-group-id="${itemGroup.id}" title="View options">
-                                        <span class="expand-btn-icon">↗</span>
-                                        <span class="expand-btn-text">View Options</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </article>
-                </section>
-            `);
+            const html = await renderCompactGroupCard(itemGroup);
+            if (html) itemsHTML.push(html);
         } else if (itemGroup && itemGroup.id && renderedGroupIds.has(itemGroup.id)) {
-            // Already rendered this group's items in the block above - skip
-            continue;
+            continue; // Already rendered this group
         } else {
-            // Ungrouped item - render normally
-            const html = await renderItineraryItem(item, i);
-            if (html) {
-                itemsHTML.push(html);
-            }
+            const html = await renderCompactCard(item);
+            if (html) itemsHTML.push(html);
         }
     }
 
     itineraryItemsListEl.innerHTML = itemsHTML.join('');
 
-    // Render reactions for each item
-    combinedList.forEach(item => {
-        const reactionContainer = itineraryItemsListEl.querySelector(`.itinerary-item-reactions[data-record-id="${item.recordId}"]`);
-        if (reactionContainer) {
-            renderReactions(item.recordId, reactionContainer);
-        }
-    });
+    // Attach click handlers for compact cards
+    initializeCompactCardClicks();
 
     // Render the reactions summary after items
     renderReactionsSummary();
-
-    // Update the event-level emoji indicator
     updateEventEmojiIndicator();
 
-    // Initialize combined sources toggle handlers
-    initializeCombinedSourcesToggles();
-
-    // Initialize drag-and-drop functionality
+    // Initialize drag-and-drop (will work in grid mode for reordering)
     initializeItemDragDrop();
-
-    // Initialize radial menu system
     initializeRadialMenu();
     attachRadialMenuListeners();
 }
@@ -3176,28 +2992,6 @@ function initializeCompactCardClicks() {
             }
         });
     });
-}
-
-// Toggle between board and list view modes
-function toggleBoardViewMode() {
-    const newMode = boardViewMode === 'board' ? 'list' : 'board';
-    setBoardViewMode(newMode);
-    updateViewToggleUI();
-    renderAllItems();
-}
-
-// Update the view toggle button appearance
-function updateViewToggleUI() {
-    const toggleBtn = document.getElementById('presentation-view-toggle');
-    if (!toggleBtn) return;
-
-    if (boardViewMode === 'board') {
-        toggleBtn.innerHTML = '<span class="toggle-view-icon">☰</span><span class="toggle-view-text">List</span>';
-        toggleBtn.title = 'Switch to list view';
-    } else {
-        toggleBtn.innerHTML = '<span class="toggle-view-icon">▦</span><span class="toggle-view-text">Board</span>';
-        toggleBtn.title = 'Switch to board view';
-    }
 }
 
 // Initialize toggle handlers for combined sources sections
@@ -10900,13 +10694,6 @@ function setupSearchModalEventListeners() {
     // Toggle all button collapses/expands all item accordions
     if (presentationToggleAllBtn) {
         presentationToggleAllBtn.addEventListener('click', toggleAllItemAccordions);
-    }
-
-    // View mode toggle (board/list)
-    const viewToggleBtn = document.getElementById('presentation-view-toggle');
-    if (viewToggleBtn) {
-        viewToggleBtn.addEventListener('click', toggleBoardViewMode);
-        updateViewToggleUI();
     }
 
     // Toggle archived items button

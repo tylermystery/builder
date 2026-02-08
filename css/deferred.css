@@ -13736,29 +13736,3 @@ hr.total-divider {
 .compact-card.sortable-chosen {
     box-shadow: 0 0 20px rgba(0, 123, 255, 0.4);
 }
-
-/* View toggle button */
-.presentation-view-toggle-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 6px 12px;
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 0.82em;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    backdrop-filter: blur(4px);
-}
-
-.presentation-view-toggle-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.25);
-    color: white;
-}
-
-.toggle-view-icon {
-    font-size: 1.1em;
-}
