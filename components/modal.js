@@ -4761,14 +4761,14 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     }
 
     // Add Edit Item button for manual/custom items and AI discovery items
-    const isManualItem = record.isManual === true ||
+    const isEditableItem = record.isManual === true ||
                          record.id?.startsWith('manual-add-') ||
                          record.id?.startsWith('manual-presentation-') ||
                          record.id?.startsWith('ai-search-') ||
                          record.id?.startsWith('ai-child-') ||
                          record.id?.startsWith('ai-presentation-');
 
-    if (isManualItem) {
+    if (isEditableItem) {
         const editItemBtn = document.createElement('button');
         editItemBtn.className = 'card-action-btn edit-item-btn';
         editItemBtn.id = 'modal-edit-item-btn';
