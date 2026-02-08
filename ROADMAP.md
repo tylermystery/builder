@@ -33,3 +33,21 @@
 - **Guest Session "Claiming":** Anonymous users can build a plan, and when they sign in, their active session is automatically associated with their user account and added to their "My Plans" list.
 - **Streamlined Header UI:** A new global header was created to house the shop title, the "My Plans" dropdown, and the user profile button, creating a cleaner and more intuitive user experience.
 - **Bug Fixes & Cleanup:** Resolved a series of complex bugs related to Airtable queries and UI event listeners. Removed obsolete UI elements and their corresponding JavaScript.
+---
+## Version 3.6: Plan Board View (🔄 IN PROGRESS)
+**Core Objective:** To transform the presentation view from a vertical accordion list into a full "Plan Board" where all entries are visible as compact card tiles in a responsive grid, with key metadata always surfaced.
+
+**Design Decisions:**
+- **Layout:** Responsive CSS Grid with no inline card expansion. Two levels only: board overview → detail modal.
+- **Entry Model:** Implicit promotion — all entries start as "ideas" and can be changed to goal/locked/archived/completed. Existing `combinedItems` and `relatedGroups` structures handle merging and grouping.
+- **Drag Behavior:** Draggable comments and tasks skipped for initial release.
+- **Card Layout:** Status badge floating top-left over photo, summary emoji floating top-right. Tooltip preserved with full ranking/score/emoji spread breakdown.
+- **Source Visibility:** Merged source entries shown as provenance text on parent card (badges/pills), not as separate cards.
+
+**Development Phases:**
+1. **Phase 1: Compact Card Component (Foundation)** — New `renderCompactCard()` function, grid layout container, view mode toggle, card click → detail modal
+2. **Phase 2: Grid Layout and View Mode** — Responsive CSS Grid, view toggle (board ▦ / list ☰), localStorage persistence
+3. **Phase 3: Entry Provenance and Visual Type Indicators** — Merged-entry provenance display, options group rendering, visual lifecycle indicators (idea/goal/locked/archived/completed)
+4. **Phase 4: Comment/Task Badges and Reactions Bar** — Batch comment counts, task status badges, compact reaction bar on cards
+5. **Phase 5: Drag-and-Drop for Grid Mode** — SortableJS grid support, radial menu repositioning, card-to-card merge detection
+6. **Phase 6: Polish, Responsiveness, and Edge Cases** — Empty/single item states, animations, responsive touch, performance, accessibility

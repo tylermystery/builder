@@ -16,6 +16,9 @@ The application is built on a modular architecture to ensure maintainability and
 - **ui.js:** The central "hub" for the user interface, importing and re-exporting functions from component modules. It also contains general-purpose UI functions.
 - **components/card.js:** Responsible for creating and rendering all card-based elements.
 - **components/modal.js:** Manages the functionality of the detail and checkout modals.
+- **components/presentation.js:** The presentation/plan view module. Supports two rendering modes:
+  - **List Mode (Legacy):** Vertical accordion layout with full-width items that expand/collapse to show details.
+  - **Board Mode (v3.6):** Responsive CSS Grid of compact card tiles. Each card shows a hero photo with floating status badge (top-left) and summary emoji (top-right), item name, merged-entry provenance, variation pills, and a bottom bar with reaction counts and comment/task badges. Clicking any card opens the detail modal directly. The view mode toggle (☰ list / ▦ board) persists the user's preference in localStorage.
 - **components/sidebar.js:** Controls the right-hand "Event Plan" panel and the "Favorites" carousel.
 - **components/backgroundEngine.js:** The central engine that manages the animated WebGL canvas background and its reactive "energy" state.
 - **components/effects/fluid.js:** The WebGL shader plugin that renders the "Fluid Energy" vortex.

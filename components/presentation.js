@@ -236,6 +236,17 @@ let showArchivedItems = true;
 let showCompletedItems = true;
 const PRESENTATION_SEARCH_DEBOUNCE = 300;
 
+// Board view mode: 'board' (compact card grid) or 'list' (accordion, legacy default)
+let boardViewMode = (typeof localStorage !== 'undefined' && localStorage.getItem('wtf-view-mode')) || 'board';
+
+function getBoardViewMode() { return boardViewMode; }
+function setBoardViewMode(mode) {
+    boardViewMode = mode;
+    if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('wtf-view-mode', mode);
+    }
+}
+
 // --- Presentation Background Engine ---
 // WebGL Shader code for the fluid effect (same as catalog background)
 const vsSource = `
@@ -2594,6 +2605,233 @@ async function renderItineraryItem(item, index) {
     `;
 }
 
+// =============================================================================
+// COMPACT CARD RENDERER (Board View - Phase 1)
+// =============================================================================
+
+/**
+ * Render a compact card tile for the board view.
+ * Shows: hero photo with floating status/emoji overlays, name, provenance,
+ * variation pills, reaction summary, and comment/task count badges.
+ * @param {Object} item - { recordId, type, itemStatus }
+ * @returns {Promise<string>} HTML string for the compact card
+ */
+async function renderCompactCard(item) {
+    const { recordId, type, itemStatus = 'active' } = item;
+    const record = getRecordById(recordId);
+    if (!record) return '';
+
+    // Skip combined source items
+    if (isItemCombinedSource(recordId)) return '';
+
+    const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
+
+    // Use hybrid name for combined items
+    const hybridDataForName = getCombinedHybridData(recordId);
+    const name = hybridDataForName?.hybridName || record.fields?.Name || 'Untitled Item';
+
+    // --- Confidence tier ---
+    const isAIItem = recordId.startsWith('custom-') || recordId.startsWith('ai-search-') ||
+                     recordId.startsWith('ai-group-') || recordId.startsWith('ai-child-');
+    const isSolutionItem = recordId.startsWith('solution-') || record.isSolution === true;
+    const isManualItem = recordId.startsWith('manual-add-') || recordId.startsWith('manual-presentation-') || record.isManual === true;
+    const needsConfidenceStyling = isAIItem || isSolutionItem || isManualItem;
+
+    let confidenceClass = '';
+    if (needsConfidenceStyling) {
+        let confidence;
+        if (record._researchData?.confidence != null) confidence = record._researchData.confidence;
+        else if (isAIItem) confidence = record._aiConfidence ?? record.fields?._aiConfidence ?? null;
+        else if (isSolutionItem && record.solutionData?.confidence) {
+            const solutionConfidenceMap = { high: 0.85, medium: 0.6, low: 0.35 };
+            confidence = solutionConfidenceMap[record.solutionData.confidence] ?? 0.6;
+        } else if (isManualItem) confidence = 0.5;
+        else confidence = null;
+
+        if (confidence === null || confidence === undefined) confidenceClass = 'confidence-pencil';
+        else if (confidence < 0.5) confidenceClass = 'confidence-pencil';
+        else if (confidence < 0.75) confidenceClass = 'confidence-pen';
+        else if (confidence < 0.95) confidenceClass = 'confidence-typed';
+        else confidenceClass = 'confidence-premium';
+    }
+
+    // --- Status classes ---
+    const isGoal = state.session.goalItems?.has(recordId);
+    const isArchived = state.session.archivedItems?.has(recordId);
+    const isCompleted = state.session.completedItems?.has(recordId);
+    const isLocked = state.cart.lockedItems.has(recordId);
+
+    let lifecycleClass = 'compact-card-idea'; // default
+    if (isArchived) lifecycleClass = 'compact-card-archived';
+    else if (isCompleted) lifecycleClass = 'compact-card-completed';
+    else if (isLocked) lifecycleClass = 'compact-card-locked';
+    else if (isGoal) lifecycleClass = 'compact-card-goal';
+
+    // --- Photo ---
+    if (!itemImagesCache.has(recordId)) {
+        const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+        const selectedIndex = itemInfo?.selectedImageIndex ?? 0;
+        const validIndex = Math.min(selectedIndex, (imageUrls?.length || 1) - 1);
+        itemImagesCache.set(recordId, { images: imageUrls || [], currentIndex: validIndex });
+    }
+    const cachedImages = itemImagesCache.get(recordId);
+    const photoUrl = cachedImages?.images?.[cachedImages.currentIndex] || cachedImages?.images?.[0] || '';
+    const optimizedPhoto = photoUrl ? applyCloudinaryTransform(photoUrl, 'w_400,h_250,c_fill,f_auto,q_auto') : '';
+
+    // --- Task status overlay (top-left) ---
+    const taskStatus = getElementTaskStatus('item', recordId);
+    const taskConfig = TASK_STATUS_CONFIG[taskStatus] || TASK_STATUS_CONFIG[ELEMENT_TASK_STATUS.NONE];
+    const showStatus = taskStatus !== ELEMENT_TASK_STATUS.NONE;
+    const statusOverlayHTML = showStatus
+        ? `<span class="compact-card-status ${taskConfig.className}" title="${taskConfig.label}"><span class="task-status-icon">${taskConfig.icon}</span> ${taskConfig.label}</span>`
+        : '';
+
+    // --- Summary emoji overlay (top-right) ---
+    const summaryEmoji = getItemSummaryEmoji(recordId);
+    const reactionCount = getItemReactionCount(recordId);
+    const rankingTooltip = getItemRankingTooltip(recordId);
+    const emojiOverlayHTML = summaryEmoji && reactionCount > 0
+        ? `<span class="compact-card-emoji item-emoji-indicator has-reactions" data-record-id="${recordId}" title="${escapeHtml(rankingTooltip)}">${summaryEmoji}${reactionCount > 1 ? `<span class="compact-card-emoji-count">${reactionCount}</span>` : ''}</span>`
+        : '';
+
+    // --- Provenance line (combined items) ---
+    const combinedSources = getCombinedSources(recordId);
+    let provenanceHTML = '';
+    if (combinedSources.length > 0) {
+        const sourceNames = combinedSources.map(sourceId => {
+            const sourceRecord = getRecordById(sourceId);
+            return sourceRecord?.fields?.Name || 'Item';
+        });
+        const displayNames = sourceNames.length <= 3
+            ? sourceNames.join(' + ')
+            : sourceNames.slice(0, 3).join(' + ') + ` +${sourceNames.length - 3} more`;
+        provenanceHTML = `<div class="compact-card-provenance" title="${escapeHtml(sourceNames.join(' + '))}">: ${escapeHtml(displayNames)}</div>`;
+    }
+
+    // --- Goal indicator ---
+    const goalBadgeHTML = isGoal ? '<span class="compact-card-goal-badge" title="Goal">⭐</span>' : '';
+
+    // --- Type label ---
+    let typeLabel = type === 'favorites' ? 'Idea' : 'Confirmed';
+    if (itemStatus === 'archived') typeLabel = 'Archived';
+    else if (itemStatus === 'completed') typeLabel = 'Completed';
+
+    // --- Variation / option pills ---
+    const itemGroup = getItemGroup(recordId);
+    let pillsHTML = '';
+    if (itemGroup) {
+        const groupItems = Array.isArray(itemGroup) ? itemGroup : (itemGroup.items || []);
+        const otherItems = groupItems.filter(gId => gId !== recordId);
+        const pillNames = otherItems.slice(0, 2).map(gId => {
+            const gRec = getRecordById(gId);
+            return gRec?.fields?.Name || 'Option';
+        });
+        const pillElements = pillNames.map(pn => `<span class="compact-card-pill">${escapeHtml(pn)}</span>`).join('');
+        const moreCount = otherItems.length - 2;
+        const morePill = moreCount > 0 ? `<span class="compact-card-pill compact-card-pill-more">+${moreCount} more</span>` : '';
+        pillsHTML = `<div class="compact-card-pills">${pillElements}${morePill}</div>`;
+    }
+
+    // --- Compact reaction bar ---
+    const reactions = state.session.reactions?.get(recordId);
+    let reactionBarHTML = '';
+    if (reactions && reactions instanceof Map && reactions.size > 0) {
+        const emojiCounts = {};
+        reactions.forEach((emoji) => {
+            emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
+        });
+        const sorted = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]);
+        const top3 = sorted.slice(0, 3).map(([emoji, count]) => `<span class="compact-card-reaction">${emoji}${count > 1 ? count : ''}</span>`).join('');
+        const moreReactions = sorted.length > 3 ? `<span class="compact-card-reaction compact-card-reaction-more">+${sorted.length - 3}</span>` : '';
+        reactionBarHTML = `<span class="compact-card-reactions">${top3}${moreReactions}</span>`;
+    }
+
+    // --- Comment count badge ---
+    const commentCacheKey = `item:${recordId}`;
+    const cachedComments = componentCommentsCache.get(commentCacheKey);
+    const commentCount = cachedComments?.length || 0;
+    const commentBadgeHTML = commentCount > 0 ? `<span class="compact-card-badge" title="${commentCount} comment${commentCount !== 1 ? 's' : ''}">💬${commentCount}</span>` : '';
+
+    // --- Photo section or fallback ---
+    const photoStyle = optimizedPhoto ? `background-image: url('${optimizedPhoto}')` : '';
+    const noPhotoClass = !optimizedPhoto ? 'compact-card-no-photo' : '';
+
+    return `
+        <div class="compact-card ${lifecycleClass} ${confidenceClass} ${noPhotoClass}" data-record-id="${recordId}" data-item-type="${type}" data-item-status="${itemStatus}">
+            <div class="compact-card-photo" style="${photoStyle}">
+                ${statusOverlayHTML}
+                ${emojiOverlayHTML}
+            </div>
+            <div class="compact-card-body">
+                <div class="compact-card-title-row">
+                    ${goalBadgeHTML}
+                    <h4 class="compact-card-name" title="${escapeHtml(name)}">${escapeHtml(name)}</h4>
+                </div>
+                ${provenanceHTML}
+                ${pillsHTML}
+                <div class="compact-card-meta">
+                    ${reactionBarHTML}
+                    <span class="compact-card-badges">
+                        ${commentBadgeHTML}
+                    </span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Render a compact card for an options group in board view.
+ * @param {Object} group - The related group object
+ * @returns {Promise<string>} HTML string for the group compact card
+ */
+async function renderCompactGroupCard(group) {
+    const groupItems = Array.isArray(group) ? group : (group.items || []);
+    const groupName = group.name || `${groupItems.length} Options`;
+    const groupId = group.id || '';
+
+    // Use the first item for photo
+    const firstItemId = groupItems[0];
+    const firstRecord = getRecordById(firstItemId);
+    if (!firstRecord) return '';
+
+    if (!itemImagesCache.has(firstItemId)) {
+        const { imageUrls } = await api.fetchImagesForRecord(firstRecord, state.records.all, new Map());
+        itemImagesCache.set(firstItemId, { images: imageUrls || [], currentIndex: 0 });
+    }
+    const cachedImages = itemImagesCache.get(firstItemId);
+    const photoUrl = cachedImages?.images?.[0] || '';
+    const optimizedPhoto = photoUrl ? applyCloudinaryTransform(photoUrl, 'w_400,h_250,c_fill,f_auto,q_auto') : '';
+
+    // Member name pills
+    const memberPills = groupItems.slice(0, 3).map(gId => {
+        const gRec = getRecordById(gId);
+        return `<span class="compact-card-pill">${escapeHtml(gRec?.fields?.Name || 'Option')}</span>`;
+    }).join('');
+    const moreCount = groupItems.length - 3;
+    const morePill = moreCount > 0 ? `<span class="compact-card-pill compact-card-pill-more">+${moreCount} more</span>` : '';
+
+    // Determine type from first item
+    const firstItemType = state.cart.lockedItems.has(firstItemId) ? 'locked' : 'favorites';
+
+    const photoStyle = optimizedPhoto ? `background-image: url('${optimizedPhoto}')` : '';
+    const noPhotoClass = !optimizedPhoto ? 'compact-card-no-photo' : '';
+
+    return `
+        <div class="compact-card compact-card-group ${noPhotoClass}" data-group-id="${groupId}" data-item-type="${firstItemType}">
+            <div class="compact-card-photo" style="${photoStyle}">
+                <span class="compact-card-group-badge">${groupItems.length} options</span>
+            </div>
+            <div class="compact-card-body">
+                <div class="compact-card-title-row">
+                    <h4 class="compact-card-name" title="${escapeHtml(groupName)}">${escapeHtml(groupName)}</h4>
+                </div>
+                <div class="compact-card-pills">${memberPills}${morePill}</div>
+            </div>
+        </div>
+    `;
+}
+
 // Debounced version of renderAllItems - coalesces rapid successive calls
 // Use this for non-critical re-renders (action handlers, background updates).
 // Use renderAllItems() directly for initial render where timing matters.
@@ -2689,6 +2927,58 @@ async function renderAllItems() {
     }
 
     itineraryItemsListEl.innerHTML = '<p class="itinerary-loading">Loading items...</p>';
+
+    // --- BOARD VIEW MODE (compact card grid) ---
+    if (boardViewMode === 'board') {
+        itineraryItemsListEl.classList.add('board-view');
+
+        const relatedGroups = state.session.relatedGroups || [];
+        const renderedGroupIds = new Set();
+        const itemsHTML = [];
+
+        // Pre-build a lookup map: recordId -> group
+        const itemToGroupMap = new Map();
+        for (const g of relatedGroups) {
+            const gItems = Array.isArray(g) ? g : (g.items || []);
+            for (const gId of gItems) {
+                itemToGroupMap.set(gId, g);
+            }
+        }
+
+        for (let i = 0; i < combinedList.length; i++) {
+            const item = combinedList[i];
+            const itemGroup = itemToGroupMap.get(item.recordId);
+
+            if (itemGroup && itemGroup.id && !renderedGroupIds.has(itemGroup.id)) {
+                renderedGroupIds.add(itemGroup.id);
+                const html = await renderCompactGroupCard(itemGroup);
+                if (html) itemsHTML.push(html);
+            } else if (itemGroup && itemGroup.id && renderedGroupIds.has(itemGroup.id)) {
+                continue; // Already rendered this group
+            } else {
+                const html = await renderCompactCard(item);
+                if (html) itemsHTML.push(html);
+            }
+        }
+
+        itineraryItemsListEl.innerHTML = itemsHTML.join('');
+
+        // Attach click handlers for compact cards
+        initializeCompactCardClicks();
+
+        // Render the reactions summary after items
+        renderReactionsSummary();
+        updateEventEmojiIndicator();
+
+        // Initialize drag-and-drop (will work in grid mode for reordering)
+        initializeItemDragDrop();
+        initializeRadialMenu();
+        attachRadialMenuListeners();
+        return;
+    }
+
+    // --- LIST VIEW MODE (existing accordion) ---
+    itineraryItemsListEl.classList.remove('board-view');
 
     // Build rendering order, grouping related items together with group headers
     const relatedGroups = state.session.relatedGroups || [];
@@ -2856,6 +3146,58 @@ async function renderAllItems() {
     // Initialize radial menu system
     initializeRadialMenu();
     attachRadialMenuListeners();
+}
+
+// Initialize click handlers for compact cards in board view
+function initializeCompactCardClicks() {
+    if (!itineraryItemsListEl) return;
+
+    // Regular item cards - open detail modal
+    const itemCards = itineraryItemsListEl.querySelectorAll('.compact-card[data-record-id]');
+    itemCards.forEach(card => {
+        card.addEventListener('click', (e) => {
+            // Don't trigger on status badge or emoji indicator clicks
+            if (e.target.closest('.compact-card-status') || e.target.closest('.compact-card-emoji')) return;
+            const recordId = card.dataset.recordId;
+            const record = getRecordById(recordId);
+            if (record) {
+                showDetailModal(record);
+            }
+        });
+    });
+
+    // Group cards - open group detail modal
+    const groupCards = itineraryItemsListEl.querySelectorAll('.compact-card-group[data-group-id]');
+    groupCards.forEach(card => {
+        card.addEventListener('click', (e) => {
+            const groupId = card.dataset.groupId;
+            if (groupId) {
+                openGroupDetailModal(groupId);
+            }
+        });
+    });
+}
+
+// Toggle between board and list view modes
+function toggleBoardViewMode() {
+    const newMode = boardViewMode === 'board' ? 'list' : 'board';
+    setBoardViewMode(newMode);
+    updateViewToggleUI();
+    renderAllItems();
+}
+
+// Update the view toggle button appearance
+function updateViewToggleUI() {
+    const toggleBtn = document.getElementById('presentation-view-toggle');
+    if (!toggleBtn) return;
+
+    if (boardViewMode === 'board') {
+        toggleBtn.innerHTML = '<span class="toggle-view-icon">☰</span><span class="toggle-view-text">List</span>';
+        toggleBtn.title = 'Switch to list view';
+    } else {
+        toggleBtn.innerHTML = '<span class="toggle-view-icon">▦</span><span class="toggle-view-text">Board</span>';
+        toggleBtn.title = 'Switch to board view';
+    }
 }
 
 // Initialize toggle handlers for combined sources sections
@@ -10558,6 +10900,13 @@ function setupSearchModalEventListeners() {
     // Toggle all button collapses/expands all item accordions
     if (presentationToggleAllBtn) {
         presentationToggleAllBtn.addEventListener('click', toggleAllItemAccordions);
+    }
+
+    // View mode toggle (board/list)
+    const viewToggleBtn = document.getElementById('presentation-view-toggle');
+    if (viewToggleBtn) {
+        viewToggleBtn.addEventListener('click', toggleBoardViewMode);
+        updateViewToggleUI();
     }
 
     // Toggle archived items button

@@ -13429,3 +13429,336 @@ hr.total-divider {
     font-size: 0.9em;
     opacity: 0.8;
 }
+
+/* =============================================================================
+   BOARD VIEW - Compact Card Grid (v3.6 Plan Board)
+   ============================================================================= */
+
+/* Grid layout for board view */
+.itinerary-items-list.board-view {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+    max-width: 100%;
+}
+
+@media (max-width: 480px) {
+    .itinerary-items-list.board-view {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+    .itinerary-items-list.board-view {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Compact card tile */
+.compact-card {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.compact-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.compact-card:active {
+    transform: translateY(0);
+}
+
+/* Photo section */
+.compact-card-photo {
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    background-size: cover;
+    background-position: center;
+    background-color: rgba(255, 255, 255, 0.05);
+    position: relative;
+}
+
+.compact-card-no-photo .compact-card-photo {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.compact-card-no-photo .compact-card-photo::after {
+    content: '📷';
+    font-size: 2em;
+    opacity: 0.3;
+}
+
+/* Floating status overlay (top-left) */
+.compact-card-status {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    font-size: 0.72em;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    z-index: 2;
+    backdrop-filter: blur(4px);
+}
+
+.compact-card-status.task-status-gtg {
+    background: rgba(40, 167, 69, 0.8);
+}
+
+.compact-card-status.task-status-check {
+    background: rgba(255, 193, 7, 0.8);
+    color: #333;
+}
+
+.compact-card-status.task-status-attention,
+.compact-card-status.task-status-needs-attention {
+    background: rgba(220, 53, 69, 0.8);
+}
+
+.compact-card-status.task-status-no-action {
+    background: rgba(108, 117, 125, 0.7);
+}
+
+/* Floating emoji overlay (top-right) */
+.compact-card-emoji {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.9);
+    cursor: help;
+    font-size: 1em;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.compact-card-emoji-count {
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #555;
+}
+
+/* Group badge on photo */
+.compact-card-group-badge {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    font-size: 0.72em;
+    font-weight: 500;
+    backdrop-filter: blur(4px);
+}
+
+/* Card body */
+.compact-card-body {
+    padding: 12px;
+}
+
+.compact-card-title-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.compact-card-goal-badge {
+    font-size: 0.85em;
+    flex-shrink: 0;
+}
+
+.compact-card-name {
+    font-weight: 600;
+    font-size: 0.95em;
+    color: rgba(255, 255, 255, 0.95);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+}
+
+/* Provenance line */
+.compact-card-provenance {
+    font-size: 0.78em;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Variation pills */
+.compact-card-pills {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.compact-card-pill {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7em;
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.8);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+}
+
+.compact-card-pill-more {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.5);
+    font-style: italic;
+}
+
+/* Bottom meta bar */
+.compact-card-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.8em;
+    min-height: 24px;
+}
+
+.compact-card-reactions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.compact-card-reaction {
+    font-size: 0.9em;
+}
+
+.compact-card-reaction-more {
+    font-size: 0.75em;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.compact-card-badges {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.compact-card-badge {
+    font-size: 0.8em;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* Lifecycle state styling */
+.compact-card-idea {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.compact-card-goal {
+    border-color: rgba(255, 193, 7, 0.4);
+    box-shadow: 0 0 0 1px rgba(255, 193, 7, 0.15) inset;
+}
+
+.compact-card-locked {
+    border-color: rgba(40, 167, 69, 0.3);
+    opacity: 1;
+}
+
+.compact-card-archived {
+    opacity: 0.5;
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.compact-card-completed {
+    opacity: 0.7;
+    border-color: rgba(40, 167, 69, 0.2);
+}
+
+.compact-card-completed .compact-card-photo::before {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 3em;
+    color: rgba(40, 167, 69, 0.6);
+    z-index: 1;
+}
+
+/* Confidence tier accents on compact cards */
+.compact-card.confidence-pencil {
+    border-left: 3px solid rgba(108, 117, 125, 0.4);
+}
+
+.compact-card.confidence-pen {
+    border-left: 3px solid rgba(0, 123, 255, 0.4);
+}
+
+.compact-card.confidence-typed {
+    border-left: 3px solid rgba(40, 167, 69, 0.4);
+}
+
+.compact-card.confidence-premium {
+    border-left: 3px solid rgba(255, 193, 7, 0.5);
+}
+
+/* SortableJS ghost/chosen for grid cards */
+.compact-card.sortable-ghost {
+    opacity: 0.4;
+}
+
+.compact-card.sortable-chosen {
+    box-shadow: 0 0 20px rgba(0, 123, 255, 0.4);
+}
+
+/* View toggle button */
+.presentation-view-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.82em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(4px);
+}
+
+.presentation-view-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: white;
+}
+
+.toggle-view-icon {
+    font-size: 1.1em;
+}

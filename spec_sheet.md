@@ -120,3 +120,16 @@ The application features a user account system with customizable preferences.
 * **My Account Modal:** Logged-in users can access a "My Account" modal to view their information and set preferences.
 * **SMS Notifications:** Users can add their phone number and choose a notification frequency (e.g., "Real-Time"). When another collaborator sends a message in the session chat, a serverless function is triggered, sending a real-time SMS alert via Twilio to opted-in users.
 
+### Plan Board View (v3.6)
+The presentation view supports a "Board Mode" that renders all plan items as compact card tiles in a responsive CSS Grid, replacing the vertical accordion layout for an at-a-glance overview of the entire plan.
+
+* **Compact Card Tiles:** Each item is rendered as a fixed-size tile showing: hero photo (with Cloudinary optimization), item name, merged-entry provenance line, variation/option pills, reaction summary, and comment/task count badges.
+* **Floating Overlays on Photo:** The task status badge (GTG/Check/Needs Attention/etc.) floats at the top-left of the photo. The summary emoji (representing average reaction sentiment) floats at the top-right, with a tooltip preserving the full ranking, score, and emoji spread breakdown.
+* **Responsive Grid Layout:** Cards are arranged in a CSS Grid (`repeat(auto-fill, minmax(260px, 1fr))`) that adapts from 1 column on mobile to 4 columns on large desktops. Cards auto-size based on available space.
+* **Two-Level Navigation:** The board view shows all items at a glance. Clicking any card opens the full detail modal directly — no accordion expand step. This keeps the experience focused: overview → detail.
+* **View Mode Toggle:** A toggle in the controls area allows switching between Board (▦) and List (☰) views. The preference is persisted in localStorage.
+* **Entry Provenance:** Combined/hybrid items display a provenance line showing which entries were merged (e.g., ": Boat Tour + Beach BBQ"). Source entries are not rendered as separate cards.
+* **Visual Lifecycle Indicators:** Cards visually distinguish item states — ideas (default), goals (star accent), locked/confirmed (solid border), archived (muted), and completed (checkmark overlay).
+* **Confidence Tier Styling:** AI-sourced, solution, and manual items display confidence-tier border accents (pencil/pen/typed/premium) matching the existing system.
+* **Backward Compatibility:** The existing accordion/list view is preserved as a fallback and can be switched to at any time via the view toggle.
+
