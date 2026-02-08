@@ -48,5 +48,5 @@
 1. **Phase 1: Compact Card Component (Foundation)** ✅ — New `renderCompactCard()` function, grid layout container as the sole rendering path, card click → detail modal
 2. **Phase 2: Entry Provenance and Visual Type Indicators** ✅ — Merged-entry provenance as source-type badges, lifecycle state badges on photo, entry source-type indicators, lifecycle-aware group card rendering
 3. **Phase 3: Comment/Task Badges and Reactions Bar** ✅ — Styled reaction pill bar, task status meta badges, comment count badges, aggregate group card badges
-4. **Phase 4: Drag-and-Drop for Grid Mode** — SortableJS grid support, radial menu repositioning, card-to-card merge detection
+4. **Phase 4: Drag-and-Drop for Grid Mode** ✅ — SortableJS grid support with compact card draggables, radial menu repositioning for grid cards, card-to-card merge detection with zone-aware visual feedback
 5. **Phase 5: Polish, Responsiveness, and Edge Cases** — Empty/single item states, animations, responsive touch, performance, accessibility

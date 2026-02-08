@@ -3310,6 +3310,9 @@ async function initializeItemDragDrop() {
         sortableInstance = null;
     }
 
+    // Detect board view (compact card grid mode)
+    const isBoardView = itineraryItemsListEl.classList.contains('board-view');
+
     try {
         const Sortable = await loadSortableJS();
 
@@ -3318,7 +3321,8 @@ async function initializeItemDragDrop() {
             ghostClass: 'sortable-ghost',
             chosenClass: 'sortable-chosen',
             dragClass: 'sortable-drag',
-            handle: '.itinerary-item-section', // Entire section is draggable
+            // In board view, drag compact cards directly; in list view, drag item sections
+            draggable: isBoardView ? '.compact-card' : '.itinerary-item-section',
             delay: 300, // Increased delay - radial menu should activate first for quick swipes
             delayOnTouchOnly: true,
             touchStartThreshold: 20, // Require more movement before starting SortableJS drag
@@ -3339,8 +3343,14 @@ async function initializeItemDragDrop() {
 
                 // Track the currently dragged item
                 currentDraggedItem = evt.item;
-                const article = evt.item.querySelector('.itinerary-item');
-                currentDraggedRecordId = article?.dataset.recordId;
+
+                // In board view, record ID is on the card itself; in list view, it's on the article child
+                if (isBoardView) {
+                    currentDraggedRecordId = evt.item.dataset.recordId || evt.item.dataset.groupId || null;
+                } else {
+                    const article = evt.item.querySelector('.itinerary-item');
+                    currentDraggedRecordId = article?.dataset.recordId;
+                }
 
                 // For SortableJS drag (long press/hold), show the radial menu at the item position
                 // instead of the old linear buckets
@@ -3427,7 +3437,7 @@ async function initializeItemDragDrop() {
             }
         });
 
-        log('Presentation', 'Drag-drop initialized for plan items');
+        log('Presentation', `Drag-drop initialized for plan items (${isBoardView ? 'board' : 'list'} view)`);
     } catch (error) {
         console.error('[Presentation] Failed to initialize drag-drop:', error);
     }
@@ -3885,10 +3895,16 @@ function showRadialMenu(x, y, itemElement) {
         }
     });
 
-    // Store the item element for later
+    // Store the item element for later - support both board view (compact cards) and list view
     if (itemElement) {
-        const article = itemElement.querySelector('.itinerary-item');
-        currentDraggedRecordId = article?.dataset.recordId;
+        if (itemElement.classList.contains('compact-card')) {
+            // Board view: record ID is directly on the compact card
+            currentDraggedRecordId = itemElement.dataset.recordId || itemElement.dataset.groupId || null;
+        } else {
+            // List view: record ID is on the .itinerary-item article child
+            const article = itemElement.querySelector('.itinerary-item');
+            currentDraggedRecordId = article?.dataset.recordId;
+        }
         currentDraggedItem = itemElement;
     }
 
@@ -4239,9 +4255,10 @@ function attachRadialMenuListeners() {
 }
 
 function handleRadialTouchStart(event) {
-    const itemSection = event.target.closest('.itinerary-item-section');
-    if (itemSection) {
-        handleItemPointerDown(event, itemSection);
+    // Board view: target compact cards; List view: target item sections
+    const targetEl = event.target.closest('.compact-card') || event.target.closest('.itinerary-item-section');
+    if (targetEl) {
+        handleItemPointerDown(event, targetEl);
     }
 }
 
@@ -4249,9 +4266,10 @@ function handleRadialMouseDown(event) {
     // Only handle left mouse button
     if (event.button !== 0) return;
 
-    const itemSection = event.target.closest('.itinerary-item-section');
-    if (itemSection) {
-        handleItemPointerDown(event, itemSection);
+    // Board view: target compact cards; List view: target item sections
+    const targetEl = event.target.closest('.compact-card') || event.target.closest('.itinerary-item-section');
+    if (targetEl) {
+        handleItemPointerDown(event, targetEl);
     }
 }
 
@@ -4279,7 +4297,7 @@ function clearQuickCommentHoverStates() {
 
 // Clear merge target highlight
 function clearMergeTarget() {
-    const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
+    const currentTarget = document.querySelector('.itinerary-item-section.merge-target, .compact-card.merge-target');
     if (currentTarget) {
         currentTarget.classList.remove('merge-target', 'merge-target-hybrid', 'merge-target-options');
         // Clear inline styles applied for merge highlighting
@@ -4287,11 +4305,16 @@ function clearMergeTarget() {
         currentTarget.style.outlineOffset = '';
         currentTarget.style.background = '';
         currentTarget.style.zIndex = '';
-        // Clear sub-zone highlights
+        // Clear sub-zone highlights (list view)
         const header = currentTarget.querySelector('.item-accordion-header');
         const content = currentTarget.querySelector('.item-accordion-content');
         if (header) { header.style.background = ''; header.style.borderRadius = ''; }
         if (content) { content.style.background = ''; content.style.borderRadius = ''; }
+        // Clear sub-zone highlights (board view)
+        const photoEl = currentTarget.querySelector('.compact-card-photo');
+        const bodyEl = currentTarget.querySelector('.compact-card-body');
+        if (photoEl) { photoEl.style.background = ''; }
+        if (bodyEl) { bodyEl.style.background = ''; }
     }
     potentialMergeTarget = null;
     potentialMergeZone = null;
@@ -4506,15 +4529,27 @@ function checkMergeTargetHover(clientX, clientY) {
         return;
     }
 
-    const items = itineraryItemsListEl.querySelectorAll('.itinerary-item-section:not(.sortable-drag)');
+    const isBoardView = itineraryItemsListEl.classList.contains('board-view');
+
+    // In board view, target compact cards; in list view, target item sections
+    const itemSelector = isBoardView
+        ? '.compact-card:not(.sortable-drag)'
+        : '.itinerary-item-section:not(.sortable-drag)';
+    const items = itineraryItemsListEl.querySelectorAll(itemSelector);
 
     let foundHoveredItem = null;
     let foundHoveredItemId = null;
     let foundHoveredZone = null; // 'hybrid' or 'options'
 
     items.forEach((item, index) => {
-        const article = item.querySelector('.itinerary-item');
-        const itemRecordId = article?.dataset.recordId;
+        let itemRecordId;
+        if (isBoardView) {
+            // Compact cards have data-record-id or data-group-id directly
+            itemRecordId = item.dataset.recordId || item.dataset.groupId;
+        } else {
+            const article = item.querySelector('.itinerary-item');
+            itemRecordId = article?.dataset.recordId;
+        }
 
         // Don't merge with self
         if (itemRecordId === currentDraggedRecordId) {
@@ -4536,18 +4571,29 @@ function checkMergeTargetHover(clientX, clientY) {
                 foundHoveredItem = item;
                 foundHoveredItemId = itemRecordId;
 
-                // Determine which zone: header (name) = hybrid, content (description/details) = options
-                const header = item.querySelector('.item-accordion-header');
-                if (header) {
-                    const headerRect = header.getBoundingClientRect();
-                    if (clientY <= headerRect.bottom) {
-                        foundHoveredZone = 'hybrid';
+                if (isBoardView) {
+                    // In board view: photo area (top) = hybrid, body area (bottom) = options
+                    const photoEl = item.querySelector('.compact-card-photo');
+                    if (photoEl) {
+                        const photoRect = photoEl.getBoundingClientRect();
+                        foundHoveredZone = clientY <= photoRect.bottom ? 'hybrid' : 'options';
                     } else {
-                        foundHoveredZone = 'options';
+                        foundHoveredZone = relativeY < 0.5 ? 'hybrid' : 'options';
                     }
                 } else {
-                    // Fallback: top half = hybrid, bottom half = options
-                    foundHoveredZone = relativeY < 0.5 ? 'hybrid' : 'options';
+                    // Determine which zone: header (name) = hybrid, content (description/details) = options
+                    const header = item.querySelector('.item-accordion-header');
+                    if (header) {
+                        const headerRect = header.getBoundingClientRect();
+                        if (clientY <= headerRect.bottom) {
+                            foundHoveredZone = 'hybrid';
+                        } else {
+                            foundHoveredZone = 'options';
+                        }
+                    } else {
+                        // Fallback: top half = hybrid, bottom half = options
+                        foundHoveredZone = relativeY < 0.5 ? 'hybrid' : 'options';
+                    }
                 }
             }
         }
@@ -4603,19 +4649,25 @@ function clearMergeHoverState() {
 // Activate merge target with visual feedback
 function activateMergeTarget(element, recordId, clientX, clientY, zone = 'hybrid') {
 
-    // Remove highlight from any previous target
-    const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
+    // Remove highlight from any previous target (support both list and board view selectors)
+    const prevTargetSelectors = '.itinerary-item-section.merge-target, .compact-card.merge-target';
+    const currentTarget = document.querySelector(prevTargetSelectors);
     if (currentTarget && currentTarget !== element) {
         currentTarget.classList.remove('merge-target', 'merge-target-hybrid', 'merge-target-options');
         currentTarget.style.outline = '';
         currentTarget.style.outlineOffset = '';
         currentTarget.style.background = '';
         currentTarget.style.animation = '';
-        // Clear sub-zone highlights
+        // Clear sub-zone highlights (list view)
         const prevHeader = currentTarget.querySelector('.item-accordion-header');
         const prevContent = currentTarget.querySelector('.item-accordion-content');
         if (prevHeader) prevHeader.style.cssText = prevHeader.style.cssText.replace(/background:[^;]*;?/g, '');
         if (prevContent) prevContent.style.cssText = prevContent.style.cssText.replace(/background:[^;]*;?/g, '');
+        // Clear sub-zone highlights (board view)
+        const prevPhoto = currentTarget.querySelector('.compact-card-photo');
+        const prevBody = currentTarget.querySelector('.compact-card-body');
+        if (prevPhoto) { prevPhoto.style.background = ''; prevPhoto.style.borderRadius = ''; }
+        if (prevBody) { prevBody.style.background = ''; prevBody.style.borderRadius = ''; }
     }
 
     // Apply merge target styling
@@ -4707,15 +4759,28 @@ function updateMergeIndicatorContent(zone) {
 
 // Update the visual highlight on sub-zones of the merge target
 function updateMergeTargetZoneVisual(element, zone) {
-    const header = element.querySelector('.item-accordion-header');
-    const content = element.querySelector('.item-accordion-content');
-
     const isHybrid = zone === 'hybrid';
     const activeColor = isHybrid ? 'rgba(156, 39, 176, 0.2)' : 'rgba(76, 175, 80, 0.2)';
     const outlineColor = isHybrid ? 'rgba(156, 39, 176, 0.9)' : 'rgba(76, 175, 80, 0.9)';
 
     // Update the outer outline color
     element.style.outline = `3px solid ${outlineColor}`;
+
+    // Board view: photo = hybrid zone, body = options zone
+    const photoEl = element.querySelector('.compact-card-photo');
+    const bodyEl = element.querySelector('.compact-card-body');
+
+    if (photoEl && bodyEl) {
+        photoEl.style.background = isHybrid ? activeColor : '';
+        photoEl.style.transition = 'background 0.15s ease';
+        bodyEl.style.background = isHybrid ? '' : activeColor;
+        bodyEl.style.transition = 'background 0.15s ease';
+        return;
+    }
+
+    // List view: header = hybrid zone, content = options zone
+    const header = element.querySelector('.item-accordion-header');
+    const content = element.querySelector('.item-accordion-content');
 
     if (header) {
         header.style.background = isHybrid ? activeColor : 'transparent';
@@ -4741,19 +4806,24 @@ function updateMergeIndicatorPosition(clientX, clientY) {
 // Deactivate merge target and hide indicator
 function deactivateMergeTarget() {
 
-    // Remove merge-target class from any highlighted item
-    const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
+    // Remove merge-target class from any highlighted item (support both list and board view)
+    const currentTarget = document.querySelector('.itinerary-item-section.merge-target, .compact-card.merge-target');
     if (currentTarget) {
         currentTarget.classList.remove('merge-target', 'merge-target-hybrid', 'merge-target-options');
         currentTarget.style.outline = '';
         currentTarget.style.outlineOffset = '';
         currentTarget.style.background = '';
         currentTarget.style.animation = '';
-        // Clear sub-zone highlights
+        // Clear sub-zone highlights (list view)
         const header = currentTarget.querySelector('.item-accordion-header');
         const content = currentTarget.querySelector('.item-accordion-content');
         if (header) { header.style.background = ''; header.style.borderRadius = ''; }
         if (content) { content.style.background = ''; content.style.borderRadius = ''; }
+        // Clear sub-zone highlights (board view)
+        const photoEl = currentTarget.querySelector('.compact-card-photo');
+        const bodyEl = currentTarget.querySelector('.compact-card-body');
+        if (photoEl) { photoEl.style.background = ''; }
+        if (bodyEl) { bodyEl.style.background = ''; }
     }
 
     potentialMergeTarget = null;
@@ -6232,16 +6302,39 @@ async function toggleCompletedItems() {
 function updateItemOrder() {
     if (!itineraryItemsListEl) return;
 
-    // Get all item sections in current DOM order
-    const itemSections = itineraryItemsListEl.querySelectorAll('.itinerary-item-section');
+    const isBoardView = itineraryItemsListEl.classList.contains('board-view');
     const newOrder = [];
 
-    itemSections.forEach(section => {
-        const article = section.querySelector('.itinerary-item');
-        if (article && article.dataset.recordId) {
-            newOrder.push(article.dataset.recordId);
-        }
-    });
+    if (isBoardView) {
+        // Board view: compact cards have data-record-id or data-group-id directly
+        const cards = itineraryItemsListEl.querySelectorAll('.compact-card');
+        cards.forEach(card => {
+            const recordId = card.dataset.recordId;
+            const groupId = card.dataset.groupId;
+            if (recordId) {
+                newOrder.push(recordId);
+            } else if (groupId) {
+                // For group cards, push the first member's record ID (used for ordering)
+                const relatedGroups = state.session.relatedGroups || [];
+                const group = relatedGroups.find(g => (g.id || '') === groupId);
+                if (group) {
+                    const groupItems = Array.isArray(group) ? group : (group.items || []);
+                    if (groupItems.length > 0) {
+                        newOrder.push(groupItems[0]);
+                    }
+                }
+            }
+        });
+    } else {
+        // List view: item sections with article children
+        const itemSections = itineraryItemsListEl.querySelectorAll('.itinerary-item-section');
+        itemSections.forEach(section => {
+            const article = section.querySelector('.itinerary-item');
+            if (article && article.dataset.recordId) {
+                newOrder.push(article.dataset.recordId);
+            }
+        });
+    }
 
     // Update state
     state.session.planItemOrder = newOrder;

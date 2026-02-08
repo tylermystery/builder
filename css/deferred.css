@@ -14042,11 +14042,59 @@ hr.total-divider {
     border-left: 3px solid rgba(255, 193, 7, 0.5);
 }
 
-/* SortableJS ghost/chosen for grid cards */
+/* SortableJS ghost/chosen/drag for grid cards */
 .compact-card.sortable-ghost {
-    opacity: 0.4;
+    opacity: 0.3;
+    border: 2px dashed rgba(0, 123, 255, 0.6);
+    background: rgba(0, 123, 255, 0.05);
+    box-shadow: none;
+    transform: none;
 }
 
 .compact-card.sortable-chosen {
     box-shadow: 0 0 20px rgba(0, 123, 255, 0.4);
+    transform: scale(1.03);
+    z-index: 50;
+    cursor: grabbing;
+}
+
+.compact-card.sortable-drag {
+    opacity: 0.95;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(0, 123, 255, 0.5);
+    transform: scale(1.05) rotate(1deg);
+    border-radius: 14px;
+    z-index: 100;
+}
+
+/* Merge target states for compact cards in board view */
+.compact-card.merge-target {
+    outline: 3px solid rgba(76, 175, 80, 0.8);
+    outline-offset: 4px;
+    animation: merge-target-pulse 1.5s ease infinite;
+}
+
+.compact-card.merge-target-hybrid {
+    outline-color: rgba(156, 39, 176, 0.8);
+}
+
+.compact-card.merge-target-options {
+    outline-color: rgba(76, 175, 80, 0.8);
+}
+
+/* Merge zone highlights within compact cards */
+.compact-card.merge-target .compact-card-photo {
+    transition: background 0.15s ease;
+}
+
+.compact-card.merge-target .compact-card-body {
+    transition: background 0.15s ease;
+}
+
+/* Drag grab cursor for board view cards */
+.board-view .compact-card {
+    cursor: grab;
+}
+
+.board-view .compact-card:active {
+    cursor: grabbing;
 }
