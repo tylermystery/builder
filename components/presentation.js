@@ -1,6 +1,8 @@
 // Debug flag: set to true (or window.__PRES_DEBUG__) for verbose logging in hot paths
 const PRES_DEBUG = typeof window !== 'undefined' && window.__PRES_DEBUG__;
 
+console.log('[MODULE DEBUG] presentation.js module starting to load...', performance.now().toFixed(2) + 'ms');
+
 import { state, setState, getRecordById, invalidateRecordsIndex } from '../state.js';
 import * as api from '../api.js';
 import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, REACTION_SCORES, getModalZIndex } from '../config.js';
@@ -17,6 +19,8 @@ import { showUserModal } from '../auth.js';
 import { showToast } from '../ui.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { refreshForumData, onNewItemReceived } from './forumPanel.js';
+
+console.log('[MODULE DEBUG] presentation.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
 // Quick emoji reactions available for messages and comments
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
@@ -2334,6 +2338,18 @@ async function renderItineraryItem(item, index) {
                          record.isManual === true;
     const needsConfidenceStyling = isAIItem || isSolutionItem || isManualItem;
 
+    console.log('[DEBUG Presentation Itinerary] Confidence detection for', recordId, ':', {
+        isAIItem,
+        isSolutionItem,
+        isManualItem,
+        needsConfidenceStyling,
+        'record.isManual': record.isManual,
+        'record.isSolution': record.isSolution,
+        '_researchData?.confidence': record._researchData?.confidence,
+        '_aiConfidence': record._aiConfidence,
+        'solutionData?.confidence': record.solutionData?.confidence
+    });
+
     let itineraryConfidenceClass = '';
     if (needsConfidenceStyling) {
         let confidence;
@@ -2361,6 +2377,15 @@ async function renderItineraryItem(item, index) {
         } else {
             itineraryConfidenceClass = 'confidence-premium';
         }
+
+        console.log('[DEBUG Presentation Itinerary] Applied confidence class for', recordId, ':', {
+            confidence,
+            itineraryConfidenceClass,
+            confidenceSource: record._researchData?.confidence != null ? 'researchData' :
+                             isAIItem ? 'aiConfidence' :
+                             (isSolutionItem && record.solutionData?.confidence) ? 'solutionData' :
+                             isManualItem ? 'manualDefault(0.5)' : 'null'
+        });
     }
 
     // Get selected options for expanded view
@@ -11255,7 +11280,14 @@ async function createPresentationResultCard(record, isAI = false) {
         confidenceType: typeof confidence,
         isAI,
         isSolutionItem,
-        isManualItem
+        isManualItem,
+        needsConfidenceStyling,
+        confidenceSource: record._researchData?.confidence != null ? 'researchData' :
+                         isAI ? 'aiConfidence' :
+                         (isSolutionItem && record.solutionData?.confidence) ? 'solutionData' :
+                         isManualItem ? 'manualDefault(0.5)' : 'null/not-styled',
+        'record.isManual': record.isManual,
+        'record.isSolution': record.isSolution
     });
 
     // Determine confidence class based on score:
@@ -11454,9 +11486,7 @@ async function createPresentationResultCard(record, isAI = false) {
     // Build AI image source indicator for AI items
     let aiImageSourceHtml = '';
     // Show AI image indicator for AI records or for manual items with AI-generated images
-    const isManualItem = record.isManual === true ||
-                         record.id?.startsWith('manual-add-') ||
-                         record.id?.startsWith('manual-presentation-');
+    // Note: isManualItem is already declared above in this scope (confidence styling section)
     const hasAIGeneratedImage = record.fields?._customImages?.some(img => img.isAIGenerated === true);
 
     if (isAI || (isManualItem && hasAIGeneratedImage)) {

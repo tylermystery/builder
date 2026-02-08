@@ -190,6 +190,19 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                          record.isManual === true;
     const needsConfidenceStyling = isAISourced || isSolutionItem || isManualItem;
 
+    console.log('[DEBUG Card] Confidence detection for', record.id, ':', {
+        isAISourced,
+        isSolutionItem,
+        isManualItem,
+        needsConfidenceStyling,
+        'record.isManual': record.isManual,
+        'record.isSolution': record.isSolution,
+        '_researchData?.confidence': record._researchData?.confidence,
+        '_aiConfidence': record._aiConfidence,
+        'fields._aiConfidence': fields._aiConfidence,
+        'solutionData?.confidence': record.solutionData?.confidence
+    });
+
     // --- CONFIDENCE TIER (drives visual text styling) ---
     let confidenceClass = '';
     if (needsConfidenceStyling) {
@@ -218,6 +231,15 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         } else {
             confidenceClass = 'confidence-premium';
         }
+
+        console.log('[DEBUG Card] Applied confidence class for', record.id, ':', {
+            confidence,
+            confidenceClass,
+            confidenceSource: record._researchData?.confidence != null ? 'researchData' :
+                             isAISourced ? 'aiConfidence' :
+                             (isSolutionItem && record.solutionData?.confidence) ? 'solutionData' :
+                             isManualItem ? 'manualDefault(0.5)' : 'null'
+        });
     }
 
     // Build AI badge HTML
