@@ -2781,16 +2781,29 @@ async function renderCompactCard(item) {
             emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
         });
         const sorted = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]);
-        const top3 = sorted.slice(0, 3).map(([emoji, count]) => `<span class="compact-card-reaction">${emoji}${count > 1 ? count : ''}</span>`).join('');
-        const moreReactions = sorted.length > 3 ? `<span class="compact-card-reaction compact-card-reaction-more">+${sorted.length - 3}</span>` : '';
-        reactionBarHTML = `<span class="compact-card-reactions">${top3}${moreReactions}</span>`;
+        const top3 = sorted.slice(0, 3).map(([emoji, count]) =>
+            `<span class="compact-reaction-pill" title="${emoji} ${count}">${emoji}<span class="compact-reaction-count">${count}</span></span>`
+        ).join('');
+        const moreReactions = sorted.length > 3 ? `<span class="compact-reaction-pill compact-reaction-overflow">+${sorted.length - 3}</span>` : '';
+        const totalReactions = reactions.size;
+        reactionBarHTML = `<span class="compact-card-reactions" data-record-id="${recordId}" title="${totalReactions} reaction${totalReactions !== 1 ? 's' : ''}">${top3}${moreReactions}</span>`;
     }
 
     // --- Comment count badge ---
     const commentCacheKey = `item:${recordId}`;
     const cachedComments = componentCommentsCache.get(commentCacheKey);
     const commentCount = cachedComments?.length || 0;
-    const commentBadgeHTML = commentCount > 0 ? `<span class="compact-card-badge" title="${commentCount} comment${commentCount !== 1 ? 's' : ''}">💬${commentCount}</span>` : '';
+    const commentBadgeHTML = commentCount > 0
+        ? `<span class="compact-badge-pill compact-badge-comment" title="${commentCount} comment${commentCount !== 1 ? 's' : ''}"><span class="compact-badge-icon">💬</span><span class="compact-badge-count">${commentCount}</span></span>`
+        : '';
+
+    // --- Task status badge in meta bar ---
+    const taskStatusForBadge = getElementTaskStatus('item', recordId);
+    const taskConfigForBadge = TASK_STATUS_CONFIG[taskStatusForBadge] || TASK_STATUS_CONFIG[ELEMENT_TASK_STATUS.NONE];
+    const showTaskBadge = taskStatusForBadge !== ELEMENT_TASK_STATUS.NONE;
+    const taskBadgeHTML = showTaskBadge
+        ? `<span class="compact-badge-pill compact-badge-task ${taskConfigForBadge.className}" title="${taskConfigForBadge.label}"><span class="compact-badge-icon">${taskConfigForBadge.icon}</span><span class="compact-badge-label">${taskConfigForBadge.label}</span></span>`
+        : '';
 
     // --- Photo section or fallback ---
     const photoStyle = optimizedPhoto ? `background-image: url('${optimizedPhoto}')` : '';
@@ -2814,6 +2827,7 @@ async function renderCompactCard(item) {
                 <div class="compact-card-meta">
                     ${reactionBarHTML}
                     <span class="compact-card-badges">
+                        ${taskBadgeHTML}
                         ${commentBadgeHTML}
                     </span>
                 </div>
@@ -2893,6 +2907,67 @@ async function renderCompactGroupCard(group) {
     else if (archivedCount === groupItems.length) groupLifecycleClass = 'compact-card-archived';
     else if (goalCount > 0 && lockedCount === 0) groupLifecycleClass = 'compact-card-goal';
 
+    // --- Aggregate comment count across group members ---
+    let groupCommentCount = 0;
+    for (const gId of groupItems) {
+        const memberComments = componentCommentsCache.get(`item:${gId}`);
+        groupCommentCount += memberComments?.length || 0;
+    }
+    const groupCommentBadgeHTML = groupCommentCount > 0
+        ? `<span class="compact-badge-pill compact-badge-comment" title="${groupCommentCount} comment${groupCommentCount !== 1 ? 's' : ''} across group"><span class="compact-badge-icon">💬</span><span class="compact-badge-count">${groupCommentCount}</span></span>`
+        : '';
+
+    // --- Aggregate task status summary for group ---
+    const taskStatusCounts = {};
+    for (const gId of groupItems) {
+        const memberTaskStatus = getElementTaskStatus('item', gId);
+        if (memberTaskStatus !== ELEMENT_TASK_STATUS.NONE) {
+            taskStatusCounts[memberTaskStatus] = (taskStatusCounts[memberTaskStatus] || 0) + 1;
+        }
+    }
+    let groupTaskBadgeHTML = '';
+    const taskEntries = Object.entries(taskStatusCounts);
+    if (taskEntries.length > 0) {
+        const taskChips = taskEntries.map(([status, count]) => {
+            const config = TASK_STATUS_CONFIG[status] || TASK_STATUS_CONFIG[ELEMENT_TASK_STATUS.NONE];
+            return `<span class="compact-badge-pill compact-badge-task ${config.className}" title="${config.label}: ${count}"><span class="compact-badge-icon">${config.icon}</span><span class="compact-badge-count">${count}</span></span>`;
+        }).join('');
+        groupTaskBadgeHTML = taskChips;
+    }
+
+    // --- Aggregate reaction bar across group members ---
+    const groupEmojiCounts = {};
+    let groupTotalReactions = 0;
+    for (const gId of groupItems) {
+        const memberReactions = state.session.reactions?.get(gId);
+        if (memberReactions && memberReactions instanceof Map) {
+            memberReactions.forEach((emoji) => {
+                groupEmojiCounts[emoji] = (groupEmojiCounts[emoji] || 0) + 1;
+                groupTotalReactions++;
+            });
+        }
+    }
+    let groupReactionBarHTML = '';
+    if (groupTotalReactions > 0) {
+        const sortedGroupEmoji = Object.entries(groupEmojiCounts).sort((a, b) => b[1] - a[1]);
+        const top3Group = sortedGroupEmoji.slice(0, 3).map(([emoji, count]) =>
+            `<span class="compact-reaction-pill" title="${emoji} ${count}">${emoji}<span class="compact-reaction-count">${count}</span></span>`
+        ).join('');
+        const moreGroupReactions = sortedGroupEmoji.length > 3 ? `<span class="compact-reaction-pill compact-reaction-overflow">+${sortedGroupEmoji.length - 3}</span>` : '';
+        groupReactionBarHTML = `<span class="compact-card-reactions" title="${groupTotalReactions} reaction${groupTotalReactions !== 1 ? 's' : ''} across group">${top3Group}${moreGroupReactions}</span>`;
+    }
+
+    // Build group meta bar HTML (only if there's content)
+    const hasGroupMeta = groupReactionBarHTML || groupTaskBadgeHTML || groupCommentBadgeHTML;
+    const groupMetaHTML = hasGroupMeta ? `
+                <div class="compact-card-meta">
+                    ${groupReactionBarHTML}
+                    <span class="compact-card-badges">
+                        ${groupTaskBadgeHTML}
+                        ${groupCommentBadgeHTML}
+                    </span>
+                </div>` : '';
+
     const photoStyle = optimizedPhoto ? `background-image: url('${optimizedPhoto}')` : '';
     const noPhotoClass = !optimizedPhoto ? 'compact-card-no-photo' : '';
 
@@ -2907,6 +2982,7 @@ async function renderCompactGroupCard(group) {
                 </div>
                 ${groupStatusHTML}
                 <div class="compact-card-pills">${memberPills}${morePill}</div>
+                ${groupMetaHTML}
             </div>
         </div>
     `;

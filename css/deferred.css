@@ -13711,28 +13711,129 @@ hr.total-divider {
 
 .compact-card-reactions {
     display: flex;
-    gap: 4px;
+    gap: 3px;
     align-items: center;
+    flex-wrap: nowrap;
+    overflow: hidden;
 }
 
-.compact-card-reaction {
-    font-size: 0.9em;
+.compact-reaction-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 0.85em;
+    line-height: 1;
+    transition: background 0.15s ease, transform 0.15s ease;
+    cursor: default;
+    white-space: nowrap;
 }
 
-.compact-card-reaction-more {
-    font-size: 0.75em;
-    color: rgba(255, 255, 255, 0.5);
+.compact-reaction-pill:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.08);
+}
+
+.compact-reaction-count {
+    font-size: 0.8em;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    min-width: 8px;
+    text-align: center;
+}
+
+.compact-reaction-overflow {
+    font-size: 0.72em;
+    color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.04);
+    font-style: italic;
 }
 
 .compact-card-badges {
     display: flex;
-    gap: 6px;
+    gap: 4px;
     align-items: center;
+    flex-shrink: 0;
 }
 
-.compact-card-badge {
-    font-size: 0.8em;
-    color: rgba(255, 255, 255, 0.6);
+/* Badge pill (shared by comment and task badges) */
+.compact-badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    line-height: 1;
+    white-space: nowrap;
+    transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.compact-badge-icon {
+    font-size: 0.9em;
+    flex-shrink: 0;
+}
+
+.compact-badge-count {
+    font-weight: 600;
+    min-width: 8px;
+    text-align: center;
+}
+
+.compact-badge-label {
+    font-weight: 500;
+    max-width: 64px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Comment badge */
+.compact-badge-comment {
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.15);
+    color: rgba(147, 197, 253, 0.9);
+}
+
+.compact-card:hover .compact-badge-comment {
+    background: rgba(59, 130, 246, 0.2);
+}
+
+/* Task status badges in meta bar */
+.compact-badge-task {
+    border: 1px solid transparent;
+}
+
+.compact-badge-task.task-status-gtg {
+    background: rgba(40, 167, 69, 0.12);
+    border-color: rgba(40, 167, 69, 0.18);
+    color: rgba(110, 231, 183, 0.9);
+}
+
+.compact-badge-task.task-status-check {
+    background: rgba(255, 193, 7, 0.12);
+    border-color: rgba(255, 193, 7, 0.18);
+    color: rgba(255, 220, 100, 0.9);
+}
+
+.compact-badge-task.task-status-attention,
+.compact-badge-task.task-status-needs-attention {
+    background: rgba(220, 53, 69, 0.12);
+    border-color: rgba(220, 53, 69, 0.18);
+    color: rgba(248, 150, 160, 0.9);
+}
+
+.compact-badge-task.task-status-no-action {
+    background: rgba(108, 117, 125, 0.1);
+    border-color: rgba(108, 117, 125, 0.15);
+    color: rgba(200, 200, 200, 0.7);
+}
+
+.compact-card:hover .compact-badge-task {
+    opacity: 1;
 }
 
 /* Lifecycle state styling */
