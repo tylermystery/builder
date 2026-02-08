@@ -2599,6 +2599,26 @@ async function renderItineraryItem(item, index) {
 // =============================================================================
 
 /**
+ * Determine the source type of an item for visual badges.
+ * @param {string} recordId - The record ID
+ * @param {Object} record - The record object
+ * @returns {{ key: string, label: string, icon: string }}
+ */
+function getCompactCardSourceType(recordId, record) {
+    if (recordId.startsWith('custom-') || recordId.startsWith('ai-search-') ||
+        recordId.startsWith('ai-group-') || recordId.startsWith('ai-child-')) {
+        return { key: 'ai', label: 'AI Suggested', icon: '🤖' };
+    }
+    if (recordId.startsWith('solution-') || record?.isSolution === true) {
+        return { key: 'solution', label: 'Solution', icon: '💡' };
+    }
+    if (recordId.startsWith('manual-add-') || recordId.startsWith('manual-presentation-') || record?.isManual === true) {
+        return { key: 'manual', label: 'Manually Added', icon: '✏️' };
+    }
+    return { key: 'catalog', label: 'From Catalog', icon: '📋' };
+}
+
+/**
  * Render a compact card tile for the board view.
  * Shows: hero photo with floating status/emoji overlays, name, provenance,
  * variation pills, reaction summary, and comment/task count badges.
@@ -2691,14 +2711,45 @@ async function renderCompactCard(item) {
             const sourceRecord = getRecordById(sourceId);
             return sourceRecord?.fields?.Name || 'Item';
         });
-        const displayNames = sourceNames.length <= 3
-            ? sourceNames.join(' + ')
-            : sourceNames.slice(0, 3).join(' + ') + ` +${sourceNames.length - 3} more`;
-        provenanceHTML = `<div class="compact-card-provenance" title="${escapeHtml(sourceNames.join(' + '))}">: ${escapeHtml(displayNames)}</div>`;
+        const sourceTypeBadges = combinedSources.map(sourceId => {
+            const sourceRecord = getRecordById(sourceId);
+            const srcType = getCompactCardSourceType(sourceId, sourceRecord);
+            return `<span class="provenance-source-badge provenance-source-${srcType.key}" title="${escapeHtml((sourceRecord?.fields?.Name || 'Item') + ' (' + srcType.label + ')')}">${srcType.icon} ${escapeHtml(sourceRecord?.fields?.Name || 'Item')}</span>`;
+        });
+        const displayBadges = sourceTypeBadges.length <= 3
+            ? sourceTypeBadges.join('')
+            : sourceTypeBadges.slice(0, 3).join('') + `<span class="provenance-source-badge provenance-source-more">+${sourceTypeBadges.length - 3}</span>`;
+        const hybridData = getCombinedHybridData(recordId);
+        const hybridLabel = hybridData?.hybridName ? '<span class="provenance-hybrid-icon" title="Hybrid item">✨</span>' : '';
+        provenanceHTML = `<div class="compact-card-provenance" title="${escapeHtml(sourceNames.join(' + '))}">${hybridLabel}<span class="provenance-label">Merged:</span> ${displayBadges}</div>`;
     }
 
     // --- Goal indicator ---
     const goalBadgeHTML = isGoal ? '<span class="compact-card-goal-badge" title="Goal">⭐</span>' : '';
+
+    // --- Lifecycle badge (floating bottom-right of photo) ---
+    let lifecycleBadgeIcon = '';
+    let lifecycleBadgeLabel = '';
+    let lifecycleBadgeClass = '';
+    if (isArchived) {
+        lifecycleBadgeIcon = '📦'; lifecycleBadgeLabel = 'Archived'; lifecycleBadgeClass = 'lifecycle-archived';
+    } else if (isCompleted) {
+        lifecycleBadgeIcon = '✓'; lifecycleBadgeLabel = 'Done'; lifecycleBadgeClass = 'lifecycle-completed';
+    } else if (isLocked) {
+        lifecycleBadgeIcon = '🔒'; lifecycleBadgeLabel = 'Confirmed'; lifecycleBadgeClass = 'lifecycle-locked';
+    } else if (isGoal) {
+        lifecycleBadgeIcon = '⭐'; lifecycleBadgeLabel = 'Goal'; lifecycleBadgeClass = 'lifecycle-goal';
+    }
+    // Ideas don't show a badge (default state)
+    const lifecycleBadgeHTML = lifecycleBadgeClass
+        ? `<span class="compact-card-lifecycle-badge ${lifecycleBadgeClass}">${lifecycleBadgeIcon} ${lifecycleBadgeLabel}</span>`
+        : '';
+
+    // --- Entry source type badge ---
+    const sourceType = getCompactCardSourceType(recordId, record);
+    const sourceTypeBadgeHTML = sourceType.key !== 'catalog'
+        ? `<span class="compact-card-source-badge source-badge-${sourceType.key}" title="${sourceType.label}">${sourceType.icon}</span>`
+        : '';
 
     // --- Type label ---
     let typeLabel = type === 'favorites' ? 'Idea' : 'Confirmed';
@@ -2750,11 +2801,13 @@ async function renderCompactCard(item) {
             <div class="compact-card-photo" style="${photoStyle}">
                 ${statusOverlayHTML}
                 ${emojiOverlayHTML}
+                ${lifecycleBadgeHTML}
             </div>
             <div class="compact-card-body">
                 <div class="compact-card-title-row">
                     ${goalBadgeHTML}
                     <h4 class="compact-card-name" title="${escapeHtml(name)}">${escapeHtml(name)}</h4>
+                    ${sourceTypeBadgeHTML}
                 </div>
                 ${provenanceHTML}
                 ${pillsHTML}
@@ -2792,22 +2845,59 @@ async function renderCompactGroupCard(group) {
     const photoUrl = cachedImages?.images?.[0] || '';
     const optimizedPhoto = photoUrl ? applyCloudinaryTransform(photoUrl, 'w_400,h_250,c_fill,f_auto,q_auto') : '';
 
-    // Member name pills
+    // Member name pills with lifecycle indicators
     const memberPills = groupItems.slice(0, 3).map(gId => {
         const gRec = getRecordById(gId);
-        return `<span class="compact-card-pill">${escapeHtml(gRec?.fields?.Name || 'Option')}</span>`;
+        const memberName = escapeHtml(gRec?.fields?.Name || 'Option');
+        const isGoal = state.session.goalItems?.has(gId);
+        const isArchived = state.session.archivedItems?.has(gId);
+        const isCompleted = state.session.completedItems?.has(gId);
+        const isLocked = state.cart.lockedItems.has(gId);
+        let pillStateClass = '';
+        let pillIcon = '';
+        if (isArchived) { pillStateClass = 'pill-archived'; pillIcon = '📦 '; }
+        else if (isCompleted) { pillStateClass = 'pill-completed'; pillIcon = '✓ '; }
+        else if (isLocked) { pillStateClass = 'pill-locked'; pillIcon = '🔒 '; }
+        else if (isGoal) { pillStateClass = 'pill-goal'; pillIcon = '⭐ '; }
+        return `<span class="compact-card-pill ${pillStateClass}">${pillIcon}${memberName}</span>`;
     }).join('');
     const moreCount = groupItems.length - 3;
     const morePill = moreCount > 0 ? `<span class="compact-card-pill compact-card-pill-more">+${moreCount} more</span>` : '';
 
+    // Aggregate lifecycle summary for the group
+    let lockedCount = 0, goalCount = 0, archivedCount = 0, completedCount = 0;
+    for (const gId of groupItems) {
+        if (state.session.archivedItems?.has(gId)) archivedCount++;
+        else if (state.session.completedItems?.has(gId)) completedCount++;
+        else if (state.cart.lockedItems.has(gId)) lockedCount++;
+        else if (state.session.goalItems?.has(gId)) goalCount++;
+    }
+    const activeCount = groupItems.length - archivedCount;
+    let groupStatusHTML = '';
+    const statusParts = [];
+    if (lockedCount > 0) statusParts.push(`<span class="group-status-chip group-chip-locked">🔒 ${lockedCount}</span>`);
+    if (goalCount > 0) statusParts.push(`<span class="group-status-chip group-chip-goal">⭐ ${goalCount}</span>`);
+    if (completedCount > 0) statusParts.push(`<span class="group-status-chip group-chip-completed">✓ ${completedCount}</span>`);
+    if (archivedCount > 0) statusParts.push(`<span class="group-status-chip group-chip-archived">📦 ${archivedCount}</span>`);
+    if (statusParts.length > 0) {
+        groupStatusHTML = `<div class="compact-card-group-status">${statusParts.join('')}</div>`;
+    }
+
     // Determine type from first item
     const firstItemType = state.cart.lockedItems.has(firstItemId) ? 'locked' : 'favorites';
+
+    // Determine dominant lifecycle class for group card border
+    let groupLifecycleClass = '';
+    if (lockedCount === groupItems.length) groupLifecycleClass = 'compact-card-locked';
+    else if (completedCount === groupItems.length) groupLifecycleClass = 'compact-card-completed';
+    else if (archivedCount === groupItems.length) groupLifecycleClass = 'compact-card-archived';
+    else if (goalCount > 0 && lockedCount === 0) groupLifecycleClass = 'compact-card-goal';
 
     const photoStyle = optimizedPhoto ? `background-image: url('${optimizedPhoto}')` : '';
     const noPhotoClass = !optimizedPhoto ? 'compact-card-no-photo' : '';
 
     return `
-        <div class="compact-card compact-card-group ${noPhotoClass}" data-group-id="${groupId}" data-item-type="${firstItemType}">
+        <div class="compact-card compact-card-group ${groupLifecycleClass} ${noPhotoClass}" data-group-id="${groupId}" data-item-type="${firstItemType}">
             <div class="compact-card-photo" style="${photoStyle}">
                 <span class="compact-card-group-badge">${groupItems.length} options</span>
             </div>
@@ -2815,6 +2905,7 @@ async function renderCompactGroupCard(group) {
                 <div class="compact-card-title-row">
                     <h4 class="compact-card-name" title="${escapeHtml(groupName)}">${escapeHtml(groupName)}</h4>
                 </div>
+                ${groupStatusHTML}
                 <div class="compact-card-pills">${memberPills}${morePill}</div>
             </div>
         </div>

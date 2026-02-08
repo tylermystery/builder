@@ -13605,10 +13605,70 @@ hr.total-divider {
 .compact-card-provenance {
     font-size: 0.78em;
     color: rgba(255, 255, 255, 0.5);
-    margin-top: 2px;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    overflow: hidden;
+}
+
+.provenance-label {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.9em;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.provenance-hybrid-icon {
+    flex-shrink: 0;
+    font-size: 1em;
+}
+
+.provenance-source-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 0.88em;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    max-width: 110px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.provenance-source-ai {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.25);
+    color: rgba(165, 168, 255, 0.9);
+}
+
+.provenance-source-solution {
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.2);
+    color: rgba(255, 200, 100, 0.9);
+}
+
+.provenance-source-manual {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.2);
+    color: rgba(110, 231, 183, 0.9);
+}
+
+.provenance-source-catalog {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.provenance-source-more {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.4);
+    font-style: italic;
+    font-size: 0.85em;
 }
 
 /* Variation pills */
@@ -13682,22 +13742,40 @@ hr.total-divider {
 
 .compact-card-goal {
     border-color: rgba(255, 193, 7, 0.4);
-    box-shadow: 0 0 0 1px rgba(255, 193, 7, 0.15) inset;
+    box-shadow: 0 0 0 1px rgba(255, 193, 7, 0.15) inset, 0 2px 8px rgba(255, 193, 7, 0.08);
+}
+
+.compact-card-goal .compact-card-body {
+    background: linear-gradient(180deg, rgba(255, 193, 7, 0.04) 0%, transparent 100%);
 }
 
 .compact-card-locked {
-    border-color: rgba(40, 167, 69, 0.3);
-    opacity: 1;
+    border-color: rgba(40, 167, 69, 0.4);
+    box-shadow: 0 0 0 1px rgba(40, 167, 69, 0.12) inset;
+}
+
+.compact-card-locked .compact-card-body {
+    background: linear-gradient(180deg, rgba(40, 167, 69, 0.03) 0%, transparent 100%);
 }
 
 .compact-card-archived {
     opacity: 0.5;
     border-color: rgba(255, 255, 255, 0.05);
+    filter: grayscale(30%);
+}
+
+.compact-card-archived:hover {
+    opacity: 0.75;
+    filter: grayscale(10%);
 }
 
 .compact-card-completed {
-    opacity: 0.7;
-    border-color: rgba(40, 167, 69, 0.2);
+    opacity: 0.75;
+    border-color: rgba(40, 167, 69, 0.25);
+}
+
+.compact-card-completed:hover {
+    opacity: 0.9;
 }
 
 .compact-card-completed .compact-card-photo::before {
@@ -13709,6 +13787,141 @@ hr.total-divider {
     font-size: 3em;
     color: rgba(40, 167, 69, 0.6);
     z-index: 1;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Lifecycle badge (floating bottom-right of photo) */
+.compact-card-lifecycle-badge {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.68em;
+    font-weight: 600;
+    z-index: 2;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.lifecycle-goal {
+    background: rgba(255, 193, 7, 0.85);
+    color: #4a3800;
+}
+
+.lifecycle-locked {
+    background: rgba(40, 167, 69, 0.85);
+    color: #fff;
+}
+
+.lifecycle-archived {
+    background: rgba(108, 117, 125, 0.8);
+    color: #fff;
+}
+
+.lifecycle-completed {
+    background: rgba(40, 167, 69, 0.9);
+    color: #fff;
+}
+
+/* Entry source type badge */
+.compact-card-source-badge {
+    flex-shrink: 0;
+    font-size: 0.75em;
+    padding: 1px 5px;
+    border-radius: 6px;
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+}
+
+.compact-card:hover .compact-card-source-badge {
+    opacity: 1;
+}
+
+.source-badge-ai {
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.source-badge-solution {
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.source-badge-manual {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+/* Group card aggregate status chips */
+.compact-card-group-status {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+
+.group-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 0.68em;
+    font-weight: 500;
+}
+
+.group-chip-locked {
+    background: rgba(40, 167, 69, 0.15);
+    color: rgba(110, 231, 183, 0.9);
+}
+
+.group-chip-goal {
+    background: rgba(255, 193, 7, 0.12);
+    color: rgba(255, 220, 100, 0.9);
+}
+
+.group-chip-completed {
+    background: rgba(40, 167, 69, 0.1);
+    color: rgba(110, 231, 183, 0.7);
+}
+
+.group-chip-archived {
+    background: rgba(108, 117, 125, 0.12);
+    color: rgba(200, 200, 200, 0.6);
+}
+
+/* Lifecycle-aware pills in group cards */
+.compact-card-pill.pill-goal {
+    background: rgba(255, 193, 7, 0.15);
+    border: 1px solid rgba(255, 193, 7, 0.2);
+    color: rgba(255, 220, 100, 0.9);
+}
+
+.compact-card-pill.pill-locked {
+    background: rgba(40, 167, 69, 0.12);
+    border: 1px solid rgba(40, 167, 69, 0.2);
+    color: rgba(110, 231, 183, 0.9);
+}
+
+.compact-card-pill.pill-completed {
+    background: rgba(40, 167, 69, 0.08);
+    border: 1px solid rgba(40, 167, 69, 0.12);
+    color: rgba(110, 231, 183, 0.6);
+    text-decoration: line-through;
+    text-decoration-color: rgba(110, 231, 183, 0.3);
+}
+
+.compact-card-pill.pill-archived {
+    background: rgba(108, 117, 125, 0.08);
+    border: 1px solid rgba(108, 117, 125, 0.12);
+    color: rgba(200, 200, 200, 0.5);
+    opacity: 0.7;
 }
 
 /* Confidence tier accents on compact cards */
