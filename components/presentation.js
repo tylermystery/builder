@@ -2323,17 +2323,33 @@ async function renderItineraryItem(item, index) {
     const quantity = itemInfo?.quantity || 1;
     const note = itemInfo?.note || '';
 
-    // --- AI Confidence tier for itinerary board items ---
+    // --- Confidence tier for itinerary board items (AI, solutions, and manual items) ---
     const isAIItem = recordId.startsWith('custom-') ||
                      recordId.startsWith('ai-search-') ||
                      recordId.startsWith('ai-group-') ||
                      recordId.startsWith('ai-child-');
+    const isSolutionItem = recordId.startsWith('solution-') || record.isSolution === true;
+    const isManualItem = recordId.startsWith('manual-add-') ||
+                         recordId.startsWith('manual-presentation-') ||
+                         record.isManual === true;
+    const needsConfidenceStyling = isAIItem || isSolutionItem || isManualItem;
+
     let itineraryConfidenceClass = '';
-    if (isAIItem) {
-        const confidence = record._researchData?.confidence ??
-            record._aiConfidence ??
-            record.fields?._aiConfidence ??
-            null;
+    if (needsConfidenceStyling) {
+        let confidence;
+        if (record._researchData?.confidence != null) {
+            confidence = record._researchData.confidence;
+        } else if (isAIItem) {
+            confidence = record._aiConfidence ?? record.fields?._aiConfidence ?? null;
+        } else if (isSolutionItem && record.solutionData?.confidence) {
+            const solutionConfidenceMap = { high: 0.85, medium: 0.6, low: 0.35 };
+            confidence = solutionConfidenceMap[record.solutionData.confidence] ?? 0.6;
+        } else if (isManualItem) {
+            confidence = 0.5; // Manual items default to 50% (pen/approximated)
+        } else {
+            confidence = null;
+        }
+
         if (confidence === null || confidence === undefined) {
             itineraryConfidenceClass = 'confidence-pencil';
         } else if (confidence < 0.5) {
@@ -11208,19 +11224,38 @@ async function createPresentationResultCard(record, isAI = false) {
 
     const fields = record.fields;
 
-    // Get confidence level for AI items (0.0-1.0)
+    // Get confidence level for AI items, solution items, and manual items (0.0-1.0)
     // Check multiple possible sources for confidence data
-    const confidence = isAI ? (
-        record._researchData?.confidence ??
-        record._aiConfidence ??
-        fields._aiConfidence ??
-        null
-    ) : null;
+    const isSolutionItem = record.isSolution === true || record.id?.startsWith('solution-');
+    const isManualItem = record.isManual === true ||
+                         record.id?.startsWith('manual-add-') ||
+                         record.id?.startsWith('manual-presentation-');
+    const needsConfidenceStyling = isAI || isSolutionItem || isManualItem;
+
+    let confidence;
+    if (needsConfidenceStyling) {
+        if (record._researchData?.confidence != null) {
+            confidence = record._researchData.confidence;
+        } else if (isAI) {
+            confidence = record._aiConfidence ?? fields._aiConfidence ?? null;
+        } else if (isSolutionItem && record.solutionData?.confidence) {
+            const solutionConfidenceMap = { high: 0.85, medium: 0.6, low: 0.35 };
+            confidence = solutionConfidenceMap[record.solutionData.confidence] ?? 0.6;
+        } else if (isManualItem) {
+            confidence = 0.5; // Manual items default to 50% (pen/approximated)
+        } else {
+            confidence = null;
+        }
+    } else {
+        confidence = null;
+    }
 
     console.log('[DEBUG Presentation] Confidence resolved for', record.id, ':', {
         confidence,
         confidenceType: typeof confidence,
-        isAI
+        isAI,
+        isSolutionItem,
+        isManualItem
     });
 
     // Determine confidence class based on score:
@@ -11232,7 +11267,7 @@ async function createPresentationResultCard(record, isAI = false) {
     let confidenceLabel = '';
     let confidenceIndicatorClass = '';
 
-    if (isAI) {
+    if (needsConfidenceStyling) {
         if (confidence === null || confidence === undefined) {
             // Unknown confidence - show as pencil (draft)
             confidenceClass = 'confidence-pencil';

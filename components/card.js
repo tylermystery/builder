@@ -183,13 +183,29 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                         record.id.startsWith('ai-child-');
     const isAIGrouping = record.id.startsWith('ai-group-');
 
-    // --- AI CONFIDENCE TIER (drives visual text styling) ---
+    // --- SOLUTION AND MANUAL ITEM DETECTION ---
+    const isSolutionItem = record.id.startsWith('solution-') || record.isSolution === true;
+    const isManualItem = record.id.startsWith('manual-add-') ||
+                         record.id.startsWith('manual-presentation-') ||
+                         record.isManual === true;
+    const needsConfidenceStyling = isAISourced || isSolutionItem || isManualItem;
+
+    // --- CONFIDENCE TIER (drives visual text styling) ---
     let confidenceClass = '';
-    if (isAISourced) {
-        const confidence = record._researchData?.confidence ??
-            record._aiConfidence ??
-            fields._aiConfidence ??
-            null;
+    if (needsConfidenceStyling) {
+        let confidence;
+        if (record._researchData?.confidence != null) {
+            confidence = record._researchData.confidence;
+        } else if (isAISourced) {
+            confidence = record._aiConfidence ?? fields._aiConfidence ?? null;
+        } else if (isSolutionItem && record.solutionData?.confidence) {
+            const solutionConfidenceMap = { high: 0.85, medium: 0.6, low: 0.35 };
+            confidence = solutionConfidenceMap[record.solutionData.confidence] ?? 0.6;
+        } else if (isManualItem) {
+            confidence = 0.5; // Manual items default to 50% (pen/approximated)
+        } else {
+            confidence = null;
+        }
 
         if (confidence === null || confidence === undefined) {
             confidenceClass = 'confidence-pencil';
