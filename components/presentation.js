@@ -2840,20 +2840,34 @@ async function renderCompactCard(item) {
         const endT = itemInfo.itemEndTime;
         const dur = itemInfo.itemDuration;
         const itemDate = itemInfo.itemDate;
+        const itemDateEnd = itemInfo.itemDateEnd;
         // Also check catalog duration as fallback
         const catalogDurHours = parseFloat(record.fields?.['Duration (hours)'] || 0);
         const catalogDurMin = Math.round(catalogDurHours * 60);
         const effectiveDur = dur || catalogDurMin;
+
+        // Format a date for display in tooltips
+        const fmtDate = (iso) => {
+            if (!iso) return '';
+            try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); } catch { return ''; }
+        };
+
+        // Build date context string for tooltip
+        let dateCtx = '';
+        if (itemDate) {
+            dateCtx = fmtDate(itemDate);
+            if (itemDateEnd) dateCtx += ' - ' + fmtDate(itemDateEnd);
+        }
 
         if (startT || endT || effectiveDur) {
             let timeText = '';
             let timeTooltip = '';
             if (startT && endT) {
                 timeText = `${startT} - ${endT}`;
-                timeTooltip = itemDate ? `${itemDate}: ${startT} - ${endT}` : `${startT} - ${endT}`;
+                timeTooltip = dateCtx ? `${dateCtx}: ${startT} - ${endT}` : `${startT} - ${endT}`;
             } else if (startT) {
                 timeText = startT;
-                timeTooltip = itemDate ? `${itemDate} at ${startT}` : `Starts ${startT}`;
+                timeTooltip = dateCtx ? `${dateCtx} at ${startT}` : `Starts ${startT}`;
             } else if (effectiveDur) {
                 const hrs = Math.floor(effectiveDur / 60);
                 const mins = effectiveDur % 60;

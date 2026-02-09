@@ -603,11 +603,17 @@
     box-sizing: border-box;
 }
 
-/* Time component styles - toolbar */
-.toolbar-group-time {
+/* Time component styles - unified date & time toolbar group */
+.toolbar-group-datetime {
     display: flex;
     flex-direction: column;
     gap: 5px;
+}
+.datetime-sub-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
 }
 .time-inputs-row {
     display: flex;
@@ -621,6 +627,23 @@
     gap: 2px;
 }
 .time-input-wrap input {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 0.85em;
+    width: 100%;
+    box-sizing: border-box;
+}
+.duration-inputs-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.duration-input-wrap {
+    flex: 1;
+    max-width: 140px;
+}
+.duration-input-wrap input {
     border: 1px solid #ced4da;
     border-radius: 4px;
     padding: 6px 8px;
@@ -669,9 +692,9 @@
     gap: 8px;
 }
 .time-duration-display {
-    font-size: 0.85em;
-    color: #495057;
-    font-weight: 500;
+    font-size: 0.8em;
+    color: #888;
+    font-style: italic;
 }
 
 /* Time component styles - detail modal */

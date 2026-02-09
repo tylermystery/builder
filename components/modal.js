@@ -5820,13 +5820,6 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             // Show time section
             modalTimeContainer.style.display = 'block';
 
-            // Show date field only for multi-day plans
-            const planDateEnd = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE_END);
-            const modalItemDateGroup = document.getElementById('modal-item-date-group');
-            if (modalItemDateGroup) {
-                modalItemDateGroup.style.display = planDateEnd ? '' : 'none';
-            }
-
             // Populate from saved item info
             const modalItemStartTimeInput = document.getElementById('modal-item-start-time');
             const modalItemEndTimeInput = document.getElementById('modal-item-end-time');
@@ -5836,20 +5829,57 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
             if (modalItemStartTimeInput) modalItemStartTimeInput.value = lockedInfo?.itemStartTime || '';
             if (modalItemEndTimeInput) modalItemEndTimeInput.value = lockedInfo?.itemEndTime || '';
-            if (modalItemDateInput) modalItemDateInput.value = lockedInfo?.itemDate || '';
 
-            // Duration: show catalog default vs override
+            // Duration: show catalog default vs override (now using text input for flexible format)
             const catalogDurationHours = parseFloat(record.fields?.['Duration (hours)'] || 0);
             const catalogDurationMin = Math.round(catalogDurationHours * 60);
+
+            /** Format minutes to readable duration string */
+            const fmtDur = (min) => {
+                if (!min || min <= 0) return '';
+                const h = Math.floor(min / 60);
+                const m = min % 60;
+                if (h > 0 && m > 0) return `${h}h ${m}m`;
+                if (h > 0) return `${h}h`;
+                return `${m}m`;
+            };
+
+            /** Parse flexible duration string to minutes */
+            const parseDur = (s) => {
+                if (!s) return null;
+                const str = s.trim().toLowerCase();
+                const hm = str.match(/^(\d+(?:\.\d+)?)\s*h\s*(?:(\d+)\s*m?)?$/);
+                if (hm) return Math.round(parseFloat(hm[1]) * 60 + parseInt(hm[2] || 0, 10));
+                const mOnly = str.match(/^(\d+)\s*(?:m|min|mins|minutes?)$/);
+                if (mOnly) return parseInt(mOnly[1], 10);
+                const plain = str.match(/^(\d+)$/);
+                if (plain) return parseInt(plain[1], 10);
+                return null;
+            };
+
+            /** Parse time string like "7:00 PM" or "14:30" */
+            const parseTime = (timeStr) => {
+                if (!timeStr) return null;
+                const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+                if (!match) return null;
+                let hours = parseInt(match[1], 10);
+                const minutes = parseInt(match[2], 10);
+                const meridiem = match[3] ? match[3].toUpperCase() : null;
+                if (meridiem === 'PM' && hours !== 12) hours += 12;
+                else if (meridiem === 'AM' && hours === 12) hours = 0;
+                if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+                return { hours, minutes };
+            };
+
             if (modalItemDurationInput) {
-                modalItemDurationInput.value = lockedInfo?.itemDuration || '';
-                modalItemDurationInput.placeholder = catalogDurationMin > 0 ? String(catalogDurationMin) : 'Auto';
+                modalItemDurationInput.value = lockedInfo?.itemDuration ? fmtDur(lockedInfo.itemDuration) : '';
+                modalItemDurationInput.placeholder = catalogDurationMin > 0 ? fmtDur(catalogDurationMin) : 'e.g. 2h 30m';
             }
             if (modalItemDurationSource) {
                 if (lockedInfo?.itemDuration) {
                     modalItemDurationSource.textContent = 'custom override';
                 } else if (catalogDurationMin > 0) {
-                    modalItemDurationSource.textContent = `catalog: ${catalogDurationMin}m`;
+                    modalItemDurationSource.textContent = `catalog: ${fmtDur(catalogDurationMin)}`;
                 } else {
                     modalItemDurationSource.textContent = '';
                 }
@@ -5869,30 +5899,118 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 if (typeof triggerSave === 'function') triggerSave();
             };
 
+            // Initialize date field with Flatpickr range mode (lazy-loaded)
+            let modalItemDatePicker = null;
+            if (modalItemDateInput) {
+                const initModalDatePicker = async () => {
+                    if (modalItemDatePicker) {
+                        modalItemDatePicker.open();
+                        return;
+                    }
+                    try {
+                        await loadFlatpickr();
+                        if (typeof window.flatpickr !== 'function') return;
+
+                        modalItemDatePicker = window.flatpickr(modalItemDateInput, {
+                            mode: "range",
+                            dateFormat: "M j, Y",
+                            onChange: (selectedDates) => {
+                                if (selectedDates.length === 2) {
+                                    selectedDates[1].setHours(23, 59, 59, 999);
+                                    saveTimeField('itemDate', selectedDates[0].toISOString());
+                                    saveTimeField('itemDateEnd', selectedDates[1].toISOString());
+                                } else if (selectedDates.length === 1) {
+                                    saveTimeField('itemDate', selectedDates[0].toISOString());
+                                    saveTimeField('itemDateEnd', null);
+                                } else {
+                                    saveTimeField('itemDate', null);
+                                    saveTimeField('itemDateEnd', null);
+                                }
+                            }
+                        });
+                        modalItemDateInput._flatpickr = modalItemDatePicker;
+
+                        // Restore saved dates
+                        if (lockedInfo?.itemDate) {
+                            const dates = [new Date(lockedInfo.itemDate)];
+                            if (lockedInfo.itemDateEnd) dates.push(new Date(lockedInfo.itemDateEnd));
+                            modalItemDatePicker.setDate(dates, false);
+                        }
+
+                        modalItemDatePicker.open();
+                    } catch (e) {
+                        console.error('Modal date picker init error:', e);
+                    }
+                };
+
+                modalItemDateInput.addEventListener('focus', initModalDatePicker);
+
+                // If there's already a saved date, show it in the input
+                if (lockedInfo?.itemDate) {
+                    const d = new Date(lockedInfo.itemDate);
+                    const fmt = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    if (lockedInfo.itemDateEnd) {
+                        const d2 = new Date(lockedInfo.itemDateEnd);
+                        const fmt2 = d2.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                        modalItemDateInput.value = `${fmt} to ${fmt2}`;
+                    } else {
+                        modalItemDateInput.value = fmt;
+                    }
+                }
+            }
+
             if (modalItemStartTimeInput) {
                 modalItemStartTimeInput.addEventListener('change', () => {
                     saveTimeField('itemStartTime', modalItemStartTimeInput.value.trim());
+                    updateModalDurationHint();
                 });
             }
             if (modalItemEndTimeInput) {
                 modalItemEndTimeInput.addEventListener('change', () => {
                     saveTimeField('itemEndTime', modalItemEndTimeInput.value.trim());
+                    updateModalDurationHint();
                 });
             }
             if (modalItemDurationInput) {
                 modalItemDurationInput.addEventListener('change', () => {
                     const val = modalItemDurationInput.value.trim();
-                    saveTimeField('itemDuration', val ? parseInt(val, 10) : null);
+                    const parsed = parseDur(val);
+                    saveTimeField('itemDuration', parsed || null);
                     if (modalItemDurationSource) {
-                        modalItemDurationSource.textContent = val ? 'custom override' : (catalogDurationMin > 0 ? `catalog: ${catalogDurationMin}m` : '');
+                        modalItemDurationSource.textContent = val ? 'custom override' : (catalogDurationMin > 0 ? `catalog: ${fmtDur(catalogDurationMin)}` : '');
+                    }
+                    // If we have start time but no end time, compute end from start + duration
+                    if (parsed && parsed > 0) {
+                        const startVal = modalItemStartTimeInput?.value?.trim();
+                        const startParsed = parseTime(startVal);
+                        const endVal = modalItemEndTimeInput?.value?.trim();
+                        if (startParsed && !endVal) {
+                            let endMin = (startParsed.hours * 60 + startParsed.minutes) + parsed;
+                            endMin = endMin % (24 * 60);
+                            const endH = Math.floor(endMin / 60);
+                            const endM = endMin % 60;
+                            const endFormatted = endH > 12 ? `${endH - 12}:${String(endM).padStart(2, '0')} PM` :
+                                                 endH === 12 ? `12:${String(endM).padStart(2, '0')} PM` :
+                                                 endH === 0 ? `12:${String(endM).padStart(2, '0')} AM` :
+                                                 `${endH}:${String(endM).padStart(2, '0')} AM`;
+                            if (modalItemEndTimeInput) modalItemEndTimeInput.value = endFormatted;
+                            saveTimeField('itemEndTime', endFormatted);
+                        }
                     }
                 });
             }
-            if (modalItemDateInput) {
-                modalItemDateInput.addEventListener('change', () => {
-                    saveTimeField('itemDate', modalItemDateInput.value.trim());
-                });
+
+            /** Show computed duration hint when both start and end time are set */
+            function updateModalDurationHint() {
+                const startParsed = parseTime(modalItemStartTimeInput?.value?.trim());
+                const endParsed = parseTime(modalItemEndTimeInput?.value?.trim());
+                if (startParsed && endParsed && modalItemDurationInput && !modalItemDurationInput.value.trim()) {
+                    let diffMin = (endParsed.hours * 60 + endParsed.minutes) - (startParsed.hours * 60 + startParsed.minutes);
+                    if (diffMin <= 0) diffMin += 24 * 60;
+                    modalItemDurationInput.placeholder = fmtDur(diffMin);
+                }
             }
+            updateModalDurationHint();
         }
     } else if (isPackage && packageContents) {
         // Package-specific UI: show headcount selector and package contents
