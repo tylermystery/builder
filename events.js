@@ -1731,13 +1731,15 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             updateProgress(-0.0001); // Removing event name regresses
         }
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
+        // Clear auto-generated flag when user manually edits the title
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.TITLE_AUTO_GENERATED, false);
 
         // Update the plan name in the recent chats list
         updateCurrentSessionName(e.target.value);
 
         triggerSave();
     });
-    
+
     safeAddEventListener('header-goals', 'change', (e) => {
         if (state.ui.isInitializing) return;
         const hadValue = state.eventDetails.combined.has(CONSTANTS.DETAIL_TYPES.GOALS);
@@ -1748,6 +1750,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             updateProgress(-0.0001); // Removing goals regresses
         }
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
+        // Clear auto-generated flag when user manually edits the description
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DESCRIPTION_AUTO_GENERATED, false);
         triggerSave();
         if (document.getElementById('sort-by').value === 'recommended') {
             applyFiltersAndSort(imageCache);

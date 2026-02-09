@@ -475,6 +475,7 @@ export async function loadSessionFromAirtable(sessionId) {
                 state.session.planItemOrder = savedState.planItemOrder || [];
                 state.session.archivedItems = new Set(savedState.archivedItems || []);
                 state.session.completedItems = new Set(savedState.completedItems || []);
+                state.session.goalItems = new Set(savedState.goalItems || []);
 
                 // Restore combined items: Object<targetId, { sources: Array, hybridData: Object }> -> Map<targetId, { sources: Set, hybridData: Object }>
                 if (savedState.combinedItems && typeof savedState.combinedItems === 'object') {
@@ -737,6 +738,7 @@ export async function saveSessionToAirtable() {
         planItemOrder: state.session.planItemOrder || [],
         archivedItems: Array.from(state.session.archivedItems || []),
         completedItems: Array.from(state.session.completedItems || []),
+        goalItems: Array.from(state.session.goalItems || []),
         // Combined items: Map<targetId, { sources: Set, hybridData: Object }> -> Object<targetId, { sources: Array, hybridData: Object }>
         combinedItems: state.session.combinedItems
             ? Object.fromEntries(
@@ -1591,7 +1593,9 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         const imageKeywords = record.fields?.[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
 
         if (websiteUrl) {
-            updateImageStatus(record.id, 'trying_website', `Checking ${new URL(websiteUrl).hostname}...`);
+            let websiteHostname = websiteUrl;
+            try { websiteHostname = new URL(websiteUrl).hostname; } catch (_e) { /* invalid URL, use raw string */ }
+            updateImageStatus(record.id, 'trying_website', `Checking ${websiteHostname}...`);
 
             console.log('[IMAGE DEBUG] AI Record - trying website scrape:', {
                 recordId: record.id,

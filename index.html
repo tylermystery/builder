@@ -3518,8 +3518,12 @@ select:focus-visible,
 
                 <!-- Center: Event Name with Event-Level Emoji -->
                 <div id="presentation-header-center">
-                    <span id="presentation-event-label" class="presentation-event-label">Viewing Plan</span>
-                    <span id="event-emoji-indicator" class="event-emoji-indicator"></span>
+                    <div class="presentation-header-title-row">
+                        <span id="presentation-event-label" class="presentation-event-label">Viewing Plan</span>
+                        <button id="plan-focus-regenerate-btn" class="plan-focus-regenerate-btn" title="Regenerate plan focus from goals" aria-label="Regenerate plan focus" style="display: none;">&#x21BB;</button>
+                        <span id="event-emoji-indicator" class="event-emoji-indicator"></span>
+                    </div>
+                    <div id="goal-chips-container" class="goal-chips-container"></div>
                 </div>
 
                 <!-- Right: Total Cost only (Add button moved to items, Share merged with people) -->
@@ -3566,6 +3570,25 @@ select:focus-visible,
 
             <!-- Scrollable Itinerary Container -->
             <div class="presentation-itinerary-scroll">
+
+                <!-- Plan Focus Suggestion Banner (hidden by default) -->
+                <div id="plan-focus-suggestion" class="plan-focus-suggestion" style="display: none;">
+                    <div class="plan-focus-suggestion-content">
+                        <div class="plan-focus-suggestion-header">
+                            <span class="plan-focus-suggestion-icon">&#x2728;</span>
+                            <span class="plan-focus-suggestion-label">Suggested Plan Focus</span>
+                            <button class="plan-focus-suggestion-dismiss" title="Dismiss suggestion" aria-label="Dismiss suggestion">&times;</button>
+                        </div>
+                        <div class="plan-focus-suggestion-body">
+                            <div class="plan-focus-suggestion-title"></div>
+                            <div class="plan-focus-suggestion-description"></div>
+                        </div>
+                        <div class="plan-focus-suggestion-actions">
+                            <button class="plan-focus-accept-btn">Apply</button>
+                            <button class="plan-focus-edit-btn">Edit &amp; Apply</button>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Event Header Section -->
                 <section class="itinerary-section itinerary-header itinerary-accordion" data-section="header">
@@ -3669,10 +3692,10 @@ select:focus-visible,
                     <span class="bucket-icon">🔒</span>
                     <span class="bucket-label">Lock</span>
                 </div>
-                <!-- Demote (from locked to idea in plan view) -->
-                <div id="drag-bucket-demote" class="drag-bucket drag-bucket-demote" data-bucket="demote">
-                    <span class="bucket-icon">↓</span>
-                    <span class="bucket-label">Demote</span>
+                <!-- Merge (combine with another item) -->
+                <div id="drag-bucket-merge" class="drag-bucket drag-bucket-merge" data-bucket="merge">
+                    <span class="bucket-icon">🔗</span>
+                    <span class="bucket-label">Merge</span>
                 </div>
                 <!-- Archive -->
                 <div id="drag-bucket-archive" class="drag-bucket drag-bucket-archive" data-bucket="archive">
@@ -3741,6 +3764,18 @@ select:focus-visible,
         <div id="drag-merge-indicator" class="drag-merge-indicator" style="display: none;">
             <span class="merge-icon">🔗</span>
             <span class="merge-label">Drop to Combine</span>
+        </div>
+
+        <!-- Merge Mode Overlay and Banner (shown when merge bucket is selected) -->
+        <div id="merge-mode-overlay" class="merge-mode-overlay" style="display: none;"></div>
+        <div id="merge-mode-banner" class="merge-mode-banner">
+            <div class="merge-mode-banner-text">
+                <span class="merge-mode-banner-icon">🔗</span>
+                <span>Merge</span>
+                <span id="merge-mode-source-name" class="merge-mode-banner-source"></span>
+                <span>with...</span>
+            </div>
+            <button id="merge-mode-cancel-btn" class="merge-mode-cancel-btn">Cancel</button>
         </div>
 
         <!-- Merge Options Dialog (shown after dropping item on another) -->
