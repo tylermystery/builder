@@ -626,13 +626,16 @@
     flex-direction: column;
     gap: 2px;
 }
-.time-input-wrap input {
+.time-input-wrap input,
+.time-input-wrap select {
     border: 1px solid #ced4da;
     border-radius: 4px;
     padding: 6px 8px;
     font-size: 0.85em;
     width: 100%;
     box-sizing: border-box;
+    background: #fff;
+    cursor: pointer;
 }
 .duration-inputs-row {
     display: flex;
@@ -643,13 +646,16 @@
     flex: 1;
     max-width: 140px;
 }
-.duration-input-wrap input {
+.duration-input-wrap input,
+.duration-input-wrap select {
     border: 1px solid #ced4da;
     border-radius: 4px;
     padding: 6px 8px;
     font-size: 0.85em;
     width: 100%;
     box-sizing: border-box;
+    background: #fff;
+    cursor: pointer;
 }
 .time-separator {
     color: #999;
@@ -729,21 +735,25 @@
     flex-direction: column;
     gap: 2px;
 }
-.modal-time-field-group input {
+.modal-time-field-group input,
+.modal-time-field-group select {
     border: 1px solid #ced4da;
     border-radius: 4px;
     padding: 6px 8px;
     font-size: 0.85em;
     width: 100%;
     box-sizing: border-box;
+    background: #fff;
+    cursor: pointer;
 }
 .modal-duration-group {
     flex-direction: row;
     align-items: center;
     gap: 8px;
 }
-.modal-duration-group input {
-    width: 80px;
+.modal-duration-group input,
+.modal-duration-group select {
+    width: 100px;
     flex: none;
 }
 .time-duration-source {

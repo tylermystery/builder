@@ -2361,23 +2361,14 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 itemInfo = { quantity, selectedOptionIndex, selections, note };
 
                 // Extract per-item time fields from modal (if populated)
-                const modalItemStartTime = document.getElementById('modal-item-start-time')?.value?.trim() || '';
-                const modalItemDurationRaw = document.getElementById('modal-item-duration')?.value?.trim() || '';
+                const modalItemStartTime = document.getElementById('modal-item-start-time')?.value || '';
+                const modalItemDurationRaw = document.getElementById('modal-item-duration')?.value || '';
                 const modalItemDateEl = document.getElementById('modal-item-date');
                 if (modalItemStartTime) itemInfo.itemStartTime = modalItemStartTime;
-                // Duration: parse flexible format (e.g. "2h 30m", "150m", "90")
+                // Duration: dropdown value is minutes as a number string
                 if (modalItemDurationRaw) {
-                    const durStr = modalItemDurationRaw.toLowerCase().trim();
-                    const hmMatch = durStr.match(/^(\d+(?:\.\d+)?)\s*h\s*(?:(\d+)\s*m?)?$/);
-                    const mMatch = durStr.match(/^(\d+)\s*(?:m|min|mins|minutes?)$/);
-                    const plainMatch = durStr.match(/^(\d+)$/);
-                    if (hmMatch) {
-                        itemInfo.itemDuration = Math.round(parseFloat(hmMatch[1]) * 60 + parseInt(hmMatch[2] || 0, 10));
-                    } else if (mMatch) {
-                        itemInfo.itemDuration = parseInt(mMatch[1], 10);
-                    } else if (plainMatch) {
-                        itemInfo.itemDuration = parseInt(plainMatch[1], 10);
-                    }
+                    const parsed = parseInt(modalItemDurationRaw, 10);
+                    if (parsed > 0) itemInfo.itemDuration = parsed;
                 }
                 // Compute end time from start time + duration
                 if (itemInfo.itemStartTime && itemInfo.itemDuration) {
@@ -2933,6 +2924,55 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     const durationDisplay = document.getElementById('event-duration-display');
 
     /**
+     * Populate a <select> with time options in 15-minute increments (12-hour format).
+     */
+    function populateTimeDropdown(selectEl) {
+        if (!selectEl) return;
+        // Keep the first "-- Select --" option
+        while (selectEl.options.length > 1) selectEl.remove(1);
+        for (let totalMin = 0; totalMin < 24 * 60; totalMin += 15) {
+            const h = Math.floor(totalMin / 60);
+            const m = totalMin % 60;
+            let label;
+            if (h === 0) label = `12:${String(m).padStart(2, '0')} AM`;
+            else if (h < 12) label = `${h}:${String(m).padStart(2, '0')} AM`;
+            else if (h === 12) label = `12:${String(m).padStart(2, '0')} PM`;
+            else label = `${h - 12}:${String(m).padStart(2, '0')} PM`;
+            const opt = document.createElement('option');
+            opt.value = label;
+            opt.textContent = label;
+            selectEl.appendChild(opt);
+        }
+    }
+
+    /**
+     * Populate a <select> with duration options (15m increments up to 12h).
+     */
+    function populateDurationDropdown(selectEl) {
+        if (!selectEl) return;
+        while (selectEl.options.length > 1) selectEl.remove(1);
+        const durations = [
+            15, 30, 45, 60, 90, 120, 150, 180, 210, 240, 300, 360, 420, 480, 540, 600, 660, 720
+        ];
+        durations.forEach(min => {
+            const hrs = Math.floor(min / 60);
+            const mins = min % 60;
+            let label;
+            if (hrs > 0 && mins > 0) label = `${hrs}h ${mins}m`;
+            else if (hrs > 0) label = `${hrs}h`;
+            else label = `${mins}m`;
+            const opt = document.createElement('option');
+            opt.value = String(min);
+            opt.textContent = label;
+            selectEl.appendChild(opt);
+        });
+    }
+
+    // Populate the plan-level dropdowns
+    populateTimeDropdown(startTimeInput);
+    populateDurationDropdown(durationInput);
+
+    /**
      * Parse a time string like "7:00 PM" or "14:30" to { hours, minutes }
      */
     function parseTimeString(timeStr) {
@@ -2946,28 +2986,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         else if (meridiem === 'AM' && hours === 12) hours = 0;
         if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
         return { hours, minutes };
-    }
-
-    /**
-     * Parse a duration string like "2h 30m", "2.5h", "150m", "90" (minutes) to minutes
-     */
-    function parseDurationString(durStr) {
-        if (!durStr) return null;
-        const s = durStr.trim().toLowerCase();
-        // "2h 30m" or "2h30m"
-        const hm = s.match(/^(\d+(?:\.\d+)?)\s*h\s*(?:(\d+)\s*m?)?$/);
-        if (hm) {
-            const hrs = parseFloat(hm[1]);
-            const mins = parseInt(hm[2] || 0, 10);
-            return Math.round(hrs * 60 + mins);
-        }
-        // "30m" or "30 min"
-        const mOnly = s.match(/^(\d+)\s*(?:m|min|mins|minutes?)$/);
-        if (mOnly) return parseInt(mOnly[1], 10);
-        // plain number treated as minutes
-        const plain = s.match(/^(\d+)$/);
-        if (plain) return parseInt(plain[1], 10);
-        return null;
     }
 
     /**
@@ -3041,10 +3059,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
         startTimeInput.addEventListener('change', () => {
             if (state.ui.isInitializing) return;
-            const val = startTimeInput.value.trim();
-            if (val && parseTimeString(val)) {
+            const val = startTimeInput.value;
+            if (val) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.START_TIME, val);
-            } else if (!val) {
+            } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.START_TIME);
             }
             computeAndStoreEndDateTime();
@@ -3055,15 +3073,14 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     if (durationInput) {
         // Restore saved duration value
         const savedDuration = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DURATION);
-        if (savedDuration) durationInput.value = formatDuration(savedDuration);
+        if (savedDuration) durationInput.value = String(savedDuration);
 
         durationInput.addEventListener('change', () => {
             if (state.ui.isInitializing) return;
-            const val = durationInput.value.trim();
-            const parsed = parseDurationString(val);
-            if (parsed && parsed > 0) {
-                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DURATION, parsed);
-            } else if (!val) {
+            const val = durationInput.value;
+            if (val) {
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DURATION, parseInt(val, 10));
+            } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DURATION);
             }
             computeAndStoreEndDateTime();

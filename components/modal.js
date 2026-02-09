@@ -5828,7 +5828,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
             if (modalItemStartTimeInput) modalItemStartTimeInput.value = lockedInfo?.itemStartTime || '';
 
-            // Duration: show catalog default vs override (now using text input for flexible format)
+            // Duration: show catalog default vs override (now using dropdown)
             const catalogDurationHours = parseFloat(record.fields?.['Duration (hours)'] || 0);
             const catalogDurationMin = Math.round(catalogDurationHours * 60);
 
@@ -5840,19 +5840,6 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 if (h > 0 && m > 0) return `${h}h ${m}m`;
                 if (h > 0) return `${h}h`;
                 return `${m}m`;
-            };
-
-            /** Parse flexible duration string to minutes */
-            const parseDur = (s) => {
-                if (!s) return null;
-                const str = s.trim().toLowerCase();
-                const hm = str.match(/^(\d+(?:\.\d+)?)\s*h\s*(?:(\d+)\s*m?)?$/);
-                if (hm) return Math.round(parseFloat(hm[1]) * 60 + parseInt(hm[2] || 0, 10));
-                const mOnly = str.match(/^(\d+)\s*(?:m|min|mins|minutes?)$/);
-                if (mOnly) return parseInt(mOnly[1], 10);
-                const plain = str.match(/^(\d+)$/);
-                if (plain) return parseInt(plain[1], 10);
-                return null;
             };
 
             /** Parse time string like "7:00 PM" or "14:30" */
@@ -5880,9 +5867,61 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 return `${h - 12}:${String(m).padStart(2, '0')} PM`;
             };
 
+            /** Populate a <select> with time options in 15-min increments */
+            const populateModalTimeDropdown = (selectEl) => {
+                if (!selectEl) return;
+                while (selectEl.options.length > 1) selectEl.remove(1);
+                for (let totalMin = 0; totalMin < 24 * 60; totalMin += 15) {
+                    const h = Math.floor(totalMin / 60);
+                    const m = totalMin % 60;
+                    let label;
+                    if (h === 0) label = `12:${String(m).padStart(2, '0')} AM`;
+                    else if (h < 12) label = `${h}:${String(m).padStart(2, '0')} AM`;
+                    else if (h === 12) label = `12:${String(m).padStart(2, '0')} PM`;
+                    else label = `${h - 12}:${String(m).padStart(2, '0')} PM`;
+                    const opt = document.createElement('option');
+                    opt.value = label;
+                    opt.textContent = label;
+                    selectEl.appendChild(opt);
+                }
+            };
+
+            /** Populate a <select> with duration options */
+            const populateModalDurationDropdown = (selectEl) => {
+                if (!selectEl) return;
+                while (selectEl.options.length > 1) selectEl.remove(1);
+                const durations = [
+                    15, 30, 45, 60, 90, 120, 150, 180, 210, 240, 300, 360, 420, 480, 540, 600, 660, 720
+                ];
+                durations.forEach(min => {
+                    const hrs = Math.floor(min / 60);
+                    const mins = min % 60;
+                    let label;
+                    if (hrs > 0 && mins > 0) label = `${hrs}h ${mins}m`;
+                    else if (hrs > 0) label = `${hrs}h`;
+                    else label = `${mins}m`;
+                    const opt = document.createElement('option');
+                    opt.value = String(min);
+                    opt.textContent = label;
+                    selectEl.appendChild(opt);
+                });
+            };
+
+            // Populate dropdowns
+            populateModalTimeDropdown(modalItemStartTimeInput);
+            populateModalDurationDropdown(modalItemDurationInput);
+
+            // Restore saved values
+            if (modalItemStartTimeInput && lockedInfo?.itemStartTime) {
+                modalItemStartTimeInput.value = lockedInfo.itemStartTime;
+            }
+
             if (modalItemDurationInput) {
-                modalItemDurationInput.value = lockedInfo?.itemDuration ? fmtDur(lockedInfo.itemDuration) : '';
-                modalItemDurationInput.placeholder = catalogDurationMin > 0 ? fmtDur(catalogDurationMin) : 'e.g. 2h 30m';
+                if (lockedInfo?.itemDuration) {
+                    modalItemDurationInput.value = String(lockedInfo.itemDuration);
+                } else {
+                    modalItemDurationInput.value = '';
+                }
             }
             if (modalItemDurationSource) {
                 if (lockedInfo?.itemDuration) {
@@ -5910,10 +5949,10 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
             /** Compute and store end time from start time + duration */
             const computeItemEndTime = () => {
-                const startVal = modalItemStartTimeInput?.value?.trim();
+                const startVal = modalItemStartTimeInput?.value;
                 const startParsed = parseTime(startVal);
-                const durVal = modalItemDurationInput?.value?.trim();
-                const durMin = parseDur(durVal) || (lockedInfo?.itemDuration) || catalogDurationMin;
+                const durVal = modalItemDurationInput?.value;
+                const durMin = (durVal ? parseInt(durVal, 10) : null) || (lockedInfo?.itemDuration) || catalogDurationMin;
 
                 if (startParsed && durMin && durMin > 0) {
                     const endTotalMin = (startParsed.hours * 60 + startParsed.minutes) + durMin;
@@ -5977,14 +6016,14 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
             if (modalItemStartTimeInput) {
                 modalItemStartTimeInput.addEventListener('change', () => {
-                    saveTimeField('itemStartTime', modalItemStartTimeInput.value.trim());
+                    saveTimeField('itemStartTime', modalItemStartTimeInput.value || null);
                     computeItemEndTime();
                 });
             }
             if (modalItemDurationInput) {
                 modalItemDurationInput.addEventListener('change', () => {
-                    const val = modalItemDurationInput.value.trim();
-                    const parsed = parseDur(val);
+                    const val = modalItemDurationInput.value;
+                    const parsed = val ? parseInt(val, 10) : null;
                     saveTimeField('itemDuration', parsed || null);
                     if (modalItemDurationSource) {
                         modalItemDurationSource.textContent = val ? 'custom override' : (catalogDurationMin > 0 ? `catalog: ${fmtDur(catalogDurationMin)}` : '');

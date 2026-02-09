@@ -3050,11 +3050,15 @@ select:focus-visible,
                         <div class="time-inputs-row">
                             <div class="time-input-wrap">
                                 <label for="event-start-time" class="time-sub-label">Start Time</label>
-                                <input type="text" id="event-start-time" placeholder="e.g. 7:00 PM" autocomplete="off">
+                                <select id="event-start-time">
+                                    <option value="">-- Select --</option>
+                                </select>
                             </div>
                             <div class="time-input-wrap duration-input-wrap">
                                 <label for="event-duration-input" class="time-sub-label">Duration</label>
-                                <input type="text" id="event-duration-input" placeholder="e.g. 2h 30m" autocomplete="off">
+                                <select id="event-duration-input">
+                                    <option value="">-- Select --</option>
+                                </select>
                             </div>
                         </div>
                         <span id="event-duration-display" class="time-duration-display"></span>
@@ -3299,11 +3303,15 @@ select:focus-visible,
                         <div class="modal-time-inputs-row">
                             <div class="modal-time-field-group">
                                 <label for="modal-item-start-time" class="time-sub-label">Start Time</label>
-                                <input type="text" id="modal-item-start-time" placeholder="e.g. 2:00 PM" autocomplete="off">
+                                <select id="modal-item-start-time">
+                                    <option value="">-- Select --</option>
+                                </select>
                             </div>
                             <div class="modal-time-field-group modal-duration-group">
                                 <label for="modal-item-duration" class="time-sub-label">Duration</label>
-                                <input type="text" id="modal-item-duration" placeholder="Auto" autocomplete="off">
+                                <select id="modal-item-duration">
+                                    <option value="">-- Select --</option>
+                                </select>
                                 <span id="modal-item-duration-source" class="time-duration-source"></span>
                             </div>
                         </div>
