@@ -2837,10 +2837,9 @@ async function renderCompactCard(item) {
     let timeBadgeHTML = '';
     if (itemInfo) {
         const startT = itemInfo.itemStartTime;
-        const endT = itemInfo.itemEndTime;
+        const endT = itemInfo.itemEndTime; // computed from start + duration
         const dur = itemInfo.itemDuration;
         const itemDate = itemInfo.itemDate;
-        const itemDateEnd = itemInfo.itemDateEnd;
         // Also check catalog duration as fallback
         const catalogDurHours = parseFloat(record.fields?.['Duration (hours)'] || 0);
         const catalogDurMin = Math.round(catalogDurHours * 60);
@@ -2856,10 +2855,9 @@ async function renderCompactCard(item) {
         let dateCtx = '';
         if (itemDate) {
             dateCtx = fmtDate(itemDate);
-            if (itemDateEnd) dateCtx += ' - ' + fmtDate(itemDateEnd);
         }
 
-        if (startT || endT || effectiveDur) {
+        if (startT || effectiveDur) {
             let timeText = '';
             let timeTooltip = '';
             if (startT && endT) {

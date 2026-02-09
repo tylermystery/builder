@@ -3045,26 +3045,19 @@ select:focus-visible,
                 </div>
                 <div class="toolbar-group toolbar-group-datetime">
                     <label for="event-date-picker">Event Date & Time</label>
-                    <input type="text" id="event-date-picker" placeholder="Select date or date range">
+                    <input type="text" id="event-date-picker" placeholder="Select date">
                     <div class="datetime-sub-fields">
                         <div class="time-inputs-row">
                             <div class="time-input-wrap">
                                 <label for="event-start-time" class="time-sub-label">Start Time</label>
                                 <input type="text" id="event-start-time" placeholder="e.g. 7:00 PM" autocomplete="off">
                             </div>
-                            <span class="time-separator">-</span>
-                            <div class="time-input-wrap">
-                                <label for="event-end-time" class="time-sub-label">End Time</label>
-                                <input type="text" id="event-end-time" placeholder="e.g. 11:00 PM" autocomplete="off">
-                            </div>
-                        </div>
-                        <div class="duration-inputs-row">
                             <div class="time-input-wrap duration-input-wrap">
                                 <label for="event-duration-input" class="time-sub-label">Duration</label>
                                 <input type="text" id="event-duration-input" placeholder="e.g. 2h 30m" autocomplete="off">
                             </div>
-                            <span id="event-duration-display" class="time-duration-display"></span>
                         </div>
+                        <span id="event-duration-display" class="time-duration-display"></span>
                     </div>
                 </div>
 
@@ -3300,24 +3293,19 @@ select:focus-visible,
                     <label class="modal-time-section-label">Item Scheduling</label>
                     <div class="modal-time-fields">
                         <div class="modal-time-field-group">
-                            <label for="modal-item-date" class="time-sub-label">Date</label>
-                            <input type="text" id="modal-item-date" placeholder="Select date or range" autocomplete="off">
+                            <label for="modal-item-date" class="time-sub-label">Start Date</label>
+                            <input type="text" id="modal-item-date" placeholder="Select date" autocomplete="off">
                         </div>
                         <div class="modal-time-inputs-row">
                             <div class="modal-time-field-group">
                                 <label for="modal-item-start-time" class="time-sub-label">Start Time</label>
                                 <input type="text" id="modal-item-start-time" placeholder="e.g. 2:00 PM" autocomplete="off">
                             </div>
-                            <span class="time-separator">-</span>
-                            <div class="modal-time-field-group">
-                                <label for="modal-item-end-time" class="time-sub-label">End Time</label>
-                                <input type="text" id="modal-item-end-time" placeholder="e.g. 4:00 PM" autocomplete="off">
+                            <div class="modal-time-field-group modal-duration-group">
+                                <label for="modal-item-duration" class="time-sub-label">Duration</label>
+                                <input type="text" id="modal-item-duration" placeholder="Auto" autocomplete="off">
+                                <span id="modal-item-duration-source" class="time-duration-source"></span>
                             </div>
-                        </div>
-                        <div class="modal-time-field-group modal-duration-group">
-                            <label for="modal-item-duration" class="time-sub-label">Duration</label>
-                            <input type="text" id="modal-item-duration" placeholder="Auto" autocomplete="off">
-                            <span id="modal-item-duration-source" class="time-duration-source"></span>
                         </div>
                     </div>
                 </div>

@@ -860,26 +860,16 @@ export async function updateEventPlanDateDisplay() {
         lockedItemsMap: state.cart.lockedItems
     });
 
-    // Build display value — show range if end date exists
+    // Build display value — show start date (end date is computed from duration)
     const fmtOpts = { month: 'short', day: 'numeric', year: 'numeric' };
     let displayValue = selectedDate.toLocaleDateString('en-US', fmtOpts);
-    if (selectedDateEndISO) {
-        const endDate = new Date(selectedDateEndISO);
-        if (!isNaN(endDate.getTime())) {
-            displayValue += ' to ' + endDate.toLocaleDateString('en-US', fmtOpts);
-        }
-    }
 
-    // Update flatpickr instance dates if it exists (to keep calendar in sync)
+    // Update flatpickr instance date if it exists (single date mode)
     if (dateInput._flatpickr) {
-        const dates = [selectedDate];
-        if (selectedDateEndISO) dates.push(new Date(selectedDateEndISO));
-        // Only set if the current selection doesn't match (avoid infinite loop)
         const currentDates = dateInput._flatpickr.selectedDates;
-        const currentISOs = currentDates.map(d => d.toISOString());
-        const targetISOs = dates.map(d => d.toISOString());
-        if (JSON.stringify(currentISOs) !== JSON.stringify(targetISOs)) {
-            dateInput._flatpickr.setDate(dates, false);
+        const currentISO = currentDates.length > 0 ? currentDates[0].toISOString() : null;
+        if (currentISO !== selectedDateISO) {
+            dateInput._flatpickr.setDate(selectedDate, false);
         }
     } else {
         dateInput.value = displayValue;

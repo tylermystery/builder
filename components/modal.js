@@ -5822,13 +5822,11 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
             // Populate from saved item info
             const modalItemStartTimeInput = document.getElementById('modal-item-start-time');
-            const modalItemEndTimeInput = document.getElementById('modal-item-end-time');
             const modalItemDurationInput = document.getElementById('modal-item-duration');
             const modalItemDateInput = document.getElementById('modal-item-date');
             const modalItemDurationSource = document.getElementById('modal-item-duration-source');
 
             if (modalItemStartTimeInput) modalItemStartTimeInput.value = lockedInfo?.itemStartTime || '';
-            if (modalItemEndTimeInput) modalItemEndTimeInput.value = lockedInfo?.itemEndTime || '';
 
             // Duration: show catalog default vs override (now using text input for flexible format)
             const catalogDurationHours = parseFloat(record.fields?.['Duration (hours)'] || 0);
@@ -5871,6 +5869,17 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 return { hours, minutes };
             };
 
+            /** Format minutes to a 12-hour time string */
+            const fmtTime = (totalMin) => {
+                totalMin = totalMin % (24 * 60);
+                const h = Math.floor(totalMin / 60);
+                const m = totalMin % 60;
+                if (h === 0) return `12:${String(m).padStart(2, '0')} AM`;
+                if (h < 12) return `${h}:${String(m).padStart(2, '0')} AM`;
+                if (h === 12) return `12:${String(m).padStart(2, '0')} PM`;
+                return `${h - 12}:${String(m).padStart(2, '0')} PM`;
+            };
+
             if (modalItemDurationInput) {
                 modalItemDurationInput.value = lockedInfo?.itemDuration ? fmtDur(lockedInfo.itemDuration) : '';
                 modalItemDurationInput.placeholder = catalogDurationMin > 0 ? fmtDur(catalogDurationMin) : 'e.g. 2h 30m';
@@ -5899,7 +5908,27 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 if (typeof triggerSave === 'function') triggerSave();
             };
 
-            // Initialize date field with Flatpickr range mode (lazy-loaded)
+            /** Compute and store end time from start time + duration */
+            const computeItemEndTime = () => {
+                const startVal = modalItemStartTimeInput?.value?.trim();
+                const startParsed = parseTime(startVal);
+                const durVal = modalItemDurationInput?.value?.trim();
+                const durMin = parseDur(durVal) || (lockedInfo?.itemDuration) || catalogDurationMin;
+
+                if (startParsed && durMin && durMin > 0) {
+                    const endTotalMin = (startParsed.hours * 60 + startParsed.minutes) + durMin;
+                    const endTimeStr = fmtTime(endTotalMin);
+                    saveTimeField('itemEndTime', endTimeStr);
+                    if (modalItemDurationSource) {
+                        const durLabel = durVal ? 'custom override' : (catalogDurationMin > 0 ? `catalog: ${fmtDur(catalogDurationMin)}` : '');
+                        modalItemDurationSource.textContent = durLabel ? `${durLabel} \u2022 ends ${endTimeStr}` : `ends ${endTimeStr}`;
+                    }
+                } else {
+                    saveTimeField('itemEndTime', null);
+                }
+            };
+
+            // Initialize date field with Flatpickr single mode (lazy-loaded)
             let modalItemDatePicker = null;
             if (modalItemDateInput) {
                 const initModalDatePicker = async () => {
@@ -5912,14 +5941,10 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                         if (typeof window.flatpickr !== 'function') return;
 
                         modalItemDatePicker = window.flatpickr(modalItemDateInput, {
-                            mode: "range",
+                            mode: "single",
                             dateFormat: "M j, Y",
                             onChange: (selectedDates) => {
-                                if (selectedDates.length === 2) {
-                                    selectedDates[1].setHours(23, 59, 59, 999);
-                                    saveTimeField('itemDate', selectedDates[0].toISOString());
-                                    saveTimeField('itemDateEnd', selectedDates[1].toISOString());
-                                } else if (selectedDates.length === 1) {
+                                if (selectedDates.length >= 1) {
                                     saveTimeField('itemDate', selectedDates[0].toISOString());
                                     saveTimeField('itemDateEnd', null);
                                 } else {
@@ -5930,11 +5955,9 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                         });
                         modalItemDateInput._flatpickr = modalItemDatePicker;
 
-                        // Restore saved dates
+                        // Restore saved date
                         if (lockedInfo?.itemDate) {
-                            const dates = [new Date(lockedInfo.itemDate)];
-                            if (lockedInfo.itemDateEnd) dates.push(new Date(lockedInfo.itemDateEnd));
-                            modalItemDatePicker.setDate(dates, false);
+                            modalItemDatePicker.setDate(new Date(lockedInfo.itemDate), false);
                         }
 
                         modalItemDatePicker.open();
@@ -5948,27 +5971,14 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 // If there's already a saved date, show it in the input
                 if (lockedInfo?.itemDate) {
                     const d = new Date(lockedInfo.itemDate);
-                    const fmt = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                    if (lockedInfo.itemDateEnd) {
-                        const d2 = new Date(lockedInfo.itemDateEnd);
-                        const fmt2 = d2.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                        modalItemDateInput.value = `${fmt} to ${fmt2}`;
-                    } else {
-                        modalItemDateInput.value = fmt;
-                    }
+                    modalItemDateInput.value = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                 }
             }
 
             if (modalItemStartTimeInput) {
                 modalItemStartTimeInput.addEventListener('change', () => {
                     saveTimeField('itemStartTime', modalItemStartTimeInput.value.trim());
-                    updateModalDurationHint();
-                });
-            }
-            if (modalItemEndTimeInput) {
-                modalItemEndTimeInput.addEventListener('change', () => {
-                    saveTimeField('itemEndTime', modalItemEndTimeInput.value.trim());
-                    updateModalDurationHint();
+                    computeItemEndTime();
                 });
             }
             if (modalItemDurationInput) {
@@ -5979,38 +5989,12 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                     if (modalItemDurationSource) {
                         modalItemDurationSource.textContent = val ? 'custom override' : (catalogDurationMin > 0 ? `catalog: ${fmtDur(catalogDurationMin)}` : '');
                     }
-                    // If we have start time but no end time, compute end from start + duration
-                    if (parsed && parsed > 0) {
-                        const startVal = modalItemStartTimeInput?.value?.trim();
-                        const startParsed = parseTime(startVal);
-                        const endVal = modalItemEndTimeInput?.value?.trim();
-                        if (startParsed && !endVal) {
-                            let endMin = (startParsed.hours * 60 + startParsed.minutes) + parsed;
-                            endMin = endMin % (24 * 60);
-                            const endH = Math.floor(endMin / 60);
-                            const endM = endMin % 60;
-                            const endFormatted = endH > 12 ? `${endH - 12}:${String(endM).padStart(2, '0')} PM` :
-                                                 endH === 12 ? `12:${String(endM).padStart(2, '0')} PM` :
-                                                 endH === 0 ? `12:${String(endM).padStart(2, '0')} AM` :
-                                                 `${endH}:${String(endM).padStart(2, '0')} AM`;
-                            if (modalItemEndTimeInput) modalItemEndTimeInput.value = endFormatted;
-                            saveTimeField('itemEndTime', endFormatted);
-                        }
-                    }
+                    computeItemEndTime();
                 });
             }
 
-            /** Show computed duration hint when both start and end time are set */
-            function updateModalDurationHint() {
-                const startParsed = parseTime(modalItemStartTimeInput?.value?.trim());
-                const endParsed = parseTime(modalItemEndTimeInput?.value?.trim());
-                if (startParsed && endParsed && modalItemDurationInput && !modalItemDurationInput.value.trim()) {
-                    let diffMin = (endParsed.hours * 60 + endParsed.minutes) - (startParsed.hours * 60 + startParsed.minutes);
-                    if (diffMin <= 0) diffMin += 24 * 60;
-                    modalItemDurationInput.placeholder = fmtDur(diffMin);
-                }
-            }
-            updateModalDurationHint();
+            // Initialize computed end time hint
+            computeItemEndTime();
         }
     } else if (isPackage && packageContents) {
         // Package-specific UI: show headcount selector and package contents
