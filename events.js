@@ -2360,6 +2360,16 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
                 itemInfo = { quantity, selectedOptionIndex, selections, note };
 
+                // Extract per-item time fields from modal (if populated)
+                const modalItemStartTime = document.getElementById('modal-item-start-time')?.value?.trim() || '';
+                const modalItemEndTime = document.getElementById('modal-item-end-time')?.value?.trim() || '';
+                const modalItemDuration = document.getElementById('modal-item-duration')?.value?.trim() || '';
+                const modalItemDate = document.getElementById('modal-item-date')?.value?.trim() || '';
+                if (modalItemStartTime) itemInfo.itemStartTime = modalItemStartTime;
+                if (modalItemEndTime) itemInfo.itemEndTime = modalItemEndTime;
+                if (modalItemDuration) itemInfo.itemDuration = parseInt(modalItemDuration, 10);
+                if (modalItemDate) itemInfo.itemDate = modalItemDate;
+
                 // Preserve any locally-generated options
                 // These are AI-generated options that were applied but not saved to catalog
                 const existingItemInfo = state.cart.items.get(recordId);
@@ -2863,7 +2873,137 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         
         eventDateInput.addEventListener('focus', initializeEventDatePicker);
     }
-    
+
+    // --- Multi-day toggle & end date picker ---
+    const multidayToggle = document.getElementById('event-multiday-toggle');
+    const dateEndGroup = document.getElementById('event-date-end-group');
+    const dateEndInput = document.getElementById('event-date-end-picker');
+    let eventDateEndPicker = null;
+
+    if (multidayToggle && dateEndGroup) {
+        // Restore toggle state from saved session
+        const savedDateEnd = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE_END);
+        if (savedDateEnd) {
+            multidayToggle.checked = true;
+            dateEndGroup.style.display = '';
+        }
+
+        multidayToggle.addEventListener('change', async () => {
+            if (state.ui.isInitializing) return;
+            if (multidayToggle.checked) {
+                dateEndGroup.style.display = '';
+                // Initialize end date picker on first show
+                if (dateEndInput && !eventDateEndPicker) {
+                    await loadFlatpickr();
+                    if (window.flatpickr) {
+                        eventDateEndPicker = window.flatpickr(dateEndInput, {
+                            dateFormat: "M j, Y",
+                            onChange: (selectedDates) => {
+                                if (state.ui.isInitializing) return;
+                                if (selectedDates.length > 0) {
+                                    state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE_END, selectedDates[0].toISOString());
+                                } else {
+                                    state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE_END);
+                                }
+                                triggerSave();
+                            }
+                        });
+                        // Restore saved end date
+                        if (savedDateEnd) {
+                            try { eventDateEndPicker.setDate(new Date(savedDateEnd), false); } catch (e) { /* ignore invalid */ }
+                        }
+                    }
+                }
+            } else {
+                dateEndGroup.style.display = 'none';
+                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE_END);
+                triggerSave();
+            }
+        });
+    }
+
+    // --- Plan-level start/end time inputs ---
+    const startTimeInput = document.getElementById('event-start-time');
+    const endTimeInput = document.getElementById('event-end-time');
+    const durationDisplay = document.getElementById('event-duration-display');
+
+    /**
+     * Parse a time string like "7:00 PM" or "14:30" to { hours, minutes }
+     */
+    function parseTimeString(timeStr) {
+        if (!timeStr) return null;
+        const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+        if (!match) return null;
+        let hours = parseInt(match[1], 10);
+        const minutes = parseInt(match[2], 10);
+        const meridiem = match[3] ? match[3].toUpperCase() : null;
+        if (meridiem === 'PM' && hours !== 12) hours += 12;
+        else if (meridiem === 'AM' && hours === 12) hours = 0;
+        if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+        return { hours, minutes };
+    }
+
+    /**
+     * Update the computed duration display from start + end time
+     */
+    function updateDurationDisplay() {
+        if (!durationDisplay) return;
+        const startStr = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.START_TIME);
+        const endStr = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.END_TIME);
+        const startParsed = parseTimeString(startStr);
+        const endParsed = parseTimeString(endStr);
+        if (startParsed && endParsed) {
+            let diffMin = (endParsed.hours * 60 + endParsed.minutes) - (startParsed.hours * 60 + startParsed.minutes);
+            if (diffMin <= 0) diffMin += 24 * 60; // handle crossing midnight
+            state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DURATION, diffMin);
+            const hrs = Math.floor(diffMin / 60);
+            const mins = diffMin % 60;
+            durationDisplay.textContent = hrs > 0 ? `${hrs}h${mins > 0 ? ` ${mins}m` : ''}` : `${mins}m`;
+        } else {
+            durationDisplay.textContent = '--';
+            state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DURATION);
+        }
+    }
+
+    if (startTimeInput) {
+        // Restore saved value
+        const savedStart = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.START_TIME);
+        if (savedStart) startTimeInput.value = savedStart;
+
+        startTimeInput.addEventListener('change', () => {
+            if (state.ui.isInitializing) return;
+            const val = startTimeInput.value.trim();
+            if (val && parseTimeString(val)) {
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.START_TIME, val);
+            } else if (!val) {
+                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.START_TIME);
+            }
+            updateDurationDisplay();
+            triggerSave();
+        });
+    }
+
+    if (endTimeInput) {
+        // Restore saved value
+        const savedEnd = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.END_TIME);
+        if (savedEnd) endTimeInput.value = savedEnd;
+
+        endTimeInput.addEventListener('change', () => {
+            if (state.ui.isInitializing) return;
+            const val = endTimeInput.value.trim();
+            if (val && parseTimeString(val)) {
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.END_TIME, val);
+            } else if (!val) {
+                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.END_TIME);
+            }
+            updateDurationDisplay();
+            triggerSave();
+        });
+    }
+
+    // Initialize duration display from any restored session values
+    updateDurationDisplay();
+
     safeAddEventListener('itinerary-btn', 'click', () => {
         log('Events', 'Itinerary button clicked, showing modal.');
         showItineraryModal();

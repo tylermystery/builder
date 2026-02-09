@@ -128,6 +128,10 @@ export const CONSTANTS = {
     DETAIL_TYPES: {
         EVENT_NAME: 'eventName',
         DATE: 'date',
+        DATE_END: 'dateEnd',
+        START_TIME: 'startTime',
+        END_TIME: 'endTime',
+        DURATION: 'duration',
         GUEST_COUNT: 'guestCount',
         GOALS: 'goals',
         SPECIAL_REQUESTS: 'specialRequests',

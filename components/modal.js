@@ -5810,6 +5810,90 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             minusBtn.addEventListener('click', handleMinus);
             minusBtn.addEventListener('touchend', handleTouchEnd, { passive: false });
         }
+
+        // --- Item-level time scheduling (shown for locked items or when adding to plan) ---
+        const modalTimeContainer = document.getElementById('modal-item-time-container');
+        if (modalTimeContainer) {
+            const isItemLocked = state.cart.lockedItems.has(record.id);
+            const lockedInfo = isItemLocked ? state.cart.lockedItems.get(record.id) : null;
+
+            // Show time section
+            modalTimeContainer.style.display = 'block';
+
+            // Show date field only for multi-day plans
+            const planDateEnd = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE_END);
+            const modalItemDateGroup = document.getElementById('modal-item-date-group');
+            if (modalItemDateGroup) {
+                modalItemDateGroup.style.display = planDateEnd ? '' : 'none';
+            }
+
+            // Populate from saved item info
+            const modalItemStartTimeInput = document.getElementById('modal-item-start-time');
+            const modalItemEndTimeInput = document.getElementById('modal-item-end-time');
+            const modalItemDurationInput = document.getElementById('modal-item-duration');
+            const modalItemDateInput = document.getElementById('modal-item-date');
+            const modalItemDurationSource = document.getElementById('modal-item-duration-source');
+
+            if (modalItemStartTimeInput) modalItemStartTimeInput.value = lockedInfo?.itemStartTime || '';
+            if (modalItemEndTimeInput) modalItemEndTimeInput.value = lockedInfo?.itemEndTime || '';
+            if (modalItemDateInput) modalItemDateInput.value = lockedInfo?.itemDate || '';
+
+            // Duration: show catalog default vs override
+            const catalogDurationHours = parseFloat(record.fields?.['Duration (hours)'] || 0);
+            const catalogDurationMin = Math.round(catalogDurationHours * 60);
+            if (modalItemDurationInput) {
+                modalItemDurationInput.value = lockedInfo?.itemDuration || '';
+                modalItemDurationInput.placeholder = catalogDurationMin > 0 ? String(catalogDurationMin) : 'Auto';
+            }
+            if (modalItemDurationSource) {
+                if (lockedInfo?.itemDuration) {
+                    modalItemDurationSource.textContent = 'custom override';
+                } else if (catalogDurationMin > 0) {
+                    modalItemDurationSource.textContent = `catalog: ${catalogDurationMin}m`;
+                } else {
+                    modalItemDurationSource.textContent = '';
+                }
+            }
+
+            // Live-update lockedItems on change (for items already in plan)
+            const saveTimeField = (field, value) => {
+                if (!isItemLocked) return; // Will be captured during "Add to Plan"
+                const info = state.cart.lockedItems.get(record.id);
+                if (!info) return;
+                if (value) {
+                    info[field] = value;
+                } else {
+                    delete info[field];
+                }
+                state.cart.lockedItems.set(record.id, info);
+                if (typeof triggerSave === 'function') triggerSave();
+            };
+
+            if (modalItemStartTimeInput) {
+                modalItemStartTimeInput.addEventListener('change', () => {
+                    saveTimeField('itemStartTime', modalItemStartTimeInput.value.trim());
+                });
+            }
+            if (modalItemEndTimeInput) {
+                modalItemEndTimeInput.addEventListener('change', () => {
+                    saveTimeField('itemEndTime', modalItemEndTimeInput.value.trim());
+                });
+            }
+            if (modalItemDurationInput) {
+                modalItemDurationInput.addEventListener('change', () => {
+                    const val = modalItemDurationInput.value.trim();
+                    saveTimeField('itemDuration', val ? parseInt(val, 10) : null);
+                    if (modalItemDurationSource) {
+                        modalItemDurationSource.textContent = val ? 'custom override' : (catalogDurationMin > 0 ? `catalog: ${catalogDurationMin}m` : '');
+                    }
+                });
+            }
+            if (modalItemDateInput) {
+                modalItemDateInput.addEventListener('change', () => {
+                    saveTimeField('itemDate', modalItemDateInput.value.trim());
+                });
+            }
+        }
     } else if (isPackage && packageContents) {
         // Package-specific UI: show headcount selector and package contents
         modalActionsContainer.style.display = 'block';

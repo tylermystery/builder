@@ -2833,6 +2833,39 @@ async function renderCompactCard(item) {
         ? `<span class="compact-badge-pill compact-badge-task ${taskConfigForBadge.className}" title="${taskConfigForBadge.label}"><span class="compact-badge-icon">${taskConfigForBadge.icon}</span><span class="compact-badge-label">${taskConfigForBadge.label}</span></span>`
         : '';
 
+    // --- Time badge (shows scheduled start time or duration) ---
+    let timeBadgeHTML = '';
+    if (itemInfo) {
+        const startT = itemInfo.itemStartTime;
+        const endT = itemInfo.itemEndTime;
+        const dur = itemInfo.itemDuration;
+        const itemDate = itemInfo.itemDate;
+        // Also check catalog duration as fallback
+        const catalogDurHours = parseFloat(record.fields?.['Duration (hours)'] || 0);
+        const catalogDurMin = Math.round(catalogDurHours * 60);
+        const effectiveDur = dur || catalogDurMin;
+
+        if (startT || endT || effectiveDur) {
+            let timeText = '';
+            let timeTooltip = '';
+            if (startT && endT) {
+                timeText = `${startT} - ${endT}`;
+                timeTooltip = itemDate ? `${itemDate}: ${startT} - ${endT}` : `${startT} - ${endT}`;
+            } else if (startT) {
+                timeText = startT;
+                timeTooltip = itemDate ? `${itemDate} at ${startT}` : `Starts ${startT}`;
+            } else if (effectiveDur) {
+                const hrs = Math.floor(effectiveDur / 60);
+                const mins = effectiveDur % 60;
+                timeText = hrs > 0 ? `${hrs}h${mins > 0 ? `${mins}m` : ''}` : `${mins}m`;
+                timeTooltip = `Duration: ${timeText}${dur ? ' (custom)' : ''}`;
+            }
+            if (timeText) {
+                timeBadgeHTML = `<span class="compact-badge-pill compact-badge-time" title="${escapeHtml(timeTooltip)}"><span class="compact-badge-icon">🕐</span><span class="compact-badge-label">${escapeHtml(timeText)}</span></span>`;
+            }
+        }
+    }
+
     // --- Photo section or fallback ---
     const photoStyle = optimizedPhoto ? `background-image: url('${optimizedPhoto}')` : '';
     const noPhotoClass = !optimizedPhoto ? 'compact-card-no-photo' : '';
@@ -2855,6 +2888,7 @@ async function renderCompactCard(item) {
                 <div class="compact-card-meta">
                     ${reactionBarHTML}
                     <span class="compact-card-badges">
+                        ${timeBadgeHTML}
                         ${taskBadgeHTML}
                         ${commentBadgeHTML}
                     </span>

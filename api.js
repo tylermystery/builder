@@ -457,7 +457,11 @@ export async function loadSessionFromAirtable(sessionId) {
                     'goals': CONSTANTS.DETAIL_TYPES.GOALS,
                     'date': CONSTANTS.DETAIL_TYPES.DATE,
                     'guestCount': CONSTANTS.DETAIL_TYPES.GUEST_COUNT,
-                    'specialRequests': CONSTANTS.DETAIL_TYPES.SPECIAL_REQUESTS
+                    'specialRequests': CONSTANTS.DETAIL_TYPES.SPECIAL_REQUESTS,
+                    'dateEnd': CONSTANTS.DETAIL_TYPES.DATE_END,
+                    'startTime': CONSTANTS.DETAIL_TYPES.START_TIME,
+                    'endTime': CONSTANTS.DETAIL_TYPES.END_TIME,
+                    'duration': CONSTANTS.DETAIL_TYPES.DURATION
                 };
 
                 for (const [key, value] of Object.entries(rawEventDetails)) {

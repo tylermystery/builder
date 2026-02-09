@@ -144,20 +144,51 @@ export function getAvailableSlotsForDay(day, busyTimes) {
         'No available slots';
 }
 
-export async function getCombinedPlanStatus(date, lockedItems) {
+/**
+ * Check combined availability for all locked items in a plan.
+ * Supports per-item date overrides: if an item has an itemDate, only that date is checked.
+ * For items without an itemDate in a multi-day plan, all dates in the range are checked.
+ * @param {Date} date - The plan start date
+ * @param {Array} lockedItems - Array of record objects
+ * @param {Object} [options] - Optional: { dateEnd: Date, lockedItemsMap: Map }
+ * @returns {Promise<string>} Availability status
+ */
+export async function getCombinedPlanStatus(date, lockedItems, options = {}) {
+    const { dateEnd, lockedItemsMap } = options;
     let overallStatus = AVAILABILITY_STATUS.FULL;
+
     for (const record of lockedItems) {
         if (record && record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]) {
             const busyTimes = await api.fetchCalendarForRecord(record);
-            const status = getDayStatus(date, busyTimes, record).status;
 
-            if (status === AVAILABILITY_STATUS.NONE) {
-                return AVAILABILITY_STATUS.NONE;
-                // If any item is unavailable, the whole plan is unavailable
-            }
-            if (status === AVAILABILITY_STATUS.PARTIAL) {
-                overallStatus = AVAILABILITY_STATUS.PARTIAL;
-                // If at least one is partial, the plan is partial
+            // Check if this item has a specific date assignment
+            const itemInfo = lockedItemsMap?.get(record.id);
+            const itemDate = itemInfo?.itemDate;
+
+            if (itemDate) {
+                // Decision 5B: Check only the item's assigned date
+                const assignedDate = new Date(itemDate);
+                const status = getDayStatus(assignedDate, busyTimes, record).status;
+                if (status === AVAILABILITY_STATUS.NONE) return AVAILABILITY_STATUS.NONE;
+                if (status === AVAILABILITY_STATUS.PARTIAL) overallStatus = AVAILABILITY_STATUS.PARTIAL;
+            } else if (dateEnd) {
+                // Decision 5A fallback: Unscheduled item in multi-day plan, check all dates
+                const start = new Date(date);
+                const end = new Date(dateEnd);
+                let anyAvailable = false;
+                let allAvailable = true;
+                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                    const dayStatus = getDayStatus(new Date(d), busyTimes, record).status;
+                    if (dayStatus !== AVAILABILITY_STATUS.NONE) anyAvailable = true;
+                    if (dayStatus !== AVAILABILITY_STATUS.FULL) allAvailable = false;
+                }
+                if (!anyAvailable) return AVAILABILITY_STATUS.NONE;
+                if (!allAvailable) overallStatus = AVAILABILITY_STATUS.PARTIAL;
+            } else {
+                // Single-date plan, check the plan date
+                const status = getDayStatus(date, busyTimes, record).status;
+                if (status === AVAILABILITY_STATUS.NONE) return AVAILABILITY_STATUS.NONE;
+                if (status === AVAILABILITY_STATUS.PARTIAL) overallStatus = AVAILABILITY_STATUS.PARTIAL;
             }
         }
     }

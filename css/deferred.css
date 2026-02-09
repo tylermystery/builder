@@ -602,6 +602,132 @@
     width: 100%;
     box-sizing: border-box;
 }
+
+/* Time component styles - toolbar */
+.toolbar-group-time {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.time-inputs-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+}
+.time-input-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.time-input-wrap input {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 0.85em;
+    width: 100%;
+    box-sizing: border-box;
+}
+.time-separator {
+    color: #999;
+    font-size: 1em;
+    padding-bottom: 6px;
+}
+.time-sub-label {
+    font-size: 0.65em;
+    color: #999;
+    text-transform: uppercase;
+    font-weight: 500;
+}
+.time-sub-field input {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 0.85em;
+    width: 100%;
+    box-sizing: border-box;
+}
+.time-toggle-row {
+    display: flex;
+    align-items: center;
+}
+.time-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8em;
+    color: #666;
+    cursor: pointer;
+}
+.time-toggle-label input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+}
+.time-duration-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.time-duration-display {
+    font-size: 0.85em;
+    color: #495057;
+    font-weight: 500;
+}
+
+/* Time component styles - detail modal */
+.modal-time-section {
+    margin: 12px 0;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+.modal-time-section-label {
+    display: block;
+    font-size: 0.75em;
+    color: #666;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+.modal-time-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.modal-time-inputs-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+}
+.modal-time-field-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.modal-time-field-group input {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 0.85em;
+    width: 100%;
+    box-sizing: border-box;
+}
+.modal-duration-group {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+.modal-duration-group input {
+    width: 80px;
+    flex: none;
+}
+.time-duration-source {
+    font-size: 0.75em;
+    color: #999;
+    font-style: italic;
+}
 #cart-items-container {
     flex-grow: 1;
     min-height: 80px; /* Reserve space for locked items - prevents layout shift */
@@ -14143,6 +14269,16 @@ hr.total-divider {
 
 .compact-card:hover .compact-badge-task {
     opacity: 1;
+}
+
+/* Time badge */
+.compact-badge-time {
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.18);
+    color: rgba(196, 167, 252, 0.9);
+}
+.compact-card:hover .compact-badge-time {
+    background: rgba(139, 92, 246, 0.22);
 }
 
 /* Lifecycle state styling */
