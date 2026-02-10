@@ -1477,14 +1477,17 @@ function enableItemEditMode(record, nameEl, descEl) {
             console.log('[AI IMAGE DEBUG] photosContainerEl._pendingPhotos:', photosContainerEl?._pendingPhotos?.length || 0);
 
             if (allPhotos.length === 0) {
-                console.log('[AI IMAGE DEBUG] No photos detected - checking if manual item');
-                // Check if this is a manual item that could benefit from AI image
+                console.log('[AI IMAGE DEBUG] No photos detected - checking if manual or solution item');
+                // Check if this is a manual or solution item that could benefit from AI image
                 const isManualItem = record.isManual === true ||
                                      record.id?.startsWith('manual-add-') ||
                                      record.id?.startsWith('manual-presentation-') ||
                                      record.id?.startsWith('ai-search-') ||
                                      record.id?.startsWith('ai-child-') ||
                                      record.id?.startsWith('ai-presentation-');
+                const isSolutionItem = record.isSolution === true ||
+                                       record.id?.startsWith('solution-');
+                const isAIImageEligible = isManualItem || isSolutionItem;
 
                 console.log('[AI IMAGE DEBUG] isManualItem check:', {
                     'record.isManual': record.isManual,
@@ -1493,11 +1496,15 @@ function enableItemEditMode(record, nameEl, descEl) {
                     'starts with ai-search-': record.id?.startsWith('ai-search-'),
                     'starts with ai-child-': record.id?.startsWith('ai-child-'),
                     'starts with ai-presentation-': record.id?.startsWith('ai-presentation-'),
-                    'final isManualItem': isManualItem
+                    'record.isSolution': record.isSolution,
+                    'starts with solution-': record.id?.startsWith('solution-'),
+                    'final isManualItem': isManualItem,
+                    'final isSolutionItem': isSolutionItem,
+                    'final isAIImageEligible': isAIImageEligible
                 });
 
-                if (isManualItem) {
-                    log('Modal', `No photos provided for manual item "${newName}" - generating AI image approximation...`);
+                if (isAIImageEligible) {
+                    log('Modal', `No photos provided for ${isSolutionItem ? 'solution' : 'manual'} item "${newName}" - generating AI image approximation...`);
                     console.log('[AI IMAGE DEBUG] TRIGGERING AI image generation for:', newName);
                     saveBtn.textContent = 'Generating AI image...';
 
@@ -1553,7 +1560,7 @@ function enableItemEditMode(record, nameEl, descEl) {
 
                     saveBtn.textContent = 'Saving...';
                 } else {
-                    console.log('[AI IMAGE DEBUG] NOT a manual item - skipping AI image generation');
+                    console.log('[AI IMAGE DEBUG] NOT a manual or solution item - skipping AI image generation');
                 }
             } else {
                 console.log('[AI IMAGE DEBUG] Photos already exist - skipping initial AI image generation');
@@ -1667,6 +1674,20 @@ function enableItemEditMode(record, nameEl, descEl) {
                 }
             }
 
+            // Also update the solution records registry if this is a solution item
+            if (window._solutionRecords && window._solutionRecords.has(record.id)) {
+                const solutionRec = window._solutionRecords.get(record.id);
+                solutionRec.fields.Name = newName;
+                solutionRec.fields.Description = newDesc;
+                solutionRec.fields.Price = newPrice;
+                if (allPhotos.length > 0) {
+                    solutionRec.fields._customImages = allPhotos;
+                    if (aiGeneratedImage) {
+                        solutionRec.fields._hasAIGeneratedImage = true;
+                    }
+                }
+            }
+
             // Also update the record reference passed to the modal
             record.fields.Name = newName;
             record.fields.Description = newDesc;
@@ -1675,6 +1696,29 @@ function enableItemEditMode(record, nameEl, descEl) {
                 record.fields._customImages = allPhotos;
                 if (aiGeneratedImage) {
                     record.fields._hasAIGeneratedImage = true;
+                }
+            }
+
+            // Update solutionData on the record if this is a solution item
+            if (record.isSolution && record.solutionData) {
+                record.solutionData.name = newName;
+                record.solutionData.description = newDesc;
+                if (newPrice > 0) {
+                    record.solutionData.estimatedPrice = `$${newPrice.toFixed(2)}`;
+                }
+                // Also update the parent concept's _generatedSolutions array if available
+                if (record.parentConceptRecord && record.parentConceptRecord._generatedSolutions) {
+                    const solutionIndex = record.parentConceptRecord._generatedSolutions.findIndex(
+                        s => s.name === originalName || s.id === record.solutionData.id
+                    );
+                    if (solutionIndex !== -1) {
+                        record.parentConceptRecord._generatedSolutions[solutionIndex].name = newName;
+                        record.parentConceptRecord._generatedSolutions[solutionIndex].description = newDesc;
+                        if (newPrice > 0) {
+                            record.parentConceptRecord._generatedSolutions[solutionIndex].estimatedPrice = `$${newPrice.toFixed(2)}`;
+                        }
+                        log('Modal', `Updated parent concept's solution data at index ${solutionIndex}`);
+                    }
                 }
             }
 
@@ -4752,13 +4796,15 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         log('Modal', `Showing Categorize button for item: ${record.id}`);
     }
 
-    // Add Edit Item button for manual/custom items and AI discovery items
+    // Add Edit Item button for manual/custom items, AI discovery items, and AI-generated solutions
     const isEditableItem = record.isManual === true ||
                          record.id?.startsWith('manual-add-') ||
                          record.id?.startsWith('manual-presentation-') ||
                          record.id?.startsWith('ai-search-') ||
                          record.id?.startsWith('ai-child-') ||
-                         record.id?.startsWith('ai-presentation-');
+                         record.id?.startsWith('ai-presentation-') ||
+                         record.isSolution === true ||
+                         record.id?.startsWith('solution-');
 
     if (isEditableItem) {
         const editItemBtn = document.createElement('button');
