@@ -2,7 +2,7 @@
 // Forum Panel - Expanded view for threaded discussions, comments, and plan history
 // Slides in from the right side, parallel to the presentation view
 
-import { state } from '../state.js';
+import { state, getRecordById } from '../state.js';
 import { log } from '../utils/debug.js';
 import * as api from '../api.js';
 
@@ -54,6 +54,7 @@ const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 
 // Local state
 let currentFilter = FORUM_FILTER_TYPES.ALL;
+let currentItemFilter = null; // When set, filters comments to a specific item recordId
 let forumMessages = [];
 let forumPlanEvents = [];
 let isLoading = false;
@@ -454,6 +455,20 @@ export function initializeForumPanel() {
     // Initialize forum message form
     initializeForumMessageForm();
 
+    // Item filter clear button
+    const itemFilterClearBtn = document.getElementById('forum-item-filter-clear');
+    if (itemFilterClearBtn) {
+        itemFilterClearBtn.addEventListener('click', () => {
+            currentItemFilter = null;
+            const indicator = document.getElementById('forum-item-filter-indicator');
+            if (indicator) indicator.style.display = 'none';
+            // Pre-select "All" in component selector
+            const componentSelect = document.getElementById('forum-component-select');
+            if (componentSelect) componentSelect.value = '';
+            renderForumContent();
+        });
+    }
+
     log('ForumPanel', 'Forum Panel initialized.');
 }
 
@@ -462,7 +477,7 @@ export function initializeForumPanel() {
  * @param {Object} options - Options for showing the panel
  */
 export async function showForumPanel(options = {}) {
-    const { skipPushState = false, filter = null } = options;
+    const { skipPushState = false, filter = null, componentId = null } = options;
     const panel = document.getElementById('forum-panel');
     const overlay = document.getElementById('forum-panel-overlay');
 
@@ -506,6 +521,22 @@ export async function showForumPanel(options = {}) {
         filterBtns.forEach(btn => {
             btn.classList.toggle('active', btn.dataset.filter === filter);
         });
+    }
+
+    // Set item-specific filter (shows only comments for a specific item)
+    currentItemFilter = componentId || null;
+    // Show/hide the item filter indicator
+    const itemFilterIndicator = document.getElementById('forum-item-filter-indicator');
+    if (itemFilterIndicator) {
+        if (currentItemFilter) {
+            // Try to get item name from state
+            const record = getRecordById(currentItemFilter);
+            const itemName = record?.fields?.Name || 'this item';
+            itemFilterIndicator.querySelector('.item-filter-text').textContent = `Showing discussion for: ${itemName}`;
+            itemFilterIndicator.style.display = 'flex';
+        } else {
+            itemFilterIndicator.style.display = 'none';
+        }
     }
 
     // Load forum data
@@ -558,6 +589,11 @@ export function hideForumPanel(options = {}) {
         window.history.pushState({}, '', currentUrl.toString());
         log('ForumPanel', 'Removed forumPanel from history');
     }
+
+    // Clear item-specific filter
+    currentItemFilter = null;
+    const itemFilterIndicator = document.getElementById('forum-item-filter-indicator');
+    if (itemFilterIndicator) itemFilterIndicator.style.display = 'none';
 
     log('ForumPanel', 'Forum Panel closed.');
 }
@@ -822,8 +858,18 @@ function renderForumContent() {
             break;
     }
 
+    // Apply item-specific filter if active
+    if (currentItemFilter) {
+        itemsToRender = itemsToRender.filter(item => {
+            if (item.itemType === 'message') {
+                return item.componentId === currentItemFilter;
+            }
+            return false; // Hide events when filtering by item
+        });
+    }
+
     if (itemsToRender.length === 0) {
-        showEmptyState(getEmptyMessage());
+        showEmptyState(currentItemFilter ? 'No comments yet for this item. Start the discussion!' : getEmptyMessage());
         return;
     }
 
@@ -1205,9 +1251,10 @@ async function handleForumMessageSubmit(e) {
                 await refreshForumData();
             }
         } else {
-            // Post as a new message
-            log('ForumPanel', 'Posting new forum message');
-            const messageId = await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
+            // Post as a new message - use item filter as component link if active
+            const itemId = currentItemFilter || null;
+            log('ForumPanel', `Posting new forum message${itemId ? ` linked to item ${itemId}` : ''}`);
+            const messageId = await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message, itemId);
 
             if (messageId) {
                 log('ForumPanel', `Message posted with ID: ${messageId}`);

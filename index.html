@@ -2829,6 +2829,10 @@ select:focus-visible,
             <button class="forum-filter-btn" data-filter="comments">Comments</button>
             <button class="forum-filter-btn" data-filter="history">History</button>
         </div>
+        <div id="forum-item-filter-indicator" class="forum-item-filter-indicator" style="display: none;">
+            <span class="item-filter-text"></span>
+            <button class="item-filter-clear-btn" id="forum-item-filter-clear" title="Show all discussions">&times; Show All</button>
+        </div>
         <div id="forum-content-container" class="forum-content-container">
             <div class="forum-loading">Loading discussions...</div>
         </div>
@@ -3209,6 +3213,22 @@ select:focus-visible,
     </div>
 
     <div id="detail-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-item-name">
+        <!-- Reactions bar floating above the modal -->
+        <div id="modal-reactions-section" class="modal-reactions-section" style="display: none;">
+            <div class="modal-reactions-quick-bar" id="modal-reactions-quick-bar">
+                <!-- Quick reaction buttons populated by JS -->
+            </div>
+            <span class="modal-reactions-score-badge" id="modal-reactions-score-badge" title="Overall ranking impact from all reactions"></span>
+            <button class="modal-reactions-expand-btn" id="modal-reactions-expand-btn" title="Browse all emojis">
+                <span class="expand-btn-icon">+</span> More
+            </button>
+            <div class="modal-reactions-picker" id="modal-reactions-picker" style="display: none;">
+                <!-- Tiered emoji picker populated by JS - scrollable -->
+            </div>
+            <div class="modal-reactions-summary" id="modal-reactions-summary">
+                <!-- Who reacted summary -->
+            </div>
+        </div>
         <div class="modal-content">
             <button id="modal-close-btn" class="modal-close-btn" title="Close" aria-label="Close item details modal">×</button>
             <div class="modal-main-column">
@@ -3320,46 +3340,13 @@ select:focus-visible,
 
                 <div id="modal-calendar-container" style="margin-bottom: 20px;"></div>
 
-                <!-- Emoji Reactions & Comments Section (populated by modal.js when in plan context) -->
-                <div id="modal-reactions-section" class="modal-reactions-section" style="display: none;">
-                    <div class="modal-reactions-header">
-                        <h4 class="modal-reactions-title">React</h4>
-                        <span class="modal-reactions-score-badge" id="modal-reactions-score-badge" title="Overall ranking impact from all reactions"></span>
-                    </div>
-                    <div class="modal-reactions-quick-bar" id="modal-reactions-quick-bar">
-                        <!-- Quick reaction buttons populated by JS -->
-                    </div>
-                    <button class="modal-reactions-expand-btn" id="modal-reactions-expand-btn" title="Browse all emojis">
-                        <span class="expand-btn-icon">+</span> More Reactions
-                    </button>
-                    <div class="modal-reactions-picker" id="modal-reactions-picker" style="display: none;">
-                        <!-- Tiered emoji picker populated by JS - scrollable -->
-                    </div>
-                    <div class="modal-reactions-summary" id="modal-reactions-summary">
-                        <!-- Who reacted summary -->
-                    </div>
-                </div>
-
+                <!-- Discussion button - opens forum panel filtered to this item's comments -->
                 <div id="modal-comments-section" class="modal-comments-section" style="display: none;">
-                    <div class="modal-comments-header">
-                        <h4 class="modal-comments-title">Comments</h4>
+                    <button id="modal-open-discussion-btn" class="modal-open-discussion-btn" type="button">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                        <span class="discussion-btn-label">Discussion</span>
                         <span class="modal-comments-count" id="modal-comments-count"></span>
-                    </div>
-                    <div class="modal-comments-list" id="modal-comments-list">
-                        <!-- Comments rendered by JS -->
-                    </div>
-                    <div class="modal-comments-input-area" id="modal-comments-input-area">
-                        <div class="modal-comment-reply-indicator" id="modal-comment-reply-indicator" style="display: none;">
-                            <span class="reply-indicator-text"></span>
-                            <button class="reply-cancel-btn" id="modal-comment-reply-cancel">&times;</button>
-                        </div>
-                        <form class="modal-comment-form" id="modal-comment-form">
-                            <input type="text" id="modal-comment-input" class="modal-comment-input" placeholder="Add a comment..." autocomplete="off">
-                            <button type="submit" class="modal-comment-send-btn" id="modal-comment-send-btn" disabled>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                            </button>
-                        </form>
-                    </div>
+                    </button>
                 </div>
 
                 <div id="modal-notes-container">

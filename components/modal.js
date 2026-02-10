@@ -12,6 +12,7 @@ import { log } from '../utils/debug.js';
 import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { triggerSave } from '../events.js';
+import { showForumPanel } from './forumPanel.js';
 
 console.log('[MODULE DEBUG] modal.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -1106,7 +1107,7 @@ function initModalReactions(recordId) {
         return;
     }
 
-    section.style.display = '';
+    section.style.display = 'flex';
 
     const quickBar = document.getElementById('modal-reactions-quick-bar');
     const expandBtn = document.getElementById('modal-reactions-expand-btn');
@@ -1333,14 +1334,14 @@ function renderModalReactionsSummary(recordId, summaryEl, scoreBadgeEl) {
 
 /**
  * Initialize the comments section in the detail modal.
- * Loads existing comments for the item and renders the input form.
+ * Shows a Discussion button that opens the forum panel filtered to this item.
  * @param {string} recordId - The item record ID
  */
 async function initModalComments(recordId) {
     const section = document.getElementById('modal-comments-section');
     if (!section) return;
 
-    // Only show comments if we have a session (plan context)
+    // Only show discussion button if we have a session (plan context)
     const hasSession = state.session.id && state.session.id.startsWith('rec');
     const isPresentationActive = document.body.classList.contains('presentation-active');
 
@@ -1351,268 +1352,51 @@ async function initModalComments(recordId) {
 
     section.style.display = '';
 
-    const commentsList = document.getElementById('modal-comments-list');
+    const discussionBtn = document.getElementById('modal-open-discussion-btn');
     const countEl = document.getElementById('modal-comments-count');
-    const form = document.getElementById('modal-comment-form');
-    const input = document.getElementById('modal-comment-input');
-    const sendBtn = document.getElementById('modal-comment-send-btn');
-    const replyIndicator = document.getElementById('modal-comment-reply-indicator');
-    const replyCancelBtn = document.getElementById('modal-comment-reply-cancel');
 
-    if (!commentsList) return;
+    if (!discussionBtn) return;
 
-    // Reset reply state
-    modalReplyingTo = null;
-    if (replyIndicator) replyIndicator.style.display = 'none';
+    // Load comment count for this item (non-blocking)
+    loadModalCommentCount(recordId, countEl);
 
-    // Enable/disable send button based on input
-    if (input) {
-        input.oninput = () => {
-            if (sendBtn) sendBtn.disabled = !input.value.trim();
-        };
-    }
-
-    // Cancel reply handler
-    if (replyCancelBtn) {
-        replyCancelBtn.onclick = () => {
-            modalReplyingTo = null;
-            if (replyIndicator) replyIndicator.style.display = 'none';
-            if (input) input.placeholder = 'Add a comment...';
-        };
-    }
-
-    // Form submit handler
-    if (form) {
-        form.onsubmit = async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (!input || !input.value.trim()) return;
-
-            const content = input.value.trim();
-            input.value = '';
-            if (sendBtn) sendBtn.disabled = true;
-
-            let currentUser;
-            try {
-                currentUser = getCurrentUser();
-            } catch (err) {
-                currentUser = { id: 'anonymous', name: 'Anonymous' };
-            }
-
-            try {
-                if (modalReplyingTo) {
-                    // Post as reply
-                    await api.postReplyMessage(
-                        modalReplyingTo.messageId,
-                        state.session.id,
-                        recordId,
-                        currentUser.id,
-                        currentUser.name || 'Anonymous',
-                        content
-                    );
-                    modalReplyingTo = null;
-                    if (replyIndicator) replyIndicator.style.display = 'none';
-                    if (input) input.placeholder = 'Add a comment...';
-                } else {
-                    // Post new comment linked to this item
-                    await api.postChatMessage(
-                        state.session.id,
-                        currentUser.id,
-                        currentUser.name || 'Anonymous',
-                        content,
-                        recordId
-                    );
-                }
-
-                // Invalidate cache and reload
-                modalCommentsCache.delete(recordId);
-                await loadAndRenderModalComments(recordId, commentsList, countEl);
-            } catch (err) {
-                log('Modal', `Error posting comment: ${err.message}`);
-                if (typeof ui !== 'undefined' && ui.showToast) {
-                    ui.showToast('Failed to post comment. Please try again.');
-                }
-            }
-        };
-    }
-
-    // Load and render comments
-    await loadAndRenderModalComments(recordId, commentsList, countEl);
+    // Attach click handler to open forum panel filtered to this item
+    discussionBtn.onclick = () => {
+        showForumPanel({ filter: 'comments', componentId: recordId });
+    };
 }
 
 /**
- * Load comments for an item and render them in the modal.
+ * Load comment count for an item to display on the Discussion button badge.
  */
-async function loadAndRenderModalComments(recordId, listEl, countEl) {
-    if (!listEl) return;
-
-    // Show loading state
-    listEl.innerHTML = '<div class="modal-comments-loading">Loading comments...</div>';
+async function loadModalCommentCount(recordId, countEl) {
+    if (!countEl) return;
 
     try {
-        let messages;
-
         // Check cache (valid for 30 seconds)
         const cached = modalCommentsCache.get(recordId);
+        let messages;
         if (cached && (Date.now() - cached.timestamp) < 30000) {
             messages = cached.messages;
         } else {
-            // Fetch all session messages and filter by item
             const allMessages = await api.fetchChatMessages(state.session.id);
             messages = allMessages.filter(msg => {
                 const itemLink = msg.fields?.['Item Link'];
                 return itemLink && (Array.isArray(itemLink) ? itemLink.includes(recordId) : itemLink === recordId);
             });
-
-            // Cache the result
             modalCommentsCache.set(recordId, { messages, timestamp: Date.now() });
         }
 
-        // Build thread structure: top-level messages and their replies
-        const topLevel = [];
-        const repliesByParent = {};
-
-        messages.forEach(msg => {
-            const parentId = msg.fields?.ParentMessageID;
-            if (parentId) {
-                if (!repliesByParent[parentId]) repliesByParent[parentId] = [];
-                repliesByParent[parentId].push(msg);
-            } else {
-                topLevel.push(msg);
-            }
-        });
-
-        if (countEl) {
-            const total = messages.length;
-            countEl.textContent = total > 0 ? `${total}` : '';
-            countEl.style.display = total > 0 ? 'inline-flex' : 'none';
-        }
-
-        if (topLevel.length === 0) {
-            listEl.innerHTML = '<div class="modal-comments-empty">No comments yet. Start the conversation!</div>';
-            return;
-        }
-
-        // Render comments
-        let currentUser;
-        try {
-            currentUser = getCurrentUser();
-        } catch (e) {
-            currentUser = { id: 'anonymous', name: 'Anonymous' };
-        }
-
-        let html = '';
-        topLevel.forEach(msg => {
-            const replies = repliesByParent[msg.id] || [];
-            html += renderModalComment(msg, replies, currentUser, recordId);
-        });
-
-        listEl.innerHTML = html;
-
-        // Attach reply button handlers
-        listEl.querySelectorAll('.modal-comment-reply-btn').forEach(btn => {
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                const messageId = btn.dataset.messageId;
-                const senderName = btn.dataset.senderName;
-                modalReplyingTo = { messageId, senderName };
-
-                const replyIndicator = document.getElementById('modal-comment-reply-indicator');
-                const input = document.getElementById('modal-comment-input');
-                if (replyIndicator) {
-                    replyIndicator.style.display = 'flex';
-                    replyIndicator.querySelector('.reply-indicator-text').textContent = `Replying to ${senderName}`;
-                }
-                if (input) {
-                    input.placeholder = `Reply to ${senderName}...`;
-                    input.focus();
-                }
-            };
-        });
-
+        const total = messages.length;
+        countEl.textContent = total > 0 ? `${total}` : '';
+        countEl.style.display = total > 0 ? 'inline-flex' : 'none';
     } catch (err) {
-        log('Modal', `Error loading comments: ${err.message}`);
-        listEl.innerHTML = '<div class="modal-comments-error">Could not load comments.</div>';
+        log('Modal', `Error loading comment count: ${err.message}`);
     }
 }
 
 /**
- * Render a single comment with its replies
- */
-function renderModalComment(msg, replies, currentUser, recordId) {
-    const fields = msg.fields || {};
-    const senderName = fields.SenderName || 'Anonymous';
-    const content = fields.Content || '';
-    const timestamp = fields.Timestamp ? formatCommentTimestamp(fields.Timestamp) : '';
-    const isMine = fields.SenderID === currentUser.id;
-    const senderInitial = senderName.charAt(0).toUpperCase();
-
-    let html = `<div class="modal-comment ${isMine ? 'mine' : ''}" data-message-id="${msg.id}">
-        <div class="modal-comment-avatar">${senderInitial}</div>
-        <div class="modal-comment-body">
-            <div class="modal-comment-meta">
-                <span class="modal-comment-author">${escapeHtml(senderName)}</span>
-                <span class="modal-comment-time">${timestamp}</span>
-            </div>
-            <div class="modal-comment-text">${escapeHtml(content)}</div>
-            <div class="modal-comment-actions">
-                <button class="modal-comment-reply-btn" data-message-id="${msg.id}" data-sender-name="${escapeHtml(senderName)}">Reply</button>
-            </div>`;
-
-    // Render replies
-    if (replies.length > 0) {
-        html += '<div class="modal-comment-replies">';
-        replies.forEach(reply => {
-            const rFields = reply.fields || {};
-            const rName = rFields.SenderName || 'Anonymous';
-            const rContent = rFields.Content || '';
-            const rTime = rFields.Timestamp ? formatCommentTimestamp(rFields.Timestamp) : '';
-            const rIsMine = rFields.SenderID === currentUser.id;
-            const rInitial = rName.charAt(0).toUpperCase();
-
-            html += `<div class="modal-comment-reply ${rIsMine ? 'mine' : ''}">
-                <div class="modal-comment-avatar small">${rInitial}</div>
-                <div class="modal-comment-body">
-                    <div class="modal-comment-meta">
-                        <span class="modal-comment-author">${escapeHtml(rName)}</span>
-                        <span class="modal-comment-time">${rTime}</span>
-                    </div>
-                    <div class="modal-comment-text">${escapeHtml(rContent)}</div>
-                </div>
-            </div>`;
-        });
-        html += '</div>';
-    }
-
-    html += '</div></div>';
-    return html;
-}
-
-/**
- * Format a timestamp for comment display (e.g. "2m ago", "1h ago", "Jan 5")
- */
-function formatCommentTimestamp(isoStr) {
-    try {
-        const date = new Date(isoStr);
-        const now = new Date();
-        const diffMs = now - date;
-        const diffMin = Math.floor(diffMs / 60000);
-        const diffHr = Math.floor(diffMs / 3600000);
-        const diffDay = Math.floor(diffMs / 86400000);
-
-        if (diffMin < 1) return 'just now';
-        if (diffMin < 60) return `${diffMin}m ago`;
-        if (diffHr < 24) return `${diffHr}h ago`;
-        if (diffDay < 7) return `${diffDay}d ago`;
-
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    } catch {
-        return '';
-    }
-}
-
-/**
- * Simple HTML escaper for comment content
+ * Simple HTML escaper for content
  */
 function escapeHtml(str) {
     const div = document.createElement('div');
@@ -1688,14 +1472,8 @@ function resetModalState() {
     const commentsSection = document.getElementById('modal-comments-section');
     if (commentsSection) {
         commentsSection.style.display = 'none';
-        const commentsList = document.getElementById('modal-comments-list');
-        if (commentsList) commentsList.innerHTML = '';
         const commentsCount = document.getElementById('modal-comments-count');
         if (commentsCount) { commentsCount.textContent = ''; commentsCount.style.display = 'none'; }
-        const commentInput = document.getElementById('modal-comment-input');
-        if (commentInput) commentInput.value = '';
-        const replyIndicator = document.getElementById('modal-comment-reply-indicator');
-        if (replyIndicator) replyIndicator.style.display = 'none';
     }
     modalReplyingTo = null;
 
