@@ -2354,6 +2354,44 @@ async function renderItineraryItem(item, index) {
     const price = getRecordPrice(record, selectionsOrIndex);
     const quantity = itemInfo?.quantity || 1;
     const note = itemInfo?.note || '';
+    const description = record.fields.Description || '';
+
+    // Build time/duration schedule display for this item
+    const itemStartTime = itemInfo?.itemStartTime || '';
+    const itemDuration = itemInfo?.itemDuration || 0;
+    const itemEndTime = itemInfo?.itemEndTime || '';
+    const itemDate = itemInfo?.itemDate || '';
+    let scheduleHTML = '';
+    {
+        const parts = [];
+        if (itemDate) {
+            try {
+                const d = new Date(itemDate);
+                parts.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+            } catch (e) { /* skip invalid date */ }
+        }
+        if (itemStartTime) {
+            let timePart = itemStartTime;
+            if (itemEndTime) {
+                timePart += ` – ${itemEndTime}`;
+            }
+            parts.push(timePart);
+        }
+        if (itemDuration && itemDuration > 0) {
+            const h = Math.floor(itemDuration / 60);
+            const m = itemDuration % 60;
+            const durStr = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+            parts.push(durStr);
+        }
+        if (parts.length > 0) {
+            scheduleHTML = `
+                <div class="itinerary-item-schedule">
+                    <span class="schedule-icon">🕐</span>
+                    <span class="schedule-text">${parts.join(' · ')}</span>
+                </div>
+            `;
+        }
+    }
 
     // --- Confidence tier for itinerary board items (AI, solutions, and manual items) ---
     const isAIItem = recordId.startsWith('custom-') ||
@@ -2570,6 +2608,10 @@ async function renderItineraryItem(item, index) {
                                 <span class="itinerary-item-price">$${price.toFixed(2)}</span>
                                 ${quantity > 1 ? `<span class="itinerary-item-qty">× ${quantity}</span>` : ''}
                             </div>
+                            ${scheduleHTML}
+                            ${description ? `
+                                <div class="itinerary-item-description">${description}</div>
+                            ` : ''}
                             ${selectedOptionsHTML}
                             ${note ? `
                                 <div class="itinerary-item-note">

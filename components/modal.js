@@ -2397,22 +2397,14 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
     const itemState = isLocked ? state.cart.lockedItems.get(record.id) : ui.getItemState(record.id);
 
-    // Check if event is free ($0 price)
-    const currentPrice = getRecordPrice(record, itemState.selectedOptionIndex);
-    const isFreeEvent = currentPrice === 0;
-
     // Check if this is a package - packages have their own button handling later
     const isPackageItem = record.fields['Item Type'] === 'Package';
 
     if (addToPlanBtn) {
-        if (isFreeEvent && !isPackageItem) {
-            // Hide Add to Plan button for free events (but not packages, which use dynamic pricing)
-            addToPlanBtn.style.display = 'none';
-        } else {
-            addToPlanBtn.style.display = '';
-            addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
-            addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
-        }
+        // Show Add to Plan / Update Plan button for all items including free ones
+        addToPlanBtn.style.display = '';
+        addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
+        addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
     }
 
     // Setup Price Action Row buttons (Rapid Pay + Chip In) next to price
