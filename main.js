@@ -20,7 +20,7 @@ import fluidEffect from './components/effects/fluid.js';
 import { showReceiptModal } from './components/receipt.js';
 import { updateFooter } from './components/footer.js';
 import { initializeProjectsDashboard, updateProjectsData, showProjectsLoading } from './components/projectsDashboard.js';
-import { initializeWtfPlansPanel, syncWtfPlansPanelWithUrl, refreshWtfPlansData, isWtfPlansPanelOpen } from './components/wtfPlansPanel.js';
+import { initializeWtfPlansPanel, syncWtfPlansPanelWithUrl, refreshWtfPlansData, isWtfPlansPanelOpen, trackRecentPlan } from './components/wtfPlansPanel.js';
 import { initializeForumPanel, syncForumPanelWithUrl } from './components/forumPanel.js';
 import { applyCloudinaryTransform } from './utils/imageOptimizer.js';
 
@@ -369,6 +369,8 @@ async function initialize() {
     document.addEventListener('planCreated', () => {
         log('Main', 'New plan created.');
         console.log(`[PLAN-CREATED] New plan created. Session ID: ${state.session.id}, User: ${state.session.user.id}`);
+        // Track in localStorage so it persists in the plan list across page loads
+        trackRecentPlan(state.session.id);
         // Refresh WTF Plans panel data if open so the new plan appears in the list
         if (isWtfPlansPanelOpen()) {
             console.log('[PLAN-CREATED] WTF Plans panel is open, refreshing data...');
@@ -381,6 +383,9 @@ async function initialize() {
         console.log('[SESSION-READY] ========== EVENT HANDLER START ==========');
         console.log(`[SESSION-READY] Session: ${state.session.id}, Items: ${state.cart.items.size}, Locked: ${state.cart.lockedItems.size}`);
         log('Main', '"sessionReady" event received, re-initializing session chat.');
+
+        // Track in localStorage so this plan persists in the plan list
+        trackRecentPlan(state.session.id);
 
         // Check if we're in presentation view - skip catalog-related updates if so
         const urlParams = new URLSearchParams(window.location.search);

@@ -31,6 +31,46 @@ let wtfPlansData = {
 let currentFilter = WTF_PLAN_TYPES.ALL;
 let isLoading = false;
 
+// ---- localStorage-backed recent plans tracking ----
+const RECENT_PLANS_KEY = 'wtf_recent_plan_ids';
+const MAX_RECENT_PLANS = 50;
+
+/**
+ * Get recently visited/created plan session IDs from localStorage
+ * @returns {string[]} Array of session IDs (most recent first)
+ */
+function getRecentPlanIds() {
+    try {
+        const raw = localStorage.getItem(RECENT_PLANS_KEY);
+        if (!raw) return [];
+        const ids = JSON.parse(raw);
+        return Array.isArray(ids) ? ids : [];
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Track a plan session ID in localStorage so it persists across page loads.
+ * Moves the ID to the front if already present.
+ * @param {string} sessionId - The session ID to track
+ */
+export function trackRecentPlan(sessionId) {
+    if (!sessionId) return;
+    try {
+        let ids = getRecentPlanIds();
+        // Remove if already present (will re-add at front)
+        ids = ids.filter(id => id !== sessionId);
+        ids.unshift(sessionId);
+        // Cap the list
+        if (ids.length > MAX_RECENT_PLANS) ids = ids.slice(0, MAX_RECENT_PLANS);
+        localStorage.setItem(RECENT_PLANS_KEY, JSON.stringify(ids));
+        console.log(`[WTF-PLANS] Tracked recent plan: ${sessionId} (total tracked: ${ids.length})`);
+    } catch (e) {
+        console.warn('[WTF-PLANS] Could not persist recent plan to localStorage:', e);
+    }
+}
+
 /**
  * Normalize a date value to YYYY-MM-DD format for consistent display
  * @param {*} dateValue - Date in various formats (string, Date, array)
@@ -305,6 +345,7 @@ async function loadWtfPlansData() {
         // Fetch data in parallel where possible
         const dataPromises = [];
         let allUserPlans = [];
+        let recentPlansFromStorage = [];
 
         // Plans/Collabs (sessions user is collaborator on)
         if (isAuthenticated && userId) {
@@ -331,8 +372,33 @@ async function loadWtfPlansData() {
             wtfPlansData.projects = [];
         }
 
+        // Always fetch recently-tracked plans from localStorage
+        // This ensures plans the user visited/created persist across page loads
+        const recentIds = getRecentPlanIds()
+            .filter(id => id !== state.session.id); // Exclude current session (handled by buildCurrentSessionItem)
+        if (recentIds.length > 0) {
+            // Limit to 20 IDs per Airtable request to stay within formula length limits
+            const idsToFetch = recentIds.slice(0, 20);
+            dataPromises.push(
+                api.fetchSessionsByIds(idsToFetch)
+                    .then(sessions => { recentPlansFromStorage = sessions || []; })
+                    .catch(err => {
+                        console.error('[WTF-PLANS] Error fetching recent plans from localStorage IDs:', err);
+                        recentPlansFromStorage = [];
+                    })
+            );
+        }
+
         // Wait for API calls
         await Promise.all(dataPromises);
+
+        // Merge recent localStorage plans with fetched user plans (avoid duplicates)
+        const fetchedPlanIds = new Set(allUserPlans.map(p => p.id));
+        const mergedFromStorage = recentPlansFromStorage.filter(p => !fetchedPlanIds.has(p.id));
+        if (mergedFromStorage.length > 0) {
+            console.log(`[WTF-PLANS] Adding ${mergedFromStorage.length} recently-tracked plan(s) not in user's fetched plans`);
+            allUserPlans = [...allUserPlans, ...mergedFromStorage];
+        }
 
         // Separate plans into shared (promoted) vs drafts based on collaborator count and RSVPs
         // A plan is "shared" if it has:
@@ -341,20 +407,18 @@ async function loadWtfPlansData() {
         wtfPlansData.plans = [];
         wtfPlansData.drafts = [];
 
-        if (isAuthenticated && userId) {
-            allUserPlans.forEach(plan => {
-                const isShared = isPlanShared(plan, userId);
-                if (isShared) {
-                    wtfPlansData.plans.push(plan);
-                } else {
-                    wtfPlansData.drafts.push(plan);
-                }
-            });
-            log('WtfPlansPanel', `Separated ${allUserPlans.length} plans: ${wtfPlansData.plans.length} shared, ${wtfPlansData.drafts.length} drafts`);
-            console.log(`[WTF-PLANS] Plans breakdown: ${wtfPlansData.plans.length} shared, ${wtfPlansData.drafts.length} drafts (from ${allUserPlans.length} total)`);
-            wtfPlansData.plans.forEach((p, i) => console.log(`[WTF-PLANS]   Shared ${i+1}: "${p.fields?.Name}" (${p.id})`));
-            wtfPlansData.drafts.forEach((p, i) => console.log(`[WTF-PLANS]   Draft ${i+1}: "${p.fields?.Name}" (${p.id})`));
-        }
+        allUserPlans.forEach(plan => {
+            const isShared = isPlanShared(plan, userId);
+            if (isShared) {
+                wtfPlansData.plans.push(plan);
+            } else {
+                wtfPlansData.drafts.push(plan);
+            }
+        });
+        log('WtfPlansPanel', `Separated ${allUserPlans.length} plans: ${wtfPlansData.plans.length} shared, ${wtfPlansData.drafts.length} drafts`);
+        console.log(`[WTF-PLANS] Plans breakdown: ${wtfPlansData.plans.length} shared, ${wtfPlansData.drafts.length} drafts (from ${allUserPlans.length} total)`);
+        wtfPlansData.plans.forEach((p, i) => console.log(`[WTF-PLANS]   Shared ${i+1}: "${p.fields?.Name}" (${p.id})`));
+        wtfPlansData.drafts.forEach((p, i) => console.log(`[WTF-PLANS]   Draft ${i+1}: "${p.fields?.Name}" (${p.id})`));
 
         // RSVPs - filter from records (events user has RSVP'd to)
         // For non-authenticated users, show upcoming public events they can browse/RSVP to

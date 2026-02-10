@@ -120,6 +120,36 @@ export async function fetchPlansForUser(userId, includeFullDetails = false) {
 }
 
 /**
+ * Fetch specific sessions by their IDs.
+ * Used to hydrate recently-visited plans stored in localStorage.
+ * @param {string[]} sessionIds - Array of Airtable record IDs
+ * @returns {Promise<Array>} - Array of session records
+ */
+export async function fetchSessionsByIds(sessionIds) {
+    if (!sessionIds || sessionIds.length === 0) return [];
+
+    // Airtable RECORD_ID() formula to match specific IDs
+    const orClauses = sessionIds.map(id => `RECORD_ID()='${id}'`).join(',');
+    const formula = encodeURIComponent(`OR(${orClauses})`);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${formula}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!response.ok) {
+            console.error('[API] fetchSessionsByIds error:', await response.text());
+            return [];
+        }
+        const data = await response.json();
+        return data.records || [];
+    } catch (error) {
+        console.error('[API] fetchSessionsByIds failed:', error);
+        return [];
+    }
+}
+
+/**
  * Fetch project hierarchy for authenticated user
  * Returns all sessions/projects the user has access to with hierarchical data
  * @param {string} userId - The authenticated user's ID
