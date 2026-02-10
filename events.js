@@ -1731,13 +1731,15 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             updateProgress(-0.0001); // Removing event name regresses
         }
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
+        // Clear auto-generated flag when user manually edits the title
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.TITLE_AUTO_GENERATED, false);
 
         // Update the plan name in the recent chats list
         updateCurrentSessionName(e.target.value);
 
         triggerSave();
     });
-    
+
     safeAddEventListener('header-goals', 'change', (e) => {
         if (state.ui.isInitializing) return;
         const hadValue = state.eventDetails.combined.has(CONSTANTS.DETAIL_TYPES.GOALS);
@@ -1748,6 +1750,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             updateProgress(-0.0001); // Removing goals regresses
         }
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
+        // Clear auto-generated flag when user manually edits the description
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DESCRIPTION_AUTO_GENERATED, false);
         triggerSave();
         if (document.getElementById('sort-by').value === 'recommended') {
             applyFiltersAndSort(imageCache);
@@ -2356,6 +2360,47 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
                 itemInfo = { quantity, selectedOptionIndex, selections, note };
 
+                // Extract per-item time fields from modal (if populated)
+                const modalItemStartTime = document.getElementById('modal-item-start-time')?.value || '';
+                const modalItemDurationRaw = document.getElementById('modal-item-duration')?.value || '';
+                const modalItemDateEl = document.getElementById('modal-item-date');
+                if (modalItemStartTime) itemInfo.itemStartTime = modalItemStartTime;
+                // Duration: dropdown value is minutes as a number string
+                if (modalItemDurationRaw) {
+                    const parsed = parseInt(modalItemDurationRaw, 10);
+                    if (parsed > 0) itemInfo.itemDuration = parsed;
+                }
+                // Compute end time from start time + duration
+                if (itemInfo.itemStartTime && itemInfo.itemDuration) {
+                    const timeMatch = itemInfo.itemStartTime.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+                    if (timeMatch) {
+                        let h = parseInt(timeMatch[1], 10);
+                        const m = parseInt(timeMatch[2], 10);
+                        const mer = timeMatch[3] ? timeMatch[3].toUpperCase() : null;
+                        if (mer === 'PM' && h !== 12) h += 12;
+                        else if (mer === 'AM' && h === 12) h = 0;
+                        const endMin = (h * 60 + m + itemInfo.itemDuration) % (24 * 60);
+                        const eH = Math.floor(endMin / 60);
+                        const eM = endMin % 60;
+                        const endStr = eH === 0 ? `12:${String(eM).padStart(2, '0')} AM` :
+                                       eH < 12 ? `${eH}:${String(eM).padStart(2, '0')} AM` :
+                                       eH === 12 ? `12:${String(eM).padStart(2, '0')} PM` :
+                                       `${eH - 12}:${String(eM).padStart(2, '0')} PM`;
+                        itemInfo.itemEndTime = endStr;
+                    }
+                }
+                // Date: extract from Flatpickr instance (single date)
+                if (modalItemDateEl?._flatpickr) {
+                    const selectedDates = modalItemDateEl._flatpickr.selectedDates;
+                    if (selectedDates.length >= 1) {
+                        itemInfo.itemDate = selectedDates[0].toISOString();
+                        delete itemInfo.itemDateEnd;
+                    }
+                } else {
+                    const modalItemDate = modalItemDateEl?.value?.trim() || '';
+                    if (modalItemDate) itemInfo.itemDate = modalItemDate;
+                }
+
                 // Preserve any locally-generated options
                 // These are AI-generated options that were applied but not saved to catalog
                 const existingItemInfo = state.cart.items.get(recordId);
@@ -2790,7 +2835,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         }
     });
     
-    // Lazy load Flatpickr when event date picker is focused
+    // Lazy load Flatpickr when event date picker is focused (now in range mode)
     let eventPlanDatePicker = null;
     const eventDateInput = document.getElementById('event-date-picker');
     if (eventDateInput) {
@@ -2799,54 +2844,67 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 try {
                     log('Events', 'Loading Flatpickr dynamically for event date picker...');
                     await loadFlatpickr();
-                    
+
                     if (!window.flatpickr) {
                         throw new Error('Flatpickr not available after loading');
                     }
-                    
+
                     if (typeof window.flatpickr !== 'function') {
                         throw new Error(`Flatpickr is not a function, got type: ${typeof window.flatpickr}`);
                     }
 
                     // Clear placeholder text before initializing flatpickr to avoid parse errors
-                    if (eventDateInput.value === 'Select a date') {
+                    if (eventDateInput.value === 'Select a date' || eventDateInput.value === 'Select date or date range' || eventDateInput.value === 'Select date') {
                         eventDateInput.value = '';
                     }
 
                     eventPlanDatePicker = window.flatpickr(eventDateInput, {
+                        mode: "single",
                         dateFormat: "M j, Y",
                         onChange: async (selectedDates) => {
                             if (state.ui.isInitializing) return;
                             if (selectedDates.length > 0) {
-                                const isoDate = selectedDates[0].toISOString();
-                                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, isoDate);
+                                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates[0].toISOString());
+                                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE_END);
+                                console.log('[Events DEBUG] Date set:', selectedDates[0].toISOString());
                                 updateProgress(0.00015);
-                                console.log('[Events DEBUG] Date set to:', isoDate);
                             } else {
                                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+                                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE_END);
                                 updateProgress(-0.00015);
                                 console.log('[Events DEBUG] Date cleared');
                             }
+                            // Recompute end date/time from start + duration
+                            computeAndStoreEndDateTime();
                             await ui.updateEventPlanDateDisplay();
                             await ui.updateLockedItemStatusIcons();
                             await updateMobileBarAvailability();
 
                             // Sync date change across all views
                             syncPlanState('eventDatePicker', 'dateChanged', {
-                                date: selectedDates.length > 0 ? selectedDates[0].toISOString() : null
+                                date: selectedDates.length > 0 ? selectedDates[0].toISOString() : null,
+                                dateEnd: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE_END) || null
                             });
 
                             triggerSave();
                         }
                     });
-                    
+
                     // Store the flatpickr instance on the input element
                     eventDateInput._flatpickr = eventPlanDatePicker;
-                    
+
+                    // Restore saved date into the picker (single date only)
+                    const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+                    if (savedDate) {
+                        try {
+                            eventPlanDatePicker.setDate(new Date(savedDate), false);
+                        } catch (e) { /* ignore invalid */ }
+                    }
+
                     // Open the calendar after initialization
                     eventPlanDatePicker.open();
-                    
-                    log('Events', 'Event date picker initialized successfully');
+
+                    log('Events', 'Event date picker initialized successfully (range mode)');
                 } catch (error) {
                     log('Events', `Error initializing event date picker: ${error.message}`);
                     console.error('Flatpickr initialization error:', error);
@@ -2856,10 +2914,183 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 eventPlanDatePicker.open();
             }
         };
-        
+
         eventDateInput.addEventListener('focus', initializeEventDatePicker);
     }
-    
+
+    // --- Plan-level start time & duration inputs (end time/date computed from start + duration) ---
+    const startTimeInput = document.getElementById('event-start-time');
+    const durationInput = document.getElementById('event-duration-input');
+    const durationDisplay = document.getElementById('event-duration-display');
+
+    /**
+     * Populate a <select> with time options in 15-minute increments (12-hour format).
+     */
+    function populateTimeDropdown(selectEl) {
+        if (!selectEl) return;
+        // Keep the first "-- Select --" option
+        while (selectEl.options.length > 1) selectEl.remove(1);
+        for (let totalMin = 0; totalMin < 24 * 60; totalMin += 15) {
+            const h = Math.floor(totalMin / 60);
+            const m = totalMin % 60;
+            let label;
+            if (h === 0) label = `12:${String(m).padStart(2, '0')} AM`;
+            else if (h < 12) label = `${h}:${String(m).padStart(2, '0')} AM`;
+            else if (h === 12) label = `12:${String(m).padStart(2, '0')} PM`;
+            else label = `${h - 12}:${String(m).padStart(2, '0')} PM`;
+            const opt = document.createElement('option');
+            opt.value = label;
+            opt.textContent = label;
+            selectEl.appendChild(opt);
+        }
+    }
+
+    /**
+     * Populate a <select> with duration options (15m increments up to 12h).
+     */
+    function populateDurationDropdown(selectEl) {
+        if (!selectEl) return;
+        while (selectEl.options.length > 1) selectEl.remove(1);
+        const durations = [
+            15, 30, 45, 60, 90, 120, 150, 180, 210, 240, 300, 360, 420, 480, 540, 600, 660, 720
+        ];
+        durations.forEach(min => {
+            const hrs = Math.floor(min / 60);
+            const mins = min % 60;
+            let label;
+            if (hrs > 0 && mins > 0) label = `${hrs}h ${mins}m`;
+            else if (hrs > 0) label = `${hrs}h`;
+            else label = `${mins}m`;
+            const opt = document.createElement('option');
+            opt.value = String(min);
+            opt.textContent = label;
+            selectEl.appendChild(opt);
+        });
+    }
+
+    // Populate the plan-level dropdowns
+    populateTimeDropdown(startTimeInput);
+    populateDurationDropdown(durationInput);
+
+    /**
+     * Parse a time string like "7:00 PM" or "14:30" to { hours, minutes }
+     */
+    function parseTimeString(timeStr) {
+        if (!timeStr) return null;
+        const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+        if (!match) return null;
+        let hours = parseInt(match[1], 10);
+        const minutes = parseInt(match[2], 10);
+        const meridiem = match[3] ? match[3].toUpperCase() : null;
+        if (meridiem === 'PM' && hours !== 12) hours += 12;
+        else if (meridiem === 'AM' && hours === 12) hours = 0;
+        if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+        return { hours, minutes };
+    }
+
+    /**
+     * Format minutes to a human-readable duration string like "2h 30m"
+     */
+    function formatDuration(totalMin) {
+        if (!totalMin || totalMin <= 0) return '';
+        const hrs = Math.floor(totalMin / 60);
+        const mins = totalMin % 60;
+        if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
+        if (hrs > 0) return `${hrs}h`;
+        return `${mins}m`;
+    }
+
+    /**
+     * Format minutes to a 12-hour time string like "7:00 PM"
+     */
+    function formatTimeFromMinutes(totalMin) {
+        totalMin = totalMin % (24 * 60);
+        const h = Math.floor(totalMin / 60);
+        const m = totalMin % 60;
+        if (h === 0) return `12:${String(m).padStart(2, '0')} AM`;
+        if (h < 12) return `${h}:${String(m).padStart(2, '0')} AM`;
+        if (h === 12) return `12:${String(m).padStart(2, '0')} PM`;
+        return `${h - 12}:${String(m).padStart(2, '0')} PM`;
+    }
+
+    /**
+     * Compute and store end time and end date from start time/date + duration.
+     * Called whenever start time, start date, or duration changes.
+     */
+    function computeAndStoreEndDateTime() {
+        const startStr = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.START_TIME);
+        const durationMin = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DURATION);
+        const startDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+
+        if (startStr && durationMin && durationMin > 0) {
+            const startParsed = parseTimeString(startStr);
+            if (startParsed) {
+                const startTotalMin = startParsed.hours * 60 + startParsed.minutes;
+                const endTotalMin = startTotalMin + durationMin;
+                const endTimeStr = formatTimeFromMinutes(endTotalMin);
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.END_TIME, endTimeStr);
+
+                // If duration crosses midnight and we have a start date, compute end date
+                if (endTotalMin >= 24 * 60 && startDateISO) {
+                    const daysOverflow = Math.floor(endTotalMin / (24 * 60));
+                    const endDate = new Date(startDateISO);
+                    endDate.setDate(endDate.getDate() + daysOverflow);
+                    endDate.setHours(23, 59, 59, 999);
+                    state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE_END, endDate.toISOString());
+                } else {
+                    state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE_END);
+                }
+
+                // Show computed end time as hint
+                if (durationDisplay) durationDisplay.textContent = `(ends ${endTimeStr})`;
+            }
+        } else {
+            // Not enough info to compute end time
+            state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.END_TIME);
+            state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE_END);
+            if (durationDisplay) durationDisplay.textContent = '';
+        }
+    }
+
+    if (startTimeInput) {
+        // Restore saved value
+        const savedStart = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.START_TIME);
+        if (savedStart) startTimeInput.value = savedStart;
+
+        startTimeInput.addEventListener('change', () => {
+            if (state.ui.isInitializing) return;
+            const val = startTimeInput.value;
+            if (val) {
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.START_TIME, val);
+            } else {
+                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.START_TIME);
+            }
+            computeAndStoreEndDateTime();
+            triggerSave();
+        });
+    }
+
+    if (durationInput) {
+        // Restore saved duration value
+        const savedDuration = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DURATION);
+        if (savedDuration) durationInput.value = String(savedDuration);
+
+        durationInput.addEventListener('change', () => {
+            if (state.ui.isInitializing) return;
+            const val = durationInput.value;
+            if (val) {
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DURATION, parseInt(val, 10));
+            } else {
+                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DURATION);
+            }
+            computeAndStoreEndDateTime();
+            triggerSave();
+        });
+    }
+
+    // Initialize computed end from any restored session values
+    computeAndStoreEndDateTime();
+
     safeAddEventListener('itinerary-btn', 'click', () => {
         log('Events', 'Itinerary button clicked, showing modal.');
         showItineraryModal();

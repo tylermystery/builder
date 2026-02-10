@@ -34,10 +34,25 @@ const effects = [
 
 // Refactored function to handle a successful login from any method
 async function _handleSuccessfulLogin(payload) {
+    console.log(`[LOGIN-ASSOC] ========== _handleSuccessfulLogin START ==========`);
+    console.log(`[LOGIN-ASSOC] User: ${payload.user?.email} (ID: ${payload.user?.id})`);
+    console.log(`[LOGIN-ASSOC] Current state.session.id: ${state.session.id}`);
     log('Auth', `Login successful for user: ${payload.user?.email}`);
 
+    // Associate the current session with the logged-in user (if a session exists)
     if (state.session.id) {
+        console.log(`[LOGIN-ASSOC] Session ${state.session.id} exists, associating with user ${payload.user.id}...`);
         await api.associateSessionWithUser(state.session.id, payload.user.id);
+        console.log(`[LOGIN-ASSOC] Association complete for existing session.`);
+    } else {
+        console.log(`[LOGIN-ASSOC] No session ID yet. Checking if there's unsaved plan data...`);
+        const hasUnsavedContent = state.cart.items.size > 0 || state.cart.lockedItems.size > 0 || state.eventDetails.combined.size > 0;
+        console.log(`[LOGIN-ASSOC] Unsaved content: items=${state.cart.items.size}, locked=${state.cart.lockedItems.size}, details=${state.eventDetails.combined.size}`);
+        if (hasUnsavedContent) {
+            console.log(`[LOGIN-ASSOC] Unsaved plan data found. Will be associated on next save (triggerSave).`);
+        } else {
+            console.log(`[LOGIN-ASSOC] No unsaved plan data. No session association needed at this time.`);
+        }
     }
 
     localStorage.setItem('jwt', payload.token);
@@ -93,9 +108,11 @@ async function _handleSuccessfulLogin(payload) {
     await Promise.allSettled(syncPromises);
 
     // Trigger events and update UI
+    console.log(`[LOGIN-ASSOC] Dispatching 'userLoggedIn' event. Session: ${state.session.id}, User: ${state.session.user.id}`);
     document.dispatchEvent(new CustomEvent('userLoggedIn'));
     updateUserProfileIcon();
     hideUserModal();
+    console.log(`[LOGIN-ASSOC] ========== _handleSuccessfulLogin END ==========`);
 }
 
 /**

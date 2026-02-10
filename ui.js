@@ -835,7 +835,6 @@ export function applyCartLabels(labels) {
 export async function updateEventPlanDateDisplay() {
     console.log('[DEBUG updateEventPlanDateDisplay] ========== DATE DISPLAY UPDATE DEBUG ==========');
     console.log('[DEBUG updateEventPlanDateDisplay] state.eventDetails.combined contents:', Object.fromEntries(state.eventDetails.combined));
-    console.log('[DEBUG updateEventPlanDateDisplay] CONSTANTS.DETAIL_TYPES.DATE:', CONSTANTS.DETAIL_TYPES.DATE);
 
     log('UI', 'Updating event plan date display.');
     const dateInput = document.getElementById('event-date-picker');
@@ -844,24 +843,39 @@ export async function updateEventPlanDateDisplay() {
         return;
     }
     const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-    console.log('[DEBUG updateEventPlanDateDisplay] Retrieved date from state:', selectedDateISO);
+    const selectedDateEndISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE_END);
 
     if (!selectedDateISO) {
         console.log('[DEBUG updateEventPlanDateDisplay] No date in state, setting placeholder');
-        dateInput.value = 'Select a date';
+        dateInput.value = '';
         dateInput.classList.remove('available-full', 'available-partial', 'unavailable');
         console.log('[DEBUG updateEventPlanDateDisplay] ========== END DATE DISPLAY UPDATE DEBUG ==========');
         return;
     }
     const selectedDate = new Date(selectedDateISO);
-    console.log('[DEBUG updateEventPlanDateDisplay] Parsed date object:', selectedDate);
-    console.log('[DEBUG updateEventPlanDateDisplay] Is valid date?', !isNaN(selectedDate.getTime()));
 
     const lockedItems = Array.from(state.cart.lockedItems.keys()).map(recordId => state.records.all.find(r => r.id === recordId)).filter(Boolean);
-    const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems);
-    const displayValue = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems, {
+        dateEnd: selectedDateEndISO ? new Date(selectedDateEndISO) : undefined,
+        lockedItemsMap: state.cart.lockedItems
+    });
+
+    // Build display value — show start date (end date is computed from duration)
+    const fmtOpts = { month: 'short', day: 'numeric', year: 'numeric' };
+    let displayValue = selectedDate.toLocaleDateString('en-US', fmtOpts);
+
+    // Update flatpickr instance date if it exists (single date mode)
+    if (dateInput._flatpickr) {
+        const currentDates = dateInput._flatpickr.selectedDates;
+        const currentISO = currentDates.length > 0 ? currentDates[0].toISOString() : null;
+        if (currentISO !== selectedDateISO) {
+            dateInput._flatpickr.setDate(selectedDate, false);
+        }
+    } else {
+        dateInput.value = displayValue;
+    }
+
     console.log('[DEBUG updateEventPlanDateDisplay] Display value:', displayValue);
-    dateInput.value = displayValue;
     dateInput.classList.remove('available-full', 'available-partial', 'unavailable');
     switch (overallStatus) {
         case AVAILABILITY_STATUS.FULL:
@@ -1086,8 +1100,12 @@ export async function updateMobileBarAvailability() {
 
     if (selectedDateISO && state.cart.lockedItems.size > 0) {
         const selectedDate = new Date(selectedDateISO);
+        const selectedDateEndISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE_END);
         const lockedItems = Array.from(state.cart.lockedItems.keys()).map(recordId => state.records.all.find(r => r.id === recordId)).filter(Boolean);
-        const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems);
+        const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems, {
+            dateEnd: selectedDateEndISO ? new Date(selectedDateEndISO) : undefined,
+            lockedItemsMap: state.cart.lockedItems
+        });
         switch (overallStatus) {
             case AVAILABILITY_STATUS.FULL:
                 mobileBar.classList.add('available');

@@ -2397,22 +2397,14 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
     const itemState = isLocked ? state.cart.lockedItems.get(record.id) : ui.getItemState(record.id);
 
-    // Check if event is free ($0 price)
-    const currentPrice = getRecordPrice(record, itemState.selectedOptionIndex);
-    const isFreeEvent = currentPrice === 0;
-
     // Check if this is a package - packages have their own button handling later
     const isPackageItem = record.fields['Item Type'] === 'Package';
 
     if (addToPlanBtn) {
-        if (isFreeEvent && !isPackageItem) {
-            // Hide Add to Plan button for free events (but not packages, which use dynamic pricing)
-            addToPlanBtn.style.display = 'none';
-        } else {
-            addToPlanBtn.style.display = '';
-            addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
-            addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
-        }
+        // Show Add to Plan / Update Plan button for all items including free ones
+        addToPlanBtn.style.display = '';
+        addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
+        addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
     }
 
     // Setup Price Action Row buttons (Rapid Pay + Chip In) next to price
@@ -5809,6 +5801,231 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             plusBtn.addEventListener('touchend', handleTouchEnd, { passive: false });
             minusBtn.addEventListener('click', handleMinus);
             minusBtn.addEventListener('touchend', handleTouchEnd, { passive: false });
+        }
+
+        // --- Item-level time scheduling (shown for locked items or when adding to plan) ---
+        const modalTimeContainer = document.getElementById('modal-item-time-container');
+        if (modalTimeContainer) {
+            const isItemLocked = state.cart.lockedItems.has(record.id);
+            const lockedInfo = isItemLocked ? state.cart.lockedItems.get(record.id) : null;
+
+            // Show time section
+            modalTimeContainer.style.display = 'block';
+
+            // Populate from saved item info
+            const modalItemStartTimeInput = document.getElementById('modal-item-start-time');
+            const modalItemDurationInput = document.getElementById('modal-item-duration');
+            const modalItemDateInput = document.getElementById('modal-item-date');
+            const modalItemDurationSource = document.getElementById('modal-item-duration-source');
+
+            if (modalItemStartTimeInput) modalItemStartTimeInput.value = lockedInfo?.itemStartTime || '';
+
+            // Duration: show catalog default vs override (now using dropdown)
+            const catalogDurationHours = parseFloat(record.fields?.['Duration (hours)'] || 0);
+            const catalogDurationMin = Math.round(catalogDurationHours * 60);
+
+            /** Format minutes to readable duration string */
+            const fmtDur = (min) => {
+                if (!min || min <= 0) return '';
+                const h = Math.floor(min / 60);
+                const m = min % 60;
+                if (h > 0 && m > 0) return `${h}h ${m}m`;
+                if (h > 0) return `${h}h`;
+                return `${m}m`;
+            };
+
+            /** Parse time string like "7:00 PM" or "14:30" */
+            const parseTime = (timeStr) => {
+                if (!timeStr) return null;
+                const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+                if (!match) return null;
+                let hours = parseInt(match[1], 10);
+                const minutes = parseInt(match[2], 10);
+                const meridiem = match[3] ? match[3].toUpperCase() : null;
+                if (meridiem === 'PM' && hours !== 12) hours += 12;
+                else if (meridiem === 'AM' && hours === 12) hours = 0;
+                if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+                return { hours, minutes };
+            };
+
+            /** Format minutes to a 12-hour time string */
+            const fmtTime = (totalMin) => {
+                totalMin = totalMin % (24 * 60);
+                const h = Math.floor(totalMin / 60);
+                const m = totalMin % 60;
+                if (h === 0) return `12:${String(m).padStart(2, '0')} AM`;
+                if (h < 12) return `${h}:${String(m).padStart(2, '0')} AM`;
+                if (h === 12) return `12:${String(m).padStart(2, '0')} PM`;
+                return `${h - 12}:${String(m).padStart(2, '0')} PM`;
+            };
+
+            /** Populate a <select> with time options in 15-min increments */
+            const populateModalTimeDropdown = (selectEl) => {
+                if (!selectEl) return;
+                while (selectEl.options.length > 1) selectEl.remove(1);
+                for (let totalMin = 0; totalMin < 24 * 60; totalMin += 15) {
+                    const h = Math.floor(totalMin / 60);
+                    const m = totalMin % 60;
+                    let label;
+                    if (h === 0) label = `12:${String(m).padStart(2, '0')} AM`;
+                    else if (h < 12) label = `${h}:${String(m).padStart(2, '0')} AM`;
+                    else if (h === 12) label = `12:${String(m).padStart(2, '0')} PM`;
+                    else label = `${h - 12}:${String(m).padStart(2, '0')} PM`;
+                    const opt = document.createElement('option');
+                    opt.value = label;
+                    opt.textContent = label;
+                    selectEl.appendChild(opt);
+                }
+            };
+
+            /** Populate a <select> with duration options */
+            const populateModalDurationDropdown = (selectEl) => {
+                if (!selectEl) return;
+                while (selectEl.options.length > 1) selectEl.remove(1);
+                const durations = [
+                    15, 30, 45, 60, 90, 120, 150, 180, 210, 240, 300, 360, 420, 480, 540, 600, 660, 720
+                ];
+                durations.forEach(min => {
+                    const hrs = Math.floor(min / 60);
+                    const mins = min % 60;
+                    let label;
+                    if (hrs > 0 && mins > 0) label = `${hrs}h ${mins}m`;
+                    else if (hrs > 0) label = `${hrs}h`;
+                    else label = `${mins}m`;
+                    const opt = document.createElement('option');
+                    opt.value = String(min);
+                    opt.textContent = label;
+                    selectEl.appendChild(opt);
+                });
+            };
+
+            // Populate dropdowns
+            populateModalTimeDropdown(modalItemStartTimeInput);
+            populateModalDurationDropdown(modalItemDurationInput);
+
+            // Restore saved values
+            if (modalItemStartTimeInput && lockedInfo?.itemStartTime) {
+                modalItemStartTimeInput.value = lockedInfo.itemStartTime;
+            }
+
+            if (modalItemDurationInput) {
+                if (lockedInfo?.itemDuration) {
+                    modalItemDurationInput.value = String(lockedInfo.itemDuration);
+                } else {
+                    modalItemDurationInput.value = '';
+                }
+            }
+            if (modalItemDurationSource) {
+                if (lockedInfo?.itemDuration) {
+                    modalItemDurationSource.textContent = 'custom override';
+                } else if (catalogDurationMin > 0) {
+                    modalItemDurationSource.textContent = `catalog: ${fmtDur(catalogDurationMin)}`;
+                } else {
+                    modalItemDurationSource.textContent = '';
+                }
+            }
+
+            // Live-update lockedItems on change (for items already in plan)
+            const saveTimeField = (field, value) => {
+                if (!isItemLocked) return; // Will be captured during "Add to Plan"
+                const info = state.cart.lockedItems.get(record.id);
+                if (!info) return;
+                if (value) {
+                    info[field] = value;
+                } else {
+                    delete info[field];
+                }
+                state.cart.lockedItems.set(record.id, info);
+                if (typeof triggerSave === 'function') triggerSave();
+            };
+
+            /** Compute and store end time from start time + duration */
+            const computeItemEndTime = () => {
+                const startVal = modalItemStartTimeInput?.value;
+                const startParsed = parseTime(startVal);
+                const durVal = modalItemDurationInput?.value;
+                const durMin = (durVal ? parseInt(durVal, 10) : null) || (lockedInfo?.itemDuration) || catalogDurationMin;
+
+                if (startParsed && durMin && durMin > 0) {
+                    const endTotalMin = (startParsed.hours * 60 + startParsed.minutes) + durMin;
+                    const endTimeStr = fmtTime(endTotalMin);
+                    saveTimeField('itemEndTime', endTimeStr);
+                    if (modalItemDurationSource) {
+                        const durLabel = durVal ? 'custom override' : (catalogDurationMin > 0 ? `catalog: ${fmtDur(catalogDurationMin)}` : '');
+                        modalItemDurationSource.textContent = durLabel ? `${durLabel} \u2022 ends ${endTimeStr}` : `ends ${endTimeStr}`;
+                    }
+                } else {
+                    saveTimeField('itemEndTime', null);
+                }
+            };
+
+            // Initialize date field with Flatpickr single mode (lazy-loaded)
+            let modalItemDatePicker = null;
+            if (modalItemDateInput) {
+                const initModalDatePicker = async () => {
+                    if (modalItemDatePicker) {
+                        modalItemDatePicker.open();
+                        return;
+                    }
+                    try {
+                        await loadFlatpickr();
+                        if (typeof window.flatpickr !== 'function') return;
+
+                        modalItemDatePicker = window.flatpickr(modalItemDateInput, {
+                            mode: "single",
+                            dateFormat: "M j, Y",
+                            onChange: (selectedDates) => {
+                                if (selectedDates.length >= 1) {
+                                    saveTimeField('itemDate', selectedDates[0].toISOString());
+                                    saveTimeField('itemDateEnd', null);
+                                } else {
+                                    saveTimeField('itemDate', null);
+                                    saveTimeField('itemDateEnd', null);
+                                }
+                            }
+                        });
+                        modalItemDateInput._flatpickr = modalItemDatePicker;
+
+                        // Restore saved date
+                        if (lockedInfo?.itemDate) {
+                            modalItemDatePicker.setDate(new Date(lockedInfo.itemDate), false);
+                        }
+
+                        modalItemDatePicker.open();
+                    } catch (e) {
+                        console.error('Modal date picker init error:', e);
+                    }
+                };
+
+                modalItemDateInput.addEventListener('focus', initModalDatePicker);
+
+                // If there's already a saved date, show it in the input
+                if (lockedInfo?.itemDate) {
+                    const d = new Date(lockedInfo.itemDate);
+                    modalItemDateInput.value = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                }
+            }
+
+            if (modalItemStartTimeInput) {
+                modalItemStartTimeInput.addEventListener('change', () => {
+                    saveTimeField('itemStartTime', modalItemStartTimeInput.value || null);
+                    computeItemEndTime();
+                });
+            }
+            if (modalItemDurationInput) {
+                modalItemDurationInput.addEventListener('change', () => {
+                    const val = modalItemDurationInput.value;
+                    const parsed = val ? parseInt(val, 10) : null;
+                    saveTimeField('itemDuration', parsed || null);
+                    if (modalItemDurationSource) {
+                        modalItemDurationSource.textContent = val ? 'custom override' : (catalogDurationMin > 0 ? `catalog: ${fmtDur(catalogDurationMin)}` : '');
+                    }
+                    computeItemEndTime();
+                });
+            }
+
+            // Initialize computed end time hint
+            computeItemEndTime();
         }
     } else if (isPackage && packageContents) {
         // Package-specific UI: show headcount selector and package contents
