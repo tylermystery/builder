@@ -4,7 +4,8 @@ console.log('[MODULE DEBUG] modal.js module starting to load...', performance.no
 import { state, getRecordById } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
-import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex } from '../config.js';
+import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS } from '../config.js';
+import { getCurrentUser } from '../chat.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
@@ -1078,6 +1079,547 @@ function getBreadcrumbs(record) {
     return breadcrumbs;
 }
 
+// ============================================
+// MODAL REACTIONS & COMMENTS SYSTEM
+// ============================================
+
+// Cache for modal comments to avoid refetching on every open
+let modalCommentsCache = new Map(); // recordId -> { messages: [], timestamp }
+let modalReplyingTo = null; // { messageId, senderName }
+
+/**
+ * Initialize the reactions section in the detail modal.
+ * Shows the quick bar, populates the tiered picker, and renders existing reactions.
+ * Only activates when there's an active session context (plan mode).
+ * @param {string} recordId - The item record ID
+ */
+function initModalReactions(recordId) {
+    const section = document.getElementById('modal-reactions-section');
+    if (!section) return;
+
+    // Only show reactions if we have a session (plan context)
+    const hasSession = state.session.id && state.session.id.startsWith('rec');
+    const isPresentationActive = document.body.classList.contains('presentation-active');
+
+    if (!hasSession && !isPresentationActive) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = '';
+
+    const quickBar = document.getElementById('modal-reactions-quick-bar');
+    const expandBtn = document.getElementById('modal-reactions-expand-btn');
+    const picker = document.getElementById('modal-reactions-picker');
+    const summary = document.getElementById('modal-reactions-summary');
+    const scoreBadge = document.getElementById('modal-reactions-score-badge');
+
+    if (!quickBar || !expandBtn || !picker) return;
+
+    // Get current user and existing reactions
+    let currentUser;
+    try {
+        currentUser = getCurrentUser();
+    } catch (e) {
+        currentUser = { id: 'anonymous', name: 'Anonymous' };
+    }
+
+    const allReactions = state.session.reactions.get(recordId);
+    const currentUserReaction = (allReactions instanceof Map) ? allReactions.get(currentUser.id) : null;
+
+    // Render quick reaction bar (first tier emojis)
+    const quickEmojis = EMOJI_REACTIONS;
+    quickBar.innerHTML = quickEmojis.map(emoji => {
+        const score = REACTION_SCORES[emoji] || 0;
+        const scoreLabel = score > 0 ? `+${score.toFixed(1)}` : score.toFixed(1);
+        const isSelected = currentUserReaction === emoji;
+        return `<button class="modal-reaction-btn ${isSelected ? 'selected' : ''}"
+                    data-emoji="${emoji}" data-record-id="${recordId}"
+                    title="${emoji} ${scoreLabel} ranking impact">
+                    ${emoji}
+                </button>`;
+    }).join('');
+
+    // Render expand button handler
+    expandBtn.onclick = () => {
+        const isOpen = picker.style.display !== 'none';
+        picker.style.display = isOpen ? 'none' : '';
+        expandBtn.querySelector('.expand-btn-icon').textContent = isOpen ? '+' : '−';
+        expandBtn.childNodes[1].textContent = isOpen ? ' More Reactions' : ' Less';
+        if (!isOpen) {
+            renderTieredEmojiPicker(recordId, picker, currentUserReaction);
+        }
+    };
+
+    // Attach click handler for quick bar
+    quickBar.onclick = (e) => {
+        const btn = e.target.closest('.modal-reaction-btn');
+        if (!btn) return;
+        e.stopPropagation();
+        handleModalReactionSelect(btn.dataset.recordId, btn.dataset.emoji);
+    };
+
+    // Render reaction summary
+    renderModalReactionsSummary(recordId, summary, scoreBadge);
+}
+
+/**
+ * Render the tiered emoji picker - scrollable, starts standard, becomes obscure.
+ * Each tier has a label and score impact tooltip on hover.
+ */
+function renderTieredEmojiPicker(recordId, container, currentUserReaction) {
+    let currentUser;
+    try {
+        currentUser = getCurrentUser();
+    } catch (e) {
+        currentUser = { id: 'anonymous', name: 'Anonymous' };
+    }
+
+    const allReactions = state.session.reactions.get(recordId);
+    const userReaction = currentUserReaction || ((allReactions instanceof Map) ? allReactions.get(currentUser.id) : null);
+
+    let html = '<div class="modal-emoji-tiers-scroll">';
+
+    EMOJI_TIERS.forEach((tier, tierIndex) => {
+        html += `<div class="modal-emoji-tier" data-tier="${tierIndex}">
+            <div class="modal-emoji-tier-header">
+                <span class="tier-label">${tier.label}</span>
+                <span class="tier-description">${tier.description}</span>
+            </div>
+            <div class="modal-emoji-tier-grid">`;
+
+        tier.emojis.forEach(emoji => {
+            const score = REACTION_SCORES[emoji] || 0;
+            const scoreLabel = score > 0 ? `+${score.toFixed(1)}` : score.toFixed(1);
+            const impact = score >= 3 ? 'high-positive' :
+                           score >= 1 ? 'positive' :
+                           score >= -0.5 ? 'neutral' :
+                           score >= -2 ? 'negative' : 'high-negative';
+            const isSelected = userReaction === emoji;
+            html += `<button class="modal-reaction-btn modal-tier-emoji ${isSelected ? 'selected' : ''}"
+                        data-emoji="${emoji}" data-record-id="${recordId}"
+                        data-impact="${impact}"
+                        title="${emoji} ${scoreLabel} ranking impact">
+                        <span class="tier-emoji-char">${emoji}</span>
+                        <span class="tier-emoji-score ${impact}">${scoreLabel}</span>
+                    </button>`;
+        });
+
+        html += '</div></div>';
+    });
+
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Attach click handler
+    container.onclick = (e) => {
+        const btn = e.target.closest('.modal-reaction-btn');
+        if (!btn) return;
+        e.stopPropagation();
+        handleModalReactionSelect(btn.dataset.recordId, btn.dataset.emoji);
+    };
+}
+
+/**
+ * Handle selecting a reaction emoji in the modal.
+ * Toggles if same emoji, replaces if different.
+ */
+function handleModalReactionSelect(recordId, emoji) {
+    let currentUser;
+    try {
+        currentUser = getCurrentUser();
+    } catch (e) {
+        currentUser = { id: 'anonymous', name: 'Anonymous' };
+    }
+
+    if (!state.session.reactions.has(recordId)) {
+        state.session.reactions.set(recordId, new Map());
+    }
+
+    const itemReactions = state.session.reactions.get(recordId);
+
+    // Toggle: if same emoji clicked, remove reaction; otherwise set new one
+    if (itemReactions.get(currentUser.id) === emoji) {
+        itemReactions.delete(currentUser.id);
+    } else {
+        itemReactions.set(currentUser.id, emoji);
+    }
+
+    // Re-render the modal reactions UI
+    initModalReactions(recordId);
+
+    // Also update presentation view if it's active
+    const presentationReactionContainer = document.querySelector(`.itinerary-item-reactions[data-record-id="${recordId}"]`);
+    if (presentationReactionContainer && typeof window.renderPresentationReactions === 'function') {
+        window.renderPresentationReactions(recordId, presentationReactionContainer);
+    }
+
+    // Update emoji indicator on presentation card
+    const emojiIndicator = document.querySelector(`.item-emoji-indicator[data-record-id="${recordId}"]`);
+    if (emojiIndicator && typeof window.updatePresentationEmojiIndicator === 'function') {
+        window.updatePresentationEmojiIndicator(recordId);
+    }
+
+    // Trigger save to persist
+    triggerSave();
+
+    log('Modal', `Reaction ${emoji} set for item ${recordId} by ${currentUser.id}`);
+}
+
+/**
+ * Render the reaction summary showing who reacted and the overall score
+ */
+function renderModalReactionsSummary(recordId, summaryEl, scoreBadgeEl) {
+    const allReactions = state.session.reactions.get(recordId);
+
+    if (!allReactions || !(allReactions instanceof Map) || allReactions.size === 0) {
+        if (summaryEl) summaryEl.innerHTML = '<span class="modal-reactions-empty">No reactions yet — be the first!</span>';
+        if (scoreBadgeEl) {
+            scoreBadgeEl.textContent = '';
+            scoreBadgeEl.style.display = 'none';
+        }
+        return;
+    }
+
+    // Calculate total score
+    let totalScore = 0;
+    const reactionCounts = {};
+    allReactions.forEach((emoji, userId) => {
+        totalScore += (REACTION_SCORES[emoji] || 0);
+        reactionCounts[emoji] = (reactionCounts[emoji] || 0) + 1;
+    });
+
+    // Score badge
+    if (scoreBadgeEl) {
+        const scoreText = totalScore > 0 ? `+${totalScore.toFixed(1)}` : totalScore.toFixed(1);
+        const scoreClass = totalScore > 2 ? 'score-positive' : totalScore < -1 ? 'score-negative' : 'score-neutral';
+        scoreBadgeEl.textContent = `${scoreText} impact`;
+        scoreBadgeEl.className = `modal-reactions-score-badge ${scoreClass}`;
+        scoreBadgeEl.style.display = 'inline-block';
+        scoreBadgeEl.title = `Combined ranking impact from ${allReactions.size} reaction${allReactions.size !== 1 ? 's' : ''}`;
+    }
+
+    // Summary - top emojis with counts
+    if (summaryEl) {
+        const sorted = Object.entries(reactionCounts).sort((a, b) => b[1] - a[1]);
+        const pills = sorted.map(([emoji, count]) => {
+            const score = REACTION_SCORES[emoji] || 0;
+            const scoreLabel = score > 0 ? `+${score.toFixed(1)}` : score.toFixed(1);
+            return `<span class="modal-reaction-pill" title="${count} reaction${count !== 1 ? 's' : ''} (${scoreLabel} each)">
+                        ${emoji}<span class="pill-count">${count}</span>
+                    </span>`;
+        }).join('');
+
+        // Show who reacted
+        const userNames = [];
+        allReactions.forEach((emoji, userId) => {
+            const name = state.session.userProfiles?.get(userId) || 'Someone';
+            userNames.push(`${name} ${emoji}`);
+        });
+        const whoText = userNames.length <= 3
+            ? userNames.join(', ')
+            : `${userNames.slice(0, 2).join(', ')} & ${userNames.length - 2} more`;
+
+        summaryEl.innerHTML = `
+            <div class="modal-reactions-pills">${pills}</div>
+            <div class="modal-reactions-who">${whoText}</div>
+        `;
+    }
+}
+
+// ============================================
+// MODAL COMMENTS SYSTEM
+// ============================================
+
+/**
+ * Initialize the comments section in the detail modal.
+ * Loads existing comments for the item and renders the input form.
+ * @param {string} recordId - The item record ID
+ */
+async function initModalComments(recordId) {
+    const section = document.getElementById('modal-comments-section');
+    if (!section) return;
+
+    // Only show comments if we have a session (plan context)
+    const hasSession = state.session.id && state.session.id.startsWith('rec');
+    const isPresentationActive = document.body.classList.contains('presentation-active');
+
+    if (!hasSession && !isPresentationActive) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = '';
+
+    const commentsList = document.getElementById('modal-comments-list');
+    const countEl = document.getElementById('modal-comments-count');
+    const form = document.getElementById('modal-comment-form');
+    const input = document.getElementById('modal-comment-input');
+    const sendBtn = document.getElementById('modal-comment-send-btn');
+    const replyIndicator = document.getElementById('modal-comment-reply-indicator');
+    const replyCancelBtn = document.getElementById('modal-comment-reply-cancel');
+
+    if (!commentsList) return;
+
+    // Reset reply state
+    modalReplyingTo = null;
+    if (replyIndicator) replyIndicator.style.display = 'none';
+
+    // Enable/disable send button based on input
+    if (input) {
+        input.oninput = () => {
+            if (sendBtn) sendBtn.disabled = !input.value.trim();
+        };
+    }
+
+    // Cancel reply handler
+    if (replyCancelBtn) {
+        replyCancelBtn.onclick = () => {
+            modalReplyingTo = null;
+            if (replyIndicator) replyIndicator.style.display = 'none';
+            if (input) input.placeholder = 'Add a comment...';
+        };
+    }
+
+    // Form submit handler
+    if (form) {
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!input || !input.value.trim()) return;
+
+            const content = input.value.trim();
+            input.value = '';
+            if (sendBtn) sendBtn.disabled = true;
+
+            let currentUser;
+            try {
+                currentUser = getCurrentUser();
+            } catch (err) {
+                currentUser = { id: 'anonymous', name: 'Anonymous' };
+            }
+
+            try {
+                if (modalReplyingTo) {
+                    // Post as reply
+                    await api.postReplyMessage(
+                        modalReplyingTo.messageId,
+                        state.session.id,
+                        recordId,
+                        currentUser.id,
+                        currentUser.name || 'Anonymous',
+                        content
+                    );
+                    modalReplyingTo = null;
+                    if (replyIndicator) replyIndicator.style.display = 'none';
+                    if (input) input.placeholder = 'Add a comment...';
+                } else {
+                    // Post new comment linked to this item
+                    await api.postChatMessage(
+                        state.session.id,
+                        currentUser.id,
+                        currentUser.name || 'Anonymous',
+                        content,
+                        recordId
+                    );
+                }
+
+                // Invalidate cache and reload
+                modalCommentsCache.delete(recordId);
+                await loadAndRenderModalComments(recordId, commentsList, countEl);
+            } catch (err) {
+                log('Modal', `Error posting comment: ${err.message}`);
+                if (typeof ui !== 'undefined' && ui.showToast) {
+                    ui.showToast('Failed to post comment. Please try again.');
+                }
+            }
+        };
+    }
+
+    // Load and render comments
+    await loadAndRenderModalComments(recordId, commentsList, countEl);
+}
+
+/**
+ * Load comments for an item and render them in the modal.
+ */
+async function loadAndRenderModalComments(recordId, listEl, countEl) {
+    if (!listEl) return;
+
+    // Show loading state
+    listEl.innerHTML = '<div class="modal-comments-loading">Loading comments...</div>';
+
+    try {
+        let messages;
+
+        // Check cache (valid for 30 seconds)
+        const cached = modalCommentsCache.get(recordId);
+        if (cached && (Date.now() - cached.timestamp) < 30000) {
+            messages = cached.messages;
+        } else {
+            // Fetch all session messages and filter by item
+            const allMessages = await api.fetchChatMessages(state.session.id);
+            messages = allMessages.filter(msg => {
+                const itemLink = msg.fields?.['Item Link'];
+                return itemLink && (Array.isArray(itemLink) ? itemLink.includes(recordId) : itemLink === recordId);
+            });
+
+            // Cache the result
+            modalCommentsCache.set(recordId, { messages, timestamp: Date.now() });
+        }
+
+        // Build thread structure: top-level messages and their replies
+        const topLevel = [];
+        const repliesByParent = {};
+
+        messages.forEach(msg => {
+            const parentId = msg.fields?.ParentMessageID;
+            if (parentId) {
+                if (!repliesByParent[parentId]) repliesByParent[parentId] = [];
+                repliesByParent[parentId].push(msg);
+            } else {
+                topLevel.push(msg);
+            }
+        });
+
+        if (countEl) {
+            const total = messages.length;
+            countEl.textContent = total > 0 ? `${total}` : '';
+            countEl.style.display = total > 0 ? 'inline-flex' : 'none';
+        }
+
+        if (topLevel.length === 0) {
+            listEl.innerHTML = '<div class="modal-comments-empty">No comments yet. Start the conversation!</div>';
+            return;
+        }
+
+        // Render comments
+        let currentUser;
+        try {
+            currentUser = getCurrentUser();
+        } catch (e) {
+            currentUser = { id: 'anonymous', name: 'Anonymous' };
+        }
+
+        let html = '';
+        topLevel.forEach(msg => {
+            const replies = repliesByParent[msg.id] || [];
+            html += renderModalComment(msg, replies, currentUser, recordId);
+        });
+
+        listEl.innerHTML = html;
+
+        // Attach reply button handlers
+        listEl.querySelectorAll('.modal-comment-reply-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const messageId = btn.dataset.messageId;
+                const senderName = btn.dataset.senderName;
+                modalReplyingTo = { messageId, senderName };
+
+                const replyIndicator = document.getElementById('modal-comment-reply-indicator');
+                const input = document.getElementById('modal-comment-input');
+                if (replyIndicator) {
+                    replyIndicator.style.display = 'flex';
+                    replyIndicator.querySelector('.reply-indicator-text').textContent = `Replying to ${senderName}`;
+                }
+                if (input) {
+                    input.placeholder = `Reply to ${senderName}...`;
+                    input.focus();
+                }
+            };
+        });
+
+    } catch (err) {
+        log('Modal', `Error loading comments: ${err.message}`);
+        listEl.innerHTML = '<div class="modal-comments-error">Could not load comments.</div>';
+    }
+}
+
+/**
+ * Render a single comment with its replies
+ */
+function renderModalComment(msg, replies, currentUser, recordId) {
+    const fields = msg.fields || {};
+    const senderName = fields.SenderName || 'Anonymous';
+    const content = fields.Content || '';
+    const timestamp = fields.Timestamp ? formatCommentTimestamp(fields.Timestamp) : '';
+    const isMine = fields.SenderID === currentUser.id;
+    const senderInitial = senderName.charAt(0).toUpperCase();
+
+    let html = `<div class="modal-comment ${isMine ? 'mine' : ''}" data-message-id="${msg.id}">
+        <div class="modal-comment-avatar">${senderInitial}</div>
+        <div class="modal-comment-body">
+            <div class="modal-comment-meta">
+                <span class="modal-comment-author">${escapeHtml(senderName)}</span>
+                <span class="modal-comment-time">${timestamp}</span>
+            </div>
+            <div class="modal-comment-text">${escapeHtml(content)}</div>
+            <div class="modal-comment-actions">
+                <button class="modal-comment-reply-btn" data-message-id="${msg.id}" data-sender-name="${escapeHtml(senderName)}">Reply</button>
+            </div>`;
+
+    // Render replies
+    if (replies.length > 0) {
+        html += '<div class="modal-comment-replies">';
+        replies.forEach(reply => {
+            const rFields = reply.fields || {};
+            const rName = rFields.SenderName || 'Anonymous';
+            const rContent = rFields.Content || '';
+            const rTime = rFields.Timestamp ? formatCommentTimestamp(rFields.Timestamp) : '';
+            const rIsMine = rFields.SenderID === currentUser.id;
+            const rInitial = rName.charAt(0).toUpperCase();
+
+            html += `<div class="modal-comment-reply ${rIsMine ? 'mine' : ''}">
+                <div class="modal-comment-avatar small">${rInitial}</div>
+                <div class="modal-comment-body">
+                    <div class="modal-comment-meta">
+                        <span class="modal-comment-author">${escapeHtml(rName)}</span>
+                        <span class="modal-comment-time">${rTime}</span>
+                    </div>
+                    <div class="modal-comment-text">${escapeHtml(rContent)}</div>
+                </div>
+            </div>`;
+        });
+        html += '</div>';
+    }
+
+    html += '</div></div>';
+    return html;
+}
+
+/**
+ * Format a timestamp for comment display (e.g. "2m ago", "1h ago", "Jan 5")
+ */
+function formatCommentTimestamp(isoStr) {
+    try {
+        const date = new Date(isoStr);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMin = Math.floor(diffMs / 60000);
+        const diffHr = Math.floor(diffMs / 3600000);
+        const diffDay = Math.floor(diffMs / 86400000);
+
+        if (diffMin < 1) return 'just now';
+        if (diffMin < 60) return `${diffMin}m ago`;
+        if (diffHr < 24) return `${diffHr}h ago`;
+        if (diffDay < 7) return `${diffDay}d ago`;
+
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } catch {
+        return '';
+    }
+}
+
+/**
+ * Simple HTML escaper for comment content
+ */
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 function resetModalState() {
     console.log('[MODAL DEBUG] resetModalState called.');
     const elements = {
@@ -1124,6 +1666,38 @@ function resetModalState() {
     if (chipInBtn) chipInBtn.classList.remove('active');
     const priceActions = document.getElementById('modal-price-actions');
     if (priceActions) priceActions.classList.add('hidden');
+
+    // Reset reactions & comments sections
+    const reactionsSection = document.getElementById('modal-reactions-section');
+    if (reactionsSection) {
+        reactionsSection.style.display = 'none';
+        const quickBar = document.getElementById('modal-reactions-quick-bar');
+        if (quickBar) quickBar.innerHTML = '';
+        const picker = document.getElementById('modal-reactions-picker');
+        if (picker) { picker.innerHTML = ''; picker.style.display = 'none'; }
+        const summary = document.getElementById('modal-reactions-summary');
+        if (summary) summary.innerHTML = '';
+        const scoreBadge = document.getElementById('modal-reactions-score-badge');
+        if (scoreBadge) { scoreBadge.textContent = ''; scoreBadge.style.display = 'none'; }
+        const expandBtn = document.getElementById('modal-reactions-expand-btn');
+        if (expandBtn) {
+            const icon = expandBtn.querySelector('.expand-btn-icon');
+            if (icon) icon.textContent = '+';
+        }
+    }
+    const commentsSection = document.getElementById('modal-comments-section');
+    if (commentsSection) {
+        commentsSection.style.display = 'none';
+        const commentsList = document.getElementById('modal-comments-list');
+        if (commentsList) commentsList.innerHTML = '';
+        const commentsCount = document.getElementById('modal-comments-count');
+        if (commentsCount) { commentsCount.textContent = ''; commentsCount.style.display = 'none'; }
+        const commentInput = document.getElementById('modal-comment-input');
+        if (commentInput) commentInput.value = '';
+        const replyIndicator = document.getElementById('modal-comment-reply-indicator');
+        if (replyIndicator) replyIndicator.style.display = 'none';
+    }
+    modalReplyingTo = null;
 
     log('Modal', 'Reset modal state.');
 }
@@ -6558,6 +7132,13 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             })()
         }
     });
+
+    // Initialize reactions & comments sections for this item
+    const modalRecordId = modalOverlay.dataset.recordId;
+    if (modalRecordId) {
+        initModalReactions(modalRecordId);
+        initModalComments(modalRecordId);
+    }
 
     // Reset the rendering guard after modal is fully displayed
     isModalRendering = false;
