@@ -62,7 +62,10 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
 // --------------------------------
 
 export async function fetchPlansForUser(userId, includeFullDetails = false) {
+    console.log(`[PLANS-FETCH] ========== fetchPlansForUser START ==========`);
+    console.log(`[PLANS-FETCH] userId: ${userId}, includeFullDetails: ${includeFullDetails}`);
     if (!userId) {
+        console.log(`[PLANS-FETCH] No userId provided, returning empty array.`);
         return [];
     }
 
@@ -103,6 +106,11 @@ export async function fetchPlansForUser(userId, includeFullDetails = false) {
         const data = await response.json();
         // Sort by creation time, newest first
         data.records.sort((a, b) => new Date(b.createdTime) - new Date(a.createdTime));
+        console.log(`[PLANS-FETCH] Fetched ${data.records.length} plans for user ${userId}:`);
+        data.records.forEach((plan, i) => {
+            console.log(`[PLANS-FETCH]   ${i + 1}. "${plan.fields?.Name}" (${plan.id}) - Collaborators: [${(plan.fields?.Collaborators || []).join(', ')}]`);
+        });
+        console.log(`[PLANS-FETCH] ========== fetchPlansForUser END ==========`);
         log('API', `Fetched ${data.records.length} plans for user ${userId}`);
         return data.records;
     } catch (error) {
@@ -270,14 +278,20 @@ export async function fetchSessionsWithDatesForStore(storeId) {
 
 
 export async function associateSessionWithUser(sessionId, userId) {
-    if (!sessionId || !userId) return;
+    console.log(`[PLAN-ASSOC] ========== associateSessionWithUser START ==========`);
+    console.log(`[PLAN-ASSOC] sessionId: ${sessionId}, userId: ${userId}`);
+    if (!sessionId || !userId) {
+        console.warn(`[PLAN-ASSOC] Missing sessionId or userId, aborting association`);
+        return;
+    }
     log('API', `Associating session ${sessionId} with user ${userId}`);
 
     const sessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
-    const userUrl = `https://api.airtable.com/v0/${BASE_ID}/Users/${userId}`; // Assuming Users table name
+    const userUrl = `https://api.airtable.com/v0/${BASE_ID}/Users/${userId}`;
 
     try {
         // Fetch existing records to get current links
+        console.log(`[PLAN-ASSOC] Fetching session and user records...`);
         const [sessionRes, userRes] = await Promise.all([
             fetch(sessionUrl, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } }),
             fetch(userUrl, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } })
@@ -288,44 +302,64 @@ export async function associateSessionWithUser(sessionId, userId) {
 
         const sessionRecord = await sessionRes.json();
         const userRecord = await userRes.json();
+        console.log(`[PLAN-ASSOC] Session "${sessionRecord.fields?.Name}" - current Collaborators:`, sessionRecord.fields.Collaborators || []);
+        console.log(`[PLAN-ASSOC] User record fields available:`, Object.keys(userRecord.fields || {}));
 
         // Update Session with User collaborator
         const currentCollaborators = sessionRecord.fields.Collaborators || [];
         if (!currentCollaborators.includes(userId)) {
             const updatedCollaborators = [...currentCollaborators, userId];
             const sessionPayload = { fields: { 'Collaborators': updatedCollaborators } };
+            console.log(`[PLAN-ASSOC] Adding user to session Collaborators. Was: [${currentCollaborators}], Now: [${updatedCollaborators}]`);
             const patchSessionRes = await fetch(sessionUrl, {
                 method: 'PATCH',
                 headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(sessionPayload)
             });
-            if (!patchSessionRes.ok) throw new Error(`Airtable API Error updating session collaborators: ${await patchSessionRes.text()}`);
+            if (!patchSessionRes.ok) {
+                const errText = await patchSessionRes.text();
+                console.error(`[PLAN-ASSOC] Failed to update session collaborators:`, errText);
+                throw new Error(`Airtable API Error updating session collaborators: ${errText}`);
+            }
+            console.log(`[PLAN-ASSOC] Successfully added user ${userId} to session ${sessionId} collaborators.`);
             log('API', `Successfully added user ${userId} to session ${sessionId} collaborators.`);
         } else {
-             log('API', `User ${userId} already a collaborator on session ${sessionId}.`);
+            console.log(`[PLAN-ASSOC] User ${userId} already a collaborator on session ${sessionId}. No update needed.`);
+            log('API', `User ${userId} already a collaborator on session ${sessionId}.`);
         }
 
         // Update User with Associated Session
-        const currentSessions = userRecord.fields['Sessions 2'] || []; // Corrected field name 'Sessions 2'
-         if (!currentSessions.includes(sessionId)) {
+        // Field name: 'Associated Sessions' (matches auth-verify.js)
+        const currentSessions = userRecord.fields['Associated Sessions'] || [];
+        console.log(`[PLAN-ASSOC] User's current Associated Sessions:`, currentSessions);
+        if (!currentSessions.includes(sessionId)) {
             const updatedSessions = [...currentSessions, sessionId];
-            const userPayload = { fields: { 'Sessions 2': updatedSessions } }; // Corrected field name 'Sessions 2'
-             const patchUserRes = await fetch(userUrl, {
+            const userPayload = { fields: { 'Associated Sessions': updatedSessions } };
+            console.log(`[PLAN-ASSOC] Adding session to user's Associated Sessions. Was: [${currentSessions}], Now: [${updatedSessions}]`);
+            const patchUserRes = await fetch(userUrl, {
                  method: 'PATCH',
                  headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
                  body: JSON.stringify(userPayload)
-             });
-             // Log error but don't throw, as login can still proceed
-             if (!patchUserRes.ok) console.error(`Airtable API Error updating user associated sessions: ${await patchUserRes.text()}`);
-             else log('API', `Successfully added session ${sessionId} to user ${userId}'s associated sessions.`);
-         } else {
-              log('API', `Session ${sessionId} already associated with user ${userId}.`);
-         }
+            });
+            // Log error but don't throw, as login can still proceed
+            if (!patchUserRes.ok) {
+                const errText = await patchUserRes.text();
+                console.error(`[PLAN-ASSOC] Failed to update user Associated Sessions:`, errText);
+            } else {
+                console.log(`[PLAN-ASSOC] Successfully added session ${sessionId} to user ${userId}'s Associated Sessions.`);
+                log('API', `Successfully added session ${sessionId} to user ${userId}'s associated sessions.`);
+            }
+        } else {
+            console.log(`[PLAN-ASSOC] Session ${sessionId} already in user ${userId}'s Associated Sessions. No update needed.`);
+            log('API', `Session ${sessionId} already associated with user ${userId}.`);
+        }
+        console.log(`[PLAN-ASSOC] ========== associateSessionWithUser END (SUCCESS) ==========`);
 
     } catch (error) {
         // Don't block login flow for this, just log the error
-        console.error("Failed to associate session with user:", error);
+        console.error("[PLAN-ASSOC] Failed to associate session with user:", error);
         log('API', `Failed to associate session: ${error.message}`);
+        console.log(`[PLAN-ASSOC] ========== associateSessionWithUser END (ERROR) ==========`);
     }
 }
 
@@ -397,6 +431,8 @@ export async function loadSessionFromAirtable(sessionId) {
             const planStoreId = state.session.storeId;
             const isOwnerOfPlanStore = isStoreOwner && ownedStoreId && planStoreId === ownedStoreId;
             state.session.isOwned = isCollaborator || isOwnerOfPlanStore;
+            console.log(`[SESSION-LOAD] Authenticated user ${state.session.user.id}: isCollaborator=${isCollaborator}, isOwnerOfPlanStore=${isOwnerOfPlanStore}, isOwned=${state.session.isOwned}`);
+            console.log(`[SESSION-LOAD] Session Collaborators:`, record.fields.Collaborators || []);
             log('API', `Authenticated user. Access level (isOwned): ${state.session.isOwned}`);
 
             // Auto-associate authenticated user as collaborator when opening a plan
@@ -803,6 +839,7 @@ export async function saveSessionToAirtable() {
     const isUpdate = state.session.id !== null;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
     const method = isUpdate ? 'PATCH' : 'POST';
+    console.log(`[SESSION-SAVE] Mode: ${isUpdate ? 'UPDATE' : 'CREATE'}, SessionId: ${state.session.id}, Collaborators: [${validCollaboratorIds}]`);
 
     try {
         const response = await fetch(url, {
@@ -825,8 +862,13 @@ export async function saveSessionToAirtable() {
             state.session.isOwned = true;
             window.history.replaceState({}, document.title, `?session=${newSessionId}${window.location.search.includes('shopId') ? `&shopId=${state.ui.activeShopId}` : ''}`);
             log('API', `New session created with ID: ${newSessionId}`);
+            console.log(`[SESSION-SAVE] New session created: ${newSessionId}. User authenticated: ${state.session.user.isAuthenticated}, userId: ${state.session.user.id}`);
             if(state.session.user.isAuthenticated && state.session.user.id) {
+                console.log(`[SESSION-SAVE] Associating new session ${newSessionId} with user ${state.session.user.id}...`);
                  await associateSessionWithUser(newSessionId, state.session.user.id);
+                 console.log(`[SESSION-SAVE] Association complete for new session.`);
+            } else {
+                console.log(`[SESSION-SAVE] User not authenticated. New session ${newSessionId} will NOT be associated with any user yet.`);
             }
             document.dispatchEvent(new CustomEvent('sessionReady'));
             document.dispatchEvent(new CustomEvent('planCreated'));

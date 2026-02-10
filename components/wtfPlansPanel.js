@@ -290,9 +290,13 @@ async function loadWtfPlansData() {
     const container = document.getElementById('wtf-plans-list-container');
     if (!container) return;
 
+    console.log(`[WTF-PLANS] ========== loadWtfPlansData START ==========`);
+
     // Show loading state
     isLoading = true;
     const isAuthenticated = state.session.user.isAuthenticated;
+    const userId = state.session.user.id;
+    console.log(`[WTF-PLANS] isAuthenticated: ${isAuthenticated}, userId: ${userId}, currentSessionId: ${state.session.id}`);
     container.innerHTML = `<div class="wtf-plans-loading">${isAuthenticated ? 'Loading your plans...' : 'Loading upcoming events...'}</div>`;
 
     try {
@@ -347,6 +351,9 @@ async function loadWtfPlansData() {
                 }
             });
             log('WtfPlansPanel', `Separated ${allUserPlans.length} plans: ${wtfPlansData.plans.length} shared, ${wtfPlansData.drafts.length} drafts`);
+            console.log(`[WTF-PLANS] Plans breakdown: ${wtfPlansData.plans.length} shared, ${wtfPlansData.drafts.length} drafts (from ${allUserPlans.length} total)`);
+            wtfPlansData.plans.forEach((p, i) => console.log(`[WTF-PLANS]   Shared ${i+1}: "${p.fields?.Name}" (${p.id})`));
+            wtfPlansData.drafts.forEach((p, i) => console.log(`[WTF-PLANS]   Draft ${i+1}: "${p.fields?.Name}" (${p.id})`));
         }
 
         // RSVPs - filter from records (events user has RSVP'd to)
@@ -383,6 +390,7 @@ async function loadWtfPlansData() {
         wtfPlansData.favorites = state.records.all.filter(record => likedIds.has(record.id));
 
         isLoading = false;
+        console.log(`[WTF-PLANS] ========== loadWtfPlansData END (rendering ${wtfPlansData.plans.length + wtfPlansData.drafts.length} plans/drafts, ${wtfPlansData.rsvps.length} rsvps, ${wtfPlansData.favorites.length} favorites) ==========`);
         renderWtfPlansList();
 
     } catch (error) {

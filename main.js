@@ -20,7 +20,7 @@ import fluidEffect from './components/effects/fluid.js';
 import { showReceiptModal } from './components/receipt.js';
 import { updateFooter } from './components/footer.js';
 import { initializeProjectsDashboard, updateProjectsData, showProjectsLoading } from './components/projectsDashboard.js';
-import { initializeWtfPlansPanel, syncWtfPlansPanelWithUrl } from './components/wtfPlansPanel.js';
+import { initializeWtfPlansPanel, syncWtfPlansPanelWithUrl, refreshWtfPlansData, isWtfPlansPanelOpen } from './components/wtfPlansPanel.js';
 import { initializeForumPanel, syncForumPanelWithUrl } from './components/forumPanel.js';
 import { applyCloudinaryTransform } from './utils/imageOptimizer.js';
 
@@ -353,11 +353,29 @@ async function initialize() {
              const menuProjectsBtn = document.getElementById('menu-projects-btn');
              if (menuSessionsBtn) menuSessionsBtn.style.display = 'flex';
              if (menuProjectsBtn) menuProjectsBtn.style.display = 'flex';
+
+             // Refresh WTF Plans panel data if it's open, so newly associated plans appear
+             if (isWtfPlansPanelOpen()) {
+                 console.log('[LOGIN-ASSOC] WTF Plans panel is open, refreshing data...');
+                 refreshWtfPlansData().then(() => {
+                     console.log('[LOGIN-ASSOC] WTF Plans panel data refreshed after login.');
+                 }).catch(err => {
+                     console.error('[LOGIN-ASSOC] Failed to refresh WTF Plans data:', err);
+                 });
+             }
          }
      });
 
     document.addEventListener('planCreated', () => {
         log('Main', 'New plan created.');
+        console.log(`[PLAN-CREATED] New plan created. Session ID: ${state.session.id}, User: ${state.session.user.id}`);
+        // Refresh WTF Plans panel data if open so the new plan appears in the list
+        if (isWtfPlansPanelOpen()) {
+            console.log('[PLAN-CREATED] WTF Plans panel is open, refreshing data...');
+            refreshWtfPlansData().catch(err => {
+                console.error('[PLAN-CREATED] Failed to refresh WTF Plans data:', err);
+            });
+        }
     });
     document.addEventListener('sessionReady', () => {
         console.log('[SESSION-READY] ========== EVENT HANDLER START ==========');
