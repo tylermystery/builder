@@ -3494,6 +3494,23 @@ html.presentation-active {
     margin: 0 auto;
 }
 
+.board-empty-state {
+    max-width: 560px;
+    padding: 80px 30px;
+}
+
+.board-empty-icon {
+    font-size: 3em;
+    margin-bottom: 16px;
+    opacity: 0.6;
+    animation: board-empty-float 3s ease-in-out infinite;
+}
+
+@keyframes board-empty-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
 .itinerary-empty-title {
     font-size: 1.4em;
     font-weight: 600;
@@ -3509,6 +3526,14 @@ html.presentation-active {
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     margin: 0 0 25px 0;
     font-style: normal;
+    line-height: 1.5;
+}
+
+.board-empty-hint {
+    font-size: 0.82em;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 28px;
+    font-style: italic;
 }
 
 .presentation-suggestions {
@@ -3521,23 +3546,40 @@ html.presentation-active {
 .presentation-suggestion-btn {
     padding: 12px 18px;
     font-size: 0.95em;
-    border-radius: 8px;
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
-    color: #fff;
-    border: none;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+    transition: transform 0.2s, box-shadow 0.2s, background 0.2s, border-color 0.2s;
     font-weight: 500;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 110px;
+}
+
+.suggestion-btn-icon {
+    font-size: 1.4em;
 }
 
 .presentation-suggestion-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
-    background: linear-gradient(135deg, #0056b3 0%, #003d82 100%);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.3);
 }
 
 .presentation-suggestion-btn:active {
     transform: translateY(0);
+}
+
+.presentation-suggestion-btn:focus-visible {
+    outline: 2px solid rgba(99, 102, 241, 0.8);
+    outline-offset: 2px;
 }
 
 /* Mobile responsive for itinerary */
@@ -9085,55 +9127,73 @@ hr.total-divider {
    - 75-100% confidence: Typed (professional, finalized)
    ============================================================================= */
 
-/* Base confidence styling - applied to AI cards */
+/* Base confidence styling - applied to AI cards (catalog and presentation) */
 .presentation-result-card.confidence-pencil,
 .presentation-result-card.confidence-pen,
 .presentation-result-card.confidence-typed,
-.presentation-result-card.confidence-premium {
+.presentation-result-card.confidence-premium,
+.event-card.confidence-pencil,
+.event-card.confidence-pen,
+.event-card.confidence-typed,
+.event-card.confidence-premium {
     position: relative;
 }
 
-/* Pencil style (< 50% confidence) - Sketchy, draft-like appearance */
-.presentation-result-card.confidence-pencil {
-    background: repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 22px,
-        rgba(100, 100, 100, 0.03) 22px,
-        rgba(100, 100, 100, 0.03) 23px
-    ), #fdfcf8;
-    border: 1px dashed #c0b8a8;
+/* Pencil style (< 50% confidence) - Sketchy, draft-like on ruled paper */
+.presentation-result-card.confidence-pencil,
+.event-card.confidence-pencil {
+    background:
+        /* Blue ruled lines like notebook paper */
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 22px,
+            rgba(180, 200, 230, 0.18) 22px,
+            rgba(180, 200, 230, 0.18) 23px
+        ),
+        /* Red margin line */
+        linear-gradient(
+            90deg,
+            transparent 38px,
+            rgba(220, 120, 120, 0.12) 38px,
+            rgba(220, 120, 120, 0.12) 39px,
+            transparent 39px
+        ),
+        /* Warm paper base */
+        #f5f2ea;
+    border: 1px dashed #b8b0a0;
     box-shadow: none;
     transform: rotate(-0.3deg);
 }
 
 .presentation-result-card.confidence-pencil .presentation-result-card-name {
-    font-family: 'Caveat', cursive;
-    font-size: 1.25em;
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.25em !important;
     font-weight: 500;
-    color: #555;
+    color: #8a8a8a !important;
     letter-spacing: 0.3px;
-    opacity: 0.85;
+    opacity: 0.78;
 }
 
 .presentation-result-card.confidence-pencil .presentation-result-card-price {
-    font-family: 'Caveat', cursive;
-    font-size: 1.1em;
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.1em !important;
     font-weight: 500;
-    color: #666;
-    opacity: 0.8;
+    color: #999 !important;
+    opacity: 0.75;
 }
 
 .presentation-result-card.confidence-pencil .presentation-result-card-category {
-    font-family: 'Caveat', cursive;
+    font-family: 'Caveat', cursive !important;
     font-size: 0.95em;
-    background: rgba(200, 190, 170, 0.2);
+    background: rgba(200, 190, 170, 0.15);
     border: 1px dashed #c0b8a8;
+    color: #999 !important;
 }
 
 .presentation-result-card.confidence-pencil .presentation-result-card-image {
-    filter: grayscale(30%) brightness(0.95);
-    opacity: 0.85;
+    filter: grayscale(55%) brightness(0.92) contrast(0.9);
+    opacity: 0.7;
 }
 
 .presentation-result-card.confidence-pencil::before {
@@ -9158,22 +9218,22 @@ hr.total-divider {
 }
 
 .presentation-result-card.confidence-pen .presentation-result-card-name {
-    font-family: 'Dancing Script', cursive;
-    font-size: 1.2em;
+    font-family: 'Dancing Script', cursive !important;
+    font-size: 1.2em !important;
     font-weight: 600;
-    color: #2c3e50;
+    color: #2c3e50 !important;
     letter-spacing: 0.2px;
 }
 
 .presentation-result-card.confidence-pen .presentation-result-card-price {
-    font-family: 'Dancing Script', cursive;
-    font-size: 1.05em;
+    font-family: 'Dancing Script', cursive !important;
+    font-size: 1.05em !important;
     font-weight: 600;
-    color: #27ae60;
+    color: #27ae60 !important;
 }
 
 .presentation-result-card.confidence-pen .presentation-result-card-category {
-    font-family: 'Dancing Script', cursive;
+    font-family: 'Dancing Script', cursive !important;
     font-size: 0.9em;
     background: rgba(176, 196, 222, 0.2);
     border: 1px solid #b0c4de;
@@ -9192,17 +9252,17 @@ hr.total-divider {
 }
 
 .presentation-result-card.confidence-typed .presentation-result-card-name {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     font-size: 0.95em;
     font-weight: 600;
-    color: #333;
+    color: #333 !important;
 }
 
 .presentation-result-card.confidence-typed .presentation-result-card-price {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     font-size: 0.9em;
     font-weight: 600;
-    color: #27ae60;
+    color: #27ae60 !important;
 }
 
 /* Premium style (100% or very high confidence) - Elegant typography */
@@ -9213,24 +9273,152 @@ hr.total-divider {
 }
 
 .presentation-result-card.confidence-premium .presentation-result-card-name {
-    font-family: 'Playfair Display', Georgia, serif;
+    font-family: 'Playfair Display', Georgia, serif !important;
     font-size: 1em;
     font-weight: 600;
-    color: #1a1a1a;
+    color: #1a1a1a !important;
     letter-spacing: 0.1px;
 }
 
 .presentation-result-card.confidence-premium .presentation-result-card-price {
-    font-family: 'Playfair Display', Georgia, serif;
+    font-family: 'Playfair Display', Georgia, serif !important;
     font-size: 0.95em;
     font-weight: 600;
-    color: #1a7a4c;
+    color: #1a7a4c !important;
 }
 
 .presentation-result-card.confidence-premium .presentation-result-card-category {
     background: linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(212, 175, 55, 0.05) 100%);
     border: 1px solid rgba(212, 175, 55, 0.3);
-    color: #8b7355;
+    color: #8b7355 !important;
+}
+
+/* =====================================================
+   CATALOG CARD (event-card) CONFIDENCE STYLING
+   Mirrors presentation-result-card tiers for the
+   main catalog/browse view
+   ===================================================== */
+
+/* Pencil catalog card — gray pencil on notebook paper */
+.event-card.confidence-pencil .event-card-content h3 {
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.25em !important;
+    font-weight: 500;
+    color: #8a8a8a !important;
+    letter-spacing: 0.3px;
+    opacity: 0.78;
+}
+
+.event-card.confidence-pencil .event-card-content .description {
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.05em !important;
+    color: #999 !important;
+    opacity: 0.75;
+    line-height: 1.4;
+}
+
+.event-card.confidence-pencil .card-footer .price {
+    font-family: 'Caveat', cursive !important;
+    color: #999 !important;
+    opacity: 0.75;
+}
+
+.event-card.confidence-pencil .event-card-image-container {
+    filter: grayscale(55%) brightness(0.92) contrast(0.9);
+    opacity: 0.7;
+}
+
+.event-card.confidence-pencil::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cpath d='M0 0 L100 100 M100 0 L0 100' stroke='%23ddd' stroke-width='0.3' fill='none' opacity='0.3'/%3E%3C/svg%3E");
+    pointer-events: none;
+    border-radius: inherit;
+    z-index: 1;
+}
+
+/* Pen catalog card — ink-written, cleaner than pencil */
+.event-card.confidence-pen {
+    background: linear-gradient(to bottom, #fff 0%, #fafafa 100%);
+    border: 1px solid #b0c4de;
+    box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.event-card.confidence-pen .event-card-content h3 {
+    font-family: 'Dancing Script', cursive !important;
+    font-size: 1.2em !important;
+    font-weight: 600;
+    color: #2c3e50 !important;
+    letter-spacing: 0.2px;
+}
+
+.event-card.confidence-pen .event-card-content .description {
+    font-family: 'Dancing Script', cursive !important;
+    font-size: 1em !important;
+    color: #3d566e !important;
+    line-height: 1.4;
+}
+
+.event-card.confidence-pen .card-footer .price {
+    font-family: 'Dancing Script', cursive !important;
+    color: #27ae60 !important;
+}
+
+.event-card.confidence-pen .event-card-image-container {
+    filter: none;
+    opacity: 0.95;
+}
+
+/* Typed catalog card — clean, professional */
+.event-card.confidence-typed {
+    background: white;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.event-card.confidence-typed .event-card-content h3 {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    font-weight: 600;
+    color: #333 !important;
+}
+
+.event-card.confidence-typed .event-card-content .description {
+    color: #444 !important;
+}
+
+.event-card.confidence-typed .card-footer .price {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    font-weight: 600;
+    color: #27ae60 !important;
+}
+
+/* Premium catalog card — elegant typography */
+.event-card.confidence-premium {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border: 1px solid #d4af37;
+    box-shadow: 0 4px 12px rgba(212, 175, 55, 0.15);
+}
+
+.event-card.confidence-premium .event-card-content h3 {
+    font-family: 'Playfair Display', Georgia, serif !important;
+    font-weight: 600;
+    color: #1a1a1a !important;
+    letter-spacing: 0.1px;
+}
+
+.event-card.confidence-premium .event-card-content .description {
+    font-family: 'Playfair Display', Georgia, serif !important;
+    color: #2c2c2c !important;
+}
+
+.event-card.confidence-premium .card-footer .price {
+    font-family: 'Playfair Display', Georgia, serif !important;
+    font-weight: 600;
+    color: #1a7a4c !important;
 }
 
 /* Confidence indicator badge in corner of card */
@@ -9392,25 +9580,29 @@ hr.total-divider {
 }
 
 /* Hover effects per confidence level */
-.presentation-result-card.confidence-pencil:hover {
+.presentation-result-card.confidence-pencil:hover,
+.event-card.confidence-pencil:hover {
     border-color: #a09080;
     box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.08);
     transform: rotate(-0.3deg) translateY(-2px);
 }
 
-.presentation-result-card.confidence-pen:hover {
+.presentation-result-card.confidence-pen:hover,
+.event-card.confidence-pen:hover {
     border-color: #8fa8c8;
     box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.1);
     transform: rotate(0.1deg) translateY(-3px);
 }
 
-.presentation-result-card.confidence-typed:hover {
+.presentation-result-card.confidence-typed:hover,
+.event-card.confidence-typed:hover {
     border-color: #3498db;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
     transform: translateY(-3px);
 }
 
-.presentation-result-card.confidence-premium:hover {
+.presentation-result-card.confidence-premium:hover,
+.event-card.confidence-premium:hover {
     border-color: #c9a227;
     box-shadow: 0 8px 25px rgba(212, 175, 55, 0.25);
     transform: translateY(-4px);
@@ -9463,95 +9655,247 @@ hr.total-divider {
     border: 1px solid #d4af37;
 }
 
-/* Pencil style modal - Sketchy, draft-like appearance */
-#detail-modal.modal-confidence-pencil {
+/* Pencil style modal - Gray pencil on ruled notebook paper */
+#detail-modal-overlay.modal-confidence-pencil {
     font-family: 'Caveat', cursive;
 }
 
-#detail-modal.modal-confidence-pencil .modal-body {
-    background: repeating-linear-gradient(
-        transparent,
-        transparent 27px,
-        rgba(200, 200, 255, 0.15) 27px,
-        rgba(200, 200, 255, 0.15) 28px
-    );
+#detail-modal-overlay.modal-confidence-pencil .modal-content {
+    background:
+        /* Blue ruled lines like notebook paper */
+        repeating-linear-gradient(
+            transparent,
+            transparent 27px,
+            rgba(180, 200, 230, 0.2) 27px,
+            rgba(180, 200, 230, 0.2) 28px
+        ),
+        /* Red margin line */
+        linear-gradient(
+            90deg,
+            transparent 58px,
+            rgba(220, 120, 120, 0.15) 58px,
+            rgba(220, 120, 120, 0.15) 59px,
+            transparent 59px
+        ),
+        /* Warm paper base */
+        #f7f4ec;
 }
 
-#detail-modal.modal-confidence-pencil h2,
-#detail-modal.modal-confidence-pencil h3,
-#detail-modal.modal-confidence-pencil .modal-item-name {
-    font-family: 'Caveat', cursive;
-    font-size: 1.6em;
+#detail-modal-overlay.modal-confidence-pencil #modal-item-name,
+#detail-modal-overlay.modal-confidence-pencil h2,
+#detail-modal-overlay.modal-confidence-pencil h3 {
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.6em !important;
     letter-spacing: 0.5px;
+    color: #8a8a8a !important;
+    opacity: 0.82;
 }
 
-#detail-modal.modal-confidence-pencil .modal-item-description,
-#detail-modal.modal-confidence-pencil p {
-    font-family: 'Caveat', cursive;
-    font-size: 1.2em;
+#detail-modal-overlay.modal-confidence-pencil #modal-item-description,
+#detail-modal-overlay.modal-confidence-pencil .modal-sidebar-column p {
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.2em !important;
     line-height: 1.5;
+    color: #999 !important;
+    opacity: 0.78;
 }
 
-#detail-modal.modal-confidence-pencil .modal-item-price {
-    font-family: 'Caveat', cursive;
-    font-size: 1.4em;
+#detail-modal-overlay.modal-confidence-pencil #modal-item-price {
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.4em !important;
+    color: #999 !important;
+    opacity: 0.78;
 }
 
-/* Pen style modal - Handwritten but cleaner */
-#detail-modal.modal-confidence-pen {
+/* Pencil modal images - faded sketch look */
+#detail-modal-overlay.modal-confidence-pencil .modal-main-column img,
+#detail-modal-overlay.modal-confidence-pencil #modal-main-image img,
+#detail-modal-overlay.modal-confidence-pencil .image-collage img {
+    filter: grayscale(50%) brightness(0.95) contrast(0.85);
+    opacity: 0.75;
+}
+
+/* Pen modal images - slightly more vivid than pencil */
+#detail-modal-overlay.modal-confidence-pen .modal-main-column img,
+#detail-modal-overlay.modal-confidence-pen #modal-main-image img,
+#detail-modal-overlay.modal-confidence-pen .image-collage img {
+    filter: grayscale(15%) brightness(0.98);
+    opacity: 0.9;
+}
+
+/* Pen style modal - Ink-written, cleaner than pencil */
+#detail-modal-overlay.modal-confidence-pen {
     font-family: 'Dancing Script', cursive;
 }
 
-#detail-modal.modal-confidence-pen h2,
-#detail-modal.modal-confidence-pen h3,
-#detail-modal.modal-confidence-pen .modal-item-name {
-    font-family: 'Dancing Script', cursive;
-    font-size: 1.5em;
+#detail-modal-overlay.modal-confidence-pen #modal-item-name,
+#detail-modal-overlay.modal-confidence-pen h2,
+#detail-modal-overlay.modal-confidence-pen h3 {
+    font-family: 'Dancing Script', cursive !important;
+    font-size: 1.5em !important;
+    color: #2c3e50 !important;
 }
 
-#detail-modal.modal-confidence-pen .modal-item-description,
-#detail-modal.modal-confidence-pen p {
-    font-family: 'Dancing Script', cursive;
-    font-size: 1.15em;
+#detail-modal-overlay.modal-confidence-pen #modal-item-description,
+#detail-modal-overlay.modal-confidence-pen .modal-sidebar-column p {
+    font-family: 'Dancing Script', cursive !important;
+    font-size: 1.15em !important;
     line-height: 1.5;
+    color: #3d566e !important;
 }
 
-#detail-modal.modal-confidence-pen .modal-item-price {
-    font-family: 'Dancing Script', cursive;
-    font-size: 1.3em;
+#detail-modal-overlay.modal-confidence-pen #modal-item-price {
+    font-family: 'Dancing Script', cursive !important;
+    font-size: 1.3em !important;
+    color: #27ae60 !important;
 }
 
-/* Typed style modal - Clean, professional */
-#detail-modal.modal-confidence-typed {
+/* Typed style modal - Clean, professional, fully legible */
+#detail-modal-overlay.modal-confidence-typed {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-#detail-modal.modal-confidence-typed h2,
-#detail-modal.modal-confidence-typed h3,
-#detail-modal.modal-confidence-typed .modal-item-name {
+#detail-modal-overlay.modal-confidence-typed #modal-item-name,
+#detail-modal-overlay.modal-confidence-typed h2,
+#detail-modal-overlay.modal-confidence-typed h3 {
     font-family: inherit;
+    color: #222 !important;
+    font-weight: 600;
+}
+
+#detail-modal-overlay.modal-confidence-typed #modal-item-description,
+#detail-modal-overlay.modal-confidence-typed .modal-sidebar-column p {
+    color: #333 !important;
 }
 
 /* Premium style modal - Elegant typography */
-#detail-modal.modal-confidence-premium {
+#detail-modal-overlay.modal-confidence-premium {
     font-family: 'Playfair Display', serif;
 }
 
-#detail-modal.modal-confidence-premium .modal-body {
+#detail-modal-overlay.modal-confidence-premium .modal-content {
     border-left: 3px solid #d4af37;
 }
 
-#detail-modal.modal-confidence-premium h2,
-#detail-modal.modal-confidence-premium h3,
-#detail-modal.modal-confidence-premium .modal-item-name {
-    font-family: 'Playfair Display', serif;
+#detail-modal-overlay.modal-confidence-premium #modal-item-name,
+#detail-modal-overlay.modal-confidence-premium h2,
+#detail-modal-overlay.modal-confidence-premium h3 {
+    font-family: 'Playfair Display', serif !important;
     font-weight: 600;
-    color: #2c2c2c;
+    color: #2c2c2c !important;
 }
 
-#detail-modal.modal-confidence-premium .modal-item-price {
-    font-family: 'Playfair Display', serif;
-    color: #9a7b4f;
+#detail-modal-overlay.modal-confidence-premium #modal-item-price {
+    font-family: 'Playfair Display', serif !important;
+    color: #9a7b4f !important;
+}
+
+/* =====================================================
+   ITINERARY BOARD ITEM CONFIDENCE STYLING
+   Applies confidence-based visual styling to itinerary
+   items on the main presentation board
+   ===================================================== */
+
+/* Pencil itinerary item — sketchy draft on notebook paper */
+.itinerary-item.confidence-pencil {
+    background:
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 22px,
+            rgba(180, 200, 230, 0.18) 22px,
+            rgba(180, 200, 230, 0.18) 23px
+        ),
+        linear-gradient(
+            90deg,
+            transparent 38px,
+            rgba(220, 120, 120, 0.12) 38px,
+            rgba(220, 120, 120, 0.12) 39px,
+            transparent 39px
+        ),
+        #f5f2ea !important;
+    border: 1px dashed #b8b0a0 !important;
+}
+
+.itinerary-item.confidence-pencil .item-accordion-title {
+    font-family: 'Caveat', cursive !important;
+    font-size: 1.3em !important;
+    color: #8a8a8a !important;
+    opacity: 0.82;
+}
+
+.itinerary-item.confidence-pencil .item-accordion-summary {
+    font-family: 'Caveat', cursive !important;
+    color: #999 !important;
+    opacity: 0.75;
+}
+
+.itinerary-item.confidence-pencil .itinerary-item-price {
+    font-family: 'Caveat', cursive !important;
+    color: #999 !important;
+    opacity: 0.75;
+}
+
+/* Pen itinerary item — handwritten ink */
+.itinerary-item.confidence-pen {
+    background: linear-gradient(to bottom, #fff 0%, #fafafa 100%) !important;
+    border: 1px solid #b0c4de !important;
+}
+
+.itinerary-item.confidence-pen .item-accordion-title {
+    font-family: 'Dancing Script', cursive !important;
+    font-size: 1.2em !important;
+    color: #2c3e50 !important;
+}
+
+.itinerary-item.confidence-pen .item-accordion-summary {
+    font-family: 'Dancing Script', cursive !important;
+    color: #3d566e !important;
+}
+
+.itinerary-item.confidence-pen .itinerary-item-price {
+    font-family: 'Dancing Script', cursive !important;
+    color: #27ae60 !important;
+}
+
+/* Typed itinerary item — clean professional */
+.itinerary-item.confidence-typed {
+    background: white !important;
+    border: 1px solid #e0e0e0 !important;
+}
+
+.itinerary-item.confidence-typed .item-accordion-title {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    font-weight: 600;
+    color: #333 !important;
+}
+
+.itinerary-item.confidence-typed .itinerary-item-price {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    color: #27ae60 !important;
+}
+
+/* Premium itinerary item — elegant serif with gold */
+.itinerary-item.confidence-premium {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%) !important;
+    border: 1px solid #d4af37 !important;
+    box-shadow: 0 4px 12px rgba(212, 175, 55, 0.15);
+}
+
+.itinerary-item.confidence-premium .item-accordion-title {
+    font-family: 'Playfair Display', Georgia, serif !important;
+    font-weight: 600;
+    color: #1a1a1a !important;
+}
+
+.itinerary-item.confidence-premium .item-accordion-summary {
+    font-family: 'Playfair Display', Georgia, serif !important;
+    color: #2c2c2c !important;
+}
+
+.itinerary-item.confidence-premium .itinerary-item-price {
+    font-family: 'Playfair Display', Georgia, serif !important;
+    color: #1a7a4c !important;
 }
 
 /* No Results State */
@@ -11955,6 +12299,22 @@ hr.total-divider {
         animation: none;
     }
 
+    /* Disable board view card entrance animations */
+    .board-view .compact-card {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
+
+    .board-empty-icon {
+        animation: none;
+    }
+
+    .single-item-nudge-content {
+        animation: none;
+        opacity: 1;
+    }
+
     /* Disable smooth scrolling */
     html {
         scroll-behavior: auto;
@@ -13126,4 +13486,867 @@ hr.total-divider {
 .item-group-indicator .group-count {
     font-size: 0.9em;
     opacity: 0.8;
+}
+
+/* =============================================================================
+   BOARD VIEW - Compact Card Grid (v3.6 Plan Board)
+   ============================================================================= */
+
+/* Grid layout for board view */
+.itinerary-items-list.board-view {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+    max-width: 100%;
+}
+
+@media (max-width: 480px) {
+    .itinerary-items-list.board-view {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+    .itinerary-items-list.board-view {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Compact card tile */
+.compact-card {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.compact-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.compact-card:active {
+    transform: translateY(0);
+}
+
+/* Photo section */
+.compact-card-photo {
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    background-size: cover;
+    background-position: center;
+    background-color: rgba(255, 255, 255, 0.05);
+    position: relative;
+}
+
+.compact-card-no-photo .compact-card-photo {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.compact-card-no-photo .compact-card-photo::after {
+    content: '📷';
+    font-size: 2em;
+    opacity: 0.3;
+}
+
+/* Floating status overlay (top-left) */
+.compact-card-status {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    font-size: 0.72em;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    z-index: 2;
+    backdrop-filter: blur(4px);
+}
+
+.compact-card-status.task-status-gtg {
+    background: rgba(40, 167, 69, 0.8);
+}
+
+.compact-card-status.task-status-check {
+    background: rgba(255, 193, 7, 0.8);
+    color: #333;
+}
+
+.compact-card-status.task-status-attention,
+.compact-card-status.task-status-needs-attention {
+    background: rgba(220, 53, 69, 0.8);
+}
+
+.compact-card-status.task-status-no-action {
+    background: rgba(108, 117, 125, 0.7);
+}
+
+/* Floating emoji overlay (top-right) */
+.compact-card-emoji {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.9);
+    cursor: help;
+    font-size: 1em;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.compact-card-emoji-count {
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #555;
+}
+
+/* Group badge on photo */
+.compact-card-group-badge {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    font-size: 0.72em;
+    font-weight: 500;
+    backdrop-filter: blur(4px);
+}
+
+/* Card body */
+.compact-card-body {
+    padding: 12px;
+}
+
+.compact-card-title-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.compact-card-goal-badge {
+    font-size: 0.85em;
+    flex-shrink: 0;
+}
+
+.compact-card-name {
+    font-weight: 600;
+    font-size: 0.95em;
+    color: rgba(255, 255, 255, 0.95);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+}
+
+/* Provenance line */
+.compact-card-provenance {
+    font-size: 0.78em;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    overflow: hidden;
+}
+
+.provenance-label {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.9em;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.provenance-hybrid-icon {
+    flex-shrink: 0;
+    font-size: 1em;
+}
+
+.provenance-source-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 0.88em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 110px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.provenance-source-ai {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.25);
+    color: rgba(165, 168, 255, 0.9);
+}
+
+.provenance-source-solution {
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.2);
+    color: rgba(255, 200, 100, 0.9);
+}
+
+.provenance-source-manual {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.2);
+    color: rgba(110, 231, 183, 0.9);
+}
+
+.provenance-source-catalog {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.provenance-source-more {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.4);
+    font-style: italic;
+    font-size: 0.85em;
+}
+
+/* Variation pills */
+.compact-card-pills {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.compact-card-pill {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7em;
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.8);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+}
+
+.compact-card-pill-more {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.5);
+    font-style: italic;
+}
+
+/* Bottom meta bar */
+.compact-card-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.8em;
+    min-height: 24px;
+}
+
+.compact-card-reactions {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    flex-wrap: nowrap;
+    overflow: hidden;
+}
+
+.compact-reaction-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 0.85em;
+    line-height: 1;
+    transition: background 0.15s ease, transform 0.15s ease;
+    cursor: default;
+    white-space: nowrap;
+}
+
+.compact-reaction-pill:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.08);
+}
+
+.compact-reaction-count {
+    font-size: 0.8em;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    min-width: 8px;
+    text-align: center;
+}
+
+.compact-reaction-overflow {
+    font-size: 0.72em;
+    color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.04);
+    font-style: italic;
+}
+
+.compact-card-badges {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+/* Badge pill (shared by comment and task badges) */
+.compact-badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    line-height: 1;
+    white-space: nowrap;
+    transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.compact-badge-icon {
+    font-size: 0.9em;
+    flex-shrink: 0;
+}
+
+.compact-badge-count {
+    font-weight: 600;
+    min-width: 8px;
+    text-align: center;
+}
+
+.compact-badge-label {
+    font-weight: 500;
+    max-width: 64px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Comment badge */
+.compact-badge-comment {
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.15);
+    color: rgba(147, 197, 253, 0.9);
+}
+
+.compact-card:hover .compact-badge-comment {
+    background: rgba(59, 130, 246, 0.2);
+}
+
+/* Task status badges in meta bar */
+.compact-badge-task {
+    border: 1px solid transparent;
+}
+
+.compact-badge-task.task-status-gtg {
+    background: rgba(40, 167, 69, 0.12);
+    border-color: rgba(40, 167, 69, 0.18);
+    color: rgba(110, 231, 183, 0.9);
+}
+
+.compact-badge-task.task-status-check {
+    background: rgba(255, 193, 7, 0.12);
+    border-color: rgba(255, 193, 7, 0.18);
+    color: rgba(255, 220, 100, 0.9);
+}
+
+.compact-badge-task.task-status-attention,
+.compact-badge-task.task-status-needs-attention {
+    background: rgba(220, 53, 69, 0.12);
+    border-color: rgba(220, 53, 69, 0.18);
+    color: rgba(248, 150, 160, 0.9);
+}
+
+.compact-badge-task.task-status-no-action {
+    background: rgba(108, 117, 125, 0.1);
+    border-color: rgba(108, 117, 125, 0.15);
+    color: rgba(200, 200, 200, 0.7);
+}
+
+.compact-card:hover .compact-badge-task {
+    opacity: 1;
+}
+
+/* Lifecycle state styling */
+.compact-card-idea {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.compact-card-goal {
+    border-color: rgba(255, 193, 7, 0.4);
+    box-shadow: 0 0 0 1px rgba(255, 193, 7, 0.15) inset, 0 2px 8px rgba(255, 193, 7, 0.08);
+}
+
+.compact-card-goal .compact-card-body {
+    background: linear-gradient(180deg, rgba(255, 193, 7, 0.04) 0%, transparent 100%);
+}
+
+.compact-card-locked {
+    border-color: rgba(40, 167, 69, 0.4);
+    box-shadow: 0 0 0 1px rgba(40, 167, 69, 0.12) inset;
+}
+
+.compact-card-locked .compact-card-body {
+    background: linear-gradient(180deg, rgba(40, 167, 69, 0.03) 0%, transparent 100%);
+}
+
+.compact-card-archived {
+    opacity: 0.5;
+    border-color: rgba(255, 255, 255, 0.05);
+    filter: grayscale(30%);
+}
+
+.compact-card-archived:hover {
+    opacity: 0.75;
+    filter: grayscale(10%);
+}
+
+.compact-card-completed {
+    opacity: 0.75;
+    border-color: rgba(40, 167, 69, 0.25);
+}
+
+.compact-card-completed:hover {
+    opacity: 0.9;
+}
+
+.compact-card-completed .compact-card-photo::before {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 3em;
+    color: rgba(40, 167, 69, 0.6);
+    z-index: 1;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Lifecycle badge (floating bottom-right of photo) */
+.compact-card-lifecycle-badge {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.68em;
+    font-weight: 600;
+    z-index: 2;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.lifecycle-goal {
+    background: rgba(255, 193, 7, 0.85);
+    color: #4a3800;
+}
+
+.lifecycle-locked {
+    background: rgba(40, 167, 69, 0.85);
+    color: #fff;
+}
+
+.lifecycle-archived {
+    background: rgba(108, 117, 125, 0.8);
+    color: #fff;
+}
+
+.lifecycle-completed {
+    background: rgba(40, 167, 69, 0.9);
+    color: #fff;
+}
+
+/* Entry source type badge */
+.compact-card-source-badge {
+    flex-shrink: 0;
+    font-size: 0.75em;
+    padding: 1px 5px;
+    border-radius: 6px;
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+}
+
+.compact-card:hover .compact-card-source-badge {
+    opacity: 1;
+}
+
+.source-badge-ai {
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.source-badge-solution {
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.source-badge-manual {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+/* Group card aggregate status chips */
+.compact-card-group-status {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+
+.group-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 0.68em;
+    font-weight: 500;
+}
+
+.group-chip-locked {
+    background: rgba(40, 167, 69, 0.15);
+    color: rgba(110, 231, 183, 0.9);
+}
+
+.group-chip-goal {
+    background: rgba(255, 193, 7, 0.12);
+    color: rgba(255, 220, 100, 0.9);
+}
+
+.group-chip-completed {
+    background: rgba(40, 167, 69, 0.1);
+    color: rgba(110, 231, 183, 0.7);
+}
+
+.group-chip-archived {
+    background: rgba(108, 117, 125, 0.12);
+    color: rgba(200, 200, 200, 0.6);
+}
+
+/* Lifecycle-aware pills in group cards */
+.compact-card-pill.pill-goal {
+    background: rgba(255, 193, 7, 0.15);
+    border: 1px solid rgba(255, 193, 7, 0.2);
+    color: rgba(255, 220, 100, 0.9);
+}
+
+.compact-card-pill.pill-locked {
+    background: rgba(40, 167, 69, 0.12);
+    border: 1px solid rgba(40, 167, 69, 0.2);
+    color: rgba(110, 231, 183, 0.9);
+}
+
+.compact-card-pill.pill-completed {
+    background: rgba(40, 167, 69, 0.08);
+    border: 1px solid rgba(40, 167, 69, 0.12);
+    color: rgba(110, 231, 183, 0.6);
+    text-decoration: line-through;
+    text-decoration-color: rgba(110, 231, 183, 0.3);
+}
+
+.compact-card-pill.pill-archived {
+    background: rgba(108, 117, 125, 0.08);
+    border: 1px solid rgba(108, 117, 125, 0.12);
+    color: rgba(200, 200, 200, 0.5);
+    opacity: 0.7;
+}
+
+/* Confidence tier accents on compact cards */
+.compact-card.confidence-pencil {
+    border-left: 3px solid rgba(108, 117, 125, 0.4);
+}
+
+.compact-card.confidence-pen {
+    border-left: 3px solid rgba(0, 123, 255, 0.4);
+}
+
+.compact-card.confidence-typed {
+    border-left: 3px solid rgba(40, 167, 69, 0.4);
+}
+
+.compact-card.confidence-premium {
+    border-left: 3px solid rgba(255, 193, 7, 0.5);
+}
+
+/* SortableJS ghost/chosen/drag for grid cards */
+.compact-card.sortable-ghost {
+    opacity: 0.3;
+    border: 2px dashed rgba(0, 123, 255, 0.6);
+    background: rgba(0, 123, 255, 0.05);
+    box-shadow: none;
+    transform: none;
+}
+
+.compact-card.sortable-chosen {
+    box-shadow: 0 0 20px rgba(0, 123, 255, 0.4);
+    transform: scale(1.03);
+    z-index: 50;
+    cursor: grabbing;
+}
+
+.compact-card.sortable-drag {
+    opacity: 0.95;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(0, 123, 255, 0.5);
+    transform: scale(1.05) rotate(1deg);
+    border-radius: 14px;
+    z-index: 100;
+}
+
+/* Merge target states for compact cards in board view */
+.compact-card.merge-target {
+    outline: 3px solid rgba(76, 175, 80, 0.8);
+    outline-offset: 4px;
+    animation: merge-target-pulse 1.5s ease infinite;
+}
+
+.compact-card.merge-target-hybrid {
+    outline-color: rgba(156, 39, 176, 0.8);
+}
+
+.compact-card.merge-target-options {
+    outline-color: rgba(76, 175, 80, 0.8);
+}
+
+/* Merge zone highlights within compact cards */
+.compact-card.merge-target .compact-card-photo {
+    transition: background 0.15s ease;
+}
+
+.compact-card.merge-target .compact-card-body {
+    transition: background 0.15s ease;
+}
+
+/* Drag grab cursor for board view cards */
+.board-view .compact-card {
+    cursor: grab;
+}
+
+.board-view .compact-card:active {
+    cursor: grabbing;
+}
+
+/* =============================================================================
+   PHASE 5: Polish, Responsiveness, and Edge Cases
+   ============================================================================= */
+
+/* --- Card Entrance Animation --- */
+@keyframes board-card-enter {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.board-view .compact-card {
+    animation: board-card-enter 0.3s ease-out both;
+}
+
+/* Staggered entrance — each card delays slightly after the previous */
+.board-view .compact-card:nth-child(1) { animation-delay: 0s; }
+.board-view .compact-card:nth-child(2) { animation-delay: 0.04s; }
+.board-view .compact-card:nth-child(3) { animation-delay: 0.08s; }
+.board-view .compact-card:nth-child(4) { animation-delay: 0.12s; }
+.board-view .compact-card:nth-child(5) { animation-delay: 0.16s; }
+.board-view .compact-card:nth-child(6) { animation-delay: 0.2s; }
+.board-view .compact-card:nth-child(7) { animation-delay: 0.24s; }
+.board-view .compact-card:nth-child(8) { animation-delay: 0.28s; }
+.board-view .compact-card:nth-child(n+9) { animation-delay: 0.32s; }
+
+/* --- Single-Item Nudge --- */
+.board-single-item-nudge {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+    padding: 20px 16px;
+}
+
+.single-item-nudge-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 24px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    max-width: 500px;
+    animation: board-card-enter 0.4s ease-out 0.2s both;
+}
+
+.nudge-icon {
+    font-size: 1.3em;
+    flex-shrink: 0;
+}
+
+.nudge-text {
+    margin: 0;
+    font-size: 0.85em;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.4;
+}
+
+/* --- Focus Visible for Keyboard Navigation --- */
+.compact-card:focus-visible {
+    outline: 2px solid rgba(99, 102, 241, 0.8);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+}
+
+/* Remove default outline for mouse users */
+.compact-card:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* --- Enhanced Touch Targets for Mobile --- */
+@media (max-width: 480px) {
+    .compact-card-body {
+        padding: 10px;
+    }
+
+    .compact-card-meta {
+        margin-top: 6px;
+        padding-top: 6px;
+        gap: 6px;
+    }
+
+    .compact-card-name {
+        font-size: 0.9em;
+    }
+
+    .compact-card-status {
+        padding: 4px 10px;
+        font-size: 0.68em;
+    }
+
+    .compact-card-lifecycle-badge {
+        padding: 3px 10px;
+        font-size: 0.64em;
+    }
+
+    .compact-reaction-pill {
+        padding: 3px 8px;
+        font-size: 0.82em;
+    }
+
+    .compact-badge-pill {
+        padding: 3px 8px;
+        font-size: 0.72em;
+    }
+
+    /* Ensure touch targets are at least 44px */
+    .presentation-suggestion-btn {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 14px 16px;
+    }
+
+    .board-empty-state {
+        padding: 50px 20px;
+    }
+
+    .board-empty-icon {
+        font-size: 2.5em;
+    }
+
+    .single-item-nudge-content {
+        flex-direction: column;
+        text-align: center;
+        padding: 16px;
+    }
+}
+
+/* --- Tablet Responsiveness --- */
+@media (min-width: 481px) and (max-width: 768px) {
+    .compact-card-photo {
+        aspect-ratio: 16 / 9;
+    }
+
+    .board-empty-state {
+        padding: 60px 24px;
+    }
+}
+
+/* --- Large Desktop (3+ columns) --- */
+@media (min-width: 1200px) {
+    .itinerary-items-list.board-view {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+    }
+}
+
+/* --- Performance: GPU-accelerated transforms --- */
+.compact-card {
+    will-change: transform;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+}
+
+/* Remove will-change after animation settles to free GPU memory */
+.compact-card.settled {
+    will-change: auto;
+}
+
+/* --- Sortable interaction during drag: disable pointer events on non-drag cards --- */
+.board-view.is-sorting .compact-card:not(.sortable-drag):not(.sortable-chosen) {
+    pointer-events: none;
+}
+
+/* --- Smooth photo loading --- */
+.compact-card-photo {
+    background-color: rgba(255, 255, 255, 0.04);
+    transition: background-image 0.2s ease;
+}
+
+/* --- High contrast mode support --- */
+@media (forced-colors: active) {
+    .compact-card {
+        border: 2px solid ButtonText;
+    }
+
+    .compact-card:focus-visible {
+        outline: 3px solid Highlight;
+    }
+
+    .compact-card-name {
+        color: ButtonText;
+    }
+
+    .compact-badge-pill {
+        border: 1px solid ButtonText;
+    }
 }

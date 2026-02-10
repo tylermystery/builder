@@ -2729,11 +2729,20 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         }
     }
 
-    // Display AI confidence badge for AI-parsed items
+    // Display confidence styling for AI-parsed items, AI solutions, and manually added items
     const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.id?.startsWith('ai-presentation-') || record?.isAI === true;
+    const isSolutionRecord = record?.isSolution === true || record?.id?.startsWith('solution-');
+    const isManualRecord = record?.isManual === true ||
+                           record?.id?.startsWith('manual-add-') ||
+                           record?.id?.startsWith('manual-presentation-');
+    const needsConfidenceStyling = isAIRecord || isSolutionRecord || isManualRecord;
+
     console.log('[DEBUG Modal] showDetailModal called:', {
         recordId: record?.id,
         isAIRecord,
+        isSolutionRecord,
+        isManualRecord,
+        needsConfidenceStyling,
         fields_aiConfidence: record?.fields?.['_aiConfidence'],
         record_aiConfidence: record?._aiConfidence,
         record_isAI: record?.isAI
@@ -2747,57 +2756,69 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     if (existingConfidenceText) existingConfidenceText.remove();
 
     // Get the modal container to apply confidence styling to the entire modal
-    const modalContainer = document.getElementById('detail-modal');
+    const modalContainer = document.getElementById('detail-modal-overlay');
 
     // Remove previous confidence classes from modal
     if (modalContainer) {
         modalContainer.classList.remove('modal-confidence-pencil', 'modal-confidence-pen', 'modal-confidence-typed', 'modal-confidence-premium');
     }
 
-    if (isAIRecord) {
-        const confidence = record.fields?.['_aiConfidence'] ?? record._aiConfidence ?? null;
-        console.log('[DEBUG Modal] AI record confidence:', { confidence, type: typeof confidence });
+    if (needsConfidenceStyling) {
+        // Resolve numeric confidence from multiple sources:
+        // 1. Research data (post-dig) takes priority
+        // 2. AI confidence fields for AI items
+        // 3. Solution string confidence mapped to numeric for solutions
+        // 4. Default 0.5 for manually added items (pen/approximated tier)
+        let confidence;
+        if (record._researchData?.confidence != null) {
+            confidence = record._researchData.confidence;
+        } else if (isAIRecord) {
+            confidence = record.fields?.['_aiConfidence'] ?? record._aiConfidence ?? null;
+        } else if (isSolutionRecord && record.solutionData?.confidence) {
+            // Map solution string confidence to numeric value
+            const solutionConfidenceMap = { high: 0.85, medium: 0.6, low: 0.35 };
+            confidence = solutionConfidenceMap[record.solutionData.confidence] ?? 0.6;
+        } else if (isManualRecord) {
+            confidence = 0.5; // Manual items default to 50% (pen/approximated)
+        } else {
+            confidence = null;
+        }
+        console.log('[DEBUG Modal] Record confidence:', { confidence, type: typeof confidence, isAIRecord, isSolutionRecord, isManualRecord });
 
         // Determine confidence style tier
-        let confidenceStyle, confidenceStyleText, confidenceTooltip;
+        let confidenceStyle, confidenceTooltip;
 
         if (confidence === null || confidence === undefined) {
             confidenceStyle = 'pencil';
-            confidenceStyleText = 'Pencil Draft';
             confidenceTooltip = 'Draft information - please verify all details';
         } else if (confidence < 0.5) {
             confidenceStyle = 'pencil';
-            confidenceStyleText = `Pencil (~${Math.round(confidence * 100)}%)`;
-            confidenceTooltip = `${Math.round(confidence * 100)}% confident - Sketchy draft, please verify details`;
+            confidenceTooltip = `~${Math.round(confidence * 100)}% confident - Sketchy draft, please verify details`;
         } else if (confidence < 0.75) {
             confidenceStyle = 'pen';
-            confidenceStyleText = `Pen (~${Math.round(confidence * 100)}%)`;
-            confidenceTooltip = `${Math.round(confidence * 100)}% confident - Handwritten quality, some details may need verification`;
+            confidenceTooltip = isManualRecord
+                ? `~${Math.round(confidence * 100)}% - Manually added, approximated details`
+                : `~${Math.round(confidence * 100)}% confident - Handwritten quality, some details may need verification`;
         } else if (confidence < 0.95) {
             confidenceStyle = 'typed';
-            confidenceStyleText = `Typed (${Math.round(confidence * 100)}%)`;
             confidenceTooltip = `${Math.round(confidence * 100)}% confident - Typed quality, reliable information`;
         } else {
             confidenceStyle = 'premium';
-            confidenceStyleText = `Premium (${Math.round(confidence * 100)}%)`;
             confidenceTooltip = `${Math.round(confidence * 100)}% confident - Premium verified information`;
         }
 
-        console.log('[DEBUG Modal] Applying confidence style to modal:', { confidenceStyle, confidenceStyleText });
+        console.log('[DEBUG Modal] Applying confidence style to modal:', { confidenceStyle });
 
-        // Apply confidence class to the entire modal
+        // Apply confidence class to the entire modal — this drives visual styling
+        // of the title, description, and background (no explicit text label needed)
         if (modalContainer) {
             modalContainer.classList.add(`modal-confidence-${confidenceStyle}`);
         }
 
-        // Create confidence text indicator (not badge)
-        const confidenceTextEl = document.createElement('div');
-        confidenceTextEl.className = `ai-confidence-text confidence-style-${confidenceStyle}`;
-        confidenceTextEl.innerHTML = `<span class="confidence-style-label">${confidenceStyleText}</span>`;
-        confidenceTextEl.title = confidenceTooltip;
-
-        // Insert after the item name
-        modalItemName.parentNode.insertBefore(confidenceTextEl, modalItemName.nextSibling);
+        // Set tooltip on the item name so users can hover to see confidence info
+        if (modalItemName) {
+            modalItemName.title = confidenceTooltip;
+        }
     }
 
     // Display solution badge for AI-generated solution items
@@ -4320,13 +4341,16 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         }
     });
 
-    // Add "Dig Info" button for AI-generated solution items and AI items
-    // This allows users to research the solution and get detailed information with accuracy scores
+    // Add "Dig Info" button for AI-generated solution items, AI items, and manually added items
+    // This allows users to research the item and get detailed information with accuracy scores
     const isSolutionItem = record.isSolution === true || record.id?.startsWith('solution-');
     const isAIItem = record.id?.startsWith('ai-child-') ||
                      record.id?.startsWith('ai-presentation-') ||
                      record.id?.startsWith('ai-search-');
-    const isResearchableItem = isSolutionItem || isAIItem;
+    const isManualItem = record.isManual === true ||
+                         record.id?.startsWith('manual-add-') ||
+                         record.id?.startsWith('manual-presentation-');
+    const isResearchableItem = isSolutionItem || isAIItem || isManualItem;
     const hasResearchData = isResearchableItem && record._researchData?.confidence != null;
 
     if (isResearchableItem) {
@@ -4737,14 +4761,14 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     }
 
     // Add Edit Item button for manual/custom items and AI discovery items
-    const isManualItem = record.isManual === true ||
+    const isEditableItem = record.isManual === true ||
                          record.id?.startsWith('manual-add-') ||
                          record.id?.startsWith('manual-presentation-') ||
                          record.id?.startsWith('ai-search-') ||
                          record.id?.startsWith('ai-child-') ||
                          record.id?.startsWith('ai-presentation-');
 
-    if (isManualItem) {
+    if (isEditableItem) {
         const editItemBtn = document.createElement('button');
         editItemBtn.className = 'card-action-btn edit-item-btn';
         editItemBtn.id = 'modal-edit-item-btn';

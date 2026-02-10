@@ -183,6 +183,65 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                         record.id.startsWith('ai-child-');
     const isAIGrouping = record.id.startsWith('ai-group-');
 
+    // --- SOLUTION AND MANUAL ITEM DETECTION ---
+    const isSolutionItem = record.id.startsWith('solution-') || record.isSolution === true;
+    const isManualItem = record.id.startsWith('manual-add-') ||
+                         record.id.startsWith('manual-presentation-') ||
+                         record.isManual === true;
+    const needsConfidenceStyling = isAISourced || isSolutionItem || isManualItem;
+
+    console.log('[DEBUG Card] Confidence detection for', record.id, ':', {
+        isAISourced,
+        isSolutionItem,
+        isManualItem,
+        needsConfidenceStyling,
+        'record.isManual': record.isManual,
+        'record.isSolution': record.isSolution,
+        '_researchData?.confidence': record._researchData?.confidence,
+        '_aiConfidence': record._aiConfidence,
+        'fields._aiConfidence': fields._aiConfidence,
+        'solutionData?.confidence': record.solutionData?.confidence
+    });
+
+    // --- CONFIDENCE TIER (drives visual text styling) ---
+    let confidenceClass = '';
+    if (needsConfidenceStyling) {
+        let confidence;
+        if (record._researchData?.confidence != null) {
+            confidence = record._researchData.confidence;
+        } else if (isAISourced) {
+            confidence = record._aiConfidence ?? fields._aiConfidence ?? null;
+        } else if (isSolutionItem && record.solutionData?.confidence) {
+            const solutionConfidenceMap = { high: 0.85, medium: 0.6, low: 0.35 };
+            confidence = solutionConfidenceMap[record.solutionData.confidence] ?? 0.6;
+        } else if (isManualItem) {
+            confidence = 0.5; // Manual items default to 50% (pen/approximated)
+        } else {
+            confidence = null;
+        }
+
+        if (confidence === null || confidence === undefined) {
+            confidenceClass = 'confidence-pencil';
+        } else if (confidence < 0.5) {
+            confidenceClass = 'confidence-pencil';
+        } else if (confidence < 0.75) {
+            confidenceClass = 'confidence-pen';
+        } else if (confidence < 0.95) {
+            confidenceClass = 'confidence-typed';
+        } else {
+            confidenceClass = 'confidence-premium';
+        }
+
+        console.log('[DEBUG Card] Applied confidence class for', record.id, ':', {
+            confidence,
+            confidenceClass,
+            confidenceSource: record._researchData?.confidence != null ? 'researchData' :
+                             isAISourced ? 'aiConfidence' :
+                             (isSolutionItem && record.solutionData?.confidence) ? 'solutionData' :
+                             isManualItem ? 'manualDefault(0.5)' : 'null'
+        });
+    }
+
     // Build AI badge HTML
     let aiDiscoveryBadge = '';
     if (isAISourced) {
@@ -221,7 +280,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const groupingCard = eventCard;
         // Apply AI-sourced styling if this is an AI-generated grouping
         const aiGroupingClass = isAISourced ? ' ai-sourced-card ai-grouping-card' : '';
-        groupingCard.className = 'event-card grouping-card' + aiGroupingClass;
+        groupingCard.className = 'event-card grouping-card' + aiGroupingClass + (confidenceClass ? ` ${confidenceClass}` : '');
         groupingCard.dataset.categoryName = fields.Name;
         const groupingNameForFilter = fields.Name.toLowerCase().replace(/\s+/g, ' ');
         const childItems = allRecords.filter(r => {
@@ -271,7 +330,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     if (fields['Item Type'] === 'Event') {
         // Apply AI-sourced styling if this is an AI-generated event
         const aiEventClass = isAISourced ? ' ai-sourced-card' : '';
-        eventCard.className = 'event-card event-type-card' + aiEventClass;
+        eventCard.className = 'event-card event-type-card' + aiEventClass + (confidenceClass ? ` ${confidenceClass}` : '');
         const eventDate = fields.Date ? new Date(fields.Date + 'T00:00:00') : null;
         const month = eventDate ? eventDate.toLocaleString('default', { month: 'short' }).toUpperCase() : 'TBD';
         const day = eventDate ? eventDate.getDate() : '??';
@@ -569,7 +628,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
 
     // Apply AI-sourced styling if this is an AI-generated bookable item
     const aiBookableClass = isAISourced ? ' ai-sourced-card' : '';
-    eventCard.className = 'event-card' + aiBookableClass;
+    eventCard.className = 'event-card' + aiBookableClass + (confidenceClass ? ` ${confidenceClass}` : '');
     const itemState = ui.getItemState(record.id);
     const effectiveMin = getEffectiveMinQuantity(record);
     const isLocked = state.cart.lockedItems.has(record.id);

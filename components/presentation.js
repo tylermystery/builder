@@ -1,6 +1,8 @@
 // Debug flag: set to true (or window.__PRES_DEBUG__) for verbose logging in hot paths
 const PRES_DEBUG = typeof window !== 'undefined' && window.__PRES_DEBUG__;
 
+console.log('[MODULE DEBUG] presentation.js module starting to load...', performance.now().toFixed(2) + 'ms');
+
 import { state, setState, getRecordById, invalidateRecordsIndex } from '../state.js';
 import * as api from '../api.js';
 import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, REACTION_SCORES, getModalZIndex } from '../config.js';
@@ -17,6 +19,8 @@ import { showUserModal } from '../auth.js';
 import { showToast } from '../ui.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { refreshForumData, onNewItemReceived } from './forumPanel.js';
+
+console.log('[MODULE DEBUG] presentation.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
 // Quick emoji reactions available for messages and comments
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
@@ -2323,6 +2327,67 @@ async function renderItineraryItem(item, index) {
     const quantity = itemInfo?.quantity || 1;
     const note = itemInfo?.note || '';
 
+    // --- Confidence tier for itinerary board items (AI, solutions, and manual items) ---
+    const isAIItem = recordId.startsWith('custom-') ||
+                     recordId.startsWith('ai-search-') ||
+                     recordId.startsWith('ai-group-') ||
+                     recordId.startsWith('ai-child-');
+    const isSolutionItem = recordId.startsWith('solution-') || record.isSolution === true;
+    const isManualItem = recordId.startsWith('manual-add-') ||
+                         recordId.startsWith('manual-presentation-') ||
+                         record.isManual === true;
+    const needsConfidenceStyling = isAIItem || isSolutionItem || isManualItem;
+
+    console.log('[DEBUG Presentation Itinerary] Confidence detection for', recordId, ':', {
+        isAIItem,
+        isSolutionItem,
+        isManualItem,
+        needsConfidenceStyling,
+        'record.isManual': record.isManual,
+        'record.isSolution': record.isSolution,
+        '_researchData?.confidence': record._researchData?.confidence,
+        '_aiConfidence': record._aiConfidence,
+        'solutionData?.confidence': record.solutionData?.confidence
+    });
+
+    let itineraryConfidenceClass = '';
+    if (needsConfidenceStyling) {
+        let confidence;
+        if (record._researchData?.confidence != null) {
+            confidence = record._researchData.confidence;
+        } else if (isAIItem) {
+            confidence = record._aiConfidence ?? record.fields?._aiConfidence ?? null;
+        } else if (isSolutionItem && record.solutionData?.confidence) {
+            const solutionConfidenceMap = { high: 0.85, medium: 0.6, low: 0.35 };
+            confidence = solutionConfidenceMap[record.solutionData.confidence] ?? 0.6;
+        } else if (isManualItem) {
+            confidence = 0.5; // Manual items default to 50% (pen/approximated)
+        } else {
+            confidence = null;
+        }
+
+        if (confidence === null || confidence === undefined) {
+            itineraryConfidenceClass = 'confidence-pencil';
+        } else if (confidence < 0.5) {
+            itineraryConfidenceClass = 'confidence-pencil';
+        } else if (confidence < 0.75) {
+            itineraryConfidenceClass = 'confidence-pen';
+        } else if (confidence < 0.95) {
+            itineraryConfidenceClass = 'confidence-typed';
+        } else {
+            itineraryConfidenceClass = 'confidence-premium';
+        }
+
+        console.log('[DEBUG Presentation Itinerary] Applied confidence class for', recordId, ':', {
+            confidence,
+            itineraryConfidenceClass,
+            confidenceSource: record._researchData?.confidence != null ? 'researchData' :
+                             isAIItem ? 'aiConfidence' :
+                             (isSolutionItem && record.solutionData?.confidence) ? 'solutionData' :
+                             isManualItem ? 'manualDefault(0.5)' : 'null'
+        });
+    }
+
     // Get selected options for expanded view
     const selectedOptions = getSelectedOptionsDisplay(record, itemInfo);
 
@@ -2455,8 +2520,8 @@ async function renderItineraryItem(item, index) {
 
     // Each item is wrapped in its own section container for independent layout
     return `
-        <section class="itinerary-section itinerary-item-section ${statusClass} ${goalClass} ${combinedClass} ${groupClass}" data-section="item-${recordId}" data-item-status="${itemStatus}" data-is-goal="${isGoal}">
-            <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}" data-item-name="${escapeHtml(name)}">
+        <section class="itinerary-section itinerary-item-section ${statusClass} ${goalClass} ${combinedClass} ${groupClass} ${itineraryConfidenceClass}" data-section="item-${recordId}" data-item-status="${itemStatus}" data-is-goal="${isGoal}">
+            <article class="itinerary-item item-accordion expanded ${itineraryConfidenceClass}" data-record-id="${recordId}" data-index="${index}" data-item-name="${escapeHtml(name)}">
                 <div class="item-accordion-header" data-record-id="${recordId}">
                     <div class="item-accordion-title-row">
                         ${taskStatusButtonHTML}
@@ -2529,6 +2594,400 @@ async function renderItineraryItem(item, index) {
     `;
 }
 
+// =============================================================================
+// COMPACT CARD RENDERER (Board View - Phase 1)
+// =============================================================================
+
+/**
+ * Determine the source type of an item for visual badges.
+ * @param {string} recordId - The record ID
+ * @param {Object} record - The record object
+ * @returns {{ key: string, label: string, icon: string }}
+ */
+function getCompactCardSourceType(recordId, record) {
+    if (recordId.startsWith('custom-') || recordId.startsWith('ai-search-') ||
+        recordId.startsWith('ai-group-') || recordId.startsWith('ai-child-')) {
+        return { key: 'ai', label: 'AI Suggested', icon: '🤖' };
+    }
+    if (recordId.startsWith('solution-') || record?.isSolution === true) {
+        return { key: 'solution', label: 'Solution', icon: '💡' };
+    }
+    if (recordId.startsWith('manual-add-') || recordId.startsWith('manual-presentation-') || record?.isManual === true) {
+        return { key: 'manual', label: 'Manually Added', icon: '✏️' };
+    }
+    return { key: 'catalog', label: 'From Catalog', icon: '📋' };
+}
+
+/**
+ * Render a compact card tile for the board view.
+ * Shows: hero photo with floating status/emoji overlays, name, provenance,
+ * variation pills, reaction summary, and comment/task count badges.
+ * @param {Object} item - { recordId, type, itemStatus }
+ * @returns {Promise<string>} HTML string for the compact card
+ */
+async function renderCompactCard(item) {
+    const { recordId, type, itemStatus = 'active' } = item;
+    const record = getRecordById(recordId);
+    if (!record) return '';
+
+    // Skip combined source items
+    if (isItemCombinedSource(recordId)) return '';
+
+    const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
+
+    // Use hybrid name for combined items
+    const hybridDataForName = getCombinedHybridData(recordId);
+    const name = hybridDataForName?.hybridName || record.fields?.Name || 'Untitled Item';
+
+    // --- Confidence tier ---
+    const isAIItem = recordId.startsWith('custom-') || recordId.startsWith('ai-search-') ||
+                     recordId.startsWith('ai-group-') || recordId.startsWith('ai-child-');
+    const isSolutionItem = recordId.startsWith('solution-') || record.isSolution === true;
+    const isManualItem = recordId.startsWith('manual-add-') || recordId.startsWith('manual-presentation-') || record.isManual === true;
+    const needsConfidenceStyling = isAIItem || isSolutionItem || isManualItem;
+
+    let confidenceClass = '';
+    if (needsConfidenceStyling) {
+        let confidence;
+        if (record._researchData?.confidence != null) confidence = record._researchData.confidence;
+        else if (isAIItem) confidence = record._aiConfidence ?? record.fields?._aiConfidence ?? null;
+        else if (isSolutionItem && record.solutionData?.confidence) {
+            const solutionConfidenceMap = { high: 0.85, medium: 0.6, low: 0.35 };
+            confidence = solutionConfidenceMap[record.solutionData.confidence] ?? 0.6;
+        } else if (isManualItem) confidence = 0.5;
+        else confidence = null;
+
+        if (confidence === null || confidence === undefined) confidenceClass = 'confidence-pencil';
+        else if (confidence < 0.5) confidenceClass = 'confidence-pencil';
+        else if (confidence < 0.75) confidenceClass = 'confidence-pen';
+        else if (confidence < 0.95) confidenceClass = 'confidence-typed';
+        else confidenceClass = 'confidence-premium';
+    }
+
+    // --- Status classes ---
+    const isGoal = state.session.goalItems?.has(recordId);
+    const isArchived = state.session.archivedItems?.has(recordId);
+    const isCompleted = state.session.completedItems?.has(recordId);
+    const isLocked = state.cart.lockedItems.has(recordId);
+
+    let lifecycleClass = 'compact-card-idea'; // default
+    if (isArchived) lifecycleClass = 'compact-card-archived';
+    else if (isCompleted) lifecycleClass = 'compact-card-completed';
+    else if (isLocked) lifecycleClass = 'compact-card-locked';
+    else if (isGoal) lifecycleClass = 'compact-card-goal';
+
+    // --- Photo ---
+    if (!itemImagesCache.has(recordId)) {
+        const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+        const selectedIndex = itemInfo?.selectedImageIndex ?? 0;
+        const validIndex = Math.min(selectedIndex, (imageUrls?.length || 1) - 1);
+        itemImagesCache.set(recordId, { images: imageUrls || [], currentIndex: validIndex });
+    }
+    const cachedImages = itemImagesCache.get(recordId);
+    const photoUrl = cachedImages?.images?.[cachedImages.currentIndex] || cachedImages?.images?.[0] || '';
+    const optimizedPhoto = photoUrl ? applyCloudinaryTransform(photoUrl, 'w_400,h_250,c_fill,f_auto,q_auto') : '';
+
+    // --- Task status overlay (top-left) ---
+    const taskStatus = getElementTaskStatus('item', recordId);
+    const taskConfig = TASK_STATUS_CONFIG[taskStatus] || TASK_STATUS_CONFIG[ELEMENT_TASK_STATUS.NONE];
+    const showStatus = taskStatus !== ELEMENT_TASK_STATUS.NONE;
+    const statusOverlayHTML = showStatus
+        ? `<span class="compact-card-status ${taskConfig.className}" title="${taskConfig.label}"><span class="task-status-icon">${taskConfig.icon}</span> ${taskConfig.label}</span>`
+        : '';
+
+    // --- Summary emoji overlay (top-right) ---
+    const summaryEmoji = getItemSummaryEmoji(recordId);
+    const reactionCount = getItemReactionCount(recordId);
+    const rankingTooltip = getItemRankingTooltip(recordId);
+    const emojiOverlayHTML = summaryEmoji && reactionCount > 0
+        ? `<span class="compact-card-emoji item-emoji-indicator has-reactions" data-record-id="${recordId}" title="${escapeHtml(rankingTooltip)}">${summaryEmoji}${reactionCount > 1 ? `<span class="compact-card-emoji-count">${reactionCount}</span>` : ''}</span>`
+        : '';
+
+    // --- Provenance line (combined items) ---
+    const combinedSources = getCombinedSources(recordId);
+    let provenanceHTML = '';
+    if (combinedSources.length > 0) {
+        const sourceNames = combinedSources.map(sourceId => {
+            const sourceRecord = getRecordById(sourceId);
+            return sourceRecord?.fields?.Name || 'Item';
+        });
+        const sourceTypeBadges = combinedSources.map(sourceId => {
+            const sourceRecord = getRecordById(sourceId);
+            const srcType = getCompactCardSourceType(sourceId, sourceRecord);
+            return `<span class="provenance-source-badge provenance-source-${srcType.key}" title="${escapeHtml((sourceRecord?.fields?.Name || 'Item') + ' (' + srcType.label + ')')}">${srcType.icon} ${escapeHtml(sourceRecord?.fields?.Name || 'Item')}</span>`;
+        });
+        const displayBadges = sourceTypeBadges.length <= 3
+            ? sourceTypeBadges.join('')
+            : sourceTypeBadges.slice(0, 3).join('') + `<span class="provenance-source-badge provenance-source-more">+${sourceTypeBadges.length - 3}</span>`;
+        const hybridData = getCombinedHybridData(recordId);
+        const hybridLabel = hybridData?.hybridName ? '<span class="provenance-hybrid-icon" title="Hybrid item">✨</span>' : '';
+        provenanceHTML = `<div class="compact-card-provenance" title="${escapeHtml(sourceNames.join(' + '))}">${hybridLabel}<span class="provenance-label">Merged:</span> ${displayBadges}</div>`;
+    }
+
+    // --- Goal indicator ---
+    const goalBadgeHTML = isGoal ? '<span class="compact-card-goal-badge" title="Goal">⭐</span>' : '';
+
+    // --- Lifecycle badge (floating bottom-right of photo) ---
+    let lifecycleBadgeIcon = '';
+    let lifecycleBadgeLabel = '';
+    let lifecycleBadgeClass = '';
+    if (isArchived) {
+        lifecycleBadgeIcon = '📦'; lifecycleBadgeLabel = 'Archived'; lifecycleBadgeClass = 'lifecycle-archived';
+    } else if (isCompleted) {
+        lifecycleBadgeIcon = '✓'; lifecycleBadgeLabel = 'Done'; lifecycleBadgeClass = 'lifecycle-completed';
+    } else if (isLocked) {
+        lifecycleBadgeIcon = '🔒'; lifecycleBadgeLabel = 'Confirmed'; lifecycleBadgeClass = 'lifecycle-locked';
+    } else if (isGoal) {
+        lifecycleBadgeIcon = '⭐'; lifecycleBadgeLabel = 'Goal'; lifecycleBadgeClass = 'lifecycle-goal';
+    }
+    // Ideas don't show a badge (default state)
+    const lifecycleBadgeHTML = lifecycleBadgeClass
+        ? `<span class="compact-card-lifecycle-badge ${lifecycleBadgeClass}">${lifecycleBadgeIcon} ${lifecycleBadgeLabel}</span>`
+        : '';
+
+    // --- Entry source type badge ---
+    const sourceType = getCompactCardSourceType(recordId, record);
+    const sourceTypeBadgeHTML = sourceType.key !== 'catalog'
+        ? `<span class="compact-card-source-badge source-badge-${sourceType.key}" title="${sourceType.label}">${sourceType.icon}</span>`
+        : '';
+
+    // --- Type label ---
+    let typeLabel = type === 'favorites' ? 'Idea' : 'Confirmed';
+    if (itemStatus === 'archived') typeLabel = 'Archived';
+    else if (itemStatus === 'completed') typeLabel = 'Completed';
+
+    // --- Variation / option pills ---
+    const itemGroup = getItemGroup(recordId);
+    let pillsHTML = '';
+    if (itemGroup) {
+        const groupItems = Array.isArray(itemGroup) ? itemGroup : (itemGroup.items || []);
+        const otherItems = groupItems.filter(gId => gId !== recordId);
+        const pillNames = otherItems.slice(0, 2).map(gId => {
+            const gRec = getRecordById(gId);
+            return gRec?.fields?.Name || 'Option';
+        });
+        const pillElements = pillNames.map(pn => `<span class="compact-card-pill">${escapeHtml(pn)}</span>`).join('');
+        const moreCount = otherItems.length - 2;
+        const morePill = moreCount > 0 ? `<span class="compact-card-pill compact-card-pill-more">+${moreCount} more</span>` : '';
+        pillsHTML = `<div class="compact-card-pills">${pillElements}${morePill}</div>`;
+    }
+
+    // --- Compact reaction bar ---
+    const reactions = state.session.reactions?.get(recordId);
+    let reactionBarHTML = '';
+    if (reactions && reactions instanceof Map && reactions.size > 0) {
+        const emojiCounts = {};
+        reactions.forEach((emoji) => {
+            emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
+        });
+        const sorted = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]);
+        const top3 = sorted.slice(0, 3).map(([emoji, count]) =>
+            `<span class="compact-reaction-pill" title="${emoji} ${count}">${emoji}<span class="compact-reaction-count">${count}</span></span>`
+        ).join('');
+        const moreReactions = sorted.length > 3 ? `<span class="compact-reaction-pill compact-reaction-overflow">+${sorted.length - 3}</span>` : '';
+        const totalReactions = reactions.size;
+        reactionBarHTML = `<span class="compact-card-reactions" data-record-id="${recordId}" title="${totalReactions} reaction${totalReactions !== 1 ? 's' : ''}">${top3}${moreReactions}</span>`;
+    }
+
+    // --- Comment count badge ---
+    const commentCacheKey = `item:${recordId}`;
+    const cachedComments = componentCommentsCache.get(commentCacheKey);
+    const commentCount = cachedComments?.length || 0;
+    const commentBadgeHTML = commentCount > 0
+        ? `<span class="compact-badge-pill compact-badge-comment" title="${commentCount} comment${commentCount !== 1 ? 's' : ''}"><span class="compact-badge-icon">💬</span><span class="compact-badge-count">${commentCount}</span></span>`
+        : '';
+
+    // --- Task status badge in meta bar ---
+    const taskStatusForBadge = getElementTaskStatus('item', recordId);
+    const taskConfigForBadge = TASK_STATUS_CONFIG[taskStatusForBadge] || TASK_STATUS_CONFIG[ELEMENT_TASK_STATUS.NONE];
+    const showTaskBadge = taskStatusForBadge !== ELEMENT_TASK_STATUS.NONE;
+    const taskBadgeHTML = showTaskBadge
+        ? `<span class="compact-badge-pill compact-badge-task ${taskConfigForBadge.className}" title="${taskConfigForBadge.label}"><span class="compact-badge-icon">${taskConfigForBadge.icon}</span><span class="compact-badge-label">${taskConfigForBadge.label}</span></span>`
+        : '';
+
+    // --- Photo section or fallback ---
+    const photoStyle = optimizedPhoto ? `background-image: url('${optimizedPhoto}')` : '';
+    const noPhotoClass = !optimizedPhoto ? 'compact-card-no-photo' : '';
+
+    return `
+        <div class="compact-card ${lifecycleClass} ${confidenceClass} ${noPhotoClass}" data-record-id="${recordId}" data-item-type="${type}" data-item-status="${itemStatus}" role="article" tabindex="0" aria-label="${escapeHtml(name)}${showStatus ? ', ' + taskConfig.label : ''}">
+            <div class="compact-card-photo" style="${photoStyle}">
+                ${statusOverlayHTML}
+                ${emojiOverlayHTML}
+                ${lifecycleBadgeHTML}
+            </div>
+            <div class="compact-card-body">
+                <div class="compact-card-title-row">
+                    ${goalBadgeHTML}
+                    <h4 class="compact-card-name" title="${escapeHtml(name)}">${escapeHtml(name)}</h4>
+                    ${sourceTypeBadgeHTML}
+                </div>
+                ${provenanceHTML}
+                ${pillsHTML}
+                <div class="compact-card-meta">
+                    ${reactionBarHTML}
+                    <span class="compact-card-badges">
+                        ${taskBadgeHTML}
+                        ${commentBadgeHTML}
+                    </span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Render a compact card for an options group in board view.
+ * @param {Object} group - The related group object
+ * @returns {Promise<string>} HTML string for the group compact card
+ */
+async function renderCompactGroupCard(group) {
+    const groupItems = Array.isArray(group) ? group : (group.items || []);
+    const groupName = group.name || `${groupItems.length} Options`;
+    const groupId = group.id || '';
+
+    // Use the first item for photo
+    const firstItemId = groupItems[0];
+    const firstRecord = getRecordById(firstItemId);
+    if (!firstRecord) return '';
+
+    if (!itemImagesCache.has(firstItemId)) {
+        const { imageUrls } = await api.fetchImagesForRecord(firstRecord, state.records.all, new Map());
+        itemImagesCache.set(firstItemId, { images: imageUrls || [], currentIndex: 0 });
+    }
+    const cachedImages = itemImagesCache.get(firstItemId);
+    const photoUrl = cachedImages?.images?.[0] || '';
+    const optimizedPhoto = photoUrl ? applyCloudinaryTransform(photoUrl, 'w_400,h_250,c_fill,f_auto,q_auto') : '';
+
+    // Member name pills with lifecycle indicators
+    const memberPills = groupItems.slice(0, 3).map(gId => {
+        const gRec = getRecordById(gId);
+        const memberName = escapeHtml(gRec?.fields?.Name || 'Option');
+        const isGoal = state.session.goalItems?.has(gId);
+        const isArchived = state.session.archivedItems?.has(gId);
+        const isCompleted = state.session.completedItems?.has(gId);
+        const isLocked = state.cart.lockedItems.has(gId);
+        let pillStateClass = '';
+        let pillIcon = '';
+        if (isArchived) { pillStateClass = 'pill-archived'; pillIcon = '📦 '; }
+        else if (isCompleted) { pillStateClass = 'pill-completed'; pillIcon = '✓ '; }
+        else if (isLocked) { pillStateClass = 'pill-locked'; pillIcon = '🔒 '; }
+        else if (isGoal) { pillStateClass = 'pill-goal'; pillIcon = '⭐ '; }
+        return `<span class="compact-card-pill ${pillStateClass}">${pillIcon}${memberName}</span>`;
+    }).join('');
+    const moreCount = groupItems.length - 3;
+    const morePill = moreCount > 0 ? `<span class="compact-card-pill compact-card-pill-more">+${moreCount} more</span>` : '';
+
+    // Aggregate lifecycle summary for the group
+    let lockedCount = 0, goalCount = 0, archivedCount = 0, completedCount = 0;
+    for (const gId of groupItems) {
+        if (state.session.archivedItems?.has(gId)) archivedCount++;
+        else if (state.session.completedItems?.has(gId)) completedCount++;
+        else if (state.cart.lockedItems.has(gId)) lockedCount++;
+        else if (state.session.goalItems?.has(gId)) goalCount++;
+    }
+    const activeCount = groupItems.length - archivedCount;
+    let groupStatusHTML = '';
+    const statusParts = [];
+    if (lockedCount > 0) statusParts.push(`<span class="group-status-chip group-chip-locked">🔒 ${lockedCount}</span>`);
+    if (goalCount > 0) statusParts.push(`<span class="group-status-chip group-chip-goal">⭐ ${goalCount}</span>`);
+    if (completedCount > 0) statusParts.push(`<span class="group-status-chip group-chip-completed">✓ ${completedCount}</span>`);
+    if (archivedCount > 0) statusParts.push(`<span class="group-status-chip group-chip-archived">📦 ${archivedCount}</span>`);
+    if (statusParts.length > 0) {
+        groupStatusHTML = `<div class="compact-card-group-status">${statusParts.join('')}</div>`;
+    }
+
+    // Determine type from first item
+    const firstItemType = state.cart.lockedItems.has(firstItemId) ? 'locked' : 'favorites';
+
+    // Determine dominant lifecycle class for group card border
+    let groupLifecycleClass = '';
+    if (lockedCount === groupItems.length) groupLifecycleClass = 'compact-card-locked';
+    else if (completedCount === groupItems.length) groupLifecycleClass = 'compact-card-completed';
+    else if (archivedCount === groupItems.length) groupLifecycleClass = 'compact-card-archived';
+    else if (goalCount > 0 && lockedCount === 0) groupLifecycleClass = 'compact-card-goal';
+
+    // --- Aggregate comment count across group members ---
+    let groupCommentCount = 0;
+    for (const gId of groupItems) {
+        const memberComments = componentCommentsCache.get(`item:${gId}`);
+        groupCommentCount += memberComments?.length || 0;
+    }
+    const groupCommentBadgeHTML = groupCommentCount > 0
+        ? `<span class="compact-badge-pill compact-badge-comment" title="${groupCommentCount} comment${groupCommentCount !== 1 ? 's' : ''} across group"><span class="compact-badge-icon">💬</span><span class="compact-badge-count">${groupCommentCount}</span></span>`
+        : '';
+
+    // --- Aggregate task status summary for group ---
+    const taskStatusCounts = {};
+    for (const gId of groupItems) {
+        const memberTaskStatus = getElementTaskStatus('item', gId);
+        if (memberTaskStatus !== ELEMENT_TASK_STATUS.NONE) {
+            taskStatusCounts[memberTaskStatus] = (taskStatusCounts[memberTaskStatus] || 0) + 1;
+        }
+    }
+    let groupTaskBadgeHTML = '';
+    const taskEntries = Object.entries(taskStatusCounts);
+    if (taskEntries.length > 0) {
+        const taskChips = taskEntries.map(([status, count]) => {
+            const config = TASK_STATUS_CONFIG[status] || TASK_STATUS_CONFIG[ELEMENT_TASK_STATUS.NONE];
+            return `<span class="compact-badge-pill compact-badge-task ${config.className}" title="${config.label}: ${count}"><span class="compact-badge-icon">${config.icon}</span><span class="compact-badge-count">${count}</span></span>`;
+        }).join('');
+        groupTaskBadgeHTML = taskChips;
+    }
+
+    // --- Aggregate reaction bar across group members ---
+    const groupEmojiCounts = {};
+    let groupTotalReactions = 0;
+    for (const gId of groupItems) {
+        const memberReactions = state.session.reactions?.get(gId);
+        if (memberReactions && memberReactions instanceof Map) {
+            memberReactions.forEach((emoji) => {
+                groupEmojiCounts[emoji] = (groupEmojiCounts[emoji] || 0) + 1;
+                groupTotalReactions++;
+            });
+        }
+    }
+    let groupReactionBarHTML = '';
+    if (groupTotalReactions > 0) {
+        const sortedGroupEmoji = Object.entries(groupEmojiCounts).sort((a, b) => b[1] - a[1]);
+        const top3Group = sortedGroupEmoji.slice(0, 3).map(([emoji, count]) =>
+            `<span class="compact-reaction-pill" title="${emoji} ${count}">${emoji}<span class="compact-reaction-count">${count}</span></span>`
+        ).join('');
+        const moreGroupReactions = sortedGroupEmoji.length > 3 ? `<span class="compact-reaction-pill compact-reaction-overflow">+${sortedGroupEmoji.length - 3}</span>` : '';
+        groupReactionBarHTML = `<span class="compact-card-reactions" title="${groupTotalReactions} reaction${groupTotalReactions !== 1 ? 's' : ''} across group">${top3Group}${moreGroupReactions}</span>`;
+    }
+
+    // Build group meta bar HTML (only if there's content)
+    const hasGroupMeta = groupReactionBarHTML || groupTaskBadgeHTML || groupCommentBadgeHTML;
+    const groupMetaHTML = hasGroupMeta ? `
+                <div class="compact-card-meta">
+                    ${groupReactionBarHTML}
+                    <span class="compact-card-badges">
+                        ${groupTaskBadgeHTML}
+                        ${groupCommentBadgeHTML}
+                    </span>
+                </div>` : '';
+
+    const photoStyle = optimizedPhoto ? `background-image: url('${optimizedPhoto}')` : '';
+    const noPhotoClass = !optimizedPhoto ? 'compact-card-no-photo' : '';
+
+    return `
+        <div class="compact-card compact-card-group ${groupLifecycleClass} ${noPhotoClass}" data-group-id="${groupId}" data-item-type="${firstItemType}" role="article" tabindex="0" aria-label="${escapeHtml(groupName)}, ${groupItems.length} options">
+            <div class="compact-card-photo" style="${photoStyle}">
+                <span class="compact-card-group-badge">${groupItems.length} options</span>
+            </div>
+            <div class="compact-card-body">
+                <div class="compact-card-title-row">
+                    <h4 class="compact-card-name" title="${escapeHtml(groupName)}">${escapeHtml(groupName)}</h4>
+                </div>
+                ${groupStatusHTML}
+                <div class="compact-card-pills">${memberPills}${morePill}</div>
+                ${groupMetaHTML}
+            </div>
+        </div>
+    `;
+}
+
 // Debounced version of renderAllItems - coalesces rapid successive calls
 // Use this for non-critical re-renders (action handlers, background updates).
 // Use renderAllItems() directly for initial render where timing matters.
@@ -2593,28 +3052,32 @@ async function renderAllItems() {
     updateStatusToggles(archivedCount, completedCount);
 
     if (combinedList.length === 0) {
-        // Show recommendations when no items exist
-        // All 4 pillars are shown as suggestions since there are no items
+        // Show enhanced empty state when no items exist
         const allCategories = ["Activities", "Food & Drink", "Venues", "Extras"];
+        const categoryIcons = { "Activities": "🎯", "Food & Drink": "🍽️", "Venues": "📍", "Extras": "✨" };
         let emptyStateHTML = `
-            <section class="itinerary-section itinerary-empty-section" data-section="empty">
-                <div class="presentation-empty-state">
-                    <p class="itinerary-empty-title">Start Building Your Event Plan</p>
-                    <p class="itinerary-empty-subtitle">Add items from these categories to create your perfect event:</p>
-                    <div class="presentation-suggestions">
+            <section class="itinerary-section itinerary-empty-section" data-section="empty" role="status" aria-label="Empty plan board">
+                <div class="presentation-empty-state board-empty-state">
+                    <div class="board-empty-icon" aria-hidden="true">📋</div>
+                    <p class="itinerary-empty-title">Your Plan Board is Empty</p>
+                    <p class="itinerary-empty-subtitle">Start by browsing items from a category below, or use the search to find something specific.</p>
+                    <div class="presentation-suggestions" role="group" aria-label="Category suggestions">
         `;
 
         allCategories.forEach(cat => {
             const filterTag = cat.toLowerCase().replace(/\s+/g, ' ');
+            const icon = categoryIcons[cat] || '📦';
             emptyStateHTML += `
-                <button class="filter-btn presentation-suggestion-btn" data-category-filter="${filterTag}">
-                    + Add ${cat}
+                <button class="filter-btn presentation-suggestion-btn" data-category-filter="${filterTag}" aria-label="Browse ${cat}">
+                    <span class="suggestion-btn-icon" aria-hidden="true">${icon}</span>
+                    <span class="suggestion-btn-text">${cat}</span>
                 </button>
             `;
         });
 
         emptyStateHTML += `
                     </div>
+                    <p class="board-empty-hint">Tip: Swipe horizontally on any card to access quick actions</p>
                 </div>
             </section>
         `;
@@ -2623,14 +3086,21 @@ async function renderAllItems() {
         return;
     }
 
-    itineraryItemsListEl.innerHTML = '<p class="itinerary-loading">Loading items...</p>';
+    // Single item state — show a contextual nudge below the card
+    const showSingleItemNudge = combinedList.length === 1;
 
-    // Build rendering order, grouping related items together with group headers
+    itineraryItemsListEl.innerHTML = '<p class="itinerary-loading" role="status" aria-live="polite">Loading items...</p>';
+
+    // --- BOARD VIEW (compact card grid) ---
+    itineraryItemsListEl.classList.add('board-view');
+    itineraryItemsListEl.setAttribute('role', 'list');
+    itineraryItemsListEl.setAttribute('aria-label', 'Plan board items');
+
     const relatedGroups = state.session.relatedGroups || [];
-    const renderedGroupIds = new Set(); // Track which groups we've already rendered
+    const renderedGroupIds = new Set();
     const itemsHTML = [];
 
-    // Pre-build a lookup map: recordId -> group for O(1) group membership checks
+    // Pre-build a lookup map: recordId -> group
     const itemToGroupMap = new Map();
     for (const g of relatedGroups) {
         const gItems = Array.isArray(g) ? g : (g.items || []);
@@ -2641,156 +3111,100 @@ async function renderAllItems() {
 
     for (let i = 0; i < combinedList.length; i++) {
         const item = combinedList[i];
-
-        // Check if this item belongs to a related group (O(1) lookup)
         const itemGroup = itemToGroupMap.get(item.recordId);
 
         if (itemGroup && itemGroup.id && !renderedGroupIds.has(itemGroup.id)) {
-            // First time seeing this group - render as a card matching the standard item layout
             renderedGroupIds.add(itemGroup.id);
-            const groupItems = Array.isArray(itemGroup) ? itemGroup : (itemGroup.items || []);
-            const groupName = itemGroup.name || `${groupItems.length} Options`;
-            const groupDesc = itemGroup.description || '';
-
-            // Use the first item in the group as the "representative" for images
-            const firstItemId = groupItems[0];
-            const firstRecord = getRecordById(firstItemId);
-            if (firstRecord && !itemImagesCache.has(firstItemId)) {
-                const { imageUrls } = await api.fetchImagesForRecord(firstRecord, state.records.all, new Map());
-                itemImagesCache.set(firstItemId, { images: imageUrls || [], currentIndex: 0 });
-            }
-
-            // Build media carousel from the first item's images (matches standard item layout)
-            const cachedImages = itemImagesCache.get(firstItemId);
-            const mediaCarouselHTML = cachedImages ? createMediaCarousel(cachedImages.images, firstItemId) : '<div class="itinerary-item-no-images">No images available</div>';
-
-            // Compute price range across all group items
-            const groupPrices = groupItems.map(gId => {
-                const gRec = getRecordById(gId);
-                if (!gRec) return null;
-                const gInfo = state.cart.lockedItems.get(gId) || state.cart.items.get(gId);
-                const selectionsOrIdx = gInfo?.selections || gInfo?.selectedOptionIndex;
-                return getRecordPrice(gRec, selectionsOrIdx);
-            }).filter(p => p !== null && p > 0);
-
-            let priceHTML = '';
-            if (groupPrices.length > 0) {
-                const minPrice = Math.min(...groupPrices);
-                const maxPrice = Math.max(...groupPrices);
-                priceHTML = minPrice === maxPrice
-                    ? `<span class="itinerary-item-price">$${minPrice.toFixed(2)}</span>`
-                    : `<span class="itinerary-item-price">$${minPrice.toFixed(2)} – $${maxPrice.toFixed(2)}</span>`;
-            }
-
-            // Get item names for the summary line
-            const itemNames = groupItems.map(gId => {
-                const gRec = getRecordById(gId);
-                return gRec?.fields?.Name || 'Item';
-            });
-            const itemNamesPreview = itemNames.length <= 3
-                ? itemNames.join(', ')
-                : itemNames.slice(0, 2).join(', ') + ` +${itemNames.length - 2} more`;
-
-            // Determine the type of the first item in the group for status labeling
-            const firstItemType = state.cart.lockedItems.has(firstItemId) ? 'locked' : 'favorites';
-            const typeLabel = firstItemType === 'favorites' ? 'Idea' : 'Confirmed';
-            const typeClass = firstItemType === 'favorites' ? 'item-type-idea' : 'item-type-confirmed';
-
-            // Build group member list section (each member with a remove button)
-            const groupMembersHTML = `
-                <div class="options-group-members-section" data-group-id="${itemGroup.id}">
-                    <div class="options-group-members-header">
-                        <button class="options-group-members-toggle" data-group-id="${itemGroup.id}">
-                            <span>Options</span>
-                            <span class="options-group-members-count">${groupItems.length}</span>
-                            <span class="toggle-arrow">▼</span>
-                        </button>
-                        <button class="options-group-dissolve-btn" data-group-id="${itemGroup.id}" title="Dissolve group">
-                            Split All
-                        </button>
-                    </div>
-                    <div class="options-group-members-list" data-group-id="${itemGroup.id}" style="display: none;">
-                        ${groupDesc ? `<div class="options-group-members-desc">${escapeHtml(groupDesc)}</div>` : ''}
-                        ${groupItems.map(gId => {
-                            const gRec = getRecordById(gId);
-                            const gName = gRec?.fields?.Name || 'Item';
-                            return `
-                                <div class="options-group-member-item" data-record-id="${gId}">
-                                    <span class="options-group-member-name">${escapeHtml(gName)}</span>
-                                    <button class="leave-group-btn" data-record-id="${gId}" data-group-id="${itemGroup.id}" title="Remove from group">✕</button>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                </div>
-            `;
-
-            // Render as a card matching the standard presentation item layout
-            itemsHTML.push(`
-                <section class="itinerary-section itinerary-item-section options-group-card-section" data-section="group-${itemGroup.id}">
-                    <article class="itinerary-item item-accordion expanded options-group-card" data-group-id="${itemGroup.id}" data-group-name="${escapeHtml(groupName)}">
-                        <div class="item-accordion-header options-group-card-header" data-group-id="${itemGroup.id}">
-                            <div class="item-accordion-title-row">
-                                <h3 class="item-accordion-title">${escapeHtml(groupName)}</h3>
-                                <span class="options-group-card-badge">${groupItems.length} options</span>
-                                <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
-                                <span class="item-accordion-icon"></span>
-                            </div>
-                            <p class="item-accordion-summary">${escapeHtml(itemNamesPreview)}</p>
-                        </div>
-                        <div class="item-accordion-content options-group-card-content" data-group-id="${itemGroup.id}">
-                            <div class="itinerary-item-content">
-                                ${mediaCarouselHTML}
-                                <div class="itinerary-item-details">
-                                    ${priceHTML ? `<div class="itinerary-item-price-qty">${priceHTML}</div>` : ''}
-                                    ${groupMembersHTML}
-                                    <button class="itinerary-item-expand-btn options-group-expand-btn" data-group-id="${itemGroup.id}" title="View options">
-                                        <span class="expand-btn-icon">↗</span>
-                                        <span class="expand-btn-text">View Options</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </article>
-                </section>
-            `);
+            const html = await renderCompactGroupCard(itemGroup);
+            if (html) itemsHTML.push(html);
         } else if (itemGroup && itemGroup.id && renderedGroupIds.has(itemGroup.id)) {
-            // Already rendered this group's items in the block above - skip
-            continue;
+            continue; // Already rendered this group
         } else {
-            // Ungrouped item - render normally
-            const html = await renderItineraryItem(item, i);
-            if (html) {
-                itemsHTML.push(html);
-            }
+            const html = await renderCompactCard(item);
+            if (html) itemsHTML.push(html);
         }
+    }
+
+    // Add single-item nudge if only one card on the board
+    if (showSingleItemNudge) {
+        itemsHTML.push(`
+            <div class="board-single-item-nudge" role="status" aria-label="Add more items suggestion">
+                <div class="single-item-nudge-content">
+                    <span class="nudge-icon" aria-hidden="true">💡</span>
+                    <p class="nudge-text">Add more items to compare options, merge ideas, and build your perfect plan.</p>
+                </div>
+            </div>
+        `);
     }
 
     itineraryItemsListEl.innerHTML = itemsHTML.join('');
 
-    // Render reactions for each item
-    combinedList.forEach(item => {
-        const reactionContainer = itineraryItemsListEl.querySelector(`.itinerary-item-reactions[data-record-id="${item.recordId}"]`);
-        if (reactionContainer) {
-            renderReactions(item.recordId, reactionContainer);
-        }
-    });
+    // After entrance animations complete, remove will-change to free GPU memory
+    setTimeout(() => {
+        const cards = itineraryItemsListEl.querySelectorAll('.compact-card');
+        cards.forEach(card => card.classList.add('settled'));
+    }, 600);
+
+    // Attach click handlers for compact cards
+    initializeCompactCardClicks();
 
     // Render the reactions summary after items
     renderReactionsSummary();
-
-    // Update the event-level emoji indicator
     updateEventEmojiIndicator();
 
-    // Initialize combined sources toggle handlers
-    initializeCombinedSourcesToggles();
-
-    // Initialize drag-and-drop functionality
+    // Initialize drag-and-drop (will work in grid mode for reordering)
     initializeItemDragDrop();
-
-    // Initialize radial menu system
     initializeRadialMenu();
     attachRadialMenuListeners();
+}
+
+// Initialize click handlers for compact cards in board view
+function initializeCompactCardClicks() {
+    if (!itineraryItemsListEl) return;
+
+    // Regular item cards - open detail modal on click or Enter/Space key
+    const itemCards = itineraryItemsListEl.querySelectorAll('.compact-card[data-record-id]');
+    itemCards.forEach(card => {
+        card.addEventListener('click', (e) => {
+            // Don't trigger on status badge or emoji indicator clicks
+            if (e.target.closest('.compact-card-status') || e.target.closest('.compact-card-emoji')) return;
+            const recordId = card.dataset.recordId;
+            const record = getRecordById(recordId);
+            if (record) {
+                showDetailModal(record);
+            }
+        });
+        card.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                const recordId = card.dataset.recordId;
+                const record = getRecordById(recordId);
+                if (record) {
+                    showDetailModal(record);
+                }
+            }
+        });
+    });
+
+    // Group cards - open group detail modal on click or Enter/Space key
+    const groupCards = itineraryItemsListEl.querySelectorAll('.compact-card-group[data-group-id]');
+    groupCards.forEach(card => {
+        card.addEventListener('click', (e) => {
+            const groupId = card.dataset.groupId;
+            if (groupId) {
+                openGroupDetailModal(groupId);
+            }
+        });
+        card.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                const groupId = card.dataset.groupId;
+                if (groupId) {
+                    openGroupDetailModal(groupId);
+                }
+            }
+        });
+    });
 }
 
 // Initialize toggle handlers for combined sources sections
@@ -2942,6 +3356,9 @@ async function initializeItemDragDrop() {
         sortableInstance = null;
     }
 
+    // Detect board view (compact card grid mode)
+    const isBoardView = itineraryItemsListEl.classList.contains('board-view');
+
     try {
         const Sortable = await loadSortableJS();
 
@@ -2950,7 +3367,8 @@ async function initializeItemDragDrop() {
             ghostClass: 'sortable-ghost',
             chosenClass: 'sortable-chosen',
             dragClass: 'sortable-drag',
-            handle: '.itinerary-item-section', // Entire section is draggable
+            // In board view, drag compact cards directly; in list view, drag item sections
+            draggable: isBoardView ? '.compact-card' : '.itinerary-item-section',
             delay: 300, // Increased delay - radial menu should activate first for quick swipes
             delayOnTouchOnly: true,
             touchStartThreshold: 20, // Require more movement before starting SortableJS drag
@@ -2964,6 +3382,8 @@ async function initializeItemDragDrop() {
                 }
 
                 isDragging = true;
+                // Add sorting class to board for CSS pointer-events optimization
+                if (isBoardView) itineraryItemsListEl.classList.add('is-sorting');
                 // Reset debug counters
                 dragMoveDebugCounter = 0;
                 bucketHoverDebugCounter = 0;
@@ -2971,8 +3391,14 @@ async function initializeItemDragDrop() {
 
                 // Track the currently dragged item
                 currentDraggedItem = evt.item;
-                const article = evt.item.querySelector('.itinerary-item');
-                currentDraggedRecordId = article?.dataset.recordId;
+
+                // In board view, record ID is on the card itself; in list view, it's on the article child
+                if (isBoardView) {
+                    currentDraggedRecordId = evt.item.dataset.recordId || evt.item.dataset.groupId || null;
+                } else {
+                    const article = evt.item.querySelector('.itinerary-item');
+                    currentDraggedRecordId = article?.dataset.recordId;
+                }
 
                 // For SortableJS drag (long press/hold), show the radial menu at the item position
                 // instead of the old linear buckets
@@ -3007,6 +3433,8 @@ async function initializeItemDragDrop() {
                     const capturedMergeZone = potentialMergeZone;
 
                     isDragging = false;
+                    // Remove sorting class from board
+                    if (isBoardView) itineraryItemsListEl.classList.remove('is-sorting');
                     clearTimeout(dragDelayTimer);
 
                     // Clear merge hover state - but we've already captured the ID and zone above
@@ -3053,13 +3481,14 @@ async function initializeItemDragDrop() {
                     console.error('[Presentation] Exception in drag onEnd:', error);
                     // Clean up anyway
                     isDragging = false;
+                    if (isBoardView) itineraryItemsListEl.classList.remove('is-sorting');
                     hideRadialMenu();
                     hideDragBuckets();
                 }
             }
         });
 
-        log('Presentation', 'Drag-drop initialized for plan items');
+        log('Presentation', `Drag-drop initialized for plan items (${isBoardView ? 'board' : 'list'} view)`);
     } catch (error) {
         console.error('[Presentation] Failed to initialize drag-drop:', error);
     }
@@ -3517,10 +3946,16 @@ function showRadialMenu(x, y, itemElement) {
         }
     });
 
-    // Store the item element for later
+    // Store the item element for later - support both board view (compact cards) and list view
     if (itemElement) {
-        const article = itemElement.querySelector('.itinerary-item');
-        currentDraggedRecordId = article?.dataset.recordId;
+        if (itemElement.classList.contains('compact-card')) {
+            // Board view: record ID is directly on the compact card
+            currentDraggedRecordId = itemElement.dataset.recordId || itemElement.dataset.groupId || null;
+        } else {
+            // List view: record ID is on the .itinerary-item article child
+            const article = itemElement.querySelector('.itinerary-item');
+            currentDraggedRecordId = article?.dataset.recordId;
+        }
         currentDraggedItem = itemElement;
     }
 
@@ -3871,9 +4306,10 @@ function attachRadialMenuListeners() {
 }
 
 function handleRadialTouchStart(event) {
-    const itemSection = event.target.closest('.itinerary-item-section');
-    if (itemSection) {
-        handleItemPointerDown(event, itemSection);
+    // Board view: target compact cards; List view: target item sections
+    const targetEl = event.target.closest('.compact-card') || event.target.closest('.itinerary-item-section');
+    if (targetEl) {
+        handleItemPointerDown(event, targetEl);
     }
 }
 
@@ -3881,9 +4317,10 @@ function handleRadialMouseDown(event) {
     // Only handle left mouse button
     if (event.button !== 0) return;
 
-    const itemSection = event.target.closest('.itinerary-item-section');
-    if (itemSection) {
-        handleItemPointerDown(event, itemSection);
+    // Board view: target compact cards; List view: target item sections
+    const targetEl = event.target.closest('.compact-card') || event.target.closest('.itinerary-item-section');
+    if (targetEl) {
+        handleItemPointerDown(event, targetEl);
     }
 }
 
@@ -3911,7 +4348,7 @@ function clearQuickCommentHoverStates() {
 
 // Clear merge target highlight
 function clearMergeTarget() {
-    const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
+    const currentTarget = document.querySelector('.itinerary-item-section.merge-target, .compact-card.merge-target');
     if (currentTarget) {
         currentTarget.classList.remove('merge-target', 'merge-target-hybrid', 'merge-target-options');
         // Clear inline styles applied for merge highlighting
@@ -3919,11 +4356,16 @@ function clearMergeTarget() {
         currentTarget.style.outlineOffset = '';
         currentTarget.style.background = '';
         currentTarget.style.zIndex = '';
-        // Clear sub-zone highlights
+        // Clear sub-zone highlights (list view)
         const header = currentTarget.querySelector('.item-accordion-header');
         const content = currentTarget.querySelector('.item-accordion-content');
         if (header) { header.style.background = ''; header.style.borderRadius = ''; }
         if (content) { content.style.background = ''; content.style.borderRadius = ''; }
+        // Clear sub-zone highlights (board view)
+        const photoEl = currentTarget.querySelector('.compact-card-photo');
+        const bodyEl = currentTarget.querySelector('.compact-card-body');
+        if (photoEl) { photoEl.style.background = ''; }
+        if (bodyEl) { bodyEl.style.background = ''; }
     }
     potentialMergeTarget = null;
     potentialMergeZone = null;
@@ -4138,15 +4580,27 @@ function checkMergeTargetHover(clientX, clientY) {
         return;
     }
 
-    const items = itineraryItemsListEl.querySelectorAll('.itinerary-item-section:not(.sortable-drag)');
+    const isBoardView = itineraryItemsListEl.classList.contains('board-view');
+
+    // In board view, target compact cards; in list view, target item sections
+    const itemSelector = isBoardView
+        ? '.compact-card:not(.sortable-drag)'
+        : '.itinerary-item-section:not(.sortable-drag)';
+    const items = itineraryItemsListEl.querySelectorAll(itemSelector);
 
     let foundHoveredItem = null;
     let foundHoveredItemId = null;
     let foundHoveredZone = null; // 'hybrid' or 'options'
 
     items.forEach((item, index) => {
-        const article = item.querySelector('.itinerary-item');
-        const itemRecordId = article?.dataset.recordId;
+        let itemRecordId;
+        if (isBoardView) {
+            // Compact cards have data-record-id or data-group-id directly
+            itemRecordId = item.dataset.recordId || item.dataset.groupId;
+        } else {
+            const article = item.querySelector('.itinerary-item');
+            itemRecordId = article?.dataset.recordId;
+        }
 
         // Don't merge with self
         if (itemRecordId === currentDraggedRecordId) {
@@ -4168,18 +4622,29 @@ function checkMergeTargetHover(clientX, clientY) {
                 foundHoveredItem = item;
                 foundHoveredItemId = itemRecordId;
 
-                // Determine which zone: header (name) = hybrid, content (description/details) = options
-                const header = item.querySelector('.item-accordion-header');
-                if (header) {
-                    const headerRect = header.getBoundingClientRect();
-                    if (clientY <= headerRect.bottom) {
-                        foundHoveredZone = 'hybrid';
+                if (isBoardView) {
+                    // In board view: photo area (top) = hybrid, body area (bottom) = options
+                    const photoEl = item.querySelector('.compact-card-photo');
+                    if (photoEl) {
+                        const photoRect = photoEl.getBoundingClientRect();
+                        foundHoveredZone = clientY <= photoRect.bottom ? 'hybrid' : 'options';
                     } else {
-                        foundHoveredZone = 'options';
+                        foundHoveredZone = relativeY < 0.5 ? 'hybrid' : 'options';
                     }
                 } else {
-                    // Fallback: top half = hybrid, bottom half = options
-                    foundHoveredZone = relativeY < 0.5 ? 'hybrid' : 'options';
+                    // Determine which zone: header (name) = hybrid, content (description/details) = options
+                    const header = item.querySelector('.item-accordion-header');
+                    if (header) {
+                        const headerRect = header.getBoundingClientRect();
+                        if (clientY <= headerRect.bottom) {
+                            foundHoveredZone = 'hybrid';
+                        } else {
+                            foundHoveredZone = 'options';
+                        }
+                    } else {
+                        // Fallback: top half = hybrid, bottom half = options
+                        foundHoveredZone = relativeY < 0.5 ? 'hybrid' : 'options';
+                    }
                 }
             }
         }
@@ -4235,19 +4700,25 @@ function clearMergeHoverState() {
 // Activate merge target with visual feedback
 function activateMergeTarget(element, recordId, clientX, clientY, zone = 'hybrid') {
 
-    // Remove highlight from any previous target
-    const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
+    // Remove highlight from any previous target (support both list and board view selectors)
+    const prevTargetSelectors = '.itinerary-item-section.merge-target, .compact-card.merge-target';
+    const currentTarget = document.querySelector(prevTargetSelectors);
     if (currentTarget && currentTarget !== element) {
         currentTarget.classList.remove('merge-target', 'merge-target-hybrid', 'merge-target-options');
         currentTarget.style.outline = '';
         currentTarget.style.outlineOffset = '';
         currentTarget.style.background = '';
         currentTarget.style.animation = '';
-        // Clear sub-zone highlights
+        // Clear sub-zone highlights (list view)
         const prevHeader = currentTarget.querySelector('.item-accordion-header');
         const prevContent = currentTarget.querySelector('.item-accordion-content');
         if (prevHeader) prevHeader.style.cssText = prevHeader.style.cssText.replace(/background:[^;]*;?/g, '');
         if (prevContent) prevContent.style.cssText = prevContent.style.cssText.replace(/background:[^;]*;?/g, '');
+        // Clear sub-zone highlights (board view)
+        const prevPhoto = currentTarget.querySelector('.compact-card-photo');
+        const prevBody = currentTarget.querySelector('.compact-card-body');
+        if (prevPhoto) { prevPhoto.style.background = ''; prevPhoto.style.borderRadius = ''; }
+        if (prevBody) { prevBody.style.background = ''; prevBody.style.borderRadius = ''; }
     }
 
     // Apply merge target styling
@@ -4339,15 +4810,28 @@ function updateMergeIndicatorContent(zone) {
 
 // Update the visual highlight on sub-zones of the merge target
 function updateMergeTargetZoneVisual(element, zone) {
-    const header = element.querySelector('.item-accordion-header');
-    const content = element.querySelector('.item-accordion-content');
-
     const isHybrid = zone === 'hybrid';
     const activeColor = isHybrid ? 'rgba(156, 39, 176, 0.2)' : 'rgba(76, 175, 80, 0.2)';
     const outlineColor = isHybrid ? 'rgba(156, 39, 176, 0.9)' : 'rgba(76, 175, 80, 0.9)';
 
     // Update the outer outline color
     element.style.outline = `3px solid ${outlineColor}`;
+
+    // Board view: photo = hybrid zone, body = options zone
+    const photoEl = element.querySelector('.compact-card-photo');
+    const bodyEl = element.querySelector('.compact-card-body');
+
+    if (photoEl && bodyEl) {
+        photoEl.style.background = isHybrid ? activeColor : '';
+        photoEl.style.transition = 'background 0.15s ease';
+        bodyEl.style.background = isHybrid ? '' : activeColor;
+        bodyEl.style.transition = 'background 0.15s ease';
+        return;
+    }
+
+    // List view: header = hybrid zone, content = options zone
+    const header = element.querySelector('.item-accordion-header');
+    const content = element.querySelector('.item-accordion-content');
 
     if (header) {
         header.style.background = isHybrid ? activeColor : 'transparent';
@@ -4373,19 +4857,24 @@ function updateMergeIndicatorPosition(clientX, clientY) {
 // Deactivate merge target and hide indicator
 function deactivateMergeTarget() {
 
-    // Remove merge-target class from any highlighted item
-    const currentTarget = document.querySelector('.itinerary-item-section.merge-target');
+    // Remove merge-target class from any highlighted item (support both list and board view)
+    const currentTarget = document.querySelector('.itinerary-item-section.merge-target, .compact-card.merge-target');
     if (currentTarget) {
         currentTarget.classList.remove('merge-target', 'merge-target-hybrid', 'merge-target-options');
         currentTarget.style.outline = '';
         currentTarget.style.outlineOffset = '';
         currentTarget.style.background = '';
         currentTarget.style.animation = '';
-        // Clear sub-zone highlights
+        // Clear sub-zone highlights (list view)
         const header = currentTarget.querySelector('.item-accordion-header');
         const content = currentTarget.querySelector('.item-accordion-content');
         if (header) { header.style.background = ''; header.style.borderRadius = ''; }
         if (content) { content.style.background = ''; content.style.borderRadius = ''; }
+        // Clear sub-zone highlights (board view)
+        const photoEl = currentTarget.querySelector('.compact-card-photo');
+        const bodyEl = currentTarget.querySelector('.compact-card-body');
+        if (photoEl) { photoEl.style.background = ''; }
+        if (bodyEl) { bodyEl.style.background = ''; }
     }
 
     potentialMergeTarget = null;
@@ -5864,16 +6353,39 @@ async function toggleCompletedItems() {
 function updateItemOrder() {
     if (!itineraryItemsListEl) return;
 
-    // Get all item sections in current DOM order
-    const itemSections = itineraryItemsListEl.querySelectorAll('.itinerary-item-section');
+    const isBoardView = itineraryItemsListEl.classList.contains('board-view');
     const newOrder = [];
 
-    itemSections.forEach(section => {
-        const article = section.querySelector('.itinerary-item');
-        if (article && article.dataset.recordId) {
-            newOrder.push(article.dataset.recordId);
-        }
-    });
+    if (isBoardView) {
+        // Board view: compact cards have data-record-id or data-group-id directly
+        const cards = itineraryItemsListEl.querySelectorAll('.compact-card');
+        cards.forEach(card => {
+            const recordId = card.dataset.recordId;
+            const groupId = card.dataset.groupId;
+            if (recordId) {
+                newOrder.push(recordId);
+            } else if (groupId) {
+                // For group cards, push the first member's record ID (used for ordering)
+                const relatedGroups = state.session.relatedGroups || [];
+                const group = relatedGroups.find(g => (g.id || '') === groupId);
+                if (group) {
+                    const groupItems = Array.isArray(group) ? group : (group.items || []);
+                    if (groupItems.length > 0) {
+                        newOrder.push(groupItems[0]);
+                    }
+                }
+            }
+        });
+    } else {
+        // List view: item sections with article children
+        const itemSections = itineraryItemsListEl.querySelectorAll('.itinerary-item-section');
+        itemSections.forEach(section => {
+            const article = section.querySelector('.itinerary-item');
+            if (article && article.dataset.recordId) {
+                newOrder.push(article.dataset.recordId);
+            }
+        });
+    }
 
     // Update state
     state.session.planItemOrder = newOrder;
@@ -11184,19 +11696,45 @@ async function createPresentationResultCard(record, isAI = false) {
 
     const fields = record.fields;
 
-    // Get confidence level for AI items (0.0-1.0)
+    // Get confidence level for AI items, solution items, and manual items (0.0-1.0)
     // Check multiple possible sources for confidence data
-    const confidence = isAI ? (
-        record._researchData?.confidence ??
-        record._aiConfidence ??
-        fields._aiConfidence ??
-        null
-    ) : null;
+    const isSolutionItem = record.isSolution === true || record.id?.startsWith('solution-');
+    const isManualItem = record.isManual === true ||
+                         record.id?.startsWith('manual-add-') ||
+                         record.id?.startsWith('manual-presentation-');
+    const needsConfidenceStyling = isAI || isSolutionItem || isManualItem;
+
+    let confidence;
+    if (needsConfidenceStyling) {
+        if (record._researchData?.confidence != null) {
+            confidence = record._researchData.confidence;
+        } else if (isAI) {
+            confidence = record._aiConfidence ?? fields._aiConfidence ?? null;
+        } else if (isSolutionItem && record.solutionData?.confidence) {
+            const solutionConfidenceMap = { high: 0.85, medium: 0.6, low: 0.35 };
+            confidence = solutionConfidenceMap[record.solutionData.confidence] ?? 0.6;
+        } else if (isManualItem) {
+            confidence = 0.5; // Manual items default to 50% (pen/approximated)
+        } else {
+            confidence = null;
+        }
+    } else {
+        confidence = null;
+    }
 
     console.log('[DEBUG Presentation] Confidence resolved for', record.id, ':', {
         confidence,
         confidenceType: typeof confidence,
-        isAI
+        isAI,
+        isSolutionItem,
+        isManualItem,
+        needsConfidenceStyling,
+        confidenceSource: record._researchData?.confidence != null ? 'researchData' :
+                         isAI ? 'aiConfidence' :
+                         (isSolutionItem && record.solutionData?.confidence) ? 'solutionData' :
+                         isManualItem ? 'manualDefault(0.5)' : 'null/not-styled',
+        'record.isManual': record.isManual,
+        'record.isSolution': record.isSolution
     });
 
     // Determine confidence class based on score:
@@ -11208,7 +11746,7 @@ async function createPresentationResultCard(record, isAI = false) {
     let confidenceLabel = '';
     let confidenceIndicatorClass = '';
 
-    if (isAI) {
+    if (needsConfidenceStyling) {
         if (confidence === null || confidence === undefined) {
             // Unknown confidence - show as pencil (draft)
             confidenceClass = 'confidence-pencil';
@@ -11395,9 +11933,7 @@ async function createPresentationResultCard(record, isAI = false) {
     // Build AI image source indicator for AI items
     let aiImageSourceHtml = '';
     // Show AI image indicator for AI records or for manual items with AI-generated images
-    const isManualItem = record.isManual === true ||
-                         record.id?.startsWith('manual-add-') ||
-                         record.id?.startsWith('manual-presentation-');
+    // Note: isManualItem is already declared above in this scope (confidence styling section)
     const hasAIGeneratedImage = record.fields?._customImages?.some(img => img.isAIGenerated === true);
 
     if (isAI || (isManualItem && hasAIGeneratedImage)) {
@@ -11440,27 +11976,11 @@ async function createPresentationResultCard(record, isAI = false) {
         });
     }
 
-    // Build confidence style text for AI items (shows pencil/pen/typed/premium)
+    // Confidence is now communicated purely through visual styling of the card
+    // (font, color, background, borders) — no text label badge needed
     let confidenceStyleTextHtml = '';
     if (isAI) {
-        // Generate style description text based on confidence tier
-        let styleText;
-        if (confidenceIndicatorClass === 'pencil') {
-            styleText = confidence === null || confidence === undefined ? 'Pencil Draft' : `Pencil (~${Math.round(confidence * 100)}%)`;
-        } else if (confidenceIndicatorClass === 'pen') {
-            styleText = `Pen (~${Math.round(confidence * 100)}%)`;
-        } else if (confidenceIndicatorClass === 'typed') {
-            styleText = `Typed (${Math.round(confidence * 100)}%)`;
-        } else {
-            styleText = `Premium (${Math.round(confidence * 100)}%)`;
-        }
-
-        confidenceStyleTextHtml = `
-            <span class="confidence-style-text confidence-style-${confidenceIndicatorClass}" title="Confidence level: ${confidenceLabel}">
-                ${styleText}
-            </span>
-        `;
-        console.log('[DEBUG Presentation] Built confidence style text for', record.id, ':', confidenceIndicatorClass, styleText);
+        console.log('[DEBUG Presentation] Confidence tier for', record.id, ':', confidenceIndicatorClass, '- expressed via card styling');
     }
 
     // Build dig button or accuracy badge HTML for AI items
