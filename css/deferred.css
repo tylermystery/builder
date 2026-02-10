@@ -14134,6 +14134,13 @@ hr.total-divider {
     border-color: rgba(198, 40, 40, 0.3);
 }
 
+/* Always show remove button on touch devices */
+@media (hover: none) {
+    .group-option-card-remove {
+        opacity: 1;
+    }
+}
+
 /* Dissolve button inside group modal */
 .group-dissolve-modal-btn {
     padding: 8px 16px;

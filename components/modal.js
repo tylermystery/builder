@@ -5660,7 +5660,8 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                         Category: record.fields.Category || 'Solution'
                     },
                     isSolution: true,
-                    parentConceptRecord: record, // Store reference to parent concept
+                    parentConceptId: record.id, // Store ID for serialization
+                    parentConceptRecord: record, // Store reference to parent concept (in-memory only)
                     solutionData: solution,
                     searchTerms: solution.searchTerms || []
                 };
@@ -7113,13 +7114,21 @@ export async function showGroupDetailModal(group, allRecords) {
                     if (items.length < 2) {
                         state.session.relatedGroups = state.session.relatedGroups.filter(g => g.id !== groupId);
                         hideDetailModal();
+                        if (typeof ui !== 'undefined' && ui.showToast) {
+                            ui.showToast(`"${removedName}" removed, group dissolved`, 'success');
+                        }
                         window.dispatchEvent(new CustomEvent('groupDissolved', { detail: { groupId } }));
                     } else {
                         if (!Array.isArray(grp)) {
                             grp.items = items;
                         }
-                        // Re-render the modal with updated group
-                        hideDetailModal();
+                        if (typeof ui !== 'undefined' && ui.showToast) {
+                            ui.showToast(`"${removedName}" removed from group`, 'success');
+                        }
+                        // Reset rendering guard so modal can re-render
+                        isModalRendering = false;
+                        // Re-render the group modal with updated items instead of closing
+                        showGroupDetailModal(grp, allRecords);
                         window.dispatchEvent(new CustomEvent('groupItemRemoved', { detail: { groupId, recordId } }));
                     }
                 }
