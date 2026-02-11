@@ -13,6 +13,7 @@ import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { triggerSave } from '../events.js';
 import { showForumPanel } from './forumPanel.js';
+import { openUCPForItem } from './unifiedChatPanel.js';
 
 console.log('[MODULE DEBUG] modal.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -1333,36 +1334,38 @@ function renderModalReactionsSummary(recordId, summaryEl, scoreBadgeEl) {
 // ============================================
 
 /**
- * Initialize the comments section in the detail modal.
- * Shows a Discussion button that opens the forum panel filtered to this item.
+ * Initialize the discussion button in the detail modal reactions bar.
+ * Opens the Unified Chat Panel (in presentation view) or Forum Panel (outside presentation)
+ * filtered to this item's comments.
  * @param {string} recordId - The item record ID
  */
 async function initModalComments(recordId) {
-    const section = document.getElementById('modal-comments-section');
-    if (!section) return;
+    const discussionBtn = document.getElementById('modal-open-discussion-btn');
+    const countEl = document.getElementById('modal-comments-count');
+
+    if (!discussionBtn) return;
 
     // Only show discussion button if we have a session (plan context)
     const hasSession = state.session.id && state.session.id.startsWith('rec');
     const isPresentationActive = document.body.classList.contains('presentation-active');
 
     if (!hasSession && !isPresentationActive) {
-        section.style.display = 'none';
+        discussionBtn.style.display = 'none';
         return;
     }
 
-    section.style.display = '';
-
-    const discussionBtn = document.getElementById('modal-open-discussion-btn');
-    const countEl = document.getElementById('modal-comments-count');
-
-    if (!discussionBtn) return;
+    discussionBtn.style.display = 'inline-flex';
 
     // Load comment count for this item (non-blocking)
     loadModalCommentCount(recordId, countEl);
 
-    // Attach click handler to open forum panel filtered to this item
+    // Attach click handler - use UCP in presentation mode, forum panel otherwise
     discussionBtn.onclick = () => {
-        showForumPanel({ filter: 'comments', componentId: recordId });
+        if (isPresentationActive) {
+            openUCPForItem(recordId);
+        } else {
+            showForumPanel({ filter: 'comments', componentId: recordId });
+        }
     };
 }
 
@@ -1469,9 +1472,9 @@ function resetModalState() {
             if (icon) icon.textContent = '+';
         }
     }
-    const commentsSection = document.getElementById('modal-comments-section');
-    if (commentsSection) {
-        commentsSection.style.display = 'none';
+    const discussionBtn = document.getElementById('modal-open-discussion-btn');
+    if (discussionBtn) {
+        discussionBtn.style.display = 'none';
         const commentsCount = document.getElementById('modal-comments-count');
         if (commentsCount) { commentsCount.textContent = ''; commentsCount.style.display = 'none'; }
     }

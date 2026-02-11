@@ -2,6 +2,10 @@
   functions = "netlify/functions"
   edge_functions = "netlify/edge-functions"
 
+# Scheduled function: Daily Digest emails at 9 AM UTC
+[functions."send-daily-digest"]
+  schedule = "0 9 * * *"
+
 # Cache headers for static assets - improves repeat visit performance
 [[headers]]
   for = "/*.js"
@@ -95,6 +99,11 @@
   [[redirects]]
   from = "/api/send-chat-to-admin"
   to = "/.netlify/functions/send-chat-to-admin"
+  status = 200
+
+[[redirects]]
+  from = "/api/send-invite"
+  to = "/.netlify/functions/send-invite"
   status = 200
 
 # --- ADD THIS NEW BLOCK ---

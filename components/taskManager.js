@@ -655,11 +655,16 @@ async function handleCheckboxChange(e) {
  * Show the task modal for creating or editing a task
  * @param {Object|null} task - Task to edit, or null for new task
  */
-function showTaskModal(task = null) {
+export function showTaskModal(task = null, projectId = null) {
     editingTaskId = task ? task.id : null;
-    const isEditing = !!task;
+    const isEditing = !!editingTaskId;
     const fields = task?.fields || {};
     const linkedItemId = fields.LinkedItem ? fields.LinkedItem[0] : '';
+
+    // Allow external callers to specify project context
+    if (projectId && !currentProjectId) {
+        currentProjectId = projectId;
+    }
 
     // Build catalog items dropdown options
     const catalogItemsOptions = buildCatalogItemsOptions(linkedItemId);

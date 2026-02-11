@@ -256,7 +256,7 @@ exports.handler = async (event) => {
     } else if (action === 'update-prefs') {
       if (event.httpMethod !== 'POST') throw new Error('update-prefs action requires POST method.');
       const { phone, frequency } = body;
-       if (!['Real-Time', 'None'].includes(frequency)) {
+       if (!['Real-Time', 'Digest', 'None'].includes(frequency)) {
           throw new Error(`Invalid frequency value: ${frequency}`);
        }
       result = await handleUpdatePrefs(userId, phone, frequency);

@@ -528,6 +528,11 @@ export function setupAuthEventListeners() {
         }
     });
 
+    // Listen for sign-in requests from other components (e.g., forum panel, invite system)
+    document.addEventListener('requestSignIn', () => {
+        showUserModal();
+    });
+
     // SMS Authentication Event Listeners
     const smsSigninForm = document.getElementById('sms-signin-form');
     const verifyOtpBtn = document.getElementById('verify-otp-btn');

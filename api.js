@@ -1994,6 +1994,14 @@ export async function postChatMessage(sessionId, senderId, senderName, content, 
     // Add Item Link if itemId is provided (for component affiliation)
     if (itemId && itemId.startsWith('rec')) {
         fields['Item Link'] = [itemId];
+        log('API', `[DEBUG] postChatMessage: Setting Item Link to [${itemId}] for component affiliation`);
+    } else if (itemId) {
+        // Custom item IDs (ai-child-*, manual-add-*, manual-presentation-*, solution-*)
+        // can't be stored in the Airtable Item Link field (requires rec* IDs).
+        // Embed the item reference as a [PLAN_COMMENT:item:ID] prefix in the content,
+        // consistent with how postComponentComment handles non-rec item IDs.
+        fields.Content = `[PLAN_COMMENT:item:${itemId}] ${fields.Content}`;
+        log('API', `[DEBUG] postChatMessage: Non-rec itemId "${itemId}" - embedding as [PLAN_COMMENT:item:] prefix in content`);
     }
 
     const payload = {

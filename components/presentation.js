@@ -19,6 +19,8 @@ import { showUserModal } from '../auth.js';
 import { showToast } from '../ui.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { refreshForumData, onNewItemReceived } from './forumPanel.js';
+import { initializeToastNotifications, handlePusherEvent as handleToastPusherEvent } from './toastNotifications.js';
+import { initializeUnifiedChatPanel, showUnifiedChatPanel, hideUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage } from './unifiedChatPanel.js';
 
 console.log('[MODULE DEBUG] presentation.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -717,6 +719,139 @@ function renderCollaborators() {
 
     if (collaboratorsListEl) {
         collaboratorsListEl.innerHTML = html;
+    }
+}
+
+// ============================================
+// INVITE MODAL FOR COLLABORATOR EMAIL INVITES
+// ============================================
+
+/**
+ * Show the invite modal for sending email invitations
+ */
+function showInviteModal() {
+    const overlay = document.getElementById('invite-modal-overlay');
+    const emailInput = document.getElementById('invite-email-input');
+    const statusEl = document.getElementById('invite-status');
+    const sendBtn = document.getElementById('invite-send-btn');
+
+    if (!overlay) return;
+
+    // Reset form
+    if (emailInput) emailInput.value = '';
+    if (statusEl) {
+        statusEl.style.display = 'none';
+        statusEl.textContent = '';
+    }
+    if (sendBtn) sendBtn.disabled = false;
+
+    overlay.classList.add('active');
+
+    // Set up event listeners (only once)
+    if (!overlay._listenersSetup) {
+        overlay._listenersSetup = true;
+
+        // Send invite
+        const form = document.getElementById('invite-form');
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await handleSendInvite();
+            });
+        }
+
+        // Copy link button
+        const copyBtn = document.getElementById('invite-copy-link-btn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                const baseURL = window.location.origin + window.location.pathname;
+                const sessionID = state.session.id;
+                const shareURL = `${baseURL}?session=${sessionID}&view=present`;
+
+                navigator.clipboard.writeText(shareURL).then(() => {
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(() => { copyBtn.textContent = 'Copy Link'; }, 1500);
+                });
+            });
+        }
+
+        // Cancel/close button
+        const cancelBtn = document.getElementById('invite-cancel-btn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', hideInviteModal);
+        }
+
+        // Close on overlay click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) hideInviteModal();
+        });
+    }
+
+    if (emailInput) emailInput.focus();
+}
+
+function hideInviteModal() {
+    const overlay = document.getElementById('invite-modal-overlay');
+    if (overlay) overlay.classList.remove('active');
+}
+
+async function handleSendInvite() {
+    const emailInput = document.getElementById('invite-email-input');
+    const roleSelect = document.getElementById('invite-role-select');
+    const statusEl = document.getElementById('invite-status');
+    const sendBtn = document.getElementById('invite-send-btn');
+
+    const email = emailInput?.value?.trim();
+    const role = roleSelect?.value || 'Editor';
+
+    if (!email) return;
+
+    if (sendBtn) sendBtn.disabled = true;
+    if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.textContent = 'Sending invitation...';
+        statusEl.className = 'invite-status';
+    }
+
+    try {
+        const currentUser = getCurrentUser();
+        const eventName = state.eventDetails?.combined?.get?.('Event Name') || 'Event Plan';
+
+        const response = await fetch('/api/send-invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email,
+                sessionId: state.session.id,
+                invitedBy: currentUser?.id,
+                inviterName: currentUser?.name || 'Someone',
+                role,
+                sessionName: eventName
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to send invitation');
+        }
+
+        if (statusEl) {
+            statusEl.textContent = `Invitation sent to ${email}`;
+            statusEl.className = 'invite-status success';
+        }
+        if (emailInput) emailInput.value = '';
+        if (sendBtn) sendBtn.disabled = false;
+
+        log('Presentation', `Invite sent to ${email} as ${role}`);
+
+    } catch (error) {
+        if (statusEl) {
+            statusEl.textContent = error.message;
+            statusEl.className = 'invite-status error';
+        }
+        if (sendBtn) sendBtn.disabled = false;
+        log('Presentation', `Invite error: ${error.message}`);
     }
 }
 
@@ -7562,9 +7697,9 @@ async function loadTaskDetailComments(overlay, componentType, elementId) {
             const timestamp = new Date(comment.createdTime || fields.Timestamp || Date.now());
             const timeAgo = getTimeAgo(timestamp);
 
-            // Strip out [PLAN_COMMENT:xxx] prefix from display content
+            // Strip out [PLAN_COMMENT:xxx] or [PLAN_COMMENT:item:componentId] prefix from display content
             let displayContent = fields.Content || '';
-            displayContent = displayContent.replace(/^\[PLAN_COMMENT:\w+\]\s*/i, '');
+            displayContent = displayContent.replace(/^\[PLAN_COMMENT:[^\]]+\]\s*/i, '');
 
             // Strip out embedded [ATTACHMENTS:...] from display content
             let attachments = [];
@@ -8418,8 +8553,13 @@ async function initializePresentationChat() {
         updatePresentationPresenceUI(members);
     });
 
-    presentationChatChannel.bind('pusher:member_added', () => {
+    presentationChatChannel.bind('pusher:member_added', (member) => {
         updatePresentationPresenceUI(presentationChatChannel.members);
+        // Show toast when someone joins
+        handleToastPusherEvent('member-joined', {
+            name: member?.info?.name || 'Someone',
+            userId: member?.id
+        });
     });
 
     presentationChatChannel.bind('pusher:member_removed', () => {
@@ -8440,6 +8580,14 @@ async function initializePresentationChat() {
             refreshForumData();
             // Update notification counts
             onNewItemReceived('message', { timestamp: data.timestamp });
+            // Show toast notification
+            const isIdea = (data.content || '').startsWith('[IDEA]');
+            handleToastPusherEvent('new-message', {
+                sender: data.senderName,
+                message: isIdea ? data.content.replace(/^\[IDEA\]\s*/, '') : data.content,
+                senderId: data.senderId,
+                isIdea: isIdea
+            });
         }
     });
 
@@ -11048,10 +11196,11 @@ async function loadAllCommentCounts() {
                 componentId = itemLinks[0]; // Get the first linked item ID
             }
 
-            // Check for manual items via content prefix [PLAN_COMMENT:item:componentId]
+            // Check for custom items via content prefix [PLAN_COMMENT:item:componentId]
+            // Matches all custom ID formats: manual-presentation-*, manual-add-*, ai-child-*, ai-presentation-*, solution-*
             if (!componentId) {
                 const content = comment.fields?.Content || '';
-                const manualItemMatch = content.match(/^\[PLAN_COMMENT:item:(manual-presentation-\d+)\]/);
+                const manualItemMatch = content.match(/^\[PLAN_COMMENT:item:([^\]]+)\]/);
                 if (manualItemMatch) {
                     componentId = manualItemMatch[1];
                 }
@@ -11150,6 +11299,15 @@ export async function showPresentationView(listType, startRecordId = null) {
 
     // Register sync callback to handle updates from other views
     registerSyncCallback('presentation', handlePlanSyncUpdate);
+
+    // Initialize toast notification system
+    initializeToastNotifications({ getCurrentUser });
+
+    // Initialize and show the Unified Chat Panel
+    setUCPGetCurrentUser(getCurrentUser);
+    setUCPSendMessage(sendChatMessage);
+    initializeUnifiedChatPanel();
+    showUnifiedChatPanel();
 
     // Fetch tasks for this project if not already loaded (critical for comment-task linking)
     // This ensures comment-created tasks are visible when page is refreshed or link is shared
@@ -11260,6 +11418,9 @@ export function hidePresentationView() {
 
     // Unregister sync callback when closing presentation view
     unregisterSyncCallback('presentation');
+
+    // Hide the Unified Chat Panel
+    hideUnifiedChatPanel();
 
     // Stop the background animation
     stopPresentationBackgroundAnimation();
@@ -11490,22 +11651,28 @@ export function setupPresentationEventListeners() {
 
     // Note: shareBtn removed - share functionality now in collaborators add/share button
 
-    // Collaborators add/share button - copies shareable link
+    // Collaborators add/share button - opens invite modal for authenticated users, copies link for guests
     if (collaboratorsAddShareBtn) {
         collaboratorsAddShareBtn.addEventListener('click', () => {
-            const baseURL = window.location.origin + window.location.pathname;
-            const sessionID = state.session.id;
-            const shareURL = `${baseURL}?session=${sessionID}&view=present`;
+            if (state.session.user.isAuthenticated) {
+                // Open invite modal for authenticated users
+                showInviteModal();
+            } else {
+                // Fallback to copy link for unauthenticated users
+                const baseURL = window.location.origin + window.location.pathname;
+                const sessionID = state.session.id;
+                const shareURL = `${baseURL}?session=${sessionID}&view=present`;
 
-            navigator.clipboard.writeText(shareURL).then(() => {
-                const originalHTML = collaboratorsAddShareBtn.innerHTML;
-                collaboratorsAddShareBtn.innerHTML = '<span class="add-share-icon">✓</span><span class="add-share-text">Copied!</span>';
-                collaboratorsAddShareBtn.title = 'Link Copied!';
-                setTimeout(() => {
-                    collaboratorsAddShareBtn.innerHTML = originalHTML;
-                    collaboratorsAddShareBtn.title = 'Add people or share this plan';
-                }, 1500);
-            });
+                navigator.clipboard.writeText(shareURL).then(() => {
+                    const originalHTML = collaboratorsAddShareBtn.innerHTML;
+                    collaboratorsAddShareBtn.innerHTML = '<span class="add-share-icon">✓</span><span class="add-share-text">Copied!</span>';
+                    collaboratorsAddShareBtn.title = 'Link Copied!';
+                    setTimeout(() => {
+                        collaboratorsAddShareBtn.innerHTML = originalHTML;
+                        collaboratorsAddShareBtn.title = 'Add people or share this plan';
+                    }, 1500);
+                });
+            }
         });
     }
 
