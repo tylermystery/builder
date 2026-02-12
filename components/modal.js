@@ -7066,7 +7066,7 @@ export async function showGroupDetailModal(group, allRecords) {
             <div class="group-options-container">
                 <div class="group-options-label">${group.items.length} options available</div>
                 ${optionCardsHTML}
-                <button class="group-dissolve-modal-btn" data-group-id="${group.id}">Ungroup All</button>
+                <button class="group-dissolve-modal-btn" data-group-id="${group.id}">✂ Split All ${group.items.length} Items Apart</button>
             </div>
         `;
 
@@ -7145,8 +7145,13 @@ export async function showGroupDetailModal(group, allRecords) {
                 e.stopPropagation();
                 const groupId = dissolveBtn.dataset.groupId;
                 if (groupId && state.session.relatedGroups) {
+                    const grp = state.session.relatedGroups.find(g => g.id === groupId);
+                    const grpName = grp?.name || 'Group';
                     state.session.relatedGroups = state.session.relatedGroups.filter(g => g.id !== groupId);
                     hideDetailModal();
+                    if (typeof ui !== 'undefined' && ui.showToast) {
+                        ui.showToast(`"${grpName}" split apart`, 'success');
+                    }
                     // Trigger re-render (the presentation module will handle this via event)
                     window.dispatchEvent(new CustomEvent('groupDissolved', { detail: { groupId } }));
                 }

@@ -2926,7 +2926,7 @@ async function renderCompactCard(item) {
             : sourceTypeBadges.slice(0, 3).join('') + `<span class="provenance-source-badge provenance-source-more">+${sourceTypeBadges.length - 3}</span>`;
         const hybridData = getCombinedHybridData(recordId);
         const hybridLabel = hybridData?.hybridName ? '<span class="provenance-hybrid-icon" title="Hybrid item">✨</span>' : '';
-        provenanceHTML = `<div class="compact-card-provenance" title="${escapeHtml(sourceNames.join(' + '))}">${hybridLabel}<span class="provenance-label">Merged:</span> ${displayBadges}</div>`;
+        provenanceHTML = `<div class="compact-card-provenance" title="${escapeHtml(sourceNames.join(' + '))}">${hybridLabel}<span class="provenance-label">Merged:</span> ${displayBadges}<button class="compact-card-split-btn compact-card-split-hybrid" data-target-id="${recordId}" title="Split hybrid apart">✂</button></div>`;
     }
 
     // --- Goal indicator ---
@@ -3231,6 +3231,7 @@ async function renderCompactGroupCard(group) {
             <div class="compact-card-body">
                 <div class="compact-card-title-row">
                     <h4 class="compact-card-name" title="${escapeHtml(groupName)}">${escapeHtml(groupName)}</h4>
+                    <button class="compact-card-split-btn" data-group-id="${groupId}" title="Split group apart">✂</button>
                 </div>
                 ${groupStatusHTML}
                 <div class="compact-card-pills">${memberPills}${morePill}</div>
@@ -3426,8 +3427,8 @@ function initializeCompactCardClicks() {
     const itemCards = itineraryItemsListEl.querySelectorAll('.compact-card[data-record-id]');
     itemCards.forEach(card => {
         card.addEventListener('click', (e) => {
-            // Don't trigger on status badge or emoji indicator clicks
-            if (e.target.closest('.compact-card-status') || e.target.closest('.compact-card-emoji')) return;
+            // Don't trigger on status badge, emoji indicator, or split button clicks
+            if (e.target.closest('.compact-card-status') || e.target.closest('.compact-card-emoji') || e.target.closest('.compact-card-split-btn')) return;
             const recordId = card.dataset.recordId;
             const record = getRecordById(recordId);
             if (record) {
@@ -3450,6 +3451,8 @@ function initializeCompactCardClicks() {
     const groupCards = itineraryItemsListEl.querySelectorAll('.compact-card-group[data-group-id]');
     groupCards.forEach(card => {
         card.addEventListener('click', (e) => {
+            // Don't open modal when clicking the split button
+            if (e.target.closest('.compact-card-split-btn')) return;
             const groupId = card.dataset.groupId;
             if (groupId) {
                 openGroupDetailModal(groupId);
@@ -3462,6 +3465,32 @@ function initializeCompactCardClicks() {
                 if (groupId) {
                     openGroupDetailModal(groupId);
                 }
+            }
+        });
+    });
+
+    // Split buttons on group cards - dissolve the group
+    const groupSplitBtns = itineraryItemsListEl.querySelectorAll('.compact-card-group .compact-card-split-btn[data-group-id]');
+    groupSplitBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            const groupId = btn.dataset.groupId;
+            if (groupId) {
+                dissolveGroup(groupId);
+            }
+        });
+    });
+
+    // Split buttons on hybrid compact cards - uncombine all sources
+    const hybridSplitBtns = itineraryItemsListEl.querySelectorAll('.compact-card-split-hybrid[data-target-id]');
+    hybridSplitBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            const targetId = btn.dataset.targetId;
+            if (targetId) {
+                uncombineAll(targetId);
             }
         });
     });
@@ -5895,8 +5924,15 @@ async function openCustomCommentDialog(recordId) {
 function enterMergeMode(sourceRecordId) {
     if (!sourceRecordId || isMergeModeActive) return;
 
-    const sourceRecord = getRecordById(sourceRecordId);
-    const sourceName = sourceRecord?.fields?.Name || 'Item';
+    // Determine display name - could be a group or individual item
+    let sourceName = 'Item';
+    if (sourceRecordId.startsWith('group-')) {
+        const group = state.session.relatedGroups?.find(g => g.id === sourceRecordId);
+        sourceName = group?.name || 'Group';
+    } else {
+        const sourceRecord = getRecordById(sourceRecordId);
+        sourceName = sourceRecord?.fields?.Name || 'Item';
+    }
 
     isMergeModeActive = true;
     mergeModeSourceRecordId = sourceRecordId;
@@ -5932,8 +5968,9 @@ function enterMergeMode(sourceRecordId) {
         const section = sourceSection.closest('.itinerary-item-section');
         if (section) section.classList.add('merge-mode-source');
     }
-    // Board view: mark source card
-    const sourceCard = document.querySelector(`.compact-card[data-record-id="${sourceRecordId}"]`);
+    // Board view: mark source card (either by record ID or group ID)
+    const sourceCard = document.querySelector(`.compact-card[data-record-id="${sourceRecordId}"]`) ||
+                       document.querySelector(`.compact-card-group[data-group-id="${sourceRecordId}"]`);
     if (sourceCard) {
         sourceCard.classList.add('merge-mode-source-card');
     }
@@ -6072,11 +6109,17 @@ async function executeMergeByZone(sourceId, targetId, zone) {
     const targetRecord = getRecordById(primaryTargetId);
 
     if (zone === 'hybrid') {
-        // Merge as hybrid - use primary source and target
-        await combineItemsIntoOne(primarySourceId, primaryTargetId, null);
+        // Merge as hybrid - combine all items into the primary target
+        const allRecordIds = [...new Set([...sourceRecordIds, ...targetRecordIds])];
+
+        // Combine each item (except the target) into the primary target
+        for (const id of allRecordIds) {
+            if (id !== primaryTargetId) {
+                await combineItemsIntoOne(id, primaryTargetId, null);
+            }
+        }
 
         // Build items array for all involved items for AI estimation
-        const allRecordIds = [...new Set([...sourceRecordIds, ...targetRecordIds])];
         const allItems = allRecordIds.map(id => {
             const rec = getRecordById(id);
             return {

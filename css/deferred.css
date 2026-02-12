@@ -14522,6 +14522,41 @@ hr.total-divider {
     min-width: 0;
 }
 
+/* Split button on compact cards (group and hybrid) */
+.compact-card-split-btn {
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.8em;
+    padding: 2px 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.compact-card-split-btn:hover {
+    background: rgba(244, 67, 54, 0.25);
+    border-color: rgba(244, 67, 54, 0.5);
+    color: #ff8a80;
+    transform: scale(1.1);
+}
+
+.compact-card-split-btn:active {
+    transform: scale(0.95);
+}
+
+/* Split button in provenance line for hybrids */
+.compact-card-split-hybrid {
+    margin-left: auto;
+    font-size: 0.85em;
+    padding: 1px 5px;
+}
+
 /* Provenance line */
 .compact-card-provenance {
     font-size: 0.78em;
