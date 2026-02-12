@@ -882,6 +882,12 @@ function createWtfPlanItem(item) {
 function handleWtfPlanItemClick(item) {
     log('WtfPlansPanel', `Clicked ${item.type}: ${item.name} (${item.id})`);
 
+    // If clicking the current session, just close the panel - no need to reload
+    if (item.isCurrentSession) {
+        hideWtfPlansPanel();
+        return;
+    }
+
     // Close the panel (skipPushState since we'll handle navigation ourselves)
     hideWtfPlansPanel({ skipPushState: true });
 

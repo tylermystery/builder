@@ -6267,21 +6267,23 @@ body.presentation-active #wtf-plans-panel-overlay {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 16px;
-    background: rgba(0, 123, 255, 0.1);
-    border: 1px solid rgba(0, 123, 255, 0.3);
+    padding: 7px 16px;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px dashed rgba(255, 255, 255, 0.35);
     border-radius: 20px;
-    font-size: 0.95em;
-    color: #007bff;
+    font-size: 0.9em;
+    color: rgba(255, 255, 255, 0.85);
     cursor: pointer;
     transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
     white-space: nowrap;
+    backdrop-filter: blur(4px);
 }
 
 .presentation-add-item-btn:hover {
-    background: rgba(0, 123, 255, 0.2);
-    border-color: rgba(0, 123, 255, 0.5);
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.55);
     transform: translateY(-1px);
+    color: rgba(255, 255, 255, 0.95);
 }
 
 .presentation-add-item-btn .add-icon {
@@ -6343,30 +6345,31 @@ body.presentation-active #wtf-plans-panel-overlay {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    padding: 6px 12px;
-    background: rgba(108, 117, 125, 0.08);
-    border: 1px solid rgba(108, 117, 125, 0.2);
+    padding: 5px 11px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 16px;
-    font-size: 0.85em;
-    color: #6c757d;
+    font-size: 0.8em;
+    color: rgba(255, 255, 255, 0.7);
     cursor: pointer;
     transition: all 0.2s ease;
     white-space: nowrap;
 }
 
 .presentation-status-toggle:hover {
-    background: rgba(108, 117, 125, 0.15);
-    border-color: rgba(108, 117, 125, 0.4);
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .presentation-status-toggle.active {
-    background: rgba(108, 117, 125, 0.15);
-    border-color: rgba(108, 117, 125, 0.5);
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.45);
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .presentation-status-toggle:not(.active) {
-    text-decoration: line-through;
-    opacity: 0.6;
+    opacity: 0.5;
 }
 
 .presentation-status-toggle .toggle-icon {

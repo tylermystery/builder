@@ -112,6 +112,17 @@ function setupPanelToggle() {
             panel.classList.toggle('collapsed', panelCollapsed);
         });
     }
+
+    // Allow clicking anywhere on the collapsed panel to expand it
+    const panel = document.getElementById('unified-chat-panel');
+    if (panel) {
+        panel.addEventListener('click', (e) => {
+            if (panelCollapsed && !e.target.closest('.ucp-toggle-btn') && !e.target.closest('.ucp-menu-btn')) {
+                panelCollapsed = false;
+                panel.classList.remove('collapsed');
+            }
+        });
+    }
 }
 
 function setupFilters() {

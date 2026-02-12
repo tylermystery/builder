@@ -12059,12 +12059,11 @@ export function setupPresentationEventListeners() {
         hidePresentationView();
     });
 
-    // Presentation header hamburger button (opens WTF Plans panel)
+    // Presentation header hamburger button (opens WTF Plans panel as overlay)
     if (presentationBackBtn) {
         presentationBackBtn.addEventListener('click', () => {
-            updateUrl({ view: null });
-            hidePresentationView();
-            // Open WTF Plans panel after closing presentation view
+            // Open WTF Plans panel directly on top of the presentation view
+            // so users can quickly switch between plans without leaving the view
             showWtfPlansPanel();
         });
     }
