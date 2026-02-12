@@ -240,8 +240,11 @@ function renderTaskManager(container, tasks) {
         <div class="task-manager ${permissionClass}">
             <div class="task-manager-header">
                 <h3>Tasks</h3>
-                ${canUserEdit ? '<button class="task-add-btn" id="task-add-btn">+ New Task</button>' : ''}
-                ${isUserViewer ? '<span class="task-viewer-badge">View Only</span>' : ''}
+                <div class="task-manager-header-actions">
+                    ${canUserEdit ? '<button class="task-add-btn" id="task-add-btn">+ New Task</button>' : ''}
+                    ${canUserEdit ? '<button class="task-archive-completed-btn" id="task-archive-completed-btn" title="Archive completed tasks">🗑 Clear Done</button>' : ''}
+                    ${isUserViewer ? '<span class="task-viewer-badge">View Only</span>' : ''}
+                </div>
             </div>
             <div id="task-list-container" class="task-list-container">
                 ${taskListHtml}
@@ -523,6 +526,12 @@ function attachEventListeners(container) {
     const addBtn = container.querySelector('#task-add-btn');
     if (addBtn) {
         addBtn.addEventListener('click', () => showTaskModal());
+    }
+
+    // Archive completed tasks button
+    const archiveBtn = container.querySelector('#task-archive-completed-btn');
+    if (archiveBtn) {
+        archiveBtn.addEventListener('click', handleArchiveCompletedTasks);
     }
 
     // Task card clicks (edit, linked item)
@@ -949,6 +958,49 @@ async function handleDeleteTask(taskId) {
     } catch (error) {
         console.error('Error deleting task:', error);
         showToast('Failed to delete task. Please try again.', 3000);
+    }
+}
+
+/**
+ * Handle archiving (deleting) all completed tasks
+ */
+async function handleArchiveCompletedTasks() {
+    const completedTasks = currentTasks.filter(t => t.fields?.Status === api.TASK_STATUS.COMPLETED);
+
+    if (completedTasks.length === 0) {
+        showToast('No completed tasks to clear', 2000);
+        return;
+    }
+
+    const confirmed = confirm(
+        `Remove ${completedTasks.length} completed task${completedTasks.length !== 1 ? 's' : ''}?\n\nThis cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    showToast('Clearing completed tasks...', 2000);
+
+    try {
+        const result = await api.archiveCompletedTasks(currentProjectId);
+
+        if (result.success > 0) {
+            // Remove from local state
+            completedTasks.forEach(task => {
+                state.tasks.all.delete(task.id);
+            });
+
+            // Refresh the task list
+            await refreshTaskList();
+
+            showToast(`Cleared ${result.success} completed task${result.success !== 1 ? 's' : ''}`, 3000);
+        } else if (result.failed > 0) {
+            showToast('Failed to clear some tasks', 3000);
+        } else {
+            showToast('No completed tasks to clear', 2000);
+        }
+    } catch (error) {
+        console.error('Error archiving completed tasks:', error);
+        showToast('Failed to clear completed tasks', 3000);
     }
 }
 

@@ -56,6 +56,7 @@ export function initializeUnifiedChatPanel() {
     setupFilters();
     setupMessageForm();
     setupMobileToggle();
+    setupChatMenuActions();
 
     initialized = true;
     log('UCP', 'Unified Chat Panel initialized.');
@@ -1026,4 +1027,108 @@ function formatMessageContent(content) {
     html = html.replace(/\n/g, '<br>');
 
     return html;
+}
+
+// ===== CHAT MENU ACTIONS (Clear/Archive) =====
+
+function setupChatMenuActions() {
+    const menuBtn = document.getElementById('ucp-menu-btn');
+    if (!menuBtn) return;
+
+    menuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleChatMenu();
+    });
+}
+
+function toggleChatMenu() {
+    const existing = document.querySelector('.ucp-chat-menu');
+    if (existing) {
+        existing.remove();
+        return;
+    }
+
+    const menuBtn = document.getElementById('ucp-menu-btn');
+    if (!menuBtn) return;
+
+    const menu = document.createElement('div');
+    menu.className = 'ucp-chat-menu';
+
+    // Permission check
+    const currentRole = state.permissions?.currentRole;
+    const isLoadingPerms = state.permissions?.isLoading !== false;
+    const canEditByRole = api.canEdit ? api.canEdit(currentRole) : false;
+    const canEditByOwnership = state.session.isOwned === true;
+    const canUserEdit = (!isLoadingPerms && canEditByRole) || canEditByOwnership;
+
+    const messageCount = ucpMessages.length;
+
+    menu.innerHTML = `
+        <button class="ucp-chat-menu-item ${!canUserEdit || messageCount === 0 ? 'disabled' : ''}" data-action="clear">
+            <span class="ucp-chat-menu-icon">🗑</span>
+            <span>Clear Conversation</span>
+            ${messageCount > 0 ? `<span class="ucp-chat-menu-count">${messageCount}</span>` : ''}
+        </button>
+    `;
+
+    menuBtn.parentElement.appendChild(menu);
+
+    // Attach handlers
+    const clearBtn = menu.querySelector('[data-action="clear"]');
+    if (clearBtn && canUserEdit && messageCount > 0) {
+        clearBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            menu.remove();
+            handleClearConversation();
+        });
+    }
+
+    // Close on outside click
+    const closeHandler = (e) => {
+        if (!menu.contains(e.target) && e.target !== menuBtn) {
+            menu.remove();
+            document.removeEventListener('click', closeHandler);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 10);
+}
+
+async function handleClearConversation() {
+    const messageCount = ucpMessages.length;
+    if (messageCount === 0) {
+        showToast('No messages to clear', 2000);
+        return;
+    }
+
+    // Show confirmation dialog
+    const confirmed = confirm(
+        `Clear all ${messageCount} message${messageCount !== 1 ? 's' : ''} in this conversation?\n\nThis cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    const sessionId = state.session?.id;
+    if (!sessionId) return;
+
+    showToast('Clearing conversation...', 2000);
+
+    try {
+        const result = await api.clearChatMessages(sessionId);
+
+        if (result.success > 0) {
+            // Clear local state
+            ucpMessages = [];
+            ucpPlanEvents = [];
+            shouldScrollToBottom = true;
+            renderContent();
+            showToast(`Cleared ${result.success} message${result.success !== 1 ? 's' : ''}`, 3000);
+        } else if (result.failed > 0) {
+            showToast('Failed to clear some messages', 3000);
+        } else {
+            showToast('No messages to clear', 2000);
+        }
+    } catch (error) {
+        log('UCP', 'Error clearing conversation:', error);
+        showToast('Failed to clear conversation', 3000);
+    }
 }

@@ -2224,6 +2224,144 @@ export async function deleteChatMessage(messageId, senderId) {
 }
 
 /**
+ * Bulk delete (soft-delete) all chat messages for a session.
+ * Marks each batch of messages as IsDeleted=true via Airtable batch PATCH.
+ * @param {string} sessionId - The session whose messages to clear
+ * @returns {Promise<{success: number, failed: number}>} Counts of successful and failed deletions
+ */
+export async function clearChatMessages(sessionId) {
+    if (!sessionId) {
+        log('API', 'clearChatMessages: No sessionId provided');
+        return { success: 0, failed: 0 };
+    }
+
+    log('API', `Clearing chat messages for session ${sessionId}`);
+
+    // First fetch all messages for this session
+    const messages = await fetchChatMessages(sessionId);
+    if (!messages || messages.length === 0) {
+        log('API', 'No messages to clear');
+        return { success: 0, failed: 0 };
+    }
+
+    // Filter to only non-deleted messages with valid IDs
+    const messageIds = messages
+        .filter(m => m.id && m.id.startsWith('rec') && !m.fields?.IsDeleted)
+        .map(m => m.id);
+
+    if (messageIds.length === 0) {
+        return { success: 0, failed: 0 };
+    }
+
+    let success = 0;
+    let failed = 0;
+    const batchSize = 10;
+
+    for (let i = 0; i < messageIds.length; i += batchSize) {
+        const batch = messageIds.slice(i, i + batchSize);
+        const records = batch.map(id => ({
+            id,
+            fields: { IsDeleted: true }
+        }));
+
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}`;
+
+        try {
+            const response = await fetch(url, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ records })
+            });
+
+            if (response.ok) {
+                success += batch.length;
+            } else {
+                // If soft delete fails (no IsDeleted field), try hard delete
+                const errorData = await response.json().catch(() => ({}));
+                if (errorData?.error?.type === 'INVALID_REQUEST_UNKNOWN_FIELD_NAME') {
+                    // Hard delete each message in this batch
+                    for (const id of batch) {
+                        try {
+                            const delResp = await fetch(`${url}/${id}`, {
+                                method: 'DELETE',
+                                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+                            });
+                            if (delResp.ok) success++;
+                            else failed++;
+                        } catch { failed++; }
+                    }
+                } else {
+                    failed += batch.length;
+                }
+            }
+        } catch (error) {
+            console.error('Error clearing chat messages batch:', error);
+            failed += batch.length;
+        }
+    }
+
+    log('API', `Chat clear complete: ${success} succeeded, ${failed} failed`);
+    return { success, failed };
+}
+
+/**
+ * Bulk delete completed tasks for a project.
+ * @param {string} projectId - The project/session ID
+ * @returns {Promise<{success: number, failed: number}>} Counts of successful and failed deletions
+ */
+export async function archiveCompletedTasks(projectId) {
+    if (!projectId) {
+        log('API', 'archiveCompletedTasks: No projectId provided');
+        return { success: 0, failed: 0 };
+    }
+
+    // Get tasks for this project
+    const tasks = await fetchTasks(projectId);
+    const completedTasks = tasks.filter(t => t.fields?.Status === TASK_STATUS.COMPLETED);
+
+    if (completedTasks.length === 0) {
+        return { success: 0, failed: 0 };
+    }
+
+    let success = 0;
+    let failed = 0;
+
+    // Delete completed tasks in batches of 10 (Airtable limit)
+    const batchSize = 10;
+    for (let i = 0; i < completedTasks.length; i += batchSize) {
+        const batch = completedTasks.slice(i, i + batchSize);
+        const ids = batch.map(t => t.id);
+
+        // Airtable batch delete: DELETE with records[] query param
+        const params = ids.map(id => `records[]=${id}`).join('&');
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}?${params}`;
+
+        try {
+            const response = await fetch(url, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+            });
+
+            if (response.ok) {
+                success += batch.length;
+            } else {
+                console.error('Error archiving completed tasks batch:', await response.text());
+                failed += batch.length;
+            }
+        } catch (error) {
+            console.error('Error archiving completed tasks batch:', error);
+            failed += batch.length;
+        }
+    }
+
+    log('API', `Archive completed tasks: ${success} succeeded, ${failed} failed`);
+    return { success, failed };
+}
+
+/**
  * Adds or removes a reaction to a message
  * @param {string} messageId - The Airtable record ID of the message
  * @param {string} userId - The user adding/removing the reaction

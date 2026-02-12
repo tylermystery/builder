@@ -83,6 +83,7 @@ async function handlePlanSyncUpdate(changeType, summary, changeData) {
             generateItemsSummary();
             // Update running total in header
             updatePresentationHeaderTotal();
+            updatePlanSummaryDashboard();
             break;
         case 'dateChanged':
             // Update the date display
@@ -98,6 +99,7 @@ async function handlePlanSyncUpdate(changeType, summary, changeData) {
             initializeAccordions();
             // Update running total in header
             updatePresentationHeaderTotal();
+            updatePlanSummaryDashboard();
             break;
         default:
     }
@@ -3059,12 +3061,32 @@ async function renderCompactCard(item) {
     const photoStyle = optimizedPhoto ? `background-image: url('${optimizedPhoto}')` : '';
     const noPhotoClass = !optimizedPhoto ? 'compact-card-no-photo' : '';
 
+    // --- Price badge on photo ---
+    let priceBadgeHTML = '';
+    if (itemInfo) {
+        const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
+            ? itemInfo.selections
+            : itemInfo.selectedOptionIndex;
+        let unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
+        if (!isNaN(unitPrice) && unitPrice > 0) {
+            const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
+            const totalPrice = unitPrice * effectiveQuantity;
+            const priceText = effectiveQuantity > 1
+                ? `$${totalPrice.toFixed(0)} (${effectiveQuantity}x)`
+                : `$${unitPrice % 1 === 0 ? unitPrice.toFixed(0) : unitPrice.toFixed(2)}`;
+            priceBadgeHTML = `<span class="compact-card-price">${priceText}</span>`;
+        } else if (unitPrice === 0) {
+            priceBadgeHTML = `<span class="compact-card-price price-free">Free</span>`;
+        }
+    }
+
     return `
         <div class="compact-card ${lifecycleClass} ${confidenceClass} ${noPhotoClass}" data-record-id="${recordId}" data-item-type="${type}" data-item-status="${itemStatus}" role="article" tabindex="0" aria-label="${escapeHtml(name)}${showStatus ? ', ' + taskConfig.label : ''}">
             <div class="compact-card-photo" style="${photoStyle}">
                 ${statusOverlayHTML}
                 ${emojiOverlayHTML}
                 ${lifecycleBadgeHTML}
+                ${priceBadgeHTML}
             </div>
             <div class="compact-card-body">
                 <div class="compact-card-title-row">
@@ -3362,9 +3384,49 @@ async function renderAllItems() {
         }
     }
 
+    // Track sections for divider insertion
+    let lastSection = null;
+    const activeLockedItems = combinedList.filter(item => item.itemStatus === 'active' && item.type === 'locked');
+    const activeIdeaItems = combinedList.filter(item => item.itemStatus === 'active' && item.type === 'favorites');
+    const archivedVisibleItems = combinedList.filter(item => item.itemStatus === 'archived');
+    const completedVisibleItems = combinedList.filter(item => item.itemStatus === 'completed');
+
     for (let i = 0; i < combinedList.length; i++) {
         const item = combinedList[i];
         const itemGroup = itemToGroupMap.get(item.recordId);
+
+        // Insert section dividers between confirmed/idea/archived/completed
+        let currentSection;
+        if (item.itemStatus === 'archived') currentSection = 'archived';
+        else if (item.itemStatus === 'completed') currentSection = 'completed';
+        else if (item.type === 'locked') currentSection = 'confirmed';
+        else currentSection = 'ideas';
+
+        if (currentSection !== lastSection) {
+            // Only show section dividers when there are multiple sections
+            const hasMixedSections = (activeLockedItems.length > 0 && activeIdeaItems.length > 0)
+                || archivedVisibleItems.length > 0 || completedVisibleItems.length > 0;
+
+            if (hasMixedSections) {
+                const sectionLabels = {
+                    confirmed: { label: 'Confirmed', count: activeLockedItems.length },
+                    ideas: { label: 'Ideas', count: activeIdeaItems.length },
+                    archived: { label: 'Archived', count: archivedVisibleItems.length },
+                    completed: { label: 'Completed', count: completedVisibleItems.length }
+                };
+                const sec = sectionLabels[currentSection];
+                if (sec && sec.count > 0) {
+                    itemsHTML.push(`
+                        <div class="board-section-divider" role="separator">
+                            <span class="board-section-divider-line"></span>
+                            <span class="board-section-divider-label">${sec.label}<span class="board-section-divider-count">(${sec.count})</span></span>
+                            <span class="board-section-divider-line"></span>
+                        </div>
+                    `);
+                }
+            }
+            lastSection = currentSection;
+        }
 
         if (itemGroup && itemGroup.id && !renderedGroupIds.has(itemGroup.id)) {
             renderedGroupIds.add(itemGroup.id);
@@ -3417,6 +3479,9 @@ async function renderAllItems() {
     initializeItemDragDrop();
     initializeRadialMenu();
     attachRadialMenuListeners();
+
+    // Update plan summary dashboard with latest metrics
+    updatePlanSummaryDashboard();
 }
 
 // Initialize click handlers for compact cards in board view
@@ -5356,6 +5421,7 @@ async function archiveItem(recordId) {
     await renderAllItems();
     generateItemsSummary();
     updatePresentationHeaderTotal();
+    updatePlanSummaryDashboard();
 
     // Show toast notification
     showToast(`"${itemName}" archived`, 'info');
@@ -5386,6 +5452,7 @@ async function completeItem(recordId) {
     await renderAllItems();
     generateItemsSummary();
     updatePresentationHeaderTotal();
+    updatePlanSummaryDashboard();
 
     // Show toast notification
     showToast(`"${itemName}" marked complete`, 'success');
@@ -9397,6 +9464,84 @@ function generateHeaderSummary() {
     }
 }
 
+/**
+ * Update the Plan Summary Dashboard with key metrics
+ * Provides a quick-glance overview: Items, Budget, Team, Status
+ */
+function updatePlanSummaryDashboard() {
+    const dashboard = document.getElementById('plan-summary-dashboard');
+    if (!dashboard) return;
+
+    // --- Items count ---
+    const favoritesCount = state.cart.items.size;
+    const lockedCount = state.cart.lockedItems.size;
+    const totalItems = favoritesCount + lockedCount;
+
+    const itemsMetric = document.querySelector('#plan-metric-items .plan-metric-value');
+    if (itemsMetric) {
+        itemsMetric.textContent = totalItems;
+    }
+
+    // --- Budget ---
+    let subtotal = 0;
+    state.cart.lockedItems.forEach((itemInfo, recordId) => {
+        const record = getRecordById(recordId);
+        if (!record) return;
+        const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
+            ? itemInfo.selections
+            : itemInfo.selectedOptionIndex;
+        let unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
+        if (isNaN(unitPrice)) return;
+        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
+        subtotal += unitPrice * effectiveQuantity;
+    });
+    // Also add idea items for a total picture
+    state.cart.items.forEach((itemInfo, recordId) => {
+        const record = getRecordById(recordId);
+        if (!record) return;
+        const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
+            ? itemInfo.selections
+            : itemInfo.selectedOptionIndex;
+        let unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
+        if (isNaN(unitPrice)) return;
+        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
+        subtotal += unitPrice * effectiveQuantity;
+    });
+
+    const budgetMetric = document.querySelector('#plan-metric-budget .plan-metric-value');
+    if (budgetMetric) {
+        if (subtotal > 0) {
+            budgetMetric.textContent = subtotal >= 1000 ? `$${(subtotal / 1000).toFixed(1)}k` : `$${Math.round(subtotal)}`;
+        } else {
+            budgetMetric.textContent = '--';
+        }
+    }
+
+    // --- Team ---
+    const teamCount = state.session.userProfiles?.size || 0;
+    const teamMetric = document.querySelector('#plan-metric-team .plan-metric-value');
+    if (teamMetric) {
+        teamMetric.textContent = teamCount || 1; // At least the current user
+    }
+
+    // --- Status ---
+    const statusMetric = document.querySelector('#plan-metric-status .plan-metric-value');
+    if (statusMetric) {
+        if (totalItems === 0) {
+            statusMetric.textContent = 'Draft';
+        } else if (lockedCount === totalItems) {
+            statusMetric.textContent = 'Ready';
+        } else if (lockedCount > 0) {
+            statusMetric.textContent = 'In Progress';
+        } else {
+            statusMetric.textContent = 'Planning';
+        }
+    }
+
+    // Hide dashboard if no items and no team (very early state)
+    dashboard.style.display = (totalItems === 0 && teamCount <= 1) ? 'none' : '';
+}
+
 // Generate summary for the items section
 function generateItemsSummary() {
     const favoritesCount = state.cart.items.size;
@@ -11767,6 +11912,9 @@ export async function showPresentationView(listType, startRecordId = null) {
 
     // Initialize accordions and generate summaries
     initializeAccordions();
+
+    // Update the plan summary dashboard
+    updatePlanSummaryDashboard();
 
     // Show modal
     modal.classList.add('active');
