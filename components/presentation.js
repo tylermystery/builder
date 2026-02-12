@@ -11923,6 +11923,20 @@ export async function showPresentationView(listType, startRecordId = null) {
     document.body.classList.add('presentation-active');
     document.documentElement.classList.add('presentation-active');
     if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] Modal shown. Classes:', modal.className, 'Display:', modal.style.display);
+
+    // Debug: Log z-index layering info for presentation view components
+    const wtfPanel = document.getElementById('wtf-plans-panel');
+    const wtfOverlay = document.getElementById('wtf-plans-panel-overlay');
+    console.log('[PRES-MENU DEBUG] Presentation view activated - layering state:', {
+        presentationModalZIndex: getComputedStyle(modal).zIndex,
+        presentationModalDisplay: getComputedStyle(modal).display,
+        wtfPanelComputedDisplay: wtfPanel ? getComputedStyle(wtfPanel).display : 'N/A',
+        wtfPanelComputedZIndex: wtfPanel ? getComputedStyle(wtfPanel).zIndex : 'N/A',
+        wtfOverlayComputedDisplay: wtfOverlay ? getComputedStyle(wtfOverlay).display : 'N/A',
+        wtfOverlayComputedZIndex: wtfOverlay ? getComputedStyle(wtfOverlay).zIndex : 'N/A',
+        bodyClasses: document.body.className,
+        hamburgerBtnExists: !!document.getElementById('presentation-back-btn'),
+    });
     // Remove early-loading optimization class now that presentation is properly initialized
     document.body.classList.remove('presentation-loading');
     document.documentElement.classList.remove('presentation-loading');
@@ -12022,6 +12036,7 @@ export function hidePresentationView() {
     document.body.classList.remove('presentation-active');
     document.documentElement.classList.remove('presentation-active');
     document.removeEventListener('keydown', handleKeyDown);
+    console.log('[PRES-MENU DEBUG] Presentation view deactivated, presentation-active class removed');
 
     // If catalog rendering was skipped when entering presentation view,
     // trigger it now via the global applyFiltersAndSort function
@@ -12062,10 +12077,40 @@ export function setupPresentationEventListeners() {
     // Presentation header hamburger button (opens WTF Plans panel as overlay)
     if (presentationBackBtn) {
         presentationBackBtn.addEventListener('click', () => {
+            console.log('[PRES-MENU DEBUG] Hamburger button clicked in presentation view');
+            const panel = document.getElementById('wtf-plans-panel');
+            const overlay = document.getElementById('wtf-plans-panel-overlay');
+            const presModal = document.getElementById('presentation-modal-overlay');
+            console.log('[PRES-MENU DEBUG] Before showWtfPlansPanel:', {
+                panelExists: !!panel,
+                panelDisplay: panel?.style.display,
+                panelComputedDisplay: panel ? getComputedStyle(panel).display : 'N/A',
+                panelComputedZIndex: panel ? getComputedStyle(panel).zIndex : 'N/A',
+                panelClassList: panel?.classList.toString(),
+                overlayExists: !!overlay,
+                overlayClassList: overlay?.classList.toString(),
+                presModalZIndex: presModal ? getComputedStyle(presModal).zIndex : 'N/A',
+                bodyHasPresentationActive: document.body.classList.contains('presentation-active'),
+            });
             // Open WTF Plans panel directly on top of the presentation view
             // so users can quickly switch between plans without leaving the view
             showWtfPlansPanel();
+            // Log state after showWtfPlansPanel completes (async, so use microtask)
+            setTimeout(() => {
+                console.log('[PRES-MENU DEBUG] After showWtfPlansPanel:', {
+                    panelDisplay: panel?.style.display,
+                    panelComputedDisplay: panel ? getComputedStyle(panel).display : 'N/A',
+                    panelComputedZIndex: panel ? getComputedStyle(panel).zIndex : 'N/A',
+                    panelClassList: panel?.classList.toString(),
+                    panelTransform: panel ? getComputedStyle(panel).transform : 'N/A',
+                    overlayComputedDisplay: overlay ? getComputedStyle(overlay).display : 'N/A',
+                    overlayClassList: overlay?.classList.toString(),
+                    panelBoundingRect: panel?.getBoundingClientRect(),
+                });
+            }, 50);
         });
+    } else {
+        console.warn('[PRES-MENU DEBUG] presentationBackBtn NOT found in DOM during event listener setup');
     }
 
     // Note: presentationHeaderShareBtn removed - share functionality now in collaborators add/share button

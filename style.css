@@ -2198,6 +2198,8 @@ body.presentation-active .modal-overlay.active {
 
 /* Hide all main page elements when presentation view is active */
 /* This prevents the catalog from being visible or scrollable behind the presentation */
+/* NOTE: #wtf-plans-panel and #wtf-plans-panel-overlay are intentionally NOT hidden here */
+/* because they need to overlay on top of the presentation view for quick plan switching */
 body.presentation-active #main-header,
 body.presentation-active #left-sidebar,
 body.presentation-active #right-sidebar,
@@ -2207,9 +2209,7 @@ body.presentation-active #marquee-banner-container,
 body.presentation-active #loading-message,
 body.presentation-active #mobile-summary-bar,
 body.presentation-active footer,
-body.presentation-active #chat-widget,
-body.presentation-active #wtf-plans-panel,
-body.presentation-active #wtf-plans-panel-overlay {
+body.presentation-active #chat-widget {
     display: none !important;
 }
 
