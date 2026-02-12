@@ -3111,7 +3111,8 @@ async function renderCompactGroupCard(group) {
     const optimizedPhoto = photoUrl ? applyCloudinaryTransform(photoUrl, 'w_400,h_250,c_fill,f_auto,q_auto') : '';
 
     // Member name pills with lifecycle indicators
-    const memberPills = groupItems.slice(0, 3).map(gId => {
+    const maxPills = Math.min(groupItems.length, 4);
+    const memberPills = groupItems.slice(0, maxPills).map(gId => {
         const gRec = getRecordById(gId);
         const memberName = escapeHtml(gRec?.fields?.Name || 'Option');
         const isGoal = state.session.goalItems?.has(gId);
@@ -3126,7 +3127,7 @@ async function renderCompactGroupCard(group) {
         else if (isGoal) { pillStateClass = 'pill-goal'; pillIcon = '⭐ '; }
         return `<span class="compact-card-pill ${pillStateClass}">${pillIcon}${memberName}</span>`;
     }).join('');
-    const moreCount = groupItems.length - 3;
+    const moreCount = groupItems.length - maxPills;
     const morePill = moreCount > 0 ? `<span class="compact-card-pill compact-card-pill-more">+${moreCount} more</span>` : '';
 
     // Aggregate lifecycle summary for the group
@@ -4866,6 +4867,17 @@ function checkMergeTargetHover(clientX, clientY) {
             return;
         }
 
+        // Don't show merge when dragging an item onto its own group
+        if (itemRecordId && itemRecordId.startsWith('group-') && currentDraggedRecordId) {
+            const hoveredGroup = state.session.relatedGroups?.find(g => g.id === itemRecordId);
+            if (hoveredGroup) {
+                const groupItems = hoveredGroup.items || [];
+                if (groupItems.includes(currentDraggedRecordId)) {
+                    return;
+                }
+            }
+        }
+
         const rect = item.getBoundingClientRect();
         const isInBounds = isPointInRect(clientX, clientY, rect);
 
@@ -5054,8 +5066,23 @@ function showMergeIndicator(clientX, clientY, zone = 'hybrid') {
 function updateMergeIndicatorContent(zone) {
     if (!dragMergeIndicator) return;
     const isHybrid = zone === 'hybrid';
-    const icon = isHybrid ? '✨' : '📂';
-    const label = isHybrid ? 'Merge as Hybrid' : 'Add as Option';
+
+    // Check if hovering over a group card for contextual label
+    const isTargetGroup = mergeHoverItemId && mergeHoverItemId.startsWith('group-');
+    const isDraggedGroup = currentDraggedRecordId && currentDraggedRecordId.startsWith('group-');
+    const isDraggedInGroup = currentDraggedRecordId && getItemGroup(currentDraggedRecordId);
+
+    let icon, label;
+    if (isHybrid) {
+        icon = '✨';
+        label = 'Merge as Hybrid';
+    } else if (isTargetGroup || isDraggedGroup || isDraggedInGroup) {
+        icon = '📂';
+        label = 'Merge Groups';
+    } else {
+        icon = '📂';
+        label = 'Add as Option';
+    }
     dragMergeIndicator.innerHTML = `<span style="font-size: 18px;">${icon}</span><span>${label}</span>`;
 
     // Update colors when zone changes
@@ -5936,7 +5963,7 @@ function enterMergeMode(sourceRecordId) {
                 const article = clickedSection.querySelector('.itinerary-item');
                 targetRecordId = article?.dataset.recordId;
             } else if (clickedCard && !clickedCard.classList.contains('merge-mode-source-card')) {
-                targetRecordId = clickedCard.dataset.recordId;
+                targetRecordId = clickedCard.dataset.recordId || clickedCard.dataset.groupId;
             }
 
             if (targetRecordId && targetRecordId !== mergeModeSourceRecordId) {
@@ -6000,32 +6027,72 @@ let pendingMergeEstimation = null;
 
 // Execute merge directly based on the drop zone (no dialog)
 // zone: 'hybrid' = merge as hybrid, 'options' = add as option
-async function executeMergeByZone(sourceRecordId, targetRecordId, zone) {
-    if (!sourceRecordId || !targetRecordId) return;
+// sourceId/targetId can be either record IDs or group IDs (prefixed with 'group-')
+async function executeMergeByZone(sourceId, targetId, zone) {
+    if (!sourceId || !targetId) return;
 
-    const sourceRecord = getRecordById(sourceRecordId);
-    const targetRecord = getRecordById(targetRecordId);
-    const sourceName = sourceRecord?.fields?.Name || 'Item';
-    const targetName = targetRecord?.fields?.Name || 'Item';
+    // Resolve group IDs: if target is a group card, get all its member record IDs
+    const isTargetGroup = targetId.startsWith('group-');
+    const isSourceGroup = sourceId.startsWith('group-');
+
+    // Collect all record IDs involved from source side
+    let sourceRecordIds = [];
+    if (isSourceGroup) {
+        const sourceGroup = state.session.relatedGroups?.find(g => g.id === sourceId);
+        sourceRecordIds = sourceGroup ? [...(sourceGroup.items || [])] : [];
+    } else {
+        sourceRecordIds = [sourceId];
+        // Also include group members if source is part of a group
+        const sourceGroup = getItemGroup(sourceId);
+        if (sourceGroup) {
+            sourceRecordIds = [...(sourceGroup.items || [])];
+        }
+    }
+
+    // Collect all record IDs involved from target side
+    let targetRecordIds = [];
+    if (isTargetGroup) {
+        const targetGroup = state.session.relatedGroups?.find(g => g.id === targetId);
+        targetRecordIds = targetGroup ? [...(targetGroup.items || [])] : [];
+    } else {
+        targetRecordIds = [targetId];
+        // Also include group members if target is part of a group
+        const targetGroup = getItemGroup(targetId);
+        if (targetGroup) {
+            targetRecordIds = [...(targetGroup.items || [])];
+        }
+    }
+
+    if (sourceRecordIds.length === 0 || targetRecordIds.length === 0) return;
+
+    // Use first record from each side for legacy 2-item operations
+    const primarySourceId = sourceRecordIds[0];
+    const primaryTargetId = targetRecordIds[0];
+    const sourceRecord = getRecordById(primarySourceId);
+    const targetRecord = getRecordById(primaryTargetId);
 
     if (zone === 'hybrid') {
-        // Merge as hybrid - execute immediately, fetch AI estimation in background
+        // Merge as hybrid - use primary source and target
+        await combineItemsIntoOne(primarySourceId, primaryTargetId, null);
 
-        // Execute combine immediately without estimation
-        await combineItemsIntoOne(sourceRecordId, targetRecordId, null);
+        // Build items array for all involved items for AI estimation
+        const allRecordIds = [...new Set([...sourceRecordIds, ...targetRecordIds])];
+        const allItems = allRecordIds.map(id => {
+            const rec = getRecordById(id);
+            return {
+                name: rec?.fields?.Name || 'Item',
+                description: rec?.fields?.Description || '',
+                category: rec?.fields?.Category || '',
+                price: rec?.fields?.Price || ''
+            };
+        });
 
-        // Fetch AI estimation in background and update the hybrid data
-        fetchEstimation(
-            { name: sourceName, description: sourceRecord?.fields?.Description || '', category: sourceRecord?.fields?.Category || '', price: sourceRecord?.fields?.Price || '' },
-            { name: targetName, description: targetRecord?.fields?.Description || '', category: targetRecord?.fields?.Category || '', price: targetRecord?.fields?.Price || '' },
-            'hybrid'
-        ).then(result => {
+        fetchEstimationMulti(allItems, 'hybrid').then(result => {
             if (result?.estimation && state.session.combinedItems) {
-                // Find the actual target (may have been redirected during combine)
-                let actualTarget = targetRecordId;
+                let actualTarget = primaryTargetId;
                 for (const [target, data] of state.session.combinedItems.entries()) {
                     const sources = data instanceof Set ? data : (data.sources || new Set());
-                    if (sources.has(targetRecordId)) {
+                    if (sources.has(primaryTargetId)) {
                         actualTarget = target;
                         break;
                     }
@@ -6043,22 +6110,31 @@ async function executeMergeByZone(sourceRecordId, targetRecordId, zone) {
         });
 
     } else {
-        // Add as option - execute immediately, fetch AI estimation in background
+        // Add as option - merge all items from both sides into one options group
 
-        // Execute group creation immediately without estimation
-        await createRelatedCategory(sourceRecordId, targetRecordId, null);
+        // Collect all unique record IDs that should end up in the group
+        const allRecordIds = [...new Set([...sourceRecordIds, ...targetRecordIds])];
 
-        // Fetch AI estimation in background and update the group
-        fetchEstimation(
-            { name: sourceName, description: sourceRecord?.fields?.Description || '', category: sourceRecord?.fields?.Category || '', price: sourceRecord?.fields?.Price || '' },
-            { name: targetName, description: targetRecord?.fields?.Description || '', category: targetRecord?.fields?.Category || '', price: targetRecord?.fields?.Price || '' },
-            'options'
-        ).then(result => {
+        // Execute group creation: pass all record IDs
+        await createRelatedCategoryMulti(allRecordIds, null);
+
+        // Fetch AI estimation in background for all items in the new group
+        const allItems = allRecordIds.map(id => {
+            const rec = getRecordById(id);
+            return {
+                name: rec?.fields?.Name || 'Item',
+                description: rec?.fields?.Description || '',
+                category: rec?.fields?.Category || '',
+                price: rec?.fields?.Price || ''
+            };
+        });
+
+        fetchEstimationMulti(allItems, 'options').then(result => {
             if (result?.estimation && state.session.relatedGroups) {
-                // Find the group that contains both items
+                // Find the group that contains all the items
                 const group = state.session.relatedGroups.find(g => {
                     const items = Array.isArray(g) ? g : (g.items || []);
-                    return items.includes(sourceRecordId) && items.includes(targetRecordId);
+                    return allRecordIds.every(id => items.includes(id));
                 });
                 if (group && !Array.isArray(group)) {
                     if (result.estimation.categoryName) group.name = result.estimation.categoryName;
@@ -6074,23 +6150,57 @@ async function executeMergeByZone(sourceRecordId, targetRecordId, zone) {
     }
 }
 
-// Open merge dialog for two items
+// Open merge dialog for two items (or groups of items)
 async function openMergeDialog(sourceRecordId, targetRecordId) {
     if (!sourceRecordId || !targetRecordId) return;
 
-    const sourceRecord = getRecordById(sourceRecordId);
-    const targetRecord = getRecordById(targetRecordId);
-    const sourceName = sourceRecord?.fields?.Name || 'Source item';
-    const targetName = targetRecord?.fields?.Name || 'Target item';
+    // Resolve all involved record IDs (expand groups)
+    const isSourceGroup = sourceRecordId.startsWith('group-');
+    const isTargetGroup = targetRecordId.startsWith('group-');
+
+    let sourceRecordIds = [];
+    if (isSourceGroup) {
+        const sg = state.session.relatedGroups?.find(g => g.id === sourceRecordId);
+        sourceRecordIds = sg ? [...(sg.items || [])] : [];
+    } else {
+        sourceRecordIds = [sourceRecordId];
+        const sg = getItemGroup(sourceRecordId);
+        if (sg) sourceRecordIds = [...(sg.items || [])];
+    }
+
+    let targetRecordIds = [];
+    if (isTargetGroup) {
+        const tg = state.session.relatedGroups?.find(g => g.id === targetRecordId);
+        targetRecordIds = tg ? [...(tg.items || [])] : [];
+    } else {
+        targetRecordIds = [targetRecordId];
+        const tg = getItemGroup(targetRecordId);
+        if (tg) targetRecordIds = [...(tg.items || [])];
+    }
+
+    const allRecordIds = [...new Set([...sourceRecordIds, ...targetRecordIds])];
 
     // Store pending merge info
     pendingMergeSource = sourceRecordId;
     pendingMergeTarget = targetRecordId;
     pendingMergeEstimation = null;
 
-    // Update dialog content with item names
-    if (mergeDialogSourceName) mergeDialogSourceName.textContent = sourceName;
-    if (mergeDialogTargetName) mergeDialogTargetName.textContent = targetName;
+    // Build item names display for the dialog preview
+    const mergeItemsPreview = document.querySelector('.merge-dialog-items');
+    if (mergeItemsPreview) {
+        const itemPillsHTML = allRecordIds.map(id => {
+            const rec = getRecordById(id);
+            const name = rec?.fields?.Name || 'Item';
+            return `<div class="merge-item-preview"><span class="merge-item-name">${name}</span></div>`;
+        }).join('<span class="merge-plus-icon">+</span>');
+        mergeItemsPreview.innerHTML = itemPillsHTML;
+    }
+
+    // Update dialog title to reflect count
+    const dialogTitle = document.querySelector('.merge-dialog-title');
+    if (dialogTitle) {
+        dialogTitle.textContent = allRecordIds.length > 2 ? `Combine ${allRecordIds.length} Items` : 'Combine Items';
+    }
 
     // Reset tabs to default (Options tab active)
     const optionsTab = document.getElementById('merge-tab-options');
@@ -6102,6 +6212,20 @@ async function openMergeDialog(sourceRecordId, targetRecordId) {
     if (hybridTab) hybridTab.classList.remove('active');
     if (optionsContent) optionsContent.classList.add('active');
     if (hybridContent) hybridContent.classList.remove('active');
+
+    // Update the options tab description to reflect item count
+    const optionsDesc = optionsContent?.querySelector('.merge-tab-description');
+    if (optionsDesc) {
+        optionsDesc.textContent = allRecordIds.length > 2
+            ? `Keep all ${allRecordIds.length} items as alternative choices under a shared category`
+            : 'Keep both items as alternative choices under a shared category';
+    }
+    const hybridDesc = hybridContent?.querySelector('.merge-tab-description');
+    if (hybridDesc) {
+        hybridDesc.textContent = allRecordIds.length > 2
+            ? `Blend all ${allRecordIds.length} items into a single, new hybrid idea`
+            : 'Blend both items into a single, new hybrid idea';
+    }
 
     // Reset both estimation panels to loading state
     ['options', 'hybrid'].forEach(type => {
@@ -6120,10 +6244,19 @@ async function openMergeDialog(sourceRecordId, targetRecordId) {
         dialog.style.display = 'flex';
     }
 
-    log('Presentation', `Merge dialog opened for ${sourceRecordId} and ${targetRecordId}`);
+    log('Presentation', `Merge dialog opened for ${allRecordIds.length} items`);
 
-    // Fetch AI estimation in background
-    fetchMergeEstimation(sourceRecord, targetRecord);
+    // Fetch AI estimation in background using all items
+    const allItems = allRecordIds.map(id => {
+        const rec = getRecordById(id);
+        return {
+            name: rec?.fields?.Name || 'Item',
+            description: rec?.fields?.Description || '',
+            category: rec?.fields?.Category || '',
+            price: rec?.fields?.Price || ''
+        };
+    });
+    fetchMergeEstimationMulti(allItems);
 }
 
 // Fetch AI estimation for merge - updates both tab panels
@@ -6232,7 +6365,95 @@ async function fetchMergeEstimation(sourceRecord, targetRecord) {
     }
 }
 
-// Helper to fetch a single estimation
+// Fetch AI estimation for merge using multiple items - updates both tab panels
+async function fetchMergeEstimationMulti(items) {
+    try {
+        // Fetch both estimations in parallel
+        const [optionsResult, hybridResult] = await Promise.all([
+            fetchEstimationMulti(items, 'options'),
+            fetchEstimationMulti(items, 'hybrid')
+        ]);
+
+        // Store estimation for use when confirming merge
+        pendingMergeEstimation = {
+            options: optionsResult?.estimation || null,
+            hybrid: hybridResult?.estimation || null
+        };
+
+        // Update Options tab panel
+        const optionsPanel = document.getElementById('merge-estimation-options');
+        if (optionsPanel) {
+            const loading = optionsPanel.querySelector('.merge-estimation-loading');
+            const result = optionsPanel.querySelector('.merge-estimation-result');
+            if (loading) loading.style.display = 'none';
+            if (result) result.style.display = 'flex';
+
+            if (optionsResult?.estimation) {
+                const categoryEl = document.getElementById('estimation-category');
+                const descEl = document.getElementById('estimation-description');
+                if (categoryEl) categoryEl.textContent = optionsResult.estimation.categoryName || 'Options';
+                if (descEl) descEl.textContent = optionsResult.estimation.categoryDescription || '';
+
+                const confidenceField = document.getElementById('estimation-options-confidence-field');
+                const confidenceFill = document.getElementById('estimation-options-confidence');
+                if (confidenceField && optionsResult.estimation.confidence) {
+                    confidenceField.style.display = 'flex';
+                    const pct = Math.round(optionsResult.estimation.confidence * 100);
+                    if (confidenceFill) {
+                        confidenceFill.style.width = pct + '%';
+                        confidenceFill.style.background = pct >= 70 ? '#4CAF50' : pct >= 40 ? '#FF9800' : '#f44336';
+                    }
+                }
+            }
+        }
+
+        // Update Hybrid tab panel
+        const hybridPanel = document.getElementById('merge-estimation-hybrid');
+        if (hybridPanel) {
+            const loading = hybridPanel.querySelector('.merge-estimation-loading');
+            const result = hybridPanel.querySelector('.merge-estimation-result');
+            if (loading) loading.style.display = 'none';
+            if (result) result.style.display = 'flex';
+
+            if (hybridResult?.estimation) {
+                const nameEl = document.getElementById('estimation-hybrid-name');
+                const descEl = document.getElementById('estimation-hybrid-description');
+                if (nameEl) nameEl.textContent = hybridResult.estimation.hybridName || 'Combined Idea';
+                if (descEl) descEl.textContent = hybridResult.estimation.hybridDescription || '';
+
+                const reasoningField = document.getElementById('estimation-hybrid-reasoning-field');
+                const reasoningEl = document.getElementById('estimation-hybrid-reasoning');
+                if (reasoningField && hybridResult.estimation.reasoning) {
+                    reasoningField.style.display = 'flex';
+                    if (reasoningEl) reasoningEl.textContent = hybridResult.estimation.reasoning;
+                }
+
+                const confidenceField = document.getElementById('estimation-hybrid-confidence-field');
+                const confidenceFill = document.getElementById('estimation-hybrid-confidence');
+                if (confidenceField && hybridResult.estimation.confidence) {
+                    confidenceField.style.display = 'flex';
+                    const pct = Math.round(hybridResult.estimation.confidence * 100);
+                    if (confidenceFill) {
+                        confidenceFill.style.width = pct + '%';
+                        confidenceFill.style.background = pct >= 70 ? '#4CAF50' : pct >= 40 ? '#FF9800' : '#f44336';
+                    }
+                }
+            }
+        }
+
+    } catch (error) {
+        console.error('[Presentation] Error fetching multi-item merge estimation:', error);
+        ['options', 'hybrid'].forEach(type => {
+            const panel = document.getElementById(`merge-estimation-${type}`);
+            if (panel) {
+                const loading = panel.querySelector('.merge-estimation-loading');
+                if (loading) loading.style.display = 'none';
+            }
+        });
+    }
+}
+
+// Helper to fetch a single estimation (legacy 2-item format, kept for backwards compat)
 async function fetchEstimation(item1, item2, mergeType) {
     try {
         const response = await fetch('/.netlify/functions/estimate-merge', {
@@ -6245,6 +6466,23 @@ async function fetchEstimation(item1, item2, mergeType) {
         return await response.json();
     } catch (error) {
         console.warn(`[Presentation] Estimation fetch failed for ${mergeType}:`, error.message);
+        return null;
+    }
+}
+
+// Helper to fetch estimation for multiple items (2+)
+async function fetchEstimationMulti(items, mergeType) {
+    try {
+        const response = await fetch('/.netlify/functions/estimate-merge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items, mergeType })
+        });
+
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (error) {
+        console.warn(`[Presentation] Multi-item estimation fetch failed for ${mergeType}:`, error.message);
         return null;
     }
 }
@@ -6271,7 +6509,20 @@ async function handleMergeCombine() {
     const hybridEstimation = pendingMergeEstimation?.hybrid || null;
     closeMergeDialog();
 
-    await combineItemsIntoOne(sourceId, targetId, hybridEstimation);
+    // Route through group-aware executeMergeByZone for multi-item support
+    // For simple 2-item case with no groups, this still works correctly
+    const isSourceGroup = sourceId.startsWith('group-');
+    const isTargetGroup = targetId.startsWith('group-');
+    const sourceGroup = !isSourceGroup ? getItemGroup(sourceId) : null;
+    const targetGroup = !isTargetGroup ? getItemGroup(targetId) : null;
+
+    if (isSourceGroup || isTargetGroup || sourceGroup || targetGroup) {
+        // Multi-item case - use executeMergeByZone which handles groups
+        await executeMergeByZone(sourceId, targetId, 'hybrid');
+    } else {
+        // Simple 2-item case with estimation
+        await combineItemsIntoOne(sourceId, targetId, hybridEstimation);
+    }
 }
 
 // Handle merge option: Group as options/category (As Options)
@@ -6286,7 +6537,38 @@ async function handleMergeGroup() {
     const optionsEstimation = pendingMergeEstimation?.options || null;
     closeMergeDialog();
 
-    await createRelatedCategory(sourceId, targetId, optionsEstimation);
+    // Route through group-aware path for multi-item support
+    const isSourceGroup = sourceId.startsWith('group-');
+    const isTargetGroup = targetId.startsWith('group-');
+    const sourceGroup = !isSourceGroup ? getItemGroup(sourceId) : null;
+    const targetGroup = !isTargetGroup ? getItemGroup(targetId) : null;
+
+    if (isSourceGroup || isTargetGroup || sourceGroup || targetGroup) {
+        // Multi-item case - resolve all items and create merged group
+        let sourceRecordIds = [];
+        if (isSourceGroup) {
+            const sg = state.session.relatedGroups?.find(g => g.id === sourceId);
+            sourceRecordIds = sg ? [...(sg.items || [])] : [];
+        } else {
+            sourceRecordIds = [sourceId];
+            if (sourceGroup) sourceRecordIds = [...(sourceGroup.items || [])];
+        }
+
+        let targetRecordIds = [];
+        if (isTargetGroup) {
+            const tg = state.session.relatedGroups?.find(g => g.id === targetId);
+            targetRecordIds = tg ? [...(tg.items || [])] : [];
+        } else {
+            targetRecordIds = [targetId];
+            if (targetGroup) targetRecordIds = [...(targetGroup.items || [])];
+        }
+
+        const allRecordIds = [...new Set([...sourceRecordIds, ...targetRecordIds])];
+        await createRelatedCategoryMulti(allRecordIds, optionsEstimation);
+    } else {
+        // Simple 2-item case with estimation
+        await createRelatedCategory(sourceId, targetId, optionsEstimation);
+    }
 }
 
 // Combine two items into a single cohesive idea (As Hybrid)
@@ -6543,6 +6825,80 @@ async function createRelatedCategory(recordId1, recordId2, optionsEstimation = n
     triggerSave();
 
     log('Presentation', `Created/updated option group for ${recordId1} and ${recordId2}`);
+}
+
+// Create a related category from multiple items (Group as Options - multi-item version)
+// Merges all provided record IDs into a single options group, consolidating any existing groups
+async function createRelatedCategoryMulti(recordIds, optionsEstimation = null) {
+    if (!recordIds || recordIds.length < 2) return;
+
+    // Initialize relatedGroups if not exists
+    if (!state.session.relatedGroups) {
+        state.session.relatedGroups = [];
+    }
+
+    const estimatedName = optionsEstimation?.categoryName;
+    const estimatedDescription = optionsEstimation?.categoryDescription;
+
+    // Find all existing groups that contain any of the provided items
+    const existingGroups = new Set();
+    for (const id of recordIds) {
+        const group = state.session.relatedGroups.find(g => {
+            const items = Array.isArray(g) ? g : (g.items || []);
+            return items.includes(id);
+        });
+        if (group) existingGroups.add(group);
+    }
+
+    // Collect all unique item IDs from existing groups + provided IDs
+    const allItemIds = new Set(recordIds);
+    for (const group of existingGroups) {
+        const items = Array.isArray(group) ? group : (group.items || []);
+        items.forEach(id => allItemIds.add(id));
+    }
+
+    const mergedItems = [...allItemIds];
+
+    // Check if all items are already in the same single group
+    if (existingGroups.size === 1) {
+        const onlyGroup = [...existingGroups][0];
+        const groupItems = Array.isArray(onlyGroup) ? onlyGroup : (onlyGroup.items || []);
+        if (mergedItems.length === groupItems.length && mergedItems.every(id => groupItems.includes(id))) {
+            showToast('Items are already grouped together', 'info');
+            return;
+        }
+    }
+
+    // Remove all existing groups that are being merged
+    if (existingGroups.size > 0) {
+        state.session.relatedGroups = state.session.relatedGroups.filter(g => !existingGroups.has(g));
+    }
+
+    // Create the new merged group
+    const newGroup = {
+        id: `group-${Date.now()}`,
+        name: estimatedName || generateGroupName(mergedItems),
+        description: estimatedDescription || '',
+        items: mergedItems
+    };
+    state.session.relatedGroups.push(newGroup);
+
+    const itemNames = mergedItems.slice(0, 3).map(id => {
+        const rec = getRecordById(id);
+        return rec?.fields?.Name || 'Item';
+    });
+    const suffix = mergedItems.length > 3 ? ` +${mergedItems.length - 3} more` : '';
+    showToast(`Created "${newGroup.name}" with ${mergedItems.length} options`, 'success');
+
+    // Re-render items
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Created/updated option group with ${mergedItems.length} items`);
 }
 
 // Generate a name for a group based on its items

@@ -13320,25 +13320,27 @@ hr.total-divider {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: 8px;
     margin-bottom: 20px;
     padding: 14px;
     background: rgba(0, 0, 0, 0.03);
     border-radius: 12px;
+    flex-wrap: wrap;
 }
 
 .merge-item-preview {
-    flex: 1;
+    flex: 0 1 auto;
     background: #fff;
     border: 2px solid rgba(76, 175, 80, 0.3);
     border-radius: 10px;
-    padding: 12px;
+    padding: 8px 12px;
     text-align: center;
-    max-width: 160px;
+    max-width: 140px;
+    min-width: 60px;
 }
 
 .merge-item-name {
-    font-size: 0.9em;
+    font-size: 0.85em;
     font-weight: 600;
     color: #333;
     display: block;
@@ -13348,7 +13350,7 @@ hr.total-divider {
 }
 
 .merge-plus-icon {
-    font-size: 1.5em;
+    font-size: 1.2em;
     font-weight: bold;
     color: #4CAF50;
     flex-shrink: 0;
@@ -13968,9 +13970,18 @@ hr.total-divider {
     grid-template-columns: 1fr 1fr;
 }
 
-.group-modal-image-grid.multi {
+.group-modal-image-grid.three {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: 1fr 1fr;
+}
+
+.group-modal-image-grid.three .group-modal-image-cell:first-child {
+    grid-column: 1 / -1;
+}
+
+.group-modal-image-grid.multi {
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto;
 }
 
 .group-modal-image-cell {

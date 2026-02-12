@@ -7017,10 +7017,10 @@ export async function showGroupDetailModal(group, allRecords) {
     // Show a grid of images in the main image area
     if (modalMainImage) {
         if (imageUrls.length > 0) {
-            const gridClass = imageUrls.length === 1 ? 'single' : imageUrls.length === 2 ? 'two' : 'multi';
+            const gridClass = imageUrls.length === 1 ? 'single' : imageUrls.length === 2 ? 'two' : imageUrls.length === 3 ? 'three' : 'multi';
             modalMainImage.innerHTML = `
                 <div class="group-modal-image-grid ${gridClass}">
-                    ${imageUrls.slice(0, 4).map(url => `
+                    ${imageUrls.slice(0, 6).map(url => `
                         <div class="group-modal-image-cell" style="background-image: url('${url}');"></div>
                     `).join('')}
                 </div>
