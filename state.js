@@ -77,6 +77,15 @@ export let state = {
     calendar: {
         busyTimes: new Map(),
     },
+    // Universal Vitality system - tracks net health benefit across four realms
+    vitality: {
+        timeScopeIndex: 4,        // Index into TIME_SCOPES (default: '1 Year')
+        itemScores: new Map(),    // recordId -> { cosmological, planetary, collective, internal, net, netEmoji }
+        planNet: 0,               // Overall plan net vitality (-1.0 to 1.0)
+        planNetEmoji: '⚖️',      // Current Net Emoji for the plan
+        synergies: [],            // Array of { itemA, itemB, label, multiplier } active synergies
+        dominantRealm: null,      // 'cosmological' | 'planetary' | 'collective' | 'internal' | null
+    },
     ui: {
         recordsCurrentlyDisplayed: 0,
         isLoadingMore: false,
@@ -181,6 +190,14 @@ export function setState(newState) {
         updatedState.tasks = {
             ...state.tasks,
             ...newState.tasks
+        };
+    }
+
+    // Deep merge for vitality to preserve Maps
+    if (newState.vitality) {
+        updatedState.vitality = {
+            ...state.vitality,
+            ...newState.vitality
         };
     }
 

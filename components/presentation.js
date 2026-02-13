@@ -21,6 +21,8 @@ import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { refreshForumData, onNewItemReceived } from './forumPanel.js';
 import { initializeToastNotifications, handlePusherEvent as handleToastPusherEvent } from './toastNotifications.js';
 import { initializeUnifiedChatPanel, showUnifiedChatPanel, hideUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage } from './unifiedChatPanel.js';
+import { initVitalityUI, cleanupVitalityUI, refreshFlowLines } from '../vitality/vitalityUI.js';
+import { requestVitalityRecalc, recalculateVitality } from '../vitality/vitalityEngine.js';
 
 console.log('[MODULE DEBUG] presentation.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -3482,6 +3484,15 @@ async function renderAllItems() {
 
     // Update plan summary dashboard with latest metrics
     updatePlanSummaryDashboard();
+
+    // Re-apply vitality badges and pulse animations to newly rendered cards.
+    // Use setTimeout(0) instead of requestAnimationFrame to avoid the rAF firing
+    // during async card rendering (before innerHTML is set). setTimeout(0) ensures
+    // the recalc runs after the current call stack completes and DOM is settled.
+    setTimeout(() => {
+        console.log('[Vitality DEBUG] renderAllItems post-render recalc firing via setTimeout');
+        recalculateVitality();
+    }, 0);
 }
 
 // Initialize click handlers for compact cards in board view
@@ -3830,6 +3841,9 @@ async function initializeItemDragDrop() {
 
                     // Update the order in state
                     updateItemOrder();
+
+                    // Refresh vitality flow lines after reorder
+                    refreshFlowLines();
 
                 } catch (error) {
                     console.error('[Presentation] Exception in drag onEnd:', error);
@@ -11853,6 +11867,10 @@ export async function showPresentationView(listType, startRecordId = null) {
     initializeUnifiedChatPanel();
     showUnifiedChatPanel();
 
+    // Initialize the Universal Vitality UI system (pulse/aura, Net Emoji, flow lines)
+    // NOTE: Only register event listeners here. Actual recalc happens AFTER cards are rendered.
+    initVitalityUI();
+
     // Fetch tasks for this project if not already loaded (critical for comment-task linking)
     // This ensures comment-created tasks are visible when page is refreshed or link is shared
     const projectId = state.session.id;
@@ -11905,6 +11923,10 @@ export async function showPresentationView(listType, startRecordId = null) {
     renderCollaborators();
     await renderRsvpSection(); // Render RSVP buttons and list for events
     await renderAllItems();
+
+    // Vitality recalculation is now handled inside renderAllItems() itself
+    // via a setTimeout(0) call that fires after innerHTML is set, ensuring
+    // cards are in the DOM when applyCardPulses() queries for them.
 
     // Render goal chips in header and set up regenerate button
     renderGoalChips();
@@ -11979,6 +12001,9 @@ export function hidePresentationView() {
 
     // Unregister sync callback when closing presentation view
     unregisterSyncCallback('presentation');
+
+    // Clean up Vitality UI (flow lines, etc.)
+    cleanupVitalityUI();
 
     // Hide the Unified Chat Panel
     hideUnifiedChatPanel();

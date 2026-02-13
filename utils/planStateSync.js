@@ -6,6 +6,7 @@ import { state, getRecordById } from '../state.js';
 import { log } from './debug.js';
 import { CONSTANTS } from '../config.js';
 import { getRecordPrice } from '../utils.js';
+import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 
 // Track pending updates to debounce rapid changes
 let updateDebounceTimer = null;
@@ -133,7 +134,10 @@ export function getPlanSummary() {
         goals,
         guestCount,
         sessionId: state.session.id,
-        isAuthenticated: state.session.user?.isAuthenticated || false
+        isAuthenticated: state.session.user?.isAuthenticated || false,
+        // Vitality data (available after first recalculation)
+        planNetVitality: state.vitality ? state.vitality.planNet : 0,
+        planNetEmoji: state.vitality ? state.vitality.planNetEmoji : '⚖️',
     };
 
     debugLog('Plan summary generated:', summary);
@@ -183,6 +187,11 @@ export function syncPlanState(source, changeType = 'fullRefresh', changeData = {
         });
         document.dispatchEvent(event);
         debugLog(`Dispatched planStateChanged event`);
+
+        // Trigger vitality recalculation on every plan change
+        console.log('[PlanSync-Vitality DEBUG] About to call requestVitalityRecalc() from syncPlanState debounce. items size:', state.cart.items.size, 'lockedItems size:', state.cart.lockedItems.size);
+        requestVitalityRecalc();
+
         debugLog(`========== SYNC COMPLETE ==========`);
     }, UPDATE_DEBOUNCE_MS);
 }
@@ -219,6 +228,11 @@ export function syncPlanStateImmediate(source, changeType = 'fullRefresh', chang
         }
     });
     document.dispatchEvent(event);
+
+    // Trigger vitality recalculation immediately
+    console.log('[PlanSync-Vitality DEBUG] About to call requestVitalityRecalc() from syncPlanStateImmediate. items size:', state.cart.items.size, 'lockedItems size:', state.cart.lockedItems.size);
+    requestVitalityRecalc();
+
     debugLog(`========== IMMEDIATE SYNC COMPLETE ==========`);
 }
 
