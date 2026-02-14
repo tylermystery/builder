@@ -5,7 +5,7 @@
 import { state, setState } from '../state.js';
 import { log } from '../utils/debug.js';
 import * as api from '../api.js';
-import { getTempLikes } from '../utils.js';
+import { getTempLikes, updateUrl } from '../utils.js';
 import { showDetailModal } from './modal.js';
 import { CONSTANTS } from '../config.js';
 import { registerSyncCallback, getPlanSummary } from '../utils/planStateSync.js';
@@ -169,6 +169,20 @@ export function initializeWtfPlansPanel() {
         overlay.addEventListener('click', hideWtfPlansPanel);
     }
 
+    // Browse Catalog button handler (navigates back to catalog view)
+    const browseCatalogBtn = document.getElementById('wtf-plans-browse-catalog-btn');
+    if (browseCatalogBtn) {
+        browseCatalogBtn.addEventListener('click', () => {
+            log('WtfPlansPanel', 'Browse Catalog clicked — navigating to catalog view');
+            hideWtfPlansPanel();
+            // Remove the view=present param to exit presentation mode
+            updateUrl({ view: null });
+            // Dispatch a custom event that presentation.js can listen for to hide itself
+            // This avoids circular imports while cleanly exiting presentation view
+            document.dispatchEvent(new CustomEvent('navigateToCatalog'));
+        });
+    }
+
     // Filter button handlers
     filterBtns.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -241,6 +255,12 @@ export async function showWtfPlansPanel(options = {}) {
         // Trigger reflow for animation
         panel.offsetHeight;
         panel.classList.add('open');
+
+        // Show/hide Browse Catalog button based on whether we're in presentation view
+        const browseCatalogBar = panel.querySelector('.wtf-plans-browse-catalog-bar');
+        if (browseCatalogBar) {
+            browseCatalogBar.style.display = isPresentationActive ? 'block' : 'none';
+        }
 
         // Debug: check if display was actually applied (CSS !important can override inline styles)
         const computedDisplay = getComputedStyle(panel).display;

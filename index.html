@@ -1346,6 +1346,41 @@ body.modal-open {
     color: #333;
 }
 
+.wtf-plans-browse-catalog-bar {
+    padding: 10px 16px;
+    border-bottom: 1px solid #dee2e6;
+    background-color: rgba(255, 255, 255, 0.9);
+}
+
+.wtf-plans-browse-catalog-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.wtf-plans-browse-catalog-btn:hover {
+    background: linear-gradient(135deg, #5f4dd0, #8c7dfe);
+    transform: translateY(-1px);
+}
+
+.wtf-plans-browse-catalog-btn:active {
+    transform: translateY(0);
+}
+
+.wtf-plans-browse-catalog-btn .browse-catalog-icon {
+    font-size: 1.2em;
+}
+
 .wtf-plans-panel-filters {
     display: flex;
     flex-wrap: wrap;
@@ -4290,6 +4325,12 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
         <div class="wtf-plans-panel-header">
             <h3>🎯 WTF Plans</h3>
             <button id="wtf-plans-panel-close" class="wtf-plans-panel-close-btn" title="Close">&times;</button>
+        </div>
+        <div class="wtf-plans-browse-catalog-bar">
+            <button id="wtf-plans-browse-catalog-btn" class="wtf-plans-browse-catalog-btn" title="Browse the catalog">
+                <span class="browse-catalog-icon">🏪</span>
+                <span class="browse-catalog-text">Browse Catalog</span>
+            </button>
         </div>
         <div class="wtf-plans-panel-filters">
             <button class="wtf-plans-filter-btn active" data-filter="all">All</button>

@@ -6267,23 +6267,24 @@ body.presentation-active #chat-widget {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 7px 16px;
-    background: rgba(255, 255, 255, 0.15);
-    border: 1px dashed rgba(255, 255, 255, 0.35);
+    padding: 10px 20px;
+    background: rgba(255, 255, 255, 0.25);
+    border: 2px dashed rgba(255, 255, 255, 0.6);
     border-radius: 20px;
-    font-size: 0.9em;
-    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.95em;
+    color: rgba(255, 255, 255, 0.95);
     cursor: pointer;
     transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
     white-space: nowrap;
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 
 .presentation-add-item-btn:hover {
-    background: rgba(255, 255, 255, 0.25);
-    border-color: rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.35);
+    border-color: rgba(255, 255, 255, 0.8);
     transform: translateY(-1px);
-    color: rgba(255, 255, 255, 0.95);
+    color: #fff;
 }
 
 .presentation-add-item-btn .add-icon {

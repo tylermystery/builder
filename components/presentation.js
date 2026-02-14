@@ -2836,11 +2836,48 @@ function getCompactCardSourceType(recordId, record) {
  */
 async function renderCompactCard(item) {
     const { recordId, type, itemStatus = 'active' } = item;
-    const record = getRecordById(recordId);
-    if (!record) return '';
+    let record = getRecordById(recordId);
+    console.log(`[CARD DEBUG] renderCompactCard called for: ${recordId} (type=${type}, status=${itemStatus})`);
+    console.log(`[CARD DEBUG]   record found: ${!!record}`, record ? `name="${record.fields?.Name}"` : 'NULL');
+    if (!record) {
+        // Attempt to recover custom items from solution records registry or cart info
+        const solutionRec = window._solutionRecords?.get(recordId);
+        const cartInfo = state.cart.lockedItems.get(recordId) || state.cart.items.get(recordId);
+        if (solutionRec) {
+            record = solutionRec;
+            console.log(`[CARD DEBUG]   Recovered from _solutionRecords: name="${record.fields?.Name}"`);
+        } else if (cartInfo && cartInfo._recordSnapshot) {
+            record = cartInfo._recordSnapshot;
+            console.log(`[CARD DEBUG]   Recovered from cart _recordSnapshot: name="${record.fields?.Name}"`);
+        } else if (cartInfo) {
+            // Build a minimal record from cart info for items that truly have no record
+            record = {
+                id: recordId,
+                fields: {
+                    Name: cartInfo.name || cartInfo.itemName || 'Custom Item',
+                    Description: cartInfo.description || '',
+                    _customImages: cartInfo._customImages || [],
+                    _hasAIGeneratedImage: cartInfo._hasAIGeneratedImage || false,
+                },
+                isManual: recordId.startsWith('manual-'),
+                isSolution: recordId.startsWith('solution-'),
+            };
+            console.log(`[CARD DEBUG]   Built minimal record from cart info: name="${record.fields.Name}"`);
+        }
+        if (!record) {
+            console.warn(`[CARD DEBUG]   ⚠️ SKIPPING ${recordId} - getRecordById returned null and no recovery possible!`);
+            console.log(`[CARD DEBUG]   state.records.all has ${state.records.all.length} records`);
+            console.log(`[CARD DEBUG]   Checking if record exists in state.records.all:`, state.records.all.some(r => r.id === recordId));
+            return '';
+        }
+    }
 
     // Skip combined source items
-    if (isItemCombinedSource(recordId)) return '';
+    const isCombinedSrc = isItemCombinedSource(recordId);
+    if (isCombinedSrc) {
+        console.log(`[CARD DEBUG]   ⚠️ SKIPPING ${recordId} - is a combined source item`);
+        return '';
+    }
 
     const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
 
@@ -3278,6 +3315,13 @@ function scheduleRenderAllItems() {
 }
 
 async function renderAllItems() {
+    console.log('[ITEMS DEBUG] ========== renderAllItems CALLED ==========');
+    console.log('[ITEMS DEBUG] state.cart.lockedItems.size:', state.cart.lockedItems.size);
+    console.log('[ITEMS DEBUG] state.cart.items.size:', state.cart.items.size);
+    console.log('[ITEMS DEBUG] lockedItem IDs:', Array.from(state.cart.lockedItems.keys()));
+    console.log('[ITEMS DEBUG] ideaItem IDs:', Array.from(state.cart.items.keys()));
+    console.log('[ITEMS DEBUG] itineraryItemsListEl exists:', !!itineraryItemsListEl);
+    console.log('[ITEMS DEBUG] itineraryItemsListEl tag:', itineraryItemsListEl?.tagName, 'id:', itineraryItemsListEl?.id);
     if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] renderAllItems called.', {
         lockedItemCount: state.cart.lockedItems.size,
         ideaItemCount: state.cart.items.size,
@@ -3287,6 +3331,11 @@ async function renderAllItems() {
     const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
     const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
     let combinedList = [...locked, ...favorites]; // Confirmed items first, then ideas
+
+    // Debug: Log combinedItems map that might be filtering items out
+    console.log('[ITEMS DEBUG] state.session.combinedItems:', state.session.combinedItems ?
+        { size: state.session.combinedItems.size, entries: Array.from(state.session.combinedItems.entries()).map(([t, e]) => ({ target: t, sources: Array.from(getSourcesFromEntry(e)) })) }
+        : 'null/undefined');
 
     // Get archived and completed items sets
     const archivedItems = state.session.archivedItems || new Set();
@@ -3327,6 +3376,11 @@ async function renderAllItems() {
 
     // Update toggle buttons visibility
     updateStatusToggles(archivedCount, completedCount);
+
+    console.log('[ITEMS DEBUG] combinedList after filtering:', combinedList.length, 'items');
+    combinedList.forEach((item, i) => {
+        console.log(`[ITEMS DEBUG]   [${i}] id=${item.recordId} type=${item.type} status=${item.itemStatus}`);
+    });
 
     if (combinedList.length === 0) {
         // Show enhanced empty state when no items exist
@@ -3434,16 +3488,20 @@ async function renderAllItems() {
             renderedGroupIds.add(itemGroup.id);
             try {
                 const html = await renderCompactGroupCard(itemGroup);
+                console.log(`[ITEMS DEBUG] Group card for ${itemGroup.id}: html=${html ? 'OK (' + html.length + ' chars)' : 'EMPTY'}`);
                 if (html) itemsHTML.push(html);
             } catch (groupErr) {
                 console.warn('[Presentation] Failed to render group card for', itemGroup.id, groupErr);
             }
         } else if (itemGroup && itemGroup.id && renderedGroupIds.has(itemGroup.id)) {
+            console.log(`[ITEMS DEBUG] Skipping ${item.recordId} - group ${itemGroup.id} already rendered`);
             continue; // Already rendered this group
         } else {
             try {
                 const html = await renderCompactCard(item);
+                console.log(`[ITEMS DEBUG] Card for ${item.recordId}: html=${html ? 'OK (' + html.length + ' chars)' : 'EMPTY'}`);
                 if (html) itemsHTML.push(html);
+                else console.warn(`[ITEMS DEBUG] ⚠️ renderCompactCard returned empty for ${item.recordId}`);
             } catch (cardErr) {
                 console.warn('[Presentation] Failed to render compact card for', item.recordId, cardErr);
             }
@@ -3463,6 +3521,7 @@ async function renderAllItems() {
     }
 
     itineraryItemsListEl.innerHTML = itemsHTML.join('');
+    console.log('[ITEMS DEBUG] innerHTML set. itemsHTML array had', itemsHTML.length, 'entries. First 200 chars of HTML:', itineraryItemsListEl.innerHTML.substring(0, 200));
 
     // === RENDER DEBUG: Log items grid state immediately after innerHTML set ===
     {
@@ -12276,6 +12335,12 @@ export function setupPresentationEventListeners() {
     // Listen for user login/logout events to update the account button and collaborators
     document.addEventListener('userLoggedIn', handlePresentationUserLogin);
     document.addEventListener('userLoggedOut', updatePresentationAccountButton);
+
+    // Listen for navigateToCatalog event (from WTF Plans panel "Browse Catalog" button)
+    document.addEventListener('navigateToCatalog', () => {
+        log('Presentation', 'navigateToCatalog event received — closing presentation view');
+        hidePresentationView();
+    });
 
     // Handle window resize for background canvas
     window.addEventListener('resize', () => {
