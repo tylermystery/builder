@@ -3464,6 +3464,39 @@ async function renderAllItems() {
 
     itineraryItemsListEl.innerHTML = itemsHTML.join('');
 
+    // === RENDER DEBUG: Log items grid state immediately after innerHTML set ===
+    {
+        const cards = itineraryItemsListEl.querySelectorAll('.compact-card');
+        const dividers = itineraryItemsListEl.querySelectorAll('.board-section-divider');
+        const listComputed = getComputedStyle(itineraryItemsListEl);
+        console.log('[RENDER DEBUG] ========== renderAllItems POST-RENDER ==========');
+        console.log('[RENDER DEBUG] itemsHTML count:', itemsHTML.length);
+        console.log('[RENDER DEBUG] DOM card count:', cards.length);
+        console.log('[RENDER DEBUG] DOM divider count:', dividers.length);
+        console.log('[RENDER DEBUG] Items list classList:', itineraryItemsListEl.className);
+        console.log('[RENDER DEBUG] Items list computed display:', listComputed.display);
+        console.log('[RENDER DEBUG] Items list computed grid-template-columns:', listComputed.gridTemplateColumns);
+        console.log('[RENDER DEBUG] Items list dimensions:', {
+            offsetWidth: itineraryItemsListEl.offsetWidth,
+            offsetHeight: itineraryItemsListEl.offsetHeight,
+            clientWidth: itineraryItemsListEl.clientWidth,
+        });
+        // Log parent chain widths
+        let parent = itineraryItemsListEl.parentElement;
+        let depth = 0;
+        while (parent && depth < 5) {
+            console.log(`[RENDER DEBUG] Parent[${depth}] (${parent.className.split(' ')[0] || parent.tagName}):`, {
+                offsetWidth: parent.offsetWidth,
+                computedWidth: getComputedStyle(parent).width,
+                computedMaxWidth: getComputedStyle(parent).maxWidth,
+                computedOverflow: getComputedStyle(parent).overflow,
+            });
+            parent = parent.parentElement;
+            depth++;
+        }
+        console.log('[RENDER DEBUG] ========== END POST-RENDER ==========');
+    }
+
     // After entrance animations complete, remove will-change to free GPU memory
     setTimeout(() => {
         const cards = itineraryItemsListEl.querySelectorAll('.compact-card');
@@ -11946,6 +11979,127 @@ export async function showPresentationView(listType, startRecordId = null) {
     document.documentElement.classList.add('presentation-active');
     if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] Modal shown. Classes:', modal.className, 'Display:', modal.style.display);
 
+    // === CRITICAL LAYOUT DEBUG: Check if inline display:flex overrides CSS grid ===
+    console.log('[LAYOUT DEBUG] ⚠️ INLINE STYLE CHECK: modal.style.display =', JSON.stringify(modal.style.display));
+    console.log('[LAYOUT DEBUG] ⚠️ Modal has ucp-open class:', modal.classList.contains('ucp-open'));
+    console.log('[LAYOUT DEBUG] ⚠️ CSS expects display:grid for .active.ucp-open but inline style sets display:flex');
+    console.log('[LAYOUT DEBUG] ⚠️ Computed display (should be grid if UCP open):', getComputedStyle(modal).display);
+
+    // === LAYOUT DEBUG: Log computed layout dimensions after modal activation ===
+    requestAnimationFrame(() => {
+        const contentEl = modal.querySelector('.presentation-content');
+        const ucpPanel = document.getElementById('unified-chat-panel');
+        const headerEl = modal.querySelector('.presentation-header');
+        const scrollEl = modal.querySelector('.presentation-itinerary-scroll');
+        const itemsList = document.getElementById('itinerary-items-list');
+        const modalComputed = getComputedStyle(modal);
+
+        console.log('[LAYOUT DEBUG] ========== POST-ACTIVATION LAYOUT ==========');
+        console.log('[LAYOUT DEBUG] Modal classes:', modal.className);
+        console.log('[LAYOUT DEBUG] Modal computed display:', modalComputed.display);
+        console.log('[LAYOUT DEBUG] Modal computed gridTemplateColumns:', modalComputed.gridTemplateColumns);
+        console.log('[LAYOUT DEBUG] Modal computed gridTemplateRows:', modalComputed.gridTemplateRows);
+        console.log('[LAYOUT DEBUG] Modal dimensions:', {
+            width: modal.offsetWidth,
+            height: modal.offsetHeight,
+            clientWidth: modal.clientWidth,
+            clientHeight: modal.clientHeight,
+            boundingRect: modal.getBoundingClientRect()
+        });
+
+        if (contentEl) {
+            const contentComputed = getComputedStyle(contentEl);
+            console.log('[LAYOUT DEBUG] Content (.presentation-content):', {
+                width: contentEl.offsetWidth,
+                height: contentEl.offsetHeight,
+                computedWidth: contentComputed.width,
+                computedMaxWidth: contentComputed.maxWidth,
+                computedMinWidth: contentComputed.minWidth,
+                computedDisplay: contentComputed.display,
+                computedFlexDirection: contentComputed.flexDirection,
+                boundingRect: contentEl.getBoundingClientRect()
+            });
+        } else {
+            console.warn('[LAYOUT DEBUG] .presentation-content NOT FOUND in modal');
+        }
+
+        if (ucpPanel) {
+            const ucpComputed = getComputedStyle(ucpPanel);
+            console.log('[LAYOUT DEBUG] UCP Panel (#unified-chat-panel):', {
+                display: ucpComputed.display,
+                width: ucpPanel.offsetWidth,
+                computedWidth: ucpComputed.width,
+                computedMinWidth: ucpComputed.minWidth,
+                computedMaxWidth: ucpComputed.maxWidth,
+                position: ucpComputed.position,
+                boundingRect: ucpPanel.getBoundingClientRect()
+            });
+        } else {
+            console.warn('[LAYOUT DEBUG] #unified-chat-panel NOT FOUND');
+        }
+
+        if (headerEl) {
+            const headerComputed = getComputedStyle(headerEl);
+            console.log('[LAYOUT DEBUG] Header (.presentation-header):', {
+                width: headerEl.offsetWidth,
+                height: headerEl.offsetHeight,
+                computedGridColumn: headerComputed.gridColumn,
+                boundingRect: headerEl.getBoundingClientRect()
+            });
+        }
+
+        if (scrollEl) {
+            console.log('[LAYOUT DEBUG] Scroll container (.presentation-itinerary-scroll):', {
+                width: scrollEl.offsetWidth,
+                height: scrollEl.offsetHeight,
+                scrollWidth: scrollEl.scrollWidth,
+                scrollHeight: scrollEl.scrollHeight,
+                boundingRect: scrollEl.getBoundingClientRect()
+            });
+        }
+
+        if (itemsList) {
+            const itemsComputed = getComputedStyle(itemsList);
+            const cards = itemsList.querySelectorAll('.compact-card');
+            const dividers = itemsList.querySelectorAll('.board-section-divider');
+            console.log('[LAYOUT DEBUG] Items list (#itinerary-items-list):', {
+                width: itemsList.offsetWidth,
+                height: itemsList.offsetHeight,
+                computedDisplay: itemsComputed.display,
+                computedGridTemplateColumns: itemsComputed.gridTemplateColumns,
+                computedMaxWidth: itemsComputed.maxWidth,
+                cardCount: cards.length,
+                dividerCount: dividers.length,
+                classList: itemsList.className,
+                boundingRect: itemsList.getBoundingClientRect()
+            });
+            // Log first card dimensions for reference
+            if (cards.length > 0) {
+                const firstCard = cards[0];
+                console.log('[LAYOUT DEBUG] First card dimensions:', {
+                    recordId: firstCard.dataset.recordId,
+                    width: firstCard.offsetWidth,
+                    height: firstCard.offsetHeight,
+                    boundingRect: firstCard.getBoundingClientRect()
+                });
+            }
+        }
+
+        // Check for itinerary sections
+        const sections = modal.querySelectorAll('.itinerary-section');
+        sections.forEach((sec, i) => {
+            const secComputed = getComputedStyle(sec);
+            console.log(`[LAYOUT DEBUG] itinerary-section[${i}]:`, {
+                width: sec.offsetWidth,
+                computedMaxWidth: secComputed.maxWidth,
+                computedMargin: secComputed.margin,
+                boundingRect: sec.getBoundingClientRect()
+            });
+        });
+
+        console.log('[LAYOUT DEBUG] ========== END POST-ACTIVATION LAYOUT ==========');
+    });
+
     // Debug: Log z-index layering info for presentation view components
     const wtfPanel = document.getElementById('wtf-plans-panel');
     const wtfOverlay = document.getElementById('wtf-plans-panel-overlay');
@@ -11993,11 +12147,47 @@ export async function showPresentationView(listType, startRecordId = null) {
 
     log('Presentation', 'Itinerary view rendered successfully');
     if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] ========== showPresentationView COMPLETE ==========');
+
+    // === DELAYED LAYOUT DEBUG: Final layout state after everything settles (1 second) ===
+    setTimeout(() => {
+        if (!modal || !modal.classList.contains('active')) return;
+        const contentEl = modal.querySelector('.presentation-content');
+        const ucpPanel = document.getElementById('unified-chat-panel');
+        const itemsList = document.getElementById('itinerary-items-list');
+        console.log('[LAYOUT DEBUG] ========== DELAYED CHECK (1s post-show) ==========');
+        console.log('[LAYOUT DEBUG] Modal inline style.display:', JSON.stringify(modal.style.display));
+        console.log('[LAYOUT DEBUG] Modal computed display:', getComputedStyle(modal).display);
+        console.log('[LAYOUT DEBUG] Modal classes:', modal.className);
+        console.log('[LAYOUT DEBUG] Modal grid-template-columns:', getComputedStyle(modal).gridTemplateColumns);
+        if (contentEl) {
+            console.log('[LAYOUT DEBUG] Content width:', contentEl.offsetWidth, 'height:', contentEl.offsetHeight);
+            console.log('[LAYOUT DEBUG] Content bounding rect:', JSON.stringify(contentEl.getBoundingClientRect()));
+        }
+        if (ucpPanel) {
+            console.log('[LAYOUT DEBUG] UCP width:', ucpPanel.offsetWidth, 'display:', getComputedStyle(ucpPanel).display);
+            console.log('[LAYOUT DEBUG] UCP bounding rect:', JSON.stringify(ucpPanel.getBoundingClientRect()));
+        }
+        if (itemsList) {
+            const cards = itemsList.querySelectorAll('.compact-card');
+            console.log('[LAYOUT DEBUG] Items list width:', itemsList.offsetWidth, 'grid-cols:', getComputedStyle(itemsList).gridTemplateColumns);
+            console.log('[LAYOUT DEBUG] Card count in DOM:', cards.length);
+            cards.forEach((card, i) => {
+                const rect = card.getBoundingClientRect();
+                console.log(`[LAYOUT DEBUG] Card[${i}] id=${card.dataset.recordId} left=${rect.left.toFixed(0)} top=${rect.top.toFixed(0)} width=${rect.width.toFixed(0)} height=${rect.height.toFixed(0)}`);
+            });
+        }
+        console.log('[LAYOUT DEBUG] ========== END DELAYED CHECK ==========');
+    }, 1000);
 }
 
 export function hidePresentationView() {
     if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] hidePresentationView called. modal:', !!modal);
     if (!modal) return;
+
+    // === HIDE DEBUG: Log state before hiding ===
+    console.log('[HIDE DEBUG] hidePresentationView - modal classes before hide:', modal.className);
+    console.log('[HIDE DEBUG] hidePresentationView - modal.style.display:', modal.style.display);
+    console.log('[HIDE DEBUG] hidePresentationView - body classes:', document.body.className);
 
     // Unregister sync callback when closing presentation view
     unregisterSyncCallback('presentation');
