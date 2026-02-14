@@ -2974,12 +2974,19 @@ select:focus-visible,
 
 /* Presentation view layout: content + side panel */
 .presentation-fullpage.active.ucp-open {
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto 1fr;
+}
+
+/* Header spans full row when chat panel is open */
+.presentation-fullpage.active.ucp-open .presentation-header {
+    grid-column: 1 / -1;
 }
 
 .presentation-fullpage.active.ucp-open .presentation-content {
-    flex: 1;
     min-width: 0;
+    min-height: 0;
     width: auto;
 }
 
@@ -3870,8 +3877,21 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
         transform: translateX(0);
     }
 
+    /* On mobile, revert to column layout since chat panel overlays */
+    .presentation-fullpage.active.ucp-open {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .presentation-fullpage.active.ucp-open .presentation-header {
+        flex: none;
+    }
+
     .presentation-fullpage.active.ucp-open .presentation-content {
         /* Don't shrink content on mobile; panel overlays */
+        flex: 1;
+        min-width: auto;
+        min-height: 0;
     }
 
     .presentation-fullpage .ucp-mobile-toggle {
