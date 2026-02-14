@@ -64,22 +64,10 @@ export function initializeUnifiedChatPanel() {
 
 export async function showUnifiedChatPanel() {
     const overlay = document.getElementById('presentation-modal-overlay');
-    console.log('[UCP LAYOUT DEBUG] showUnifiedChatPanel called');
-    console.log('[UCP LAYOUT DEBUG] overlay exists:', !!overlay);
     if (overlay) {
-        console.log('[UCP LAYOUT DEBUG] overlay classes BEFORE ucp-open:', overlay.className);
         overlay.classList.add('ucp-open');
-        console.log('[UCP LAYOUT DEBUG] overlay classes AFTER ucp-open:', overlay.className);
-        console.log('[UCP LAYOUT DEBUG] overlay has "active" class:', overlay.classList.contains('active'));
-        console.log('[UCP LAYOUT DEBUG] overlay computed display:', getComputedStyle(overlay).display);
-        console.log('[UCP LAYOUT DEBUG] overlay computed grid-template-columns:', getComputedStyle(overlay).gridTemplateColumns);
     }
     const ucpPanel = document.getElementById('unified-chat-panel');
-    if (ucpPanel) {
-        console.log('[UCP LAYOUT DEBUG] UCP panel computed display:', getComputedStyle(ucpPanel).display);
-        console.log('[UCP LAYOUT DEBUG] UCP panel computed width:', getComputedStyle(ucpPanel).width);
-        console.log('[UCP LAYOUT DEBUG] UCP panel offsetWidth:', ucpPanel.offsetWidth);
-    }
     document.body.classList.add('ucp-panel-active');
     panelOpen = true;
     shouldScrollToBottom = true;
@@ -91,11 +79,8 @@ export async function showUnifiedChatPanel() {
 
 export function hideUnifiedChatPanel() {
     const overlay = document.getElementById('presentation-modal-overlay');
-    console.log('[UCP LAYOUT DEBUG] hideUnifiedChatPanel called');
     if (overlay) {
-        console.log('[UCP LAYOUT DEBUG] overlay classes BEFORE removing ucp-open:', overlay.className);
         overlay.classList.remove('ucp-open');
-        console.log('[UCP LAYOUT DEBUG] overlay classes AFTER removing ucp-open:', overlay.className);
     }
     document.body.classList.remove('ucp-panel-active');
     panelOpen = false;
