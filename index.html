@@ -5475,11 +5475,18 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
         <div id="merge-mode-banner" class="merge-mode-banner">
             <div class="merge-mode-banner-text">
                 <span class="merge-mode-banner-icon">🔗</span>
-                <span>Merge</span>
+                <span id="merge-mode-banner-label">Tap items to select for merge</span>
                 <span id="merge-mode-source-name" class="merge-mode-banner-source"></span>
-                <span>with...</span>
             </div>
             <button id="merge-mode-cancel-btn" class="merge-mode-cancel-btn">Cancel</button>
+        </div>
+
+        <!-- Multi-Select Merge Floating Action Button (shown when 2+ items selected in merge mode) -->
+        <div id="merge-select-fab" class="merge-select-fab" style="display: none;">
+            <div class="merge-select-fab-content">
+                <span class="merge-select-fab-icon">🔗</span>
+                <span class="merge-select-fab-text">Merge <span id="merge-select-fab-count">0</span> items</span>
+            </div>
         </div>
 
         <!-- Merge Options Dialog (shown after dropping item on another) -->

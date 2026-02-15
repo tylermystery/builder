@@ -6986,6 +6986,141 @@ body:not(.presentation-active) .drag-merge-indicator {
 }
 
 /* =====================================================
+   MULTI-SELECT MERGE MODE
+   ===================================================== */
+
+/* Selected item checkmark indicator */
+.merge-select-check {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #00968880, #00796b80);
+    border: 2px solid rgba(0, 150, 136, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    transition: all 0.2s ease;
+    pointer-events: none;
+}
+
+.merge-select-check::after {
+    content: '';
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: transparent;
+    transition: background 0.2s ease;
+}
+
+/* When the item is selected, fill in the check */
+.merge-mode-selected .merge-select-check {
+    background: linear-gradient(135deg, #009688, #00796b);
+    border-color: #4dd0c1;
+    box-shadow: 0 2px 8px rgba(0, 150, 136, 0.5);
+}
+
+.merge-mode-selected .merge-select-check::after {
+    content: '\2713';
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    background: transparent;
+    width: auto;
+    height: auto;
+    border-radius: 0;
+}
+
+/* Selected item visual state */
+.merge-mode-active .itinerary-item-section.merge-mode-selected .itinerary-item,
+.merge-mode-active .itinerary-item-section.merge-mode-selected .compact-card {
+    border: 2px solid rgba(0, 150, 136, 1) !important;
+    box-shadow: 0 0 16px rgba(0, 150, 136, 0.4), 0 0 32px rgba(0, 150, 136, 0.15) !important;
+    animation: none !important;
+    background: rgba(0, 150, 136, 0.08);
+}
+
+/* Board view: selected card */
+.merge-mode-active .compact-card.merge-mode-selected-card {
+    border: 2px solid rgba(0, 150, 136, 1) !important;
+    box-shadow: 0 0 16px rgba(0, 150, 136, 0.4) !important;
+    animation: none !important;
+    position: relative;
+}
+
+.merge-mode-selected-card .merge-select-check {
+    background: linear-gradient(135deg, #009688, #00796b);
+    border-color: #4dd0c1;
+    box-shadow: 0 2px 8px rgba(0, 150, 136, 0.5);
+}
+
+.merge-mode-selected-card .merge-select-check::after {
+    content: '\2713';
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    background: transparent;
+    width: auto;
+    height: auto;
+    border-radius: 0;
+}
+
+/* Floating Action Button for multi-select merge */
+.merge-select-fab {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    z-index: 9200;
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+}
+
+.merge-select-fab.active {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
+}
+
+.merge-select-fab-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 28px;
+    background: linear-gradient(135deg, #009688, #00796b);
+    color: white;
+    border-radius: 30px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 6px 24px rgba(0, 150, 136, 0.5), 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.merge-select-fab-content:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 32px rgba(0, 150, 136, 0.6), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.merge-select-fab-content:active {
+    transform: scale(0.98);
+}
+
+.merge-select-fab-icon {
+    font-size: 20px;
+}
+
+.merge-select-fab-text {
+    letter-spacing: 0.3px;
+}
+
+/* =====================================================
    MERGE OPTIONS DIALOG
    ===================================================== */
 
