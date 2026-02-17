@@ -1,2 +1,22 @@
 # Local Netlify folder
 .netlify
+
+# Dependencies
+node_modules/
+
+# Generated project source exports (build artifacts)
+project_source.json
+project_source*.txt
+project_source - *.txt
+
+# Build artifacts
+_redirects
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db

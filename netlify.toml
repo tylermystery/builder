@@ -42,7 +42,6 @@
   to = "/.netlify/functions/send-notification"
   status = 200
 
-# --- ADD THIS NEW REDIRECT ---
 [[redirects]]
   from = "/api/send-email-notification"
   to = "/.netlify/functions/send-email-notification"
@@ -106,14 +105,11 @@
   to = "/.netlify/functions/send-invite"
   status = 200
 
-# --- ADD THIS NEW BLOCK ---
 [[redirects]]
   from = "/api/process-weblink"
   to = "/.netlify/functions/process-weblink"
   status = 200
-# --- END NEW BLOCK ---
 
-# --- NEW AI/CURATION REDIRECTS ---
 [[redirects]]
   from = "/api/process-image-ai"
   to = "/.netlify/functions/process-image-ai"
@@ -129,21 +125,14 @@
   to = "/.netlify/functions/generate-products"
   status = 200
 
-# Add this rule to netlify.toml
 [[redirects]]
   from = "/api/profile-item"
-  to = "/.netlify/functions/hello-world"
+  to = "/.netlify/functions/profile-item"
   status = 200
 
 [[redirects]]
   from = "/api/toggle-like"
   to = "/.netlify/functions/toggle-like"
-  status = 200
-
-# --- ADD THIS NEW REDIRECT ---
-[[redirects]]
-  from = "/api/profile-item"
-  to = "/.netlify/functions/profile-item"
   status = 200
 
 [[redirects]]
