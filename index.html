@@ -4939,6 +4939,56 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
                     <span id="checkout-total-label">Total Estimated Cost:</span>
                     <span id="full-total-price">$0.00</span>
                 </div>
+
+                <!-- Chip In / Community Fund Section -->
+                <div id="checkout-chip-in-section" style="display: none;">
+                    <div class="checkout-chip-in-header">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                        <span>Community Fund</span>
+                    </div>
+                    <p class="checkout-chip-in-desc">Chip in to help make items available for free to those most in need.</p>
+                    <div class="checkout-chip-in-options">
+                        <button class="checkout-chip-in-option-btn" data-chip-in="match" title="Supply the same cart to the community">
+                            <span class="chip-in-option-icon">🤝</span>
+                            <span class="chip-in-option-text">
+                                <strong>Match My Cart</strong>
+                                <small>Supply this same experience to someone in need</small>
+                            </span>
+                            <span class="chip-in-option-amount" id="chip-in-match-amount"></span>
+                        </button>
+                        <button class="checkout-chip-in-option-btn" data-chip-in="custom" title="Chip in a smaller amount">
+                            <span class="chip-in-option-icon">💛</span>
+                            <span class="chip-in-option-text">
+                                <strong>Chip In</strong>
+                                <small>Contribute a smaller amount</small>
+                            </span>
+                        </button>
+                        <button class="checkout-chip-in-option-btn active" data-chip-in="skip" title="Skip community contribution">
+                            <span class="chip-in-option-icon">➡️</span>
+                            <span class="chip-in-option-text">
+                                <strong>Skip</strong>
+                                <small>No contribution this time</small>
+                            </span>
+                        </button>
+                    </div>
+                    <div id="checkout-chip-in-custom-input" style="display: none;">
+                        <div class="chip-in-presets">
+                            <button class="chip-in-preset-btn" data-amount="1">$1</button>
+                            <button class="chip-in-preset-btn" data-amount="5">$5</button>
+                            <button class="chip-in-preset-btn" data-amount="10">$10</button>
+                            <button class="chip-in-preset-btn" data-amount="25">$25</button>
+                        </div>
+                        <div class="chip-in-custom-field">
+                            <span class="chip-in-currency">$</span>
+                            <input type="number" id="checkout-chip-in-amount" placeholder="0.00" min="0.01" step="0.01">
+                        </div>
+                    </div>
+                    <div class="checkout-chip-in-summary" id="checkout-chip-in-summary" style="display: none;">
+                        <span>Community Contribution:</span>
+                        <span id="checkout-chip-in-total">$0.00</span>
+                    </div>
+                </div>
+
                 <div class="tip-row">
                     <label for="tip-amount">Add Tip:</label>
                     <input type="number" id="tip-amount" placeholder="$0.00" min="0" step="0.01">
@@ -4956,6 +5006,22 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
                 </div>
             </div>
             <div class="terms-and-conditions"></div>
+
+            <!-- Payment Method Toggle -->
+            <div id="checkout-payment-method-toggle" style="display: none;">
+                <div class="payment-method-tabs">
+                    <button class="payment-method-tab active" data-method="stripe">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+                        Pay by Card
+                    </button>
+                    <button class="payment-method-tab" data-method="p2p">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"></path><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><path d="M7 23l-4-4 4-4"></path><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
+                        Pay by App
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stripe Payment Form (existing) -->
             <form id="payment-form">
                 <div class="form-row">
                     <label for="customer-name">Full Name</label>
@@ -4984,6 +5050,19 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
                     <span class="spinner" style="display: none;">Processing...</span>
                 </button>
         </form>
+
+            <!-- P2P Quick Pay Section (alternative to Stripe) -->
+            <div id="checkout-p2p-section" style="display: none;">
+                <div class="checkout-p2p-amount-display">
+                    <span>Amount to Send:</span>
+                    <strong id="checkout-p2p-amount">$0.00</strong>
+                </div>
+                <p class="checkout-p2p-note">Choose a payment app to pay the store directly. Your host will confirm receipt.</p>
+                <div id="checkout-p2p-options">
+                    <!-- P2P payment buttons dynamically inserted here -->
+                </div>
+            </div>
+
             <div id="payment-success-message" style="display: none; text-align: center; padding: 30px;">
                 <div style="font-size: 64px; margin-bottom: 20px; animation: checkmark-bounce 0.6s ease-out;">✅</div>
                 <h3 style="color: #28a745; margin-bottom: 15px;">Payment Successful!</h3>

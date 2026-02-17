@@ -15274,3 +15274,339 @@ hr.total-divider {
         border: 1px solid ButtonText;
     }
 }
+
+/* ========================================
+   UNIFIED CHECKOUT: Chip In Section
+   ======================================== */
+
+#checkout-chip-in-section {
+    margin: 15px 0;
+    padding: 15px;
+    background: linear-gradient(135deg, #fff5f5 0%, #fff0f6 100%);
+    border-radius: 10px;
+    border: 1px solid #ffe0e6;
+}
+
+.checkout-chip-in-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 1em;
+    color: #e74c3c;
+    margin-bottom: 6px;
+}
+
+.checkout-chip-in-header svg {
+    flex-shrink: 0;
+}
+
+.checkout-chip-in-desc {
+    font-size: 0.85em;
+    color: #666;
+    margin: 0 0 12px 0;
+    line-height: 1.4;
+}
+
+.checkout-chip-in-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.checkout-chip-in-option-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: white;
+    border: 2px solid #e8e8e8;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    font-family: inherit;
+    font-size: inherit;
+    width: 100%;
+}
+
+.checkout-chip-in-option-btn:hover {
+    border-color: #e74c3c;
+    background: #fff8f8;
+}
+
+.checkout-chip-in-option-btn.active {
+    border-color: #e74c3c;
+    background: #fff0f2;
+    box-shadow: 0 0 0 1px #e74c3c;
+}
+
+.chip-in-option-icon {
+    font-size: 1.3em;
+    flex-shrink: 0;
+    width: 28px;
+    text-align: center;
+}
+
+.chip-in-option-text {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+.chip-in-option-text strong {
+    font-size: 0.9em;
+    color: #333;
+}
+
+.chip-in-option-text small {
+    font-size: 0.78em;
+    color: #888;
+    margin-top: 1px;
+}
+
+.chip-in-option-amount {
+    font-weight: 700;
+    color: #e74c3c;
+    font-size: 0.95em;
+    flex-shrink: 0;
+}
+
+#checkout-chip-in-custom-input {
+    margin-top: 10px;
+    padding: 10px;
+    background: white;
+    border-radius: 8px;
+}
+
+.chip-in-presets {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.chip-in-preset-btn {
+    flex: 1;
+    padding: 6px 4px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.chip-in-preset-btn:hover {
+    border-color: #e74c3c;
+    color: #e74c3c;
+}
+
+.chip-in-preset-btn.active {
+    background: #e74c3c;
+    color: white;
+    border-color: #e74c3c;
+}
+
+.chip-in-custom-field {
+    display: flex;
+    align-items: center;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    overflow: hidden;
+    background: white;
+}
+
+.chip-in-currency {
+    padding: 6px 8px;
+    background: #f5f5f5;
+    color: #666;
+    font-weight: 600;
+    border-right: 1px solid #ddd;
+}
+
+#checkout-chip-in-amount {
+    border: none;
+    padding: 6px 8px;
+    width: 100%;
+    font-size: 0.9em;
+    outline: none;
+    font-family: inherit;
+}
+
+.checkout-chip-in-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: #e74c3c;
+    color: white;
+    border-radius: 6px;
+    font-size: 0.9em;
+    font-weight: 600;
+}
+
+#checkout-chip-in-total {
+    font-size: 1.05em;
+}
+
+/* ========================================
+   UNIFIED CHECKOUT: Payment Method Toggle
+   ======================================== */
+
+#checkout-payment-method-toggle {
+    margin: 15px 0 10px 0;
+}
+
+.payment-method-tabs {
+    display: flex;
+    gap: 0;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.payment-method-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 12px;
+    border: none;
+    background: #f8f9fa;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #666;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.payment-method-tab:first-child {
+    border-right: 1px solid #e0e0e0;
+}
+
+.payment-method-tab:hover {
+    background: #eee;
+}
+
+.payment-method-tab.active {
+    background: #007bff;
+    color: white;
+}
+
+.payment-method-tab.active svg {
+    stroke: white;
+}
+
+.payment-method-tab svg {
+    flex-shrink: 0;
+}
+
+/* ========================================
+   UNIFIED CHECKOUT: P2P Payment Section
+   ======================================== */
+
+#checkout-p2p-section {
+    margin: 10px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.checkout-p2p-amount-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1.1em;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.checkout-p2p-note {
+    font-size: 0.82em;
+    color: #6c757d;
+    margin: 0 0 12px 0;
+    line-height: 1.4;
+    font-style: italic;
+}
+
+#checkout-p2p-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#checkout-p2p-options .quick-pay-option-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 15px;
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s;
+}
+
+#checkout-p2p-options .quick-pay-option-btn:hover {
+    border-color: #007bff;
+    background: #f0f7ff;
+}
+
+#checkout-p2p-options .quick-pay-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.2em;
+    color: white;
+    flex-shrink: 0;
+}
+
+#checkout-p2p-options .quick-pay-icon.zelle {
+    background: linear-gradient(135deg, #6d1ed4, #8338ec);
+}
+
+#checkout-p2p-options .quick-pay-icon.venmo {
+    background: #3D95CE;
+}
+
+#checkout-p2p-options .quick-pay-icon.cashapp {
+    background: #00D632;
+}
+
+#checkout-p2p-options .quick-pay-icon.paypal {
+    background: linear-gradient(135deg, #003087, #009cde);
+}
+
+#checkout-p2p-options .quick-pay-option-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+#checkout-p2p-options .quick-pay-option-name {
+    font-weight: 600;
+    font-size: 0.95em;
+}
+
+#checkout-p2p-options .quick-pay-option-handle {
+    font-size: 0.82em;
+    color: #888;
+}
+
+#checkout-p2p-options .quick-pay-arrow {
+    font-size: 1.2em;
+    color: #aaa;
+}

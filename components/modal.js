@@ -339,6 +339,8 @@ let currentPaymentType = 'card'; // <-- ADD THIS LINE
 let currentProcessingFee = 0; // To store the current fee
 
 let currentShopSettings = {};
+let currentChipInAmount = 0; // Chip-in community contribution amount
+let currentCheckoutScope = null; // { mode: 'plan' | 'item', itemId, itemName, quantity, price, record, highlightChipIn }
 const modalOverlay = document.getElementById('detail-modal-overlay');
 console.log('[MODAL DEBUG] modalOverlay initialized at module load:', !!modalOverlay);
 
@@ -740,6 +742,239 @@ export function hasQuickPayOptions() {
 }
 
 /**
+ * Renders P2P payment option buttons into the checkout modal's P2P section.
+ * Called during showCheckoutModal initialization.
+ * @param {Object} paymentOptions - Parsed App_Pay_JSON object from store
+ * @param {number} amount - Total amount to display
+ * @param {string} itemName - Description/name for the payment
+ */
+function renderCheckoutP2POptions(paymentOptions, amount, itemName) {
+    const p2pContainer = document.getElementById('checkout-p2p-options');
+    if (!p2pContainer) return;
+
+    p2pContainer.innerHTML = '';
+
+    if (!paymentOptions || Object.keys(paymentOptions).length === 0) {
+        return;
+    }
+
+    for (const [key, handle] of Object.entries(paymentOptions)) {
+        const appConfig = PAYMENT_APPS[key.toLowerCase()];
+        if (!appConfig || !handle) continue;
+
+        const url = appConfig.getUrl(handle, amount, itemName);
+        const displayHandle = appConfig.getDisplayHandle(handle);
+
+        const optionElement = document.createElement(url ? 'a' : 'div');
+        optionElement.className = 'quick-pay-option-btn';
+        optionElement.dataset.appKey = key.toLowerCase();
+        optionElement.dataset.handle = handle;
+        optionElement.dataset.amount = amount.toFixed(2);
+
+        if (url) {
+            optionElement.href = url;
+            optionElement.target = '_blank';
+            optionElement.rel = 'noopener noreferrer';
+        }
+
+        optionElement.innerHTML = `
+            <div class="quick-pay-icon ${appConfig.cssClass}">${appConfig.icon}</div>
+            <div class="quick-pay-option-info">
+                <span class="quick-pay-option-name">${appConfig.name}</span>
+                <span class="quick-pay-option-handle">${displayHandle}</span>
+            </div>
+            <span class="quick-pay-arrow">${url ? '→' : ''}</span>
+        `;
+
+        // For Zelle (no URL), add copy functionality
+        if (!url) {
+            optionElement.style.cursor = 'pointer';
+            optionElement.title = 'Click to copy payment details';
+            optionElement.addEventListener('click', () => {
+                const currentAmount = parseFloat(optionElement.dataset.amount) || amount;
+                const copyText = appConfig.getCopyText ? appConfig.getCopyText(handle, currentAmount, itemName) : handle;
+                navigator.clipboard.writeText(copyText).then(() => {
+                    const originalArrow = optionElement.querySelector('.quick-pay-arrow');
+                    originalArrow.textContent = 'Copied!';
+                    setTimeout(() => { originalArrow.textContent = ''; }, 2000);
+                }).catch(err => console.error('Failed to copy:', err));
+            });
+        }
+
+        p2pContainer.appendChild(optionElement);
+    }
+}
+
+/**
+ * Updates P2P payment links in the checkout modal with a new amount.
+ * Called whenever the total changes (tip, chip-in, etc.)
+ * @param {number} amount - New total amount
+ */
+function updateP2PPaymentLinks(amount) {
+    const p2pContainer = document.getElementById('checkout-p2p-options');
+    if (!p2pContainer) return;
+
+    const paymentBtns = p2pContainer.querySelectorAll('.quick-pay-option-btn');
+    paymentBtns.forEach(btn => {
+        const appKey = btn.dataset.appKey;
+        const handle = btn.dataset.handle;
+        if (!appKey || !handle) return;
+
+        const appConfig = PAYMENT_APPS[appKey];
+        if (!appConfig) return;
+
+        const itemName = currentCheckoutScope?.itemName || 'Plan Checkout';
+        const url = appConfig.getUrl(handle, amount, itemName);
+        if (url) {
+            btn.href = url;
+        }
+        btn.dataset.amount = amount.toFixed(2);
+    });
+
+    // Update the amount display
+    const p2pAmountEl = document.getElementById('checkout-p2p-amount');
+    if (p2pAmountEl) {
+        p2pAmountEl.textContent = `$${amount.toFixed(2)}`;
+    }
+}
+
+/**
+ * Sets up the Chip In section in the checkout modal.
+ * Initializes option buttons, preset amounts, and custom input handlers.
+ * @param {number} cartSubtotal - The cart subtotal to use for "Match My Cart"
+ */
+function setupCheckoutChipIn(cartSubtotal) {
+    const chipInSection = document.getElementById('checkout-chip-in-section');
+    if (!chipInSection) return;
+
+    // Reset state
+    currentChipInAmount = 0;
+
+    // Show the section
+    chipInSection.style.display = 'block';
+
+    // Set the match amount display
+    const matchAmountEl = document.getElementById('chip-in-match-amount');
+    if (matchAmountEl) {
+        matchAmountEl.textContent = `+$${cartSubtotal.toFixed(2)}`;
+    }
+
+    // Get UI elements
+    const optionBtns = chipInSection.querySelectorAll('.checkout-chip-in-option-btn');
+    const customInputContainer = document.getElementById('checkout-chip-in-custom-input');
+    const customAmountInput = document.getElementById('checkout-chip-in-amount');
+    const chipInSummary = document.getElementById('checkout-chip-in-summary');
+    const chipInTotalEl = document.getElementById('checkout-chip-in-total');
+    const presetBtns = chipInSection.querySelectorAll('.chip-in-preset-btn');
+
+    // Helper to update chip-in amount and refresh checkout display
+    const setChipInAmount = (amount) => {
+        currentChipInAmount = amount;
+        if (chipInSummary) {
+            chipInSummary.style.display = amount > 0 ? 'flex' : 'none';
+        }
+        if (chipInTotalEl) {
+            chipInTotalEl.textContent = `$${amount.toFixed(2)}`;
+        }
+        updateCheckoutDisplay();
+    };
+
+    // Option button handlers (Match / Chip In / Skip)
+    optionBtns.forEach(btn => {
+        // Clone to remove old listeners
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+
+        newBtn.addEventListener('click', () => {
+            // Update active states
+            chipInSection.querySelectorAll('.checkout-chip-in-option-btn').forEach(b => b.classList.remove('active'));
+            newBtn.classList.add('active');
+
+            const chipInType = newBtn.dataset.chipIn;
+
+            if (chipInType === 'match') {
+                // Match full cart
+                if (customInputContainer) customInputContainer.style.display = 'none';
+                setChipInAmount(cartSubtotal);
+            } else if (chipInType === 'custom') {
+                // Show custom input
+                if (customInputContainer) customInputContainer.style.display = 'block';
+                const currentCustom = parseFloat(customAmountInput?.value) || 0;
+                setChipInAmount(currentCustom);
+            } else {
+                // Skip
+                if (customInputContainer) customInputContainer.style.display = 'none';
+                setChipInAmount(0);
+            }
+        });
+    });
+
+    // Preset amount buttons
+    presetBtns.forEach(btn => {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+
+        newBtn.addEventListener('click', () => {
+            chipInSection.querySelectorAll('.chip-in-preset-btn').forEach(b => b.classList.remove('active'));
+            newBtn.classList.add('active');
+
+            const presetAmount = parseFloat(newBtn.dataset.amount);
+            if (customAmountInput) customAmountInput.value = presetAmount.toFixed(2);
+            setChipInAmount(presetAmount);
+        });
+    });
+
+    // Custom amount input handler
+    if (customAmountInput) {
+        const newInput = customAmountInput.cloneNode(true);
+        customAmountInput.parentNode.replaceChild(newInput, customAmountInput);
+
+        newInput.addEventListener('input', debounce(() => {
+            // Clear preset button active states when typing custom amount
+            chipInSection.querySelectorAll('.chip-in-preset-btn').forEach(b => b.classList.remove('active'));
+            const customAmount = parseFloat(newInput.value) || 0;
+            setChipInAmount(customAmount);
+        }, 300));
+    }
+
+    // Ensure default state: Skip is active, custom input hidden, amount = 0
+    if (customInputContainer) customInputContainer.style.display = 'none';
+    if (chipInSummary) chipInSummary.style.display = 'none';
+}
+
+/**
+ * Sets up the payment method toggle (Stripe vs P2P) in the checkout modal.
+ */
+function setupPaymentMethodToggle() {
+    const toggleContainer = document.getElementById('checkout-payment-method-toggle');
+    const paymentForm = document.getElementById('payment-form');
+    const p2pSection = document.getElementById('checkout-p2p-section');
+
+    if (!toggleContainer) return;
+
+    const tabs = toggleContainer.querySelectorAll('.payment-method-tab');
+
+    tabs.forEach(tab => {
+        const newTab = tab.cloneNode(true);
+        tab.parentNode.replaceChild(newTab, tab);
+
+        newTab.addEventListener('click', () => {
+            toggleContainer.querySelectorAll('.payment-method-tab').forEach(t => t.classList.remove('active'));
+            newTab.classList.add('active');
+
+            const method = newTab.dataset.method;
+            if (method === 'stripe') {
+                if (paymentForm) paymentForm.style.display = 'block';
+                if (p2pSection) p2pSection.style.display = 'none';
+            } else if (method === 'p2p') {
+                if (paymentForm) paymentForm.style.display = 'none';
+                if (p2pSection) p2pSection.style.display = 'block';
+            }
+        });
+    });
+}
+
+/**
  * Sets up the donation meter for an item, showing community fund progress
  * and allowing users to chip in toward making the item free for someone in need.
  * Donation state is stored per-item in localStorage.
@@ -896,15 +1131,18 @@ function handleOverlayClick(event) {
 
 async function updateCheckoutDisplay() {
     const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
-    const amountReceived = state.session.user.amountReceived || 0;
+
+    // In single-item mode, don't apply payment history deductions or deposit logic
+    const isItemMode = currentCheckoutScope && currentCheckoutScope.mode === 'item';
+    const amountReceived = isItemMode ? 0 : (state.session.user.amountReceived || 0);
     const totalDue = finalTotal - amountReceived;
     const isFullyPaid = totalDue <= 0.009; // Check for paid status
-    
+
     const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
     let baseAmountToCharge = totalDue; // This is the amount *before* processing fees
-    
-    const isInitialDeposit = amountReceived === 0 && (currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
-    
+
+    const isInitialDeposit = !isItemMode && amountReceived === 0 && (currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
+
     const tipRow = document.querySelector('.tip-row');
     if (tipRow) {
         if (isInitialDeposit && totalDue > baseAmountToCharge * 1.05) {
@@ -914,7 +1152,11 @@ async function updateCheckoutDisplay() {
         }
     }
 
-    if (amountReceived === 0) {
+    if (isItemMode) {
+        // Single-item mode: charge full amount, no deposit logic
+        baseAmountToCharge = finalTotal;
+        document.getElementById('deposit-label').textContent = 'Amount Due:';
+    } else if (amountReceived === 0) {
         if (currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full') {
             baseAmountToCharge = finalTotal;
             document.getElementById('deposit-label').textContent = 'Full Amount Due:';
@@ -926,9 +1168,17 @@ async function updateCheckoutDisplay() {
         document.getElementById('deposit-label').textContent = 'Remaining Balance Due:';
     }
     const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
-    
-    let finalBaseAmount = baseAmountToCharge + tipAmount;
+
+    let finalBaseAmount = baseAmountToCharge + tipAmount + currentChipInAmount;
     document.getElementById('deposit-price').textContent = `$${finalBaseAmount.toFixed(2)}`;
+
+    // Update P2P amount display if visible
+    const p2pAmountEl = document.getElementById('checkout-p2p-amount');
+    if (p2pAmountEl) {
+        p2pAmountEl.textContent = `$${finalBaseAmount.toFixed(2)}`;
+    }
+    // Update P2P payment links with new amount
+    updateP2PPaymentLinks(finalBaseAmount);
     
     // Get fee/total elements
     const processingFeeEl = document.getElementById('processing-fee-price');
@@ -2845,7 +3095,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             rapidPayBtn._updateText = updateRapidPayLabel;
         }
 
-        // Rapid Pay click - opens quick pay modal
+        // Rapid Pay click - opens unified checkout modal scoped to this item
         if (rapidPayBtn) {
             // Remove old listeners by cloning
             const newRapidPayBtn = rapidPayBtn.cloneNode(true);
@@ -2864,27 +3114,45 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                 const price = getRecordPrice(record, selectedOptionIndex);
                 const amount = price * quantity;
                 const itemName = record.fields.Name || 'Item';
-                showQuickPayModal(paymentOptions, amount, itemName, quantity);
+                const shopSettings = getShopSettings();
+                showCheckoutModal(shopSettings, {
+                    mode: 'item',
+                    itemId: record.id,
+                    itemName: itemName,
+                    quantity: quantity,
+                    price: price,
+                    record: record,
+                    highlightChipIn: false
+                });
             });
         }
 
-        // Chip In click - toggles donation meter
+        // Chip In click - opens unified checkout modal scoped to this item with chip-in highlighted
         if (chipInBtn) {
             const newChipInBtn = chipInBtn.cloneNode(true);
             chipInBtn.parentNode.replaceChild(newChipInBtn, chipInBtn);
 
             newChipInBtn.addEventListener('click', () => {
-                if (donationMeter) {
-                    const isVisible = donationMeter.style.display !== 'none';
-                    if (isVisible) {
-                        donationMeter.style.display = 'none';
-                        newChipInBtn.classList.remove('active');
-                    } else {
-                        donationMeter.style.display = 'block';
-                        newChipInBtn.classList.add('active');
-                        setupDonationMeter(record, paymentOptions, itemState);
-                    }
+                const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
+                const quantity = quantityInput ? parseInt(quantityInput.value, 10) || 1 : 1;
+                const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
+                let selectedOptionIndex = itemState.selectedOptionIndex || 0;
+                if (optionRadios.length > 0) {
+                    const selectedValue = optionRadios[0].value;
+                    selectedOptionIndex = parseInt(selectedValue, 10) || 0;
                 }
+                const price = getRecordPrice(record, selectedOptionIndex);
+                const itemName = record.fields.Name || 'Item';
+                const shopSettings = getShopSettings();
+                showCheckoutModal(shopSettings, {
+                    mode: 'item',
+                    itemId: record.id,
+                    itemName: itemName,
+                    quantity: quantity,
+                    price: price,
+                    record: record,
+                    highlightChipIn: true
+                });
             });
         }
     } else {
@@ -7058,9 +7326,11 @@ export function hideDetailModal() {
     }
 }
 
-export async function showCheckoutModal(shopSettings) {
+export async function showCheckoutModal(shopSettings, scope = null) {
     currentShopSettings = shopSettings;
-    log('Modal', 'Showing checkout modal.');
+    currentCheckoutScope = scope; // { mode: 'item', itemId, itemName, quantity, price, record, highlightChipIn } or null (plan mode)
+    currentChipInAmount = 0; // Reset chip-in on each open
+    log('Modal', `Showing checkout modal. Scope: ${scope ? scope.mode : 'plan'}`);
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     const fullTotalEl = document.getElementById('full-total-price');
     const checkoutCloseBtn = document.getElementById('checkout-close-btn');
@@ -7068,6 +7338,12 @@ export async function showCheckoutModal(shopSettings) {
     const tipAmountInput = document.getElementById('tip-amount');
     const paymentChoiceContainer = document.getElementById('payment-choice-container');
     const termsContainer = document.querySelector('.terms-and-conditions');
+
+    // Update modal title based on scope
+    const checkoutTitle = document.getElementById('checkout-modal-title');
+    if (checkoutTitle) {
+        checkoutTitle.textContent = scope && scope.mode === 'item' ? 'Checkout' : 'Checkout Summary';
+    }
 
     // Get new fee/total elements
     const processingFeeEl = document.getElementById('processing-fee-price');
@@ -7102,6 +7378,22 @@ export async function showCheckoutModal(shopSettings) {
     tipAmountInput.value = '';
     let finalTotal = 0; // This is the plan subtotal
     const summaryList = document.createElement('ul');
+
+    if (scope && scope.mode === 'item') {
+        // Single-item mode: show only the specified item
+        const itemTotal = (scope.price || 0) * (scope.quantity || 1);
+        finalTotal = itemTotal;
+
+        const listItem = document.createElement('li');
+        listItem.innerHTML = `
+            <div class="summary-item-details">
+                <span class="summary-item-name">${scope.itemName || 'Item'} (x${scope.quantity || 1})</span>
+            </div>
+            <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
+        `;
+        summaryList.appendChild(listItem);
+    } else {
+    // Plan mode (original behavior): show all locked items
 
     // Check if UMW is in plan
     let isUmwInPlan = false;
@@ -7157,6 +7449,7 @@ export async function showCheckoutModal(shopSettings) {
         `;
         summaryList.appendChild(listItem);
     }
+    } // end plan mode
     summaryDetailsEl.appendChild(summaryList);
 
     fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
@@ -7164,8 +7457,9 @@ export async function showCheckoutModal(shopSettings) {
     
     const paymentHistory = state.session.user.paymentHistory || [];
     const amountReceived = state.session.user.amountReceived || 0;
-    
-    if (paymentHistory.length > 0) {
+
+    // In single-item mode, skip payment history display
+    if (paymentHistory.length > 0 && !(scope && scope.mode === 'item')) {
         const paymentsReceivedSection = document.createElement('div');
         paymentsReceivedSection.className = 'checkout-payments-received';
         paymentsReceivedSection.style.cssText = 'margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px;';
@@ -7209,7 +7503,7 @@ export async function showCheckoutModal(shopSettings) {
         }
     }
 
-    if (currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
+    if (!(scope && scope.mode === 'item') && currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
         paymentChoiceContainer.style.display = 'block';
         // --- THIS IS CHANGED: Add async/await ---\
         document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
@@ -7221,6 +7515,44 @@ export async function showCheckoutModal(shopSettings) {
 
     if (termsContainer && currentShopSettings.terms) {
         termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\\n/g, '<br>')}</p>`;
+    }
+
+    // --- UNIFIED CHECKOUT: Setup Chip In Section ---
+    setupCheckoutChipIn(finalTotal);
+    // If scope says to highlight chip-in, pre-expand it
+    if (scope && scope.highlightChipIn) {
+        const chipInSection = document.getElementById('checkout-chip-in-section');
+        if (chipInSection) {
+            const customBtn = chipInSection.querySelector('[data-chip-in="custom"]');
+            const skipBtn = chipInSection.querySelector('[data-chip-in="skip"]');
+            if (customBtn && skipBtn) {
+                skipBtn.classList.remove('active');
+                customBtn.classList.add('active');
+                customBtn.click();
+            }
+        }
+    }
+
+    // --- UNIFIED CHECKOUT: Setup P2P Payment Options ---
+    const storePaymentOptions = getStorePaymentOptions();
+    const hasP2POptions = storePaymentOptions && Object.keys(storePaymentOptions).length > 0;
+    const paymentMethodToggle = document.getElementById('checkout-payment-method-toggle');
+    const p2pSection = document.getElementById('checkout-p2p-section');
+
+    if (hasP2POptions) {
+        // Render P2P buttons
+        const p2pItemName = scope && scope.mode === 'item' ? (scope.itemName || 'Item') : 'Plan Checkout';
+        renderCheckoutP2POptions(storePaymentOptions, finalTotal, p2pItemName);
+        // Show the payment method toggle
+        if (paymentMethodToggle) paymentMethodToggle.style.display = 'block';
+        // Ensure P2P section starts hidden (Stripe is default)
+        if (p2pSection) p2pSection.style.display = 'none';
+        // Setup toggle handlers
+        setupPaymentMethodToggle();
+    } else {
+        // No P2P options - hide toggle and P2P section
+        if (paymentMethodToggle) paymentMethodToggle.style.display = 'none';
+        if (p2pSection) p2pSection.style.display = 'none';
     }
 
     // Initialize Stripe on demand (lazy load)
@@ -7327,6 +7659,8 @@ export function hideCheckoutModal() {
         currentClientSecret = null;
         currentBaseAmount = 0;
         currentProcessingFee = 0;
+        currentChipInAmount = 0;
+        currentCheckoutScope = null;
         // --- END ADD ---\
 
         checkoutModalOverlay.classList.remove('active');
