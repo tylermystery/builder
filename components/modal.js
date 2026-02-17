@@ -1459,14 +1459,23 @@ async function updateCheckoutDisplay() {
  * PaymentElement with a new PaymentIntent so the clientSecret matches the
  * correct amount (including the recalculated fee for the new payment type).
  */
+// Guard flag to suppress change events fired by freshly mounted PaymentElements
+let suppressPaymentTypeChange = false;
+
 async function handlePaymentTypeChange(event) {
     console.log('[ACH DEBUG] handlePaymentTypeChange fired:', {
         eventValue: event?.value,
         eventType: event?.value?.type,
         currentPaymentType,
         currentBaseAmount,
+        suppressPaymentTypeChange,
         currentClientSecret: currentClientSecret ? '...' + currentClientSecret.slice(-8) : 'null'
     });
+
+    if (suppressPaymentTypeChange) {
+        console.log('[ACH DEBUG] Suppressed (post-rebuild guard). Ignoring.');
+        return;
+    }
 
     if (!event.value.type || event.value.type === currentPaymentType) {
         console.log('[ACH DEBUG] Payment type unchanged or incomplete, skipping.');
@@ -1524,8 +1533,23 @@ async function handlePaymentTypeChange(event) {
             }
             currentClientSecret = newClientSecret;
             elements = stripe.elements({ clientSecret: currentClientSecret });
-            paymentElement = elements.create('payment');
+            paymentElement = elements.create('payment', {
+                defaultValues: {
+                    billingDetails: {}
+                }
+            });
             paymentElement.mount('#payment-element');
+
+            // Suppress change events from the fresh mount for 1 second.
+            // When a PaymentElement mounts, it fires a change event with its default type (card),
+            // which would bounce the user back from their ACH selection.
+            suppressPaymentTypeChange = true;
+            console.log('[ACH DEBUG] Post-rebuild suppression enabled.');
+            setTimeout(() => {
+                suppressPaymentTypeChange = false;
+                console.log('[ACH DEBUG] Post-rebuild suppression lifted.');
+            }, 1000);
+
             // Re-attach the change listener on the new element
             paymentElement.on('change', debounce(handlePaymentTypeChange, 300));
             console.log('[ACH DEBUG] Stripe Elements rebuilt and mounted with new secret.');
@@ -7996,6 +8020,8 @@ export function hideCheckoutModal() {
         currentChipInAmount = 0;
         currentCheckoutScope = null;
         currentCheckoutItemQty = 0;
+        currentPaymentType = 'card'; // Reset to default
+        suppressPaymentTypeChange = false; // Clear any pending suppression
         // Reset quantity toggle and crowdfund progress
         const qtyToggle = document.getElementById('checkout-item-quantity-toggle');
         if (qtyToggle) qtyToggle.style.display = 'none';

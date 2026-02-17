@@ -248,18 +248,56 @@ async function handlePaymentFormSubmit(event) {
         const customerName = document.getElementById('customer-name').value;
         const customerEmail = document.getElementById('customer-email').value;
 
+        // Build return_url preserving the session param so the app reloads correctly after redirect
+        const returnUrl = new URL(window.location.href);
+        // Clear any old Stripe/payment params but keep session
+        returnUrl.searchParams.delete('payment_intent');
+        returnUrl.searchParams.delete('payment_intent_client_secret');
+        returnUrl.searchParams.delete('redirect_status');
+        returnUrl.searchParams.delete('payment_success');
+        returnUrl.searchParams.set('payment_success', 'true');
+        const returnUrlString = returnUrl.toString();
+
         console.log('[ACH DEBUG] Calling stripe.confirmPayment with:', {
-            return_url: `${window.location.origin}${window.location.pathname}?payment_success=true`,
+            return_url: returnUrlString,
             customerName,
             customerEmail,
             redirect: 'if_required'
         });
 
+        // Save payment context to localStorage before confirmPayment.
+        // If ACH triggers a redirect (Financial Connections), the await never resolves,
+        // so the return handler needs this context to complete the payment recording.
+        try {
+            const pendingPaymentCtx = {
+                sessionId: state.session.id,
+                timestamp: Date.now(),
+                customerName,
+                customerEmail,
+                paymentType: ui.getCurrentPaymentType ? ui.getCurrentPaymentType() : 'unknown'
+            };
+            // Save chip-in context if applicable
+            const chipInCtx = ui.getCheckoutChipInContext();
+            if (chipInCtx.chipInAmount > 0 && chipInCtx.scope) {
+                pendingPaymentCtx.chipIn = {
+                    amount: chipInCtx.chipInAmount,
+                    itemId: chipInCtx.scope.itemId,
+                    itemName: chipInCtx.scope.itemName || 'Item',
+                    goalAmount: chipInCtx.scope.price || 0,
+                    storeId: state.shop?.id || state.session?.storeId || ''
+                };
+            }
+            localStorage.setItem('pendingPaymentContext', JSON.stringify(pendingPaymentCtx));
+            console.log('[ACH DEBUG] Saved pending payment context to localStorage.');
+        } catch (e) {
+            console.warn('[ACH DEBUG] Could not save pending payment context:', e);
+        }
+
         const confirmStartTime = Date.now();
         const { error, paymentIntent } = await stripe.confirmPayment({
             elements,
             confirmParams: {
-                return_url: `${window.location.origin}${window.location.pathname}?payment_success=true`,
+                return_url: returnUrlString,
                 payment_method_data: {
                     billing_details: {
                         name: customerName,
@@ -304,6 +342,9 @@ async function handlePaymentFormSubmit(event) {
         }
 
         console.log('[ACH DEBUG] PaymentIntent full status:', paymentIntent.status);
+
+        // Clean up pending payment context since confirmPayment resolved (no redirect happened)
+        try { localStorage.removeItem('pendingPaymentContext'); } catch (e) { /* ignore */ }
 
         // Handle both 'succeeded' (card) and 'processing' (ACH/bank) statuses
         if (paymentIntent.status === 'succeeded' || paymentIntent.status === 'processing') {

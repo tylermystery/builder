@@ -4,13 +4,13 @@
 console.log('[MODULE DEBUG] main.js module starting to load...', performance.now().toFixed(2) + 'ms');
 
 import { state, setState } from './state.js';
-import { CONSTANTS } from './config.js';
+import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from './config.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
-import { debounce, updateUrl, extractRecordIdFromPath } from './utils.js';
+import { debounce, updateUrl, extractRecordIdFromPath, loadStripe } from './utils.js';
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js';
 import { initializeSessionChat } from './chat.js';
 import { setupCalendarEventListeners } from './components/calendarView.js';
@@ -30,6 +30,173 @@ window.imageCache = imageCache;
 
 window.applyFiltersAndSort = applyFiltersAndSort;
 window.showReceiptModal = showReceiptModal;
+
+/**
+ * Handles the return from a Stripe ACH payment redirect (Financial Connections).
+ * After Stripe redirects the user back, the URL contains payment_success=true,
+ * payment_intent, payment_intent_client_secret, and redirect_status.
+ * This function retrieves the PaymentIntent to check its status and records the payment.
+ */
+async function handlePaymentRedirectReturn() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentSuccess = urlParams.get('payment_success');
+    const clientSecret = urlParams.get('payment_intent_client_secret');
+    const redirectStatus = urlParams.get('redirect_status');
+
+    if (paymentSuccess !== 'true' || !clientSecret) {
+        return false; // Not a payment return
+    }
+
+    console.log('[ACH REDIRECT] Payment redirect return detected.', {
+        hasClientSecret: !!clientSecret,
+        redirectStatus,
+        paymentIntentParam: urlParams.get('payment_intent')
+    });
+
+    // Clean the URL immediately to prevent re-processing on refresh
+    const cleanUrl = new URL(window.location);
+    cleanUrl.searchParams.delete('payment_success');
+    cleanUrl.searchParams.delete('payment_intent');
+    cleanUrl.searchParams.delete('payment_intent_client_secret');
+    cleanUrl.searchParams.delete('redirect_status');
+    window.history.replaceState({}, document.title, cleanUrl.toString());
+
+    // Retrieve saved payment context from localStorage
+    let pendingCtx = null;
+    try {
+        const raw = localStorage.getItem('pendingPaymentContext');
+        if (raw) {
+            pendingCtx = JSON.parse(raw);
+            console.log('[ACH REDIRECT] Retrieved pending payment context:', {
+                sessionId: pendingCtx.sessionId,
+                paymentType: pendingCtx.paymentType,
+                ageMs: Date.now() - pendingCtx.timestamp
+            });
+        }
+    } catch (e) {
+        console.warn('[ACH REDIRECT] Could not parse pending payment context:', e);
+    }
+
+    // Clean up localStorage
+    try { localStorage.removeItem('pendingPaymentContext'); } catch (e) { /* ignore */ }
+
+    // Expire context older than 30 minutes
+    if (pendingCtx && (Date.now() - pendingCtx.timestamp > 30 * 60 * 1000)) {
+        console.warn('[ACH REDIRECT] Pending payment context is too old, ignoring.');
+        pendingCtx = null;
+    }
+
+    try {
+        // Initialize Stripe to retrieve the PaymentIntent
+        if (!window.Stripe) {
+            console.log('[ACH REDIRECT] Loading Stripe.js...');
+            await loadStripe();
+        }
+        const stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
+
+        console.log('[ACH REDIRECT] Retrieving PaymentIntent from client secret...');
+        const { paymentIntent, error } = await stripe.retrievePaymentIntent(clientSecret);
+
+        if (error) {
+            console.error('[ACH REDIRECT] Error retrieving PaymentIntent:', error);
+            alert('We could not verify your payment status. Please check your payment history or contact support.');
+            return true;
+        }
+
+        console.log('[ACH REDIRECT] PaymentIntent retrieved:', {
+            id: paymentIntent.id,
+            status: paymentIntent.status,
+            amount: paymentIntent.amount,
+            paymentMethodType: paymentIntent.payment_method?.type || 'unknown'
+        });
+
+        if (paymentIntent.status === 'succeeded' || paymentIntent.status === 'processing') {
+            const isACHProcessing = paymentIntent.status === 'processing';
+            const amountPaid = paymentIntent.amount / 100;
+
+            log('Main', isACHProcessing
+                ? `ACH payment redirect return - processing. Amount: $${amountPaid}`
+                : `Payment redirect return - succeeded. Amount: $${amountPaid}`);
+
+            // Track community fund chip-in if context is available
+            if (pendingCtx?.chipIn) {
+                const ci = pendingCtx.chipIn;
+                api.upsertCommunityFund(ci.itemId, ci.itemName, ci.amount, ci.goalAmount, ci.storeId)
+                    .then(() => log('Main', `Community fund tracked from redirect: $${ci.amount.toFixed(2)}`))
+                    .catch(err => console.warn('[ACH REDIRECT] Failed to track community fund:', err));
+
+                try {
+                    const donationKey = `donation_fund_${ci.itemId}`;
+                    let localData = { raised: 0, contributors: 0 };
+                    const stored = localStorage.getItem(donationKey);
+                    if (stored) localData = JSON.parse(stored);
+                    localData.raised = (localData.raised || 0) + ci.amount;
+                    localData.contributors = (localData.contributors || 0) + 1;
+                    localStorage.setItem(donationKey, JSON.stringify(localData));
+                } catch (e) { /* storage full, ignore */ }
+            }
+
+            // Record the payment in the session's payment history
+            const paymentNote = isACHProcessing
+                ? `ACH Bank Transfer on ${new Date().toLocaleDateString()} (processing)`
+                : `Stripe Payment on ${new Date().toLocaleDateString()}`;
+            const newPayment = {
+                amount: amountPaid,
+                date: new Date().toISOString(),
+                note: paymentNote
+            };
+
+            const currentHistory = state.session.user.paymentHistory || [];
+            // Guard against double-recording: check if a payment with same amount was already recorded in the last 5 minutes
+            const recentDuplicate = currentHistory.find(p => {
+                const timeDiff = Math.abs(new Date(p.date).getTime() - Date.now());
+                return p.amount === amountPaid && timeDiff < 5 * 60 * 1000;
+            });
+
+            if (recentDuplicate) {
+                console.log('[ACH REDIRECT] Payment already recorded (duplicate guard). Skipping recording.');
+            } else {
+                const updatedPaymentHistory = [...currentHistory, newPayment];
+                await api.updatePaymentHistory(state.session.id, updatedPaymentHistory);
+
+                state.session.user.paymentHistory = updatedPaymentHistory;
+                state.session.user.amountReceived = updatedPaymentHistory.reduce((sum, p) => sum + p.amount, 0);
+
+                ui.updateTotalCost();
+                console.log('[ACH REDIRECT] Payment recorded successfully. New total received:', state.session.user.amountReceived);
+            }
+
+            // Show a success notification to the user
+            const successMessage = isACHProcessing
+                ? 'Bank payment submitted! ACH transfers typically take 2-4 business days to complete.'
+                : 'Payment successful! Your payment has been processed.';
+
+            // Create a brief toast notification
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#28a745;color:white;padding:16px 24px;border-radius:8px;z-index:100000;font-size:15px;box-shadow:0 4px 12px rgba(0,0,0,0.3);text-align:center;max-width:90vw;';
+            toast.textContent = successMessage;
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.remove(); }, isACHProcessing ? 8000 : 5000);
+
+        } else if (paymentIntent.status === 'requires_payment_method') {
+            console.warn('[ACH REDIRECT] Payment failed - requires new payment method. Status:', paymentIntent.status);
+            alert('Your bank payment could not be completed. Please try again with a different payment method.');
+        } else if (paymentIntent.status === 'requires_action') {
+            console.warn('[ACH REDIRECT] Payment requires additional action. Status:', paymentIntent.status);
+            alert('Your bank payment requires additional verification. Please check your bank or email for instructions.');
+        } else {
+            console.warn('[ACH REDIRECT] Unexpected PaymentIntent status after redirect:', paymentIntent.status);
+            alert(`Payment status: ${paymentIntent.status}. If you believe this is an error, please contact support.`);
+        }
+
+        return true; // We handled a payment return
+
+    } catch (err) {
+        console.error('[ACH REDIRECT] Error handling payment redirect return:', err);
+        alert('An error occurred while verifying your payment. Please check your payment history or contact support.');
+        return true;
+    }
+}
 
 /**
  * Waits for the deferred CSS to be fully loaded AND applied
@@ -379,13 +546,24 @@ async function initialize() {
             });
         }
     });
-    document.addEventListener('sessionReady', () => {
+    document.addEventListener('sessionReady', async () => {
         console.log('[SESSION-READY] ========== EVENT HANDLER START ==========');
         console.log(`[SESSION-READY] Session: ${state.session.id}, Items: ${state.cart.items.size}, Locked: ${state.cart.lockedItems.size}`);
         log('Main', '"sessionReady" event received, re-initializing session chat.');
 
         // Track in localStorage so this plan persists in the plan list
         trackRecentPlan(state.session.id);
+
+        // Handle ACH/bank payment redirect return (from Financial Connections flow)
+        // This must run after session is loaded so we can record the payment to the session.
+        try {
+            const wasPaymentReturn = await handlePaymentRedirectReturn();
+            if (wasPaymentReturn) {
+                console.log('[SESSION-READY] Payment redirect return was handled.');
+            }
+        } catch (err) {
+            console.error('[SESSION-READY] Error in payment redirect handler:', err);
+        }
 
         // Check if we're in presentation view - skip catalog-related updates if so
         const urlParams = new URLSearchParams(window.location.search);
