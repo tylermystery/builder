@@ -8,6 +8,7 @@ import { REALM_META, TIME_SCOPES, NET_EMOJI_SCALE } from './vitalityProfiles.js'
 import { setTimeScope, getFidelityMultiplier, getNetEmoji, getItemSentiment } from './vitalityEngine.js';
 import { getRecordPrice } from '../utils.js';
 import { getModalZIndex, REACTION_SCORES } from '../config.js';
+import { openActionMenu } from '../components/actionMenu.js';
 
 // Track previous Net Emoji for morph transition
 let previousPlanEmoji = '⚖️';
@@ -215,11 +216,24 @@ function applyCardPulses(itemScores, synergies, dominantRealm) {
 }
 
 /**
+ * Open the action menu from a vitality badge click.
+ * Uses the click coordinates to position the menu near the badge.
+ */
+function openActionMenuFromBadge(e, recordId) {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    openActionMenu(recordId, {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+    });
+}
+
+/**
  * Add or update a small vitality badge on a card showing the item's goodness emoji.
  * Uses the blended goodnessEmoji (vitality + sentiment) when available.
  * Targets the price/valuation container so the emoji sits adjacent to the price.
  * Falls back to photo area for cards without a price container.
- * Badges are clickable — clicking opens the Goodness Report popup.
+ * Badges are clickable — clicking opens the unified Action Menu.
  */
 function updateCardVitalityBadge(card, scores) {
     const emoji = scores.goodnessEmoji || scores.netEmoji || '⚖️';
@@ -230,9 +244,9 @@ function updateCardVitalityBadge(card, scores) {
     if (valuationEmoji) {
         valuationEmoji.textContent = emoji;
         valuationEmoji.style.cursor = 'pointer';
-        valuationEmoji.title = `Goodness: ${scores.goodnessLabel || scores.netLabel || 'Neutral'} (click for details)`;
+        valuationEmoji.title = `Goodness: ${scores.goodnessLabel || scores.netLabel || 'Neutral'} (click for actions)`;
         if (!valuationEmoji._goodnessClickBound) {
-            valuationEmoji.addEventListener('click', (e) => { e.stopPropagation(); showGoodnessReport(recordId); });
+            valuationEmoji.addEventListener('click', (e) => openActionMenuFromBadge(e, recordId));
             valuationEmoji._goodnessClickBound = true;
         }
         return;
@@ -243,9 +257,9 @@ function updateCardVitalityBadge(card, scores) {
     if (compactVitality) {
         compactVitality.textContent = emoji;
         compactVitality.style.cursor = 'pointer';
-        compactVitality.title = `Goodness: ${scores.goodnessLabel || scores.netLabel || 'Neutral'} (click for details)`;
+        compactVitality.title = `Goodness: ${scores.goodnessLabel || scores.netLabel || 'Neutral'} (click for actions)`;
         if (!compactVitality._goodnessClickBound) {
-            compactVitality.addEventListener('click', (e) => { e.stopPropagation(); showGoodnessReport(recordId); });
+            compactVitality.addEventListener('click', (e) => openActionMenuFromBadge(e, recordId));
             compactVitality._goodnessClickBound = true;
         }
         return;
@@ -256,10 +270,10 @@ function updateCardVitalityBadge(card, scores) {
     if (valuationMeta && !valuationMeta.querySelector('.valuation-vitality-emoji')) {
         const span = document.createElement('span');
         span.className = 'valuation-vitality-emoji';
-        span.title = `Goodness: ${scores.goodnessLabel || 'Neutral'} (click for details)`;
+        span.title = `Goodness: ${scores.goodnessLabel || 'Neutral'} (click for actions)`;
         span.textContent = emoji;
         span.style.cursor = 'pointer';
-        span.addEventListener('click', (e) => { e.stopPropagation(); showGoodnessReport(recordId); });
+        span.addEventListener('click', (e) => openActionMenuFromBadge(e, recordId));
         span._goodnessClickBound = true;
         valuationMeta.appendChild(span);
         return;
@@ -270,10 +284,10 @@ function updateCardVitalityBadge(card, scores) {
     if (compactValuation && !compactValuation.querySelector('.compact-card-vitality')) {
         const span = document.createElement('span');
         span.className = 'compact-card-vitality';
-        span.title = `Goodness: ${scores.goodnessLabel || 'Neutral'} (click for details)`;
+        span.title = `Goodness: ${scores.goodnessLabel || 'Neutral'} (click for actions)`;
         span.textContent = emoji;
         span.style.cursor = 'pointer';
-        span.addEventListener('click', (e) => { e.stopPropagation(); showGoodnessReport(recordId); });
+        span.addEventListener('click', (e) => openActionMenuFromBadge(e, recordId));
         span._goodnessClickBound = true;
         compactValuation.appendChild(span);
         return;
@@ -285,7 +299,7 @@ function updateCardVitalityBadge(card, scores) {
         badge = document.createElement('div');
         badge.className = 'vitality-score-badge';
         badge.style.cursor = 'pointer';
-        badge.addEventListener('click', (e) => { e.stopPropagation(); showGoodnessReport(recordId); });
+        badge.addEventListener('click', (e) => openActionMenuFromBadge(e, recordId));
 
         const emojiSpan = document.createElement('span');
         emojiSpan.className = 'vitality-emoji';

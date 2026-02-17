@@ -23,6 +23,7 @@ import { initializeToastNotifications, handlePusherEvent as handleToastPusherEve
 import { initializeUnifiedChatPanel, showUnifiedChatPanel, hideUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage } from './unifiedChatPanel.js';
 import { initVitalityUI, cleanupVitalityUI, refreshFlowLines } from '../vitality/vitalityUI.js';
 import { requestVitalityRecalc, recalculateVitality } from '../vitality/vitalityEngine.js';
+import { openActionMenu, closeActionMenu, isActionMenuOpen, registerActionHandler } from './actionMenu.js';
 
 console.log('[MODULE DEBUG] presentation.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -3668,6 +3669,10 @@ async function renderAllItems() {
     initializeRadialMenu();
     attachRadialMenuListeners();
 
+    // Register the unified action menu handler so badge clicks and the action menu
+    // can trigger the same actions as the drag buckets
+    registerActionHandler(handleActionMenuAction);
+
     // Update plan summary dashboard with latest metrics
     updatePlanSummaryDashboard();
 
@@ -3689,8 +3694,8 @@ function initializeCompactCardClicks() {
     const itemCards = itineraryItemsListEl.querySelectorAll('.compact-card[data-record-id]');
     itemCards.forEach(card => {
         card.addEventListener('click', (e) => {
-            // Don't trigger on status badge, emoji indicator, or split button clicks
-            if (e.target.closest('.compact-card-status') || e.target.closest('.compact-card-emoji') || e.target.closest('.compact-card-split-btn')) return;
+            // Don't trigger on status badge, emoji indicator, vitality badge, or split button clicks
+            if (e.target.closest('.compact-card-status') || e.target.closest('.compact-card-emoji') || e.target.closest('.compact-card-split-btn') || e.target.closest('.compact-card-vitality') || e.target.closest('.valuation-vitality-emoji') || e.target.closest('.vitality-score-badge')) return;
             const recordId = card.dataset.recordId;
             const record = getRecordById(recordId);
             if (record) {
@@ -3952,7 +3957,7 @@ async function initializeItemDragDrop() {
                 }
 
                 // For SortableJS drag (long press/hold), show the radial menu at the item position
-                // instead of the old linear buckets
+                // for the drag-and-drop reorder functionality
                 const itemRect = evt.item.getBoundingClientRect();
                 const centerX = itemRect.left + itemRect.width / 2;
                 const centerY = itemRect.top + itemRect.height / 2;
@@ -4638,6 +4643,46 @@ function checkRadialBucketHover(clientX, clientY) {
     return hoveredBucket;
 }
 
+/**
+ * Handle action menu selections from the unified Action Menu component.
+ * Maps action IDs to the same functions used by drag bucket drops.
+ * @param {string} actionId - The action ID (e.g. 'goal', 'archive', 'delete')
+ * @param {string} recordId - The item record ID
+ */
+function handleActionMenuAction(actionId, recordId) {
+    if (!recordId) return;
+    console.log('[ActionMenu Handler] Action:', actionId, 'for item:', recordId);
+
+    switch (actionId) {
+        case 'goal':
+            setItemAsGoal(recordId);
+            break;
+        case 'ideas':
+            moveToIdeas(recordId);
+            break;
+        case 'lock':
+            lockItem(recordId);
+            break;
+        case 'merge':
+            enterMergeMode(recordId);
+            break;
+        case 'archive':
+            archiveItem(recordId);
+            break;
+        case 'delete':
+            deleteItem(recordId);
+            break;
+        case 'quick-comment':
+            openCustomCommentDialog(recordId);
+            break;
+        case 'completed':
+            completeItem(recordId);
+            break;
+        default:
+            console.log('[ActionMenu Handler] Unknown action:', actionId);
+    }
+}
+
 // Handle radial bucket selection (on release)
 // capturedMergeTargetId can be either a string (recordId) or an object with recordId property
 function handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId = null, capturedMergeZone = null) {
@@ -4783,16 +4828,34 @@ function handleItemPointerMove(event, itemElement) {
         directionDetected = true;
 
         if (deltaX > deltaY) {
-            // Horizontal movement - show radial menu
-            console.log('[Radial Menu] Horizontal swipe detected - showing radial menu');
+            // Horizontal movement - open the unified action menu
+            console.log('[ActionMenu] Horizontal swipe detected - opening action menu');
 
             // Prevent default to stop scrolling
             if (event.cancelable) {
                 event.preventDefault();
             }
 
-            // Show radial menu at the initial touch point
-            showRadialMenu(initialTouchPoint.x, initialTouchPoint.y, itemElement);
+            // Determine the record ID from the swiped element
+            let swipedRecordId = null;
+            if (itemElement) {
+                if (itemElement.classList.contains('compact-card')) {
+                    swipedRecordId = itemElement.dataset.recordId || itemElement.dataset.groupId || null;
+                } else {
+                    const article = itemElement.querySelector('.itinerary-item');
+                    swipedRecordId = article?.dataset.recordId;
+                }
+            }
+
+            if (swipedRecordId) {
+                openActionMenu(swipedRecordId, {
+                    x: initialTouchPoint.x,
+                    y: initialTouchPoint.y,
+                    onAction: handleActionMenuAction
+                });
+            }
+
+            cleanupRadialEventListeners();
         } else {
             // Vertical movement - allow scrolling, cleanup handlers
             console.log('[Radial Menu] Vertical swipe detected - allowing scroll');

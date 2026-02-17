@@ -15,6 +15,7 @@ import { showForumPanel } from './forumPanel.js';
 import { openUCPForItem } from './unifiedChatPanel.js';
 import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge } from '../vitality/vitalityUI.js';
+import { openActionMenu } from './actionMenu.js';
 
 console.log('[MODULE DEBUG] modal.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -4276,8 +4277,14 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             badge.id = 'modal-vitality-badge';
             badge.className = 'modal-vitality-badge';
             badge.textContent = goodnessEmoji;
-            badge.title = `Goodness: ${goodnessLabel} (click for details)`;
-            badge.addEventListener('click', () => showGoodnessReport(record.id));
+            badge.title = `Goodness: ${goodnessLabel} (click for actions)`;
+            badge.addEventListener('click', (e) => {
+                const rect = badge.getBoundingClientRect();
+                openActionMenu(record.id, {
+                    x: rect.left + rect.width / 2,
+                    y: rect.top + rect.height / 2
+                });
+            });
             // Insert badge right after the price element
             modalItemPrice.parentNode.insertBefore(badge, modalItemPrice.nextSibling);
         }
