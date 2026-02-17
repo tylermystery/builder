@@ -4910,8 +4910,6 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
                     </div>
                 </div>
 
-                <div id="modal-calendar-container" style="margin-bottom: 20px;"></div>
-
                 <div id="modal-notes-container">
                     <textarea id="modal-item-note" placeholder="Add notes about customization, timing, or special requests..." autocomplete="off"></textarea>
                 </div>
@@ -5470,7 +5468,17 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
             <span class="merge-label">Drop to Combine</span>
         </div>
 
-        <!-- Merge Mode Overlay and Banner (shown when merge bucket is selected) -->
+        <!-- Floating Chat Button for Presentation View -->
+        <button id="presentation-floating-chat-btn" title="Jump to Chat">
+            <span class="chat-icon">💬</span>
+            <span class="chat-badge" style="display: none;"></span>
+        </button>
+
+        <!-- Mobile toggle for Unified Chat Panel -->
+        <button id="ucp-mobile-toggle" class="ucp-mobile-toggle" title="Open conversations">💬</button>
+
+        <!-- Merge Mode UI - OUTSIDE presentation-drag-buckets but INSIDE presentation-modal-overlay -->
+        <!-- This ensures proper stacking context for z-index layering with plan items -->
         <div id="merge-mode-overlay" class="merge-mode-overlay" style="display: none;"></div>
         <div id="merge-mode-banner" class="merge-mode-banner">
             <div class="merge-mode-banner-text">
@@ -5480,8 +5488,6 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
             </div>
             <button id="merge-mode-cancel-btn" class="merge-mode-cancel-btn">Cancel</button>
         </div>
-
-        <!-- Multi-Select Merge Floating Action Button (shown when 2+ items selected in merge mode) -->
         <div id="merge-select-fab" class="merge-select-fab" style="display: none;">
             <div class="merge-select-fab-content">
                 <span class="merge-select-fab-icon">🔗</span>
@@ -5578,15 +5584,6 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
                 <button class="merge-dialog-cancel" id="merge-dialog-cancel">Cancel</button>
             </div>
         </div>
-
-        <!-- Floating Chat Button for Presentation View -->
-        <button id="presentation-floating-chat-btn" title="Jump to Chat">
-            <span class="chat-icon">💬</span>
-            <span class="chat-badge" style="display: none;"></span>
-        </button>
-
-        <!-- Mobile toggle for Unified Chat Panel -->
-        <button id="ucp-mobile-toggle" class="ucp-mobile-toggle" title="Open conversations">💬</button>
     </div>
 
     <div id="user-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">

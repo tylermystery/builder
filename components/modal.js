@@ -7,7 +7,6 @@ import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS } from '../config.js';
 import { getCurrentUser } from '../chat.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
-import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
@@ -1419,7 +1418,6 @@ function resetModalState() {
         modalOptionsContainer: document.getElementById('modal-options-container'),
         modalQuantitySelector: document.getElementById('modal-quantity-selector'),
         modalItemNote: document.getElementById('modal-item-note'),
-        modalCalendarContainer: document.getElementById('modal-calendar-container'),
         modalBreadcrumbs: document.getElementById('modal-breadcrumbs'),
         modalAdditionalDetails: document.getElementById('modal-additional-details')
     };
@@ -2749,7 +2747,6 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     const modalQuantitySelector = document.getElementById('modal-quantity-selector');
     const modalNotesContainer = document.getElementById('modal-notes-container');
     const modalItemNote = document.getElementById('modal-item-note');
-    const modalCalendarContainer = document.getElementById('modal-calendar-container');
     const modalActionsContainer = document.getElementById('modal-actions-container');
     const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
     const modalAdditionalDetails = document.getElementById('modal-additional-details');
@@ -3723,164 +3720,6 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                 ${rankingsHtmlParts.join('')}
             `;
             fragment.appendChild(rankingContainer);
-        }
-
-        // Add Variations Parsing Tool for authorized users (publish permission)
-        // Now available for all item types: real catalog items, AI-parsed items, and custom items
-        const userHasPublishPermission = api.userHasPublishPermission();
-        const isRealRecord = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-') && !record.id.startsWith('ai-presentation-');
-
-        if (userHasPublishPermission) {
-            const variationsToolContainer = document.createElement('div');
-            variationsToolContainer.className = 'variations-tool-container detail-item';
-            variationsToolContainer.style.gridColumn = '1 / -1';
-
-            const currentOptionsString = record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] || '';
-            const parsedGroups = parseOptions(currentOptionsString);
-            const hasExistingOptions = parsedGroups.length > 0 && parsedGroups.some(g => g.options.length > 0);
-
-            variationsToolContainer.innerHTML = `
-                <div class="variations-tool-header" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                    <span class="detail-label" style="margin-bottom: 0;">Variations & Options</span>
-                    <button class="variations-toggle-btn" style="background: none; border: none; cursor: pointer; font-size: 1.2em; color: #007bff;">
-                        ${hasExistingOptions ? '▼' : '+ Add'}
-                    </button>
-                </div>
-                <div class="variations-tool-content" style="display: none; margin-top: 10px;">
-                    <div class="variations-help-text" style="font-size: 0.85em; color: #666; margin-bottom: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px;">
-                        <strong>Format:</strong> Use <code>[Group Name]</code> for groups, then add options below.<br>
-                        <strong>Modifiers:</strong> <code>[price: +10]</code> <code>[price: 25]</code> (override) <code>[img: tag]</code> <code>[desc: text]</code> <code>[time: +30]</code>
-                    </div>
-                    <textarea class="variations-editor" placeholder="[Size] (required)
-Small [price: -5]
-Medium
-Large [price: +5]
-
-[Add-ons]
-Extra cheese [price: +2]
-Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; font-family: monospace; font-size: 0.9em; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;">${currentOptionsString}</textarea>
-                    <div class="variations-preview" style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px; display: none;">
-                        <strong style="font-size: 0.85em; color: #333;">Preview:</strong>
-                        <div class="variations-preview-content" style="margin-top: 8px;"></div>
-                    </div>
-                    <div class="variations-actions" style="margin-top: 10px; display: flex; gap: 10px;">
-                        <button class="variations-preview-btn" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Preview</button>
-                        <button class="variations-save-btn" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save Variations</button>
-                        <span class="variations-status" style="align-self: center; font-size: 0.85em; color: #666;"></span>
-                    </div>
-                </div>
-            `;
-
-            // Toggle show/hide variations tool
-            const header = variationsToolContainer.querySelector('.variations-tool-header');
-            const content = variationsToolContainer.querySelector('.variations-tool-content');
-            const toggleBtn = variationsToolContainer.querySelector('.variations-toggle-btn');
-
-            header.addEventListener('click', () => {
-                const isVisible = content.style.display !== 'none';
-                content.style.display = isVisible ? 'none' : 'block';
-                toggleBtn.textContent = isVisible ? (hasExistingOptions ? '▼' : '+ Add') : '▲';
-            });
-
-            // Preview functionality
-            const textarea = variationsToolContainer.querySelector('.variations-editor');
-            const previewContainer = variationsToolContainer.querySelector('.variations-preview');
-            const previewContent = variationsToolContainer.querySelector('.variations-preview-content');
-            const previewBtn = variationsToolContainer.querySelector('.variations-preview-btn');
-            const saveBtn = variationsToolContainer.querySelector('.variations-save-btn');
-            const statusSpan = variationsToolContainer.querySelector('.variations-status');
-
-            previewBtn.addEventListener('click', () => {
-                const optionsText = textarea.value;
-                const groups = parseOptions(optionsText);
-
-                if (groups.length === 0 || !groups.some(g => g.options.length > 0)) {
-                    previewContent.innerHTML = '<em style="color: #666;">No valid options found. Add options using the format above.</em>';
-                } else {
-                    let previewHtml = '';
-                    groups.forEach(group => {
-                        if (group.options.length > 0) {
-                            previewHtml += `<div style="margin-bottom: 10px;">
-                                <strong style="color: #333;">${group.name}</strong>${group.modifier ? ` <span style="color: #666; font-size: 0.85em;">(${group.modifier})</span>` : ''}
-                                <ul style="margin: 5px 0 0 15px; padding: 0;">`;
-                            group.options.forEach(opt => {
-                                let priceText = '';
-                                if (opt.priceOverride !== null) {
-                                    priceText = ` <span style="color: #28a745;">$${opt.priceOverride.toFixed(2)}</span>`;
-                                } else if (opt.priceModifier !== null) {
-                                    priceText = ` <span style="color: ${opt.priceModifier >= 0 ? '#28a745' : '#dc3545'}">${opt.priceModifier >= 0 ? '+' : ''}$${opt.priceModifier.toFixed(2)}</span>`;
-                                }
-                                let extras = [];
-                                if (opt.imageTag) extras.push(`img: ${opt.imageTag}`);
-                                if (opt.descriptionAppend) extras.push(`desc: "${opt.descriptionAppend.substring(0, 20)}${opt.descriptionAppend.length > 20 ? '...' : ''}"`);
-                                if (opt.durationChange !== null) extras.push(`time: ${opt.durationChange >= 0 ? '+' : ''}${opt.durationChange}min`);
-                                const extrasText = extras.length > 0 ? ` <span style="color: #888; font-size: 0.85em;">[${extras.join(', ')}]</span>` : '';
-                                previewHtml += `<li style="margin: 3px 0;">${opt.name}${priceText}${extrasText}</li>`;
-                            });
-                            previewHtml += '</ul></div>';
-                        }
-                    });
-                    previewContent.innerHTML = previewHtml;
-                }
-                previewContainer.style.display = 'block';
-            });
-
-            // Save functionality
-            saveBtn.addEventListener('click', async () => {
-                const optionsText = textarea.value;
-                statusSpan.textContent = 'Saving...';
-                statusSpan.style.color = '#666';
-                saveBtn.disabled = true;
-
-                try {
-                    let saveSuccess = false;
-
-                    // For AI-parsed and custom items, save locally only (no API call)
-                    if (!isRealRecord) {
-                        // Store options directly on the record object
-                        record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
-                        saveSuccess = true;
-                        statusSpan.textContent = 'Saved locally!';
-                        statusSpan.style.color = '#28a745';
-                    } else {
-                        // For real catalog items, persist to Airtable
-                        const result = await api.updateItemOptions(record.id, optionsText);
-                        if (result) {
-                            saveSuccess = true;
-                            statusSpan.textContent = 'Saved successfully!';
-                            statusSpan.style.color = '#28a745';
-
-                            // Update the record's options field locally
-                            record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
-                        } else {
-                            throw new Error('Failed to save');
-                        }
-                    }
-
-                    if (saveSuccess) {
-                        // Refresh the options display in the modal
-                        const newGroups = parseOptions(optionsText);
-                        const hasNewOptions = newGroups.length > 0 && newGroups.some(g => g.options.length > 0);
-                        toggleBtn.textContent = hasNewOptions ? '▲' : '+ Add';
-
-                        // Trigger re-render of the options buttons
-                        setTimeout(() => {
-                            showDetailModal(record);
-                        }, 1000);
-                    }
-                } catch (error) {
-                    statusSpan.textContent = 'Error saving. Please try again.';
-                    statusSpan.style.color = '#dc3545';
-                    console.error('Error saving variations:', error);
-                } finally {
-                    saveBtn.disabled = false;
-                    setTimeout(() => {
-                        statusSpan.textContent = '';
-                    }, 3000);
-                }
-            });
-
-            fragment.appendChild(variationsToolContainer);
         }
 
         modalAdditionalDetails.appendChild(fragment);
@@ -6573,103 +6412,6 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     }
     // --- END THE FIX ---\
 
-    modalCalendarContainer.innerHTML = '';
-    const iCalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
-
-    // Hide availability calendar for events - not needed for published event viewing
-    if (iCalUrl && !isEvent) {
-        try {
-            modalCalendarContainer.style.display = 'block';
-            log('Modal', `iCal URL found for ${record.id}, initializing calendar.`);
-
-            // Lazy load Flatpickr if needed
-            if (!window.flatpickr) {
-                log('Modal', 'Loading Flatpickr dynamically...');
-                await loadFlatpickr();
-            }
-
-            if (!window.flatpickr) {
-                throw new Error('Flatpickr not available after loading');
-            }
-            
-            if (typeof window.flatpickr !== 'function') {
-                throw new Error(`Flatpickr is not a function, got type: ${typeof window.flatpickr}`);
-            }
-
-            const busyTimes = await api.fetchCalendarForRecord(record);
-            const calendarInstance = window.flatpickr(modalCalendarContainer, {
-                inline: true,
-                showMonths: 1,
-                disable: [(date) => {
-                    const status = getDayStatus(date, busyTimes, record);
-                    return status.status === AVAILABILITY_STATUS.NONE;
-                }],
-                onDayCreate: function (dObj, dStr, fp, dayElem) {
-                    const day = dayElem.dateObj;
-                    const status = getDayStatus(day, busyTimes, record);
-                    let className = '';
-                    let tooltip = status.reason;
-                    if (status.status === AVAILABILITY_STATUS.FULL) {
-                        className = 'available-full';
-                    } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
-                        className = 'available-partial';
-                        tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
-                    } else {
-                        className = 'unavailable';
-                    }
-                    dayElem.classList.add(className);
-                    dayElem.setAttribute('data-tippy-content', tooltip);
-                },
-                onReady: function () {
-                    if (window.tippy) {
-                        tippy('.flatpickr-day', {
-                            content: reference => reference.getAttribute('data-tippy-content'),
-                            placement: 'top',
-                            theme: 'light',
-                            allowHTML: true,
-                        });
-                    }
-                },
-                onChange: (selectedDates) => {
-                    if (selectedDates.length > 0 && selectedDates[0]) {
-                        const eventDateInput = document.getElementById('event-date-picker');
-                        if (eventDateInput && eventDateInput._flatpickr) {
-                            try {
-                                eventDateInput._flatpickr.setDate(selectedDates[0], true);
-                            } catch (error) {
-                                log('Modal', `Error syncing event date picker: ${error.message}`);
-                            }
-                        }
-                    }
-                }
-            });
-            
-            const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-            if (eventDate) {
-                try {
-                    const dateObj = new Date(eventDate);
-                    if (!isNaN(dateObj.getTime())) {
-                        calendarInstance.setDate(dateObj, true);
-                    } else {
-                        log('Modal', `Invalid event date: ${eventDate}`);
-                    }
-                } catch (error) {
-                    log('Modal', `Error setting calendar date: ${error.message}`);
-                }
-            }
-            
-            log('Modal', 'Calendar initialized successfully');
-        } catch (error) {
-            log('Modal', `Error initializing calendar: ${error.message}`);
-            console.error('Calendar initialization error:', error);
-            modalCalendarContainer.style.display = 'none';
-            modalCalendarContainer.innerHTML = '<p style="color: #dc3545; padding: 10px; text-align: center;">Unable to load calendar. Please try refreshing the page.</p>';
-        }
-    } else {
-        modalCalendarContainer.style.display = 'none';
-        log('Modal', `No iCal URL for ${record.id}, hiding calendar.`);
-    }
-
     ui.updateCardIcon(record.id);
 
     // Get the appropriate z-index based on presentation state
@@ -6953,7 +6695,6 @@ export async function showGroupDetailModal(group, allRecords) {
     const modalOptionsContainer = document.getElementById('modal-options-container');
     const modalQuantitySelector = document.getElementById('modal-quantity-selector');
     const modalNotesContainer = document.getElementById('modal-notes-container');
-    const modalCalendarContainer = document.getElementById('modal-calendar-container');
     const modalActionsContainer = document.getElementById('modal-actions-container');
     const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
     const modalAdditionalDetails = document.getElementById('modal-additional-details');
@@ -6973,7 +6714,6 @@ export async function showGroupDetailModal(group, allRecords) {
     if (donationMeterGroup) donationMeterGroup.style.display = 'none';
     if (modalQuantitySelector) modalQuantitySelector.innerHTML = '';
     if (modalNotesContainer) modalNotesContainer.style.display = 'none';
-    if (modalCalendarContainer) modalCalendarContainer.innerHTML = '';
     if (modalActionsContainer) modalActionsContainer.style.display = 'none';
     if (modalAdditionalDetails) modalAdditionalDetails.innerHTML = '';
     if (modalHeaderActions) modalHeaderActions.innerHTML = '';

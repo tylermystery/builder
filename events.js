@@ -2690,13 +2690,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             if (!record) return;
             
             ui.showDetailModal(record);
-            
-            setTimeout(() => {
-                const modalCalendar = document.getElementById('modal-calendar-container');
-                if (modalCalendar && modalCalendar.style.display !== 'none') {
-                    modalCalendar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }
-            }, 300);
         } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn, .availability-btn')) {
             const recordId = card.dataset.recordId;
             console.log('[EVENTS DEBUG] Card clicked (detail modal trigger), recordId:', recordId);

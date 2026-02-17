@@ -6070,7 +6070,9 @@ async function openCustomCommentDialog(recordId) {
 // =============================================================================
 
 function enterMergeMode(sourceRecordId) {
-    if (!sourceRecordId || isMergeModeActive) return;
+    if (!sourceRecordId || isMergeModeActive) {
+        return;
+    }
 
     // Determine display name - could be a group or individual item
     let sourceName = 'Item';
@@ -6103,6 +6105,7 @@ function enterMergeMode(sourceRecordId) {
     if (bannerLabel) bannerLabel.textContent = 'Tap items to select for merge';
     const sourceNameEl = document.getElementById('merge-mode-source-name');
     if (sourceNameEl) sourceNameEl.textContent = `(${sourceName} selected)`;
+
     if (mergeModeBanner) {
         requestAnimationFrame(() => {
             mergeModeBanner.classList.add('active');
@@ -6170,7 +6173,9 @@ function enterMergeMode(sourceRecordId) {
 }
 
 function exitMergeMode() {
-    if (!isMergeModeActive) return;
+    if (!isMergeModeActive) {
+        return;
+    }
 
     isMergeModeActive = false;
     mergeModeSourceRecordId = null;
@@ -6234,7 +6239,9 @@ function toggleMergeSelection(recordId) {
     const index = mergeSelectedItems.indexOf(recordId);
     if (index >= 0) {
         // Deselect - but don't allow deselecting if it would leave < 1 item
-        if (mergeSelectedItems.length <= 1) return;
+        if (mergeSelectedItems.length <= 1) {
+            return;
+        }
         mergeSelectedItems.splice(index, 1);
         markItemAsSelected(recordId, false);
     } else {
@@ -6259,9 +6266,6 @@ function markItemAsSelected(recordId, selected) {
             } else {
                 section.classList.remove('merge-mode-selected');
             }
-            // Update checkmark visual
-            const check = section.querySelector('.merge-select-check');
-            // Checkmark appearance is handled by CSS based on .merge-mode-selected class
         }
     }
 
@@ -6281,11 +6285,10 @@ function markItemAsSelected(recordId, selected) {
 function addMergeSelectCheckmarks() {
     // List view items
     const itemSections = document.querySelectorAll('.itinerary-item-section');
-    itemSections.forEach(section => {
+    itemSections.forEach((section) => {
         if (!section.querySelector('.merge-select-check')) {
             const itemEl = section.querySelector('.itinerary-item');
             if (itemEl) {
-                // Make section position relative so checkmark is positioned within
                 section.style.position = 'relative';
                 const check = document.createElement('div');
                 check.className = 'merge-select-check';
@@ -6368,7 +6371,9 @@ function getItemDisplayName(recordId) {
 
 // Open merge dialog for multiple selected items (N items, N >= 2)
 function openMergeDialogMulti(selectedIds) {
-    if (!selectedIds || selectedIds.length < 2) return;
+    if (!selectedIds || selectedIds.length < 2) {
+        return;
+    }
 
     // Save the selected items and exit merge mode UI (but don't clear the dialog state)
     const itemsToMerge = [...selectedIds];
@@ -6391,7 +6396,9 @@ function openMergeDialogMulti(selectedIds) {
     }
     allRecordIds = [...new Set(allRecordIds)];
 
-    if (allRecordIds.length < 2) return;
+    if (allRecordIds.length < 2) {
+        return;
+    }
 
     // Use first two as source/target for the dialog's pending merge state
     // (The actual merge will use all items)
@@ -6483,7 +6490,9 @@ let pendingMergeAllItems = null; // Array of all selected item IDs for multi-sel
 // zone: 'hybrid' = merge as hybrid, 'options' = add as option
 // sourceId/targetId can be either record IDs or group IDs (prefixed with 'group-')
 async function executeMergeByZone(sourceId, targetId, zone) {
-    if (!sourceId || !targetId) return;
+    if (!sourceId || !targetId) {
+        return;
+    }
 
     // Resolve group IDs: if target is a group card, get all its member record IDs
     const isTargetGroup = targetId.startsWith('group-');
@@ -6612,7 +6621,9 @@ async function executeMergeByZone(sourceId, targetId, zone) {
 
 // Open merge dialog for two items (or groups of items)
 async function openMergeDialog(sourceRecordId, targetRecordId) {
-    if (!sourceRecordId || !targetRecordId) return;
+    if (!sourceRecordId || !targetRecordId) {
+        return;
+    }
 
     // Resolve all involved record IDs (expand groups)
     const isSourceGroup = sourceRecordId.startsWith('group-');
