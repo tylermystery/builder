@@ -341,6 +341,7 @@ let currentProcessingFee = 0; // To store the current fee
 let currentShopSettings = {};
 let currentChipInAmount = 0; // Chip-in community contribution amount
 let currentCheckoutScope = null; // { mode: 'plan' | 'item', itemId, itemName, quantity, price, record, highlightChipIn }
+let currentCheckoutItemQty = 0; // Tracks quantity in chip-in checkout (0 = donation only)
 const modalOverlay = document.getElementById('detail-modal-overlay');
 console.log('[MODAL DEBUG] modalOverlay initialized at module load:', !!modalOverlay);
 
@@ -943,6 +944,130 @@ function setupCheckoutChipIn(cartSubtotal) {
 }
 
 /**
+ * Updates the checkout item quantity display when +/- buttons are clicked.
+ * Recalculates item total, updates the cart summary and the full total, then
+ * refreshes the checkout display (fees, payment intent, etc.).
+ * @param {Object} scope - The checkout scope (item mode)
+ */
+function updateCheckoutItemQtyDisplay(scope) {
+    const qty = currentCheckoutItemQty;
+    const price = scope.price || 0;
+    const itemTotal = price * qty;
+    const itemName = scope.itemName || 'Item';
+
+    // Update qty value display
+    const qtyValueEl = document.getElementById('checkout-item-qty');
+    if (qtyValueEl) qtyValueEl.textContent = qty;
+
+    // Update hint text
+    const qtyHint = document.getElementById('checkout-qty-hint');
+    if (qtyHint) {
+        qtyHint.textContent = qty === 0
+            ? 'Quantity 0 = donation only. Increase to also buy.'
+            : `Quantity ${qty} — item will be purchased + donation.`;
+    }
+
+    // Update the cart summary line item
+    const scopeItem = document.getElementById('checkout-scope-item');
+    if (scopeItem) {
+        if (qty === 0) {
+            scopeItem.innerHTML = `
+                <div class="summary-item-details">
+                    <span class="summary-item-name">${itemName}</span>
+                    <small class="summary-item-donation-note">Chip in to crowdfund this item</small>
+                </div>
+                <span class="summary-item-price">—</span>
+            `;
+        } else {
+            scopeItem.innerHTML = `
+                <div class="summary-item-details">
+                    <span class="summary-item-name">${itemName} (x${qty})</span>
+                </div>
+                <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
+            `;
+        }
+    }
+
+    // Update full total
+    const fullTotalEl = document.getElementById('full-total-price');
+    if (fullTotalEl) {
+        fullTotalEl.textContent = `$${itemTotal.toFixed(2)}`;
+        fullTotalEl.dataset.total = itemTotal;
+    }
+
+    // Update the "Match My Cart" amount in chip-in section
+    const matchAmountEl = document.getElementById('chip-in-match-amount');
+    if (matchAmountEl) {
+        matchAmountEl.textContent = `+$${itemTotal.toFixed(2)}`;
+    }
+
+    // Refresh the checkout display (recalculates fees, updates payment intent)
+    updateCheckoutDisplay();
+}
+
+/**
+ * Loads and displays crowdfunding progress from Airtable for the given item.
+ * Falls back to localStorage data if the Airtable fetch fails.
+ * @param {string} itemRecordId - The item's Airtable record ID
+ * @param {number} goalAmount - The fundraising goal (item price)
+ */
+async function loadCrowdfundProgress(itemRecordId, goalAmount) {
+    const progressContainer = document.getElementById('checkout-crowdfund-progress');
+    if (!progressContainer) return;
+
+    // Try Airtable first
+    let raised = 0;
+    let contributors = 0;
+
+    try {
+        const fundRecord = await api.fetchCommunityFund(itemRecordId);
+        if (fundRecord) {
+            raised = fundRecord.fields.Total_Raised || 0;
+            contributors = fundRecord.fields.Contributor_Count || 0;
+        }
+    } catch (e) {
+        console.warn('[ChipIn] Failed to load from Airtable, falling back to localStorage', e);
+    }
+
+    // Fallback: merge localStorage data if Airtable had nothing
+    if (raised === 0) {
+        try {
+            const stored = localStorage.getItem(`donation_fund_${itemRecordId}`);
+            if (stored) {
+                const localData = JSON.parse(stored);
+                raised = localData.raised || 0;
+                contributors = localData.contributors || 0;
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    // Only show progress if there is any
+    if (raised > 0 || goalAmount > 0) {
+        progressContainer.style.display = 'block';
+        const effectiveGoal = goalAmount > 0 ? goalAmount : 5;
+        const percent = Math.min(100, (raised / effectiveGoal) * 100);
+
+        const barFill = document.getElementById('crowdfund-bar-fill');
+        const raisedEl = document.getElementById('crowdfund-raised');
+        const goalEl = document.getElementById('crowdfund-goal');
+        const contribEl = document.getElementById('crowdfund-contributors');
+
+        if (barFill) {
+            requestAnimationFrame(() => { barFill.style.width = `${percent}%`; });
+        }
+        if (raisedEl) raisedEl.textContent = `$${raised.toFixed(2)}`;
+        if (goalEl) goalEl.textContent = `$${effectiveGoal.toFixed(2)}`;
+        if (contribEl) {
+            contribEl.textContent = contributors > 0
+                ? ` · ${contributors} ${contributors === 1 ? 'contributor' : 'contributors'}`
+                : '';
+        }
+    } else {
+        progressContainer.style.display = 'none';
+    }
+}
+
+/**
  * Sets up the payment method toggle (Stripe vs P2P) in the checkout modal.
  */
 function setupPaymentMethodToggle() {
@@ -1155,7 +1280,15 @@ async function updateCheckoutDisplay() {
     if (isItemMode) {
         // Single-item mode: charge full amount, no deposit logic
         baseAmountToCharge = finalTotal;
-        document.getElementById('deposit-label').textContent = 'Amount Due:';
+        // Adjust label based on whether this is donation-only or purchase + donation
+        const isDonationOnly = currentCheckoutItemQty === 0 && currentCheckoutScope && currentCheckoutScope.highlightChipIn;
+        if (isDonationOnly && currentChipInAmount > 0) {
+            document.getElementById('deposit-label').textContent = 'Donation Amount:';
+        } else if (isDonationOnly) {
+            document.getElementById('deposit-label').textContent = 'Amount Due:';
+        } else {
+            document.getElementById('deposit-label').textContent = 'Amount Due:';
+        }
     } else if (amountReceived === 0) {
         if (currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full') {
             baseAmountToCharge = finalTotal;
@@ -1188,10 +1321,10 @@ async function updateCheckoutDisplay() {
     // --- NEW LOGIC FOR "RECEIPT" MODE ---
     if (isFullyPaid && finalBaseAmount <= 0) {
         log('Modal', 'Receipt mode: Plan is fully paid.');
-        
+
         // Hide all payment form elements
         if (paymentForm) paymentForm.style.display = 'none';
-        
+
         // Also hide the tip row
         if (tipRow) tipRow.style.display = 'none';
 
@@ -1199,8 +1332,45 @@ async function updateCheckoutDisplay() {
     }
     // --- END NEW LOGIC ---
 
+    // --- DONATION-ONLY MODE: Hide payment until chip-in selected ---
+    const isDonationOnlyPending = isItemMode && currentCheckoutItemQty === 0 && currentChipInAmount <= 0 && finalBaseAmount <= 0;
+    if (isDonationOnlyPending) {
+        log('Modal', 'Donation-only mode: waiting for chip-in selection.');
+        if (paymentForm) paymentForm.style.display = 'none';
+        const paymentMethodToggle = document.getElementById('checkout-payment-method-toggle');
+        if (paymentMethodToggle) paymentMethodToggle.style.display = 'none';
+        const p2pSection = document.getElementById('checkout-p2p-section');
+        if (p2pSection) p2pSection.style.display = 'none';
+        // Update submit button text
+        const submitBtn = document.getElementById('payment-submit-btn');
+        if (submitBtn) {
+            const btnText = submitBtn.querySelector('.button-text');
+            if (btnText) btnText.textContent = 'Pay Now';
+        }
+        return;
+    }
+    // --- END DONATION-ONLY MODE ---
+
     // If we're here, we need to pay. Show the form.
-    if (paymentForm) paymentForm.style.display = 'block'; 
+    if (paymentForm) paymentForm.style.display = 'block';
+
+    // Re-show payment method toggle if P2P options exist (may have been hidden in donation-only pending state)
+    if (isItemMode && currentCheckoutScope && currentCheckoutScope.highlightChipIn) {
+        const paymentMethodToggle = document.getElementById('checkout-payment-method-toggle');
+        const storePaymentOptions = getStorePaymentOptions();
+        const hasP2POptions = storePaymentOptions && Object.keys(storePaymentOptions).length > 0;
+        if (paymentMethodToggle && hasP2POptions) {
+            paymentMethodToggle.style.display = 'block';
+        }
+        // Update pay button text for donation context
+        const submitBtn = document.getElementById('payment-submit-btn');
+        if (submitBtn) {
+            const btnText = submitBtn.querySelector('.button-text');
+            if (btnText) {
+                btnText.textContent = currentCheckoutItemQty === 0 ? 'Donate Now' : 'Pay Now';
+            }
+        }
+    }
 
     // --- MINIMUM CHARGE FIX ---
     // Stripe's minimum charge is $0.50 (50 cents)
@@ -3148,7 +3318,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     mode: 'item',
                     itemId: record.id,
                     itemName: itemName,
-                    quantity: quantity,
+                    quantity: 0, // Default to 0 = donation only (crowdfunding mode)
+                    maxQuantity: quantity, // Pass the current quantity as reference for the toggle max
                     price: price,
                     record: record,
                     highlightChipIn: true
@@ -7342,7 +7513,13 @@ export async function showCheckoutModal(shopSettings, scope = null) {
     // Update modal title based on scope
     const checkoutTitle = document.getElementById('checkout-modal-title');
     if (checkoutTitle) {
-        checkoutTitle.textContent = scope && scope.mode === 'item' ? 'Checkout' : 'Checkout Summary';
+        if (scope && scope.highlightChipIn) {
+            checkoutTitle.textContent = 'Chip In';
+        } else if (scope && scope.mode === 'item') {
+            checkoutTitle.textContent = 'Checkout';
+        } else {
+            checkoutTitle.textContent = 'Checkout Summary';
+        }
     }
 
     // Get new fee/total elements
@@ -7351,7 +7528,9 @@ export async function showCheckoutModal(shopSettings, scope = null) {
 
     const totalLabel = document.getElementById('checkout-total-label');
     if (totalLabel) {
-        if (state.session.user.amountReceived > 0) {
+        if (scope && scope.highlightChipIn && (scope.quantity === 0 || !scope.quantity)) {
+            totalLabel.textContent = 'Item Price:';
+        } else if (state.session.user.amountReceived > 0) {
             totalLabel.textContent = 'Total Final Cost:';
         } else {
             totalLabel.textContent = 'Total Estimated Cost:';
@@ -7381,19 +7560,77 @@ export async function showCheckoutModal(shopSettings, scope = null) {
 
     if (scope && scope.mode === 'item') {
         // Single-item mode: show only the specified item
-        const itemTotal = (scope.price || 0) * (scope.quantity || 1);
+        const initialQty = scope.quantity || 0;
+        currentCheckoutItemQty = initialQty;
+        const itemTotal = (scope.price || 0) * initialQty;
         finalTotal = itemTotal;
 
         const listItem = document.createElement('li');
-        listItem.innerHTML = `
-            <div class="summary-item-details">
-                <span class="summary-item-name">${scope.itemName || 'Item'} (x${scope.quantity || 1})</span>
-            </div>
-            <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
-        `;
+        listItem.id = 'checkout-scope-item';
+        if (initialQty === 0) {
+            // Donation-only mode: show item name without price (no purchase)
+            listItem.innerHTML = `
+                <div class="summary-item-details">
+                    <span class="summary-item-name">${scope.itemName || 'Item'}</span>
+                    <small class="summary-item-donation-note">Chip in to crowdfund this item</small>
+                </div>
+                <span class="summary-item-price">—</span>
+            `;
+        } else {
+            listItem.innerHTML = `
+                <div class="summary-item-details">
+                    <span class="summary-item-name">${scope.itemName || 'Item'} (x${initialQty})</span>
+                </div>
+                <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
+            `;
+        }
         summaryList.appendChild(listItem);
+
+        // Show/setup quantity toggle for chip-in mode (when highlightChipIn is true)
+        const qtyToggle = document.getElementById('checkout-item-quantity-toggle');
+        if (qtyToggle && scope.highlightChipIn) {
+            qtyToggle.style.display = 'block';
+            const qtyValueEl = document.getElementById('checkout-item-qty');
+            const qtyHint = document.getElementById('checkout-qty-hint');
+            if (qtyValueEl) qtyValueEl.textContent = initialQty;
+            if (qtyHint) {
+                qtyHint.textContent = initialQty === 0
+                    ? 'Quantity 0 = donation only. Increase to also buy.'
+                    : `Quantity ${initialQty} — item will be purchased + donation.`;
+            }
+
+            // Wire up +/- buttons
+            const minusBtn = qtyToggle.querySelector('.checkout-qty-minus');
+            const plusBtn = qtyToggle.querySelector('.checkout-qty-plus');
+
+            // Clone to remove old listeners
+            if (minusBtn) {
+                const newMinus = minusBtn.cloneNode(true);
+                minusBtn.parentNode.replaceChild(newMinus, minusBtn);
+                newMinus.addEventListener('click', () => {
+                    if (currentCheckoutItemQty > 0) {
+                        currentCheckoutItemQty--;
+                        updateCheckoutItemQtyDisplay(scope);
+                    }
+                });
+            }
+            if (plusBtn) {
+                const newPlus = plusBtn.cloneNode(true);
+                plusBtn.parentNode.replaceChild(newPlus, plusBtn);
+                newPlus.addEventListener('click', () => {
+                    currentCheckoutItemQty++;
+                    updateCheckoutItemQtyDisplay(scope);
+                });
+            }
+        } else if (qtyToggle) {
+            qtyToggle.style.display = 'none';
+        }
     } else {
     // Plan mode (original behavior): show all locked items
+    // Hide quantity toggle in plan mode
+    const qtyToggle = document.getElementById('checkout-item-quantity-toggle');
+    if (qtyToggle) qtyToggle.style.display = 'none';
+    currentCheckoutItemQty = 0;
 
     // Check if UMW is in plan
     let isUmwInPlan = false;
@@ -7452,8 +7689,14 @@ export async function showCheckoutModal(shopSettings, scope = null) {
     } // end plan mode
     summaryDetailsEl.appendChild(summaryList);
 
-    fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
-    fullTotalEl.dataset.total = finalTotal;
+    // Show the per-unit price as reference in chip-in mode with qty=0
+    if (scope && scope.highlightChipIn && currentCheckoutItemQty === 0 && scope.price > 0) {
+        fullTotalEl.textContent = `$${scope.price.toFixed(2)}`;
+        fullTotalEl.dataset.total = 0; // actual charge total is 0 (donation only)
+    } else {
+        fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
+        fullTotalEl.dataset.total = finalTotal;
+    }
     
     const paymentHistory = state.session.user.paymentHistory || [];
     const amountReceived = state.session.user.amountReceived || 0;
@@ -7530,6 +7773,10 @@ export async function showCheckoutModal(shopSettings, scope = null) {
                 customBtn.classList.add('active');
                 customBtn.click();
             }
+        }
+        // Load crowdfunding progress from Airtable for this item
+        if (scope.itemId && scope.price) {
+            loadCrowdfundProgress(scope.itemId, scope.price);
         }
     }
 
@@ -7661,6 +7908,12 @@ export function hideCheckoutModal() {
         currentProcessingFee = 0;
         currentChipInAmount = 0;
         currentCheckoutScope = null;
+        currentCheckoutItemQty = 0;
+        // Reset quantity toggle and crowdfund progress
+        const qtyToggle = document.getElementById('checkout-item-quantity-toggle');
+        if (qtyToggle) qtyToggle.style.display = 'none';
+        const crowdfundProgress = document.getElementById('checkout-crowdfund-progress');
+        if (crowdfundProgress) crowdfundProgress.style.display = 'none';
         // --- END ADD ---\
 
         checkoutModalOverlay.classList.remove('active');
@@ -7680,4 +7933,12 @@ export function hideCheckoutModal() {
 
 export function getStripeContext() {
     return { stripe, elements };
+}
+
+export function getCheckoutChipInContext() {
+    return {
+        chipInAmount: currentChipInAmount,
+        scope: currentCheckoutScope,
+        itemQty: currentCheckoutItemQty
+    };
 }

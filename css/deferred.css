@@ -15454,6 +15454,136 @@ hr.total-divider {
 }
 
 /* ========================================
+   CHECKOUT: Quantity Toggle (Chip-In Mode)
+   ======================================== */
+
+#checkout-item-quantity-toggle {
+    margin: 10px 0;
+    padding: 12px 15px;
+    background: #f0f7ff;
+    border: 1px solid #d0e3f7;
+    border-radius: 8px;
+}
+
+.checkout-qty-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.checkout-qty-label {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #333;
+}
+
+.checkout-qty-controls {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    border: 2px solid #d0e3f7;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.checkout-qty-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: white;
+    border: none;
+    font-size: 1.2em;
+    font-weight: 700;
+    color: #007bff;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    user-select: none;
+}
+
+.checkout-qty-btn:hover {
+    background: #e8f0fe;
+}
+
+.checkout-qty-btn:active {
+    background: #d0e3f7;
+}
+
+.checkout-qty-value {
+    width: 40px;
+    text-align: center;
+    font-size: 1.15em;
+    font-weight: 700;
+    color: #333;
+    background: #f8f9fa;
+    padding: 4px 0;
+    border-left: 1px solid #d0e3f7;
+    border-right: 1px solid #d0e3f7;
+}
+
+.checkout-qty-hint {
+    margin: 6px 0 0 0;
+    font-size: 0.8em;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Summary item donation note */
+.summary-item-donation-note {
+    display: block;
+    font-size: 0.82em;
+    color: #e74c3c;
+    font-style: italic;
+    margin-top: 2px;
+}
+
+/* ========================================
+   CHECKOUT: Crowdfunding Progress Bar
+   ======================================== */
+
+#checkout-crowdfund-progress {
+    margin: 10px 0 12px 0;
+    padding: 10px 12px;
+    background: rgba(231, 76, 60, 0.06);
+    border-radius: 8px;
+}
+
+.crowdfund-progress-bar-container {
+    margin-bottom: 6px;
+}
+
+.crowdfund-progress-bar-bg {
+    height: 8px;
+    background: #e8e8e8;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.crowdfund-progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #e74c3c, #ff6b6b);
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.6s ease;
+}
+
+.crowdfund-progress-stats {
+    font-size: 0.82em;
+    color: #666;
+}
+
+.crowdfund-progress-stats span:first-child {
+    font-weight: 700;
+    color: #e74c3c;
+}
+
+.crowdfund-contributor-count {
+    color: #999;
+}
+
+/* ========================================
    UNIFIED CHECKOUT: Payment Method Toggle
    ======================================== */
 

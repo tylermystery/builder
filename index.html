@@ -4933,6 +4933,18 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
             <div id="checkout-summary-details">
                 <p>This is a summary of the items in your plan.</p>
             </div>
+            <!-- Checkout Item Quantity Toggle (shown in chip-in/item mode) -->
+            <div id="checkout-item-quantity-toggle" style="display: none;">
+                <div class="checkout-qty-row">
+                    <span class="checkout-qty-label">Also purchase this item?</span>
+                    <div class="checkout-qty-controls">
+                        <button class="checkout-qty-btn checkout-qty-minus" aria-label="Decrease quantity">−</button>
+                        <span class="checkout-qty-value" id="checkout-item-qty">0</span>
+                        <button class="checkout-qty-btn checkout-qty-plus" aria-label="Increase quantity">+</button>
+                    </div>
+                </div>
+                <p class="checkout-qty-hint" id="checkout-qty-hint">Quantity 0 = donation only. Increase to also buy.</p>
+            </div>
             <hr>
             <div class="checkout-total-deposit-section">
                 <div class="checkout-total">
@@ -4947,6 +4959,18 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
                         <span>Community Fund</span>
                     </div>
                     <p class="checkout-chip-in-desc">Chip in to help make items available for free to those most in need.</p>
+                    <!-- Crowdfunding Progress (populated by JS from Airtable) -->
+                    <div id="checkout-crowdfund-progress" style="display: none;">
+                        <div class="crowdfund-progress-bar-container">
+                            <div class="crowdfund-progress-bar-bg">
+                                <div class="crowdfund-progress-bar-fill" id="crowdfund-bar-fill"></div>
+                            </div>
+                        </div>
+                        <div class="crowdfund-progress-stats">
+                            <span id="crowdfund-raised">$0.00</span> raised of <span id="crowdfund-goal">$0.00</span> goal
+                            <span class="crowdfund-contributor-count" id="crowdfund-contributors"></span>
+                        </div>
+                    </div>
                     <div class="checkout-chip-in-options">
                         <button class="checkout-chip-in-option-btn" data-chip-in="match" title="Supply the same cart to the community">
                             <span class="chip-in-option-icon">🤝</span>
