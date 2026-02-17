@@ -15781,10 +15781,10 @@ hr.total-divider {
 /* ── Center hub ── */
 .action-menu-center {
     position: absolute;
-    width: 80px;
-    height: 80px;
-    left: -40px;
-    top: -40px;
+    width: 64px;
+    height: 64px;
+    left: -32px;
+    top: -32px;
     background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
     border-radius: 50%;
     display: flex;
@@ -15801,7 +15801,7 @@ hr.total-divider {
 }
 
 .action-menu-center-emoji {
-    font-size: 1.8em;
+    font-size: 1.4em;
     line-height: 1;
     transition: all 0.2s ease;
 }
@@ -15822,10 +15822,10 @@ hr.total-divider {
 }
 
 .action-menu-center-label {
-    font-size: 0.45em;
+    font-size: 0.4em;
     color: #64748b;
     text-align: center;
-    max-width: 70px;
+    max-width: 56px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -15882,13 +15882,13 @@ hr.total-divider {
 }
 
 .action-menu-emoji-char {
-    font-size: 1.2em;
+    font-size: 1em;
     line-height: 1;
     pointer-events: none;
 }
 
 .action-menu-emoji-score {
-    font-size: 0.5em;
+    font-size: 0.45em;
     color: #cbd5e1;
     font-weight: 600;
     pointer-events: none;
@@ -15936,13 +15936,13 @@ hr.total-divider {
 }
 
 .action-menu-action-icon {
-    font-size: 1.3em;
+    font-size: 1.1em;
     line-height: 1;
     pointer-events: none;
 }
 
 .action-menu-action-label {
-    font-size: 0.5em;
+    font-size: 0.45em;
     color: rgba(255, 255, 255, 0.9);
     font-weight: 600;
     letter-spacing: 0.3px;
@@ -15952,14 +15952,14 @@ hr.total-divider {
 /* ── Tier label ── */
 .action-menu-tier-label {
     position: absolute;
-    top: 50px;
+    top: 40px;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(30, 41, 59, 0.9);
     color: #e2e8f0;
-    font-size: 0.7em;
+    font-size: 0.6em;
     font-weight: 600;
-    padding: 4px 12px;
+    padding: 3px 10px;
     border-radius: 12px;
     white-space: nowrap;
     pointer-events: none;
@@ -15978,14 +15978,14 @@ hr.total-divider {
 /* ── Vitality summary panel ── */
 .action-menu-vitality-summary {
     position: absolute;
-    bottom: -60px;
+    bottom: -50px;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(15, 23, 42, 0.92);
-    border-radius: 12px;
-    padding: 10px 14px;
-    min-width: 200px;
-    max-width: 260px;
+    border-radius: 10px;
+    padding: 8px 12px;
+    min-width: 180px;
+    max-width: 230px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
     border: 1px solid rgba(255, 255, 255, 0.1);
     z-index: 5;
@@ -16065,42 +16065,42 @@ hr.total-divider {
 /* ── Mobile adjustments ── */
 @media (max-width: 768px) {
     .action-menu-center {
-        width: 66px;
-        height: 66px;
-        left: -33px;
-        top: -33px;
+        width: 54px;
+        height: 54px;
+        left: -27px;
+        top: -27px;
     }
     .action-menu-center-emoji {
-        font-size: 1.5em;
+        font-size: 1.2em;
     }
     .action-menu-center-score {
-        font-size: 0.5em;
-    }
-    .action-menu-center-label {
-        font-size: 0.4em;
-        max-width: 56px;
-    }
-    .action-menu-emoji-char {
-        font-size: 1em;
-    }
-    .action-menu-emoji-score {
         font-size: 0.45em;
     }
-    .action-menu-action-icon {
-        font-size: 1.1em;
+    .action-menu-center-label {
+        font-size: 0.35em;
+        max-width: 46px;
     }
-    .action-menu-action-label {
+    .action-menu-emoji-char {
+        font-size: 0.85em;
+    }
+    .action-menu-emoji-score {
         font-size: 0.4em;
     }
+    .action-menu-action-icon {
+        font-size: 0.95em;
+    }
+    .action-menu-action-label {
+        font-size: 0.38em;
+    }
     .action-menu-tier-label {
-        font-size: 0.6em;
-        top: 40px;
+        font-size: 0.55em;
+        top: 34px;
     }
     .action-menu-vitality-summary {
-        min-width: 170px;
-        max-width: 220px;
-        padding: 8px 10px;
-        bottom: -50px;
+        min-width: 150px;
+        max-width: 200px;
+        padding: 6px 8px;
+        bottom: -44px;
     }
 }
 

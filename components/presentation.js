@@ -3931,19 +3931,21 @@ async function initializeItemDragDrop() {
             dragClass: 'sortable-drag',
             // In board view, drag compact cards directly; in list view, drag item sections
             draggable: isBoardView ? '.compact-card' : '.itinerary-item-section',
-            delay: 300, // Increased delay - radial menu should activate first for quick swipes
+            delay: 300, // Increased delay - action menu activates on long-press drag
             delayOnTouchOnly: true,
             touchStartThreshold: 20, // Require more movement before starting SortableJS drag
 
             onStart: function(evt) {
 
-                // If radial menu is already active, cancel the SortableJS drag
-                if (radialMenuActive) {
+                // If the action menu is already open, cancel the SortableJS drag
+                if (isActionMenuOpen()) {
+                    console.log('[Drag DEBUG] onStart: action menu is open, cancelling drag');
                     evt.preventDefault && evt.preventDefault();
                     return false;
                 }
 
                 isDragging = true;
+                console.log('[Drag DEBUG] onStart: drag started, isDragging=true');
                 // Add sorting class to board for CSS pointer-events optimization
                 if (isBoardView) itineraryItemsListEl.classList.add('is-sorting');
                 // Reset debug counters
@@ -3961,13 +3963,18 @@ async function initializeItemDragDrop() {
                     const article = evt.item.querySelector('.itinerary-item');
                     currentDraggedRecordId = article?.dataset.recordId;
                 }
+                console.log('[Drag DEBUG] onStart: recordId:', currentDraggedRecordId);
 
-                // For SortableJS drag (long press/hold), show the radial menu at the item position
-                // for the drag-and-drop reorder functionality
+                // For SortableJS drag (long press/hold), open the unified action menu at the item position
                 const itemRect = evt.item.getBoundingClientRect();
                 const centerX = itemRect.left + itemRect.width / 2;
                 const centerY = itemRect.top + itemRect.height / 2;
-                showRadialMenu(centerX, centerY, evt.item);
+                console.log('[Drag DEBUG] onStart: opening ActionMenu at centerX:', centerX, 'centerY:', centerY, 'for recordId:', currentDraggedRecordId);
+                openActionMenu(currentDraggedRecordId, {
+                    x: centerX,
+                    y: centerY,
+                    onAction: handleActionMenuAction
+                });
 
                 // Add document-level listeners to track drag position
                 document.addEventListener('mousemove', handleDragMove);
@@ -3975,16 +3982,12 @@ async function initializeItemDragDrop() {
             },
 
             onMove: function(evt) {
-                // During SortableJS move, update radial menu hover state
-                if (radialMenuActive) {
-                    const clientX = evt.originalEvent?.touches ? evt.originalEvent.touches[0].clientX : evt.originalEvent?.clientX;
-                    const clientY = evt.originalEvent?.touches ? evt.originalEvent.touches[0].clientY : evt.originalEvent?.clientY;
-                    if (clientX !== undefined && clientY !== undefined) {
-                        checkRadialBucketHover(clientX, clientY);
-                        updateRadialDirectionIndicator(clientX, clientY);
-                        // Also check for merge targets when radial menu is active
-                        checkMergeTargetHover(clientX, clientY);
-                    }
+                // During SortableJS move, check for merge targets
+                // (the action menu handles its own interaction - no drag-bucket hover needed)
+                const clientX = evt.originalEvent?.touches ? evt.originalEvent.touches[0].clientX : evt.originalEvent?.clientX;
+                const clientY = evt.originalEvent?.touches ? evt.originalEvent.touches[0].clientY : evt.originalEvent?.clientY;
+                if (clientX !== undefined && clientY !== undefined) {
+                    checkMergeTargetHover(clientX, clientY);
                 }
             },
 
@@ -3995,6 +3998,7 @@ async function initializeItemDragDrop() {
                     const capturedMergeZone = potentialMergeZone;
 
                     isDragging = false;
+                    console.log('[Drag DEBUG] onEnd: drag ended, isDragging=false');
                     // Remove sorting class from board
                     if (isBoardView) itineraryItemsListEl.classList.remove('is-sorting');
                     clearTimeout(dragDelayTimer);
@@ -4007,34 +4011,20 @@ async function initializeItemDragDrop() {
                     document.removeEventListener('mousemove', handleDragMove);
                     document.removeEventListener('touchmove', handleDragMove);
 
-                    // Check if dropped on a radial bucket
-                    if (radialMenuActive) {
-                        // Get coordinates from event
-                        let clientX, clientY;
-                        if (evt.originalEvent?.changedTouches && evt.originalEvent.changedTouches.length > 0) {
-                            clientX = evt.originalEvent.changedTouches[0].clientX;
-                            clientY = evt.originalEvent.changedTouches[0].clientY;
-                        } else if (evt.originalEvent) {
-                            clientX = evt.originalEvent.clientX;
-                            clientY = evt.originalEvent.clientY;
-                        }
-
-                        if (clientX !== undefined && clientY !== undefined) {
-                            const droppedOnBucket = handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId, capturedMergeZone);
-                            if (droppedOnBucket) {
-                                return; // Item was moved to bucket or merged, don't update order
-                            }
-                        }
-                        hideRadialMenu();
-                    } else {
-                        // Legacy bucket drop check - pass captured merge target ID and zone
-                        const droppedOnBucket = checkBucketDrop(evt.originalEvent, evt.item, capturedMergeTargetId, capturedMergeZone);
-                        if (droppedOnBucket) {
-                            hideDragBuckets();
-                            return; // Item was moved to bucket, don't update order
-                        }
-                        hideDragBuckets();
+                    // Close the action menu if it's open (user dropped without selecting an action)
+                    if (isActionMenuOpen()) {
+                        console.log('[Drag DEBUG] onEnd: closing action menu (drag ended without action selection)');
+                        closeActionMenu();
                     }
+
+                    // Legacy bucket drop check - pass captured merge target ID and zone
+                    const droppedOnBucket = checkBucketDrop(evt.originalEvent, evt.item, capturedMergeTargetId, capturedMergeZone);
+                    if (droppedOnBucket) {
+                        console.log('[Drag DEBUG] onEnd: item dropped on bucket');
+                        hideDragBuckets();
+                        return; // Item was moved to bucket, don't update order
+                    }
+                    hideDragBuckets();
 
                     // Update the order in state
                     updateItemOrder();
@@ -4047,7 +4037,7 @@ async function initializeItemDragDrop() {
                     // Clean up anyway
                     isDragging = false;
                     if (isBoardView) itineraryItemsListEl.classList.remove('is-sorting');
-                    hideRadialMenu();
+                    if (isActionMenuOpen()) closeActionMenu();
                     hideDragBuckets();
                 }
             }
@@ -4357,9 +4347,10 @@ function positionRadialBuckets() {
     });
 }
 
-// Show radial menu at a specific point
+// Show radial menu at a specific point (DEPRECATED - migrated to unified Action Menu)
 function showRadialMenu(x, y, itemElement) {
-    console.log('[Radial Menu] showRadialMenu called at:', x, y);
+    console.log('[Radial Menu] showRadialMenu called but DEPRECATED - use openActionMenu() instead');
+    return; // No-op: old radial menu replaced by unified Action Menu
 
     if (!dragBucketsEl || !radialMenuContainer) {
         console.error('[Radial Menu] Missing required elements');
@@ -4527,10 +4518,10 @@ function showRadialMenu(x, y, itemElement) {
     console.log('[Radial Menu] Shown at', constrainedX, constrainedY, 'for item:', currentDraggedRecordId);
 }
 
-// Hide radial menu
+// Hide radial menu (DEPRECATED - migrated to unified Action Menu)
 function hideRadialMenu() {
-    console.log('[Radial Menu] Hiding');
-
+    console.log('[Radial Menu] hideRadialMenu called but DEPRECATED - use closeActionMenu() instead');
+    // Still clean up radial state in case it was somehow left active
     if (!radialMenuContainer) {
         return;
     }
@@ -4656,8 +4647,12 @@ function checkRadialBucketHover(clientX, clientY) {
  * @param {string} recordId - The item record ID
  */
 function handleActionMenuAction(actionId, recordId) {
-    if (!recordId) return;
-    console.log('[ActionMenu Handler] Action:', actionId, 'for item:', recordId);
+    if (!recordId) {
+        console.log('[ActionMenu Handler DEBUG] handleActionMenuAction called with no recordId, returning');
+        return;
+    }
+    console.log('[ActionMenu Handler DEBUG] Action:', actionId, 'for item:', recordId);
+    console.log('[ActionMenu Handler DEBUG] Available actions: goal, ideas, lock, merge, archive, delete, quick-comment, completed');
 
     switch (actionId) {
         case 'goal':
@@ -4791,7 +4786,7 @@ function handleItemPointerDown(event, itemElement) {
     initialTouchPoint = { x: clientX, y: clientY };
     directionDetected = false;
 
-    console.log('[Radial Menu] Pointer down at', clientX, clientY);
+    console.log('[ActionMenu Swipe DEBUG] Pointer down at', clientX, clientY);
 
     // Set up move and end handlers
     if (event.touches) {
@@ -4818,10 +4813,9 @@ function handleItemPointerMove(event, itemElement) {
     const clientX = event.touches ? event.touches[0].clientX : event.clientX;
     const clientY = event.touches ? event.touches[0].clientY : event.clientY;
 
-    // If radial menu is already active, update hover state and direction indicator
-    if (radialMenuActive) {
-        checkRadialBucketHover(clientX, clientY);
-        updateRadialDirectionIndicator(clientX, clientY);
+    // If the action menu is already open, no further swipe detection needed
+    if (isActionMenuOpen()) {
+        console.log('[ActionMenu Swipe DEBUG] Pointer move ignored - action menu already open');
         return;
     }
 
@@ -4835,7 +4829,7 @@ function handleItemPointerMove(event, itemElement) {
 
         if (deltaX > deltaY) {
             // Horizontal movement - open the unified action menu
-            console.log('[ActionMenu] Horizontal swipe detected - opening action menu');
+            console.log('[ActionMenu Swipe DEBUG] Horizontal swipe detected - opening action menu');
 
             // Prevent default to stop scrolling
             if (event.cancelable) {
@@ -4854,7 +4848,7 @@ function handleItemPointerMove(event, itemElement) {
             }
 
             if (swipedRecordId) {
-                console.log('[Presentation DEBUG] Swipe → opening Action Menu for recordId:', swipedRecordId, 'at:', initialTouchPoint.x, initialTouchPoint.y);
+                console.log('[ActionMenu Swipe DEBUG] Swipe → opening Action Menu for recordId:', swipedRecordId, 'at:', initialTouchPoint.x, initialTouchPoint.y);
                 openActionMenu(swipedRecordId, {
                     x: initialTouchPoint.x,
                     y: initialTouchPoint.y,
@@ -4865,14 +4859,9 @@ function handleItemPointerMove(event, itemElement) {
             cleanupRadialEventListeners();
         } else {
             // Vertical movement - allow scrolling, cleanup handlers
-            console.log('[Radial Menu] Vertical swipe detected - allowing scroll');
+            console.log('[ActionMenu Swipe DEBUG] Vertical swipe detected - allowing scroll');
             cleanupRadialEventListeners();
         }
-    }
-
-    // If radial menu is active and we detected horizontal, prevent scroll
-    if (radialMenuActive && event.cancelable) {
-        event.preventDefault();
     }
 }
 
@@ -4880,15 +4869,10 @@ function handleItemPointerUp(event) {
     const clientX = event.changedTouches ? event.changedTouches[0].clientX : event.clientX;
     const clientY = event.changedTouches ? event.changedTouches[0].clientY : event.clientY;
 
-    console.log('[Radial Menu] Pointer up at', clientX, clientY);
+    console.log('[ActionMenu Swipe DEBUG] Pointer up at', clientX, clientY);
 
-    if (radialMenuActive) {
-        // Capture merge state before it gets cleared
-        const capturedMergeTargetId = potentialMergeTarget ? potentialMergeTarget.recordId : null;
-        const capturedMergeZone = potentialMergeZone;
-        // Check if dropped on a bucket
-        handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId, capturedMergeZone);
-    }
+    // The action menu handles its own click-based interactions,
+    // so no bucket-drop logic is needed here anymore.
 
     cleanupRadialEventListeners();
 }
@@ -4916,13 +4900,20 @@ function cleanupRadialEventListeners() {
     directionDetected = false;
 }
 
-// Attach radial menu event listeners to itinerary items
+// Attach swipe/pointer event listeners for action menu activation on itinerary items
 let radialListenersAttached = false;
 function attachRadialMenuListeners() {
-    if (!itineraryItemsListEl) return;
+    if (!itineraryItemsListEl) {
+        console.log('[ActionMenu Swipe DEBUG] attachRadialMenuListeners: no itineraryItemsListEl, skipping');
+        return;
+    }
     // Guard: only attach once since we use event delegation on a persistent element
-    if (radialListenersAttached) return;
+    if (radialListenersAttached) {
+        console.log('[ActionMenu Swipe DEBUG] attachRadialMenuListeners: already attached, skipping');
+        return;
+    }
     radialListenersAttached = true;
+    console.log('[ActionMenu Swipe DEBUG] attachRadialMenuListeners: attaching touch/mouse listeners for swipe-to-action-menu');
 
     // Use event delegation on the items list
     itineraryItemsListEl.addEventListener('touchstart', handleRadialTouchStart, { passive: true });
@@ -4933,6 +4924,7 @@ function handleRadialTouchStart(event) {
     // Board view: target compact cards; List view: target item sections
     const targetEl = event.target.closest('.compact-card') || event.target.closest('.itinerary-item-section');
     if (targetEl) {
+        console.log('[ActionMenu Swipe DEBUG] Touch start on card/section, delegating to handleItemPointerDown');
         handleItemPointerDown(event, targetEl);
     }
 }
@@ -4944,12 +4936,13 @@ function handleRadialMouseDown(event) {
     // Board view: target compact cards; List view: target item sections
     const targetEl = event.target.closest('.compact-card') || event.target.closest('.itinerary-item-section');
     if (targetEl) {
+        console.log('[ActionMenu Swipe DEBUG] Mouse down on card/section, delegating to handleItemPointerDown');
         handleItemPointerDown(event, targetEl);
     }
 }
 
 // =============================================================================
-// END RADIAL MENU FUNCTIONS
+// END RADIAL MENU FUNCTIONS (DEPRECATED — migrated to unified Action Menu)
 // =============================================================================
 
 // Clear reaction option hover states
@@ -12698,13 +12691,17 @@ export function hidePresentationView() {
         dragBucketsEl.style.visibility = 'hidden';
     }
 
-    // Hide radial menu and clean up
+    // Close action menu and clean up old radial state
+    if (isActionMenuOpen()) {
+        console.log('[PRES-MENU DEBUG] Closing action menu on presentation deactivation');
+        closeActionMenu();
+    }
     if (radialMenuContainer) {
         radialMenuContainer.classList.remove('radial-active');
         radialMenuActive = false;
         cleanupRadialEventListeners();
     }
-    // Remove delegated radial listeners so they can be re-attached on next open
+    // Remove delegated swipe listeners so they can be re-attached on next open
     if (itineraryItemsListEl && radialListenersAttached) {
         itineraryItemsListEl.removeEventListener('touchstart', handleRadialTouchStart);
         itineraryItemsListEl.removeEventListener('mousedown', handleRadialMouseDown);

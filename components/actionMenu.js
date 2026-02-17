@@ -19,16 +19,16 @@ import { log } from '../utils/debug.js';
 console.log('[ActionMenu DEBUG] ✅ actionMenu.js MODULE LOADED');
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const INNER_RING_RADIUS = 110;       // distance from center to inner emoji ring
-const INNER_RING_RADIUS_MOBILE = 90;
-const OUTER_RING_RADIUS = 220;       // distance from center to outer action ring
-const OUTER_RING_RADIUS_MOBILE = 175;
-const EMOJI_ITEM_SIZE = 44;          // px, each emoji button
-const EMOJI_ITEM_SIZE_MOBILE = 38;
-const ACTION_ITEM_SIZE = 56;         // px, each action button
-const ACTION_ITEM_SIZE_MOBILE = 48;
-const CENTER_SIZE = 80;              // px, center hub
-const CENTER_SIZE_MOBILE = 66;
+const INNER_RING_RADIUS = 85;        // distance from center to inner emoji ring (was 110)
+const INNER_RING_RADIUS_MOBILE = 70;
+const OUTER_RING_RADIUS = 165;       // distance from center to outer action ring (was 220)
+const OUTER_RING_RADIUS_MOBILE = 135;
+const EMOJI_ITEM_SIZE = 36;          // px, each emoji button (was 44)
+const EMOJI_ITEM_SIZE_MOBILE = 32;
+const ACTION_ITEM_SIZE = 46;         // px, each action button (was 56)
+const ACTION_ITEM_SIZE_MOBILE = 40;
+const CENTER_SIZE = 64;              // px, center hub (was 80)
+const CENTER_SIZE_MOBILE = 54;
 
 // The collaborator actions (outer ring)
 const COLLABORATOR_ACTIONS = [
@@ -84,6 +84,7 @@ export function openActionMenu(recordId, { x, y, onAction } = {}) {
     console.log('[ActionMenu DEBUG]   registeredActionHandler:', typeof registeredActionHandler, registeredActionHandler?.name || '(none)');
     console.log('[ActionMenu DEBUG]   isOpen (before):', isOpen);
     console.log('[ActionMenu DEBUG]   menuOverlay (before):', menuOverlay ? 'EXISTS' : 'null');
+    console.log('[ActionMenu DEBUG]   SIZING: center=' + CENTER_SIZE + 'px inner=' + INNER_RING_RADIUS + 'px outer=' + OUTER_RING_RADIUS + 'px emoji=' + EMOJI_ITEM_SIZE + 'px action=' + ACTION_ITEM_SIZE + 'px');
 
     if (isOpen || menuOverlay) {
         console.log('[ActionMenu DEBUG]   Was already open, closing first...');
