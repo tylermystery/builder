@@ -1387,25 +1387,36 @@ async function updateCheckoutDisplay() {
     if (finalBaseAmount !== currentBaseAmount) {
         log('Modal', `Price changed from ${currentBaseAmount} to ${finalBaseAmount}. Rebuilding PaymentElement.`);
         currentBaseAmount = finalBaseAmount; // Update module-level var
-        
+
         if (processingFeeEl) processingFeeEl.textContent = 'Calculating...';
         if (finalChargeEl) finalChargeEl.textContent = 'Calculating...';
 
         try {
             // 1. Call create-payment-intent with the *current* payment type
+            console.log('[ACH DEBUG] updateCheckoutDisplay: Creating PaymentIntent.', {
+                amount: Math.round(currentBaseAmount * 100),
+                paymentMethodType: currentPaymentType
+            });
             const intentResponse = await fetch('/api/create-payment-intent', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    amount: Math.round(currentBaseAmount * 100), 
+                body: JSON.stringify({
+                    amount: Math.round(currentBaseAmount * 100),
                     paymentMethodType: currentPaymentType // Use the stored payment type
                 }),
             });
             if (!intentResponse.ok) throw new Error('Could not update payment intent.');
-            
+
             const intentData = await intentResponse.json();
             const newClientSecret = intentData.clientSecret;
             const newProcessingFee = intentData.processingFeeInCents / 100;
+
+            console.log('[ACH DEBUG] updateCheckoutDisplay: PaymentIntent created.', {
+                hasClientSecret: !!newClientSecret,
+                clientSecretSuffix: newClientSecret ? '...' + newClientSecret.slice(-8) : 'null',
+                processingFee: newProcessingFee,
+                paymentType: currentPaymentType
+            });
 
             // 2. Update UI with new fees
             currentProcessingFee = newProcessingFee;
@@ -1416,18 +1427,18 @@ async function updateCheckoutDisplay() {
             if (paymentElement) {
                 paymentElement.unmount();
             }
-            
+
             currentClientSecret = newClientSecret; // Update the secret
             elements = stripe.elements({ clientSecret: currentClientSecret });
             paymentElement = elements.create('payment');
             paymentElement.mount('#payment-element');
-            
-            // 4. --- THIS IS THE FIX ---\
-            // Add listener to update payment type AND fetch new fee
+
+            // 4. Add listener to update payment type AND fetch new fee
             paymentElement.on('change', debounce(handlePaymentTypeChange, 300));
+            console.log('[ACH DEBUG] updateCheckoutDisplay: PaymentElement mounted with change listener.');
 
         } catch (error) {
-            console.error('Failed to update payment intent/element:', error);
+            console.error('[ACH DEBUG] Failed to update payment intent/element:', error);
             if (processingFeeEl) processingFeeEl.textContent = 'Error';
             if (finalChargeEl) finalChargeEl.textContent = 'Error';
         }
@@ -1444,17 +1455,27 @@ async function updateCheckoutDisplay() {
 
 /**
  * Handles changes in the PaymentElement (e.g., switching from Card to ACH).
- * This function ONLY fetches the new fee and updates the UI, it does not
- * rebuild the PaymentElement.
+ * This function fetches the new fee, updates the UI, and rebuilds the
+ * PaymentElement with a new PaymentIntent so the clientSecret matches the
+ * correct amount (including the recalculated fee for the new payment type).
  */
 async function handlePaymentTypeChange(event) {
+    console.log('[ACH DEBUG] handlePaymentTypeChange fired:', {
+        eventValue: event?.value,
+        eventType: event?.value?.type,
+        currentPaymentType,
+        currentBaseAmount,
+        currentClientSecret: currentClientSecret ? '...' + currentClientSecret.slice(-8) : 'null'
+    });
+
     if (!event.value.type || event.value.type === currentPaymentType) {
-        // No change, or event is incomplete
+        console.log('[ACH DEBUG] Payment type unchanged or incomplete, skipping.');
         return;
     }
-    
+
+    const previousType = currentPaymentType;
     currentPaymentType = event.value.type;
-    log('Modal', `Payment type changed to: ${currentPaymentType}. Fetching new fee.`);
+    log('Modal', `Payment type changed from ${previousType} to: ${currentPaymentType}. Fetching new fee and rebuilding.`);
 
     const processingFeeEl = document.getElementById('processing-fee-price');
     const finalChargeEl = document.getElementById('final-charge-price');
@@ -1463,29 +1484,59 @@ async function handlePaymentTypeChange(event) {
     if (finalChargeEl) finalChargeEl.textContent = 'Calculating...';
 
     try {
-        // 1. Call create-payment-intent to get the new fee
+        // 1. Create a new PaymentIntent with the correct fee for the new payment type
+        console.log('[ACH DEBUG] Creating new PaymentIntent for type:', currentPaymentType, 'amount:', Math.round(currentBaseAmount * 100), 'cents');
         const intentResponse = await fetch('/api/create-payment-intent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                amount: Math.round(currentBaseAmount * 100), 
+            body: JSON.stringify({
+                amount: Math.round(currentBaseAmount * 100),
                 paymentMethodType: currentPaymentType
             }),
         });
-        if (!intentResponse.ok) throw new Error('Could not fetch new processing fee.');
-        
+        if (!intentResponse.ok) {
+            const errBody = await intentResponse.text();
+            console.error('[ACH DEBUG] PaymentIntent creation failed:', intentResponse.status, errBody);
+            throw new Error('Could not fetch new processing fee.');
+        }
+
         const intentData = await intentResponse.json();
         const newProcessingFee = intentData.processingFeeInCents / 100;
+        const newClientSecret = intentData.clientSecret;
+
+        console.log('[ACH DEBUG] New PaymentIntent received:', {
+            newProcessingFee,
+            hasClientSecret: !!newClientSecret,
+            clientSecretSuffix: newClientSecret ? '...' + newClientSecret.slice(-8) : 'null',
+            oldClientSecretSuffix: currentClientSecret ? '...' + currentClientSecret.slice(-8) : 'null'
+        });
 
         // 2. Update UI with new fees
         currentProcessingFee = newProcessingFee;
         if (processingFeeEl) processingFeeEl.textContent = `$${newProcessingFee.toFixed(2)}`;
         if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount + newProcessingFee).toFixed(2)}`;
-        
-        log('Modal', `New fee is ${newProcessingFee.toFixed(2)}`);
+
+        // 3. Rebuild Stripe Elements with the new clientSecret so confirmPayment uses the correct intent
+        if (newClientSecret && newClientSecret !== currentClientSecret) {
+            console.log('[ACH DEBUG] Rebuilding Stripe Elements with new clientSecret.');
+            if (paymentElement) {
+                paymentElement.unmount();
+            }
+            currentClientSecret = newClientSecret;
+            elements = stripe.elements({ clientSecret: currentClientSecret });
+            paymentElement = elements.create('payment');
+            paymentElement.mount('#payment-element');
+            // Re-attach the change listener on the new element
+            paymentElement.on('change', debounce(handlePaymentTypeChange, 300));
+            console.log('[ACH DEBUG] Stripe Elements rebuilt and mounted with new secret.');
+        } else {
+            console.log('[ACH DEBUG] clientSecret unchanged, no element rebuild needed.');
+        }
+
+        log('Modal', `New fee is ${newProcessingFee.toFixed(2)} for ${currentPaymentType}`);
 
     } catch (error) {
-        console.error('Failed to update fee on type change:', error);
+        console.error('[ACH DEBUG] Failed to update fee on type change:', error);
         if (processingFeeEl) processingFeeEl.textContent = 'Error';
         if (finalChargeEl) finalChargeEl.textContent = 'Error';
     }
@@ -7969,6 +8020,10 @@ export function hideCheckoutModal() {
 
 export function getStripeContext() {
     return { stripe, elements };
+}
+
+export function getCurrentPaymentType() {
+    return currentPaymentType;
 }
 
 export function getCheckoutChipInContext() {

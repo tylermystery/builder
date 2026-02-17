@@ -229,7 +229,13 @@ async function handlePaymentFormSubmit(event) {
     spinner.style.display = 'inline';
 
     const { stripe, elements } = ui.getStripeContext();
-    
+
+    console.log('[ACH DEBUG] handlePaymentFormSubmit called.', {
+        stripeLoaded: !!stripe,
+        elementsLoaded: !!elements,
+        currentPaymentType: ui.getCurrentPaymentType ? ui.getCurrentPaymentType() : 'unknown'
+    });
+
     if (!stripe || !elements) {
         cardErrors.textContent = 'Payment system is not initialized. Please close and reopen the checkout window.';
         submitBtn.disabled = false;
@@ -237,11 +243,19 @@ async function handlePaymentFormSubmit(event) {
         spinner.style.display = 'none';
         return;
     }
-    
+
     try {
         const customerName = document.getElementById('customer-name').value;
         const customerEmail = document.getElementById('customer-email').value;
 
+        console.log('[ACH DEBUG] Calling stripe.confirmPayment with:', {
+            return_url: `${window.location.origin}${window.location.pathname}?payment_success=true`,
+            customerName,
+            customerEmail,
+            redirect: 'if_required'
+        });
+
+        const confirmStartTime = Date.now();
         const { error, paymentIntent } = await stripe.confirmPayment({
             elements,
             confirmParams: {
@@ -253,7 +267,18 @@ async function handlePaymentFormSubmit(event) {
                     },
                 },
             },
-            redirect: 'if_required', 
+            redirect: 'if_required',
+        });
+        const confirmDuration = Date.now() - confirmStartTime;
+
+        console.log('[ACH DEBUG] stripe.confirmPayment returned after', confirmDuration, 'ms:', {
+            hasError: !!error,
+            errorType: error?.type,
+            errorCode: error?.code,
+            errorMessage: error?.message,
+            paymentIntentStatus: paymentIntent?.status,
+            paymentIntentId: paymentIntent?.id,
+            paymentMethodType: paymentIntent?.payment_method_type || paymentIntent?.payment_method?.type || 'unknown'
         });
 
         if (error) {
@@ -273,13 +298,23 @@ async function handlePaymentFormSubmit(event) {
                 }
                 throw new Error(userMessage);
             } else {
-                console.error('Stripe confirmPayment error:', error);
+                console.error('[ACH DEBUG] Stripe confirmPayment non-card error:', error);
                 throw new Error("An unexpected error occurred during payment. Please try again or contact support.");
             }
         }
 
-        if (paymentIntent.status === 'succeeded') {
-            log('Events', 'Payment succeeded.');
+        console.log('[ACH DEBUG] PaymentIntent full status:', paymentIntent.status);
+
+        // Handle both 'succeeded' (card) and 'processing' (ACH/bank) statuses
+        if (paymentIntent.status === 'succeeded' || paymentIntent.status === 'processing') {
+            const isACHProcessing = paymentIntent.status === 'processing';
+            log('Events', isACHProcessing ? 'ACH payment submitted - processing (bank transfer takes 2-4 business days).' : 'Payment succeeded.');
+            console.log('[ACH DEBUG] Payment accepted.', {
+                status: paymentIntent.status,
+                isACHProcessing,
+                amount: paymentIntent.amount
+            });
+
             const amountPaid = paymentIntent.amount / 100;
 
             // --- Track Community Fund chip-in to Airtable ---
@@ -312,13 +347,16 @@ async function handlePaymentFormSubmit(event) {
             }
             // --- End Community Fund tracking ---
 
+            const paymentNote = isACHProcessing
+                ? `ACH Bank Transfer on ${new Date().toLocaleDateString()} (processing)`
+                : `Stripe Payment on ${new Date().toLocaleDateString()}`;
             const newPayment = {
                 amount: amountPaid,
                 date: new Date().toISOString(),
-                note: `Stripe Payment on ${new Date().toLocaleDateString()}`
+                note: paymentNote
             };
             const updatedPaymentHistory = [...state.session.user.paymentHistory, newPayment];
-            
+
             await api.updatePaymentHistory(state.session.id, updatedPaymentHistory);
 
             state.session.user.paymentHistory = updatedPaymentHistory;
@@ -328,21 +366,43 @@ async function handlePaymentFormSubmit(event) {
             document.getElementById('payment-form').style.display = 'none';
             document.getElementById('checkout-summary-details').style.display = 'none';
             document.querySelector('.checkout-total-deposit-section').style.display = 'none';
-            
+
             const feeRow = document.querySelector('.processing-fee-row');
             const totalRow = document.querySelector('.final-total-row');
             const divider = document.querySelector('.total-divider');
             if(feeRow) feeRow.style.display = 'none';
             if(totalRow) totalRow.style.display = 'none';
             if(divider) divider.style.display = 'none';
-            
-            document.querySelector('.terms-and-conditions').style.display = 'none';
-            document.getElementById('payment-success-message').style.display = 'block';
 
-            setTimeout(() => { ui.hideCheckoutModal(); }, 4000);
+            document.querySelector('.terms-and-conditions').style.display = 'none';
+
+            // Show appropriate success message for ACH vs card
+            const successMsg = document.getElementById('payment-success-message');
+            if (successMsg) {
+                if (isACHProcessing) {
+                    successMsg.innerHTML = '✅ Bank Payment Submitted!<br><small style="font-size: 0.7em; opacity: 0.85;">ACH transfers typically take 2-4 business days to complete.</small>';
+                } else {
+                    successMsg.textContent = '✅ Payment Successful!';
+                }
+                successMsg.style.display = 'block';
+            }
+
+            setTimeout(() => { ui.hideCheckoutModal(); }, isACHProcessing ? 6000 : 4000);
+        } else if (paymentIntent.status === 'requires_action' || paymentIntent.status === 'requires_confirmation') {
+            // ACH may require additional verification steps (e.g., micro-deposits)
+            console.warn('[ACH DEBUG] PaymentIntent requires additional action:', paymentIntent.status);
+            cardErrors.textContent = 'Additional verification is required. Please follow the prompts to complete your bank payment.';
+            submitBtn.disabled = false;
+            buttonText.style.display = 'inline';
+            spinner.style.display = 'none';
+        } else {
+            // Unexpected status - log and show error
+            console.error('[ACH DEBUG] Unexpected PaymentIntent status:', paymentIntent.status, paymentIntent);
+            throw new Error(`Payment returned unexpected status: "${paymentIntent.status}". Please try again or use a different payment method.`);
         }
     } catch (err) {
         log('Events', `Stripe payment error: ${err.message}`);
+        console.error('[ACH DEBUG] Payment error caught:', err);
         cardErrors.textContent = err.message;
         submitBtn.disabled = false;
         buttonText.style.display = 'inline';
