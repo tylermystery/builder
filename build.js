@@ -1,5 +1,6 @@
 const fetch = require('node-fetch');
 const fs = require('fs');
+const { exportProjectAsJson } = require('./export_to_json');
 
 // --- Configuration ---
 const REDIRECTS_OUTPUT_FILE = '_redirects'; // Netlify redirects file name
@@ -129,6 +130,14 @@ async function buildSourceFile() {
 
     const shortcutItems = await fetchShortcutsFromAirtable();
     generateAndWriteRedirects(shortcutItems);
+
+    // Generate project_source.json snapshot
+    console.log('\n📦 Generating project_source.json...');
+    try {
+        exportProjectAsJson();
+    } catch (error) {
+        console.warn('⚠️ Could not generate project_source.json:', error.message);
+    }
 
     console.log('\n✨ Build completed successfully! ✨');
 }
