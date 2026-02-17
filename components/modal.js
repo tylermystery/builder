@@ -10,6 +10,7 @@ import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveI
 import { log } from '../utils/debug.js';
 import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
+import { resizeImageForUpload } from '../utils/imageResizer.js';
 import { triggerSave } from '../events.js';
 import { showForumPanel } from './forumPanel.js';
 import { openUCPForItem } from './unifiedChatPanel.js';
@@ -2104,10 +2105,17 @@ function enableItemEditMode(record, nameEl, descEl) {
         for (const file of files) {
             if (!file.type.startsWith('image/')) continue;
 
-            // Read file as data URL for preview and storage
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const dataUrl = event.target.result;
+            // Validate file size (max 10MB before resize)
+            if (file.size > 10 * 1024 * 1024) {
+                if (typeof ui !== 'undefined' && ui.showToast) {
+                    ui.showToast('Image must be less than 10MB', 'error');
+                }
+                continue;
+            }
+
+            try {
+                // Resize image if needed (handles large mobile photos)
+                const dataUrl = await resizeImageForUpload(file);
                 pendingPhotos.push({ url: dataUrl, name: file.name });
 
                 // Add preview
@@ -2132,8 +2140,9 @@ function enableItemEditMode(record, nameEl, descEl) {
                 });
 
                 photosPreview.appendChild(previewItem);
-            };
-            reader.readAsDataURL(file);
+            } catch (err) {
+                console.error('[Modal] Error processing image:', err);
+            }
         }
 
         // Clear input to allow re-selecting same files

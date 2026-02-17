@@ -18,6 +18,7 @@ import { syncPlanState, registerSyncCallback, unregisterSyncCallback } from '../
 import { showUserModal } from '../auth.js';
 import { showToast } from '../ui.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
+import { resizeImageForUpload } from '../utils/imageResizer.js';
 import { refreshForumData, onNewItemReceived } from './forumPanel.js';
 import { initializeToastNotifications, handlePusherEvent as handleToastPusherEvent } from './toastNotifications.js';
 import { initializeUnifiedChatPanel, showUnifiedChatPanel, hideUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage } from './unifiedChatPanel.js';
@@ -10857,12 +10858,11 @@ function handleCommentImageInputChange(e) {
         return;
     }
 
-    console.log('[CommentImage DEBUG] File validation passed, creating preview');
+    console.log('[CommentImage DEBUG] File validation passed, resizing if needed and creating preview');
 
-    // Show preview
-    const reader = new FileReader();
-    reader.onload = (event) => {
-        console.log('[CommentImage DEBUG] FileReader onload triggered');
+    // Resize image if needed (handles large mobile photos), then show preview
+    resizeImageForUpload(file).then(dataUrl => {
+        console.log('[CommentImage DEBUG] Image processed, showing preview');
         const previewContainer = document.querySelector(`.comment-image-preview[data-component-id="${componentId}"]`);
         const thumbnail = previewContainer?.querySelector('.comment-preview-thumbnail');
         const removeBtn = previewContainer?.querySelector('.comment-preview-remove');
@@ -10872,26 +10872,19 @@ function handleCommentImageInputChange(e) {
         console.log('[CommentImage DEBUG] removeBtn found:', !!removeBtn);
 
         if (previewContainer && thumbnail) {
-            thumbnail.src = event.target.result;
+            thumbnail.src = dataUrl;
             previewContainer.style.display = 'flex';
+            // Store the resized data URL on the file input for later upload
+            fileInput.dataset.resizedDataUrl = dataUrl;
 
             console.log('[CommentImage DEBUG] Preview displayed');
-            console.log('[CommentImage DEBUG] previewContainer.style.display:', previewContainer.style.display);
-            console.log('[CommentImage DEBUG] previewContainer.classList:', Array.from(previewContainer.classList));
-            console.log('[CommentImage DEBUG] thumbnail.naturalWidth:', thumbnail.naturalWidth);
-            console.log('[CommentImage DEBUG] thumbnail.naturalHeight:', thumbnail.naturalHeight);
-            console.log('[CommentImage DEBUG] thumbnail.offsetWidth:', thumbnail.offsetWidth);
-            console.log('[CommentImage DEBUG] thumbnail.offsetHeight:', thumbnail.offsetHeight);
-            console.log('[CommentImage DEBUG] previewContainer computed style:', window.getComputedStyle(previewContainer).cssText.substring(0, 200));
-            console.log('[CommentImage DEBUG] thumbnail computed style:', window.getComputedStyle(thumbnail).cssText.substring(0, 200));
         } else {
-            console.log('[CommentImage DEBUG] ❌ Could not find previewContainer or thumbnail');
+            console.log('[CommentImage DEBUG] Could not find previewContainer or thumbnail');
         }
-    };
-    reader.onerror = (error) => {
-        console.log('[CommentImage DEBUG] ❌ FileReader error:', error);
-    };
-    reader.readAsDataURL(file);
+    }).catch(err => {
+        console.error('[CommentImage DEBUG] Error processing image:', err);
+        showToast('Error processing image. Please try again.', 'error');
+    });
 }
 
 /**
@@ -10907,6 +10900,7 @@ function clearCommentImagePreview(componentId) {
 
     if (fileInput) {
         fileInput.value = '';
+        delete fileInput.dataset.resizedDataUrl;
         console.log('[CommentImage DEBUG] File input cleared');
     }
     if (previewContainer) {
@@ -11296,15 +11290,12 @@ async function submitComponentComment(componentId) {
         // Upload image if attached
         if (hasImage) {
             console.log('[ComponentComment DEBUG] Uploading attached image...');
-            const file = fileInput.files[0];
 
-            // Convert file to base64
-            const base64Data = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
+            // Use pre-resized data URL from the preview step, or resize now as fallback
+            let base64Data = fileInput.dataset.resizedDataUrl;
+            if (!base64Data && fileInput.files[0]) {
+                base64Data = await resizeImageForUpload(fileInput.files[0]);
+            }
 
             // Upload to Cloudinary via serverless function
             const uploadResponse = await fetch('/.netlify/functions/cloudinary-upload', {
