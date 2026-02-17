@@ -85,9 +85,16 @@ export function openActionMenu(recordId, { x, y, onAction } = {}) {
     console.log('[ActionMenu DEBUG]   isOpen (before):', isOpen);
     console.log('[ActionMenu DEBUG]   menuOverlay (before):', menuOverlay ? 'EXISTS' : 'null');
 
-    if (isOpen) {
+    if (isOpen || menuOverlay) {
         console.log('[ActionMenu DEBUG]   Was already open, closing first...');
         closeActionMenu();
+    }
+
+    // Also clean up any stale overlay left in the DOM from a prior close animation
+    const staleOverlay = document.getElementById('action-menu-overlay');
+    if (staleOverlay) {
+        console.log('[ActionMenu DEBUG]   Removing stale overlay from DOM');
+        staleOverlay.remove();
     }
 
     currentRecordId = recordId;
@@ -127,7 +134,10 @@ export function openActionMenu(recordId, { x, y, onAction } = {}) {
     console.log('[ActionMenu DEBUG]   Created menuOverlay element');
 
     let zIndex = 100000;
-    try { zIndex = getModalZIndex('picker'); } catch (_) { /* default */ }
+    try {
+        const modalZ = getModalZIndex('picker');
+        zIndex = Math.max(modalZ, 100000); // Ensure we're always above everything else
+    } catch (_) { /* default */ }
     menuOverlay.style.zIndex = zIndex;
     console.log('[ActionMenu DEBUG]   z-index set to:', zIndex);
 
@@ -166,11 +176,20 @@ export function openActionMenu(recordId, { x, y, onAction } = {}) {
     document.body.appendChild(menuOverlay);
     console.log('[ActionMenu DEBUG]   ✅ menuOverlay appended to document.body');
     console.log('[ActionMenu DEBUG]   menuOverlay in DOM:', document.body.contains(menuOverlay));
-    console.log('[ActionMenu DEBUG]   menuOverlay display:', window.getComputedStyle(menuOverlay).display);
-    console.log('[ActionMenu DEBUG]   menuOverlay visibility:', window.getComputedStyle(menuOverlay).visibility);
-    console.log('[ActionMenu DEBUG]   menuOverlay opacity:', window.getComputedStyle(menuOverlay).opacity);
-    console.log('[ActionMenu DEBUG]   menuOverlay position:', window.getComputedStyle(menuOverlay).position);
-    console.log('[ActionMenu DEBUG]   menuOverlay zIndex (computed):', window.getComputedStyle(menuOverlay).zIndex);
+
+    // Critical CSS check — verify deferred.css action-menu styles are loaded
+    const overlayCS = window.getComputedStyle(menuOverlay);
+    const rootCS = window.getComputedStyle(menuRoot);
+    const cssLoaded = overlayCS.position === 'fixed';
+    console.log('[ActionMenu DEBUG]   ⚠️ CSS LOADED CHECK: position is "' + overlayCS.position + '" (expected "fixed") → CSS ' + (cssLoaded ? '✅ LOADED' : '❌ NOT LOADED — styles missing from deferred.css!'));
+    console.log('[ActionMenu DEBUG]   menuOverlay display:', overlayCS.display, '(expect flex)');
+    console.log('[ActionMenu DEBUG]   menuOverlay visibility:', overlayCS.visibility);
+    console.log('[ActionMenu DEBUG]   menuOverlay opacity:', overlayCS.opacity);
+    console.log('[ActionMenu DEBUG]   menuOverlay position:', overlayCS.position, '(expect fixed)');
+    console.log('[ActionMenu DEBUG]   menuOverlay zIndex (computed):', overlayCS.zIndex);
+    console.log('[ActionMenu DEBUG]   menuOverlay backdrop-filter:', overlayCS.backdropFilter || overlayCS.webkitBackdropFilter || 'none');
+    console.log('[ActionMenu DEBUG]   menuRoot position:', rootCS.position, '(expect fixed)');
+    console.log('[ActionMenu DEBUG]   menuRoot left:', rootCS.left, 'top:', rootCS.top);
 
     // Event listeners
     menuOverlay.addEventListener('click', handleOverlayClick);
@@ -198,31 +217,55 @@ export function openActionMenu(recordId, { x, y, onAction } = {}) {
         // Check computed styles after visibility class is applied
         setTimeout(() => {
             if (menuOverlay) {
-                console.log('[ActionMenu DEBUG]   POST-VISIBLE computed styles:');
                 const cs = window.getComputedStyle(menuOverlay);
-                console.log('[ActionMenu DEBUG]     display:', cs.display);
-                console.log('[ActionMenu DEBUG]     visibility:', cs.visibility);
-                console.log('[ActionMenu DEBUG]     opacity:', cs.opacity);
+                const isFixedPosition = cs.position === 'fixed';
+                const isFullScreen = parseInt(cs.width) >= window.innerWidth * 0.9 && parseInt(cs.height) >= window.innerHeight * 0.9;
+                console.log('[ActionMenu DEBUG]   POST-VISIBLE STATUS:', isFixedPosition && isFullScreen ? '✅ MENU SHOULD BE VISIBLE' : '❌ MENU LIKELY NOT VISIBLE');
+                console.log('[ActionMenu DEBUG]     position:', cs.position, '(need fixed)');
+                console.log('[ActionMenu DEBUG]     display:', cs.display, '(need flex)');
+                console.log('[ActionMenu DEBUG]     opacity:', cs.opacity, '(need 1)');
                 console.log('[ActionMenu DEBUG]     pointerEvents:', cs.pointerEvents);
-                console.log('[ActionMenu DEBUG]     width:', cs.width, 'height:', cs.height);
+                console.log('[ActionMenu DEBUG]     dimensions:', cs.width, 'x', cs.height, '(need full viewport:', window.innerWidth, 'x', window.innerHeight + ')');
                 // Check the root's children
                 const root = menuOverlay.querySelector('.action-menu-root');
                 if (root) {
                     const rcs = window.getComputedStyle(root);
-                    console.log('[ActionMenu DEBUG]   menuRoot computed: display:', rcs.display, 'position:', rcs.position, 'left:', rcs.left, 'top:', rcs.top);
-                    console.log('[ActionMenu DEBUG]   menuRoot children count:', root.children.length);
-                    Array.from(root.children).forEach((child, i) => {
-                        console.log(`[ActionMenu DEBUG]     child[${i}]:`, child.className, '| display:', window.getComputedStyle(child).display);
-                    });
+                    console.log('[ActionMenu DEBUG]   menuRoot: position:', rcs.position, 'left:', rcs.left, 'top:', rcs.top);
+                    console.log('[ActionMenu DEBUG]   menuRoot children:', root.children.length);
+                    // Check center hub visibility
+                    const centerHub = root.querySelector('.action-menu-center');
+                    if (centerHub) {
+                        const hubCS = window.getComputedStyle(centerHub);
+                        const hubRect = centerHub.getBoundingClientRect();
+                        console.log('[ActionMenu DEBUG]   centerHub: position:', hubCS.position, 'display:', hubCS.display, 'rect:', JSON.stringify({x: Math.round(hubRect.x), y: Math.round(hubRect.y), w: Math.round(hubRect.width), h: Math.round(hubRect.height)}));
+                    }
+                    // Check emoji ring
+                    const emojiRing = root.querySelector('.action-menu-emoji-ring');
+                    if (emojiRing) {
+                        const emojiButtons = emojiRing.querySelectorAll('.action-menu-emoji-btn');
+                        const firstBtnCS = emojiButtons.length > 0 ? window.getComputedStyle(emojiButtons[0]) : null;
+                        console.log('[ActionMenu DEBUG]   emojiRing: buttons:', emojiButtons.length, '| first btn opacity:', firstBtnCS?.opacity, 'transform:', firstBtnCS?.transform);
+                    }
+                    // Check action ring
+                    const actionRing = root.querySelector('.action-menu-action-ring');
+                    if (actionRing) {
+                        const actionButtons = actionRing.querySelectorAll('.action-menu-action-btn');
+                        const firstBtnCS = actionButtons.length > 0 ? window.getComputedStyle(actionButtons[0]) : null;
+                        console.log('[ActionMenu DEBUG]   actionRing: buttons:', actionButtons.length, '| first btn opacity:', firstBtnCS?.opacity, 'transform:', firstBtnCS?.transform);
+                    }
                 }
-                // Check if overlay is being covered by another element
+                // Check overlay bounding rect
                 const overlayRect = menuOverlay.getBoundingClientRect();
                 console.log('[ActionMenu DEBUG]   overlay boundingRect:', JSON.stringify({
                     top: overlayRect.top, left: overlayRect.left,
                     width: overlayRect.width, height: overlayRect.height
                 }));
+                // Check if deferred.css has loaded
+                const sheets = Array.from(document.styleSheets);
+                const deferredLoaded = sheets.some(s => s.href && s.href.includes('deferred.css'));
+                console.log('[ActionMenu DEBUG]   deferred.css loaded:', deferredLoaded, '| total stylesheets:', sheets.length);
             }
-        }, 100);
+        }, 150);
     });
 
     console.log('[ActionMenu DEBUG]   ✅ openActionMenu COMPLETE, isOpen:', isOpen);
@@ -247,17 +290,23 @@ export function closeActionMenu() {
         previewScore = null;
     }
 
-    menuOverlay.classList.remove('action-menu-visible');
-    menuOverlay.classList.add('action-menu-closing');
+    // Capture the reference to the current overlay so the timeout removes
+    // the correct element even if openActionMenu() is called again immediately.
+    const overlayToRemove = menuOverlay;
+    overlayToRemove.classList.remove('action-menu-visible');
+    overlayToRemove.classList.add('action-menu-closing');
+
+    // Clear module-level references immediately so re-open works cleanly
+    menuOverlay = null;
+    isOpen = false;
+    currentRecordId = null;
+    onActionCallback = null;
 
     setTimeout(() => {
-        if (menuOverlay && menuOverlay.parentElement) {
-            menuOverlay.remove();
+        if (overlayToRemove && overlayToRemove.parentElement) {
+            overlayToRemove.remove();
+            console.log('[ActionMenu DEBUG]   Deferred removal: old overlay removed from DOM');
         }
-        menuOverlay = null;
-        isOpen = false;
-        currentRecordId = null;
-        onActionCallback = null;
     }, 200);
 
     document.removeEventListener('keydown', handleEscKey);
@@ -801,6 +850,33 @@ if (typeof window !== 'undefined') {
         });
         console.log('\nHigh z-index elements (>1000):', allHighZ.length);
         allHighZ.forEach(item => console.log(`  ${item.element}: z-index=${item.zIndex}`));
+
+        // Check if deferred.css is loaded and contains action-menu styles
+        const sheets = Array.from(document.styleSheets);
+        const deferredSheet = sheets.find(s => s.href && s.href.includes('deferred.css'));
+        console.log('\n--- CSS Loading Check ---');
+        console.log('Total stylesheets:', sheets.length);
+        console.log('deferred.css found:', deferredSheet ? 'YES (' + deferredSheet.href + ')' : 'NO');
+        if (deferredSheet) {
+            try {
+                const rules = Array.from(deferredSheet.cssRules || []);
+                const actionMenuRules = rules.filter(r => r.selectorText && r.selectorText.includes('action-menu'));
+                console.log('action-menu rules in deferred.css:', actionMenuRules.length);
+                if (actionMenuRules.length > 0) {
+                    console.log('  First action-menu rule:', actionMenuRules[0].selectorText);
+                }
+            } catch (e) {
+                console.log('Could not inspect deferred.css rules (CORS):', e.message);
+            }
+        }
+        // Quick CSS test: create a temp element with action-menu-overlay class and check position
+        const testEl = document.createElement('div');
+        testEl.className = 'action-menu-overlay';
+        testEl.style.display = 'none';
+        document.body.appendChild(testEl);
+        const testCS = window.getComputedStyle(testEl);
+        console.log('CSS probe (.action-menu-overlay): position:', testCS.position, '(expect fixed)');
+        testEl.remove();
 
         console.log('═══════════════════════════════════════════');
         return 'Diagnostic report complete. Check console output above.';
