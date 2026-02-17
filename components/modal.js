@@ -4279,7 +4279,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             badge.textContent = goodnessEmoji;
             badge.title = `Goodness: ${goodnessLabel} (click for actions)`;
             badge.addEventListener('click', (e) => {
+                console.log('[Modal DEBUG] modal-vitality-badge CLICKED for record:', record.id);
                 const rect = badge.getBoundingClientRect();
+                console.log('[Modal DEBUG]   badge rect:', JSON.stringify({ left: rect.left, top: rect.top, width: rect.width, height: rect.height }));
+                console.log('[Modal DEBUG]   → calling openActionMenu');
                 openActionMenu(record.id, {
                     x: rect.left + rect.width / 2,
                     y: rect.top + rect.height / 2

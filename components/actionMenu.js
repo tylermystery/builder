@@ -16,6 +16,8 @@ import { triggerSave } from '../events.js';
 import { showToast } from '../ui.js';
 import { log } from '../utils/debug.js';
 
+console.log('[ActionMenu DEBUG] ✅ actionMenu.js MODULE LOADED');
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 const INNER_RING_RADIUS = 110;       // distance from center to inner emoji ring
 const INNER_RING_RADIUS_MOBILE = 90;
@@ -61,6 +63,7 @@ const SCROLL_TIER_THRESHOLD = 80;
  * @param {function} handler - callback(actionId, recordId)
  */
 export function registerActionHandler(handler) {
+    console.log('[ActionMenu DEBUG] registerActionHandler() called, handler:', typeof handler, handler?.name || '(anonymous)');
     registeredActionHandler = handler;
 }
 
@@ -73,7 +76,19 @@ export function registerActionHandler(handler) {
  * @param {function} opts.onAction - callback(actionId, recordId) for collaborator actions
  */
 export function openActionMenu(recordId, { x, y, onAction } = {}) {
-    if (isOpen) closeActionMenu();
+    console.log('[ActionMenu DEBUG] ──────────────────────────────────────');
+    console.log('[ActionMenu DEBUG] openActionMenu() CALLED');
+    console.log('[ActionMenu DEBUG]   recordId:', recordId);
+    console.log('[ActionMenu DEBUG]   x:', x, 'y:', y);
+    console.log('[ActionMenu DEBUG]   onAction:', typeof onAction, onAction?.name || '(none)');
+    console.log('[ActionMenu DEBUG]   registeredActionHandler:', typeof registeredActionHandler, registeredActionHandler?.name || '(none)');
+    console.log('[ActionMenu DEBUG]   isOpen (before):', isOpen);
+    console.log('[ActionMenu DEBUG]   menuOverlay (before):', menuOverlay ? 'EXISTS' : 'null');
+
+    if (isOpen) {
+        console.log('[ActionMenu DEBUG]   Was already open, closing first...');
+        closeActionMenu();
+    }
 
     currentRecordId = recordId;
     onActionCallback = onAction || registeredActionHandler || null;
@@ -82,10 +97,18 @@ export function openActionMenu(recordId, { x, y, onAction } = {}) {
     previewScore = null;
     scrollAccumulator = 0;
 
+    console.log('[ActionMenu DEBUG]   onActionCallback resolved to:', typeof onActionCallback, onActionCallback?.name || '(none)');
+
     const record = getRecordById(recordId);
-    if (!record) return;
+    if (!record) {
+        console.error('[ActionMenu DEBUG]   ❌ getRecordById returned null/undefined for recordId:', recordId);
+        console.log('[ActionMenu DEBUG]   ABORTING openActionMenu - no record found');
+        return;
+    }
+    console.log('[ActionMenu DEBUG]   ✅ Record found:', record.fields?.Name || '(no name)');
 
     const isMobile = window.innerWidth < 768;
+    console.log('[ActionMenu DEBUG]   isMobile:', isMobile, '(window.innerWidth:', window.innerWidth + ')');
     const outerR = isMobile ? OUTER_RING_RADIUS_MOBILE : OUTER_RING_RADIUS;
     const margin = outerR + 60;
 
@@ -101,27 +124,35 @@ export function openActionMenu(recordId, { x, y, onAction } = {}) {
     menuOverlay = document.createElement('div');
     menuOverlay.className = 'action-menu-overlay';
     menuOverlay.id = 'action-menu-overlay';
+    console.log('[ActionMenu DEBUG]   Created menuOverlay element');
 
     let zIndex = 100000;
     try { zIndex = getModalZIndex('picker'); } catch (_) { /* default */ }
     menuOverlay.style.zIndex = zIndex;
+    console.log('[ActionMenu DEBUG]   z-index set to:', zIndex);
 
     const menuRoot = document.createElement('div');
     menuRoot.className = 'action-menu-root';
     menuRoot.style.left = `${cx}px`;
     menuRoot.style.top = `${cy}px`;
+    console.log('[ActionMenu DEBUG]   menuRoot positioned at cx:', cx, 'cy:', cy);
 
     // ── Center hub ──
-    menuRoot.appendChild(buildCenterHub(recordId));
+    const centerHub = buildCenterHub(recordId);
+    menuRoot.appendChild(centerHub);
+    console.log('[ActionMenu DEBUG]   ✅ Center hub built and appended');
 
     // ── Inner ring: emojis ──
     buildEmojiRing(menuRoot, recordId);
+    console.log('[ActionMenu DEBUG]   ✅ Emoji ring built');
 
     // ── Outer ring: collaborator actions ──
     buildActionRing(menuRoot, recordId);
+    console.log('[ActionMenu DEBUG]   ✅ Action ring built');
 
     // ── Vitality summary panel (below center) ──
     buildVitalitySummary(menuRoot, recordId);
+    console.log('[ActionMenu DEBUG]   ✅ Vitality summary built');
 
     // ── Tier label ──
     const tierLabel = document.createElement('div');
@@ -129,29 +160,73 @@ export function openActionMenu(recordId, { x, y, onAction } = {}) {
     tierLabel.id = 'action-menu-tier-label';
     tierLabel.textContent = EMOJI_TIERS[0].label;
     menuRoot.appendChild(tierLabel);
+    console.log('[ActionMenu DEBUG]   ✅ Tier label built, tier:', EMOJI_TIERS[0].label);
 
     menuOverlay.appendChild(menuRoot);
     document.body.appendChild(menuOverlay);
+    console.log('[ActionMenu DEBUG]   ✅ menuOverlay appended to document.body');
+    console.log('[ActionMenu DEBUG]   menuOverlay in DOM:', document.body.contains(menuOverlay));
+    console.log('[ActionMenu DEBUG]   menuOverlay display:', window.getComputedStyle(menuOverlay).display);
+    console.log('[ActionMenu DEBUG]   menuOverlay visibility:', window.getComputedStyle(menuOverlay).visibility);
+    console.log('[ActionMenu DEBUG]   menuOverlay opacity:', window.getComputedStyle(menuOverlay).opacity);
+    console.log('[ActionMenu DEBUG]   menuOverlay position:', window.getComputedStyle(menuOverlay).position);
+    console.log('[ActionMenu DEBUG]   menuOverlay zIndex (computed):', window.getComputedStyle(menuOverlay).zIndex);
 
     // Event listeners
     menuOverlay.addEventListener('click', handleOverlayClick);
     menuOverlay.addEventListener('wheel', handleWheel, { passive: false });
     document.addEventListener('keydown', handleEscKey);
+    console.log('[ActionMenu DEBUG]   ✅ Event listeners attached (click, wheel, keydown)');
 
     // Touch/mouse scroll on the emoji ring for tier advancement
     menuRoot.addEventListener('touchstart', handleTouchStart, { passive: true });
     menuRoot.addEventListener('touchmove', handleTouchMove, { passive: false });
     menuRoot.addEventListener('touchend', handleTouchEnd);
+    console.log('[ActionMenu DEBUG]   ✅ Touch listeners attached');
 
     // Listen for vitality recalculations to update preview in real time
     document.addEventListener('vitalityRecalculated', handleVitalityUpdate);
+    console.log('[ActionMenu DEBUG]   ✅ vitalityRecalculated listener attached');
 
     isOpen = true;
 
     // Animate in
     requestAnimationFrame(() => {
+        console.log('[ActionMenu DEBUG]   rAF: adding action-menu-visible class');
         menuOverlay.classList.add('action-menu-visible');
+        console.log('[ActionMenu DEBUG]   rAF: menuOverlay classes:', menuOverlay.className);
+        // Check computed styles after visibility class is applied
+        setTimeout(() => {
+            if (menuOverlay) {
+                console.log('[ActionMenu DEBUG]   POST-VISIBLE computed styles:');
+                const cs = window.getComputedStyle(menuOverlay);
+                console.log('[ActionMenu DEBUG]     display:', cs.display);
+                console.log('[ActionMenu DEBUG]     visibility:', cs.visibility);
+                console.log('[ActionMenu DEBUG]     opacity:', cs.opacity);
+                console.log('[ActionMenu DEBUG]     pointerEvents:', cs.pointerEvents);
+                console.log('[ActionMenu DEBUG]     width:', cs.width, 'height:', cs.height);
+                // Check the root's children
+                const root = menuOverlay.querySelector('.action-menu-root');
+                if (root) {
+                    const rcs = window.getComputedStyle(root);
+                    console.log('[ActionMenu DEBUG]   menuRoot computed: display:', rcs.display, 'position:', rcs.position, 'left:', rcs.left, 'top:', rcs.top);
+                    console.log('[ActionMenu DEBUG]   menuRoot children count:', root.children.length);
+                    Array.from(root.children).forEach((child, i) => {
+                        console.log(`[ActionMenu DEBUG]     child[${i}]:`, child.className, '| display:', window.getComputedStyle(child).display);
+                    });
+                }
+                // Check if overlay is being covered by another element
+                const overlayRect = menuOverlay.getBoundingClientRect();
+                console.log('[ActionMenu DEBUG]   overlay boundingRect:', JSON.stringify({
+                    top: overlayRect.top, left: overlayRect.left,
+                    width: overlayRect.width, height: overlayRect.height
+                }));
+            }
+        }, 100);
     });
+
+    console.log('[ActionMenu DEBUG]   ✅ openActionMenu COMPLETE, isOpen:', isOpen);
+    console.log('[ActionMenu DEBUG] ──────────────────────────────────────');
 
     log('ActionMenu', `Opened for item ${recordId} at (${Math.round(cx)}, ${Math.round(cy)})`);
 }
@@ -160,7 +235,11 @@ export function openActionMenu(recordId, { x, y, onAction } = {}) {
  * Close the action menu.
  */
 export function closeActionMenu() {
-    if (!menuOverlay) return;
+    console.log('[ActionMenu DEBUG] closeActionMenu() called, menuOverlay:', menuOverlay ? 'EXISTS' : 'null', 'isOpen:', isOpen);
+    if (!menuOverlay) {
+        console.log('[ActionMenu DEBUG]   No menuOverlay to close, returning early');
+        return;
+    }
 
     // If we had a preview emoji active, clear the preview state
     if (previewEmoji) {
@@ -198,6 +277,10 @@ export function isActionMenuOpen() {
 
 function buildCenterHub(recordId) {
     const scores = state.vitality?.itemScores?.get(recordId);
+    console.log('[ActionMenu DEBUG] buildCenterHub - recordId:', recordId, 'scores:', scores ? 'EXISTS' : 'null/undefined');
+    if (scores) {
+        console.log('[ActionMenu DEBUG]   scores.goodnessEmoji:', scores.goodnessEmoji, 'scores.netEmoji:', scores.netEmoji, 'scores.goodnessScore:', scores.goodnessScore, 'scores.net:', scores.net);
+    }
     const goodnessEmoji = scores?.goodnessEmoji || scores?.netEmoji || '⚖️';
     const goodnessLabel = scores?.goodnessLabel || scores?.netLabel || 'Neutral';
     const goodnessScore = scores?.goodnessScore ?? scores?.net ?? 0;
@@ -216,6 +299,7 @@ function buildCenterHub(recordId) {
 }
 
 function buildEmojiRing(container, recordId) {
+    console.log('[ActionMenu DEBUG] buildEmojiRing - tierIndex:', currentTierIndex, 'recordId:', recordId);
     const isMobile = window.innerWidth < 768;
     const radius = isMobile ? INNER_RING_RADIUS_MOBILE : INNER_RING_RADIUS;
     const itemSize = isMobile ? EMOJI_ITEM_SIZE_MOBILE : EMOJI_ITEM_SIZE;
@@ -340,7 +424,11 @@ function buildActionRing(container, recordId) {
 
 function buildVitalitySummary(container, recordId) {
     const scores = state.vitality?.itemScores?.get(recordId);
-    if (!scores) return;
+    console.log('[ActionMenu DEBUG] buildVitalitySummary - recordId:', recordId, 'scores:', scores ? 'EXISTS' : 'null/undefined');
+    if (!scores) {
+        console.log('[ActionMenu DEBUG]   No scores found, skipping vitality summary');
+        return;
+    }
 
     // Remove old
     const old = container.querySelector('.action-menu-vitality-summary');
@@ -388,9 +476,15 @@ function buildVitalitySummary(container, recordId) {
 // ─── Event Handlers ──────────────────────────────────────────────────────────
 
 function handleOverlayClick(e) {
+    console.log('[ActionMenu DEBUG] handleOverlayClick - target:', e.target.className, 'tagName:', e.target.tagName);
+    console.log('[ActionMenu DEBUG]   e.target === menuOverlay:', e.target === menuOverlay);
+    console.log('[ActionMenu DEBUG]   e.target has action-menu-overlay class:', e.target.classList.contains('action-menu-overlay'));
     // Close if clicking the backdrop (not a child element)
     if (e.target === menuOverlay || e.target.classList.contains('action-menu-overlay')) {
+        console.log('[ActionMenu DEBUG]   → Closing menu (backdrop click)');
         closeActionMenu();
+    } else {
+        console.log('[ActionMenu DEBUG]   → Click was on a child element, NOT closing');
     }
 }
 
@@ -567,11 +661,15 @@ function clearEmojiPreview(recordId) {
 // ─── Action Handling ─────────────────────────────────────────────────────────
 
 function handleActionSelect(recordId, actionId) {
+    console.log('[ActionMenu DEBUG] handleActionSelect - actionId:', actionId, 'recordId:', recordId);
+    console.log('[ActionMenu DEBUG]   onActionCallback:', typeof onActionCallback, onActionCallback?.name || '(none)');
     closeActionMenu();
 
     if (onActionCallback) {
+        console.log('[ActionMenu DEBUG]   → Invoking onActionCallback');
         onActionCallback(actionId, recordId);
     } else {
+        console.warn('[ActionMenu DEBUG]   ⚠️ Action selected but NO callback registered');
         log('ActionMenu', `Action "${actionId}" selected but no callback registered`);
     }
 }
@@ -633,4 +731,79 @@ function updateVitalitySummary(recordId) {
     const root = menuOverlay.querySelector('.action-menu-root');
     if (!root) return;
     buildVitalitySummary(root, recordId);
+}
+
+// ─── Global Debug Helper ─────────────────────────────────────────────────────
+// Call window.debugActionMenu() from browser console for instant diagnostics
+if (typeof window !== 'undefined') {
+    window.debugActionMenu = function() {
+        console.log('═══════════════════════════════════════════');
+        console.log('  ACTION MENU DIAGNOSTIC REPORT');
+        console.log('═══════════════════════════════════════════');
+        console.log('Module loaded: YES');
+        console.log('isOpen:', isOpen);
+        console.log('menuOverlay:', menuOverlay ? 'EXISTS in memory' : 'null');
+        console.log('currentRecordId:', currentRecordId);
+        console.log('onActionCallback:', typeof onActionCallback, onActionCallback?.name || '(none)');
+        console.log('registeredActionHandler:', typeof registeredActionHandler, registeredActionHandler?.name || '(none)');
+        console.log('currentTierIndex:', currentTierIndex);
+
+        // Check if overlay is in the DOM
+        const overlayInDOM = document.getElementById('action-menu-overlay');
+        console.log('Overlay in DOM (#action-menu-overlay):', overlayInDOM ? 'FOUND' : 'NOT FOUND');
+        if (overlayInDOM) {
+            const cs = window.getComputedStyle(overlayInDOM);
+            console.log('  display:', cs.display);
+            console.log('  visibility:', cs.visibility);
+            console.log('  opacity:', cs.opacity);
+            console.log('  pointerEvents:', cs.pointerEvents);
+            console.log('  zIndex:', cs.zIndex);
+            console.log('  classes:', overlayInDOM.className);
+            console.log('  childNodes:', overlayInDOM.childNodes.length);
+            const root = overlayInDOM.querySelector('.action-menu-root');
+            if (root) {
+                console.log('  menuRoot found, children:', root.children.length);
+                Array.from(root.children).forEach((child, i) => {
+                    console.log(`    child[${i}]:`, child.className);
+                });
+            }
+        }
+
+        // Check vitality badge elements in the DOM
+        const vitalityBadges = document.querySelectorAll('.compact-card-vitality, .valuation-vitality-emoji, .vitality-score-badge, .modal-vitality-badge');
+        console.log('\nVitality badge elements in DOM:', vitalityBadges.length);
+        vitalityBadges.forEach((el, i) => {
+            console.log(`  badge[${i}]:`, el.className, '| text:', el.textContent, '| _goodnessClickBound:', el._goodnessClickBound || false);
+        });
+
+        // Check state
+        console.log('\nstate.vitality:', state.vitality ? 'EXISTS' : 'null/undefined');
+        console.log('state.vitality?.itemScores:', state.vitality?.itemScores ? `Map(${state.vitality.itemScores.size})` : 'null/undefined');
+        if (state.vitality?.itemScores?.size > 0) {
+            const firstKey = state.vitality.itemScores.keys().next().value;
+            console.log('  First item score key:', firstKey);
+            const firstVal = state.vitality.itemScores.get(firstKey);
+            console.log('  First item score:', JSON.stringify({
+                net: firstVal?.net,
+                netEmoji: firstVal?.netEmoji,
+                goodnessEmoji: firstVal?.goodnessEmoji,
+                goodnessScore: firstVal?.goodnessScore
+            }));
+        }
+
+        // Check for z-index conflicts
+        const allHighZ = [];
+        document.querySelectorAll('[style*="z-index"], [style*="zIndex"]').forEach(el => {
+            const z = parseInt(window.getComputedStyle(el).zIndex);
+            if (z > 1000) {
+                allHighZ.push({ element: el.tagName + '#' + el.id + '.' + el.className.substring(0, 30), zIndex: z });
+            }
+        });
+        console.log('\nHigh z-index elements (>1000):', allHighZ.length);
+        allHighZ.forEach(item => console.log(`  ${item.element}: z-index=${item.zIndex}`));
+
+        console.log('═══════════════════════════════════════════');
+        return 'Diagnostic report complete. Check console output above.';
+    };
+    console.log('[ActionMenu DEBUG] ✅ window.debugActionMenu() helper registered - call from browser console for diagnostics');
 }

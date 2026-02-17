@@ -10,6 +10,8 @@ import { getRecordPrice } from '../utils.js';
 import { getModalZIndex, REACTION_SCORES } from '../config.js';
 import { openActionMenu } from '../components/actionMenu.js';
 
+console.log('[VitalityUI DEBUG] ✅ vitalityUI.js MODULE LOADED, openActionMenu imported:', typeof openActionMenu);
+
 // Track previous Net Emoji for morph transition
 let previousPlanEmoji = '⚖️';
 let morphContainerEl = null;
@@ -220,8 +222,13 @@ function applyCardPulses(itemScores, synergies, dominantRealm) {
  * Uses the click coordinates to position the menu near the badge.
  */
 function openActionMenuFromBadge(e, recordId) {
+    console.log('[VitalityUI DEBUG] openActionMenuFromBadge() CALLED');
+    console.log('[VitalityUI DEBUG]   recordId:', recordId);
+    console.log('[VitalityUI DEBUG]   event type:', e.type, 'target:', e.target?.className, 'currentTarget:', e.currentTarget?.className);
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
+    console.log('[VitalityUI DEBUG]   badge rect:', JSON.stringify({ left: rect.left, top: rect.top, width: rect.width, height: rect.height }));
+    console.log('[VitalityUI DEBUG]   → calling openActionMenu at x:', rect.left + rect.width / 2, 'y:', rect.top + rect.height / 2);
     openActionMenu(recordId, {
         x: rect.left + rect.width / 2,
         y: rect.top + rect.height / 2
@@ -238,16 +245,21 @@ function openActionMenuFromBadge(e, recordId) {
 function updateCardVitalityBadge(card, scores) {
     const emoji = scores.goodnessEmoji || scores.netEmoji || '⚖️';
     const recordId = card.dataset.recordId || card.dataset.id;
+    console.log('[VitalityUI DEBUG] updateCardVitalityBadge() - recordId:', recordId, 'emoji:', emoji, 'cardClass:', card.className.substring(0, 60));
 
     // --- Interactive cards (card.js): update the .valuation-vitality-emoji inside .valuation-meta ---
     const valuationEmoji = card.querySelector('.valuation-vitality-emoji');
     if (valuationEmoji) {
+        console.log('[VitalityUI DEBUG]   Found .valuation-vitality-emoji, updating + binding click');
         valuationEmoji.textContent = emoji;
         valuationEmoji.style.cursor = 'pointer';
         valuationEmoji.title = `Goodness: ${scores.goodnessLabel || scores.netLabel || 'Neutral'} (click for actions)`;
         if (!valuationEmoji._goodnessClickBound) {
             valuationEmoji.addEventListener('click', (e) => openActionMenuFromBadge(e, recordId));
             valuationEmoji._goodnessClickBound = true;
+            console.log('[VitalityUI DEBUG]   ✅ Click handler BOUND to .valuation-vitality-emoji for', recordId);
+        } else {
+            console.log('[VitalityUI DEBUG]   Click handler already bound to .valuation-vitality-emoji');
         }
         return;
     }
@@ -255,12 +267,16 @@ function updateCardVitalityBadge(card, scores) {
     // --- Compact cards (presentation.js): update .compact-card-vitality inside .compact-card-valuation ---
     const compactVitality = card.querySelector('.compact-card-vitality');
     if (compactVitality) {
+        console.log('[VitalityUI DEBUG]   Found .compact-card-vitality, updating + binding click');
         compactVitality.textContent = emoji;
         compactVitality.style.cursor = 'pointer';
         compactVitality.title = `Goodness: ${scores.goodnessLabel || scores.netLabel || 'Neutral'} (click for actions)`;
         if (!compactVitality._goodnessClickBound) {
             compactVitality.addEventListener('click', (e) => openActionMenuFromBadge(e, recordId));
             compactVitality._goodnessClickBound = true;
+            console.log('[VitalityUI DEBUG]   ✅ Click handler BOUND to .compact-card-vitality for', recordId);
+        } else {
+            console.log('[VitalityUI DEBUG]   Click handler already bound to .compact-card-vitality');
         }
         return;
     }
@@ -268,6 +284,7 @@ function updateCardVitalityBadge(card, scores) {
     // --- Fallback: inject into .valuation-meta or .price-wrapper if the spans weren't pre-rendered ---
     const valuationMeta = card.querySelector('.valuation-meta');
     if (valuationMeta && !valuationMeta.querySelector('.valuation-vitality-emoji')) {
+        console.log('[VitalityUI DEBUG]   Fallback: injecting .valuation-vitality-emoji into .valuation-meta for', recordId);
         const span = document.createElement('span');
         span.className = 'valuation-vitality-emoji';
         span.title = `Goodness: ${scores.goodnessLabel || 'Neutral'} (click for actions)`;
@@ -282,6 +299,7 @@ function updateCardVitalityBadge(card, scores) {
     // --- Compact card fallback: inject into .compact-card-valuation ---
     const compactValuation = card.querySelector('.compact-card-valuation');
     if (compactValuation && !compactValuation.querySelector('.compact-card-vitality')) {
+        console.log('[VitalityUI DEBUG]   Fallback: injecting .compact-card-vitality into .compact-card-valuation for', recordId);
         const span = document.createElement('span');
         span.className = 'compact-card-vitality';
         span.title = `Goodness: ${scores.goodnessLabel || 'Neutral'} (click for actions)`;
@@ -295,7 +313,9 @@ function updateCardVitalityBadge(card, scores) {
 
     // --- Last resort: original photo-area badge for cards without price containers ---
     let badge = card.querySelector('.vitality-score-badge');
+    console.log('[VitalityUI DEBUG]   Last resort path - existing .vitality-score-badge:', badge ? 'FOUND' : 'NOT FOUND');
     if (!badge) {
+        console.log('[VitalityUI DEBUG]   Creating new .vitality-score-badge for', recordId);
         badge = document.createElement('div');
         badge.className = 'vitality-score-badge';
         badge.style.cursor = 'pointer';

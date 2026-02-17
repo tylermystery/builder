@@ -3671,7 +3671,9 @@ async function renderAllItems() {
 
     // Register the unified action menu handler so badge clicks and the action menu
     // can trigger the same actions as the drag buckets
+    console.log('[Presentation DEBUG] About to call registerActionHandler with handleActionMenuAction');
     registerActionHandler(handleActionMenuAction);
+    console.log('[Presentation DEBUG] ✅ registerActionHandler() completed');
 
     // Update plan summary dashboard with latest metrics
     updatePlanSummaryDashboard();
@@ -3695,7 +3697,11 @@ function initializeCompactCardClicks() {
     itemCards.forEach(card => {
         card.addEventListener('click', (e) => {
             // Don't trigger on status badge, emoji indicator, vitality badge, or split button clicks
-            if (e.target.closest('.compact-card-status') || e.target.closest('.compact-card-emoji') || e.target.closest('.compact-card-split-btn') || e.target.closest('.compact-card-vitality') || e.target.closest('.valuation-vitality-emoji') || e.target.closest('.vitality-score-badge')) return;
+            const isExcluded = e.target.closest('.compact-card-status') || e.target.closest('.compact-card-emoji') || e.target.closest('.compact-card-split-btn') || e.target.closest('.compact-card-vitality') || e.target.closest('.valuation-vitality-emoji') || e.target.closest('.vitality-score-badge');
+            if (isExcluded) {
+                console.log('[Presentation DEBUG] Compact card click EXCLUDED (vitality/status/emoji element):', e.target.className);
+                return;
+            }
             const recordId = card.dataset.recordId;
             const record = getRecordById(recordId);
             if (record) {
@@ -4848,6 +4854,7 @@ function handleItemPointerMove(event, itemElement) {
             }
 
             if (swipedRecordId) {
+                console.log('[Presentation DEBUG] Swipe → opening Action Menu for recordId:', swipedRecordId, 'at:', initialTouchPoint.x, initialTouchPoint.y);
                 openActionMenu(swipedRecordId, {
                     x: initialTouchPoint.x,
                     y: initialTouchPoint.y,
