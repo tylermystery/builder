@@ -585,12 +585,7 @@ export function showGoodnessReport(recordId) {
     let zIndex = 100000;
     try { zIndex = getModalZIndex('picker'); } catch(e) { /* use default */ }
 
-    overlay.style.cssText = `
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.5); z-index: ${zIndex};
-        display: flex; justify-content: center; align-items: center;
-        padding: 20px; box-sizing: border-box;
-    `;
+    overlay.style.zIndex = zIndex;
     overlay.innerHTML = popupHTML;
     document.body.appendChild(overlay);
 
