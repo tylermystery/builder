@@ -1772,15 +1772,15 @@ function createSentimentPopupHTML() {
                 : cartInfo?.selectedOptionIndex;
             const price = cartInfo ? (cartInfo.overridePrice ?? getRecordPrice(record, priceParam)) : getRecordPrice(record);
             const vitalityScores = state.vitality?.itemScores?.get(item.recordId);
-            const netVitality = vitalityScores?.net ?? 0;
-            const netEmoji = vitalityScores?.netEmoji || '⚖️';
+            const goodnessScore = vitalityScores?.goodnessScore ?? vitalityScores?.net ?? 0;
+            const goodnessEmoji = vitalityScores?.goodnessEmoji || vitalityScores?.netEmoji || '⚖️';
 
             // Calculate Goodness per Dollar ratio
-            // Free items with positive vitality get a special high ranking
+            // Free items with positive goodness get a special high ranking
             let goodnessPerDollar = 0;
-            if (!isNaN(price) && price > 0 && netVitality !== 0) {
-                goodnessPerDollar = netVitality / price;
-            } else if ((!price || price === 0) && netVitality > 0) {
+            if (!isNaN(price) && price > 0 && goodnessScore !== 0) {
+                goodnessPerDollar = goodnessScore / price;
+            } else if ((!price || price === 0) && goodnessScore > 0) {
                 goodnessPerDollar = Infinity; // Free + good = best value
             }
 
@@ -1788,8 +1788,8 @@ function createSentimentPopupHTML() {
                 recordId: item.recordId,
                 name,
                 price: !isNaN(price) ? price : 0,
-                netVitality,
-                netEmoji,
+                netVitality: goodnessScore,
+                netEmoji: goodnessEmoji,
                 goodnessPerDollar
             };
         }).filter(item => item && (item.netVitality !== 0 || item.price > 0));
@@ -3235,10 +3235,11 @@ async function renderCompactCard(item) {
         }
     }
 
-    // --- Vitality emoji for compact card ---
+    // --- Vitality/Goodness emoji for compact card ---
     const compactVitalityScores = state.vitality?.itemScores?.get(recordId);
-    const compactVitalityEmoji = compactVitalityScores?.netEmoji || '';
-    const compactVitalityHTML = compactVitalityEmoji ? `<span class="compact-card-vitality" title="Vitality">${compactVitalityEmoji}</span>` : '';
+    const compactVitalityEmoji = compactVitalityScores?.goodnessEmoji || compactVitalityScores?.netEmoji || '';
+    const compactGoodnessLabel = compactVitalityScores?.goodnessLabel || compactVitalityScores?.netLabel || 'Neutral';
+    const compactVitalityHTML = compactVitalityEmoji ? `<span class="compact-card-vitality" title="Goodness: ${compactGoodnessLabel} (click for details)">${compactVitalityEmoji}</span>` : '';
 
     return `
         <div class="compact-card ${lifecycleClass} ${confidenceClass} ${noPhotoClass}" data-record-id="${recordId}" data-item-type="${type}" data-item-status="${itemStatus}" role="article" tabindex="0" aria-label="${escapeHtml(name)}${showStatus ? ', ' + taskConfig.label : ''}">
@@ -6138,6 +6139,9 @@ async function addReactionToItem(recordId, emoji) {
 
     // Save session
     triggerSave();
+
+    // Recalculate vitality (sentiment changed, so goodness scores need updating)
+    requestVitalityRecalc();
 
     log('Presentation', `Reaction ${emoji} added to item ${recordId}`);
 }
@@ -10129,10 +10133,10 @@ function updatePlanSummaryDashboard() {
         }
     }
 
-    // --- Plan Health (Vitality) ---
+    // --- Plan Health (Vitality + Sentiment Goodness) ---
     const healthMetric = document.querySelector('#plan-metric-health .plan-metric-value');
     if (healthMetric) {
-        const planEmoji = state.vitality?.planNetEmoji || '⚖️';
+        const planEmoji = state.vitality?.planGoodnessEmoji || state.vitality?.planNetEmoji || '⚖️';
         healthMetric.textContent = planEmoji;
     }
 

@@ -13,6 +13,8 @@ import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { triggerSave } from '../events.js';
 import { showForumPanel } from './forumPanel.js';
 import { openUCPForItem } from './unifiedChatPanel.js';
+import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
+import { showGoodnessReport, updateModalVitalityBadge } from '../vitality/vitalityUI.js';
 
 console.log('[MODULE DEBUG] modal.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -1683,6 +1685,9 @@ function handleModalReactionSelect(recordId, emoji) {
 
     // Trigger save to persist
     triggerSave();
+
+    // Recalculate vitality (sentiment changed, so goodness scores need updating)
+    requestVitalityRecalc();
 
     log('Modal', `Reaction ${emoji} set for item ${recordId} by ${currentUser.id}`);
 }
@@ -4255,6 +4260,27 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             priceText += ' (Est.)';
         }
         modalItemPrice.innerHTML = priceText + pricingTypeHTML;
+    }
+
+    // Inject vitality/goodness badge next to the price
+    if (modalItemPrice) {
+        // Remove any previous badge
+        const existingBadge = document.getElementById('modal-vitality-badge');
+        if (existingBadge) existingBadge.remove();
+
+        const vitalityScores = state.vitality?.itemScores?.get(record.id);
+        const goodnessEmoji = vitalityScores?.goodnessEmoji || vitalityScores?.netEmoji || '';
+        const goodnessLabel = vitalityScores?.goodnessLabel || vitalityScores?.netLabel || 'Neutral';
+        if (goodnessEmoji) {
+            const badge = document.createElement('span');
+            badge.id = 'modal-vitality-badge';
+            badge.className = 'modal-vitality-badge';
+            badge.textContent = goodnessEmoji;
+            badge.title = `Goodness: ${goodnessLabel} (click for details)`;
+            badge.addEventListener('click', () => showGoodnessReport(record.id));
+            // Insert badge right after the price element
+            modalItemPrice.parentNode.insertBefore(badge, modalItemPrice.nextSibling);
+        }
     }
 
     let currentPhotoIndex = startPhotoIndex;

@@ -14178,6 +14178,285 @@ hr.total-divider {
     padding-right: 12px;
 }
 
+/* --- Modal Vitality Badge (next to price in detail modal) --- */
+.modal-vitality-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4em;
+    line-height: 1;
+    margin-left: 8px;
+    cursor: pointer;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+    transition: transform 0.3s ease;
+    vertical-align: middle;
+}
+.modal-vitality-badge:hover {
+    transform: scale(1.25);
+}
+
+/* --- Goodness Report Popup --- */
+.goodness-report-overlay {
+    animation: goodnessOverlayIn 0.2s ease-out;
+}
+@keyframes goodnessOverlayIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.goodness-report-modal {
+    background: white;
+    border-radius: 16px;
+    max-width: 480px;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: goodnessModalIn 0.3s ease-out;
+}
+@keyframes goodnessModalIn {
+    from { transform: translateY(20px) scale(0.95); opacity: 0; }
+    to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.goodness-report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 20px 24px 12px;
+    border-bottom: 1px solid #eee;
+}
+.goodness-report-title {
+    margin: 0;
+    font-size: 1.2em;
+    font-weight: 700;
+    background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.goodness-report-item-name {
+    font-size: 0.85em;
+    color: #666;
+    margin-top: 2px;
+}
+.goodness-report-close {
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    cursor: pointer;
+    color: #999;
+    padding: 0 4px;
+    line-height: 1;
+}
+.goodness-report-close:hover {
+    color: #333;
+}
+
+.goodness-report-body {
+    padding: 16px 24px 24px;
+}
+
+/* Hero score */
+.goodness-score-hero {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    background: linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%);
+    border-radius: 12px;
+    margin-bottom: 16px;
+}
+.goodness-hero-emoji {
+    font-size: 2.5em;
+    line-height: 1;
+}
+.goodness-hero-details {
+    display: flex;
+    flex-direction: column;
+}
+.goodness-hero-label {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #1e293b;
+}
+.goodness-hero-score {
+    font-size: 0.85em;
+    color: #64748b;
+    font-family: monospace;
+}
+
+/* Formula breakdown */
+.goodness-formula {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: #f8fafc;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+}
+.goodness-formula-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.goodness-formula-component {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    min-width: 80px;
+}
+.goodness-formula-component.vitality-component {
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+.goodness-formula-component.sentiment-component {
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+}
+.formula-pct {
+    font-size: 0.65em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #94a3b8;
+    font-weight: 600;
+}
+.formula-label {
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #475569;
+}
+.formula-emoji {
+    font-size: 1.2em;
+}
+.formula-value {
+    font-family: monospace;
+    font-size: 0.8em;
+    color: #334155;
+}
+.formula-count {
+    font-size: 0.65em;
+    color: #94a3b8;
+}
+.goodness-formula-plus,
+.goodness-formula-equals {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #94a3b8;
+}
+.goodness-formula-result {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 12px;
+    background: rgba(16, 185, 129, 0.12);
+    border-radius: 8px;
+    border: 2px solid rgba(16, 185, 129, 0.3);
+}
+
+/* Sections */
+.goodness-section {
+    margin-bottom: 14px;
+}
+.goodness-section-title {
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #94a3b8;
+    margin-bottom: 8px;
+}
+
+/* Realm bars */
+.goodness-realm-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.goodness-realm-label {
+    font-size: 0.8em;
+    min-width: 100px;
+    color: #475569;
+}
+.goodness-realm-bar-track {
+    flex: 1;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.goodness-realm-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+.goodness-realm-bar-fill.positive { background: #10b981; }
+.goodness-realm-bar-fill.negative { background: #ef4444; }
+.goodness-realm-value {
+    font-family: monospace;
+    font-size: 0.75em;
+    min-width: 42px;
+    text-align: right;
+}
+
+/* Community reactions */
+.goodness-reactions-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.goodness-reaction-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 8px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+}
+.goodness-reaction-pill.positive { background: #f0fdf4; border-color: #bbf7d0; }
+.goodness-reaction-pill.negative { background: #fef2f2; border-color: #fecaca; }
+.goodness-reaction-pill small {
+    font-family: monospace;
+    font-size: 0.8em;
+    color: #64748b;
+}
+.goodness-no-reactions {
+    font-size: 0.85em;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* Value section */
+.goodness-value-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.9em;
+    color: #475569;
+}
+.goodness-value-ratio {
+    font-weight: 600;
+    color: #10b981;
+    margin-left: auto;
+}
+
+/* Rank */
+.goodness-rank {
+    text-align: center;
+    font-size: 0.8em;
+    color: #94a3b8;
+    padding-top: 10px;
+    border-top: 1px solid #f1f5f9;
+}
+
 /* ============================================
    END UNIVERSAL VITALITY STYLES
    ============================================ */
