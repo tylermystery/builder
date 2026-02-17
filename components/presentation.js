@@ -1758,6 +1758,87 @@ function createSentimentPopupHTML() {
         }).join('');
     }
 
+    // --- Value vs. Vitality: "Bang for the Goodness" ranking ---
+    let valueVitalityHTML = '';
+    {
+        // Build ranking of items by Goodness per Dollar (vitality net / price)
+        const vitalityItems = combinedList.map(item => {
+            const record = getRecordById(item.recordId);
+            if (!record) return null;
+            const name = record.fields.Name || 'Unknown Item';
+            const cartInfo = state.cart.lockedItems.get(item.recordId) || state.cart.items.get(item.recordId);
+            const priceParam = (cartInfo?.selections && Object.keys(cartInfo.selections).length > 0)
+                ? cartInfo.selections
+                : cartInfo?.selectedOptionIndex;
+            const price = cartInfo ? (cartInfo.overridePrice ?? getRecordPrice(record, priceParam)) : getRecordPrice(record);
+            const vitalityScores = state.vitality?.itemScores?.get(item.recordId);
+            const netVitality = vitalityScores?.net ?? 0;
+            const netEmoji = vitalityScores?.netEmoji || '⚖️';
+
+            // Calculate Goodness per Dollar ratio
+            // Free items with positive vitality get a special high ranking
+            let goodnessPerDollar = 0;
+            if (!isNaN(price) && price > 0 && netVitality !== 0) {
+                goodnessPerDollar = netVitality / price;
+            } else if ((!price || price === 0) && netVitality > 0) {
+                goodnessPerDollar = Infinity; // Free + good = best value
+            }
+
+            return {
+                recordId: item.recordId,
+                name,
+                price: !isNaN(price) ? price : 0,
+                netVitality,
+                netEmoji,
+                goodnessPerDollar
+            };
+        }).filter(item => item && (item.netVitality !== 0 || item.price > 0));
+
+        if (vitalityItems.length > 0) {
+            // Sort by Goodness per Dollar descending (best value first)
+            const sorted = [...vitalityItems].sort((a, b) => {
+                if (a.goodnessPerDollar === Infinity && b.goodnessPerDollar === Infinity) return b.netVitality - a.netVitality;
+                if (a.goodnessPerDollar === Infinity) return -1;
+                if (b.goodnessPerDollar === Infinity) return 1;
+                return b.goodnessPerDollar - a.goodnessPerDollar;
+            });
+
+            valueVitalityHTML = sorted.map((item, index) => {
+                const rank = index + 1;
+                let medalHTML = '';
+                if (rank === 1) medalHTML = '<span class="rank-medal">🏆</span>';
+                else if (rank === 2) medalHTML = '<span class="rank-medal">🥈</span>';
+                else if (rank === 3) medalHTML = '<span class="rank-medal">🥉</span>';
+
+                const priceText = item.price === 0 ? 'Free' : `$${item.price % 1 === 0 ? item.price.toFixed(0) : item.price.toFixed(2)}`;
+                const ratioText = item.goodnessPerDollar === Infinity
+                    ? 'Free + Good'
+                    : item.goodnessPerDollar > 0
+                        ? `${(item.goodnessPerDollar * 100).toFixed(1)}¢/pt`
+                        : item.netVitality < 0 ? 'Drain' : '--';
+
+                const valueClass = item.netVitality > 0 ? 'positive' : item.netVitality < 0 ? 'negative' : 'neutral';
+
+                return `
+                    <div class="sentiment-ranking-item value-vitality-item ${valueClass}" data-record-id="${item.recordId}">
+                        <div class="ranking-position">
+                            ${medalHTML}
+                            <span class="ranking-number">#${rank}</span>
+                        </div>
+                        <div class="ranking-info">
+                            <div class="ranking-name">${item.name}</div>
+                            <div class="ranking-reactions"><span class="vv-price">${priceText}</span> <span class="vv-emoji">${item.netEmoji}</span></div>
+                        </div>
+                        <div class="ranking-score">
+                            <span class="score-value ${valueClass}">${ratioText}</span>
+                            <span class="score-label">value</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
     // Empty state
     if (totalReactions === 0) {
         return `
@@ -1875,6 +1956,17 @@ function createSentimentPopupHTML() {
                         ${rankingHTML}
                     </div>
                 </div>
+
+                <!-- Value vs. Vitality: Bang for the Goodness -->
+                ${valueVitalityHTML ? `
+                <div class="sentiment-ranking-section value-vitality-section">
+                    <h3 class="section-title">Value vs. Vitality</h3>
+                    <p class="section-hint">Items ranked by "Goodness per Dollar" — high-impact, low-cost virtuous choices</p>
+                    <div class="sentiment-ranking-list value-vitality-list">
+                        ${valueVitalityHTML}
+                    </div>
+                </div>
+                ` : ''}
 
                 <!-- Analysis Info -->
                 <div class="sentiment-info">
@@ -2141,6 +2233,27 @@ function showSentimentPopup() {
                 });
             }
             console.log('[SentimentPopup DEBUG] Ranking section styles applied');
+        }
+
+        // Value vs. Vitality section
+        const vvSection = modalElement.querySelector('.value-vitality-section');
+        if (vvSection) {
+            vvSection.style.cssText = 'margin-bottom: 24px;';
+            const vvList = vvSection.querySelector('.value-vitality-list');
+            if (vvList) {
+                vvList.style.cssText = 'max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;';
+                vvList.querySelectorAll('.value-vitality-item').forEach(item => {
+                    let borderColor = '#667eea';
+                    if (item.classList.contains('positive')) borderColor = '#28a745';
+                    else if (item.classList.contains('negative')) borderColor = '#dc3545';
+                    item.style.cssText = `display: flex; align-items: center; gap: 12px; padding: 12px; background: white; border-radius: 10px; border: 1px solid #eee; border-left: 3px solid ${borderColor}; cursor: pointer; transition: all 0.2s ease;`;
+                    const vvPrice = item.querySelector('.vv-price');
+                    if (vvPrice) vvPrice.style.cssText = 'font-size: 0.85em; color: #666; font-weight: 500;';
+                    const vvEmoji = item.querySelector('.vv-emoji');
+                    if (vvEmoji) vvEmoji.style.cssText = 'font-size: 1.1em;';
+                });
+            }
+            console.log('[SentimentPopup DEBUG] Value vs. Vitality section styles applied');
         }
 
         // Info section
@@ -3122,13 +3235,18 @@ async function renderCompactCard(item) {
         }
     }
 
+    // --- Vitality emoji for compact card ---
+    const compactVitalityScores = state.vitality?.itemScores?.get(recordId);
+    const compactVitalityEmoji = compactVitalityScores?.netEmoji || '';
+    const compactVitalityHTML = compactVitalityEmoji ? `<span class="compact-card-vitality" title="Vitality">${compactVitalityEmoji}</span>` : '';
+
     return `
         <div class="compact-card ${lifecycleClass} ${confidenceClass} ${noPhotoClass}" data-record-id="${recordId}" data-item-type="${type}" data-item-status="${itemStatus}" role="article" tabindex="0" aria-label="${escapeHtml(name)}${showStatus ? ', ' + taskConfig.label : ''}">
             <div class="compact-card-photo" style="${photoStyle}">
                 ${statusOverlayHTML}
                 ${emojiOverlayHTML}
                 ${lifecycleBadgeHTML}
-                ${priceBadgeHTML}
+                <span class="compact-card-valuation">${priceBadgeHTML}${compactVitalityHTML}</span>
             </div>
             <div class="compact-card-body">
                 <div class="compact-card-title-row">
@@ -10009,6 +10127,13 @@ function updatePlanSummaryDashboard() {
         } else {
             statusMetric.textContent = 'Planning';
         }
+    }
+
+    // --- Plan Health (Vitality) ---
+    const healthMetric = document.querySelector('#plan-metric-health .plan-metric-value');
+    if (healthMetric) {
+        const planEmoji = state.vitality?.planNetEmoji || '⚖️';
+        healthMetric.textContent = planEmoji;
     }
 
     // Hide dashboard if no items and no team (very early state)

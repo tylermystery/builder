@@ -206,8 +206,49 @@ function applyCardPulses(itemScores, synergies, dominantRealm) {
 
 /**
  * Add or update a small vitality badge on a card showing the item's net emoji.
+ * Targets the price/valuation container so the emoji sits adjacent to the price.
+ * Falls back to photo area for cards without a price container.
  */
 function updateCardVitalityBadge(card, scores) {
+    const emoji = scores.netEmoji || '⚖️';
+
+    // --- Interactive cards (card.js): update the .valuation-vitality-emoji inside .valuation-meta ---
+    const valuationEmoji = card.querySelector('.valuation-vitality-emoji');
+    if (valuationEmoji) {
+        valuationEmoji.textContent = emoji;
+        return; // done – the container was already rendered by card.js
+    }
+
+    // --- Compact cards (presentation.js): update .compact-card-vitality inside .compact-card-valuation ---
+    const compactVitality = card.querySelector('.compact-card-vitality');
+    if (compactVitality) {
+        compactVitality.textContent = emoji;
+        return;
+    }
+
+    // --- Fallback: inject into .valuation-meta or .price-wrapper if the spans weren't pre-rendered ---
+    const valuationMeta = card.querySelector('.valuation-meta');
+    if (valuationMeta && !valuationMeta.querySelector('.valuation-vitality-emoji')) {
+        const span = document.createElement('span');
+        span.className = 'valuation-vitality-emoji';
+        span.title = 'Vitality';
+        span.textContent = emoji;
+        valuationMeta.appendChild(span);
+        return;
+    }
+
+    // --- Compact card fallback: inject into .compact-card-valuation ---
+    const compactValuation = card.querySelector('.compact-card-valuation');
+    if (compactValuation && !compactValuation.querySelector('.compact-card-vitality')) {
+        const span = document.createElement('span');
+        span.className = 'compact-card-vitality';
+        span.title = 'Vitality';
+        span.textContent = emoji;
+        compactValuation.appendChild(span);
+        return;
+    }
+
+    // --- Last resort: original photo-area badge for cards without price containers ---
     let badge = card.querySelector('.vitality-score-badge');
     if (!badge) {
         badge = document.createElement('div');
@@ -217,22 +258,19 @@ function updateCardVitalityBadge(card, scores) {
         emojiSpan.className = 'vitality-emoji';
         badge.appendChild(emojiSpan);
 
-        // Find the photo area or card body to append to
         const photoArea = card.querySelector('.compact-card-photo, .presentation-result-card-image-container');
         if (photoArea) {
             photoArea.style.position = 'relative';
             photoArea.appendChild(badge);
-            console.log('[VitalityUI DEBUG] Badge CREATED in photoArea for card:', card.dataset.recordId);
         } else {
             card.style.position = 'relative';
             card.appendChild(badge);
-            console.log('[VitalityUI DEBUG] Badge CREATED on card (no photo area) for:', card.dataset.recordId);
         }
     }
 
     const emojiSpan = badge.querySelector('.vitality-emoji');
     if (emojiSpan) {
-        emojiSpan.textContent = scores.netEmoji || '⚖️';
+        emojiSpan.textContent = emoji;
     }
 }
 
