@@ -6850,7 +6850,59 @@ function openMergeDialogMulti(selectedIds) {
     pendingMergeAllItems = itemsToMerge;
     pendingMergeEstimation = null;
 
-    // Build item names display for the dialog preview
+    // Build item list display for the dialog
+    const itemListContainer = document.getElementById('merge-dialog-item-list-items');
+    const itemCountBadge = document.getElementById('merge-dialog-item-count');
+    if (itemListContainer) {
+        const rowsHTML = allRecordIds.map(id => {
+            const rec = getRecordById(id);
+            const name = rec?.fields?.Name || 'Item';
+            const categories = rec?.fields?.Categories;
+            const meta = Array.isArray(categories) ? categories.slice(0, 2).join(', ') : (categories || '');
+            const price = rec?.fields?.Price ? `$${rec.fields.Price}` : '';
+            const metaText = [meta, price].filter(Boolean).join(' · ');
+            return `<div class="merge-dialog-item-row" data-merge-item-id="${id}">
+                <div class="merge-dialog-item-row-icon">🔗</div>
+                <div class="merge-dialog-item-row-info">
+                    <div class="merge-dialog-item-row-name">${name}</div>
+                    ${metaText ? `<div class="merge-dialog-item-row-meta">${metaText}</div>` : ''}
+                </div>
+                ${allRecordIds.length > 2 ? `<button class="merge-dialog-item-row-remove" data-remove-id="${id}" title="Remove from merge">&times;</button>` : ''}
+            </div>`;
+        }).join('');
+        itemListContainer.innerHTML = rowsHTML;
+
+        // Attach remove handlers (only if more than 2 items - need minimum 2 to merge)
+        itemListContainer.querySelectorAll('.merge-dialog-item-row-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const removeId = btn.dataset.removeId;
+                if (!removeId || !pendingMergeAllItems) return;
+                pendingMergeAllItems = pendingMergeAllItems.filter(i => i !== removeId);
+                const row = btn.closest('.merge-dialog-item-row');
+                if (row) row.remove();
+                // Update count
+                if (itemCountBadge) itemCountBadge.textContent = pendingMergeAllItems.length;
+                // Hide remove buttons if down to 2 items
+                if (pendingMergeAllItems.length <= 2) {
+                    itemListContainer.querySelectorAll('.merge-dialog-item-row-remove').forEach(b => b.style.display = 'none');
+                }
+                // If less than 2, close dialog
+                if (pendingMergeAllItems.length < 2) {
+                    closeMergeDialog();
+                }
+                // Update dialog title
+                const dialogTitle = document.querySelector('.merge-dialog-title');
+                if (dialogTitle) {
+                    dialogTitle.textContent = pendingMergeAllItems.length > 2 ? `Combine ${pendingMergeAllItems.length} Items` : 'Combine Items';
+                }
+                console.log('[MERGE DEBUG] Item removed from merge list:', removeId, 'remaining:', pendingMergeAllItems.length);
+            });
+        });
+    }
+    if (itemCountBadge) itemCountBadge.textContent = allRecordIds.length;
+
+    // Also update legacy pill preview (hidden but kept for backward compat)
     const mergeItemsPreview = document.querySelector('.merge-dialog-items');
     if (mergeItemsPreview) {
         const itemPillsHTML = allRecordIds.map(id => {
@@ -7111,8 +7163,32 @@ async function openMergeDialog(sourceRecordId, targetRecordId) {
     pendingMergeSource = sourceRecordId;
     pendingMergeTarget = targetRecordId;
     pendingMergeEstimation = null;
+    pendingMergeAllItems = allRecordIds;
 
-    // Build item names display for the dialog preview
+    // Build item list display for the dialog
+    const itemListContainer = document.getElementById('merge-dialog-item-list-items');
+    const itemCountBadge = document.getElementById('merge-dialog-item-count');
+    if (itemListContainer) {
+        const rowsHTML = allRecordIds.map(id => {
+            const rec = getRecordById(id);
+            const name = rec?.fields?.Name || 'Item';
+            const categories = rec?.fields?.Categories;
+            const meta = Array.isArray(categories) ? categories.slice(0, 2).join(', ') : (categories || '');
+            const price = rec?.fields?.Price ? `$${rec.fields.Price}` : '';
+            const metaText = [meta, price].filter(Boolean).join(' · ');
+            return `<div class="merge-dialog-item-row" data-merge-item-id="${id}">
+                <div class="merge-dialog-item-row-icon">🔗</div>
+                <div class="merge-dialog-item-row-info">
+                    <div class="merge-dialog-item-row-name">${name}</div>
+                    ${metaText ? `<div class="merge-dialog-item-row-meta">${metaText}</div>` : ''}
+                </div>
+            </div>`;
+        }).join('');
+        itemListContainer.innerHTML = rowsHTML;
+    }
+    if (itemCountBadge) itemCountBadge.textContent = allRecordIds.length;
+
+    // Also update legacy pill preview (hidden but kept for backward compat)
     const mergeItemsPreview = document.querySelector('.merge-dialog-items');
     if (mergeItemsPreview) {
         const itemPillsHTML = allRecordIds.map(id => {
