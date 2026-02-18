@@ -57,6 +57,7 @@ export function initializeUnifiedChatPanel() {
     setupMessageForm();
     setupMobileToggle();
     setupChatMenuActions();
+    setupTaskCreationListener();
 
     initialized = true;
     log('UCP', 'Unified Chat Panel initialized.');
@@ -470,6 +471,12 @@ function createTimelineMessage(message) {
     }
     el.appendChild(body);
 
+    // Task link badge - shows when this message has been turned into a task
+    const linkedTaskBadge = createTaskLinkBadge(message);
+    if (linkedTaskBadge) {
+        el.appendChild(linkedTaskBadge);
+    }
+
     // Reactions row
     if (message.reactions && Object.keys(message.reactions).length > 0) {
         el.appendChild(createReactionsRow(message));
@@ -541,14 +548,106 @@ function createActionsRow(message, isOwn) {
         actions.appendChild(editBtn);
     }
 
-    // Task - opens the task GUI modal
+    // Task - opens the task GUI modal (shows different state if task already linked)
+    const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
+    const hasLinkedTask = !!linksObj[message.id];
     const taskBtn = document.createElement('button');
-    taskBtn.className = 'ucp-action-btn ucp-task-btn';
-    taskBtn.innerHTML = '☑ Task';
+    taskBtn.className = `ucp-action-btn ucp-task-btn${hasLinkedTask ? ' has-task' : ''}`;
+    taskBtn.innerHTML = hasLinkedTask ? '☑ View Task' : '☑ Task';
     taskBtn.addEventListener('click', () => openTaskModalFromMessage(message));
     actions.appendChild(taskBtn);
 
     return actions;
+}
+
+// ===== TASK LINK BADGE =====
+
+/**
+ * Create a clickable badge showing that this message has been turned into a task.
+ * Returns null if no linked task exists.
+ * @param {Object} message - The message object
+ * @returns {HTMLElement|null}
+ */
+function createTaskLinkBadge(message) {
+    const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
+    const linkedTaskId = linksObj[message.id];
+    if (!linkedTaskId) return null;
+
+    const task = state.tasks.all.get(linkedTaskId);
+    const taskName = task?.fields?.Name || 'Task';
+    const taskStatus = task?.fields?.Status || 'pending';
+
+    const badge = document.createElement('div');
+    badge.className = 'ucp-task-link-badge';
+    badge.dataset.taskId = linkedTaskId;
+    badge.innerHTML = `<span class="ucp-task-link-icon">☑</span> <span class="ucp-task-link-name">${escapeHtml(taskName)}</span> <span class="ucp-task-link-status">${escapeHtml(taskStatus)}</span>`;
+    badge.title = `Click to open task: ${taskName}`;
+    badge.style.cursor = 'pointer';
+
+    badge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        console.log('[UCP-TASK DEBUG] Task link badge clicked:', { linkedTaskId, taskName });
+        if (task) {
+            showTaskModal(task, state.session.id);
+        } else {
+            showToast('Task not found. It may have been deleted.', 3000);
+        }
+    });
+
+    return badge;
+}
+
+/**
+ * Listen for task-created-from-message events to update the UCP UI in real-time.
+ * This avoids needing a full re-render when a task is created from a message.
+ */
+function setupTaskCreationListener() {
+    window.addEventListener('task-created-from-message', (e) => {
+        const { messageId, taskId, task } = e.detail;
+        console.log('[UCP-TASK DEBUG] Received task-created-from-message event:', { messageId, taskId });
+
+        // Find the message element in the DOM and add the task link badge
+        const msgEl = document.querySelector(`.ucp-msg[data-message-id="${messageId}"]`);
+        if (msgEl) {
+            // Add the badge if not already present
+            if (!msgEl.querySelector('.ucp-task-link-badge')) {
+                const taskName = task?.fields?.Name || 'Task';
+                const taskStatus = task?.fields?.Status || 'pending';
+
+                const badge = document.createElement('div');
+                badge.className = 'ucp-task-link-badge';
+                badge.dataset.taskId = taskId;
+                badge.innerHTML = `<span class="ucp-task-link-icon">☑</span> <span class="ucp-task-link-name">${escapeHtml(taskName)}</span> <span class="ucp-task-link-status">${escapeHtml(taskStatus)}</span>`;
+                badge.title = `Click to open task: ${taskName}`;
+                badge.style.cursor = 'pointer';
+
+                badge.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    const latestTask = state.tasks.all.get(taskId);
+                    if (latestTask) {
+                        showTaskModal(latestTask, state.session.id);
+                    } else {
+                        showToast('Task not found.', 3000);
+                    }
+                });
+
+                // Insert badge after the message body
+                const body = msgEl.querySelector('.ucp-msg-body');
+                if (body) {
+                    body.after(badge);
+                } else {
+                    msgEl.appendChild(badge);
+                }
+            }
+
+            // Update the task button text in the actions row
+            const taskBtn = msgEl.querySelector('.ucp-task-btn');
+            if (taskBtn) {
+                taskBtn.innerHTML = '☑ View Task';
+                taskBtn.classList.add('has-task');
+            }
+        }
+    });
 }
 
 // ===== SUB-THREAD (Replies) =====
@@ -906,6 +1005,25 @@ function openTaskModalFromMessage(message) {
         return;
     }
 
+    console.log('[UCP-TASK DEBUG] openTaskModalFromMessage called:', {
+        messageId: message.id,
+        content: message.content?.substring(0, 50),
+        componentId: message.componentId,
+        sessionId: state.session.id
+    });
+
+    // Check if this message already has a linked task
+    const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
+    const existingTaskId = linksObj[message.id];
+    if (existingTaskId) {
+        const existingTask = state.tasks.all.get(existingTaskId);
+        if (existingTask) {
+            console.log('[UCP-TASK DEBUG] Message already has linked task, opening for edit:', existingTaskId);
+            showTaskModal(existingTask, state.session.id);
+            return;
+        }
+    }
+
     // Pre-fill task data from the message and open the full task modal
     const prefillTask = {
         fields: {
@@ -916,8 +1034,8 @@ function openTaskModalFromMessage(message) {
         }
     };
 
-    // Open the task manager's GUI modal with pre-filled data
-    showTaskModal(prefillTask, state.session.id);
+    // Open the task manager's GUI modal with pre-filled data and the source message ID
+    showTaskModal(prefillTask, state.session.id, message.id);
 }
 
 // ===== ONLINE COUNT =====

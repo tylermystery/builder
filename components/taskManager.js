@@ -8,6 +8,7 @@ import { state, setState } from '../state.js';
 import { log } from '../utils/debug.js';
 import * as api from '../api.js';
 import { showToast } from '../ui.js';
+import { triggerSave } from '../events.js';
 import { showDetailModal } from './modal.js';
 import {
     initializeRealtimeUpdates,
@@ -24,6 +25,7 @@ let currentProjectId = null;
 let currentTasks = [];
 let editingTaskId = null;
 let sortableInstances = []; // Track SortableJS instances for cleanup
+let sourceMessageId = null; // Track the message ID that triggered task creation from chat
 
 /**
  * Initialize the Task Manager for a specific project
@@ -670,11 +672,20 @@ async function handleCheckboxChange(e) {
  * Show the task modal for creating or editing a task
  * @param {Object|null} task - Task to edit, or null for new task
  */
-export function showTaskModal(task = null, projectId = null) {
+export function showTaskModal(task = null, projectId = null, messageId = null) {
     editingTaskId = task ? task.id : null;
+    sourceMessageId = messageId; // Store message ID for linking after creation
     const isEditing = !!editingTaskId;
     const fields = task?.fields || {};
     const linkedItemId = fields.LinkedItem ? fields.LinkedItem[0] : '';
+
+    console.log('[UCP-TASK DEBUG] showTaskModal called:', {
+        isEditing,
+        projectId,
+        messageId,
+        currentProjectId,
+        taskFields: fields
+    });
 
     // Allow external callers to specify project context
     if (projectId && !currentProjectId) {
@@ -778,6 +789,7 @@ export function showTaskModal(task = null, projectId = null) {
         overlay.classList.remove('active');
         setTimeout(() => overlay.remove(), 300);
         editingTaskId = null;
+        sourceMessageId = null;
     };
 
     closeBtn.addEventListener('click', closeModal);
@@ -997,6 +1009,34 @@ async function handleTaskSubmit(form, closeModal) {
                 broadcastTaskUpdated(result, taskData);
             } else {
                 broadcastTaskCreated(result);
+
+                // Save comment-to-task link if this task was created from a chat message
+                if (sourceMessageId) {
+                    console.log('[UCP-TASK DEBUG] Saving comment-task link:', {
+                        messageId: sourceMessageId,
+                        taskId: result.id,
+                        taskName: result.fields?.Name
+                    });
+                    const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
+                    linksObj[sourceMessageId] = result.id;
+                    state.eventDetails.combined.set('_commentTaskLinks', linksObj);
+
+                    // Apply SourceCommentId to the in-memory task object
+                    if (!result.fields) result.fields = {};
+                    result.fields.SourceCommentId = sourceMessageId;
+
+                    // Persist the link to Airtable via session save
+                    triggerSave();
+
+                    console.log('[UCP-TASK DEBUG] Comment-task link saved. All links:', linksObj);
+
+                    // Dispatch a custom event so the UCP can update its UI
+                    window.dispatchEvent(new CustomEvent('task-created-from-message', {
+                        detail: { messageId: sourceMessageId, taskId: result.id, task: result }
+                    }));
+
+                    sourceMessageId = null; // Reset after use
+                }
             }
 
             closeModal();

@@ -11,6 +11,7 @@
 import { state } from '../state.js';
 import { log } from '../utils/debug.js';
 import * as api from '../api.js';
+import { triggerSave } from '../events.js';
 
 // Store reference to getCurrentUser - will be set via setter to avoid circular dependency
 let getCurrentUserFn = null;
@@ -465,6 +466,22 @@ async function createTaskFromMessage(message) {
             state.tasks.all.set(newTask.id, newTask);
             const existingTasks = state.tasks.byProject.get(projectId) || [];
             state.tasks.byProject.set(projectId, [...existingTasks, newTask]);
+
+            // Save comment-to-task link for persistence
+            if (message.id) {
+                console.log('[UnifiedStream-TASK DEBUG] Saving comment-task link:', {
+                    messageId: message.id,
+                    taskId: newTask.id
+                });
+                const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
+                linksObj[message.id] = newTask.id;
+                state.eventDetails.combined.set('_commentTaskLinks', linksObj);
+
+                if (!newTask.fields) newTask.fields = {};
+                newTask.fields.SourceCommentId = message.id;
+
+                triggerSave();
+            }
 
             log('UnifiedStream', `Task created from message: ${newTask.id}`);
             showToast('Task created from message');
