@@ -557,6 +557,11 @@ function createActionsRow(message, isOwn) {
     taskBtn.addEventListener('click', () => openTaskModalFromMessage(message));
     actions.appendChild(taskBtn);
 
+    // Keep actions row visible when a task is linked
+    if (hasLinkedTask) {
+        actions.classList.add('has-linked-task');
+    }
+
     return actions;
 }
 
@@ -573,6 +578,7 @@ function createTaskLinkBadge(message) {
     const linkedTaskId = linksObj[message.id];
     if (!linkedTaskId) return null;
 
+    // Look up task at render time for initial display, but always re-lookup at click time
     const task = state.tasks.all.get(linkedTaskId);
     const taskName = task?.fields?.Name || 'Task';
     const taskStatus = task?.fields?.Status || 'pending';
@@ -580,15 +586,18 @@ function createTaskLinkBadge(message) {
     const badge = document.createElement('div');
     badge.className = 'ucp-task-link-badge';
     badge.dataset.taskId = linkedTaskId;
+    badge.dataset.messageId = message.id;
     badge.innerHTML = `<span class="ucp-task-link-icon">☑</span> <span class="ucp-task-link-name">${escapeHtml(taskName)}</span> <span class="ucp-task-link-status">${escapeHtml(taskStatus)}</span>`;
     badge.title = `Click to open task: ${taskName}`;
     badge.style.cursor = 'pointer';
 
     badge.addEventListener('click', (e) => {
         e.stopPropagation();
-        console.log('[UCP-TASK DEBUG] Task link badge clicked:', { linkedTaskId, taskName });
-        if (task) {
-            showTaskModal(task, state.session.id);
+        // Always look up the latest task at click time, not the stale closure reference
+        const latestTask = state.tasks.all.get(linkedTaskId);
+        console.log('[UCP-TASK DEBUG] Task link badge clicked:', { linkedTaskId, found: !!latestTask });
+        if (latestTask) {
+            showTaskModal(latestTask, state.session.id);
         } else {
             showToast('Task not found. It may have been deleted.', 3000);
         }
@@ -598,56 +607,148 @@ function createTaskLinkBadge(message) {
 }
 
 /**
- * Listen for task-created-from-message events to update the UCP UI in real-time.
- * This avoids needing a full re-render when a task is created from a message.
+ * Listen for task-created-from-message and task-updated events to update the UCP UI in real-time.
+ * This avoids needing a full re-render when a task is created or updated from a message.
  */
 function setupTaskCreationListener() {
+    // Handle new task created from a message
     window.addEventListener('task-created-from-message', (e) => {
         const { messageId, taskId, task } = e.detail;
         console.log('[UCP-TASK DEBUG] Received task-created-from-message event:', { messageId, taskId });
+        upsertTaskBadgeForMessage(messageId, taskId, task);
+    });
 
-        // Find the message element in the DOM and add the task link badge
+    // Handle task updated (name/status changed) — update all badges referencing this task
+    window.addEventListener('task-updated-in-chat', (e) => {
+        const { taskId, task } = e.detail;
+        console.log('[UCP-TASK DEBUG] Received task-updated-in-chat event:', { taskId, name: task?.fields?.Name });
+        updateAllBadgesForTask(taskId, task);
+    });
+
+    // When tasks finish loading (e.g. after page refresh), refresh all badges
+    // that may have rendered with stale/missing data
+    window.addEventListener('tasks-state-updated', () => {
+        refreshAllTaskBadges();
+    });
+}
+
+/**
+ * Insert or update a task link badge for a specific message, and update the action button.
+ */
+function upsertTaskBadgeForMessage(messageId, taskId, task) {
+    const msgEl = document.querySelector(`.ucp-msg[data-message-id="${messageId}"]`);
+    if (!msgEl) return;
+
+    const taskName = task?.fields?.Name || 'Task';
+    const taskStatus = task?.fields?.Status || 'pending';
+
+    // Check if badge already exists
+    let badge = msgEl.querySelector('.ucp-task-link-badge');
+    if (badge) {
+        // Update existing badge content
+        badge.dataset.taskId = taskId;
+        const nameEl = badge.querySelector('.ucp-task-link-name');
+        const statusEl = badge.querySelector('.ucp-task-link-status');
+        if (nameEl) nameEl.textContent = taskName;
+        if (statusEl) statusEl.textContent = taskStatus;
+        badge.title = `Click to open task: ${taskName}`;
+    } else {
+        // Create new badge
+        badge = document.createElement('div');
+        badge.className = 'ucp-task-link-badge';
+        badge.dataset.taskId = taskId;
+        badge.dataset.messageId = messageId;
+        badge.innerHTML = `<span class="ucp-task-link-icon">☑</span> <span class="ucp-task-link-name">${escapeHtml(taskName)}</span> <span class="ucp-task-link-status">${escapeHtml(taskStatus)}</span>`;
+        badge.title = `Click to open task: ${taskName}`;
+        badge.style.cursor = 'pointer';
+
+        badge.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const latestTask = state.tasks.all.get(taskId);
+            if (latestTask) {
+                showTaskModal(latestTask, state.session.id);
+            } else {
+                showToast('Task not found.', 3000);
+            }
+        });
+
+        // Insert badge after the message body
+        const body = msgEl.querySelector('.ucp-msg-body');
+        if (body) {
+            body.after(badge);
+        } else {
+            msgEl.appendChild(badge);
+        }
+    }
+
+    // Update the task button text in the actions row
+    const taskBtn = msgEl.querySelector('.ucp-task-btn');
+    if (taskBtn) {
+        taskBtn.innerHTML = '☑ View Task';
+        taskBtn.classList.add('has-task');
+    }
+    // Keep actions row visible when task is linked
+    const actionsRow = msgEl.querySelector('.ucp-actions');
+    if (actionsRow) {
+        actionsRow.classList.add('has-linked-task');
+    }
+}
+
+/**
+ * Update all task link badges in the DOM that reference a specific task (after edit).
+ */
+function updateAllBadgesForTask(taskId, task) {
+    const taskName = task?.fields?.Name || 'Task';
+    const taskStatus = task?.fields?.Status || 'pending';
+
+    // Find all badges for this task
+    const badges = document.querySelectorAll(`.ucp-task-link-badge[data-task-id="${taskId}"]`);
+    badges.forEach(badge => {
+        const nameEl = badge.querySelector('.ucp-task-link-name');
+        const statusEl = badge.querySelector('.ucp-task-link-status');
+        if (nameEl) nameEl.textContent = taskName;
+        if (statusEl) statusEl.textContent = taskStatus;
+        badge.title = `Click to open task: ${taskName}`;
+    });
+}
+
+/**
+ * Refresh all task link badges currently in the DOM with the latest task data from state.
+ * Called when tasks finish loading to fix badges that rendered before task data was available.
+ */
+function refreshAllTaskBadges() {
+    const badges = document.querySelectorAll('.ucp-task-link-badge[data-task-id]');
+    if (badges.length === 0) return;
+
+    console.log('[UCP-TASK DEBUG] Refreshing all task badges after tasks-state-updated:', badges.length);
+    badges.forEach(badge => {
+        const taskId = badge.dataset.taskId;
+        const task = state.tasks.all.get(taskId);
+        if (task) {
+            const nameEl = badge.querySelector('.ucp-task-link-name');
+            const statusEl = badge.querySelector('.ucp-task-link-status');
+            if (nameEl) nameEl.textContent = task.fields?.Name || 'Task';
+            if (statusEl) statusEl.textContent = task.fields?.Status || 'pending';
+            badge.title = `Click to open task: ${task.fields?.Name || 'Task'}`;
+        }
+    });
+
+    // Also refresh the action buttons to reflect linked task state
+    const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
+    for (const [messageId, taskId] of Object.entries(linksObj)) {
         const msgEl = document.querySelector(`.ucp-msg[data-message-id="${messageId}"]`);
         if (msgEl) {
-            // Add the badge if not already present
-            if (!msgEl.querySelector('.ucp-task-link-badge')) {
-                const taskName = task?.fields?.Name || 'Task';
-                const taskStatus = task?.fields?.Status || 'pending';
-
-                const badge = document.createElement('div');
-                badge.className = 'ucp-task-link-badge';
-                badge.dataset.taskId = taskId;
-                badge.innerHTML = `<span class="ucp-task-link-icon">☑</span> <span class="ucp-task-link-name">${escapeHtml(taskName)}</span> <span class="ucp-task-link-status">${escapeHtml(taskStatus)}</span>`;
-                badge.title = `Click to open task: ${taskName}`;
-                badge.style.cursor = 'pointer';
-
-                badge.addEventListener('click', (ev) => {
-                    ev.stopPropagation();
-                    const latestTask = state.tasks.all.get(taskId);
-                    if (latestTask) {
-                        showTaskModal(latestTask, state.session.id);
-                    } else {
-                        showToast('Task not found.', 3000);
-                    }
-                });
-
-                // Insert badge after the message body
-                const body = msgEl.querySelector('.ucp-msg-body');
-                if (body) {
-                    body.after(badge);
-                } else {
-                    msgEl.appendChild(badge);
-                }
-            }
-
-            // Update the task button text in the actions row
             const taskBtn = msgEl.querySelector('.ucp-task-btn');
-            if (taskBtn) {
+            if (taskBtn && !taskBtn.classList.contains('has-task')) {
                 taskBtn.innerHTML = '☑ View Task';
                 taskBtn.classList.add('has-task');
             }
+            const actionsRow = msgEl.querySelector('.ucp-actions');
+            if (actionsRow && !actionsRow.classList.contains('has-linked-task')) {
+                actionsRow.classList.add('has-linked-task');
+            }
         }
-    });
+    }
 }
 
 // ===== SUB-THREAD (Replies) =====

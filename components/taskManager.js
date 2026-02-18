@@ -162,6 +162,9 @@ function updateTasksState(projectId, tasks) {
 
     // Update tasks.byProject map
     state.tasks.byProject.set(projectId, tasks);
+
+    // Notify listeners (e.g. UCP badges) that tasks are now available
+    window.dispatchEvent(new CustomEvent('tasks-state-updated'));
 }
 
 /**
@@ -1007,6 +1010,11 @@ async function handleTaskSubmit(form, closeModal) {
             // Phase 5: Broadcast the change to other collaborators
             if (editingTaskId) {
                 broadcastTaskUpdated(result, taskData);
+
+                // Dispatch event so UCP badges update with new name/status
+                window.dispatchEvent(new CustomEvent('task-updated-in-chat', {
+                    detail: { taskId: result.id, task: result }
+                }));
             } else {
                 broadcastTaskCreated(result);
 

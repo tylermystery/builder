@@ -3600,6 +3600,11 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
     font-weight: 500;
 }
 
+/* When a message has a linked task, keep the actions row visible so the View Task button is always accessible */
+.ucp-actions.has-linked-task {
+    opacity: 1;
+}
+
 /* Task link badge on messages that have been turned into tasks */
 .ucp-task-link-badge {
     display: inline-flex;
