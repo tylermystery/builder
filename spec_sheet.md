@@ -119,6 +119,7 @@ The application features a user account system with customizable preferences.
 * **Authentication:** Users can create an account or sign in using a passwordless "magic link" system.
 * **My Account Modal:** Logged-in users can access a "My Account" modal to view their information and set preferences.
 * **SMS Notifications:** Users can add their phone number and choose a notification frequency (e.g., "Real-Time"). When another collaborator sends a message in the session chat, a serverless function is triggered, sending a real-time SMS alert via Twilio to opted-in users.
+* **Copy Console Log:** The Account modal includes a "Copy Console Log" button under a Debug Console section. This feature captures all browser console output (log, warn, error, info, debug) into a rolling buffer of up to 2,000 lines and copies it to the clipboard when clicked. This is designed for mobile debugging workflows where the browser developer console is not easily accessible.
 
 ### Plan Board View (v3.6)
 The presentation view renders all plan items as compact card tiles in a responsive CSS Grid, providing an at-a-glance overview of the entire plan.

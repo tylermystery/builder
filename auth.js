@@ -528,6 +528,52 @@ export function setupAuthEventListeners() {
         }
     });
 
+    // Copy Console Log button
+    const copyConsoleBtn = document.getElementById('copy-console-btn');
+    const copyConsoleMsg = document.getElementById('copy-console-message');
+    if (copyConsoleBtn) {
+        copyConsoleBtn.addEventListener('click', async () => {
+            const buffer = window.__consoleBuffer || [];
+            if (buffer.length === 0) {
+                if (copyConsoleMsg) {
+                    copyConsoleMsg.textContent = 'No console output captured yet.';
+                    copyConsoleMsg.style.color = '#dc3545';
+                }
+                return;
+            }
+            const text = buffer.join('\n');
+            try {
+                await navigator.clipboard.writeText(text);
+                if (copyConsoleMsg) {
+                    copyConsoleMsg.textContent = `Copied ${buffer.length} lines to clipboard!`;
+                    copyConsoleMsg.style.color = '#28a745';
+                }
+                log('Auth', `Console log copied: ${buffer.length} lines`);
+            } catch (err) {
+                // Fallback for browsers/contexts where clipboard API fails
+                try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    if (copyConsoleMsg) {
+                        copyConsoleMsg.textContent = `Copied ${buffer.length} lines to clipboard!`;
+                        copyConsoleMsg.style.color = '#28a745';
+                    }
+                } catch (fallbackErr) {
+                    if (copyConsoleMsg) {
+                        copyConsoleMsg.textContent = 'Failed to copy. Try long-pressing to select text.';
+                        copyConsoleMsg.style.color = '#dc3545';
+                    }
+                }
+            }
+        });
+    }
+
     // Listen for sign-in requests from other components (e.g., forum panel, invite system)
     document.addEventListener('requestSignIn', () => {
         showUserModal();

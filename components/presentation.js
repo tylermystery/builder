@@ -6388,10 +6388,8 @@ function enterMergeMode(sourceRecordId) {
     addMergeSelectCheckmarks();
     markItemAsSelected(sourceRecordId, true);
 
-    // Set up click handler on overlay to cancel
-    if (mergeModeOverlay) {
-        mergeModeOverlay.onclick = exitMergeMode;
-    }
+    // Overlay uses pointer-events: none so clicks pass through to items below.
+    // Cancel is handled via the banner cancel button.
 
     // Set up cancel button
     const cancelBtn = document.getElementById('merge-mode-cancel-btn');
@@ -6523,7 +6521,6 @@ function exitMergeMode() {
         setTimeout(() => {
             if (mergeModeOverlay) mergeModeOverlay.style.display = 'none';
         }, 300);
-        mergeModeOverlay.onclick = null;
     }
 
     // Hide banner

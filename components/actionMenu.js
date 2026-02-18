@@ -21,12 +21,12 @@ console.log('[ActionMenu DEBUG] ✅ actionMenu.js MODULE LOADED');
 // ─── Constants ───────────────────────────────────────────────────────────────
 const INNER_RING_RADIUS = 100;       // distance from center to inner emoji ring
 const INNER_RING_RADIUS_MOBILE = 85;
-const OUTER_RING_RADIUS = 190;       // distance from center to outer action ring
-const OUTER_RING_RADIUS_MOBILE = 155;
+const OUTER_RING_RADIUS = 240;       // distance from center to outer action ring
+const OUTER_RING_RADIUS_MOBILE = 200;
 const EMOJI_ITEM_SIZE = 44;          // px, each emoji button
 const EMOJI_ITEM_SIZE_MOBILE = 40;
-const ACTION_ITEM_SIZE = 58;         // px, each action button
-const ACTION_ITEM_SIZE_MOBILE = 50;
+const ACTION_ITEM_SIZE = 77;         // px, each action button (33% larger for readability)
+const ACTION_ITEM_SIZE_MOBILE = 67;
 const CENTER_SIZE = 76;              // px, center hub
 const CENTER_SIZE_MOBILE = 64;
 
@@ -458,6 +458,20 @@ function buildEmojiRing(container, recordId) {
             handleEmojiSelect(recordId, emoji);
         });
 
+        // On touch devices, allow immediate reaction on finger lift after swipe-to-open.
+        // The menu opens during a swipe, so the finger is still down — standard 'click'
+        // only fires on a fresh tap. This touchend handler lets the user lift their finger
+        // on an emoji to select it right away.
+        btn.addEventListener('touchend', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            const touch = e.changedTouches[0];
+            const el = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (el && (el === btn || btn.contains(el))) {
+                handleEmojiSelect(recordId, emoji);
+            }
+        });
+
         btn.addEventListener('pointerenter', () => {
             handleEmojiPreview(recordId, emoji);
         });
@@ -514,6 +528,17 @@ function buildActionRing(container, recordId) {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             handleActionSelect(recordId, action.id);
+        });
+
+        // Allow immediate activation on finger lift after swipe-to-open
+        btn.addEventListener('touchend', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            const touch = e.changedTouches[0];
+            const el = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (el && (el === btn || btn.contains(el))) {
+                handleActionSelect(recordId, action.id);
+            }
         });
 
         ring.appendChild(btn);
