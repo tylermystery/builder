@@ -3209,6 +3209,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     }
     isModalRendering = true;
 
+    try {
+
     // DEBUG: Comprehensive entry point logging for direct modal URL debugging
     const deferredCssLink = document.querySelector('link[href*="deferred.css"]');
     const deferredCssLoaded = deferredCssLink && deferredCssLink.rel === 'stylesheet';
@@ -7223,8 +7225,12 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         initModalComments(modalRecordId);
     }
 
-    // Reset the rendering guard after modal is fully displayed
-    isModalRendering = false;
+    } catch (error) {
+        console.error('[MODAL DEBUG] Error in showDetailModal:', error);
+    } finally {
+        // Always reset the rendering guard, even if an error occurred
+        isModalRendering = false;
+    }
 }
 
 /**
@@ -7242,6 +7248,8 @@ export async function showGroupDetailModal(group, allRecords) {
         return;
     }
     isModalRendering = true;
+
+    try {
 
     log('Modal', `Showing group detail modal for: ${group.name}`);
 
@@ -7536,7 +7544,12 @@ export async function showGroupDetailModal(group, allRecords) {
     const setCoverPhotoContainer = document.getElementById('set-cover-photo-container');
     if (setCoverPhotoContainer) setCoverPhotoContainer.style.display = 'none';
 
-    isModalRendering = false;
+    } catch (error) {
+        console.error('[MODAL DEBUG] Error in showGroupDetailModal:', error);
+    } finally {
+        // Always reset the rendering guard, even if an error occurred
+        isModalRendering = false;
+    }
 }
 
 export function hideDetailModal() {

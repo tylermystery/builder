@@ -1039,8 +1039,9 @@ async function handleTaskSubmit(form, closeModal) {
                 }
             }
 
+            const wasEditing = !!editingTaskId;
             closeModal();
-            showToast(editingTaskId ? 'Task updated!' : 'Task created!', 2000);
+            showToast(wasEditing ? 'Task updated!' : 'Task created!', 2000);
         } else {
             throw new Error('Failed to save task');
         }
@@ -1139,14 +1140,32 @@ async function refreshTaskList() {
     cleanupSortables();
 
     try {
-        const tasks = await api.fetchTasks(currentProjectId);
-        currentTasks = tasks;
-        updateTasksState(currentProjectId, tasks);
+        const apiTasks = await api.fetchTasks(currentProjectId);
+
+        // Merge API results with locally-known tasks to prevent data loss
+        // This handles the case where the server-side filter fails or returns incomplete results
+        const apiTaskIds = new Set(apiTasks.map(t => t.id));
+        const mergedTasks = [...apiTasks];
+
+        // Preserve any locally-created/updated tasks that the API didn't return
+        for (const [taskId, task] of state.tasks.all) {
+            if (!apiTaskIds.has(taskId)) {
+                // Check if this task belongs to the current project
+                const taskProjectIds = task.fields?.ProjectId;
+                const belongsToProject = Array.isArray(taskProjectIds) && taskProjectIds.includes(currentProjectId);
+                if (belongsToProject) {
+                    mergedTasks.push(task);
+                }
+            }
+        }
+
+        currentTasks = mergedTasks;
+        updateTasksState(currentProjectId, mergedTasks);
 
         // Re-render just the task list container
         const listContainer = document.getElementById('task-list-container');
         if (listContainer) {
-            listContainer.innerHTML = renderTaskList(tasks);
+            listContainer.innerHTML = renderTaskList(mergedTasks);
             // Reinitialize drag-and-drop
             initializeSortable();
         }
