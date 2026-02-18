@@ -727,12 +727,15 @@ export function showTaskModal(task = null, projectId = null, messageId = null) {
                     <div class="task-form-row">
                         <div class="task-form-group">
                             <label for="task-status">Status</label>
-                            <select id="task-status" name="status">
-                                <option value="${api.TASK_STATUS.PENDING}" ${fields.Status === api.TASK_STATUS.PENDING || !fields.Status ? 'selected' : ''}>Pending</option>
-                                <option value="${api.TASK_STATUS.IN_PROGRESS}" ${fields.Status === api.TASK_STATUS.IN_PROGRESS ? 'selected' : ''}>In Progress</option>
-                                <option value="${api.TASK_STATUS.BLOCKED}" ${fields.Status === api.TASK_STATUS.BLOCKED ? 'selected' : ''}>Blocked</option>
-                                <option value="${api.TASK_STATUS.COMPLETED}" ${fields.Status === api.TASK_STATUS.COMPLETED ? 'selected' : ''}>Completed</option>
-                            </select>
+                            <div class="task-status-select-wrapper">
+                                <span class="task-status-indicator" id="task-status-indicator"></span>
+                                <select id="task-status" name="status">
+                                    <option value="${api.TASK_STATUS.PENDING}" ${fields.Status === api.TASK_STATUS.PENDING || !fields.Status ? 'selected' : ''}>Pending</option>
+                                    <option value="${api.TASK_STATUS.IN_PROGRESS}" ${fields.Status === api.TASK_STATUS.IN_PROGRESS ? 'selected' : ''}>In Progress</option>
+                                    <option value="${api.TASK_STATUS.BLOCKED}" ${fields.Status === api.TASK_STATUS.BLOCKED ? 'selected' : ''}>Blocked</option>
+                                    <option value="${api.TASK_STATUS.COMPLETED}" ${fields.Status === api.TASK_STATUS.COMPLETED ? 'selected' : ''}>Completed</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="task-form-group">
                             <label for="task-due-date">Due Date</label>
@@ -806,6 +809,23 @@ export function showTaskModal(task = null, projectId = null, messageId = null) {
         e.preventDefault();
         await handleTaskSubmit(form, closeModal);
     });
+
+    // Setup status indicator color sync
+    const statusSelect = document.getElementById('task-status');
+    const statusIndicator = document.getElementById('task-status-indicator');
+    if (statusSelect && statusIndicator) {
+        const STATUS_COLORS = {
+            'pending': '#ffc107',
+            'in_progress': '#007bff',
+            'blocked': '#dc3545',
+            'completed': '#28a745'
+        };
+        const updateIndicator = () => {
+            statusIndicator.style.background = STATUS_COLORS[statusSelect.value] || STATUS_COLORS['pending'];
+        };
+        updateIndicator(); // Set initial color
+        statusSelect.addEventListener('change', updateIndicator);
+    }
 
     // Show modal with animation
     requestAnimationFrame(() => {

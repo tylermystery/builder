@@ -8027,6 +8027,25 @@ hr.total-divider {
     color: #155724;
 }
 
+/* Status select wrapper with color indicator */
+.task-status-select-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.task-status-select-wrapper select {
+    flex: 1;
+}
+.task-status-indicator {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 2px solid rgba(0,0,0,0.1);
+    transition: background 0.2s;
+}
+
 .task-due-date {
     font-size: 0.8em;
     color: #6c757d;

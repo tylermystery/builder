@@ -12530,6 +12530,11 @@ export async function showPresentationView(listType, startRecordId = null) {
                 // IMPORTANT: After tasks are loaded, restore comment-to-task links from session storage
                 // This applies SourceCommentId to task objects so the UI shows linked tasks correctly
                 loadCommentTaskLinks();
+
+                // Notify UCP (and any other listeners) that task data is now available
+                // so badges can refresh with correct statuses instead of showing "pending"
+                console.log('[Presentation DEBUG] Dispatching tasks-state-updated after task load');
+                window.dispatchEvent(new CustomEvent('tasks-state-updated'));
             }
         } catch (error) {
             console.error('[Presentation DEBUG] Error fetching tasks:', error);
@@ -12538,6 +12543,9 @@ export async function showPresentationView(listType, startRecordId = null) {
     } else {
         // Even if tasks were already loaded, restore comment-to-task links
         loadCommentTaskLinks();
+        // Notify UCP that task data is available for badge refresh
+        console.log('[Presentation DEBUG] Dispatching tasks-state-updated (tasks already loaded)');
+        window.dispatchEvent(new CustomEvent('tasks-state-updated'));
     }
 
     // Mark that catalog will need rendering when exiting presentation view

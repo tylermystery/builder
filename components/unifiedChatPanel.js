@@ -14,7 +14,7 @@ let getCurrentUserFn = null;
 let sendChatMessageFn = null; // Setter-injected from chat.js to avoid circular dep
 let panelOpen = true;
 let panelCollapsed = false;
-let currentFilter = 'all'; // 'all' | 'comments' | 'ideas'
+let currentFilter = 'all'; // 'all' | 'comments' | 'ideas' | 'tasks'
 let ucpMessages = [];
 let ucpPlanEvents = [];
 let replyingTo = null;
@@ -51,6 +51,11 @@ export function initializeUnifiedChatPanel() {
         return;
     }
     log('UCP', 'Initializing Unified Chat Panel...');
+    console.log('[UCP DEBUG] Task state at UCP init:', {
+        tasksAllSize: state.tasks.all.size,
+        tasksByProjectKeys: [...state.tasks.byProject.keys()],
+        commentTaskLinks: state.eventDetails.combined.get('_commentTaskLinks')
+    });
 
     setupPanelToggle();
     setupFilters();
@@ -64,6 +69,11 @@ export function initializeUnifiedChatPanel() {
 }
 
 export async function showUnifiedChatPanel() {
+    console.log('[UCP DEBUG] showUnifiedChatPanel called. Task state:', {
+        tasksAllSize: state.tasks.all.size,
+        sessionId: state.session?.id,
+        commentTaskLinks: state.eventDetails.combined.get('_commentTaskLinks')
+    });
     const overlay = document.getElementById('presentation-modal-overlay');
     if (overlay) {
         overlay.classList.add('ucp-open');
@@ -331,6 +341,16 @@ function renderContent() {
     const container = document.getElementById('ucp-content');
     if (!container) return;
 
+    // Tasks tab has its own rendering path
+    if (currentFilter === 'tasks') {
+        renderTasksTab(container);
+        return;
+    }
+
+    // Ensure input area is visible when NOT in tasks tab
+    const inputArea = document.getElementById('ucp-input-area');
+    if (inputArea) inputArea.style.display = '';
+
     container.innerHTML = '';
 
     let items = [];
@@ -394,6 +414,7 @@ function updateInputPlaceholder() {
     switch (currentFilter) {
         case 'comments': input.placeholder = 'Comment on a plan item...'; break;
         case 'ideas': input.placeholder = 'Share an idea...'; break;
+        case 'tasks': input.placeholder = 'Message the team...'; break;
         default: input.placeholder = 'Message the team...'; break;
     }
 }
@@ -402,6 +423,7 @@ function getEmptyMessage() {
     switch (currentFilter) {
         case 'comments': return 'No item comments yet. Discuss plan items!';
         case 'ideas': return 'No ideas shared yet. Suggest something!';
+        case 'tasks': return 'No tasks yet. Create one from any message or the Tasks panel.';
         default: return 'No conversations yet. Say hello!';
     }
 }
@@ -553,7 +575,15 @@ function createActionsRow(message, isOwn) {
     const hasLinkedTask = !!linksObj[message.id];
     const taskBtn = document.createElement('button');
     taskBtn.className = `ucp-action-btn ucp-task-btn${hasLinkedTask ? ' has-task' : ''}`;
-    taskBtn.innerHTML = hasLinkedTask ? '☑ View Task' : '☑ Task';
+    if (hasLinkedTask) {
+        const linkedTaskId = linksObj[message.id];
+        const linkedTask = state.tasks.all.get(linkedTaskId);
+        const linkedStatus = linkedTask?.fields?.Status || 'pending';
+        taskBtn.innerHTML = `☑ View Task`;
+        taskBtn.classList.add(`task-btn-${linkedStatus}`);
+    } else {
+        taskBtn.innerHTML = '☑ Task';
+    }
     taskBtn.addEventListener('click', () => openTaskModalFromMessage(message));
     actions.appendChild(taskBtn);
 
@@ -566,6 +596,34 @@ function createActionsRow(message, isOwn) {
 }
 
 // ===== TASK LINK BADGE =====
+
+/**
+ * Get a human-readable label for task status.
+ * @param {string} status
+ * @returns {string}
+ */
+function getTaskStatusLabel(status) {
+    switch (status) {
+        case 'pending': return 'Pending';
+        case 'in_progress': return 'In Progress';
+        case 'blocked': return 'Blocked';
+        case 'completed': return 'Completed';
+        default: return status || 'Pending';
+    }
+}
+
+/**
+ * Apply the correct status CSS class to a task link badge element.
+ * Removes any existing task-badge-* class and adds the new one.
+ * @param {HTMLElement} badge
+ * @param {string} status
+ */
+function applyBadgeStatusClass(badge, status) {
+    // Remove any existing status class
+    badge.classList.remove('task-badge-pending', 'task-badge-in_progress', 'task-badge-blocked', 'task-badge-completed');
+    const statusClass = `task-badge-${status || 'pending'}`;
+    badge.classList.add(statusClass);
+}
 
 /**
  * Create a clickable badge showing that this message has been turned into a task.
@@ -583,11 +641,14 @@ function createTaskLinkBadge(message) {
     const taskName = task?.fields?.Name || 'Task';
     const taskStatus = task?.fields?.Status || 'pending';
 
+    console.log('[UCP-TASK DEBUG] createTaskLinkBadge:', { messageId: message.id, linkedTaskId, taskName, taskStatus, taskFound: !!task });
+
     const badge = document.createElement('div');
     badge.className = 'ucp-task-link-badge';
     badge.dataset.taskId = linkedTaskId;
     badge.dataset.messageId = message.id;
-    badge.innerHTML = `<span class="ucp-task-link-icon">☑</span> <span class="ucp-task-link-name">${escapeHtml(taskName)}</span> <span class="ucp-task-link-status">${escapeHtml(taskStatus)}</span>`;
+    applyBadgeStatusClass(badge, taskStatus);
+    badge.innerHTML = `<span class="ucp-task-link-icon">☑</span> <span class="ucp-task-link-name">${escapeHtml(taskName)}</span> <span class="ucp-task-link-status">${escapeHtml(getTaskStatusLabel(taskStatus))}</span>`;
     badge.title = `Click to open task: ${taskName}`;
     badge.style.cursor = 'pointer';
 
@@ -616,6 +677,11 @@ function setupTaskCreationListener() {
         const { messageId, taskId, task } = e.detail;
         console.log('[UCP-TASK DEBUG] Received task-created-from-message event:', { messageId, taskId });
         upsertTaskBadgeForMessage(messageId, taskId, task);
+        // Refresh tasks tab if it's currently active
+        if (currentFilter === 'tasks') {
+            const container = document.getElementById('ucp-content');
+            if (container) renderTasksTab(container);
+        }
     });
 
     // Handle task updated (name/status changed) — update all badges referencing this task
@@ -623,12 +689,22 @@ function setupTaskCreationListener() {
         const { taskId, task } = e.detail;
         console.log('[UCP-TASK DEBUG] Received task-updated-in-chat event:', { taskId, name: task?.fields?.Name });
         updateAllBadgesForTask(taskId, task);
+        // Refresh tasks tab if it's currently active
+        if (currentFilter === 'tasks') {
+            const container = document.getElementById('ucp-content');
+            if (container) renderTasksTab(container);
+        }
     });
 
     // When tasks finish loading (e.g. after page refresh), refresh all badges
     // that may have rendered with stale/missing data
     window.addEventListener('tasks-state-updated', () => {
         refreshAllTaskBadges();
+        // Refresh tasks tab if it's currently active
+        if (currentFilter === 'tasks') {
+            const container = document.getElementById('ucp-content');
+            if (container) renderTasksTab(container);
+        }
     });
 }
 
@@ -647,10 +723,11 @@ function upsertTaskBadgeForMessage(messageId, taskId, task) {
     if (badge) {
         // Update existing badge content
         badge.dataset.taskId = taskId;
+        applyBadgeStatusClass(badge, taskStatus);
         const nameEl = badge.querySelector('.ucp-task-link-name');
         const statusEl = badge.querySelector('.ucp-task-link-status');
         if (nameEl) nameEl.textContent = taskName;
-        if (statusEl) statusEl.textContent = taskStatus;
+        if (statusEl) statusEl.textContent = getTaskStatusLabel(taskStatus);
         badge.title = `Click to open task: ${taskName}`;
     } else {
         // Create new badge
@@ -658,7 +735,8 @@ function upsertTaskBadgeForMessage(messageId, taskId, task) {
         badge.className = 'ucp-task-link-badge';
         badge.dataset.taskId = taskId;
         badge.dataset.messageId = messageId;
-        badge.innerHTML = `<span class="ucp-task-link-icon">☑</span> <span class="ucp-task-link-name">${escapeHtml(taskName)}</span> <span class="ucp-task-link-status">${escapeHtml(taskStatus)}</span>`;
+        applyBadgeStatusClass(badge, taskStatus);
+        badge.innerHTML = `<span class="ucp-task-link-icon">☑</span> <span class="ucp-task-link-name">${escapeHtml(taskName)}</span> <span class="ucp-task-link-status">${escapeHtml(getTaskStatusLabel(taskStatus))}</span>`;
         badge.title = `Click to open task: ${taskName}`;
         badge.style.cursor = 'pointer';
 
@@ -704,10 +782,11 @@ function updateAllBadgesForTask(taskId, task) {
     // Find all badges for this task
     const badges = document.querySelectorAll(`.ucp-task-link-badge[data-task-id="${taskId}"]`);
     badges.forEach(badge => {
+        applyBadgeStatusClass(badge, taskStatus);
         const nameEl = badge.querySelector('.ucp-task-link-name');
         const statusEl = badge.querySelector('.ucp-task-link-status');
         if (nameEl) nameEl.textContent = taskName;
-        if (statusEl) statusEl.textContent = taskStatus;
+        if (statusEl) statusEl.textContent = getTaskStatusLabel(taskStatus);
         badge.title = `Click to open task: ${taskName}`;
     });
 }
@@ -725,23 +804,33 @@ function refreshAllTaskBadges() {
         const taskId = badge.dataset.taskId;
         const task = state.tasks.all.get(taskId);
         if (task) {
+            const taskStatus = task.fields?.Status || 'pending';
+            applyBadgeStatusClass(badge, taskStatus);
             const nameEl = badge.querySelector('.ucp-task-link-name');
             const statusEl = badge.querySelector('.ucp-task-link-status');
             if (nameEl) nameEl.textContent = task.fields?.Name || 'Task';
-            if (statusEl) statusEl.textContent = task.fields?.Status || 'pending';
+            if (statusEl) statusEl.textContent = getTaskStatusLabel(taskStatus);
             badge.title = `Click to open task: ${task.fields?.Name || 'Task'}`;
+            console.log('[UCP-TASK DEBUG] Badge refreshed:', { taskId, status: taskStatus, name: task.fields?.Name });
         }
     });
 
-    // Also refresh the action buttons to reflect linked task state
+    // Also refresh the action buttons to reflect linked task state and status color
     const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
     for (const [messageId, taskId] of Object.entries(linksObj)) {
         const msgEl = document.querySelector(`.ucp-msg[data-message-id="${messageId}"]`);
         if (msgEl) {
             const taskBtn = msgEl.querySelector('.ucp-task-btn');
-            if (taskBtn && !taskBtn.classList.contains('has-task')) {
-                taskBtn.innerHTML = '☑ View Task';
-                taskBtn.classList.add('has-task');
+            if (taskBtn) {
+                if (!taskBtn.classList.contains('has-task')) {
+                    taskBtn.innerHTML = '☑ View Task';
+                    taskBtn.classList.add('has-task');
+                }
+                // Update status color class on the button
+                const task = state.tasks.all.get(taskId);
+                const taskStatus = task?.fields?.Status || 'pending';
+                taskBtn.classList.remove('task-btn-pending', 'task-btn-in_progress', 'task-btn-blocked', 'task-btn-completed');
+                taskBtn.classList.add(`task-btn-${taskStatus}`);
             }
             const actionsRow = msgEl.querySelector('.ucp-actions');
             if (actionsRow && !actionsRow.classList.contains('has-linked-task')) {
@@ -749,6 +838,169 @@ function refreshAllTaskBadges() {
             }
         }
     }
+}
+
+// ===== TASKS TAB =====
+
+/**
+ * Render the Tasks tab content — shows all tasks for the current project
+ * grouped by status with color-coded badges.
+ * @param {HTMLElement} container - The UCP content container
+ */
+function renderTasksTab(container) {
+    container.innerHTML = '';
+
+    const projectId = state.session?.id;
+    const projectTasks = projectId ? (state.tasks.byProject.get(projectId) || []) : [];
+
+    console.log('[UCP-TASKS TAB DEBUG] Rendering tasks tab:', { projectId, taskCount: projectTasks.length });
+
+    if (projectTasks.length === 0) {
+        // Check if tasks might still be loading
+        const isLoading = projectId && !state.tasks.byProject.has(projectId);
+        if (isLoading) {
+            container.innerHTML = `
+                <div class="ucp-empty">
+                    <span class="ucp-empty-icon">⏳</span>
+                    <div>Loading tasks...</div>
+                </div>
+            `;
+        } else {
+            container.innerHTML = `
+                <div class="ucp-empty">
+                    <span class="ucp-empty-icon">☑</span>
+                    <div>No tasks yet. Create one from any message or the Tasks panel.</div>
+                </div>
+            `;
+        }
+        // Hide the input area when in tasks tab
+        const inputArea = document.getElementById('ucp-input-area');
+        if (inputArea) inputArea.style.display = 'none';
+        return;
+    }
+
+    // Hide message input when viewing tasks (tasks are managed via the modal)
+    const inputArea = document.getElementById('ucp-input-area');
+    if (inputArea) inputArea.style.display = 'none';
+
+    // Group tasks by status
+    const STATUS_ORDER = [
+        { key: 'in_progress', label: 'In Progress', color: '#007bff' },
+        { key: 'pending', label: 'Pending', color: '#ffc107' },
+        { key: 'blocked', label: 'Blocked', color: '#dc3545' },
+        { key: 'completed', label: 'Completed', color: '#28a745' }
+    ];
+
+    const grouped = {};
+    STATUS_ORDER.forEach(s => { grouped[s.key] = []; });
+
+    projectTasks.forEach(task => {
+        const status = task.fields?.Status || 'pending';
+        if (grouped[status]) {
+            grouped[status].push(task);
+        } else {
+            grouped['pending'].push(task);
+        }
+    });
+
+    // Sort each group by Order then createdTime
+    Object.values(grouped).forEach(arr => {
+        arr.sort((a, b) => {
+            const orderA = a.fields?.Order ?? Infinity;
+            const orderB = b.fields?.Order ?? Infinity;
+            if (orderA !== orderB) return orderA - orderB;
+            return new Date(a.createdTime || 0) - new Date(b.createdTime || 0);
+        });
+    });
+
+    // Create summary header
+    const summaryEl = document.createElement('div');
+    summaryEl.className = 'ucp-tasks-summary';
+    const totalActive = grouped['in_progress'].length + grouped['pending'].length + grouped['blocked'].length;
+    const totalCompleted = grouped['completed'].length;
+    summaryEl.innerHTML = `
+        <div class="ucp-tasks-summary-stats">
+            <span class="ucp-tasks-stat"><strong>${projectTasks.length}</strong> total</span>
+            <span class="ucp-tasks-stat ucp-tasks-stat-active"><strong>${totalActive}</strong> active</span>
+            <span class="ucp-tasks-stat ucp-tasks-stat-done"><strong>${totalCompleted}</strong> done</span>
+        </div>
+    `;
+    container.appendChild(summaryEl);
+
+    // Render each status group
+    STATUS_ORDER.forEach(statusDef => {
+        const tasks = grouped[statusDef.key];
+        if (tasks.length === 0) return;
+
+        const groupEl = document.createElement('div');
+        groupEl.className = 'ucp-tasks-group';
+
+        const headerEl = document.createElement('div');
+        headerEl.className = 'ucp-tasks-group-header';
+        headerEl.innerHTML = `
+            <span class="ucp-tasks-group-dot" style="background:${statusDef.color}"></span>
+            <span class="ucp-tasks-group-label">${statusDef.label}</span>
+            <span class="ucp-tasks-group-count">${tasks.length}</span>
+        `;
+        groupEl.appendChild(headerEl);
+
+        tasks.forEach(task => {
+            groupEl.appendChild(createTaskTabCard(task, statusDef));
+        });
+
+        container.appendChild(groupEl);
+    });
+}
+
+/**
+ * Create a task card element for the tasks tab in the UCP.
+ * @param {Object} task - The task record
+ * @param {Object} statusDef - Status definition {key, label, color}
+ * @returns {HTMLElement}
+ */
+function createTaskTabCard(task, statusDef) {
+    const fields = task.fields || {};
+    const name = fields.Name || 'Untitled Task';
+    const status = fields.Status || 'pending';
+    const dueDate = fields.DueDate;
+    const assignee = fields.Assignee;
+    const isCompleted = status === 'completed';
+
+    const card = document.createElement('div');
+    card.className = `ucp-task-card${isCompleted ? ' ucp-task-card-completed' : ''}`;
+    card.dataset.taskId = task.id;
+
+    let metaHtml = '';
+    if (dueDate) {
+        const dateObj = new Date(dueDate);
+        const formatted = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const isPast = dateObj < new Date() && !isCompleted;
+        metaHtml += `<span class="ucp-task-card-due${isPast ? ' overdue' : ''}">${formatted}</span>`;
+    }
+    if (assignee) {
+        const names = assignee.split(',').map(n => n.trim()).filter(Boolean);
+        metaHtml += names.map(n => `<span class="ucp-task-card-assignee">${escapeHtml(n)}</span>`).join('');
+    }
+
+    card.innerHTML = `
+        <div class="ucp-task-card-status-bar" style="background:${statusDef.color}"></div>
+        <div class="ucp-task-card-body">
+            <span class="ucp-task-card-name${isCompleted ? ' completed' : ''}">${escapeHtml(name)}</span>
+            ${metaHtml ? `<div class="ucp-task-card-meta">${metaHtml}</div>` : ''}
+        </div>
+    `;
+
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', () => {
+        const latestTask = state.tasks.all.get(task.id);
+        if (latestTask) {
+            showTaskModal(latestTask, state.session.id);
+        } else {
+            showToast('Task not found.', 3000);
+        }
+    });
+
+    return card;
 }
 
 // ===== SUB-THREAD (Replies) =====
