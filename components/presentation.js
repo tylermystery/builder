@@ -488,6 +488,21 @@ function ensureDOMElements() {
     mergeDialogSourceName = document.getElementById('merge-source-name');
     mergeDialogTargetName = document.getElementById('merge-target-name');
 
+    console.log('[MERGE DEBUG] ── DOM INIT: Merge element caching ──');
+    console.log('[MERGE DEBUG]   mergeModeOverlay:', mergeModeOverlay ? '✅ FOUND' : '❌ NOT FOUND');
+    console.log('[MERGE DEBUG]   mergeModeBanner:', mergeModeBanner ? '✅ FOUND' : '❌ NOT FOUND');
+    console.log('[MERGE DEBUG]   mergeSelectFab:', mergeSelectFab ? '✅ FOUND' : '❌ NOT FOUND');
+    console.log('[MERGE DEBUG]   mergeOptionsDialog:', mergeOptionsDialog ? '✅ FOUND' : '❌ NOT FOUND');
+    console.log('[MERGE DEBUG]   dragBucketMerge:', dragBucketMerge ? '✅ FOUND' : '❌ NOT FOUND');
+    console.log('[MERGE DEBUG]   dragMergeIndicator:', dragMergeIndicator ? '✅ FOUND' : '❌ NOT FOUND');
+    if (mergeModeOverlay) {
+        console.log('[MERGE DEBUG]   overlay parent:', mergeModeOverlay.parentElement?.id || mergeModeOverlay.parentElement?.tagName || 'UNKNOWN');
+        console.log('[MERGE DEBUG]   overlay inDOM:', document.body.contains(mergeModeOverlay));
+    }
+    if (mergeModeBanner) {
+        console.log('[MERGE DEBUG]   banner parent:', mergeModeBanner.parentElement?.id || mergeModeBanner.parentElement?.tagName || 'UNKNOWN');
+    }
+
     // Action tooltip
     dragActionTooltip = document.getElementById('drag-action-tooltip');
     // Radial menu container
@@ -4666,7 +4681,14 @@ function handleActionMenuAction(actionId, recordId, context) {
             lockItem(recordId);
             break;
         case 'merge':
+            console.log('[ActionMenu Handler DEBUG] 🔗 MERGE action triggered, calling enterMergeMode...');
+            console.log('[ActionMenu Handler DEBUG]   recordId:', recordId);
+            console.log('[ActionMenu Handler DEBUG]   isMergeModeActive (before):', isMergeModeActive);
+            console.log('[ActionMenu Handler DEBUG]   mergeModeOverlay ref:', mergeModeOverlay ? 'EXISTS' : '❌ NULL');
+            console.log('[ActionMenu Handler DEBUG]   mergeModeBanner ref:', mergeModeBanner ? 'EXISTS' : '❌ NULL');
+            console.log('[ActionMenu Handler DEBUG]   mergeSelectFab ref:', mergeSelectFab ? 'EXISTS' : '❌ NULL');
             enterMergeMode(recordId);
+            console.log('[ActionMenu Handler DEBUG]   After enterMergeMode: isMergeModeActive:', isMergeModeActive);
             break;
         case 'archive':
             archiveItem(recordId);
@@ -6256,7 +6278,13 @@ async function openCustomCommentDialog(recordId) {
 // =============================================================================
 
 function enterMergeMode(sourceRecordId) {
+    console.log('[MERGE DEBUG] ══════════════════════════════════════════════');
+    console.log('[MERGE DEBUG] enterMergeMode() CALLED');
+    console.log('[MERGE DEBUG]   sourceRecordId:', sourceRecordId);
+    console.log('[MERGE DEBUG]   isMergeModeActive (before):', isMergeModeActive);
+
     if (!sourceRecordId || isMergeModeActive) {
+        console.log('[MERGE DEBUG]   ❌ EARLY RETURN: sourceRecordId falsy?', !sourceRecordId, '| isMergeModeActive?', isMergeModeActive);
         return;
     }
 
@@ -6269,6 +6297,7 @@ function enterMergeMode(sourceRecordId) {
         const sourceRecord = getRecordById(sourceRecordId);
         sourceName = sourceRecord?.fields?.Name || 'Item';
     }
+    console.log('[MERGE DEBUG]   sourceName resolved to:', sourceName);
 
     isMergeModeActive = true;
     mergeModeSourceRecordId = sourceRecordId;
@@ -6278,30 +6307,81 @@ function enterMergeMode(sourceRecordId) {
 
     log('Presentation', `Entering multi-select merge mode for: ${sourceName} (${sourceRecordId})`);
 
+    // ── DEBUG: Check cached DOM references ──
+    console.log('[MERGE DEBUG]   ── DOM Element References ──');
+    console.log('[MERGE DEBUG]   mergeModeOverlay (cached):', mergeModeOverlay ? 'EXISTS' : '❌ NULL');
+    console.log('[MERGE DEBUG]   mergeModeBanner (cached):', mergeModeBanner ? 'EXISTS' : '❌ NULL');
+    console.log('[MERGE DEBUG]   mergeSelectFab (cached):', mergeSelectFab ? 'EXISTS' : '❌ NULL');
+
+    // ── DEBUG: Try re-querying from DOM in case cached references are stale ──
+    const freshOverlay = document.getElementById('merge-mode-overlay');
+    const freshBanner = document.getElementById('merge-mode-banner');
+    const freshFab = document.getElementById('merge-select-fab');
+    console.log('[MERGE DEBUG]   freshOverlay (live DOM query):', freshOverlay ? 'FOUND' : '❌ NOT IN DOM');
+    console.log('[MERGE DEBUG]   freshBanner (live DOM query):', freshBanner ? 'FOUND' : '❌ NOT IN DOM');
+    console.log('[MERGE DEBUG]   freshFab (live DOM query):', freshFab ? 'FOUND' : '❌ NOT IN DOM');
+
+    // If cached refs are stale but DOM has them, refresh the references
+    if (!mergeModeOverlay && freshOverlay) {
+        console.log('[MERGE DEBUG]   ⚠️ STALE REF: Refreshing mergeModeOverlay from DOM');
+        mergeModeOverlay = freshOverlay;
+    }
+    if (!mergeModeBanner && freshBanner) {
+        console.log('[MERGE DEBUG]   ⚠️ STALE REF: Refreshing mergeModeBanner from DOM');
+        mergeModeBanner = freshBanner;
+    }
+    if (!mergeSelectFab && freshFab) {
+        console.log('[MERGE DEBUG]   ⚠️ STALE REF: Refreshing mergeSelectFab from DOM');
+        mergeSelectFab = freshFab;
+    }
+
     // Show overlay
     if (mergeModeOverlay) {
+        console.log('[MERGE DEBUG]   Setting overlay display=block, then adding .active');
+        console.log('[MERGE DEBUG]   overlay current display:', mergeModeOverlay.style.display);
+        console.log('[MERGE DEBUG]   overlay current classes:', mergeModeOverlay.className);
+        console.log('[MERGE DEBUG]   overlay in DOM tree:', document.body.contains(mergeModeOverlay));
         mergeModeOverlay.style.display = 'block';
         requestAnimationFrame(() => {
             mergeModeOverlay.classList.add('active');
+            const cs = window.getComputedStyle(mergeModeOverlay);
+            console.log('[MERGE DEBUG]   overlay POST-ACTIVE: display:', cs.display, 'opacity:', cs.opacity, 'position:', cs.position, 'zIndex:', cs.zIndex, 'pointerEvents:', cs.pointerEvents);
+            console.log('[MERGE DEBUG]   overlay boundingRect:', JSON.stringify(mergeModeOverlay.getBoundingClientRect()));
         });
+    } else {
+        console.log('[MERGE DEBUG]   ❌ NO mergeModeOverlay - overlay will NOT be shown!');
     }
 
     // Show banner - update text for multi-select mode
     const bannerLabel = document.getElementById('merge-mode-banner-label');
     if (bannerLabel) bannerLabel.textContent = 'Tap items to select for merge';
+    else console.log('[MERGE DEBUG]   ❌ merge-mode-banner-label NOT FOUND in DOM');
+
     const sourceNameEl = document.getElementById('merge-mode-source-name');
     if (sourceNameEl) sourceNameEl.textContent = `(${sourceName} selected)`;
+    else console.log('[MERGE DEBUG]   ❌ merge-mode-source-name NOT FOUND in DOM');
 
     if (mergeModeBanner) {
+        console.log('[MERGE DEBUG]   Setting banner active');
+        console.log('[MERGE DEBUG]   banner in DOM tree:', document.body.contains(mergeModeBanner));
+        console.log('[MERGE DEBUG]   banner current classes:', mergeModeBanner.className);
         requestAnimationFrame(() => {
             mergeModeBanner.classList.add('active');
+            const cs = window.getComputedStyle(mergeModeBanner);
+            console.log('[MERGE DEBUG]   banner POST-ACTIVE: display:', cs.display, 'transform:', cs.transform, 'zIndex:', cs.zIndex, 'position:', cs.position);
+            console.log('[MERGE DEBUG]   banner boundingRect:', JSON.stringify(mergeModeBanner.getBoundingClientRect()));
         });
+    } else {
+        console.log('[MERGE DEBUG]   ❌ NO mergeModeBanner - banner will NOT be shown!');
     }
 
     // Add merge-mode-active class to the items list container
     const itineraryList = document.getElementById('itinerary-items-list');
+    console.log('[MERGE DEBUG]   itinerary-items-list:', itineraryList ? 'FOUND' : '❌ NOT FOUND');
     if (itineraryList) {
         itineraryList.classList.add('merge-mode-active');
+        console.log('[MERGE DEBUG]   ✅ Added merge-mode-active class to itinerary list');
+        console.log('[MERGE DEBUG]   itinerary list children count:', itineraryList.children.length);
     }
 
     // Mark the source item as selected (not dimmed - it's part of the selection)
@@ -6317,15 +6397,22 @@ function enterMergeMode(sourceRecordId) {
     const cancelBtn = document.getElementById('merge-mode-cancel-btn');
     if (cancelBtn) {
         cancelBtn.onclick = exitMergeMode;
+        console.log('[MERGE DEBUG]   ✅ Cancel button click handler set');
+    } else {
+        console.log('[MERGE DEBUG]   ❌ merge-mode-cancel-btn NOT FOUND');
     }
 
     // Set up FAB click handler
     if (mergeSelectFab) {
         mergeSelectFab.onclick = () => {
+            console.log('[MERGE DEBUG] FAB clicked, mergeSelectedItems.length:', mergeSelectedItems.length);
             if (mergeSelectedItems.length >= 2) {
                 openMergeDialogMulti(mergeSelectedItems);
             }
         };
+        console.log('[MERGE DEBUG]   ✅ FAB click handler set');
+    } else {
+        console.log('[MERGE DEBUG]   ❌ NO mergeSelectFab - FAB will NOT be available!');
     }
 
     // Set up click handlers for multi-select on target items
@@ -6345,6 +6432,8 @@ function enterMergeMode(sourceRecordId) {
                 targetRecordId = clickedCard.dataset.recordId || clickedCard.dataset.groupId;
             }
 
+            console.log('[MERGE DEBUG] Item click in merge mode - targetRecordId:', targetRecordId, 'clickedSection:', !!clickedSection, 'clickedCard:', !!clickedCard);
+
             if (targetRecordId) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -6352,14 +6441,72 @@ function enterMergeMode(sourceRecordId) {
             }
         };
         itineraryList.addEventListener('click', itineraryList._mergeModeClickHandler, true);
+        console.log('[MERGE DEBUG]   ✅ Click handler for item selection attached to itinerary list');
     }
 
     updateMergeSelectFab();
     showToast(`Select items to merge (${sourceName} already selected)`, 'info');
+
+    // ── Final diagnostic check after a brief delay ──
+    setTimeout(() => {
+        console.log('[MERGE DEBUG]   ── POST-ENTER DIAGNOSTIC (200ms delay) ──');
+        console.log('[MERGE DEBUG]   isMergeModeActive:', isMergeModeActive);
+        console.log('[MERGE DEBUG]   mergeSelectedItems:', JSON.stringify(mergeSelectedItems));
+        const oEl = document.getElementById('merge-mode-overlay');
+        const bEl = document.getElementById('merge-mode-banner');
+        const fEl = document.getElementById('merge-select-fab');
+        if (oEl) {
+            const cs = window.getComputedStyle(oEl);
+            console.log('[MERGE DEBUG]   overlay: display=' + cs.display + ' opacity=' + cs.opacity + ' zIndex=' + cs.zIndex + ' position=' + cs.position + ' classes=' + oEl.className);
+        } else {
+            console.log('[MERGE DEBUG]   ❌ overlay not in DOM');
+        }
+        if (bEl) {
+            const cs = window.getComputedStyle(bEl);
+            console.log('[MERGE DEBUG]   banner: display=' + cs.display + ' transform=' + cs.transform + ' zIndex=' + cs.zIndex + ' classes=' + bEl.className);
+            console.log('[MERGE DEBUG]   banner rect:', JSON.stringify(bEl.getBoundingClientRect()));
+        } else {
+            console.log('[MERGE DEBUG]   ❌ banner not in DOM');
+        }
+        if (fEl) {
+            const cs = window.getComputedStyle(fEl);
+            console.log('[MERGE DEBUG]   fab: display=' + cs.display + ' zIndex=' + cs.zIndex + ' classes=' + fEl.className);
+        } else {
+            console.log('[MERGE DEBUG]   ❌ fab not in DOM');
+        }
+        // Check for z-index conflicts
+        const allHighZ = [];
+        document.querySelectorAll('*').forEach(el => {
+            const z = parseInt(window.getComputedStyle(el).zIndex);
+            if (z >= 9000) {
+                allHighZ.push({ tag: el.tagName, id: el.id, className: (el.className || '').toString().substring(0, 40), zIndex: z });
+            }
+        });
+        console.log('[MERGE DEBUG]   Elements with z-index >= 9000:', allHighZ.length);
+        allHighZ.forEach(item => console.log('[MERGE DEBUG]     z=' + item.zIndex + ' ' + item.tag + '#' + item.id + '.' + item.className));
+
+        // Check parent visibility chain for overlay
+        if (oEl) {
+            let parent = oEl.parentElement;
+            let depth = 0;
+            while (parent && depth < 10) {
+                const pcs = window.getComputedStyle(parent);
+                const hidden = pcs.display === 'none' || pcs.visibility === 'hidden' || parseFloat(pcs.opacity) === 0;
+                if (hidden) {
+                    console.log('[MERGE DEBUG]   ⚠️ HIDDEN PARENT at depth ' + depth + ': ' + parent.tagName + '#' + parent.id + ' display=' + pcs.display + ' visibility=' + pcs.visibility + ' opacity=' + pcs.opacity);
+                }
+                parent = parent.parentElement;
+                depth++;
+            }
+        }
+        console.log('[MERGE DEBUG] ══════════════════════════════════════════════');
+    }, 200);
 }
 
 function exitMergeMode() {
+    console.log('[MERGE DEBUG] exitMergeMode() called, isMergeModeActive:', isMergeModeActive);
     if (!isMergeModeActive) {
+        console.log('[MERGE DEBUG]   Not active, returning early');
         return;
     }
 
@@ -6368,6 +6515,7 @@ function exitMergeMode() {
     mergeSelectedItems = [];
 
     log('Presentation', 'Exiting merge mode');
+    console.log('[MERGE DEBUG]   Cleaning up merge mode UI...');
 
     // Hide overlay
     if (mergeModeOverlay) {
@@ -6412,6 +6560,82 @@ function exitMergeMode() {
     // Remove all checkmark indicators
     const checkmarks = document.querySelectorAll('.merge-select-check');
     checkmarks.forEach(el => el.remove());
+    console.log('[MERGE DEBUG]   ✅ exitMergeMode complete');
+}
+
+// ── Global Debug Helper ──
+// Call window.debugMergeMode() from browser console for instant diagnostics
+if (typeof window !== 'undefined') {
+    window.debugMergeMode = function() {
+        console.log('═══════════════════════════════════════════');
+        console.log('  MERGE MODE DIAGNOSTIC REPORT');
+        console.log('═══════════════════════════════════════════');
+        console.log('isMergeModeActive:', isMergeModeActive);
+        console.log('mergeModeSourceRecordId:', mergeModeSourceRecordId);
+        console.log('mergeSelectedItems:', JSON.stringify(mergeSelectedItems));
+
+        console.log('\n--- Cached DOM References ---');
+        console.log('mergeModeOverlay:', mergeModeOverlay ? 'EXISTS (in DOM: ' + document.body.contains(mergeModeOverlay) + ')' : '❌ NULL');
+        console.log('mergeModeBanner:', mergeModeBanner ? 'EXISTS (in DOM: ' + document.body.contains(mergeModeBanner) + ')' : '❌ NULL');
+        console.log('mergeSelectFab:', mergeSelectFab ? 'EXISTS (in DOM: ' + document.body.contains(mergeSelectFab) + ')' : '❌ NULL');
+        console.log('mergeOptionsDialog:', typeof mergeOptionsDialog !== 'undefined' && mergeOptionsDialog ? 'EXISTS' : '❌ NULL');
+
+        console.log('\n--- Live DOM Queries ---');
+        const ids = ['merge-mode-overlay', 'merge-mode-banner', 'merge-select-fab', 'merge-options-dialog', 'merge-mode-cancel-btn', 'merge-mode-banner-label', 'merge-mode-source-name', 'merge-select-fab-count', 'itinerary-items-list'];
+        ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                const cs = window.getComputedStyle(el);
+                console.log(`  #${id}: ✅ FOUND | display:${cs.display} | visibility:${cs.visibility} | opacity:${cs.opacity} | zIndex:${cs.zIndex} | position:${cs.position} | classes:${el.className.toString().substring(0, 60)}`);
+                if (id === 'merge-mode-overlay' || id === 'merge-mode-banner' || id === 'merge-select-fab') {
+                    console.log(`    rect:`, JSON.stringify(el.getBoundingClientRect()));
+                    // Check parent chain
+                    let parent = el.parentElement;
+                    let depth = 0;
+                    while (parent && depth < 8) {
+                        const pcs = window.getComputedStyle(parent);
+                        const hidden = pcs.display === 'none' || pcs.visibility === 'hidden' || parseFloat(pcs.opacity) === 0;
+                        if (hidden) {
+                            console.log(`    ⚠️ HIDDEN PARENT (depth ${depth}): ${parent.tagName}#${parent.id} display:${pcs.display} visibility:${pcs.visibility} opacity:${pcs.opacity}`);
+                        }
+                        parent = parent.parentElement;
+                        depth++;
+                    }
+                }
+            } else {
+                console.log(`  #${id}: ❌ NOT IN DOM`);
+            }
+        });
+
+        console.log('\n--- Merge CSS Check ---');
+        const testOverlay = document.createElement('div');
+        testOverlay.className = 'merge-mode-overlay active';
+        testOverlay.style.display = 'none';
+        document.body.appendChild(testOverlay);
+        const testCS = window.getComputedStyle(testOverlay);
+        console.log('CSS probe (.merge-mode-overlay.active): position:', testCS.position, '(expect fixed) zIndex:', testCS.zIndex, '(expect ~8999)');
+        testOverlay.remove();
+
+        const testBanner = document.createElement('div');
+        testBanner.className = 'merge-mode-banner active';
+        testBanner.style.display = 'none';
+        document.body.appendChild(testBanner);
+        const testBCS = window.getComputedStyle(testBanner);
+        console.log('CSS probe (.merge-mode-banner.active): position:', testBCS.position, '(expect fixed) zIndex:', testBCS.zIndex, '(expect ~9100) transform:', testBCS.transform);
+        testBanner.remove();
+
+        // Check the presentation view state
+        const presOverlay = document.getElementById('presentation-modal-overlay');
+        if (presOverlay) {
+            const cs = window.getComputedStyle(presOverlay);
+            console.log('\n--- Presentation View Container ---');
+            console.log('  #presentation-modal-overlay: display:', cs.display, 'visibility:', cs.visibility, 'opacity:', cs.opacity, 'position:', cs.position, 'overflow:', cs.overflow);
+        }
+
+        console.log('═══════════════════════════════════════════');
+        return 'Merge diagnostic report complete. Check console above.';
+    };
+    console.log('[MERGE DEBUG] ✅ window.debugMergeMode() helper registered - call from browser console for diagnostics');
 }
 
 // =============================================================================
@@ -6420,20 +6644,25 @@ function exitMergeMode() {
 
 // Toggle an item's selection state in multi-select merge mode
 function toggleMergeSelection(recordId) {
+    console.log('[MERGE DEBUG] toggleMergeSelection called - recordId:', recordId, 'isMergeModeActive:', isMergeModeActive);
     if (!isMergeModeActive || !recordId) return;
 
     const index = mergeSelectedItems.indexOf(recordId);
+    console.log('[MERGE DEBUG]   index in mergeSelectedItems:', index, 'total selected:', mergeSelectedItems.length);
     if (index >= 0) {
         // Deselect - but don't allow deselecting if it would leave < 1 item
         if (mergeSelectedItems.length <= 1) {
+            console.log('[MERGE DEBUG]   Cannot deselect, only 1 item remaining');
             return;
         }
         mergeSelectedItems.splice(index, 1);
         markItemAsSelected(recordId, false);
+        console.log('[MERGE DEBUG]   Deselected. Now selected:', JSON.stringify(mergeSelectedItems));
     } else {
         // Select
         mergeSelectedItems.push(recordId);
         markItemAsSelected(recordId, true);
+        console.log('[MERGE DEBUG]   Selected. Now selected:', JSON.stringify(mergeSelectedItems));
     }
 
     updateMergeSelectFab();
@@ -6442,8 +6671,10 @@ function toggleMergeSelection(recordId) {
 
 // Mark/unmark an item visually as selected
 function markItemAsSelected(recordId, selected) {
+    console.log('[MERGE DEBUG] markItemAsSelected - recordId:', recordId, 'selected:', selected);
     // List view: find the itinerary-item-section containing this record
     const article = document.querySelector(`.itinerary-item[data-record-id="${recordId}"]`);
+    console.log('[MERGE DEBUG]   article found:', !!article);
     if (article) {
         const section = article.closest('.itinerary-item-section');
         if (section) {
@@ -6452,12 +6683,14 @@ function markItemAsSelected(recordId, selected) {
             } else {
                 section.classList.remove('merge-mode-selected');
             }
+            console.log('[MERGE DEBUG]   section classes:', section.className.substring(0, 80));
         }
     }
 
     // Board view: find compact card
     const card = document.querySelector(`.compact-card[data-record-id="${recordId}"]`) ||
                  document.querySelector(`.compact-card-group[data-group-id="${recordId}"]`);
+    console.log('[MERGE DEBUG]   card found:', !!card);
     if (card) {
         if (selected) {
             card.classList.add('merge-mode-selected-card');
@@ -6469,8 +6702,10 @@ function markItemAsSelected(recordId, selected) {
 
 // Add selection checkmark indicators to all items (called when entering merge mode)
 function addMergeSelectCheckmarks() {
+    console.log('[MERGE DEBUG] addMergeSelectCheckmarks() called');
     // List view items
     const itemSections = document.querySelectorAll('.itinerary-item-section');
+    console.log('[MERGE DEBUG]   Found', itemSections.length, 'itinerary-item-section elements');
     itemSections.forEach((section) => {
         if (!section.querySelector('.merge-select-check')) {
             const itemEl = section.querySelector('.itinerary-item');
@@ -6485,6 +6720,7 @@ function addMergeSelectCheckmarks() {
 
     // Board view compact cards
     const cards = document.querySelectorAll('.compact-card');
+    console.log('[MERGE DEBUG]   Found', cards.length, 'compact-card elements');
     cards.forEach(card => {
         if (!card.querySelector('.merge-select-check')) {
             card.style.position = 'relative';
@@ -6493,13 +6729,27 @@ function addMergeSelectCheckmarks() {
             card.appendChild(check);
         }
     });
+    console.log('[MERGE DEBUG]   Checkmarks added');
 }
 
 // Update the floating action button state and count
 function updateMergeSelectFab() {
-    if (!mergeSelectFab) return;
+    console.log('[MERGE DEBUG] updateMergeSelectFab() called, mergeSelectFab:', mergeSelectFab ? 'EXISTS' : '❌ NULL');
+    if (!mergeSelectFab) {
+        console.log('[MERGE DEBUG]   ❌ No mergeSelectFab reference, cannot update FAB');
+        // Try to re-query from DOM
+        const freshFab = document.getElementById('merge-select-fab');
+        if (freshFab) {
+            console.log('[MERGE DEBUG]   ⚠️ Found FAB in DOM via fresh query, updating reference');
+            mergeSelectFab = freshFab;
+        } else {
+            console.log('[MERGE DEBUG]   ❌ FAB not found in DOM either');
+            return;
+        }
+    }
 
     const count = mergeSelectedItems.length;
+    console.log('[MERGE DEBUG]   Selected items count:', count);
     const countEl = document.getElementById('merge-select-fab-count');
     if (countEl) countEl.textContent = count;
 
@@ -6510,11 +6760,15 @@ function updateMergeSelectFab() {
     }
 
     if (count >= 2) {
+        console.log('[MERGE DEBUG]   ✅ Showing FAB (count >= 2)');
         mergeSelectFab.style.display = 'block';
         requestAnimationFrame(() => {
             mergeSelectFab.classList.add('active');
+            const cs = window.getComputedStyle(mergeSelectFab);
+            console.log('[MERGE DEBUG]   FAB POST-ACTIVE: display:', cs.display, 'zIndex:', cs.zIndex, 'classes:', mergeSelectFab.className);
         });
     } else {
+        console.log('[MERGE DEBUG]   Hiding FAB (count < 2)');
         mergeSelectFab.classList.remove('active');
         setTimeout(() => {
             if (mergeSelectFab && mergeSelectedItems.length < 2) {
@@ -6557,7 +6811,9 @@ function getItemDisplayName(recordId) {
 
 // Open merge dialog for multiple selected items (N items, N >= 2)
 function openMergeDialogMulti(selectedIds) {
+    console.log('[MERGE DEBUG] openMergeDialogMulti() called, selectedIds:', JSON.stringify(selectedIds));
     if (!selectedIds || selectedIds.length < 2) {
+        console.log('[MERGE DEBUG]   ❌ Not enough items, returning');
         return;
     }
 
@@ -6649,8 +6905,18 @@ function openMergeDialogMulti(selectedIds) {
 
     // Show the dialog
     const dialog = mergeOptionsDialog || document.getElementById('merge-options-dialog');
+    console.log('[MERGE DEBUG]   mergeOptionsDialog ref:', mergeOptionsDialog ? 'EXISTS' : '❌ NULL');
+    console.log('[MERGE DEBUG]   dialog (with fallback):', dialog ? 'EXISTS' : '❌ NULL');
     if (dialog) {
         dialog.style.display = 'flex';
+        console.log('[MERGE DEBUG]   ✅ Dialog display set to flex');
+        setTimeout(() => {
+            const cs = window.getComputedStyle(dialog);
+            console.log('[MERGE DEBUG]   Dialog POST-SHOW: display:', cs.display, 'zIndex:', cs.zIndex, 'position:', cs.position, 'opacity:', cs.opacity);
+            console.log('[MERGE DEBUG]   Dialog rect:', JSON.stringify(dialog.getBoundingClientRect()));
+        }, 100);
+    } else {
+        console.log('[MERGE DEBUG]   ❌ CANNOT show merge dialog - element not found!');
     }
 
     log('Presentation', `Multi-select merge dialog opened for ${allRecordIds.length} items`);
@@ -6676,7 +6942,9 @@ let pendingMergeAllItems = null; // Array of all selected item IDs for multi-sel
 // zone: 'hybrid' = merge as hybrid, 'options' = add as option
 // sourceId/targetId can be either record IDs or group IDs (prefixed with 'group-')
 async function executeMergeByZone(sourceId, targetId, zone) {
+    console.log('[MERGE DEBUG] executeMergeByZone() called - sourceId:', sourceId, 'targetId:', targetId, 'zone:', zone);
     if (!sourceId || !targetId) {
+        console.log('[MERGE DEBUG]   ❌ Missing sourceId or targetId, returning');
         return;
     }
 
@@ -6807,7 +7075,9 @@ async function executeMergeByZone(sourceId, targetId, zone) {
 
 // Open merge dialog for two items (or groups of items)
 async function openMergeDialog(sourceRecordId, targetRecordId) {
+    console.log('[MERGE DEBUG] openMergeDialog() called - sourceRecordId:', sourceRecordId, 'targetRecordId:', targetRecordId);
     if (!sourceRecordId || !targetRecordId) {
+        console.log('[MERGE DEBUG]   ❌ Missing source or target recordId, returning');
         return;
     }
 
@@ -7146,8 +7416,10 @@ async function fetchEstimationMulti(items, mergeType) {
 
 // Close the merge options dialog
 function closeMergeDialog() {
+    console.log('[MERGE DEBUG] closeMergeDialog() called');
     if (mergeOptionsDialog) {
         mergeOptionsDialog.style.display = 'none';
+        console.log('[MERGE DEBUG]   ✅ Dialog hidden');
     }
     pendingMergeSource = null;
     pendingMergeTarget = null;
@@ -7157,7 +7429,12 @@ function closeMergeDialog() {
 
 // Handle merge option: Combine into single idea (As Hybrid)
 async function handleMergeCombine() {
+    console.log('[MERGE DEBUG] handleMergeCombine() called');
+    console.log('[MERGE DEBUG]   pendingMergeSource:', pendingMergeSource);
+    console.log('[MERGE DEBUG]   pendingMergeTarget:', pendingMergeTarget);
+    console.log('[MERGE DEBUG]   pendingMergeAllItems:', JSON.stringify(pendingMergeAllItems));
     if (!pendingMergeSource || !pendingMergeTarget) {
+        console.log('[MERGE DEBUG]   ❌ Missing source or target, closing dialog');
         closeMergeDialog();
         return;
     }
@@ -7245,7 +7522,12 @@ async function handleMergeCombine() {
 
 // Handle merge option: Group as options/category (As Options)
 async function handleMergeGroup() {
+    console.log('[MERGE DEBUG] handleMergeGroup() called');
+    console.log('[MERGE DEBUG]   pendingMergeSource:', pendingMergeSource);
+    console.log('[MERGE DEBUG]   pendingMergeTarget:', pendingMergeTarget);
+    console.log('[MERGE DEBUG]   pendingMergeAllItems:', JSON.stringify(pendingMergeAllItems));
     if (!pendingMergeSource || !pendingMergeTarget) {
+        console.log('[MERGE DEBUG]   ❌ Missing source or target, closing dialog');
         closeMergeDialog();
         return;
     }
