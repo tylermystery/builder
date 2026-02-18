@@ -3325,6 +3325,66 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
     background: rgba(255, 255, 255, 0.35);
 }
 
+/* Hide completed toggle */
+.ucp-hide-completed-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    cursor: pointer;
+    font-size: 0.72em;
+    color: #888;
+    white-space: nowrap;
+    user-select: none;
+    flex-shrink: 0;
+}
+.ucp-hide-completed-toggle input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: #28a745;
+    cursor: pointer;
+    margin: 0;
+}
+.ucp-hide-completed-label {
+    line-height: 1;
+}
+
+/* Completed message styling (greyed out with subtle hide) */
+.ucp-msg.ucp-msg-task-completed {
+    opacity: 0.45;
+    position: relative;
+    max-height: 80px;
+    overflow: hidden;
+    transition: opacity 0.2s, max-height 0.3s;
+}
+.ucp-msg.ucp-msg-task-completed::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 24px;
+    background: linear-gradient(transparent, rgba(249, 249, 249, 0.95));
+    pointer-events: none;
+}
+.ucp-msg.ucp-msg-task-completed:hover {
+    opacity: 0.7;
+    max-height: none;
+}
+.ucp-msg.ucp-msg-task-completed:hover::after {
+    display: none;
+}
+
+/* Fully hidden when toggle is active */
+.ucp-msg.ucp-msg-task-completed.ucp-hide-done {
+    display: none;
+}
+
+/* Tasks tab: hide completed group when toggle is active */
+.ucp-tasks-group.ucp-completed-group-hidden {
+    display: none;
+}
+
 /* Content area */
 .ucp-content {
     flex: 1;
@@ -5687,6 +5747,10 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
                 <button class="ucp-filter-btn" data-filter="comments">Comments</button>
                 <button class="ucp-filter-btn" data-filter="ideas">Ideas</button>
                 <button class="ucp-filter-btn" data-filter="tasks">Tasks</button>
+                <label class="ucp-hide-completed-toggle" id="ucp-hide-completed-toggle" title="Hide completed items">
+                    <input type="checkbox" id="ucp-hide-completed-cb">
+                    <span class="ucp-hide-completed-label">Hide done</span>
+                </label>
             </div>
             <div id="ucp-content" class="ucp-content">
                 <div class="ucp-loading">Loading conversations...</div>

@@ -24,6 +24,7 @@ let collapsedThreads = new Set();
 let openEmojiPicker = null;
 let initialized = false;
 let shouldScrollToBottom = true;
+let hideCompleted = false; // Toggle to hide/show completed tasks and their linked comments
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '🔥', '🎉', '😮', '👀', '💯'];
 
@@ -63,6 +64,7 @@ export function initializeUnifiedChatPanel() {
     setupMobileToggle();
     setupChatMenuActions();
     setupTaskCreationListener();
+    setupHideCompletedToggle();
 
     initialized = true;
     log('UCP', 'Unified Chat Panel initialized.');
@@ -204,17 +206,48 @@ function setupMobileToggle() {
     }
 }
 
+function setupHideCompletedToggle() {
+    const checkbox = document.getElementById('ucp-hide-completed-cb');
+    if (checkbox) {
+        checkbox.addEventListener('change', () => {
+            hideCompleted = checkbox.checked;
+            renderContent();
+        });
+    }
+}
+
 function populateAttachSelect() {
     const select = document.getElementById('ucp-attach-select');
     if (!select) return;
 
     select.innerHTML = '<option value="">Plan-wide chat</option>';
 
-    const planItems = state.cart?.lockedItems || new Map();
-    const allItems = planItems.size > 0 ? planItems : (state.records?.all ? new Map(state.records.all.map(r => [r.id, r])) : new Map());
+    // Gather plan item IDs from locked items (confirmed) and ideas (favorites)
+    const planItemIds = new Set();
+    if (state.cart?.lockedItems) {
+        state.cart.lockedItems.forEach((info, id) => planItemIds.add(id));
+    }
+    if (state.cart?.items) {
+        state.cart.items.forEach((info, id) => planItemIds.add(id));
+    }
 
-    allItems.forEach((item, id) => {
-        const name = item.fields?.Name || item.fields?.['Item Name'] || item.name || 'Unknown';
+    // Fall back to all records if no plan items
+    if (planItemIds.size === 0 && state.records?.all) {
+        state.records.all.forEach(r => { if (r?.id) planItemIds.add(r.id); });
+    }
+
+    // Build options by looking up actual record data for proper names
+    const entries = [];
+    planItemIds.forEach(id => {
+        const record = getRecordById(id);
+        const name = record?.fields?.Name || record?.fields?.['Item Name'] || 'Unknown';
+        entries.push({ id, name });
+    });
+
+    // Sort alphabetically
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+
+    entries.forEach(({ id, name }) => {
         const option = document.createElement('option');
         option.value = id;
         option.textContent = name;
@@ -488,10 +521,18 @@ function createTimelineMessage(message) {
     const isOwn = message.senderId === currentUser?.id;
     const el = document.createElement('div');
 
+    // Check if this message has a linked task that is completed
+    const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
+    const linkedTaskId = linksObj[message.id];
+    const linkedTask = linkedTaskId ? state.tasks.all.get(linkedTaskId) : null;
+    const isTaskCompleted = linkedTask?.fields?.Status === 'completed';
+
     let classes = 'ucp-msg';
     if (isOwn) classes += ' ucp-msg-own';
     if (message.componentId) classes += ' ucp-msg-comment';
     if (message.isIdea) classes += ' ucp-msg-idea';
+    if (isTaskCompleted) classes += ' ucp-msg-task-completed';
+    if (isTaskCompleted && hideCompleted) classes += ' ucp-hide-done';
     el.className = classes;
     el.dataset.messageId = message.id;
 
@@ -719,6 +760,8 @@ function setupTaskCreationListener() {
         const { messageId, taskId, task } = e.detail;
         console.log('[UCP-TASK DEBUG] Received task-created-from-message event:', { messageId, taskId });
         upsertTaskBadgeForMessage(messageId, taskId, task);
+        // Bidirectional: sync task's LinkedItem to the message's context badge
+        syncMessageContextFromTask(messageId, task);
         // Refresh tasks tab if it's currently active
         if (currentFilter === 'tasks') {
             const container = document.getElementById('ucp-content');
@@ -731,6 +774,12 @@ function setupTaskCreationListener() {
         const { taskId, task } = e.detail;
         console.log('[UCP-TASK DEBUG] Received task-updated-in-chat event:', { taskId, name: task?.fields?.Name });
         updateAllBadgesForTask(taskId, task);
+        // Bidirectional: sync task's LinkedItem to any linked message's context badge
+        const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
+        const linkedMessageId = Object.keys(linksObj).find(msgId => linksObj[msgId] === taskId);
+        if (linkedMessageId) {
+            syncMessageContextFromTask(linkedMessageId, task);
+        }
         // Refresh tasks tab if it's currently active
         if (currentFilter === 'tasks') {
             const container = document.getElementById('ucp-content');
@@ -882,6 +931,49 @@ function refreshAllTaskBadges() {
     }
 }
 
+/**
+ * Sync a message's context badge (plan item attachment) from its linked task's LinkedItem.
+ * If the task has a LinkedItem and the message doesn't have a context badge, add one.
+ * If the task's LinkedItem changed, update the badge.
+ * @param {string} messageId - The message ID
+ * @param {Object} task - The task record
+ */
+function syncMessageContextFromTask(messageId, task) {
+    const linkedItemId = task?.fields?.LinkedItem?.[0] || null;
+    if (!linkedItemId) return;
+
+    const msgEl = document.querySelector(`.ucp-msg[data-message-id="${messageId}"]`);
+    if (!msgEl) return;
+
+    const record = getRecordById(linkedItemId);
+    const itemName = record?.fields?.Name || 'Item';
+
+    // Check if a context badge already exists
+    let contextBadge = msgEl.querySelector('.ucp-msg-context');
+    if (contextBadge) {
+        // Update existing badge name
+        const nameEl = contextBadge.querySelector('.ucp-context-name');
+        if (nameEl) nameEl.textContent = itemName;
+    } else {
+        // Create a new context badge and insert before the header
+        contextBadge = document.createElement('div');
+        contextBadge.className = 'ucp-msg-context';
+        contextBadge.innerHTML = `<span class="ucp-context-icon">📎</span> <span class="ucp-context-name">${escapeHtml(itemName)}</span>`;
+        const header = msgEl.querySelector('.ucp-msg-header');
+        if (header) {
+            msgEl.insertBefore(contextBadge, header);
+        } else {
+            msgEl.prepend(contextBadge);
+        }
+    }
+
+    // Also update the in-memory message's componentId so subsequent renders are correct
+    const msg = ucpMessages.find(m => m.id === messageId);
+    if (msg && !msg.componentId) {
+        msg.componentId = linkedItemId;
+    }
+}
+
 // ===== TASKS TAB =====
 
 /**
@@ -976,6 +1068,10 @@ function renderTasksTab(container) {
 
         const groupEl = document.createElement('div');
         groupEl.className = 'ucp-tasks-group';
+        // Hide completed group when toggle is active
+        if (statusDef.key === 'completed' && hideCompleted) {
+            groupEl.classList.add('ucp-completed-group-hidden');
+        }
 
         const headerEl = document.createElement('div');
         headerEl.className = 'ucp-tasks-group-header';

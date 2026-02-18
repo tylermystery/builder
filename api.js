@@ -2146,6 +2146,52 @@ export async function updateChatMessage(messageId, newContent, senderId) {
 }
 
 /**
+ * Updates a chat message's Item Link field (for bidirectional task-comment linking)
+ * @param {string} messageId - The Airtable record ID of the message
+ * @param {string|null} itemId - The record ID to link, or null to clear
+ * @returns {Promise<object|null>} The updated record or null on failure
+ */
+export async function updateChatMessageItemLink(messageId, itemId) {
+    if (!messageId || !messageId.startsWith('rec')) {
+        log('API', `updateChatMessageItemLink: Invalid messageId: "${messageId}"`);
+        return null;
+    }
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}/${messageId}`;
+    const fields = {};
+    if (itemId && itemId.startsWith('rec')) {
+        fields['Item Link'] = [itemId];
+    } else {
+        fields['Item Link'] = null;
+    }
+
+    try {
+        log('API', `Updating Item Link for message ${messageId} to ${itemId}`);
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            log('API', `Failed to update message Item Link: ${errorData?.error?.message || response.statusText}`);
+            return null;
+        }
+
+        const result = await response.json();
+        log('API', `Message ${messageId} Item Link updated successfully`);
+        return result;
+    } catch (error) {
+        log('API', `Error updating message Item Link: ${error.message}`);
+        return null;
+    }
+}
+
+/**
  * Deletes a chat message (soft delete by marking as deleted)
  * @param {string} messageId - The Airtable record ID of the message
  * @param {string} senderId - The ID of the user trying to delete (for verification)

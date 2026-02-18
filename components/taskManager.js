@@ -1027,6 +1027,10 @@ async function handleTaskSubmit(form, closeModal) {
             // Refresh the task list
             await refreshTaskList();
 
+            // Bidirectional link: sync task's LinkedItem to the linked comment's Item Link
+            const linkedItemId = result.fields?.LinkedItem?.[0] || null;
+            const commentTaskLinks = state.eventDetails.combined.get('_commentTaskLinks') || {};
+
             // Phase 5: Broadcast the change to other collaborators
             if (editingTaskId) {
                 broadcastTaskUpdated(result, taskData);
@@ -1035,6 +1039,16 @@ async function handleTaskSubmit(form, closeModal) {
                 window.dispatchEvent(new CustomEvent('task-updated-in-chat', {
                     detail: { taskId: result.id, task: result }
                 }));
+
+                // Bidirectional: if this task has a linked comment, sync the Item Link
+                const linkedMessageId = Object.keys(commentTaskLinks).find(
+                    msgId => commentTaskLinks[msgId] === result.id
+                );
+                if (linkedMessageId && linkedItemId) {
+                    api.updateChatMessageItemLink(linkedMessageId, linkedItemId).catch(err =>
+                        console.warn('[TaskManager] Failed to sync comment Item Link:', err)
+                    );
+                }
             } else {
                 broadcastTaskCreated(result);
 
@@ -1057,6 +1071,13 @@ async function handleTaskSubmit(form, closeModal) {
                     triggerSave();
 
                     console.log('[UCP-TASK DEBUG] Comment-task link saved. All links:', linksObj);
+
+                    // Bidirectional: sync task's LinkedItem to the comment's Item Link
+                    if (linkedItemId) {
+                        api.updateChatMessageItemLink(sourceMessageId, linkedItemId).catch(err =>
+                            console.warn('[TaskManager] Failed to sync comment Item Link:', err)
+                        );
+                    }
 
                     // Dispatch a custom event so the UCP can update its UI
                     window.dispatchEvent(new CustomEvent('task-created-from-message', {
