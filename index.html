@@ -3007,114 +3007,67 @@ select:focus-visible,
    UNIFIED CHAT PANEL - Persistent Side Panel
    ======================================== */
 
-/* Presentation view layout: content + side panel */
-.presentation-fullpage.active.ucp-open {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-rows: auto 1fr;
-    overflow: hidden; /* Prevent grid from extending beyond viewport */
-}
-
-/* Header spans full row when chat panel is open */
-.presentation-fullpage.active.ucp-open .presentation-header {
-    grid-row: 1;
-    grid-column: 1 / -1;
-}
-
-.presentation-fullpage.active.ucp-open .presentation-content {
-    grid-row: 2;
-    grid-column: 1;
-    min-width: 0;
-    min-height: 0; /* Critical: allow grid child to shrink below content size for overflow scrolling */
-    width: auto;
-    height: 100%; /* Fill the grid cell row */
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-/* Hide floating chat button when unified panel is open (panel replaces it) */
-.presentation-fullpage.active.ucp-open #presentation-floating-chat-btn {
+/* Hide floating chat button when unified panel is open */
+body.ucp-panel-open #presentation-floating-chat-btn {
     display: none !important;
 }
 
-/* Hide regular chat widget when unified panel is active in presentation view */
-body.presentation-active.ucp-panel-active #chat-widget-container {
+/* Hide the chat bubble when UCP panel is open (in any view) */
+body.ucp-panel-open #chat-widget-container #chat-toggle-button {
     display: none !important;
 }
 
-/* Main panel container */
+/* Hide regular chat widget popup when unified panel is active */
+body.ucp-panel-open #chat-widget-container #chat-window {
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/* Main panel container - fixed position overlay from right */
 .unified-chat-panel {
     display: none;
     flex-direction: column;
     width: 360px;
     min-width: 320px;
     max-width: 420px;
-    height: 100%;
-    min-height: 0; /* Allow flex/grid child to shrink below content size */
-    overflow: hidden; /* Contain children within panel bounds */
-    background: rgba(255, 255, 255, 0.95);
+    height: 100vh;
+    height: 100dvh; /* Dynamic viewport height for mobile browser chrome */
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 1100; /* Above presentation overlay (z-index: 1000) and chat widget (1050) */
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.97);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-left: 1px solid rgba(0, 0, 0, 0.08);
-    z-index: 10;
-    position: relative;
-    transition: width 0.3s ease, min-width 0.3s ease, opacity 0.3s ease;
-    box-shadow: -2px 0 16px rgba(0, 0, 0, 0.06);
+    transition: transform 0.3s ease, opacity 0.2s ease;
+    box-shadow: -2px 0 16px rgba(0, 0, 0, 0.1);
+    transform: translateX(100%);
 }
 
-.presentation-fullpage.active.ucp-open .unified-chat-panel {
+/* Show UCP when body has the open class */
+body.ucp-panel-open .unified-chat-panel {
     display: flex;
-    grid-row: 2;
-    grid-column: 2;
+    transform: translateX(0);
 }
 
-/* Collapsed state */
-.unified-chat-panel.collapsed {
-    width: 44px;
-    min-width: 44px;
-    max-width: 44px;
-    overflow: hidden;
+/* Close button style */
+.ucp-close-btn {
+    background: none;
+    border: none;
+    font-size: 22px;
+    color: #666;
     cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    line-height: 1;
+    transition: background 0.15s, color 0.15s;
 }
-
-.unified-chat-panel.collapsed .ucp-header-left .ucp-title,
-.unified-chat-panel.collapsed .ucp-online-badge,
-.unified-chat-panel.collapsed .ucp-filters,
-.unified-chat-panel.collapsed .ucp-content,
-.unified-chat-panel.collapsed .ucp-input-area {
-    display: none;
-}
-
-.unified-chat-panel.collapsed .ucp-header {
-    flex-direction: column;
-    padding: 12px 6px;
-    gap: 8px;
-    align-items: center;
-    height: 100%;
-    justify-content: flex-start;
-    background: linear-gradient(180deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.05) 100%);
-}
-
-.unified-chat-panel.collapsed .ucp-header-right {
-    flex-direction: column;
-    gap: 6px;
-}
-
-.unified-chat-panel.collapsed .ucp-toggle-icon {
-    transform: rotate(180deg);
-}
-
-/* Vertical "Chat" label when collapsed */
-.unified-chat-panel.collapsed .ucp-header::after {
-    content: 'C H A T';
-    writing-mode: vertical-lr;
-    text-orientation: mixed;
-    font-size: 0.65em;
-    font-weight: 600;
-    letter-spacing: 3px;
-    color: rgba(102, 126, 234, 0.5);
-    margin-top: 12px;
+.ucp-close-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #333;
 }
 
 /* Panel Header */
@@ -3153,31 +3106,6 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
     color: white;
     background: #28a745;
     border-radius: 11px;
-}
-
-.ucp-toggle-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 6px;
-    color: #666;
-    font-size: 1.3em;
-    transition: background-color 0.2s, color 0.2s;
-}
-
-.ucp-toggle-btn:hover {
-    background: rgba(0, 0, 0, 0.06);
-    color: #333;
-}
-
-.ucp-toggle-icon {
-    transition: transform 0.3s ease;
-    display: inline-block;
 }
 
 /* Chat menu button (kebab / three dots) */
@@ -3264,11 +3192,6 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
     background: rgba(0, 0, 0, 0.05);
     padding: 1px 7px;
     border-radius: 10px;
-}
-
-/* Collapsed state hides menu button too */
-.unified-chat-panel.collapsed .ucp-menu-btn {
-    display: none;
 }
 
 /* Filter tabs */
@@ -4194,47 +4117,14 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
 /* Mobile responsive */
 @media (max-width: 768px) {
     .unified-chat-panel {
-        position: fixed;
-        top: 0;
-        right: 0;
         width: 100%;
         max-width: 100%;
         min-width: 100%;
-        height: 100vh;
-        z-index: 2000;
-        transform: translateX(100%);
-        transition: transform 0.3s ease;
     }
 
-    .presentation-fullpage.active.ucp-open .unified-chat-panel {
-        transform: translateX(0);
-    }
-
-    /* On mobile, revert to column layout since chat panel overlays */
-    .presentation-fullpage.active.ucp-open {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .presentation-fullpage.active.ucp-open .presentation-header {
-        flex: none;
-    }
-
-    .presentation-fullpage.active.ucp-open .presentation-content {
-        /* Don't shrink content on mobile; panel overlays */
-        flex: 1;
-        min-width: auto;
-        min-height: 0;
-    }
-
+    /* Hide mobile UCP toggle in presentation since the bubble handles it now */
     .presentation-fullpage .ucp-mobile-toggle {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .presentation-fullpage.active.ucp-open .ucp-mobile-toggle {
-        display: none;
+        display: none !important;
     }
 }
 
@@ -5726,54 +5616,6 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
             </div>
         </div>
 
-        <!-- Unified Chat Side Panel - Persistent in Presentation View -->
-        <div id="unified-chat-panel" class="unified-chat-panel">
-            <div class="ucp-header">
-                <div class="ucp-header-left">
-                    <h3 class="ucp-title">Conversations</h3>
-                    <span id="ucp-online-count" class="ucp-online-badge" title="People online">0</span>
-                </div>
-                <div class="ucp-header-right">
-                    <button id="ucp-menu-btn" class="ucp-menu-btn" title="Chat options" aria-label="Chat options">
-                        <span class="ucp-menu-icon">&#x22EE;</span>
-                    </button>
-                    <button id="ucp-toggle-btn" class="ucp-toggle-btn" title="Collapse panel" aria-label="Toggle chat panel">
-                        <span class="ucp-toggle-icon">›</span>
-                    </button>
-                </div>
-            </div>
-            <div class="ucp-filters">
-                <button class="ucp-filter-btn active" data-filter="all">All</button>
-                <button class="ucp-filter-btn" data-filter="comments">Comments</button>
-                <button class="ucp-filter-btn" data-filter="ideas">Ideas</button>
-                <button class="ucp-filter-btn" data-filter="tasks">Tasks</button>
-                <label class="ucp-hide-completed-toggle" id="ucp-hide-completed-toggle" title="Hide completed items">
-                    <input type="checkbox" id="ucp-hide-completed-cb">
-                    <span class="ucp-hide-completed-label">Hide done</span>
-                </label>
-            </div>
-            <div id="ucp-content" class="ucp-content">
-                <div class="ucp-loading">Loading conversations...</div>
-            </div>
-            <div id="ucp-input-area" class="ucp-input-area">
-                <div id="ucp-reply-indicator" class="ucp-reply-indicator" style="display: none;">
-                    <span class="ucp-reply-text"></span>
-                    <button class="ucp-reply-cancel" type="button">&times;</button>
-                </div>
-                <div id="ucp-attach-bar" class="ucp-attach-bar">
-                    <select id="ucp-attach-select" class="ucp-attach-select" title="Attach to plan item">
-                        <option value="">Plan-wide chat</option>
-                    </select>
-                </div>
-                <form id="ucp-message-form" class="ucp-message-form">
-                    <input type="text" id="ucp-message-input" class="ucp-message-input" placeholder="Message the team..." autocomplete="off">
-                    <button type="submit" class="ucp-send-btn" title="Send">
-                        <span>&#10148;</span>
-                    </button>
-                </form>
-            </div>
-        </div>
-
         <!-- Drag-and-Drop Zones for Presentation View (Enhanced) -->
         <!-- Left side: Actions (Goals at top, Archive/Delete at bottom) -->
         <!-- Right side: Reactions and Comments -->
@@ -5990,6 +5832,54 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
                 </div>
                 <button class="merge-dialog-cancel" id="merge-dialog-cancel">Cancel</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Unified Chat Side Panel - Shared across catalog and presentation views -->
+    <div id="unified-chat-panel" class="unified-chat-panel">
+        <div class="ucp-header">
+            <div class="ucp-header-left">
+                <h3 class="ucp-title">Conversations</h3>
+                <span id="ucp-online-count" class="ucp-online-badge" title="People online">0</span>
+            </div>
+            <div class="ucp-header-right">
+                <button id="ucp-menu-btn" class="ucp-menu-btn" title="Chat options" aria-label="Chat options">
+                    <span class="ucp-menu-icon">&#x22EE;</span>
+                </button>
+                <button id="ucp-close-btn" class="ucp-close-btn" title="Close panel" aria-label="Close chat panel">
+                    <span>&times;</span>
+                </button>
+            </div>
+        </div>
+        <div class="ucp-filters">
+            <button class="ucp-filter-btn active" data-filter="all">All</button>
+            <button class="ucp-filter-btn" data-filter="comments">Comments</button>
+            <button class="ucp-filter-btn" data-filter="ideas">Ideas</button>
+            <button class="ucp-filter-btn" data-filter="tasks">Tasks</button>
+            <label class="ucp-hide-completed-toggle" id="ucp-hide-completed-toggle" title="Hide completed items">
+                <input type="checkbox" id="ucp-hide-completed-cb">
+                <span class="ucp-hide-completed-label">Hide done</span>
+            </label>
+        </div>
+        <div id="ucp-content" class="ucp-content">
+            <div class="ucp-loading">Loading conversations...</div>
+        </div>
+        <div id="ucp-input-area" class="ucp-input-area">
+            <div id="ucp-reply-indicator" class="ucp-reply-indicator" style="display: none;">
+                <span class="ucp-reply-text"></span>
+                <button class="ucp-reply-cancel" type="button">&times;</button>
+            </div>
+            <div id="ucp-attach-bar" class="ucp-attach-bar">
+                <select id="ucp-attach-select" class="ucp-attach-select" title="Attach to plan item">
+                    <option value="">Plan-wide chat</option>
+                </select>
+            </div>
+            <form id="ucp-message-form" class="ucp-message-form">
+                <input type="text" id="ucp-message-input" class="ucp-message-input" placeholder="Message the team..." autocomplete="off">
+                <button type="submit" class="ucp-send-btn" title="Send">
+                    <span>&#10148;</span>
+                </button>
+            </form>
         </div>
     </div>
 

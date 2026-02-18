@@ -12590,9 +12590,8 @@ export async function showPresentationView(listType, startRecordId = null) {
 
     // Show modal - let CSS handle display via .active class
     // CSS: .presentation-fullpage.active { display: flex }
-    // CSS: .presentation-fullpage.active.ucp-open { display: grid } (for side panel layout)
+    // UCP panel is now a fixed overlay (body.ucp-panel-open) rather than a grid column
     // IMPORTANT: Do NOT set modal.style.display here - inline styles override CSS class rules
-    // and prevent the grid layout from activating when ucp-open is present
 
     // Remove early-loading optimization class BEFORE adding .active
     // The loading CSS has `display: flex !important` which would override the grid layout

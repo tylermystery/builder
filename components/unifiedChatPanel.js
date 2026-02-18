@@ -1,5 +1,5 @@
 // FILE: components/unifiedChatPanel.js
-// Unified Chat Panel - Persistent side panel for presentation view
+// Unified Chat Panel - Side panel for conversations (shared across catalog and presentation views)
 // Single main thread timeline with nested item comments and sub-threads on replies
 // Features: chronological timeline, inline reactions, task modal, message editing
 
@@ -12,8 +12,7 @@ import { showTaskModal } from './taskManager.js';
 // ===== MODULE STATE =====
 let getCurrentUserFn = null;
 let sendChatMessageFn = null; // Setter-injected from chat.js to avoid circular dep
-let panelOpen = true;
-let panelCollapsed = false;
+let panelOpen = false;
 let currentFilter = 'all'; // 'all' | 'comments' | 'ideas' | 'tasks'
 let ucpMessages = [];
 let ucpPlanEvents = [];
@@ -58,10 +57,9 @@ export function initializeUnifiedChatPanel() {
         commentTaskLinks: state.eventDetails.combined.get('_commentTaskLinks')
     });
 
-    setupPanelToggle();
+    setupPanelClose();
     setupFilters();
     setupMessageForm();
-    setupMobileToggle();
     setupChatMenuActions();
     setupTaskCreationListener();
     setupHideCompletedToggle();
@@ -76,11 +74,8 @@ export async function showUnifiedChatPanel() {
         sessionId: state.session?.id,
         commentTaskLinks: state.eventDetails.combined.get('_commentTaskLinks')
     });
-    const overlay = document.getElementById('presentation-modal-overlay');
-    if (overlay) {
-        overlay.classList.add('ucp-open');
-    }
-    const ucpPanel = document.getElementById('unified-chat-panel');
+    document.body.classList.add('ucp-panel-open');
+    // Also maintain legacy class for any CSS that still references it
     document.body.classList.add('ucp-panel-active');
     panelOpen = true;
     shouldScrollToBottom = true;
@@ -89,13 +84,11 @@ export async function showUnifiedChatPanel() {
     await loadPanelData();
     updateOnlineCount();
 
-    // Debug: log layout dimensions to diagnose overflow/scroll issues
+    // Debug: log layout dimensions
     requestAnimationFrame(() => {
         const panel = document.getElementById('unified-chat-panel');
         const content = document.getElementById('ucp-content');
         const inputArea = document.getElementById('ucp-input-area');
-        const presContent = document.querySelector('.presentation-content');
-        const itinScroll = document.querySelector('.presentation-itinerary-scroll');
         console.log('[UCP LAYOUT DEBUG] Panel dimensions:', {
             panelHeight: panel?.offsetHeight,
             panelClientHeight: panel?.clientHeight,
@@ -106,24 +99,21 @@ export async function showUnifiedChatPanel() {
             inputAreaVisible: inputArea ? (inputArea.offsetTop + inputArea.offsetHeight <= (panel?.offsetHeight || 0)) : 'N/A',
             viewportHeight: window.innerHeight
         });
-        console.log('[UCP LAYOUT DEBUG] Presentation content:', {
-            presContentHeight: presContent?.offsetHeight,
-            presContentClientHeight: presContent?.clientHeight,
-            itinScrollHeight: itinScroll?.offsetHeight,
-            itinScrollScrollHeight: itinScroll?.scrollHeight,
-            itinScrollOverflowY: itinScroll ? getComputedStyle(itinScroll).overflowY : 'N/A',
-            presContentOverflow: presContent ? getComputedStyle(presContent).overflow : 'N/A'
-        });
     });
 }
 
 export function hideUnifiedChatPanel() {
-    const overlay = document.getElementById('presentation-modal-overlay');
-    if (overlay) {
-        overlay.classList.remove('ucp-open');
-    }
+    document.body.classList.remove('ucp-panel-open');
     document.body.classList.remove('ucp-panel-active');
     panelOpen = false;
+}
+
+export async function toggleUnifiedChatPanel() {
+    if (panelOpen) {
+        hideUnifiedChatPanel();
+    } else {
+        await showUnifiedChatPanel();
+    }
 }
 
 export async function refreshUnifiedChatPanel() {
@@ -143,25 +133,11 @@ export function onUCPNewItem(itemType, data) {
 
 // ===== SETUP FUNCTIONS =====
 
-function setupPanelToggle() {
-    const toggleBtn = document.getElementById('ucp-toggle-btn');
-    if (toggleBtn) {
-        toggleBtn.addEventListener('click', () => {
-            const panel = document.getElementById('unified-chat-panel');
-            if (!panel) return;
-            panelCollapsed = !panelCollapsed;
-            panel.classList.toggle('collapsed', panelCollapsed);
-        });
-    }
-
-    // Allow clicking anywhere on the collapsed panel to expand it
-    const panel = document.getElementById('unified-chat-panel');
-    if (panel) {
-        panel.addEventListener('click', (e) => {
-            if (panelCollapsed && !e.target.closest('.ucp-toggle-btn') && !e.target.closest('.ucp-menu-btn')) {
-                panelCollapsed = false;
-                panel.classList.remove('collapsed');
-            }
+function setupPanelClose() {
+    const closeBtn = document.getElementById('ucp-close-btn');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            hideUnifiedChatPanel();
         });
     }
 }
@@ -188,21 +164,6 @@ function setupMessageForm() {
     const cancelReplyBtn = document.querySelector('.ucp-reply-cancel');
     if (cancelReplyBtn) {
         cancelReplyBtn.addEventListener('click', cancelReply);
-    }
-}
-
-function setupMobileToggle() {
-    const mobileToggle = document.getElementById('ucp-mobile-toggle');
-    if (mobileToggle) {
-        mobileToggle.addEventListener('click', () => {
-            const overlay = document.getElementById('presentation-modal-overlay');
-            if (overlay) {
-                overlay.classList.toggle('ucp-open');
-                panelOpen = overlay.classList.contains('ucp-open');
-                document.body.classList.toggle('ucp-panel-active', panelOpen);
-                if (panelOpen) loadPanelData();
-            }
-        });
     }
 }
 
@@ -1559,20 +1520,12 @@ export function updateUCPOnlineCount(count) {
  * @param {string} recordId - The item record ID to filter discussion for
  */
 export async function openUCPForItem(recordId) {
-    // Ensure the panel is visible and expanded
+    // Ensure the panel is visible
     const panel = document.getElementById('unified-chat-panel');
     if (!panel) return;
 
-    if (panelCollapsed) {
-        panelCollapsed = false;
-        panel.classList.remove('collapsed');
-    }
-
-    // Ensure presentation overlay has ucp-open class
-    const overlay = document.getElementById('presentation-modal-overlay');
-    if (overlay && !overlay.classList.contains('ucp-open')) {
-        overlay.classList.add('ucp-open');
-    }
+    // Open the panel using the standard mechanism
+    document.body.classList.add('ucp-panel-open');
     document.body.classList.add('ucp-panel-active');
     panelOpen = true;
 
