@@ -8032,9 +8032,19 @@ hr.total-divider {
     color: #6c757d;
 }
 
-.task-assignee {
-    font-size: 0.8em;
-    color: #007bff;
+.task-collaborators {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+
+.task-collaborator-tag {
+    font-size: 0.75em;
+    color: #fff;
+    background-color: #007bff;
+    padding: 1px 6px;
+    border-radius: 10px;
+    white-space: nowrap;
 }
 
 /* Task Card Actions */
@@ -8422,28 +8432,81 @@ hr.total-divider {
     max-width: 180px;
 }
 
-/* Link Item Select in Modal */
-.task-linked-item-select-wrapper {
+/* Collaborator Chip Input in Task Modal */
+.task-collaborators-container {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    background-color: #fff;
+    cursor: text;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    min-height: 42px;
 }
 
-.task-linked-item-select-wrapper select {
-    width: 100%;
+.task-collaborators-container:focus-within {
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
 }
 
-.task-linked-item-search {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
+.task-collaborator-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.task-collaborator-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background-color: #e7f1ff;
+    border: 1px solid #b6d4fe;
+    border-radius: 12px;
+    font-size: 0.85em;
+    color: #0d47a1;
+    white-space: nowrap;
+}
+
+.task-collaborator-remove {
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    font-size: 1.1em;
+    line-height: 1;
+    padding: 0 2px;
+    border-radius: 50%;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.task-collaborator-remove:hover {
+    color: #dc3545;
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+.task-collaborator-input {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    padding: 4px !important;
+    flex: 1;
+    min-width: 120px;
     font-size: 0.9em;
+    background: transparent;
 }
 
-.task-linked-item-search:focus {
-    outline: none;
-    border-color: #3498db;
+/* Linked Plan Item type badge */
+.linked-item-type-badge {
+    font-size: 0.7em;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background-color: #e2e8f0;
+    color: #4a5568;
+    white-space: nowrap;
 }
 
 .task-form-hint {

@@ -357,7 +357,8 @@ function renderTaskCard(task) {
     const name = fields.Name || 'Untitled Task';
     const status = fields.Status || api.TASK_STATUS.PENDING;
     const dueDate = fields.DueDate ? formatDate(fields.DueDate) : '';
-    const assignee = fields.Assignee || '';
+    const assigneeRaw = fields.Assignee || '';
+    const collaborators = assigneeRaw ? assigneeRaw.split(',').map(c => c.trim()).filter(Boolean) : [];
     const isCompleted = status === api.TASK_STATUS.COMPLETED;
     const linkedItemId = fields.LinkedItem ? fields.LinkedItem[0] : null;
 
@@ -408,7 +409,7 @@ function renderTaskCard(task) {
                     <div class="task-card-meta">
                         <span class="task-status-badge ${statusBadgeClass}">${statusLabel}</span>
                         ${dueDate ? `<span class="task-due-date">${dueDate}</span>` : ''}
-                        ${assignee ? `<span class="task-assignee">${escapeHtml(assignee)}</span>` : ''}
+                        ${collaborators.length > 0 ? `<span class="task-collaborators">${collaborators.map(c => `<span class="task-collaborator-tag">${escapeHtml(c)}</span>`).join('')}</span>` : ''}
                     </div>
                     ${linkedItemHtml}
                 </div>
@@ -420,7 +421,8 @@ function renderTaskCard(task) {
 
 /**
  * Render linked item snippet for task card
- * @param {string} itemId - The catalog item ID
+ * Shows the linked plan item with thumbnail and name
+ * @param {string} itemId - The plan item ID
  * @returns {string} - HTML string for linked item display
  */
 function renderLinkedItemSnippet(itemId) {
@@ -430,7 +432,7 @@ function renderLinkedItemSnippet(itemId) {
     if (!item) {
         return `
             <div class="task-linked-item task-linked-item-missing" data-item-id="${itemId}">
-                <span class="linked-item-icon">📦</span>
+                <span class="linked-item-icon">📋</span>
                 <span class="linked-item-name">Linked Item</span>
             </div>
         `;
@@ -438,14 +440,18 @@ function renderLinkedItemSnippet(itemId) {
 
     const itemName = item.fields?.Name || 'Unnamed Item';
     const thumbnail = item.fields?.Attachments?.[0]?.thumbnails?.small?.url || '';
+    const isLocked = state.cart.lockedItems?.has(itemId);
+    const isIdea = state.cart.items?.has(itemId);
+    const typeLabel = isLocked ? 'Plan' : (isIdea ? 'Idea' : 'Item');
 
     return `
         <div class="task-linked-item" data-item-id="${itemId}" title="Click to view item details">
             ${thumbnail
                 ? `<img src="${thumbnail}" alt="${escapeHtml(itemName)}" class="linked-item-thumb" loading="lazy">`
-                : `<span class="linked-item-icon">📦</span>`
+                : `<span class="linked-item-icon">📋</span>`
             }
             <span class="linked-item-name">${escapeHtml(itemName)}</span>
+            <span class="linked-item-type-badge">${typeLabel}</span>
         </div>
     `;
 }
@@ -675,8 +681,13 @@ export function showTaskModal(task = null, projectId = null) {
         currentProjectId = projectId;
     }
 
-    // Build catalog items dropdown options
-    const catalogItemsOptions = buildCatalogItemsOptions(linkedItemId);
+    // Build plan items dropdown options (locked items + ideas from the current plan)
+    const planItemsOptions = buildPlanItemsOptions(linkedItemId);
+
+    // Parse existing collaborators from comma-separated Assignee field
+    const existingCollaborators = fields.Assignee
+        ? fields.Assignee.split(',').map(c => c.trim()).filter(Boolean)
+        : [];
 
     // Create modal HTML
     const modalHtml = `
@@ -716,23 +727,30 @@ export function showTaskModal(task = null, projectId = null) {
                         </div>
                     </div>
                     <div class="task-form-group">
-                        <label for="task-assignee">Assignee</label>
-                        <input type="text" id="task-assignee" name="assignee"
-                               value="${escapeHtml(fields.Assignee || '')}"
-                               placeholder="Assign to someone (optional)">
+                        <label>Collaborators</label>
+                        <div class="task-collaborators-container" id="task-collaborators-container">
+                            <div class="task-collaborator-chips" id="task-collaborator-chips">
+                                ${existingCollaborators.map(name => `
+                                    <span class="task-collaborator-chip" data-name="${escapeHtml(name)}">
+                                        ${escapeHtml(name)}
+                                        <button type="button" class="task-collaborator-remove" title="Remove">&times;</button>
+                                    </span>
+                                `).join('')}
+                            </div>
+                            <input type="text" id="task-collaborator-input"
+                                   placeholder="${existingCollaborators.length > 0 ? 'Add another...' : 'Add collaborator name and press Enter'}"
+                                   class="task-collaborator-input"
+                                   autocomplete="off">
+                        </div>
+                        <small class="task-form-hint">Press Enter or comma to add. Multiple collaborators can work on this task.</small>
                     </div>
                     <div class="task-form-group">
-                        <label for="task-linked-item">Link Catalog Item</label>
-                        <div class="task-linked-item-select-wrapper">
-                            <select id="task-linked-item" name="linkedItem">
-                                <option value="">-- No linked item --</option>
-                                ${catalogItemsOptions}
-                            </select>
-                            <input type="text" id="task-linked-item-search"
-                                   placeholder="Search items..."
-                                   class="task-linked-item-search">
-                        </div>
-                        <small class="task-form-hint">Associate a catalog item/product with this task</small>
+                        <label for="task-linked-item">Link Plan Item</label>
+                        <select id="task-linked-item" name="linkedItem">
+                            <option value="">-- No linked item --</option>
+                            ${planItemsOptions}
+                        </select>
+                        <small class="task-form-hint">Associate a plan item with this task</small>
                     </div>
                     <div class="task-form-actions">
                         <button type="button" class="task-cancel-btn" id="task-cancel-btn">Cancel</button>
@@ -751,11 +769,9 @@ export function showTaskModal(task = null, projectId = null) {
     const closeBtn = document.getElementById('task-modal-close');
     const cancelBtn = document.getElementById('task-cancel-btn');
     const form = document.getElementById('task-form');
-    const linkedItemSelect = document.getElementById('task-linked-item');
-    const linkedItemSearch = document.getElementById('task-linked-item-search');
 
-    // Setup linked item search/filter
-    setupLinkedItemSearch(linkedItemSelect, linkedItemSearch);
+    // Setup collaborator chip input
+    setupCollaboratorInput();
 
     // Close modal handlers
     const closeModal = () => {
@@ -786,75 +802,133 @@ export function showTaskModal(task = null, projectId = null) {
 }
 
 /**
- * Build catalog items dropdown options HTML
+ * Build plan items dropdown options HTML
+ * Uses items from the current plan (locked items + ideas) instead of full catalog
  * @param {string} selectedItemId - Currently selected item ID
  * @returns {string} - HTML string for dropdown options
  */
-function buildCatalogItemsOptions(selectedItemId = '') {
-    const items = state.records.all || [];
-
-    if (items.length === 0) {
-        return '<option value="" disabled>No catalog items available</option>';
+function buildPlanItemsOptions(selectedItemId = '') {
+    // Gather plan items: locked items (confirmed) + ideas (favorites)
+    const planItemIds = new Set();
+    if (state.cart.lockedItems) {
+        state.cart.lockedItems.forEach((info, id) => planItemIds.add(id));
+    }
+    if (state.cart.items) {
+        state.cart.items.forEach((info, id) => planItemIds.add(id));
     }
 
+    if (planItemIds.size === 0) {
+        return '<option value="" disabled>No plan items available</option>';
+    }
+
+    // Build option entries from plan item IDs
+    const planItems = [];
+    planItemIds.forEach(itemId => {
+        const record = state.records.all.find(r => r.id === itemId);
+        if (record) {
+            planItems.push(record);
+        }
+    });
+
     // Sort items alphabetically by name
-    const sortedItems = [...items].sort((a, b) => {
+    planItems.sort((a, b) => {
         const nameA = (a.fields?.Name || '').toLowerCase();
         const nameB = (b.fields?.Name || '').toLowerCase();
         return nameA.localeCompare(nameB);
     });
 
-    return sortedItems.map(item => {
+    return planItems.map(item => {
         const itemId = item.id;
         const itemName = item.fields?.Name || 'Unnamed Item';
-        const itemType = item.fields?.['Item Type'] || '';
+        const isLocked = state.cart.lockedItems.has(itemId);
+        const typeLabel = isLocked ? 'Plan' : 'Idea';
         const isSelected = itemId === selectedItemId ? 'selected' : '';
-        const displayName = itemType ? `${itemName} (${itemType})` : itemName;
+        const displayName = `${itemName} (${typeLabel})`;
 
         return `<option value="${itemId}" ${isSelected}>${escapeHtml(displayName)}</option>`;
     }).join('');
 }
 
 /**
- * Setup linked item search filtering
- * @param {HTMLSelectElement} selectEl - The select element
- * @param {HTMLInputElement} searchEl - The search input element
+ * Setup the collaborator chip input behavior
+ * Handles adding/removing collaborator names as tags
  */
-function setupLinkedItemSearch(selectEl, searchEl) {
-    if (!selectEl || !searchEl) return;
+function setupCollaboratorInput() {
+    const input = document.getElementById('task-collaborator-input');
+    const chipsContainer = document.getElementById('task-collaborator-chips');
+    if (!input || !chipsContainer) return;
 
-    // Store original options
-    const originalOptions = Array.from(selectEl.options).map(opt => ({
-        value: opt.value,
-        text: opt.text,
-        selected: opt.selected
-    }));
-
-    searchEl.addEventListener('input', (e) => {
-        const searchTerm = e.target.value.toLowerCase().trim();
-
-        // Clear and repopulate select
-        selectEl.innerHTML = '';
-
-        // Always add the "no linked item" option
-        const noItemOption = document.createElement('option');
-        noItemOption.value = '';
-        noItemOption.textContent = '-- No linked item --';
-        selectEl.appendChild(noItemOption);
-
-        // Filter and add matching options
-        originalOptions.forEach(opt => {
-            if (opt.value === '') return; // Skip the empty option we already added
-
-            if (!searchTerm || opt.text.toLowerCase().includes(searchTerm)) {
-                const option = document.createElement('option');
-                option.value = opt.value;
-                option.textContent = opt.text;
-                option.selected = opt.selected;
-                selectEl.appendChild(option);
+    // Add collaborator on Enter or comma
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            const name = input.value.replace(/,/g, '').trim();
+            if (name) {
+                addCollaboratorChip(chipsContainer, name, input);
+                input.value = '';
             }
-        });
+        }
+        // Remove last chip on Backspace when input is empty
+        if (e.key === 'Backspace' && input.value === '') {
+            const lastChip = chipsContainer.querySelector('.task-collaborator-chip:last-of-type');
+            if (lastChip) {
+                lastChip.remove();
+            }
+        }
     });
+
+    // Also add on blur (when user clicks away)
+    input.addEventListener('blur', () => {
+        const name = input.value.replace(/,/g, '').trim();
+        if (name) {
+            addCollaboratorChip(chipsContainer, name, input);
+            input.value = '';
+        }
+    });
+
+    // Handle remove button clicks on existing chips
+    chipsContainer.addEventListener('click', (e) => {
+        const removeBtn = e.target.closest('.task-collaborator-remove');
+        if (removeBtn) {
+            removeBtn.closest('.task-collaborator-chip').remove();
+        }
+    });
+}
+
+/**
+ * Add a collaborator chip to the container
+ * @param {HTMLElement} container - The chips container
+ * @param {string} name - The collaborator name
+ * @param {HTMLInputElement} input - The input element (to update placeholder)
+ */
+function addCollaboratorChip(container, name, input) {
+    // Prevent duplicates
+    const existing = container.querySelectorAll('.task-collaborator-chip');
+    for (const chip of existing) {
+        if (chip.dataset.name.toLowerCase() === name.toLowerCase()) {
+            return; // Already exists
+        }
+    }
+
+    const chip = document.createElement('span');
+    chip.className = 'task-collaborator-chip';
+    chip.dataset.name = name;
+    chip.innerHTML = `${escapeHtml(name)}<button type="button" class="task-collaborator-remove" title="Remove">&times;</button>`;
+    container.appendChild(chip);
+
+    // Update placeholder
+    if (input) {
+        input.placeholder = 'Add another...';
+    }
+}
+
+/**
+ * Get all collaborator names from the chips container
+ * @returns {string[]} - Array of collaborator names
+ */
+function getCollaboratorNames() {
+    const chips = document.querySelectorAll('#task-collaborator-chips .task-collaborator-chip');
+    return Array.from(chips).map(chip => chip.dataset.name).filter(Boolean);
 }
 
 /**
@@ -866,12 +940,23 @@ async function handleTaskSubmit(form, closeModal) {
     const formData = new FormData(form);
     const linkedItemValue = formData.get('linkedItem');
 
+    // Collect collaborators from chip input
+    const collaborators = getCollaboratorNames();
+    // Also check if there's text in the input that wasn't submitted as a chip
+    const pendingInput = document.getElementById('task-collaborator-input');
+    if (pendingInput && pendingInput.value.trim()) {
+        const pending = pendingInput.value.trim();
+        if (!collaborators.includes(pending)) {
+            collaborators.push(pending);
+        }
+    }
+
     const taskData = {
         Name: formData.get('name')?.trim(),
         Description: formData.get('description')?.trim(),
         Status: formData.get('status'),
         DueDate: formData.get('dueDate') || null,
-        Assignee: formData.get('assignee')?.trim() || null,
+        Assignee: collaborators.length > 0 ? collaborators.join(', ') : null,
         LinkedItem: linkedItemValue || null
     };
 
