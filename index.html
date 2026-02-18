@@ -3012,16 +3012,20 @@ select:focus-visible,
     display: grid;
     grid-template-columns: 1fr auto;
     grid-template-rows: auto 1fr;
+    overflow: hidden; /* Prevent grid from extending beyond viewport */
 }
 
 /* Header spans full row when chat panel is open */
 .presentation-fullpage.active.ucp-open .presentation-header {
+    grid-row: 1;
     grid-column: 1 / -1;
 }
 
 .presentation-fullpage.active.ucp-open .presentation-content {
+    grid-row: 2;
+    grid-column: 1;
     min-width: 0;
-    min-height: 0;
+    min-height: 0; /* Critical: allow grid child to shrink below content size for overflow scrolling */
     width: auto;
     height: 100%; /* Fill the grid cell row */
     overflow: hidden;
@@ -3047,6 +3051,8 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
     min-width: 320px;
     max-width: 420px;
     height: 100%;
+    min-height: 0; /* Allow flex/grid child to shrink below content size */
+    overflow: hidden; /* Contain children within panel bounds */
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -3059,6 +3065,8 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
 
 .presentation-fullpage.active.ucp-open .unified-chat-panel {
     display: flex;
+    grid-row: 2;
+    grid-column: 2;
 }
 
 /* Collapsed state */
@@ -3320,6 +3328,7 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
 /* Content area */
 .ucp-content {
     flex: 1;
+    min-height: 0; /* Critical: allow flex child to shrink below content size so input area stays visible */
     overflow-y: auto;
     overflow-x: hidden;
     padding: 8px 10px;

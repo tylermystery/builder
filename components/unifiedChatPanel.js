@@ -86,6 +86,33 @@ export async function showUnifiedChatPanel() {
     populateAttachSelect();
     await loadPanelData();
     updateOnlineCount();
+
+    // Debug: log layout dimensions to diagnose overflow/scroll issues
+    requestAnimationFrame(() => {
+        const panel = document.getElementById('unified-chat-panel');
+        const content = document.getElementById('ucp-content');
+        const inputArea = document.getElementById('ucp-input-area');
+        const presContent = document.querySelector('.presentation-content');
+        const itinScroll = document.querySelector('.presentation-itinerary-scroll');
+        console.log('[UCP LAYOUT DEBUG] Panel dimensions:', {
+            panelHeight: panel?.offsetHeight,
+            panelClientHeight: panel?.clientHeight,
+            contentHeight: content?.offsetHeight,
+            contentScrollHeight: content?.scrollHeight,
+            inputAreaHeight: inputArea?.offsetHeight,
+            inputAreaOffsetTop: inputArea?.offsetTop,
+            inputAreaVisible: inputArea ? (inputArea.offsetTop + inputArea.offsetHeight <= (panel?.offsetHeight || 0)) : 'N/A',
+            viewportHeight: window.innerHeight
+        });
+        console.log('[UCP LAYOUT DEBUG] Presentation content:', {
+            presContentHeight: presContent?.offsetHeight,
+            presContentClientHeight: presContent?.clientHeight,
+            itinScrollHeight: itinScroll?.offsetHeight,
+            itinScrollScrollHeight: itinScroll?.scrollHeight,
+            itinScrollOverflowY: itinScroll ? getComputedStyle(itinScroll).overflowY : 'N/A',
+            presContentOverflow: presContent ? getComputedStyle(presContent).overflow : 'N/A'
+        });
+    });
 }
 
 export function hideUnifiedChatPanel() {
@@ -395,6 +422,21 @@ function renderContent() {
         container.scrollTop = container.scrollHeight;
         shouldScrollToBottom = false;
     }
+
+    // Debug: verify UCP content area is scrollable and input is visible
+    requestAnimationFrame(() => {
+        const panel = document.getElementById('unified-chat-panel');
+        const inputArea = document.getElementById('ucp-input-area');
+        console.log('[UCP RENDER DEBUG] After renderContent:', {
+            contentOffsetH: container.offsetHeight,
+            contentScrollH: container.scrollHeight,
+            contentCanScroll: container.scrollHeight > container.offsetHeight,
+            inputAreaDisplay: inputArea?.style.display,
+            inputAreaBottom: inputArea ? (inputArea.offsetTop + inputArea.offsetHeight) : 'N/A',
+            panelBottom: panel?.offsetHeight,
+            inputVisible: inputArea && panel ? (inputArea.offsetTop + inputArea.offsetHeight <= panel.offsetHeight + 1) : 'N/A'
+        });
+    });
 }
 
 function getDateLabel(timestamp) {

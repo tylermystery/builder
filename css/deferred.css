@@ -3222,6 +3222,7 @@ html.presentation-active {
 
 .presentation-itinerary-scroll {
     flex: 1;
+    min-height: 0; /* Critical: allow flex child to shrink below content size for proper scrolling */
     overflow-y: auto;
     overflow-x: hidden;
     padding: 20px;
