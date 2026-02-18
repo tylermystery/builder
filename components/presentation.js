@@ -4646,14 +4646,14 @@ function checkRadialBucketHover(clientX, clientY) {
  * Maps action IDs to the same functions used by drag bucket drops.
  * @param {string} actionId - The action ID (e.g. 'goal', 'archive', 'delete')
  * @param {string} recordId - The item record ID
+ * @param {string} [context] - The action menu context ('plan-item', 'chat', 'image', 'variation')
  */
-function handleActionMenuAction(actionId, recordId) {
+function handleActionMenuAction(actionId, recordId, context) {
     if (!recordId) {
         console.log('[ActionMenu Handler DEBUG] handleActionMenuAction called with no recordId, returning');
         return;
     }
-    console.log('[ActionMenu Handler DEBUG] Action:', actionId, 'for item:', recordId);
-    console.log('[ActionMenu Handler DEBUG] Available actions: goal, ideas, lock, merge, archive, delete, quick-comment, completed');
+    console.log('[ActionMenu Handler DEBUG] Action:', actionId, 'for item:', recordId, 'context:', context || 'plan-item');
 
     switch (actionId) {
         case 'goal':

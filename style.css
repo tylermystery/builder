@@ -14526,6 +14526,7 @@ hr.total-divider {
 
 /* ==========================================================================
    UNIFIED ACTION MENU (radial emoji + vitality + collaborator actions)
+   Styles are in css/deferred.css — this section kept as baseline fallback
    ========================================================================== */
 
 /* Overlay backdrop */
@@ -14543,6 +14544,7 @@ hr.total-divider {
     transition: opacity 0.2s ease-out;
     -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
+    z-index: 100000;
 }
 .action-menu-overlay.action-menu-visible {
     opacity: 1;
@@ -14563,10 +14565,10 @@ hr.total-divider {
 /* ── Center hub ── */
 .action-menu-center {
     position: absolute;
-    width: 80px;
-    height: 80px;
-    left: -40px;
-    top: -40px;
+    width: 76px;
+    height: 76px;
+    left: -38px;
+    top: -38px;
     background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
     border-radius: 50%;
     display: flex;
@@ -14574,7 +14576,7 @@ hr.total-divider {
     align-items: center;
     justify-content: center;
     z-index: 10;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 3px rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), 0 0 0 3px rgba(255, 255, 255, 0.2);
     cursor: default;
     transition: transform 0.2s ease;
 }
@@ -14583,7 +14585,7 @@ hr.total-divider {
 }
 
 .action-menu-center-emoji {
-    font-size: 1.8em;
+    font-size: 1.6em;
     line-height: 1;
     transition: all 0.2s ease;
 }
@@ -14593,7 +14595,7 @@ hr.total-divider {
 }
 
 .action-menu-center-score {
-    font-size: 0.55em;
+    font-size: 0.65em;
     color: #94a3b8;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
@@ -14604,10 +14606,10 @@ hr.total-divider {
 }
 
 .action-menu-center-label {
-    font-size: 0.45em;
-    color: #64748b;
+    font-size: 0.5em;
+    color: #94a3b8;
     text-align: center;
-    max-width: 70px;
+    max-width: 66px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -14670,8 +14672,8 @@ hr.total-divider {
 }
 
 .action-menu-emoji-score {
-    font-size: 0.5em;
-    color: #cbd5e1;
+    font-size: 0.55em;
+    color: #e2e8f0;
     font-weight: 600;
     pointer-events: none;
     font-variant-numeric: tabular-nums;
@@ -14724,20 +14726,21 @@ hr.total-divider {
 }
 
 .action-menu-action-label {
-    font-size: 0.5em;
-    color: rgba(255, 255, 255, 0.9);
-    font-weight: 600;
+    font-size: 0.55em;
+    color: rgba(255, 255, 255, 0.95);
+    font-weight: 700;
     letter-spacing: 0.3px;
     pointer-events: none;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 /* ── Tier label ── */
 .action-menu-tier-label {
     position: absolute;
-    top: 50px;
+    top: 46px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(30, 41, 59, 0.9);
+    background: rgba(30, 41, 59, 0.92);
     color: #e2e8f0;
     font-size: 0.7em;
     font-weight: 600;
@@ -14760,21 +14763,21 @@ hr.total-divider {
 /* ── Vitality summary panel ── */
 .action-menu-vitality-summary {
     position: absolute;
-    bottom: -60px;
+    bottom: -56px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(15, 23, 42, 0.92);
+    background: rgba(15, 23, 42, 0.94);
     border-radius: 12px;
     padding: 10px 14px;
     min-width: 200px;
     max-width: 260px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     z-index: 5;
 }
 
 .action-menu-summary-title {
-    font-size: 0.6em;
+    font-size: 0.7em;
     color: #94a3b8;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -14786,48 +14789,48 @@ hr.total-divider {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: 3px;
+    margin-bottom: 4px;
 }
 
 .action-menu-realm-icon {
-    font-size: 0.75em;
-    width: 18px;
+    font-size: 0.85em;
+    width: 20px;
     text-align: center;
 }
 
 .action-menu-realm-bar-track {
     flex: 1;
-    height: 4px;
+    height: 5px;
     background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
+    border-radius: 3px;
     overflow: hidden;
 }
 
 .action-menu-realm-bar-fill {
     height: 100%;
-    border-radius: 2px;
+    border-radius: 3px;
     transition: width 0.4s ease;
 }
 
 .action-menu-realm-val {
-    font-size: 0.55em;
+    font-size: 0.65em;
     font-weight: 600;
-    width: 38px;
+    width: 40px;
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
 
 .action-menu-summary-sentiment {
-    font-size: 0.55em;
-    color: #64748b;
-    margin-top: 4px;
+    font-size: 0.65em;
+    color: #94a3b8;
+    margin-top: 5px;
     text-align: center;
 }
 
 .action-menu-summary-formula {
-    font-size: 0.5em;
+    font-size: 0.6em;
     color: #94a3b8;
-    margin-top: 4px;
+    margin-top: 5px;
     text-align: center;
     display: flex;
     align-items: center;
@@ -14847,42 +14850,42 @@ hr.total-divider {
 /* ── Mobile adjustments ── */
 @media (max-width: 768px) {
     .action-menu-center {
-        width: 66px;
-        height: 66px;
-        left: -33px;
-        top: -33px;
+        width: 64px;
+        height: 64px;
+        left: -32px;
+        top: -32px;
     }
     .action-menu-center-emoji {
-        font-size: 1.5em;
+        font-size: 1.4em;
     }
     .action-menu-center-score {
-        font-size: 0.5em;
+        font-size: 0.55em;
     }
     .action-menu-center-label {
-        font-size: 0.4em;
+        font-size: 0.45em;
         max-width: 56px;
     }
     .action-menu-emoji-char {
-        font-size: 1em;
+        font-size: 1.05em;
     }
     .action-menu-emoji-score {
-        font-size: 0.45em;
+        font-size: 0.5em;
     }
     .action-menu-action-icon {
-        font-size: 1.1em;
+        font-size: 1.15em;
     }
     .action-menu-action-label {
-        font-size: 0.4em;
+        font-size: 0.5em;
     }
     .action-menu-tier-label {
         font-size: 0.6em;
-        top: 40px;
+        top: 38px;
     }
     .action-menu-vitality-summary {
         min-width: 170px;
         max-width: 220px;
         padding: 8px 10px;
-        bottom: -50px;
+        bottom: -48px;
     }
 }
 

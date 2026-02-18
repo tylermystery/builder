@@ -19,18 +19,18 @@ import { log } from '../utils/debug.js';
 console.log('[ActionMenu DEBUG] ✅ actionMenu.js MODULE LOADED');
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const INNER_RING_RADIUS = 85;        // distance from center to inner emoji ring (was 110)
-const INNER_RING_RADIUS_MOBILE = 70;
-const OUTER_RING_RADIUS = 165;       // distance from center to outer action ring (was 220)
-const OUTER_RING_RADIUS_MOBILE = 135;
-const EMOJI_ITEM_SIZE = 36;          // px, each emoji button (was 44)
-const EMOJI_ITEM_SIZE_MOBILE = 32;
-const ACTION_ITEM_SIZE = 46;         // px, each action button (was 56)
-const ACTION_ITEM_SIZE_MOBILE = 40;
-const CENTER_SIZE = 64;              // px, center hub (was 80)
-const CENTER_SIZE_MOBILE = 54;
+const INNER_RING_RADIUS = 100;       // distance from center to inner emoji ring
+const INNER_RING_RADIUS_MOBILE = 85;
+const OUTER_RING_RADIUS = 190;       // distance from center to outer action ring
+const OUTER_RING_RADIUS_MOBILE = 155;
+const EMOJI_ITEM_SIZE = 44;          // px, each emoji button
+const EMOJI_ITEM_SIZE_MOBILE = 40;
+const ACTION_ITEM_SIZE = 58;         // px, each action button
+const ACTION_ITEM_SIZE_MOBILE = 50;
+const CENTER_SIZE = 76;              // px, center hub
+const CENTER_SIZE_MOBILE = 64;
 
-// The collaborator actions (outer ring)
+// The collaborator actions (outer ring) — default for plan items
 const COLLABORATOR_ACTIONS = [
     { id: 'goal',           icon: '⭐', label: 'Goal',    bg: 'linear-gradient(135deg, rgba(255,193,7,0.95), rgba(255,160,0,0.95))' },
     { id: 'ideas',          icon: '💡', label: 'Ideas',   bg: 'linear-gradient(135deg, rgba(156,39,176,0.95), rgba(123,31,162,0.95))' },
@@ -42,10 +42,45 @@ const COLLABORATOR_ACTIONS = [
     { id: 'delete',         icon: '🗑️', label: 'Delete',  bg: 'linear-gradient(135deg, rgba(220,53,69,0.95), rgba(176,42,55,0.95))' },
 ];
 
+// Context-specific action sets — used when the menu is opened for different entity types.
+// Each context maps to a subset/superset of actions appropriate for that entity.
+const CONTEXT_ACTIONS = {
+    // Default plan item actions (same as COLLABORATOR_ACTIONS)
+    'plan-item': COLLABORATOR_ACTIONS,
+
+    // Actions for chat messages / comments
+    'chat': [
+        { id: 'reply',         icon: '↩️', label: 'Reply',   bg: 'linear-gradient(135deg, rgba(59,130,246,0.95), rgba(37,99,235,0.95))' },
+        { id: 'quick-comment', icon: '💬', label: 'Comment', bg: 'linear-gradient(135deg, rgba(0,188,212,0.95), rgba(0,151,167,0.95))' },
+        { id: 'pin',           icon: '📌', label: 'Pin',     bg: 'linear-gradient(135deg, rgba(245,158,11,0.95), rgba(217,119,6,0.95))' },
+        { id: 'flag',          icon: '🚩', label: 'Flag',    bg: 'linear-gradient(135deg, rgba(239,68,68,0.95), rgba(220,38,38,0.95))' },
+        { id: 'completed',     icon: '✓',  label: 'Done',    bg: 'linear-gradient(135deg, rgba(76,175,80,0.95), rgba(46,125,50,0.95))' },
+        { id: 'delete',        icon: '🗑️', label: 'Delete',  bg: 'linear-gradient(135deg, rgba(220,53,69,0.95), rgba(176,42,55,0.95))' },
+    ],
+
+    // Actions for images / media
+    'image': [
+        { id: 'quick-comment', icon: '💬', label: 'Comment', bg: 'linear-gradient(135deg, rgba(0,188,212,0.95), rgba(0,151,167,0.95))' },
+        { id: 'goal',          icon: '⭐', label: 'Favorite', bg: 'linear-gradient(135deg, rgba(255,193,7,0.95), rgba(255,160,0,0.95))' },
+        { id: 'flag',          icon: '🚩', label: 'Flag',    bg: 'linear-gradient(135deg, rgba(239,68,68,0.95), rgba(220,38,38,0.95))' },
+        { id: 'share',         icon: '🔗', label: 'Share',   bg: 'linear-gradient(135deg, rgba(0,150,136,0.95), rgba(0,121,107,0.95))' },
+        { id: 'delete',        icon: '🗑️', label: 'Delete',  bg: 'linear-gradient(135deg, rgba(220,53,69,0.95), rgba(176,42,55,0.95))' },
+    ],
+
+    // Actions for item variations / options
+    'variation': [
+        { id: 'quick-comment', icon: '💬', label: 'Comment', bg: 'linear-gradient(135deg, rgba(0,188,212,0.95), rgba(0,151,167,0.95))' },
+        { id: 'goal',          icon: '⭐', label: 'Prefer',  bg: 'linear-gradient(135deg, rgba(255,193,7,0.95), rgba(255,160,0,0.95))' },
+        { id: 'completed',     icon: '✓',  label: 'Select',  bg: 'linear-gradient(135deg, rgba(76,175,80,0.95), rgba(46,125,50,0.95))' },
+        { id: 'flag',          icon: '🚩', label: 'Flag',    bg: 'linear-gradient(135deg, rgba(239,68,68,0.95), rgba(220,38,38,0.95))' },
+    ],
+};
+
 // ─── State ───────────────────────────────────────────────────────────────────
 let menuOverlay = null;
 let isOpen = false;
 let currentRecordId = null;
+let currentContext = 'plan-item'; // active context type
 let currentTierIndex = 0;       // which emoji tier is currently displayed
 let previewEmoji = null;        // emoji being previewed (hovered)
 let previewScore = null;        // transient goodness preview
@@ -69,13 +104,14 @@ export function registerActionHandler(handler) {
 
 /**
  * Open the unified action menu for a specific item.
- * @param {string} recordId - The item record ID
+ * @param {string} recordId - The item record ID (or entity ID for non-item contexts)
  * @param {object} opts
  * @param {number} opts.x - Center X (viewport)
  * @param {number} opts.y - Center Y (viewport)
- * @param {function} opts.onAction - callback(actionId, recordId) for collaborator actions
+ * @param {function} opts.onAction - callback(actionId, recordId, context) for collaborator actions
+ * @param {string} opts.context - Context type: 'plan-item' (default), 'chat', 'image', 'variation'
  */
-export function openActionMenu(recordId, { x, y, onAction } = {}) {
+export function openActionMenu(recordId, { x, y, onAction, context } = {}) {
     console.log('[ActionMenu DEBUG] ──────────────────────────────────────');
     console.log('[ActionMenu DEBUG] openActionMenu() CALLED');
     console.log('[ActionMenu DEBUG]   recordId:', recordId);
@@ -99,21 +135,23 @@ export function openActionMenu(recordId, { x, y, onAction } = {}) {
     }
 
     currentRecordId = recordId;
+    currentContext = context || 'plan-item';
     onActionCallback = onAction || registeredActionHandler || null;
     currentTierIndex = 0;
     previewEmoji = null;
     previewScore = null;
     scrollAccumulator = 0;
 
+    console.log('[ActionMenu DEBUG]   context:', currentContext);
     console.log('[ActionMenu DEBUG]   onActionCallback resolved to:', typeof onActionCallback, onActionCallback?.name || '(none)');
 
     const record = getRecordById(recordId);
-    if (!record) {
+    if (!record && currentContext === 'plan-item') {
         console.error('[ActionMenu DEBUG]   ❌ getRecordById returned null/undefined for recordId:', recordId);
         console.log('[ActionMenu DEBUG]   ABORTING openActionMenu - no record found');
         return;
     }
-    console.log('[ActionMenu DEBUG]   ✅ Record found:', record.fields?.Name || '(no name)');
+    console.log('[ActionMenu DEBUG]   ✅ Record found:', record?.fields?.Name || '(non-item context or no name)');
 
     const isMobile = window.innerWidth < 768;
     console.log('[ActionMenu DEBUG]   isMobile:', isMobile, '(window.innerWidth:', window.innerWidth + ')');
@@ -149,21 +187,24 @@ export function openActionMenu(recordId, { x, y, onAction } = {}) {
     console.log('[ActionMenu DEBUG]   menuRoot positioned at cx:', cx, 'cy:', cy);
 
     // ── Center hub ──
+    // For plan-item context, show vitality center hub; for other contexts, show a simpler hub
     const centerHub = buildCenterHub(recordId);
     menuRoot.appendChild(centerHub);
     console.log('[ActionMenu DEBUG]   ✅ Center hub built and appended');
 
-    // ── Inner ring: emojis ──
+    // ── Inner ring: emojis (reactions are available in all contexts) ──
     buildEmojiRing(menuRoot, recordId);
     console.log('[ActionMenu DEBUG]   ✅ Emoji ring built');
 
-    // ── Outer ring: collaborator actions ──
+    // ── Outer ring: context-specific actions ──
     buildActionRing(menuRoot, recordId);
     console.log('[ActionMenu DEBUG]   ✅ Action ring built');
 
-    // ── Vitality summary panel (below center) ──
-    buildVitalitySummary(menuRoot, recordId);
-    console.log('[ActionMenu DEBUG]   ✅ Vitality summary built');
+    // ── Vitality summary panel (only for plan-item context) ──
+    if (currentContext === 'plan-item') {
+        buildVitalitySummary(menuRoot, recordId);
+        console.log('[ActionMenu DEBUG]   ✅ Vitality summary built');
+    }
 
     // ── Tier label ──
     const tierLabel = document.createElement('div');
@@ -301,6 +342,7 @@ export function closeActionMenu() {
     menuOverlay = null;
     isOpen = false;
     currentRecordId = null;
+    currentContext = 'plan-item';
     onActionCallback = null;
 
     setTimeout(() => {
@@ -321,6 +363,14 @@ export function closeActionMenu() {
  */
 export function isActionMenuOpen() {
     return isOpen;
+}
+
+/**
+ * Get the list of available context types for the action menu.
+ * @returns {string[]} Available context keys
+ */
+export function getActionMenuContexts() {
+    return Object.keys(CONTEXT_ACTIONS);
 }
 
 // ─── DOM Builders ────────────────────────────────────────────────────────────
@@ -428,7 +478,7 @@ function buildActionRing(container, recordId) {
     const itemSize = isMobile ? ACTION_ITEM_SIZE_MOBILE : ACTION_ITEM_SIZE;
     const halfItem = itemSize / 2;
 
-    const actions = COLLABORATOR_ACTIONS;
+    const actions = CONTEXT_ACTIONS[currentContext] || COLLABORATOR_ACTIONS;
     const angleStep = (2 * Math.PI) / actions.length;
     const startAngle = -Math.PI / 2;
 
@@ -711,13 +761,17 @@ function clearEmojiPreview(recordId) {
 // ─── Action Handling ─────────────────────────────────────────────────────────
 
 function handleActionSelect(recordId, actionId) {
-    console.log('[ActionMenu DEBUG] handleActionSelect - actionId:', actionId, 'recordId:', recordId);
+    console.log('[ActionMenu DEBUG] handleActionSelect - actionId:', actionId, 'recordId:', recordId, 'context:', currentContext);
     console.log('[ActionMenu DEBUG]   onActionCallback:', typeof onActionCallback, onActionCallback?.name || '(none)');
+
+    // Capture the callback and context BEFORE closing, since closeActionMenu() nullifies state
+    const callback = onActionCallback;
+    const ctx = currentContext;
     closeActionMenu();
 
-    if (onActionCallback) {
-        console.log('[ActionMenu DEBUG]   → Invoking onActionCallback');
-        onActionCallback(actionId, recordId);
+    if (callback) {
+        console.log('[ActionMenu DEBUG]   → Invoking captured callback with context:', ctx);
+        callback(actionId, recordId, ctx);
     } else {
         console.warn('[ActionMenu DEBUG]   ⚠️ Action selected but NO callback registered');
         log('ActionMenu', `Action "${actionId}" selected but no callback registered`);
