@@ -705,7 +705,7 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
                         'Item Type': 'Bookable Item',
                         'Parent Item': aiData.name || `AI ${searchTerm} Options`,
                         Status: 'Available',
-                        'Pricing Type': child.PricingType || 'per person',
+                        'Pricing Type': child.PricingType || 'flat rate',
                         Stores: [state.ui.activeShopId],
                         Rankings: JSON.stringify(rankingsData),
                         'Location Details': locationDetails || null,
@@ -794,7 +794,7 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
                     ServiceType: aiData.ServiceType || 'Partner Activity',
                     'Item Type': 'Bookable Item',
                     Status: 'Available',
-                    'Pricing Type': aiData.PricingType || 'per person',
+                    'Pricing Type': aiData.PricingType || 'flat rate',
                     Stores: [state.ui.activeShopId],
                     Rankings: JSON.stringify(rankingsData),
                     'Location Details': locationDetails || null,
@@ -980,7 +980,7 @@ function createManualAddOption(searchTerm) {
                 ServiceType: 'Custom Item',
                 'Item Type': 'Bookable Item',
                 Status: 'Available',
-                'Pricing Type': 'per person',
+                'Pricing Type': 'flat rate',
                 Stores: [state.ui.activeShopId],
                 Rankings: JSON.stringify({
                     "profileSource": "manual_add",
@@ -2028,6 +2028,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
                 if (itemRecord && !state.cart.lockedItems.has(itemId)) {
                     // Check if this is a per-guest item - if so, use package headcount
+                    // Items with null/missing pricing type are treated as flat rate (no headcount multiplication)
                     const pricingType = itemRecord.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
                     const isPerGuest = pricingType && pricingType.toLowerCase().includes('per guest');
 
@@ -2068,6 +2069,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
                 if (itemRecord && !state.cart.lockedItems.has(itemId) && !state.cart.items.has(itemId)) {
                     // Check if this is a per-guest item
+                    // Items with null/missing pricing type are treated as flat rate (no headcount multiplication)
                     const pricingType = itemRecord.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
                     const isPerGuest = pricingType && pricingType.toLowerCase().includes('per guest');
 
@@ -2720,6 +2722,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 if (research.name) solutionRecord.fields.Name = research.name;
                 if (research.description) solutionRecord.fields.Description = research.description;
                 if (research.price?.estimate) solutionRecord.fields.Price = research.price.estimate;
+                if (research.price?.pricingType) solutionRecord.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] = research.price.pricingType;
 
                 // Add location details
                 if (research.location?.serviceArea) {

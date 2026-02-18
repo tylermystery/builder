@@ -1077,7 +1077,8 @@ export function calculateDynamicPackagePrice(packageContents, packageMetadata, a
         const selections = itemRef.options || itemRef.selections || {};
         const basePrice = getRecordPrice(itemRecord, selections);
 
-        // Check if this is a per-guest item
+        // Check if this is a per-guest item (multiplied by headcount)
+        // Items with null/missing/empty pricing type are treated as flat rate (no headcount multiplication)
         const pricingType = itemRecord.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
         const isPerGuest = pricingType && pricingType.toLowerCase().includes('per guest');
 
