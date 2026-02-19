@@ -746,6 +746,10 @@ function initializeNetlifyIdentity() {
         console.log('[Google-SSO] gotrue API URL:', netlifyIdentity.gotrue?.api?.apiURL);
         console.log('[Google-SSO] Current user after init:', netlifyIdentity.currentUser()?.email || 'none');
 
+        // Ensure the widget's own modal is closed — we manage our own sign-in UI.
+        // The widget may auto-open on error hashes or certain URL fragments.
+        netlifyIdentity.close();
+
         // Check if the widget detected an OAuth callback in the URL hash
         const currentHash = window.location.hash;
         if (currentHash && currentHash.includes('access_token=')) {
@@ -921,6 +925,20 @@ function initializeNetlifyIdentity() {
 
     console.log('[Google-SSO] ========== NETLIFY IDENTITY INITIALIZATION COMPLETE ==========');
     log('Auth', 'Netlify Identity initialization complete');
+
+    // Check if an OAuth error was captured during page load (e.g., webhook failure)
+    if (window._oauthError) {
+        console.error('[Google-SSO] Displaying OAuth error from page load:', window._oauthError);
+        const errorDesc = window._oauthError.description || 'Unknown error';
+        // Show a user-friendly message
+        if (errorDesc.toLowerCase().includes('webhook')) {
+            signinMessage.textContent = 'Google sign-in encountered a temporary server issue. Please try again.';
+        } else {
+            signinMessage.textContent = `Google sign-in failed: ${errorDesc}`;
+        }
+        signinMessage.style.color = '#dc3545';
+        delete window._oauthError;
+    }
 }
 
 // ============================================

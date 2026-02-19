@@ -4399,8 +4399,21 @@ body.ucp-panel-open .unified-chat-panel {
         if (hash.includes('error=')) {
           var errorMatch = hash.match(/error=([^&]*)/);
           var errorDescMatch = hash.match(/error_description=([^&]*)/);
-          console.error('[Google-SSO] OAuth ERROR in hash:', decodeURIComponent(errorMatch ? errorMatch[1] : 'unknown'));
-          console.error('[Google-SSO] OAuth error description:', decodeURIComponent(errorDescMatch ? errorDescMatch[1] : 'none'));
+          var errorType = decodeURIComponent(errorMatch ? errorMatch[1] : 'unknown');
+          var errorDesc = decodeURIComponent(errorDescMatch ? errorDescMatch[1] : 'none');
+          console.error('[Google-SSO] OAuth ERROR in hash:', errorType);
+          console.error('[Google-SSO] OAuth error description:', errorDesc);
+
+          // Clear the error hash so it doesn't persist across navigation/reloads
+          if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          }
+
+          // Store the error so auth.js can display it once the sign-in modal is ready
+          window._oauthError = {
+            type: errorType,
+            description: errorDesc
+          };
         }
 
         // Check for stale Netlify Identity tokens (confirmation, recovery, invite)
