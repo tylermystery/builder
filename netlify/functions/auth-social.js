@@ -17,34 +17,56 @@ const NAME_FIELD = 'Name';
 const EMAIL_FIELD = 'Email';
 
 exports.handler = async (event, context) => {
-    console.log('[auth-social] ========== HANDLER START ==========');
+    const ts = new Date().toISOString();
+    console.log(`[auth-social] ========== HANDLER START (${ts}) ==========`);
+    console.log('[auth-social] httpMethod:', event.httpMethod);
+    console.log('[auth-social] Authorization header present:', !!event.headers?.authorization);
+    console.log('[auth-social] Authorization header prefix:', event.headers?.authorization?.substring(0, 15));
 
     // Check for required environment variables
     const { AIRTABLE_PAT, BASE_ID, JWT_SECRET } = process.env;
+    console.log('[auth-social] Env check — AIRTABLE_PAT:', !!AIRTABLE_PAT, ', BASE_ID:', !!BASE_ID, ', JWT_SECRET:', !!JWT_SECRET);
 
     if (!AIRTABLE_PAT) {
-        console.error('[auth-social] ERROR: AIRTABLE_PAT environment variable is not set');
-        return { statusCode: 500, body: JSON.stringify({ error: 'Server configuration error' }) };
+        console.error('[auth-social] ERROR: AIRTABLE_PAT not set');
+        return { statusCode: 500, body: JSON.stringify({ error: 'Server configuration error: missing AIRTABLE_PAT' }) };
     }
 
     if (!BASE_ID) {
-        console.error('[auth-social] ERROR: BASE_ID environment variable is not set');
-        return { statusCode: 500, body: JSON.stringify({ error: 'Server configuration error' }) };
+        console.error('[auth-social] ERROR: BASE_ID not set');
+        return { statusCode: 500, body: JSON.stringify({ error: 'Server configuration error: missing BASE_ID' }) };
     }
 
     if (!JWT_SECRET) {
-        console.error('[auth-social] ERROR: JWT_SECRET environment variable is not set');
-        return { statusCode: 500, body: JSON.stringify({ error: 'Server configuration error' }) };
+        console.error('[auth-social] ERROR: JWT_SECRET not set');
+        return { statusCode: 500, body: JSON.stringify({ error: 'Server configuration error: missing JWT_SECRET' }) };
     }
 
     // 1. Verify Netlify Identity User
+    // When a valid Netlify Identity JWT is sent in the Authorization header,
+    // Netlify's proxy automatically decodes it and populates context.clientContext.user
+    console.log('[auth-social] context keys:', context ? Object.keys(context) : 'null');
+    console.log('[auth-social] clientContext present:', !!context.clientContext);
+    console.log('[auth-social] clientContext keys:', context.clientContext ? Object.keys(context.clientContext) : 'null');
+    console.log('[auth-social] clientContext.identity present:', !!context.clientContext?.identity);
+    console.log('[auth-social] clientContext.user present:', !!context.clientContext?.user);
+
+    if (context.clientContext?.user) {
+        console.log('[auth-social] clientContext.user.email:', context.clientContext.user.email);
+        console.log('[auth-social] clientContext.user.sub:', context.clientContext.user.sub);
+        console.log('[auth-social] clientContext.user keys:', Object.keys(context.clientContext.user));
+    }
+
     const { user } = context.clientContext || {};
-    console.log('[auth-social] Client context present:', !!context.clientContext);
-    console.log('[auth-social] User present:', !!user);
 
     if (!user) {
-        console.error('[auth-social] ERROR: No user in client context - unauthorized');
-        return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized.' }) };
+        console.error('[auth-social] ERROR: No user in clientContext — the Bearer token may not be a valid Netlify Identity JWT');
+        console.error('[auth-social] This can happen if:');
+        console.error('[auth-social]   1. The token is expired');
+        console.error('[auth-social]   2. The token was not issued by this site\'s Netlify Identity');
+        console.error('[auth-social]   3. The function was called directly (not through Netlify\'s proxy)');
+        console.error('[auth-social]   4. The Netlify Identity webhook (identity-validate/signup) failed');
+        return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized — no user in context. The Netlify Identity JWT may be invalid or the identity webhook may have failed.' }) };
     }
 
     try {

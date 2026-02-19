@@ -4388,7 +4388,21 @@ body.ucp-panel-open .unified-chat-panel {
     // This catches users clicking old Identity confirmation emails
     (function() {
       var hash = window.location.hash;
+      console.log('[Google-SSO] Page load — hash present:', !!hash);
       if (hash) {
+        console.log('[Google-SSO] Hash contents (first 100 chars):', hash.substring(0, 100));
+        console.log('[Google-SSO] Hash contains access_token:', hash.includes('access_token='));
+        console.log('[Google-SSO] Hash contains error:', hash.includes('error='));
+        console.log('[Google-SSO] Hash contains error_description:', hash.includes('error_description='));
+
+        // Check for OAuth error in the hash (Google OAuth can return errors this way)
+        if (hash.includes('error=')) {
+          var errorMatch = hash.match(/error=([^&]*)/);
+          var errorDescMatch = hash.match(/error_description=([^&]*)/);
+          console.error('[Google-SSO] OAuth ERROR in hash:', decodeURIComponent(errorMatch ? errorMatch[1] : 'unknown'));
+          console.error('[Google-SSO] OAuth error description:', decodeURIComponent(errorDescMatch ? errorDescMatch[1] : 'none'));
+        }
+
         // Check for stale Netlify Identity tokens (confirmation, recovery, invite)
         // NOTE: access_token is NOT cleared here — it's needed for Google OAuth callbacks
         var staleTokenTypes = ['confirmation_token', 'recovery_token', 'invite_token'];
@@ -4406,17 +4420,31 @@ body.ucp-panel-open .unified-chat-panel {
 
         // If access_token is present, ensure Netlify Identity widget loads immediately to process it
         if (hash.includes('access_token=')) {
-          console.log('[Google-SSO] OAuth access_token detected in URL hash — ensuring Netlify Identity loads to process it');
+          console.log('[Google-SSO] OAuth access_token detected in URL hash — ensuring Netlify Identity widget loads immediately');
+          // Parse and log token metadata (not the token itself for security)
+          var tokenTypeMatch = hash.match(/token_type=([^&]*)/);
+          var expiresInMatch = hash.match(/expires_in=([^&]*)/);
+          console.log('[Google-SSO] Token type:', tokenTypeMatch ? decodeURIComponent(tokenTypeMatch[1]) : 'not present');
+          console.log('[Google-SSO] Expires in:', expiresInMatch ? decodeURIComponent(expiresInMatch[1]) : 'not present');
         }
       }
     })();
 
     window.loadNetlifyIdentity = function() {
       if (window._identityLoading) return window._identityLoading;
-      window._identityLoading = new Promise((resolve) => {
+      console.log('[Google-SSO] loadNetlifyIdentity() called — loading widget script');
+      window._identityLoading = new Promise(function(resolve, reject) {
         var script = document.createElement('script');
         script.src = 'https://identity.netlify.com/v1/netlify-identity-widget.js';
-        script.onload = resolve;
+        script.onload = function() {
+          console.log('[Google-SSO] Netlify Identity widget script loaded successfully');
+          console.log('[Google-SSO] netlifyIdentity global available:', typeof netlifyIdentity !== 'undefined');
+          resolve();
+        };
+        script.onerror = function(err) {
+          console.error('[Google-SSO] FAILED to load Netlify Identity widget script:', err);
+          reject(new Error('Failed to load Netlify Identity widget'));
+        };
         document.head.appendChild(script);
       });
       return window._identityLoading;
@@ -4425,7 +4453,12 @@ body.ucp-panel-open .unified-chat-panel {
     // If access_token is present (Google OAuth callback), load Netlify Identity immediately
     if (window.location.hash && window.location.hash.includes('access_token=')) {
       console.log('[Google-SSO] Loading Netlify Identity widget immediately for OAuth callback');
-      window.loadNetlifyIdentity();
+      window.loadNetlifyIdentity().then(function() {
+        console.log('[Google-SSO] Widget loaded for OAuth callback — widget should now process the hash token');
+        console.log('[Google-SSO] Current hash still present:', !!window.location.hash);
+      }).catch(function(err) {
+        console.error('[Google-SSO] Failed to load widget for OAuth callback:', err);
+      });
     }
     </script>
 

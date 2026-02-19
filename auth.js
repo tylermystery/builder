@@ -744,8 +744,19 @@ function initializeNetlifyIdentity() {
         console.log('[Google-SSO] Netlify Identity initialized successfully');
         console.log('[Google-SSO] gotrue client available after init:', !!netlifyIdentity.gotrue);
         console.log('[Google-SSO] gotrue API URL:', netlifyIdentity.gotrue?.api?.apiURL);
+        console.log('[Google-SSO] Current user after init:', netlifyIdentity.currentUser()?.email || 'none');
+
+        // Check if the widget detected an OAuth callback in the URL hash
+        const currentHash = window.location.hash;
+        if (currentHash && currentHash.includes('access_token=')) {
+            console.log('[Google-SSO] WARNING: access_token still in URL hash after init — widget may not have processed the callback yet');
+            console.log('[Google-SSO] The login event should fire shortly if the token is valid');
+        } else if (!currentHash && document.referrer && document.referrer.includes('accounts.google.com')) {
+            console.log('[Google-SSO] Redirected from Google but no hash token — the OAuth flow may have failed at the provider level');
+        }
     } catch (initError) {
         console.error('[Google-SSO] Error initializing Netlify Identity:', initError);
+        console.error('[Google-SSO] Init error details:', initError.message, initError.stack);
     }
 
     // Set up Google SSO button — redirect directly to Google OAuth via gotrue
@@ -794,15 +805,32 @@ function initializeNetlifyIdentity() {
     // Handle successful login from Netlify Identity (Google OAuth callback)
     netlifyIdentity.on('login', async (user) => {
         console.log('[Google-SSO] ========== NETLIFY IDENTITY LOGIN EVENT ==========');
+        console.log('[Google-SSO] Event fired at:', new Date().toISOString());
+        console.log('[Google-SSO] User object present:', !!user);
         console.log('[Google-SSO] User email:', user?.email);
+        console.log('[Google-SSO] User id:', user?.id);
+        console.log('[Google-SSO] User confirmed_at:', user?.confirmed_at);
         console.log('[Google-SSO] User app_metadata:', JSON.stringify(user?.app_metadata));
         console.log('[Google-SSO] User user_metadata:', JSON.stringify(user?.user_metadata));
-        console.log('[Google-SSO] Token present:', !!user?.token?.access_token);
+        console.log('[Google-SSO] Token object present:', !!user?.token);
+        console.log('[Google-SSO] access_token present:', !!user?.token?.access_token);
+        console.log('[Google-SSO] access_token length:', user?.token?.access_token?.length);
+        console.log('[Google-SSO] token_type:', user?.token?.token_type);
+        console.log('[Google-SSO] expires_at:', user?.token?.expires_at);
         log('Auth', `Netlify Identity login event for: ${user?.email}`);
+
         try {
             const netlifyJwt = user.token.access_token;
-            console.log('[Google-SSO] JWT token length:', netlifyJwt?.length);
-            console.log('[Google-SSO] Calling /api/auth-social...');
+
+            if (!netlifyJwt) {
+                console.error('[Google-SSO] ERROR: No access_token in user.token — cannot call auth-social');
+                signinMessage.textContent = "Login token missing. Please try again.";
+                signinMessage.style.color = '#dc3545';
+                return;
+            }
+
+            console.log('[Google-SSO] Calling /api/auth-social with Bearer token...');
+            console.log('[Google-SSO] Token first 20 chars:', netlifyJwt.substring(0, 20) + '...');
 
             // Call serverless function to get app-specific JWT
             const response = await fetch('/api/auth-social', {
@@ -815,14 +843,31 @@ function initializeNetlifyIdentity() {
 
             console.log('[Google-SSO] auth-social response status:', response.status);
             console.log('[Google-SSO] auth-social response ok:', response.ok);
+            console.log('[Google-SSO] auth-social response headers:', JSON.stringify(Object.fromEntries(response.headers.entries())));
+
+            const responseText = await response.text();
+            console.log('[Google-SSO] auth-social response body length:', responseText.length);
 
             if (!response.ok) {
-                const errorData = await response.json();
-                console.error('[Google-SSO] auth-social error response:', JSON.stringify(errorData));
-                throw new Error(errorData.error || "Failed to sync social login.");
+                console.error('[Google-SSO] auth-social error response body:', responseText);
+                let errorMsg = 'Failed to sync social login.';
+                try {
+                    const errorData = JSON.parse(responseText);
+                    errorMsg = errorData.error || errorMsg;
+                } catch (e) {
+                    console.error('[Google-SSO] Could not parse error response as JSON');
+                }
+                throw new Error(errorMsg);
             }
 
-            const appPayload = await response.json();
+            let appPayload;
+            try {
+                appPayload = JSON.parse(responseText);
+            } catch (parseErr) {
+                console.error('[Google-SSO] Failed to parse auth-social success response:', parseErr.message);
+                throw new Error('Invalid response from auth-social');
+            }
+
             console.log('[Google-SSO] auth-social success. User ID:', appPayload.user?.id);
             console.log('[Google-SSO] auth-social user email:', appPayload.user?.email);
 
@@ -836,17 +881,42 @@ function initializeNetlifyIdentity() {
             console.error('[Google-SSO] Error name:', error.name);
             console.error('[Google-SSO] Error message:', error.message);
             console.error('[Google-SSO] Error stack:', error.stack);
-            signinMessage.textContent = "Error logging in with Google. Please try again.";
+            signinMessage.textContent = `Google sign-in error: ${error.message}`;
             signinMessage.style.color = '#dc3545';
         }
     });
 
     // Handle errors
     netlifyIdentity.on('error', (error) => {
-        console.error('[Google-SSO] Netlify Identity error:', error);
-        console.error('[Google-SSO] Error details:', JSON.stringify(error));
-        signinMessage.textContent = "Authentication error. Please try again.";
+        console.error('[Google-SSO] ========== NETLIFY IDENTITY ERROR EVENT ==========');
+        console.error('[Google-SSO] Error event fired at:', new Date().toISOString());
+        console.error('[Google-SSO] Error object:', error);
+        console.error('[Google-SSO] Error type:', typeof error);
+        console.error('[Google-SSO] Error message:', error?.message || error?.msg || String(error));
+        if (error?.json) {
+            console.error('[Google-SSO] Error JSON:', JSON.stringify(error.json));
+        }
+        if (error?.status) {
+            console.error('[Google-SSO] Error status:', error.status);
+        }
+        console.error('[Google-SSO] Full error details:', JSON.stringify(error, Object.getOwnPropertyNames(error || {})));
+        signinMessage.textContent = `Authentication error: ${error?.message || error?.msg || String(error)}`;
         signinMessage.style.color = '#dc3545';
+    });
+
+    // Listen for init event to confirm widget is ready
+    netlifyIdentity.on('init', (user) => {
+        console.log('[Google-SSO] ========== NETLIFY IDENTITY INIT EVENT ==========');
+        console.log('[Google-SSO] Init event fired at:', new Date().toISOString());
+        console.log('[Google-SSO] Current user from init:', user ? user.email : 'none (not logged in)');
+        console.log('[Google-SSO] Current URL hash present:', !!window.location.hash);
+        if (window.location.hash) {
+            console.log('[Google-SSO] Hash (first 80 chars):', window.location.hash.substring(0, 80));
+        }
+        if (user) {
+            console.log('[Google-SSO] Init user token present:', !!user?.token?.access_token);
+            console.log('[Google-SSO] Init user provider:', user?.app_metadata?.provider);
+        }
     });
 
     console.log('[Google-SSO] ========== NETLIFY IDENTITY INITIALIZATION COMPLETE ==========');
