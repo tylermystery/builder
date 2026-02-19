@@ -492,8 +492,17 @@ export function handleSignOut() {
     });
 
     updateUserProfileIcon();
+
+    // Switch modal to signin view so biometric option can be refreshed
+    signinView.style.display = 'block';
+    profileView.style.display = 'none';
+    signinEmailInput.value = localStorage.getItem('lastSignInEmail') || '';
+
+    // Refresh biometric section visibility so passkey login remains available after sign-out
+    refreshBiometricSectionVisibility();
+
     hideUserModal();
-    
+
     // Dispatch event so main.js can update plans dropdown and re-filter
     document.dispatchEvent(new CustomEvent('userLoggedOut'));
 }
@@ -528,7 +537,7 @@ export function setupAuthEventListeners() {
         }
     });
 
-    // Copy Console Log button
+    // Copy Console Log button (subtle global button, available to all users)
     const copyConsoleBtn = document.getElementById('copy-console-btn');
     const copyConsoleMsg = document.getElementById('copy-console-message');
     if (copyConsoleBtn) {
@@ -536,8 +545,9 @@ export function setupAuthEventListeners() {
             const buffer = window.__consoleBuffer || [];
             if (buffer.length === 0) {
                 if (copyConsoleMsg) {
-                    copyConsoleMsg.textContent = 'No console output captured yet.';
-                    copyConsoleMsg.style.color = '#dc3545';
+                    copyConsoleMsg.textContent = 'No output yet';
+                    copyConsoleMsg.classList.add('visible');
+                    setTimeout(() => copyConsoleMsg.classList.remove('visible'), 2000);
                 }
                 return;
             }
@@ -545,8 +555,10 @@ export function setupAuthEventListeners() {
             try {
                 await navigator.clipboard.writeText(text);
                 if (copyConsoleMsg) {
-                    copyConsoleMsg.textContent = `Copied ${buffer.length} lines to clipboard!`;
+                    copyConsoleMsg.textContent = `Copied ${buffer.length} lines`;
                     copyConsoleMsg.style.color = '#28a745';
+                    copyConsoleMsg.classList.add('visible');
+                    setTimeout(() => copyConsoleMsg.classList.remove('visible'), 2000);
                 }
                 log('Auth', `Console log copied: ${buffer.length} lines`);
             } catch (err) {
@@ -561,13 +573,17 @@ export function setupAuthEventListeners() {
                     document.execCommand('copy');
                     document.body.removeChild(textarea);
                     if (copyConsoleMsg) {
-                        copyConsoleMsg.textContent = `Copied ${buffer.length} lines to clipboard!`;
+                        copyConsoleMsg.textContent = `Copied ${buffer.length} lines`;
                         copyConsoleMsg.style.color = '#28a745';
+                        copyConsoleMsg.classList.add('visible');
+                        setTimeout(() => copyConsoleMsg.classList.remove('visible'), 2000);
                     }
                 } catch (fallbackErr) {
                     if (copyConsoleMsg) {
-                        copyConsoleMsg.textContent = 'Failed to copy. Try long-pressing to select text.';
+                        copyConsoleMsg.textContent = 'Copy failed';
                         copyConsoleMsg.style.color = '#dc3545';
+                        copyConsoleMsg.classList.add('visible');
+                        setTimeout(() => copyConsoleMsg.classList.remove('visible'), 2000);
                     }
                 }
             }
