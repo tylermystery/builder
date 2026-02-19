@@ -2023,6 +2023,7 @@ function enableItemEditMode(record, nameEl, descEl) {
     const originalName = record.fields.Name || '';
     const originalDescription = record.fields.Description || '';
     const originalPrice = record.fields.Price || 0;
+    const originalPricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || 'flat rate';
 
     // Replace name element with editable input
     const nameContainer = document.createElement('div');
@@ -2057,6 +2058,28 @@ function enableItemEditMode(record, nameEl, descEl) {
         priceEl.parentNode.insertBefore(priceContainer, priceEl);
     }
 
+    // Add Pricing Type selector
+    const pricingTypeContainer = document.createElement('div');
+    pricingTypeContainer.className = 'item-edit-container item-edit-pricing-type-container';
+    const pricingTypeOptions = [
+        { value: 'flat rate', label: 'Flat Rate' },
+        { value: 'per guest', label: 'Per Guest' },
+        { value: 'per hour', label: 'Per Hour' },
+        { value: 'per group', label: 'Per Group' },
+        { value: 'per vehicle', label: 'Per Vehicle' }
+    ];
+    pricingTypeContainer.innerHTML = `
+        <label class="item-edit-label">Pricing Type</label>
+        <select class="item-edit-input item-edit-pricing-type-select">
+            ${pricingTypeOptions.map(opt => `<option value="${opt.value}"${originalPricingType.toLowerCase() === opt.value ? ' selected' : ''}>${opt.label}</option>`).join('')}
+        </select>
+    `;
+    if (priceEl && priceEl.parentNode) {
+        priceEl.parentNode.insertBefore(pricingTypeContainer, priceContainer.nextSibling);
+    } else {
+        descContainer.parentNode.insertBefore(pricingTypeContainer, descContainer.nextSibling);
+    }
+
     // Add Photo Upload section
     const photosContainer = document.createElement('div');
     photosContainer.className = 'item-edit-container item-edit-photos-container';
@@ -2083,8 +2106,10 @@ function enableItemEditMode(record, nameEl, descEl) {
         </div>
     `;
 
-    // Insert photos container after price container
-    if (priceEl && priceEl.parentNode) {
+    // Insert photos container after pricing type container
+    if (pricingTypeContainer && pricingTypeContainer.parentNode) {
+        pricingTypeContainer.parentNode.insertBefore(photosContainer, pricingTypeContainer.nextSibling);
+    } else if (priceEl && priceEl.parentNode) {
         priceEl.parentNode.insertBefore(photosContainer, priceContainer.nextSibling);
     } else {
         descContainer.parentNode.insertBefore(photosContainer, descContainer.nextSibling);
@@ -2187,6 +2212,7 @@ function enableItemEditMode(record, nameEl, descEl) {
         const newName = nameContainer.querySelector('.item-edit-name-input').value.trim();
         const newDesc = descContainer.querySelector('.item-edit-desc-input').value.trim();
         const newPrice = parseFloat(priceContainer.querySelector('.item-edit-price-input').value) || 0;
+        const newPricingType = pricingTypeContainer.querySelector('.item-edit-pricing-type-select').value;
 
         if (!newName) {
             alert('Please enter an item name.');
@@ -2527,6 +2553,7 @@ function enableItemEditMode(record, nameEl, descEl) {
                 state.records.all[recordIndex].fields.Name = newName;
                 state.records.all[recordIndex].fields.Description = newDesc;
                 state.records.all[recordIndex].fields.Price = newPrice;
+                state.records.all[recordIndex].fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] = newPricingType;
                 // Store custom images in a special field
                 if (allPhotos.length > 0) {
                     state.records.all[recordIndex].fields._customImages = allPhotos;
@@ -2543,6 +2570,7 @@ function enableItemEditMode(record, nameEl, descEl) {
                 solutionRec.fields.Name = newName;
                 solutionRec.fields.Description = newDesc;
                 solutionRec.fields.Price = newPrice;
+                solutionRec.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] = newPricingType;
                 if (allPhotos.length > 0) {
                     solutionRec.fields._customImages = allPhotos;
                     if (aiGeneratedImage) {
@@ -2555,6 +2583,7 @@ function enableItemEditMode(record, nameEl, descEl) {
             record.fields.Name = newName;
             record.fields.Description = newDesc;
             record.fields.Price = newPrice;
+            record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] = newPricingType;
             if (allPhotos.length > 0) {
                 record.fields._customImages = allPhotos;
                 if (aiGeneratedImage) {
@@ -2599,7 +2628,8 @@ function enableItemEditMode(record, nameEl, descEl) {
             nameEl.textContent = newName;
             descEl.textContent = newDesc;
             if (priceEl) {
-                priceEl.innerHTML = newPrice > 0 ? `$${newPrice.toFixed(2)}` : 'Free';
+                const pricingTypeHTML = newPricingType ? `<span class="pricing-type"> / ${newPricingType.toLowerCase()}</span>` : '';
+                priceEl.innerHTML = (newPrice > 0 ? `$${newPrice.toFixed(2)}` : 'Free') + pricingTypeHTML;
             }
 
             // Update thumbnail strip if photos were added
@@ -5263,6 +5293,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     if (research.name) solutionRecord.fields.Name = research.name;
                     if (research.description) solutionRecord.fields.Description = research.description;
                     if (research.price?.estimate) solutionRecord.fields.Price = research.price.estimate;
+                    if (research.price?.pricingType) solutionRecord.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] = research.price.pricingType;
 
                     // Add location details
                     if (research.location?.serviceArea) {

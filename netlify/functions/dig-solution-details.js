@@ -39,7 +39,7 @@ Respond with a JSON object (and nothing else) with this exact structure:
   "description": "Detailed 2-3 sentence description of what this service offers",
   "price": {
     "estimate": 0,
-    "pricingType": "per person|flat fee|per hour|varies",
+    "pricingType": "per person|per guest|flat rate|per hour|per group|per vehicle",
     "rangeMin": 0,
     "rangeMax": 0,
     "notes": "Any pricing notes or conditions"

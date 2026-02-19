@@ -11202,6 +11202,18 @@ hr.total-divider {
     max-width: 150px;
 }
 
+.item-edit-pricing-type-select {
+    max-width: 200px;
+    cursor: pointer;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+}
+
 /* Save button container */
 .item-edit-save-container {
     margin-bottom: 15px;
@@ -16566,3 +16578,63 @@ hr.total-divider {
 /* ==========================================================================
    END UNIFIED ACTION MENU
    ========================================================================== */
+
+/* ==========================================================================
+   COPY CONSOLE BUTTON (subtle, bottom-left corner, available to all users)
+   ========================================================================== */
+
+#copy-console-btn {
+    position: fixed;
+    bottom: 8px;
+    left: 8px;
+    z-index: 50;
+    background: rgba(0, 0, 0, 0.15);
+    border: none;
+    border-radius: 4px;
+    padding: 5px 6px;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.35);
+    line-height: 1;
+    opacity: 0.5;
+    transition: opacity 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+#copy-console-btn:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.45);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+#copy-console-btn svg {
+    display: block;
+}
+
+#copy-console-message {
+    position: fixed;
+    bottom: 10px;
+    left: 38px;
+    z-index: 50;
+    font-size: 0.75em;
+    color: #28a745;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    white-space: nowrap;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 3px 8px;
+    border-radius: 4px;
+}
+
+#copy-console-message.visible {
+    opacity: 1;
+}
+
+/* On mobile, nudge above the mobile summary bar if present */
+@media (max-width: 768px) {
+    #copy-console-btn {
+        bottom: 65px;
+    }
+    #copy-console-message {
+        bottom: 67px;
+    }
+}

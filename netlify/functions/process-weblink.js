@@ -82,7 +82,7 @@ RESPOND ONLY WITH A VALID JSON OBJECT. Do not include markdown code blocks or an
   - "per hour" - For services charged hourly (e.g., private chef, DJ, photographer, venue rentals by the hour)
   - "per group" - For activities priced per group regardless of size (e.g., private event packages, group workshops with fixed pricing)
   - "flat rate" - For services with a single fixed price (e.g., venue rental for the day, private event space)
-  Default to "per person" if unclear, but be intelligent about transportation and vehicle services.
+  Default to "flat rate" if unclear, but be intelligent about transportation and vehicle services.
 - "Rankings": An object with activity profile scores from 0-10:
   - "Fun": How entertaining/enjoyable (0=boring, 10=extremely fun)
   - "Social": How much social interaction (0=solo, 10=highly social)

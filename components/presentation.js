@@ -13698,7 +13698,7 @@ async function performPresentationSearch(searchTerm) {
                     ServiceType: source.ServiceType || 'Partner Activity',
                     'Item Type': 'Bookable Item',
                     Status: 'Available',
-                    'Pricing Type': source.PricingType || source.pricingType || 'per person',
+                    'Pricing Type': source.PricingType || source.pricingType || 'flat rate',
                     // Business details for modal display
                     Duration: duration || null,
                     Capacity: capacity || null,
@@ -13862,7 +13862,7 @@ function createPresentationManualAddOption(searchTerm) {
                     ServiceType: 'Custom Item',
                     'Item Type': 'Bookable Item',
                     Status: 'Available',
-                    'Pricing Type': 'per person',
+                    'Pricing Type': 'flat rate',
                     Stores: [state.ui.activeShopId],
                     Rankings: JSON.stringify({
                         "profileSource": "manual_presentation_add",
@@ -14531,6 +14531,7 @@ async function handleDigInto(record, button, card) {
         if (research.name) record.fields.Name = research.name;
         if (research.description) record.fields.Description = research.description;
         if (research.price?.estimate) record.fields.Price = research.price.estimate;
+        if (research.price?.pricingType) record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] = research.price.pricingType;
 
         // Add location details
         if (research.location?.serviceArea) {

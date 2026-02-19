@@ -111,6 +111,14 @@ async function _handleSuccessfulLogin(payload) {
     console.log(`[LOGIN-ASSOC] Dispatching 'userLoggedIn' event. Session: ${state.session.id}, User: ${state.session.user.id}`);
     document.dispatchEvent(new CustomEvent('userLoggedIn'));
     updateUserProfileIcon();
+
+    // Explicitly hide the biometric setup prompt since the user just logged in successfully
+    // This prevents it from flashing briefly if the userLoggedIn event triggers showBiometricSetupPromptIfNeeded
+    const biometricSetupPrompt = document.getElementById('biometric-setup-prompt');
+    if (biometricSetupPrompt) {
+        biometricSetupPrompt.style.display = 'none';
+    }
+
     hideUserModal();
     console.log(`[LOGIN-ASSOC] ========== _handleSuccessfulLogin END ==========`);
 }
@@ -136,6 +144,11 @@ export function showUserModal(options = {}) {
         prefsMessage.textContent = '';
         signinView.style.display = 'none';
         profileView.style.display = 'block';
+
+        // Ensure biometric setup prompt is hidden (it lives in signin-view but could be left visible)
+        const biometricSetupPrompt = document.getElementById('biometric-setup-prompt');
+        if (biometricSetupPrompt) biometricSetupPrompt.style.display = 'none';
+
         const adminProfileBtn = document.getElementById('admin-bulk-profile-btn');
         if (user.isOwner && user.ownerDashboardId) {
             ownerDashboardLink.href = `/store-dashboard.html?id=${user.ownerDashboardId}`;
@@ -196,7 +209,11 @@ export function showUserModal(options = {}) {
 function hideUserModal() {
     userModalOverlay.classList.remove('active');
     setTimeout(() => { userModalOverlay.style.display = 'none'; }, 300);
-    document.body.classList.add('modal-open');
+    document.body.classList.remove('modal-open');
+
+    // Reset biometric setup prompt when closing modal to prevent stale state
+    const biometricSetupPrompt = document.getElementById('biometric-setup-prompt');
+    if (biometricSetupPrompt) biometricSetupPrompt.style.display = 'none';
 }
 
 async function handleSignIn(e) {
@@ -492,8 +509,17 @@ export function handleSignOut() {
     });
 
     updateUserProfileIcon();
+
+    // Switch modal to signin view so biometric option can be refreshed
+    signinView.style.display = 'block';
+    profileView.style.display = 'none';
+    signinEmailInput.value = localStorage.getItem('lastSignInEmail') || '';
+
+    // Refresh biometric section visibility so passkey login remains available after sign-out
+    refreshBiometricSectionVisibility();
+
     hideUserModal();
-    
+
     // Dispatch event so main.js can update plans dropdown and re-filter
     document.dispatchEvent(new CustomEvent('userLoggedOut'));
 }
@@ -528,7 +554,7 @@ export function setupAuthEventListeners() {
         }
     });
 
-    // Copy Console Log button
+    // Copy Console Log button (subtle global button, available to all users)
     const copyConsoleBtn = document.getElementById('copy-console-btn');
     const copyConsoleMsg = document.getElementById('copy-console-message');
     if (copyConsoleBtn) {
@@ -536,8 +562,9 @@ export function setupAuthEventListeners() {
             const buffer = window.__consoleBuffer || [];
             if (buffer.length === 0) {
                 if (copyConsoleMsg) {
-                    copyConsoleMsg.textContent = 'No console output captured yet.';
-                    copyConsoleMsg.style.color = '#dc3545';
+                    copyConsoleMsg.textContent = 'No output yet';
+                    copyConsoleMsg.classList.add('visible');
+                    setTimeout(() => copyConsoleMsg.classList.remove('visible'), 2000);
                 }
                 return;
             }
@@ -545,8 +572,10 @@ export function setupAuthEventListeners() {
             try {
                 await navigator.clipboard.writeText(text);
                 if (copyConsoleMsg) {
-                    copyConsoleMsg.textContent = `Copied ${buffer.length} lines to clipboard!`;
+                    copyConsoleMsg.textContent = `Copied ${buffer.length} lines`;
                     copyConsoleMsg.style.color = '#28a745';
+                    copyConsoleMsg.classList.add('visible');
+                    setTimeout(() => copyConsoleMsg.classList.remove('visible'), 2000);
                 }
                 log('Auth', `Console log copied: ${buffer.length} lines`);
             } catch (err) {
@@ -561,13 +590,17 @@ export function setupAuthEventListeners() {
                     document.execCommand('copy');
                     document.body.removeChild(textarea);
                     if (copyConsoleMsg) {
-                        copyConsoleMsg.textContent = `Copied ${buffer.length} lines to clipboard!`;
+                        copyConsoleMsg.textContent = `Copied ${buffer.length} lines`;
                         copyConsoleMsg.style.color = '#28a745';
+                        copyConsoleMsg.classList.add('visible');
+                        setTimeout(() => copyConsoleMsg.classList.remove('visible'), 2000);
                     }
                 } catch (fallbackErr) {
                     if (copyConsoleMsg) {
-                        copyConsoleMsg.textContent = 'Failed to copy. Try long-pressing to select text.';
+                        copyConsoleMsg.textContent = 'Copy failed';
                         copyConsoleMsg.style.color = '#dc3545';
+                        copyConsoleMsg.classList.add('visible');
+                        setTimeout(() => copyConsoleMsg.classList.remove('visible'), 2000);
                     }
                 }
             }
@@ -609,30 +642,42 @@ export function setupAuthEventListeners() {
 
     // Netlify Identity SSO Setup
     if (typeof netlifyIdentity !== 'undefined') {
+        console.log('[Google-SSO] Netlify Identity already loaded, initializing immediately');
         initializeNetlifyIdentity();
     } else {
         // Try to load Netlify Identity if the loader is available
+        console.log('[Google-SSO] Netlify Identity not yet loaded, attempting to load...');
         if (typeof window.loadNetlifyIdentity === 'function') {
+            console.log('[Google-SSO] loadNetlifyIdentity function available, calling it...');
             window.loadNetlifyIdentity().then(() => {
                 if (typeof netlifyIdentity !== 'undefined') {
+                    console.log('[Google-SSO] Netlify Identity loaded via loadNetlifyIdentity');
                     initializeNetlifyIdentity();
                 } else {
-                    console.error('[Auth] Netlify Identity failed to load');
+                    console.error('[Google-SSO] Netlify Identity failed to load via loadNetlifyIdentity');
                 }
             }).catch(err => {
-                console.error('[Auth] Error loading Netlify Identity:', err);
+                console.error('[Google-SSO] Error loading Netlify Identity:', err);
             });
         } else {
+            console.log('[Google-SSO] No loadNetlifyIdentity function, waiting for window load event');
             // Wait for the script to load
             window.addEventListener('load', () => {
                 if (typeof netlifyIdentity !== 'undefined') {
+                    console.log('[Google-SSO] Netlify Identity available after window load');
                     initializeNetlifyIdentity();
                 } else if (typeof window.loadNetlifyIdentity === 'function') {
+                    console.log('[Google-SSO] loadNetlifyIdentity available after window load, calling...');
                     window.loadNetlifyIdentity().then(() => {
                         if (typeof netlifyIdentity !== 'undefined') {
+                            console.log('[Google-SSO] Netlify Identity loaded after window load');
                             initializeNetlifyIdentity();
+                        } else {
+                            console.error('[Google-SSO] Netlify Identity still not available after all attempts');
                         }
                     });
+                } else {
+                    console.error('[Google-SSO] No way to load Netlify Identity - SSO will not be available');
                 }
             });
         }
@@ -640,6 +685,7 @@ export function setupAuthEventListeners() {
 }
 
 function initializeNetlifyIdentity() {
+    console.log('[Google-SSO] ========== INITIALIZING NETLIFY IDENTITY ==========');
     log('Auth', 'Initializing Netlify Identity');
 
     // Determine the correct API URL - always use production for OAuth redirects
@@ -653,6 +699,11 @@ function initializeNetlifyIdentity() {
                          currentHost === CUSTOM_DOMAIN ||
                          currentHost === `www.${CUSTOM_DOMAIN}`;
     const isCustomDomain = currentHost === CUSTOM_DOMAIN || currentHost === `www.${CUSTOM_DOMAIN}`;
+
+    console.log('[Google-SSO] Current host:', currentHost);
+    console.log('[Google-SSO] Is deploy preview:', isDeployPreview);
+    console.log('[Google-SSO] Is production:', isProduction);
+    console.log('[Google-SSO] Is custom domain:', isCustomDomain);
 
     // Clear any stale netlifySiteURL from localStorage on production site
     if (isProduction) {
@@ -677,48 +728,114 @@ function initializeNetlifyIdentity() {
         initOptions.APIUrl = `${PRODUCTION_SITE_URL}/.netlify/identity`;
     }
 
+    console.log('[Google-SSO] Init options:', JSON.stringify(initOptions));
+
     // Force store the correct site URL for OAuth redirects
     const currentSiteUrl = window.location.origin;
     if (isProduction) {
         localStorage.setItem('netlifySiteURL', currentSiteUrl);
     }
+    console.log('[Google-SSO] Current site URL:', currentSiteUrl);
+    console.log('[Google-SSO] Stored netlifySiteURL:', localStorage.getItem('netlifySiteURL'));
 
     // Initialize the widget
     try {
         netlifyIdentity.init(initOptions);
+        console.log('[Google-SSO] Netlify Identity initialized successfully');
+        console.log('[Google-SSO] gotrue client available after init:', !!netlifyIdentity.gotrue);
+        console.log('[Google-SSO] gotrue API URL:', netlifyIdentity.gotrue?.api?.apiURL);
+        console.log('[Google-SSO] Current user after init:', netlifyIdentity.currentUser()?.email || 'none');
+
+        // Ensure the widget's own modal is closed — we manage our own sign-in UI.
+        // The widget may auto-open on error hashes or certain URL fragments.
+        netlifyIdentity.close();
+
+        // Check if the widget detected an OAuth callback in the URL hash
+        const currentHash = window.location.hash;
+        if (currentHash && currentHash.includes('access_token=')) {
+            console.log('[Google-SSO] WARNING: access_token still in URL hash after init — widget may not have processed the callback yet');
+            console.log('[Google-SSO] The login event should fire shortly if the token is valid');
+        } else if (!currentHash && document.referrer && document.referrer.includes('accounts.google.com')) {
+            console.log('[Google-SSO] Redirected from Google but no hash token — the OAuth flow may have failed at the provider level');
+        }
     } catch (initError) {
-        console.error('[Auth] Error initializing Netlify Identity:', initError);
+        console.error('[Google-SSO] Error initializing Netlify Identity:', initError);
+        console.error('[Google-SSO] Init error details:', initError.message, initError.stack);
     }
 
-    // Set up Google SSO button
+    // Set up Google SSO button — redirect directly to Google OAuth via gotrue
     const googleSsoBtn = document.getElementById('google-sso-btn');
 
     if (googleSsoBtn) {
         googleSsoBtn.addEventListener('click', (event) => {
+            console.log('[Google-SSO] ========== GOOGLE SSO BUTTON CLICKED ==========');
             log('Auth', 'Google SSO button clicked');
             try {
-                netlifyIdentity.open('login');
+                // Use gotrue client to get the direct OAuth URL, bypassing the widget UI
+                const gotrueClient = netlifyIdentity.gotrue;
+                console.log('[Google-SSO] gotrue client available:', !!gotrueClient);
+                console.log('[Google-SSO] gotrue API URL:', gotrueClient?.api?.apiURL);
 
-                netlifyIdentity.on('open', () => {
-                    // Automatically select Google provider
-                    const googleBtn = document.querySelector('.btnProvider[data-provider="google"]');
-                    if (googleBtn) {
-                        googleBtn.click();
-                    }
-                });
+                if (gotrueClient && typeof gotrueClient.loginExternalUrl === 'function') {
+                    const googleAuthUrl = gotrueClient.loginExternalUrl('google');
+                    console.log('[Google-SSO] Direct OAuth URL:', googleAuthUrl);
+                    console.log('[Google-SSO] Redirecting to Google OAuth...');
+
+                    // Close the account modal before redirecting
+                    hideUserModal();
+
+                    // Redirect directly to Google's OAuth consent screen
+                    window.location.href = googleAuthUrl;
+                } else {
+                    // Fallback: open the Netlify Identity widget if gotrue client is not available
+                    console.warn('[Google-SSO] gotrue client or loginExternalUrl not available, falling back to widget');
+                    console.log('[Google-SSO] gotrue client type:', typeof gotrueClient);
+                    console.log('[Google-SSO] loginExternalUrl type:', typeof gotrueClient?.loginExternalUrl);
+                    netlifyIdentity.open('login');
+                }
             } catch (error) {
-                console.error('[Auth] Error opening Google SSO:', error);
+                console.error('[Google-SSO] Error initiating Google SSO:', error);
+                console.error('[Google-SSO] Error name:', error.name);
+                console.error('[Google-SSO] Error message:', error.message);
+                console.error('[Google-SSO] Error stack:', error.stack);
                 signinMessage.textContent = "Error opening Google sign-in. Please try again.";
                 signinMessage.style.color = '#dc3545';
             }
         });
+    } else {
+        console.warn('[Google-SSO] Google SSO button element not found in DOM');
     }
 
-    // Handle successful login
+    // Handle successful login from Netlify Identity (Google OAuth callback)
     netlifyIdentity.on('login', async (user) => {
+        console.log('[Google-SSO] ========== NETLIFY IDENTITY LOGIN EVENT ==========');
+        console.log('[Google-SSO] Event fired at:', new Date().toISOString());
+        console.log('[Google-SSO] User object present:', !!user);
+        console.log('[Google-SSO] User email:', user?.email);
+        console.log('[Google-SSO] User id:', user?.id);
+        console.log('[Google-SSO] User confirmed_at:', user?.confirmed_at);
+        console.log('[Google-SSO] User app_metadata:', JSON.stringify(user?.app_metadata));
+        console.log('[Google-SSO] User user_metadata:', JSON.stringify(user?.user_metadata));
+        console.log('[Google-SSO] Token object present:', !!user?.token);
+        console.log('[Google-SSO] access_token present:', !!user?.token?.access_token);
+        console.log('[Google-SSO] access_token length:', user?.token?.access_token?.length);
+        console.log('[Google-SSO] token_type:', user?.token?.token_type);
+        console.log('[Google-SSO] expires_at:', user?.token?.expires_at);
         log('Auth', `Netlify Identity login event for: ${user?.email}`);
+
         try {
             const netlifyJwt = user.token.access_token;
+
+            if (!netlifyJwt) {
+                console.error('[Google-SSO] ERROR: No access_token in user.token — cannot call auth-social');
+                signinMessage.textContent = "Login token missing. Please try again.";
+                signinMessage.style.color = '#dc3545';
+                return;
+            }
+
+            console.log('[Google-SSO] Calling /api/auth-social with Bearer token...');
+            console.log('[Google-SSO] Token first 20 chars:', netlifyJwt.substring(0, 20) + '...');
+
             // Call serverless function to get app-specific JWT
             const response = await fetch('/api/auth-social', {
                 method: 'POST',
@@ -727,31 +844,101 @@ function initializeNetlifyIdentity() {
                     'Authorization': `Bearer ${netlifyJwt}`
                 }
             });
+
+            console.log('[Google-SSO] auth-social response status:', response.status);
+            console.log('[Google-SSO] auth-social response ok:', response.ok);
+            console.log('[Google-SSO] auth-social response headers:', JSON.stringify(Object.fromEntries(response.headers.entries())));
+
+            const responseText = await response.text();
+            console.log('[Google-SSO] auth-social response body length:', responseText.length);
+
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || "Failed to sync social login.");
+                console.error('[Google-SSO] auth-social error response body:', responseText);
+                let errorMsg = 'Failed to sync social login.';
+                try {
+                    const errorData = JSON.parse(responseText);
+                    errorMsg = errorData.error || errorMsg;
+                } catch (e) {
+                    console.error('[Google-SSO] Could not parse error response as JSON');
+                }
+                throw new Error(errorMsg);
             }
 
-            const appPayload = await response.json();
+            let appPayload;
+            try {
+                appPayload = JSON.parse(responseText);
+            } catch (parseErr) {
+                console.error('[Google-SSO] Failed to parse auth-social success response:', parseErr.message);
+                throw new Error('Invalid response from auth-social');
+            }
+
+            console.log('[Google-SSO] auth-social success. User ID:', appPayload.user?.id);
+            console.log('[Google-SSO] auth-social user email:', appPayload.user?.email);
+
             await _handleSuccessfulLogin(appPayload);
             netlifyIdentity.close();
+            console.log('[Google-SSO] ========== GOOGLE SSO LOGIN COMPLETE ==========');
             log('Auth', 'Google SSO login complete');
 
         } catch (error) {
-            console.error("[Auth] SSO login error:", error.message);
-            signinMessage.textContent = "Error logging in with Google. Please try again.";
+            console.error('[Google-SSO] ========== SSO LOGIN ERROR ==========');
+            console.error('[Google-SSO] Error name:', error.name);
+            console.error('[Google-SSO] Error message:', error.message);
+            console.error('[Google-SSO] Error stack:', error.stack);
+            signinMessage.textContent = `Google sign-in error: ${error.message}`;
             signinMessage.style.color = '#dc3545';
         }
     });
 
     // Handle errors
     netlifyIdentity.on('error', (error) => {
-        console.error('[Auth] Netlify Identity error:', error);
-        signinMessage.textContent = "Authentication error. Please try again.";
+        console.error('[Google-SSO] ========== NETLIFY IDENTITY ERROR EVENT ==========');
+        console.error('[Google-SSO] Error event fired at:', new Date().toISOString());
+        console.error('[Google-SSO] Error object:', error);
+        console.error('[Google-SSO] Error type:', typeof error);
+        console.error('[Google-SSO] Error message:', error?.message || error?.msg || String(error));
+        if (error?.json) {
+            console.error('[Google-SSO] Error JSON:', JSON.stringify(error.json));
+        }
+        if (error?.status) {
+            console.error('[Google-SSO] Error status:', error.status);
+        }
+        console.error('[Google-SSO] Full error details:', JSON.stringify(error, Object.getOwnPropertyNames(error || {})));
+        signinMessage.textContent = `Authentication error: ${error?.message || error?.msg || String(error)}`;
         signinMessage.style.color = '#dc3545';
     });
 
+    // Listen for init event to confirm widget is ready
+    netlifyIdentity.on('init', (user) => {
+        console.log('[Google-SSO] ========== NETLIFY IDENTITY INIT EVENT ==========');
+        console.log('[Google-SSO] Init event fired at:', new Date().toISOString());
+        console.log('[Google-SSO] Current user from init:', user ? user.email : 'none (not logged in)');
+        console.log('[Google-SSO] Current URL hash present:', !!window.location.hash);
+        if (window.location.hash) {
+            console.log('[Google-SSO] Hash (first 80 chars):', window.location.hash.substring(0, 80));
+        }
+        if (user) {
+            console.log('[Google-SSO] Init user token present:', !!user?.token?.access_token);
+            console.log('[Google-SSO] Init user provider:', user?.app_metadata?.provider);
+        }
+    });
+
+    console.log('[Google-SSO] ========== NETLIFY IDENTITY INITIALIZATION COMPLETE ==========');
     log('Auth', 'Netlify Identity initialization complete');
+
+    // Check if an OAuth error was captured during page load (e.g., webhook failure)
+    if (window._oauthError) {
+        console.error('[Google-SSO] Displaying OAuth error from page load:', window._oauthError);
+        const errorDesc = window._oauthError.description || 'Unknown error';
+        // Show a user-friendly message
+        if (errorDesc.toLowerCase().includes('webhook')) {
+            signinMessage.textContent = 'Google sign-in encountered a temporary server issue. Please try again.';
+        } else {
+            signinMessage.textContent = `Google sign-in failed: ${errorDesc}`;
+        }
+        signinMessage.style.color = '#dc3545';
+        delete window._oauthError;
+    }
 }
 
 // ============================================
@@ -1267,12 +1454,21 @@ function showBiometricSetupPromptIfNeeded() {
 
     // Check conditions
     const hasPasskey = hasStoredPasskey(email);
+    const anyPasskey = hasAnyStoredPasskey();
     const skipped = localStorage.getItem('biometricSetupSkipped') === 'true';
+
+    // If user already has a passkey (for this email or any email), hide the prompt
+    if (hasPasskey || anyPasskey || skipped) {
+        biometricSetupPrompt.style.display = 'none';
+        return;
+    }
 
     isPlatformAuthenticatorAvailable().then(available => {
         if (available && !hasPasskey && !skipped) {
             console.log('[WebAuthn] Showing biometric setup prompt');
             biometricSetupPrompt.style.display = 'block';
+        } else {
+            biometricSetupPrompt.style.display = 'none';
         }
     });
 }
