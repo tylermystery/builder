@@ -4389,21 +4389,24 @@ body.ucp-panel-open .unified-chat-panel {
     (function() {
       var hash = window.location.hash;
       if (hash) {
-        // Check for Netlify Identity tokens in hash
-        var identityTokens = ['confirmation_token', 'recovery_token', 'invite_token', 'access_token'];
-        var hasIdentityToken = identityTokens.some(function(token) {
+        // Check for stale Netlify Identity tokens (confirmation, recovery, invite)
+        // NOTE: access_token is NOT cleared here — it's needed for Google OAuth callbacks
+        var staleTokenTypes = ['confirmation_token', 'recovery_token', 'invite_token'];
+        var hasStaleToken = staleTokenTypes.some(function(token) {
           return hash.includes(token + '=');
         });
 
-        if (hasIdentityToken) {
-          console.log('[Identity Redirect] Detected Netlify Identity hash token, clearing hash to prevent interference');
-          // Clear the hash to prevent the identity widget from processing an invalid token
-          // This prevents the "Link Disabled" error
+        if (hasStaleToken) {
+          console.log('[Identity Redirect] Detected stale Netlify Identity token, clearing hash');
           if (window.history && window.history.replaceState) {
             window.history.replaceState(null, '', window.location.pathname + window.location.search);
           }
-          // Show a user-friendly message
           console.warn('[Auth] Old or invalid Netlify Identity link detected. Please use the email sign-in form to request a new link.');
+        }
+
+        // If access_token is present, ensure Netlify Identity widget loads immediately to process it
+        if (hash.includes('access_token=')) {
+          console.log('[Google-SSO] OAuth access_token detected in URL hash — ensuring Netlify Identity loads to process it');
         }
       }
     })();
@@ -4418,6 +4421,12 @@ body.ucp-panel-open .unified-chat-panel {
       });
       return window._identityLoading;
     };
+
+    // If access_token is present (Google OAuth callback), load Netlify Identity immediately
+    if (window.location.hash && window.location.hash.includes('access_token=')) {
+      console.log('[Google-SSO] Loading Netlify Identity widget immediately for OAuth callback');
+      window.loadNetlifyIdentity();
+    }
     </script>
 
     </head>
