@@ -710,6 +710,17 @@ export async function loadSessionFromAirtable(sessionId) {
                 // and solution items (solution-*)
                 if (savedState.aiRecords && Object.keys(savedState.aiRecords).length > 0) {
                     const customRecordsToRestore = Object.values(savedState.aiRecords);
+                    const restoredWithCategorization = customRecordsToRestore.filter(r => r && r._categorization);
+                    console.log('[SESSION-LOAD DEBUG] Restoring custom records', {
+                        total: customRecordsToRestore.length,
+                        withCategorization: restoredWithCategorization.length,
+                        sample: restoredWithCategorization.slice(0, 5).map(r => ({
+                            recordId: r.id,
+                            recordName: r.fields?.Name,
+                            baseCategories: r._categorization?.baseCategories || [],
+                            tagsCount: r._categorization?.tags?.length || 0
+                        }))
+                    });
                     for (const customRecord of customRecordsToRestore) {
                         // Only add if not already in state.records.all
                         if (!state.records.all.some(r => r.id === customRecord.id)) {
@@ -917,6 +928,7 @@ export async function saveSessionToAirtable() {
         ...Array.from(state.cart.lockedItems.keys())
     ];
     const customRecordsToSave = {};
+    let customCategorizationCount = 0;
     for (const itemId of allCartItemIds) {
         // Custom items include AI-generated items, manually added items, and solution items
         const isCustomItem = itemId.startsWith('ai-') || itemId.startsWith('manual-') || itemId.startsWith('solution-');
@@ -930,6 +942,17 @@ export async function saveSessionToAirtable() {
             }
 
             if (customRecord) {
+                if (customRecord._categorization) {
+                    customCategorizationCount += 1;
+                    console.log('[SESSION-SAVE DEBUG] Custom record categorization detected', {
+                        recordId: customRecord.id,
+                        recordName: customRecord.fields?.Name,
+                        baseCategories: customRecord._categorization.baseCategories || [],
+                        tagsCount: customRecord._categorization.tags?.length || 0,
+                        fieldsCategories: customRecord.fields?.Categories,
+                        fieldsCategory: customRecord.fields?.Category
+                    });
+                }
                 customRecordsToSave[itemId] = {
                     id: customRecord.id,
                     fields: customRecord.fields,
@@ -944,6 +967,22 @@ export async function saveSessionToAirtable() {
                 };
             }
         }
+    }
+
+    const categorizationRecords = state.records.all.filter(r => r && r._categorization);
+    if (categorizationRecords.length > 0) {
+        const nonCustomCategorized = categorizationRecords.filter(r => !(r.id || '').startsWith('ai-') && !(r.id || '').startsWith('manual-') && !(r.id || '').startsWith('solution-'));
+        console.log('[SESSION-SAVE DEBUG] Records with _categorization in state', {
+            total: categorizationRecords.length,
+            customCount: customCategorizationCount,
+            nonCustomCount: nonCustomCategorized.length,
+            nonCustomSample: nonCustomCategorized.slice(0, 5).map(r => ({
+                recordId: r.id,
+                recordName: r.fields?.Name,
+                fieldsCategories: r.fields?.Categories,
+                fieldsCategory: r.fields?.Category
+            }))
+        });
     }
 
     const sessionData = {
@@ -6085,4 +6124,3 @@ export async function upsertCommunityFund(itemRecordId, itemName, donationAmount
         return null;
     }
 }
-

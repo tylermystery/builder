@@ -2831,6 +2831,15 @@ function enableItemEditMode(record, nameEl, descEl) {
 
                 // Only save if user has selected at least one category
                 if (selCats.length > 0 || selTags.length > 0) {
+                    console.log('[CATEGORIZATION DEBUG] Saving categorization (edit mode)', {
+                        recordId: record.id,
+                        recordName: record.fields?.Name,
+                        selectedCategories: selCats,
+                        selectedTags: selTags,
+                        fieldsCategories: record.fields?.Categories,
+                        fieldsCategory: record.fields?.Category,
+                        isCustom: record.id?.startsWith('ai-') || record.id?.startsWith('manual-') || record.id?.startsWith('solution-')
+                    });
                     const newCategorization = {
                         ...(record._categorization || {}),
                         baseCategories: selCats,
@@ -3755,6 +3764,16 @@ function openCategorizationEditor(record, parentContainer, existingBadgesEl) {
             categorizedAt: new Date().toISOString(),
             _manuallyEdited: true,
         };
+
+        console.log('[CATEGORIZATION DEBUG] Apply categorization editor changes', {
+            recordId: record.id,
+            recordName: record.fields?.Name,
+            selectedCategories: Array.from(selectedCategories),
+            selectedTags: Array.from(selectedTags),
+            fieldsCategories: record.fields?.Categories,
+            fieldsCategory: record.fields?.Category,
+            isCustom: record.id?.startsWith('ai-') || record.id?.startsWith('manual-') || record.id?.startsWith('solution-')
+        });
 
         record._categorization = newCategorization;
 

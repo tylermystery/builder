@@ -312,6 +312,22 @@ async function renderScene() {
     );
     // --- END FIX ---
 
+    const lockedRecords = state.records.all.filter(r => state.cart.lockedItems.has(r.id));
+    const categorizedVenues = lockedRecords.filter(r => (r._categorization?.baseCategories || []).some(c => String(c).toLowerCase() === 'venues' || String(c).toLowerCase() === 'venue'));
+    const missingVenueCategories = categorizedVenues.filter(r => !String(r.fields?.Categories || '').toLowerCase().includes('venue'));
+    console.log('[SCENE DEBUG] Venue background scan', {
+        lockedCount: lockedRecords.length,
+        venueFieldCount: venueRecords.length,
+        categorizedVenueCount: categorizedVenues.length,
+        missingVenueFieldCount: missingVenueCategories.length,
+        missingVenueFieldSample: missingVenueCategories.slice(0, 5).map(r => ({
+            recordId: r.id,
+            recordName: r.fields?.Name,
+            fieldsCategories: r.fields?.Categories,
+            categorization: r._categorization?.baseCategories || []
+        }))
+    });
+
     const bgDescription = bgThumbContainer.parentElement.querySelector('p.description');
     
     // --- THIS IS THE FIX (Part 2) ---
