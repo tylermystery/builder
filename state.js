@@ -71,6 +71,10 @@ export let state = {
         goalItems: new Set(), // Set of record IDs marked as goals/inspiration (typically top-ranked items)
         relatedGroups: [], // Array of arrays, each containing record IDs that are related/merged together
 
+        // Iteration history for versioned evolution (Maturity Engine)
+        // Map of recordId -> { currentIndex: number, iterations: Array<{ title, description, imageURL, tags, realm, timestamp, author, refinementNote, maturityDelta }> }
+        itemIterations: new Map(),
+
         // Recent chats list for expandable chat history
         recentChats: [], // Array of { id, type: 'session'|'item', name, lastMessage, lastMessageTime, unreadCount }
     },
@@ -133,6 +137,29 @@ export function getRecordById(id) {
  */
 export function invalidateRecordsIndex() {
     state.records._byId = null;
+}
+
+/**
+ * Get aggregate reactions across all variations for an item.
+ * With per-variation compound keys (recordId::variationAuthorId),
+ * this aggregates reactions across all variations into a single Map.
+ * @param {string} recordId
+ * @returns {Map<userId, emoji>} Aggregated reactions
+ */
+export function getAggregateReactions(recordId) {
+    const aggregate = new Map();
+    const prefix = `${recordId}::`;
+
+    for (const [key, reactionsMap] of state.session.reactions.entries()) {
+        if (key === recordId || key.startsWith(prefix)) {
+            if (reactionsMap instanceof Map) {
+                for (const [userId, emoji] of reactionsMap.entries()) {
+                    aggregate.set(userId, emoji);
+                }
+            }
+        }
+    }
+    return aggregate;
 }
 
 export function setState(newState) {

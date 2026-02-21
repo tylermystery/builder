@@ -1,24 +1,16 @@
 /**
  * AI-powered Item Categorizer
  * Takes an item and generates top 3 recommended event categories/use cases
- * Uses Google Gemini AI to intelligently categorize items based on their name, description, and context.
+ * Uses multi-provider AI with automatic fallback (Gemini → OpenAI → Anthropic)
  */
 
-const fetch = require('node-fetch');
-const { GEMINI_API_KEY } = process.env;
+const { generateText, parseJsonResponse } = require('./utils/ai-provider');
 
 /**
  * Categorize an item using AI to find the top 3 event types it's best suited for
- * @param {Object} itemData - Item information including name, description, category
- * @returns {Promise<Object>} - Array of top 3 recommended categories with relevance scores
  */
 async function categorizeItemWithAI(itemData) {
     console.log(`[Debug] categorizeItemWithAI: Categorizing item: ${itemData.name}`);
-
-    if (!GEMINI_API_KEY) {
-        console.error("[Debug] CRITICAL: GEMINI_API_KEY is missing!");
-        throw new Error("Server configuration error: Missing Gemini API Key.");
-    }
 
     const prompt = `You are an expert event planner. Analyze the following item/service and determine the TOP 3 types of events or occasions where this item would be most useful or appropriate.
 
@@ -82,65 +74,22 @@ SCORING:
 
 Generate the categorization now:`;
 
-    const payload = {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-            temperature: 0.5, // Lower temperature for more consistent categorization
-            maxOutputTokens: 1024,
-        }
-    };
-
-    const modelId = "gemini-2.0-flash";
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
-
-    console.log(`[Debug] categorizeItemWithAI: Sending request to Gemini...`);
-    const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+    const aiResult = await generateText(prompt, {
+        temperature: 0.5,
+        maxTokens: 1024,
+        caller: 'categorize-item',
     });
 
-    console.log(`[Debug] categorizeItemWithAI: Received status ${response.status} from Gemini.`);
-
-    if (!response.ok) {
-        let errorBody = await response.text();
-        try { errorBody = JSON.parse(errorBody); } catch (e) { /* Ignore */ }
-        console.error("[Debug] Gemini API Error Response Body:", errorBody);
-        let errorMessage = `Gemini API call failed with status ${response.status}`;
-        if (response.status === 400) errorMessage += ". Check payload/prompt structure.";
-        if (response.status === 403) errorMessage += ". Check API key permissions/billing.";
-        if (response.status === 429) errorMessage += ". Rate limit exceeded.";
-        throw new Error(errorMessage);
+    if (!aiResult.ok) {
+        const err = new Error(aiResult.error || 'AI categorization failed');
+        err.statusCode = aiResult.statusCode || 500;
+        err.quotaExhausted = aiResult.quotaExhausted || false;
+        throw err;
     }
 
-    const result = await response.json();
-    let categorizationText = '';
+    console.log(`[Debug] categorizeItemWithAI: Response from ${aiResult.providerName}`);
 
-    try {
-        categorizationText = result.candidates[0].content.parts[0].text;
-        // Clean up any markdown code blocks if present
-        categorizationText = categorizationText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    } catch (e) {
-        console.error('[Debug] Error extracting text from Gemini response structure:', JSON.stringify(result, null, 2));
-        throw new Error('Could not extract text from Gemini response.');
-    }
-
-    console.log(`[Debug] categorizeItemWithAI: Raw categorization text:\n${categorizationText}`);
-
-    // Parse the JSON response
-    let categorization;
-    try {
-        categorization = JSON.parse(categorizationText);
-    } catch (e) {
-        console.error('[Debug] Failed to parse categorization JSON:', e.message);
-        // Try to extract JSON object from the text
-        const jsonMatch = categorizationText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            categorization = JSON.parse(jsonMatch[0]);
-        } else {
-            throw new Error('Could not parse categorization from AI response');
-        }
-    }
+    const categorization = parseJsonResponse(aiResult.text);
 
     // Validate and normalize the response
     const normalizedResult = {
@@ -151,7 +100,8 @@ Generate the categorization now:`;
         })),
         confidence: Math.min(1, Math.max(0, parseFloat(categorization.confidence) || 0.7)),
         generalNote: categorization.generalNote || '',
-        categorizedAt: new Date().toISOString()
+        categorizedAt: new Date().toISOString(),
+        _aiProvider: aiResult.provider,
     };
 
     // Ensure we have exactly 3 categories (pad if needed)
@@ -169,7 +119,7 @@ Generate the categorization now:`;
 
 // Main Handler
 exports.handler = async (event) => {
-    console.log(`[Debug] categorize-item handler invoked. Method: ${event.httpMethod}`);
+    console.log(`[categorize-item] Handler invoked. Method: ${event.httpMethod}`);
 
     // Handle CORS preflight
     if (event.httpMethod === 'OPTIONS') {
@@ -206,13 +156,7 @@ exports.handler = async (event) => {
 
         console.log(`[Debug] Categorizing item: ${name}`);
 
-        // Categorize the item using AI
-        const categorization = await categorizeItemWithAI({
-            name,
-            description,
-            category,
-            price
-        });
+        const categorization = await categorizeItemWithAI({ name, description, category, price });
 
         return {
             statusCode: 200,
@@ -228,11 +172,21 @@ exports.handler = async (event) => {
         };
 
     } catch (error) {
-        console.error('[ERROR] categorize-item handler failed:', error.message, error.stack);
+        console.error('[categorize-item] Handler FAILED:', error.name, error.message);
+        console.error('[categorize-item] Stack:', error.stack);
+        const statusCode = error.statusCode === 429 ? 429 : 500;
+        const isQuota = error.quotaExhausted || false;
         return {
-            statusCode: 500,
+            statusCode,
             headers: { 'Access-Control-Allow-Origin': '*' },
-            body: JSON.stringify({ error: `Failed to categorize item: ${error.message}` })
+            body: JSON.stringify({
+                error: isQuota
+                    ? 'AI quota exceeded. Categorization is temporarily unavailable.'
+                    : `Failed to categorize item: ${error.message}`,
+                errorName: error.name,
+                retryable: statusCode === 429 && !isQuota,
+                quotaExhausted: isQuota
+            })
         };
     }
 };

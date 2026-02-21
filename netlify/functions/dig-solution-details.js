@@ -1,25 +1,16 @@
 /**
  * AI-powered Solution Detail Digger
  * Takes a solution item and researches it to provide comprehensive details
- * similar to the AI parsing tool - including location, website, pricing, rankings, etc.
- * Returns an accuracy/confidence score for the researched information.
+ * Uses multi-provider AI with automatic fallback (Gemini → OpenAI → Anthropic)
  */
 
-const fetch = require('node-fetch');
-const { GEMINI_API_KEY } = process.env;
+const { generateText, parseJsonResponse } = require('./utils/ai-provider');
 
 /**
  * Research a solution item and generate detailed information using AI
- * @param {Object} solutionData - Solution information including name, description, price
- * @returns {Promise<Object>} - Detailed information with accuracy score
  */
 async function researchSolutionWithAI(solutionData) {
     console.log(`[Debug] researchSolutionWithAI: Researching solution: ${solutionData.name}`);
-
-    if (!GEMINI_API_KEY) {
-        console.error("[Debug] CRITICAL: GEMINI_API_KEY is missing!");
-        throw new Error("Server configuration error: Missing Gemini API Key.");
-    }
 
     const prompt = `You are an expert event planning researcher. You need to research and provide detailed, accurate information about a service/product that could be used for events.
 
@@ -79,65 +70,22 @@ SCORING INSTRUCTIONS:
 
 Generate the research now:`;
 
-    const payload = {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-            temperature: 0.5, // Lower temperature for more factual responses
-            maxOutputTokens: 2048,
-        }
-    };
-
-    const modelId = "gemini-2.0-flash";
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
-
-    console.log(`[Debug] researchSolutionWithAI: Sending request to Gemini...`);
-    const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+    const aiResult = await generateText(prompt, {
+        temperature: 0.5,
+        maxTokens: 2048,
+        caller: 'dig-solution-details',
     });
 
-    console.log(`[Debug] researchSolutionWithAI: Received status ${response.status} from Gemini.`);
-
-    if (!response.ok) {
-        let errorBody = await response.text();
-        try { errorBody = JSON.parse(errorBody); } catch (e) { /* Ignore */ }
-        console.error("[Debug] Gemini API Error Response Body:", errorBody);
-        let errorMessage = `Gemini API call failed with status ${response.status}`;
-        if (response.status === 400) errorMessage += ". Check payload/prompt structure.";
-        if (response.status === 403) errorMessage += ". Check API key permissions/billing.";
-        if (response.status === 429) errorMessage += ". Rate limit exceeded.";
-        throw new Error(errorMessage);
+    if (!aiResult.ok) {
+        const err = new Error(aiResult.error || 'AI research failed');
+        err.statusCode = aiResult.statusCode || 500;
+        err.quotaExhausted = aiResult.quotaExhausted || false;
+        throw err;
     }
 
-    const result = await response.json();
-    let researchText = '';
+    console.log(`[Debug] researchSolutionWithAI: Response from ${aiResult.providerName}`);
 
-    try {
-        researchText = result.candidates[0].content.parts[0].text;
-        // Clean up any markdown code blocks if present
-        researchText = researchText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    } catch (e) {
-        console.error('[Debug] Error extracting text from Gemini response structure:', JSON.stringify(result, null, 2));
-        throw new Error('Could not extract text from Gemini response.');
-    }
-
-    console.log(`[Debug] researchSolutionWithAI: Raw research text:\n${researchText}`);
-
-    // Parse the JSON response
-    let research;
-    try {
-        research = JSON.parse(researchText);
-    } catch (e) {
-        console.error('[Debug] Failed to parse research JSON:', e.message);
-        // Try to extract JSON object from the text
-        const jsonMatch = researchText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            research = JSON.parse(jsonMatch[0]);
-        } else {
-            throw new Error('Could not parse research from AI response');
-        }
-    }
+    const research = parseJsonResponse(aiResult.text);
 
     // Validate and normalize the response
     const normalizedResearch = {
@@ -173,7 +121,8 @@ Generate the research now:`;
         websiteSearchTerms: Array.isArray(research.websiteSearchTerms) ? research.websiteSearchTerms : [],
         confidence: Math.min(1, Math.max(0, parseFloat(research.confidence) || 0.5)),
         confidenceNotes: research.confidenceNotes || '',
-        researchedAt: new Date().toISOString()
+        researchedAt: new Date().toISOString(),
+        _aiProvider: aiResult.provider,
     };
 
     console.log(`[Debug] researchSolutionWithAI: Parsed research with confidence ${normalizedResearch.confidence}`);
@@ -182,7 +131,7 @@ Generate the research now:`;
 
 // Main Handler
 exports.handler = async (event) => {
-    console.log(`[Debug] dig-solution-details handler invoked. Method: ${event.httpMethod}`);
+    console.log(`[dig-solution-details] Handler invoked. Method: ${event.httpMethod}`);
 
     // Handle CORS preflight
     if (event.httpMethod === 'OPTIONS') {
@@ -219,14 +168,7 @@ exports.handler = async (event) => {
 
         console.log(`[Debug] Researching solution: ${name}`);
 
-        // Research the solution using AI
-        const research = await researchSolutionWithAI({
-            name,
-            description,
-            price,
-            category,
-            parentConcept
-        });
+        const research = await researchSolutionWithAI({ name, description, price, category, parentConcept });
 
         return {
             statusCode: 200,
@@ -242,11 +184,21 @@ exports.handler = async (event) => {
         };
 
     } catch (error) {
-        console.error('[ERROR] dig-solution-details handler failed:', error.message, error.stack);
+        console.error('[dig-solution-details] Handler FAILED:', error.name, error.message);
+        console.error('[dig-solution-details] Stack:', error.stack);
+        const statusCode = error.statusCode === 429 ? 429 : 500;
+        const isQuota = error.quotaExhausted || false;
         return {
-            statusCode: 500,
+            statusCode,
             headers: { 'Access-Control-Allow-Origin': '*' },
-            body: JSON.stringify({ error: `Failed to research solution: ${error.message}` })
+            body: JSON.stringify({
+                error: isQuota
+                    ? 'AI quota exceeded. Research is temporarily unavailable.'
+                    : `Failed to research solution: ${error.message}`,
+                errorName: error.name,
+                retryable: statusCode === 429 && !isQuota,
+                quotaExhausted: isQuota
+            })
         };
     }
 };
