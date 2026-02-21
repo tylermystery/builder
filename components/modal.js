@@ -4,7 +4,7 @@ console.log('[MODULE DEBUG] modal.js module starting to load...', performance.no
 import { state, getRecordById } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
-import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS } from '../config.js';
+import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS } from '../config.js';
 import { getCurrentUser } from '../chat.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { log } from '../utils/debug.js';
@@ -3222,6 +3222,356 @@ async function initializePlanCarousel(componentRecords) {
     updateCarousel();
 }
 
+/**
+ * Opens an inline categorization editor panel in the modal.
+ * Lets users toggle base categories and tags, then apply changes.
+ */
+function openCategorizationEditor(record, parentContainer, existingBadgesEl) {
+    // Remove any existing editor
+    const sidebarColumn = document.querySelector('.modal-sidebar-column');
+    const existingEditor = sidebarColumn?.querySelector('.categorization-editor') || parentContainer.closest('.modal-content')?.querySelector('.categorization-editor');
+    if (existingEditor) {
+        existingEditor.remove();
+        return; // Toggle off
+    }
+
+    // Create working copies of the current state
+    const selectedCategories = new Set(record._categorization?.baseCategories || []);
+    const selectedTags = new Set(record._categorization?.tags || []);
+
+    const editor = document.createElement('div');
+    editor.className = 'categorization-editor';
+    editor.style.cssText = `
+        background: #fafafa;
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        padding: 16px;
+        margin: 12px 0;
+        animation: slideDown 0.2s ease-out;
+    `;
+
+    // -- Header row --
+    const headerRow = document.createElement('div');
+    headerRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;';
+    headerRow.innerHTML = `
+        <span style="font-weight: 600; font-size: 0.9em; color: #333;">Edit Categories & Tags</span>
+    `;
+    const closeEditorBtn = document.createElement('button');
+    closeEditorBtn.style.cssText = 'background: none; border: none; cursor: pointer; font-size: 1.1em; color: #999; padding: 2px 6px;';
+    closeEditorBtn.textContent = '✕';
+    closeEditorBtn.addEventListener('click', () => editor.remove());
+    headerRow.appendChild(closeEditorBtn);
+    editor.appendChild(headerRow);
+
+    // -- Base Categories section --
+    const catSection = document.createElement('div');
+    catSection.style.cssText = 'margin-bottom: 14px;';
+    catSection.innerHTML = '<div style="font-size: 0.8em; color: #666; margin-bottom: 6px; font-weight: 500;">Categories</div>';
+
+    const catGrid = document.createElement('div');
+    catGrid.style.cssText = 'display: flex; flex-wrap: wrap; gap: 6px;';
+
+    BASE_CATEGORIES.forEach(catDef => {
+        const chip = document.createElement('button');
+        const isSelected = selectedCategories.has(catDef.id);
+        chip.className = 'cat-editor-chip';
+        chip.dataset.catId = catDef.id;
+        applyCategoryChipStyle(chip, catDef, isSelected);
+        chip.innerHTML = `<span>${catDef.icon}</span> ${catDef.label}`;
+        chip.addEventListener('click', () => {
+            if (selectedCategories.has(catDef.id)) {
+                // Don't allow removing the last category
+                if (selectedCategories.size <= 1) {
+                    if (typeof ui !== 'undefined' && ui.showToast) {
+                        ui.showToast('Item must have at least one category');
+                    }
+                    return;
+                }
+                selectedCategories.delete(catDef.id);
+            } else {
+                selectedCategories.add(catDef.id);
+            }
+            applyCategoryChipStyle(chip, catDef, selectedCategories.has(catDef.id));
+        });
+        catGrid.appendChild(chip);
+    });
+    catSection.appendChild(catGrid);
+    editor.appendChild(catSection);
+
+    // -- Tags section --
+    const tagSection = document.createElement('div');
+    tagSection.style.cssText = 'margin-bottom: 14px;';
+    tagSection.innerHTML = '<div style="font-size: 0.8em; color: #666; margin-bottom: 6px; font-weight: 500;">Tags</div>';
+
+    const tagContainer = document.createElement('div');
+    tagContainer.style.cssText = 'display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; padding-right: 4px;';
+
+    TAG_GROUPS.forEach(group => {
+        const groupDiv = document.createElement('div');
+        const groupLabel = document.createElement('div');
+        groupLabel.style.cssText = 'font-size: 0.7em; color: #999; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px;';
+        groupLabel.textContent = group.label;
+        groupDiv.appendChild(groupLabel);
+
+        const tagsRow = document.createElement('div');
+        tagsRow.style.cssText = 'display: flex; flex-wrap: wrap; gap: 4px;';
+
+        group.tags.forEach(tag => {
+            const tagChip = document.createElement('button');
+            tagChip.className = 'tag-editor-chip';
+            tagChip.dataset.tag = tag;
+            applyTagChipStyle(tagChip, selectedTags.has(tag));
+            tagChip.textContent = tag;
+            tagChip.addEventListener('click', () => {
+                if (selectedTags.has(tag)) {
+                    selectedTags.delete(tag);
+                } else {
+                    selectedTags.add(tag);
+                }
+                applyTagChipStyle(tagChip, selectedTags.has(tag));
+            });
+            tagsRow.appendChild(tagChip);
+        });
+
+        groupDiv.appendChild(tagsRow);
+        tagContainer.appendChild(groupDiv);
+    });
+
+    // Custom tag input
+    const customTagRow = document.createElement('div');
+    customTagRow.style.cssText = 'display: flex; gap: 6px; align-items: center; margin-top: 4px;';
+    const customInput = document.createElement('input');
+    customInput.type = 'text';
+    customInput.placeholder = 'Add custom tag...';
+    customInput.maxLength = 30;
+    customInput.style.cssText = `
+        flex: 1;
+        padding: 4px 8px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 0.75em;
+        outline: none;
+    `;
+    const addTagBtn = document.createElement('button');
+    addTagBtn.textContent = '+ Add';
+    addTagBtn.style.cssText = `
+        padding: 4px 10px;
+        border: 1px solid #1565c0;
+        background: #e3f2fd;
+        color: #1565c0;
+        border-radius: 8px;
+        font-size: 0.75em;
+        cursor: pointer;
+        white-space: nowrap;
+    `;
+
+    function addCustomTag() {
+        const val = customInput.value.trim();
+        if (val && val.length <= 30 && !selectedTags.has(val)) {
+            selectedTags.add(val);
+            // Add a visual chip for the custom tag
+            const customChip = document.createElement('button');
+            customChip.className = 'tag-editor-chip';
+            customChip.dataset.tag = val;
+            applyTagChipStyle(customChip, true);
+            customChip.textContent = val;
+            customChip.addEventListener('click', () => {
+                if (selectedTags.has(val)) {
+                    selectedTags.delete(val);
+                } else {
+                    selectedTags.add(val);
+                }
+                applyTagChipStyle(customChip, selectedTags.has(val));
+            });
+            // Insert before the custom input row
+            customTagRow.before(customChip);
+            customInput.value = '';
+        }
+    }
+
+    addTagBtn.addEventListener('click', addCustomTag);
+    customInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addCustomTag();
+        }
+    });
+    customTagRow.appendChild(customInput);
+    customTagRow.appendChild(addTagBtn);
+    tagContainer.appendChild(customTagRow);
+
+    tagSection.appendChild(tagContainer);
+    editor.appendChild(tagSection);
+
+    // -- Action buttons --
+    const actionRow = document.createElement('div');
+    actionRow.style.cssText = 'display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;';
+
+    const aiSuggestBtn = document.createElement('button');
+    aiSuggestBtn.style.cssText = `
+        padding: 6px 14px;
+        border: 1px solid #43a047;
+        background: white;
+        color: #43a047;
+        border-radius: 8px;
+        font-size: 0.8em;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    `;
+    aiSuggestBtn.innerHTML = '🤖 AI Suggest';
+    aiSuggestBtn.addEventListener('click', async () => {
+        aiSuggestBtn.disabled = true;
+        aiSuggestBtn.innerHTML = '⏳ Thinking...';
+
+        try {
+            let itemRecord = record;
+            if (record.id?.startsWith('solution-') && window._solutionRecords) {
+                const sr = window._solutionRecords.get(record.id);
+                if (sr) itemRecord = sr;
+            }
+            if (!itemRecord.fields && state.records.all) {
+                const sr = getRecordById(record.id);
+                if (sr) itemRecord = sr;
+            }
+
+            const result = await api.categorizeItem(itemRecord);
+            if (result.success && result.categorization) {
+                // Update selections with AI suggestions
+                selectedCategories.clear();
+                (result.categorization.baseCategories || []).forEach(c => selectedCategories.add(c));
+                selectedTags.clear();
+                (result.categorization.tags || []).forEach(t => selectedTags.add(t));
+
+                // Re-apply styles to all chips
+                catGrid.querySelectorAll('.cat-editor-chip').forEach(chip => {
+                    const catDef = BASE_CATEGORIES.find(c => c.id === chip.dataset.catId);
+                    if (catDef) applyCategoryChipStyle(chip, catDef, selectedCategories.has(catDef.id));
+                });
+                tagContainer.querySelectorAll('.tag-editor-chip').forEach(chip => {
+                    applyTagChipStyle(chip, selectedTags.has(chip.dataset.tag));
+                });
+
+                if (typeof ui !== 'undefined' && ui.showToast) {
+                    ui.showToast('AI suggestions applied! Adjust as needed.');
+                }
+            }
+        } catch (err) {
+            console.error('AI suggest failed:', err);
+            if (typeof ui !== 'undefined' && ui.showToast) {
+                ui.showToast('AI suggestion failed. Try again.');
+            }
+        }
+
+        aiSuggestBtn.disabled = false;
+        aiSuggestBtn.innerHTML = '🤖 AI Suggest';
+    });
+
+    const applyBtn = document.createElement('button');
+    applyBtn.style.cssText = `
+        padding: 6px 14px;
+        border: none;
+        background: linear-gradient(135deg, #43a047 0%, #1b5e20 100%);
+        color: white;
+        border-radius: 8px;
+        font-size: 0.8em;
+        cursor: pointer;
+        font-weight: 600;
+    `;
+    applyBtn.textContent = 'Apply';
+    applyBtn.addEventListener('click', () => {
+        // Save the categorization to the record
+        const newCategorization = {
+            ...(record._categorization || {}),
+            baseCategories: Array.from(selectedCategories),
+            tags: Array.from(selectedTags),
+            categorizedAt: new Date().toISOString(),
+            _manuallyEdited: true,
+        };
+
+        record._categorization = newCategorization;
+
+        // Update solution registry if applicable
+        if (record.id?.startsWith('solution-') && window._solutionRecords) {
+            const sr = window._solutionRecords.get(record.id);
+            if (sr) sr._categorization = newCategorization;
+        }
+
+        // Update in state.records.all if present
+        const stateIndex = state.records.all.findIndex(r => r.id === record.id);
+        if (stateIndex !== -1) {
+            state.records.all[stateIndex]._categorization = newCategorization;
+        }
+
+        if (typeof ui !== 'undefined' && ui.showToast) {
+            ui.showToast('Categories & tags updated!');
+        }
+
+        // Re-render the modal to show updated badges
+        showDetailModal(record);
+    });
+
+    actionRow.appendChild(aiSuggestBtn);
+    actionRow.appendChild(applyBtn);
+    editor.appendChild(actionRow);
+
+    // Insert editor right after the header actions row in the sidebar
+    const modalHeaderActionsEl = document.getElementById('modal-header-actions');
+    if (modalHeaderActionsEl && modalHeaderActionsEl.nextElementSibling) {
+        modalHeaderActionsEl.parentElement.insertBefore(editor, modalHeaderActionsEl.nextElementSibling);
+    } else if (modalHeaderActionsEl) {
+        modalHeaderActionsEl.parentElement.appendChild(editor);
+    } else {
+        // Fallback: insert after the trigger container
+        const insertTarget = parentContainer.closest('.modal-header-actions-row') || parentContainer;
+        if (insertTarget.nextElementSibling) {
+            insertTarget.parentElement.insertBefore(editor, insertTarget.nextElementSibling);
+        } else {
+            insertTarget.parentElement.appendChild(editor);
+        }
+    }
+}
+
+/**
+ * Apply styling to a base category chip based on selection state
+ */
+function applyCategoryChipStyle(chip, catDef, isSelected) {
+    chip.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.8em;
+        cursor: pointer;
+        transition: all 0.15s;
+        border: 2px solid ${isSelected ? catDef.color : '#ddd'};
+        background: ${isSelected ? catDef.bg : 'white'};
+        color: ${isSelected ? catDef.color : '#888'};
+        font-weight: ${isSelected ? '600' : '400'};
+        opacity: ${isSelected ? '1' : '0.7'};
+    `;
+}
+
+/**
+ * Apply styling to a tag chip based on selection state
+ */
+function applyTagChipStyle(chip, isSelected) {
+    chip.style.cssText = `
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 0.7em;
+        cursor: pointer;
+        transition: all 0.15s;
+        border: 1px solid ${isSelected ? '#1565c0' : '#e0e0e0'};
+        background: ${isSelected ? '#e3f2fd' : 'white'};
+        color: ${isSelected ? '#1565c0' : '#888'};
+        font-weight: ${isSelected ? '500' : '400'};
+        white-space: nowrap;
+    `;
+}
+
 // Guard to prevent concurrent modal rendering
 let isModalRendering = false;
 
@@ -5396,65 +5746,114 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     }
 
     // Add "Categorize" button for ALL items (both catalog and solution items)
-    // This allows users to see what event types an item would be best suited for
-    const hasCategorization = record._categorization?.categories?.length > 0;
+    // This allows users to assign base categories and tags to items
+    const hasCategorization = record._categorization?.baseCategories?.length > 0;
 
     if (hasCategorization) {
-        // Show category badges for already-categorized items
+        // Show category + tag badges for already-categorized items
         const categoriesContainer = document.createElement('div');
         categoriesContainer.className = 'modal-categories-container';
         categoriesContainer.style.cssText = `
-            display: inline-flex;
+            display: flex;
             align-items: center;
             gap: 6px;
             margin-right: 10px;
             flex-wrap: wrap;
         `;
 
-        // Add a small label
-        const categoryLabel = document.createElement('span');
-        categoryLabel.style.cssText = `
-            font-size: 0.75em;
-            color: #666;
-            margin-right: 2px;
-        `;
-        categoryLabel.textContent = 'Good for:';
-        categoriesContainer.appendChild(categoryLabel);
-
-        record._categorization.categories.forEach((cat, index) => {
-            const relevancePercent = Math.round(cat.relevance * 100);
-            const badge = document.createElement('span');
-            badge.className = 'category-badge';
-            badge.style.cssText = `
-                display: inline-flex;
-                align-items: center;
-                gap: 3px;
-                background: ${index === 0 ? '#e8f5e9' : index === 1 ? '#fff3e0' : '#f3e5f5'};
-                color: ${index === 0 ? '#2e7d32' : index === 1 ? '#e65100' : '#7b1fa2'};
+        // Render base category chips
+        record._categorization.baseCategories.forEach(catId => {
+            const catDef = BASE_CATEGORIES.find(c => c.id === catId);
+            if (!catDef) return;
+            const chip = document.createElement('span');
+            chip.className = 'category-badge base-category-chip';
+            chip.style.cssText = `
+                background: ${catDef.bg};
+                color: ${catDef.color};
+                border: 1px solid ${catDef.border};
                 padding: 3px 8px;
                 border-radius: 10px;
                 font-size: 0.75em;
-                border: 1px solid ${index === 0 ? '#a5d6a7' : index === 1 ? '#ffcc80' : '#ce93d8'};
-                cursor: help;
+                font-weight: 600;
+                display: inline-flex;
+                align-items: center;
+                gap: 3px;
             `;
-            badge.textContent = cat.name;
-            badge.title = cat.reason || `${relevancePercent}% match`;
+            chip.innerHTML = `<span>${catDef.icon}</span> ${catDef.label}`;
+            categoriesContainer.appendChild(chip);
+        });
 
-            // Initialize Tippy tooltip if available
+        // Render tag badges (show first 4, then a "+N more" chip)
+        const tags = record._categorization.tags || [];
+        const visibleTags = tags.slice(0, 4);
+        const hiddenCount = tags.length - visibleTags.length;
+
+        visibleTags.forEach(tag => {
+            const badge = document.createElement('span');
+            badge.className = 'category-badge tag-badge';
+            badge.style.cssText = `
+                background: #f5f5f5;
+                color: #555;
+                border: 1px solid #e0e0e0;
+                padding: 2px 7px;
+                border-radius: 8px;
+                font-size: 0.7em;
+            `;
+            badge.textContent = tag;
+            categoriesContainer.appendChild(badge);
+        });
+
+        if (hiddenCount > 0) {
+            const moreBadge = document.createElement('span');
+            moreBadge.className = 'category-badge tag-badge';
+            moreBadge.style.cssText = `
+                background: #e8eaf6;
+                color: #3f51b5;
+                border: 1px solid #c5cae9;
+                padding: 2px 7px;
+                border-radius: 8px;
+                font-size: 0.7em;
+                cursor: pointer;
+            `;
+            moreBadge.textContent = `+${hiddenCount} more`;
             if (window.tippy) {
-                tippy(badge, {
-                    content: `<strong>${cat.name}</strong><br><em>${cat.reason || 'Recommended for this event type'}</em><br>Relevance: ${relevancePercent}%`,
-                    allowHTML: true,
+                tippy(moreBadge, {
+                    content: tags.slice(4).join(', '),
                     placement: 'bottom',
                     arrow: true
                 });
             }
+            categoriesContainer.appendChild(moreBadge);
+        }
 
-            categoriesContainer.appendChild(badge);
+        // Edit button to re-open categorization editor
+        const editBtn = document.createElement('button');
+        editBtn.className = 'categorize-edit-btn';
+        editBtn.style.cssText = `
+            background: none;
+            border: 1px solid #ccc;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 0.7em;
+            color: #777;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        `;
+        editBtn.innerHTML = '✏️';
+        editBtn.title = 'Edit categories & tags';
+        editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openCategorizationEditor(record, modalHeaderActions, categoriesContainer);
         });
+        categoriesContainer.appendChild(editBtn);
 
         modalHeaderActions.appendChild(categoriesContainer);
-        log('Modal', `Showing category badges for categorized item: ${record.id}`);
+        log('Modal', `Showing category/tag badges for categorized item: ${record.id}`);
     } else {
         // Show "Categorize" button for uncategorized items
         const categorizeBtn = document.createElement('button');
@@ -5476,13 +5875,13 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             transition: transform 0.2s, box-shadow 0.2s;
         `;
         categorizeBtn.innerHTML = '<span style="font-size: 1em;">🏷️</span> Categorize';
-        categorizeBtn.title = 'Find the best event types for this item';
+        categorizeBtn.title = 'Assign categories & tags to this item';
         modalHeaderActions.appendChild(categorizeBtn);
 
         // Initialize Tippy tooltip if available
         if (window.tippy) {
             tippy(categorizeBtn, {
-                content: 'Click to see what types of events this item is best suited for',
+                content: 'Click to assign categories and tags to this item',
                 placement: 'bottom',
                 arrow: true
             });
@@ -5536,7 +5935,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                 }
 
                 const categorization = result.categorization;
-                log('Modal', `Successfully categorized item ${record.id} with ${categorization.categories?.length || 0} categories`);
+                log('Modal', `Successfully categorized item ${record.id}: ${categorization.baseCategories?.length || 0} categories, ${categorization.tags?.length || 0} tags`);
 
                 // Store the categorization on the record
                 itemRecord._categorization = categorization;
@@ -5553,9 +5952,9 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                 }
 
                 // Show success toast
-                const topCategory = categorization.categories?.[0]?.name || 'events';
+                const topCategory = categorization.baseCategories?.[0] || 'item';
                 if (typeof ui !== 'undefined' && ui.showToast) {
-                    ui.showToast(`Perfect for ${topCategory}!`);
+                    ui.showToast(`Categorized as ${topCategory}!`);
                 }
 
                 // Add energy visual feedback if available
@@ -5563,7 +5962,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     addEnergy();
                 }
 
-                // Re-render the modal to show the category badges
+                // Open the editor panel so users can adjust before it's "final"
+                // First re-render the modal to show the new state
                 showDetailModal(itemRecord);
 
             } catch (error) {

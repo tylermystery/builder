@@ -1,81 +1,83 @@
 /**
  * AI-powered Item Categorizer
- * Takes an item and generates top 3 recommended event categories/use cases
+ * Assigns items to base categories (Activities, Food & Drink, Venues, Extras)
+ * and adds relevant tags for filtering and discovery.
  * Uses multi-provider AI with automatic fallback (Gemini → OpenAI → Anthropic)
  */
 
 const { generateText, parseJsonResponse } = require('./utils/ai-provider');
 
+// Base categories - items must belong to at least one
+const BASE_CATEGORIES = ['Activities', 'Food & Drink', 'Venues', 'Extras'];
+
+// Curated tag list organized by theme
+const AVAILABLE_TAGS = [
+    // Audience
+    'Family Friendly', 'Kids', 'Adults Only', 'All Ages', 'Couples', 'Groups', 'Solo',
+    // Setting
+    'Outdoors', 'Indoors', 'Waterfront', 'Rooftop', 'Beachside',
+    // Vibe / Style
+    'Luxury', 'Budget Friendly', 'Casual', 'Formal', 'Themed', 'Unique', 'Classic', 'Trendy', 'Rustic', 'Elegant',
+    // Experience
+    'Interactive', 'Live Entertainment', 'Music', 'DIY', 'Educational', 'Hands-On', 'Spectator', 'Relaxing', 'Adventurous', 'Cultural',
+    // Event Type Fit
+    'Wedding', 'Birthday', 'Corporate', 'Holiday', 'Date Night', 'Team Building', 'Celebration', 'Festival',
+    // Logistics
+    'Late Night', 'Daytime', 'Seasonal', 'Year Round', 'Weekend', 'Private', 'Public',
+    // Food & Drink Specific
+    'Catering', 'Bar Service', 'Desserts', 'Local Cuisine', 'Dietary Options', 'BYOB',
+    // Venue Specific
+    'Photo Worthy', 'Scenic', 'Spacious', 'Intimate', 'Historic', 'Modern',
+];
+
 /**
- * Categorize an item using AI to find the top 3 event types it's best suited for
+ * Categorize an item using AI to assign base categories and relevant tags
  */
 async function categorizeItemWithAI(itemData) {
     console.log(`[Debug] categorizeItemWithAI: Categorizing item: ${itemData.name}`);
 
-    const prompt = `You are an expert event planner. Analyze the following item/service and determine the TOP 3 types of events or occasions where this item would be most useful or appropriate.
+    const prompt = `You are an expert event planner and item classifier. Analyze the following item/service and:
+1. Assign it to one or more BASE CATEGORIES (must pick at least one)
+2. Add all relevant TAGS that describe this item
 
 Item Name: ${itemData.name}
 Description: ${itemData.description || 'No description provided'}
 ${itemData.category ? 'Current Category: ' + itemData.category : ''}
 ${itemData.price ? 'Price: $' + itemData.price : ''}
 
-Think about what types of events would benefit most from this item or service. Consider:
-- Event formality (casual, formal, professional)
-- Event purpose (celebration, corporate, social)
-- Audience (families, adults, professionals, mixed)
-- Setting (indoor, outdoor, both)
+BASE CATEGORIES (assign one or more):
+- Activities: Things to do — tours, games, classes, adventures, entertainment acts, performances
+- Food & Drink: Anything edible or drinkable — restaurants, catering, bars, food trucks, tastings
+- Venues: Physical spaces — event halls, parks, hotels, unique locations, rental spaces
+- Extras: Supporting items — decorations, rentals, photography, planning services, equipment, favors, supplies
 
-Common event types to consider (but not limited to):
-- Wedding / Reception
-- Birthday Party
-- Corporate Event / Team Building
-- Anniversary Celebration
-- Baby Shower / Gender Reveal
-- Graduation Party
-- Holiday Party
-- Bachelor/Bachelorette Party
-- Retirement Party
-- Family Reunion
-- Networking Event
-- Product Launch
-- Fundraiser / Charity Event
-- Kids Party
-- Outdoor / Garden Party
-- Cocktail Party / Happy Hour
-- Dinner Party
-- Festival / Fair
+AVAILABLE TAGS (pick all that genuinely apply, typically 3-8 tags):
+${AVAILABLE_TAGS.join(', ')}
+
+You may also suggest 1-2 custom tags if nothing in the list fits a key attribute of this item.
+
+Think carefully:
+- An item can belong to MULTIPLE base categories (e.g., a restaurant with private dining = "Food & Drink" + "Venues")
+- Only assign categories and tags that truly fit — don't force irrelevant ones
+- Err on the side of including more relevant tags rather than fewer
 
 Respond with a JSON object (and nothing else) with this exact structure:
 {
-  "categories": [
-    {
-      "name": "Event type name (2-4 words)",
-      "relevance": 0.95,
-      "reason": "Brief explanation why this item fits this event type (1 sentence)"
-    },
-    {
-      "name": "Second event type",
-      "relevance": 0.85,
-      "reason": "Brief explanation"
-    },
-    {
-      "name": "Third event type",
-      "relevance": 0.75,
-      "reason": "Brief explanation"
-    }
-  ],
+  "baseCategories": ["Activities"],
+  "tags": ["Family Friendly", "Outdoors", "Interactive"],
   "confidence": 0.85,
-  "generalNote": "One sentence summary of what makes this item versatile or specialized"
+  "reasoning": "One sentence explaining the categorization logic"
 }
 
-SCORING:
-- relevance: 0.0 to 1.0, how well this item fits that event type
-- confidence: 0.0 to 1.0, how confident you are in these categorizations overall
+RULES:
+- baseCategories: Array of 1-4 strings, must only contain: "Activities", "Food & Drink", "Venues", "Extras"
+- tags: Array of 3-10 strings from the available tags list (plus up to 2 custom)
+- confidence: 0.0 to 1.0, how confident you are in the categorization
 
 Generate the categorization now:`;
 
     const aiResult = await generateText(prompt, {
-        temperature: 0.5,
+        temperature: 0.4,
         maxTokens: 1024,
         caller: 'categorize-item',
     });
@@ -91,29 +93,40 @@ Generate the categorization now:`;
 
     const categorization = parseJsonResponse(aiResult.text);
 
-    // Validate and normalize the response
+    // Validate and normalize base categories
+    const rawCategories = Array.isArray(categorization.baseCategories)
+        ? categorization.baseCategories
+        : [];
+    const validCategories = rawCategories.filter(c => BASE_CATEGORIES.includes(c));
+
+    // Ensure at least one base category - default to 'Extras' if AI gave none valid
+    if (validCategories.length === 0) {
+        validCategories.push('Extras');
+    }
+
+    // Validate and normalize tags
+    const rawTags = Array.isArray(categorization.tags)
+        ? categorization.tags
+        : [];
+    // Allow tags from our list + up to 2 custom tags
+    const knownTags = rawTags.filter(t => AVAILABLE_TAGS.includes(t));
+    const customTags = rawTags
+        .filter(t => !AVAILABLE_TAGS.includes(t))
+        .slice(0, 2)
+        .map(t => String(t).trim())
+        .filter(t => t.length > 0 && t.length <= 30);
+    const allTags = [...knownTags, ...customTags];
+
     const normalizedResult = {
-        categories: (categorization.categories || []).slice(0, 3).map((cat, index) => ({
-            name: cat.name || `Category ${index + 1}`,
-            relevance: Math.min(1, Math.max(0, parseFloat(cat.relevance) || 0.5)),
-            reason: cat.reason || ''
-        })),
+        baseCategories: validCategories,
+        tags: allTags,
         confidence: Math.min(1, Math.max(0, parseFloat(categorization.confidence) || 0.7)),
-        generalNote: categorization.generalNote || '',
+        reasoning: categorization.reasoning || '',
         categorizedAt: new Date().toISOString(),
         _aiProvider: aiResult.provider,
     };
 
-    // Ensure we have exactly 3 categories (pad if needed)
-    while (normalizedResult.categories.length < 3) {
-        normalizedResult.categories.push({
-            name: 'General Event',
-            relevance: 0.5,
-            reason: 'Could work for various event types'
-        });
-    }
-
-    console.log(`[Debug] categorizeItemWithAI: Parsed categorization with ${normalizedResult.categories.length} categories`);
+    console.log(`[Debug] categorizeItemWithAI: Assigned ${normalizedResult.baseCategories.length} categories and ${normalizedResult.tags.length} tags`);
     return normalizedResult;
 }
 
@@ -167,6 +180,8 @@ exports.handler = async (event) => {
             body: JSON.stringify({
                 success: true,
                 categorization: categorization,
+                availableCategories: BASE_CATEGORIES,
+                availableTags: AVAILABLE_TAGS,
                 message: 'Item categorized successfully'
             })
         };

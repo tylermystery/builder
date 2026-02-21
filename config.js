@@ -2,6 +2,26 @@
 export const STRIPE_PUBLISHABLE_KEY = 'pk_live_opXi3umu9588LiitWvYhdk9H';
 export const CLOUDINARY_CLOUD_NAME = 'daedqizre';
 export const RECORDS_PER_LOAD = 10;
+
+// Base categories for item classification
+export const BASE_CATEGORIES = [
+    { id: 'Activities', label: 'Activities', icon: '🎯', color: '#1565c0', bg: '#e3f2fd', border: '#90caf9' },
+    { id: 'Food & Drink', label: 'Food & Drink', icon: '🍽️', color: '#e65100', bg: '#fff3e0', border: '#ffcc80' },
+    { id: 'Venues', label: 'Venues', icon: '📍', color: '#2e7d32', bg: '#e8f5e9', border: '#a5d6a7' },
+    { id: 'Extras', label: 'Extras', icon: '✨', color: '#7b1fa2', bg: '#f3e5f5', border: '#ce93d8' },
+];
+
+// Tags organized by theme for the tag picker
+export const TAG_GROUPS = [
+    { label: 'Audience', tags: ['Family Friendly', 'Kids', 'Adults Only', 'All Ages', 'Couples', 'Groups', 'Solo'] },
+    { label: 'Setting', tags: ['Outdoors', 'Indoors', 'Waterfront', 'Rooftop', 'Beachside'] },
+    { label: 'Vibe', tags: ['Luxury', 'Budget Friendly', 'Casual', 'Formal', 'Themed', 'Unique', 'Classic', 'Trendy', 'Rustic', 'Elegant'] },
+    { label: 'Experience', tags: ['Interactive', 'Live Entertainment', 'Music', 'DIY', 'Educational', 'Hands-On', 'Spectator', 'Relaxing', 'Adventurous', 'Cultural'] },
+    { label: 'Event Fit', tags: ['Wedding', 'Birthday', 'Corporate', 'Holiday', 'Date Night', 'Team Building', 'Celebration', 'Festival'] },
+    { label: 'Timing', tags: ['Late Night', 'Daytime', 'Seasonal', 'Year Round', 'Weekend', 'Private', 'Public'] },
+    { label: 'Food & Drink', tags: ['Catering', 'Bar Service', 'Desserts', 'Local Cuisine', 'Dietary Options', 'BYOB'] },
+    { label: 'Venue', tags: ['Photo Worthy', 'Scenic', 'Spacious', 'Intimate', 'Historic', 'Modern'] },
+];
 // Quick reaction emojis shown by default
 export const EMOJI_REACTIONS = ['🚀', '🔥', '🤩', '❤️', '👍', '🤔', '👎', '🤢'];
 

@@ -5763,7 +5763,7 @@ export async function categorizeItem(itemRecord) {
         }
 
         const result = await response.json();
-        log('API', `Successfully categorized ${itemData.name} with ${result.categorization?.categories?.length || 0} categories`);
+        log('API', `Successfully categorized ${itemData.name} with ${result.categorization?.baseCategories?.length || 0} categories and ${result.categorization?.tags?.length || 0} tags`);
         return result;
     } catch (error) {
         console.error('Error categorizing item:', error);

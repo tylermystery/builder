@@ -2587,6 +2587,74 @@ body.presentation-active #chat-widget {
     border: 1px solid #ce93d8;
 }
 
+/* Base category chip in display mode */
+.base-category-chip {
+    font-weight: 600;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.base-category-chip:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Tag badge in display mode */
+.tag-badge {
+    transition: transform 0.15s ease;
+}
+
+.tag-badge:hover {
+    transform: scale(1.05);
+}
+
+/* Categorization editor panel */
+.categorization-editor {
+    animation: catEditorSlideDown 0.2s ease-out;
+}
+
+@keyframes catEditorSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Editor chips hover */
+.cat-editor-chip:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.tag-editor-chip:hover {
+    transform: scale(1.05);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* Edit button for re-opening categorization editor */
+.categorize-edit-btn:hover {
+    border-color: #999;
+    color: #333;
+    background: #f5f5f5;
+}
+
+/* Scrollbar for tag container */
+.categorization-editor div::-webkit-scrollbar {
+    width: 4px;
+}
+
+.categorization-editor div::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.categorization-editor div::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 2px;
+}
+
 /* Solution accuracy badge in sidebar */
 .solution-accuracy-badge {
     display: inline-flex;
