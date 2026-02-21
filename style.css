@@ -4166,6 +4166,7 @@ body.presentation-active #chat-widget {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: 6px;
     padding: 8px 14px;
     min-height: 36px;
     background: rgba(255, 255, 255, 0.85);
@@ -4174,14 +4175,32 @@ body.presentation-active #chat-widget {
     font-size: 0.9em;
     color: #495057;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s;
+    transition: all 0.2s ease;
     white-space: nowrap;
     box-sizing: border-box;
+    position: relative;
+}
+
+.collaborator-name-btn::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #adb5bd;
+    flex-shrink: 0;
+    transition: background-color 0.3s;
+}
+
+.collaborator-name-btn.online::before {
+    background: #28a745;
+    box-shadow: 0 0 4px rgba(40, 167, 69, 0.5);
 }
 
 .collaborator-name-btn:hover {
     background: rgba(255, 255, 255, 1);
-    border-color: rgba(0, 0, 0, 0.2);
+    border-color: rgba(0, 123, 255, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 /* Add/Share button at the end of the collaborators list */
