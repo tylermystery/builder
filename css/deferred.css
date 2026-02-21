@@ -5592,6 +5592,12 @@ hr.total-divider {
     border-radius: 10px;
     display: none;
     white-space: nowrap;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.modal-reactions-score-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
 }
 
 .modal-reactions-score-badge.score-positive {
@@ -5795,6 +5801,7 @@ hr.total-divider {
     align-items: center;
     gap: 4px;
     flex-wrap: wrap;
+    cursor: pointer;
 }
 
 .modal-reactions-empty {
@@ -16590,7 +16597,7 @@ hr.total-divider {
 /* ── Vitality summary panel ── */
 .action-menu-vitality-summary {
     position: absolute;
-    bottom: -220px;
+    top: 280px;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(15, 23, 42, 0.94);
@@ -16602,6 +16609,28 @@ hr.total-divider {
     border: 1px solid rgba(255, 255, 255, 0.12);
     z-index: 2;
     pointer-events: none;
+}
+.action-menu-footnote {
+    opacity: 0.85;
+    font-size: 0.95em;
+}
+
+.action-menu-guest-note {
+    position: absolute;
+    top: 170px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.85);
+    color: #e2e8f0;
+    font-size: 0.65em;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    pointer-events: none;
+    z-index: 3;
 }
 
 .action-menu-summary-title {
@@ -16713,7 +16742,11 @@ hr.total-divider {
         min-width: 170px;
         max-width: 220px;
         padding: 8px 10px;
-        bottom: -48px;
+        top: 220px;
+    }
+    .action-menu-guest-note {
+        top: 140px;
+        font-size: 0.6em;
     }
 }
 

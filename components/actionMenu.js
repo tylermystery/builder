@@ -4,12 +4,12 @@
 // the vitality icon OR via drag/swipe on cards.
 //
 // Inner ring: emoji reactions (scroll/drag outward to reveal more tiers)
-// Center: current goodness emoji + vitality summary
+// Center: emoji summary + reaction count
 // Outer ring: collaborator action buckets (goal, ideas, lock, merge, archive, delete, comment, done)
 
 import { state, getRecordById } from '../state.js';
 import { EMOJI_TIERS, REACTION_SCORES, getModalZIndex } from '../config.js';
-import { getItemSentiment, requestVitalityRecalc, getNetEmoji } from '../vitality/vitalityEngine.js';
+import { requestVitalityRecalc, getNetEmoji } from '../vitality/vitalityEngine.js';
 import { REALM_META } from '../vitality/vitalityProfiles.js';
 import { getCurrentUser } from '../chat.js';
 import { triggerSave } from '../events.js';
@@ -375,24 +375,101 @@ export function getActionMenuContexts() {
 
 // ─── DOM Builders ────────────────────────────────────────────────────────────
 
+function getReactionSummary(recordId) {
+    const reactions = state.session.reactions?.get(recordId);
+    if (!reactions || !(reactions instanceof Map) || reactions.size === 0) {
+        return { count: 0, total: 0, average: 0, summaryEmoji: '😊' };
+    }
+
+    let total = 0;
+    let count = 0;
+    reactions.forEach((emoji) => {
+        total += (REACTION_SCORES[emoji] || 0);
+        count += 1;
+    });
+
+    const average = count > 0 ? total / count : 0;
+
+    let summaryEmoji = '😊';
+    let closestDiff = Infinity;
+    Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
+        const diff = Math.abs(score - average);
+        if (diff < closestDiff) {
+            closestDiff = diff;
+            summaryEmoji = emoji;
+        }
+    });
+
+    return { count, total, average, summaryEmoji };
+}
+
+function getPreviewSummary(recordId, previewEmojiValue) {
+    const reactions = state.session.reactions?.get(recordId);
+    let total = 0;
+    let count = 0;
+    let currentUserReaction = null;
+
+    let currentUser;
+    try {
+        currentUser = getCurrentUser();
+    } catch (_) {
+        currentUser = { id: 'anonymous', name: 'Anonymous' };
+    }
+
+    if (reactions && reactions instanceof Map) {
+        reactions.forEach((emoji, userId) => {
+            total += (REACTION_SCORES[emoji] || 0);
+            count += 1;
+            if (userId === currentUser.id) currentUserReaction = emoji;
+        });
+    }
+
+    if (currentUserReaction) {
+        total -= (REACTION_SCORES[currentUserReaction] || 0);
+    } else {
+        count += 1;
+    }
+
+    total += (REACTION_SCORES[previewEmojiValue] || 0);
+    const average = count > 0 ? total / count : 0;
+
+    let summaryEmoji = previewEmojiValue || '😊';
+    let closestDiff = Infinity;
+    Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
+        const diff = Math.abs(score - average);
+        if (diff < closestDiff) {
+            closestDiff = diff;
+            summaryEmoji = emoji;
+        }
+    });
+
+    return { count, total, average, summaryEmoji };
+}
+
 function buildCenterHub(recordId) {
     const scores = state.vitality?.itemScores?.get(recordId);
     console.log('[ActionMenu DEBUG] buildCenterHub - recordId:', recordId, 'scores:', scores ? 'EXISTS' : 'null/undefined');
     if (scores) {
         console.log('[ActionMenu DEBUG]   scores.goodnessEmoji:', scores.goodnessEmoji, 'scores.netEmoji:', scores.netEmoji, 'scores.goodnessScore:', scores.goodnessScore, 'scores.net:', scores.net);
     }
-    const goodnessEmoji = scores?.goodnessEmoji || scores?.netEmoji || '⚖️';
-    const goodnessLabel = scores?.goodnessLabel || scores?.netLabel || 'Neutral';
-    const goodnessScore = scores?.goodnessScore ?? scores?.net ?? 0;
+
+    const reactionSummary = getReactionSummary(recordId);
+    const summaryEmoji = reactionSummary.count > 0 ? reactionSummary.summaryEmoji : '😊';
+    const summaryScore = reactionSummary.count > 0
+        ? `${reactionSummary.average >= 0 ? '+' : ''}${reactionSummary.average.toFixed(2)}`
+        : '—';
+    const summaryLabel = reactionSummary.count > 0
+        ? `${reactionSummary.count} reaction${reactionSummary.count !== 1 ? 's' : ''}`
+        : 'Add a reaction';
 
     const hub = document.createElement('div');
     hub.className = 'action-menu-center';
     hub.id = 'action-menu-center';
 
     hub.innerHTML = `
-        <div class="action-menu-center-emoji" id="action-menu-center-emoji">${goodnessEmoji}</div>
-        <div class="action-menu-center-score" id="action-menu-center-score">${goodnessScore >= 0 ? '+' : ''}${goodnessScore.toFixed(2)}</div>
-        <div class="action-menu-center-label" id="action-menu-center-label">${goodnessLabel}</div>
+        <div class="action-menu-center-emoji" id="action-menu-center-emoji">${summaryEmoji}</div>
+        <div class="action-menu-center-score" id="action-menu-center-score">${summaryScore}</div>
+        <div class="action-menu-center-label" id="action-menu-center-label">${summaryLabel}</div>
     `;
 
     return hub;
@@ -487,10 +564,15 @@ function buildEmojiRing(container, recordId) {
 }
 
 function buildActionRing(container, recordId) {
+    const isAuthenticated = state.session?.user?.isAuthenticated;
+    const canShowActions = currentContext !== 'plan-item' || isAuthenticated;
     const isMobile = window.innerWidth < 768;
     const radius = isMobile ? OUTER_RING_RADIUS_MOBILE : OUTER_RING_RADIUS;
     const itemSize = isMobile ? ACTION_ITEM_SIZE_MOBILE : ACTION_ITEM_SIZE;
     const halfItem = itemSize / 2;
+
+    const oldNote = container.querySelector('.action-menu-guest-note');
+    if (oldNote) oldNote.remove();
 
     const actions = CONTEXT_ACTIONS[currentContext] || COLLABORATOR_ACTIONS;
     const angleStep = (2 * Math.PI) / actions.length;
@@ -499,6 +581,14 @@ function buildActionRing(container, recordId) {
     // Remove old ring
     const oldRing = container.querySelector('.action-menu-action-ring');
     if (oldRing) oldRing.remove();
+
+    if (!canShowActions) {
+        const note = document.createElement('div');
+        note.className = 'action-menu-guest-note';
+        note.textContent = 'Sign in to unlock actions';
+        container.appendChild(note);
+        return;
+    }
 
     const ring = document.createElement('div');
     ring.className = 'action-menu-action-ring';
@@ -560,7 +650,7 @@ function buildVitalitySummary(container, recordId) {
     if (old) old.remove();
 
     const summary = document.createElement('div');
-    summary.className = 'action-menu-vitality-summary';
+    summary.className = 'action-menu-vitality-summary action-menu-footnote';
     summary.id = 'action-menu-vitality-summary';
 
     const realms = ['cosmological', 'planetary', 'collective', 'internal'];
@@ -704,6 +794,7 @@ function handleEmojiSelect(recordId, emoji) {
 
     // Refresh the emoji ring to show selected state
     refreshEmojiRing();
+    updateCenterHub(recordId);
 
     // Also update presentation reactions if visible
     const presentationContainer = document.querySelector(`.itinerary-item-reactions[data-record-id="${recordId}"]`);
@@ -721,23 +812,10 @@ function handleEmojiSelect(recordId, emoji) {
 function handleEmojiPreview(recordId, emoji) {
     previewEmoji = emoji;
 
-    const scores = state.vitality?.itemScores?.get(recordId);
-    if (!scores) return;
-
-    // Compute hypothetical sentiment
     const emojiScore = REACTION_SCORES[emoji] || 0;
-    const currentSentiment = scores.sentiment || { raw: 0, normalized: 0, count: 0 };
-
-    // Simulate adding this reaction
-    const newRaw = currentSentiment.raw + emojiScore;
-    const newCount = currentSentiment.count + 1;
-    const newNormalized = Math.max(-1, Math.min(1, newRaw / (newCount * 5)));
-
-    // Blend: 70% vitality + 30% new sentiment
-    const blendedScore = scores.net * 0.7 + newNormalized * 0.3;
-    const blendedEmoji = getNetEmoji(blendedScore);
-
-    previewScore = blendedScore;
+    const previewSummary = getPreviewSummary(recordId, emoji);
+    previewScore = previewSummary.average;
+    const scores = state.vitality?.itemScores?.get(recordId);
 
     // Update center hub with preview
     const centerEmoji = document.getElementById('action-menu-center-emoji');
@@ -745,13 +823,11 @@ function handleEmojiPreview(recordId, emoji) {
     const centerLabel = document.getElementById('action-menu-center-label');
 
     if (centerEmoji) {
-        centerEmoji.textContent = blendedEmoji;
+        centerEmoji.textContent = previewSummary.summaryEmoji;
         centerEmoji.classList.add('previewing');
     }
     if (centerScore) {
-        const diff = blendedScore - (scores.goodnessScore ?? scores.net ?? 0);
-        const diffStr = diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2);
-        centerScore.textContent = `${blendedScore >= 0 ? '+' : ''}${blendedScore.toFixed(2)} (${diffStr})`;
+        centerScore.textContent = `${previewSummary.average >= 0 ? '+' : ''}${previewSummary.average.toFixed(2)}`;
         centerScore.classList.add('previewing');
     }
     if (centerLabel) {
@@ -761,7 +837,13 @@ function handleEmojiPreview(recordId, emoji) {
 
     // Update summary goodness
     const summaryGoodness = document.getElementById('action-menu-summary-goodness');
-    if (summaryGoodness) {
+    if (summaryGoodness && scores) {
+        const currentSentiment = scores.sentiment || { raw: 0, normalized: 0, count: 0 };
+        const newRaw = currentSentiment.raw + emojiScore;
+        const newCount = currentSentiment.count + 1;
+        const newNormalized = Math.max(-1, Math.min(1, newRaw / (newCount * 5)));
+        const blendedScore = scores.net * 0.7 + newNormalized * 0.3;
+        const blendedEmoji = getNetEmoji(blendedScore);
         summaryGoodness.textContent = blendedEmoji;
         summaryGoodness.classList.add('previewing');
     }
@@ -830,27 +912,29 @@ function refreshEmojiRing() {
 }
 
 function updateCenterHub(recordId) {
-    const scores = state.vitality?.itemScores?.get(recordId);
-    if (!scores) return;
-
-    const goodnessEmoji = scores.goodnessEmoji || scores.netEmoji || '⚖️';
-    const goodnessLabel = scores.goodnessLabel || scores.netLabel || 'Neutral';
-    const goodnessScore = scores.goodnessScore ?? scores.net ?? 0;
+    const reactionSummary = getReactionSummary(recordId);
+    const summaryEmoji = reactionSummary.count > 0 ? reactionSummary.summaryEmoji : '😊';
+    const summaryScore = reactionSummary.count > 0
+        ? `${reactionSummary.average >= 0 ? '+' : ''}${reactionSummary.average.toFixed(2)}`
+        : '—';
+    const summaryLabel = reactionSummary.count > 0
+        ? `${reactionSummary.count} reaction${reactionSummary.count !== 1 ? 's' : ''}`
+        : 'Add a reaction';
 
     const centerEmoji = document.getElementById('action-menu-center-emoji');
     const centerScore = document.getElementById('action-menu-center-score');
     const centerLabel = document.getElementById('action-menu-center-label');
 
     if (centerEmoji) {
-        centerEmoji.textContent = goodnessEmoji;
+        centerEmoji.textContent = summaryEmoji;
         centerEmoji.classList.remove('previewing');
     }
     if (centerScore) {
-        centerScore.textContent = `${goodnessScore >= 0 ? '+' : ''}${goodnessScore.toFixed(2)}`;
+        centerScore.textContent = summaryScore;
         centerScore.classList.remove('previewing');
     }
     if (centerLabel) {
-        centerLabel.textContent = goodnessLabel;
+        centerLabel.textContent = summaryLabel;
         centerLabel.classList.remove('previewing');
     }
 }

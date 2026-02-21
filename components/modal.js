@@ -1661,6 +1661,30 @@ function initModalReactions(recordId) {
 
     // Render reaction summary
     renderModalReactionsSummary(recordId, summary, scoreBadge);
+
+    const openActionMenuFromEl = (el) => {
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        openActionMenu(recordId, {
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2
+        });
+    };
+
+    if (summary) {
+        summary.onclick = (e) => {
+            e.stopPropagation();
+            openActionMenuFromEl(summary);
+        };
+        summary.title = 'Open reactions and actions';
+    }
+    if (scoreBadge) {
+        scoreBadge.onclick = (e) => {
+            e.stopPropagation();
+            openActionMenuFromEl(scoreBadge);
+        };
+        scoreBadge.title = 'Open reactions and actions';
+    }
 }
 
 /**
@@ -1776,7 +1800,7 @@ function renderModalReactionsSummary(recordId, summaryEl, scoreBadgeEl) {
     const allReactions = state.session.reactions.get(recordId);
 
     if (!allReactions || !(allReactions instanceof Map) || allReactions.size === 0) {
-        if (summaryEl) summaryEl.innerHTML = '<span class="modal-reactions-empty">No reactions yet — be the first!</span>';
+        if (summaryEl) summaryEl.innerHTML = '<span class="modal-reactions-empty">No reactions yet — tap to react</span>';
         if (scoreBadgeEl) {
             scoreBadgeEl.textContent = '';
             scoreBadgeEl.style.display = 'none';
