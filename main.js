@@ -32,6 +32,42 @@ window.imageCache = imageCache;
 window.applyFiltersAndSort = applyFiltersAndSort;
 window.showReceiptModal = showReceiptModal;
 
+// ─── Invite Flow: Process pending invite after login ────────────────
+async function handlePendingInvite() {
+    const pendingInviteStr = sessionStorage.getItem('pendingInvite');
+    if (!pendingInviteStr) return;
+
+    try {
+        const pendingInvite = JSON.parse(pendingInviteStr);
+        const { sessionId: inviteSessionId, role: inviteRole } = pendingInvite;
+
+        // Only process if we have a valid session and authenticated user
+        if (!inviteSessionId || !state.session.user?.isAuthenticated || !state.session.user?.id) {
+            log('Main', 'handlePendingInvite: Missing session or user, skipping.');
+            return;
+        }
+
+        log('Main', `Processing pending invite: session=${inviteSessionId}, role=${inviteRole}, user=${state.session.user.id}`);
+
+        // Create the permission record with the invited role
+        const role = inviteRole || 'editor';
+        await api.createPermissionRecord(inviteSessionId, state.session.user.id, role);
+        log('Main', `Permission record created: ${role} for user ${state.session.user.id} on session ${inviteSessionId}`);
+
+        // Show welcome toast
+        const planName = state.eventDetails?.combined?.get?.('eventName') || state.eventDetails?.combined?.get?.('Event Name') || 'the plan';
+        const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+        ui.showToast(`Welcome! You've joined "${planName}" as ${roleLabel}.`, 6000, 'success');
+
+        // Clear the pending invite
+        sessionStorage.removeItem('pendingInvite');
+
+    } catch (error) {
+        console.error('[Main] Error processing pending invite:', error);
+        sessionStorage.removeItem('pendingInvite');
+    }
+}
+
 // ─── Offline Mode Banner Management ────────────────────────────────
 function _setupOfflineBanner() {
     api.onAirtableStatusChange((isOnline) => {
@@ -540,6 +576,9 @@ async function initialize() {
      document.addEventListener('userLoggedIn', () => {
          log('Main', "'userLoggedIn' event caught, reapplying filters and reinitializing chat.");
 
+         // Process any pending invite (Phase 1b: auto-associate invitee with plan)
+         handlePendingInvite();
+
          // Skip catalog operations if in presentation mode
          const currentUrlParams = new URLSearchParams(window.location.search);
          const currentlyInPresentation = currentUrlParams.get('view') === 'present';
@@ -824,6 +863,60 @@ async function initialize() {
         if (!state.session.user.isAuthenticated) {
             loadTempIterations();
             loadTempReactions();
+        }
+
+        // --- Phase 1b: Invite flow handling ---
+        const isInvite = urlParams.get('invite') === 'true';
+        const inviteEmail = urlParams.get('email');
+        const inviteRole = urlParams.get('role');
+
+        if (isInvite) {
+            log('Main', `Invite link detected. Email: ${inviteEmail}, Role: ${inviteRole}`);
+
+            // Store invite info for post-login association
+            if (inviteEmail || inviteRole) {
+                sessionStorage.setItem('pendingInvite', JSON.stringify({
+                    sessionId: sessionId,
+                    email: inviteEmail || '',
+                    role: inviteRole || 'editor'
+                }));
+            }
+
+            if (!state.session.user.isAuthenticated) {
+                // Pre-fill sign-in email from invite URL
+                if (inviteEmail) {
+                    const signinEmailInput = document.getElementById('signin-email');
+                    if (signinEmailInput) {
+                        signinEmailInput.value = inviteEmail;
+                    }
+                    localStorage.setItem('lastSignInEmail', inviteEmail);
+                }
+
+                // Show a brief welcome banner before prompting sign-in
+                const planName = state.session.name || state.eventDetails?.combined?.get?.('Event Name') || 'a plan';
+                log('Main', `Invitee landing: prompting auth for plan "${planName}"`);
+
+                // Small delay to let the UI settle, then prompt sign-in
+                setTimeout(() => {
+                    showUserModal();
+                    const signinMessage = document.getElementById('signin-message');
+                    if (signinMessage) {
+                        signinMessage.style.color = '#667eea';
+                        signinMessage.textContent = `You've been invited to collaborate! Sign in with your email to join.`;
+                    }
+                }, 800);
+            } else {
+                // User is already authenticated - process the invite immediately
+                log('Main', 'Invitee already authenticated, processing invite...');
+                handlePendingInvite();
+            }
+
+            // Clean invite params from URL to avoid re-triggering
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete('invite');
+            cleanUrl.searchParams.delete('email');
+            cleanUrl.searchParams.delete('role');
+            history.replaceState({}, '', cleanUrl.toString());
         }
     }
 

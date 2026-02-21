@@ -4773,15 +4773,9 @@ body.ucp-panel-open .unified-chat-panel {
                             <button id="share-copy-link-btn" class="hamburger-dropdown-item">
                                 <span class="menu-item-icon">&#128279;</span> Copy Link
                             </button>
-                            <!-- DORMANT FEATURE: Invite Collaborator and Invite Guest - hidden until fully functional
-                                 TODO: Re-enable these invitation features when the backend collaboration system is complete
                             <button id="share-invite-btn" class="hamburger-dropdown-item">
                                 <span class="menu-item-icon">&#128236;</span> Invite Collaborator
                             </button>
-                            <button id="share-invite-guest-btn" class="hamburger-dropdown-item">
-                                <span class="menu-item-icon">&#127881;</span> Invite Guest
-                            </button>
-                            END DORMANT FEATURE -->
                             <hr class="hamburger-dropdown-divider publish-divider" style="display: none;">
                             <!-- Publish Section (conditionally visible) -->
                             <div class="plan-menu-section-label publish-section-label" style="display: none;">Publish</div>
@@ -4807,45 +4801,26 @@ body.ucp-panel-open .unified-chat-panel {
                                 <span class="menu-item-icon">&#128465;</span> Delete Plan
                             </button>
                         </div>
-                        <!-- DORMANT FEATURE: Invite Collaborator and Guest Popups - hidden until fully functional
-                             TODO: Re-enable these popups when invitation system is complete
                         <div id="invite-popup" class="invite-popup" style="display: none;">
                             <div class="invite-popup-header">
-                                <span class="invite-popup-icon">💌</span>
+                                <span class="invite-popup-icon">&#128236;</span>
                                 <span class="invite-popup-title">Invite Collaborator</span>
                                 <button id="invite-popup-close" class="invite-popup-close">&times;</button>
                             </div>
-                            <p class="invite-popup-desc">Share this plan with a friend.</p>
+                            <p class="invite-popup-desc">Share this plan with a friend. They'll sign in with this email to join.</p>
                             <div class="invite-popup-form">
-                                <input type="text" id="collab-name" placeholder="Friend's Name" class="invite-popup-input">
-                                <input type="email" id="collab-email" placeholder="Friend's Email" class="invite-popup-input">
+                                <input type="email" id="collab-email" placeholder="Friend's Email" class="invite-popup-input" autocomplete="email">
                                 <div class="invite-role-select-wrapper">
                                     <label for="collab-role" class="invite-role-label">Permission Level</label>
                                     <select id="collab-role" class="invite-popup-select">
                                         <option value="editor" selected>Editor (can edit)</option>
                                         <option value="viewer">Viewer (read-only)</option>
-                                        <option value="owner">Owner (full access)</option>
                                     </select>
                                 </div>
                                 <button id="invite-btn" class="invite-popup-btn">Send Invite</button>
                                 <div id="invite-status" class="invite-popup-status"></div>
                             </div>
                         </div>
-                        <div id="invite-guest-popup" class="invite-popup" style="display: none;">
-                            <div class="invite-popup-header">
-                                <span class="invite-popup-icon">🎉</span>
-                                <span class="invite-popup-title">Invite Guest</span>
-                                <button id="invite-guest-popup-close" class="invite-popup-close">&times;</button>
-                            </div>
-                            <p class="invite-popup-desc">Send a read-only event preview to your guests.</p>
-                            <div class="invite-popup-form">
-                                <input type="text" id="guest-name" placeholder="Guest's Name" class="invite-popup-input">
-                                <input type="email" id="guest-email" placeholder="Guest's Email" class="invite-popup-input">
-                                <button id="invite-guest-btn" class="invite-popup-btn">Send Invitation</button>
-                                <div id="invite-guest-status" class="invite-popup-status"></div>
-                            </div>
-                        </div>
-                        END DORMANT FEATURE -->
                     </div>
                 </div>
                 <div class="toolbar-group">

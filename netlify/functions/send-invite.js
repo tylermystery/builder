@@ -31,11 +31,14 @@ exports.handler = async (event) => {
             };
         }
 
+        // Cap role to editor max (prevent URL tampering to owner)
+        const assignedRole = (role === 'viewer') ? 'Viewer' : 'Editor';
+
         const baseUrl = SITE_URL || NETLIFY_URL;
-        const inviteLink = `${baseUrl}/?session=${sessionId}&invite=true`;
+        // Include email and role in invite link so main app can pre-fill auth and set permissions
+        const inviteLink = `${baseUrl}/?session=${sessionId}&invite=true&email=${encodeURIComponent(email)}&role=${assignedRole.toLowerCase()}`;
         const planName = sessionName || 'an event plan';
         const senderName = inviterName || 'Someone';
-        const assignedRole = role || 'Editor';
 
         // Send the invitation email
         const msg = {
@@ -61,7 +64,7 @@ exports.handler = async (event) => {
                         </a>
                     </div>
                     <p style="color: #999; font-size: 13px; text-align: center;">
-                        Sign in to collaborate. Your ideas and feedback will be shared with the team in real time.
+                        Click the button above to view the plan and sign in to collaborate in real time.
                     </p>
                 </div>
             `
@@ -69,7 +72,7 @@ exports.handler = async (event) => {
 
         await sgMail.send(msg);
 
-        console.log(`[send-invite] Invitation sent to ${email} for session ${sessionId} by ${invitedBy}`);
+        console.log(`[send-invite] Invitation sent to ${email} for session ${sessionId} as ${assignedRole} by ${invitedBy || senderName}`);
 
         return {
             statusCode: 200,
