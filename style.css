@@ -3915,11 +3915,10 @@ body.presentation-active #chat-widget {
     overflow: hidden;
 }
 .presentation-header {
-    padding: 15px 30px;
-    border-bottom: 1px solid #eee;
+    padding: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
     flex-shrink: 0;
 }
 .presentation-header h2 {
@@ -14286,11 +14285,7 @@ hr.total-divider {
     backdrop-filter: blur(4px);
 }
 
-/* Plan Health metric in dashboard */
-#plan-metric-health .plan-metric-value {
-    font-size: 1.3em;
-    line-height: 1;
-}
+/* Vitality emoji now in header-right, no longer in dashboard */
 
 /* --- SVG Synergy Flow Lines Overlay --- */
 .vitality-flow-lines-svg {

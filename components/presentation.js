@@ -9939,14 +9939,14 @@ function updatePresentationPresenceUI(members) {
         }
     });
 
-    // Update Team metric count to show online/total
-    const teamMetric = document.querySelector('#plan-metric-team .plan-metric-value');
-    if (teamMetric) {
+    // Update Team count badge to show online/total
+    const teamCountNumber = document.getElementById('team-count-number');
+    if (teamCountNumber) {
         const totalTeam = state.session.userProfiles?.size || 1;
         if (count > 1) {
-            teamMetric.textContent = `${count}/${totalTeam}`;
+            teamCountNumber.textContent = `${count}/${totalTeam}`;
         } else {
-            teamMetric.textContent = totalTeam;
+            teamCountNumber.textContent = totalTeam;
         }
     }
 }
@@ -10529,88 +10529,17 @@ function generateHeaderSummary() {
 }
 
 /**
- * Update the Plan Summary Dashboard with key metrics
- * Provides a quick-glance overview: Items, Budget, Team, Status
+ * Update plan metrics displayed across the UI:
+ * - Team count in the people container badge
+ * - Vitality emoji is updated by the vitality system (vitalityUI.js)
  */
 function updatePlanSummaryDashboard() {
-    const dashboard = document.getElementById('plan-summary-dashboard');
-    if (!dashboard) return;
-
-    // --- Items count ---
-    const favoritesCount = state.cart.items.size;
-    const lockedCount = state.cart.lockedItems.size;
-    const totalItems = favoritesCount + lockedCount;
-
-    const itemsMetric = document.querySelector('#plan-metric-items .plan-metric-value');
-    if (itemsMetric) {
-        itemsMetric.textContent = totalItems;
-    }
-
-    // --- Budget ---
-    let subtotal = 0;
-    state.cart.lockedItems.forEach((itemInfo, recordId) => {
-        const record = getRecordById(recordId);
-        if (!record) return;
-        const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
-            ? itemInfo.selections
-            : itemInfo.selectedOptionIndex;
-        let unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
-        if (isNaN(unitPrice)) return;
-        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
-        subtotal += unitPrice * effectiveQuantity;
-    });
-    // Also add idea items for a total picture
-    state.cart.items.forEach((itemInfo, recordId) => {
-        const record = getRecordById(recordId);
-        if (!record) return;
-        const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
-            ? itemInfo.selections
-            : itemInfo.selectedOptionIndex;
-        let unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
-        if (isNaN(unitPrice)) return;
-        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
-        subtotal += unitPrice * effectiveQuantity;
-    });
-
-    const budgetMetric = document.querySelector('#plan-metric-budget .plan-metric-value');
-    if (budgetMetric) {
-        if (subtotal > 0) {
-            budgetMetric.textContent = subtotal >= 1000 ? `$${(subtotal / 1000).toFixed(1)}k` : `$${Math.round(subtotal)}`;
-        } else {
-            budgetMetric.textContent = '--';
-        }
-    }
-
-    // --- Team ---
+    // --- Team count (in people container badge) ---
     const teamCount = state.session.userProfiles?.size || 0;
-    const teamMetric = document.querySelector('#plan-metric-team .plan-metric-value');
-    if (teamMetric) {
-        teamMetric.textContent = teamCount || 1; // At least the current user
+    const teamCountNumber = document.getElementById('team-count-number');
+    if (teamCountNumber) {
+        teamCountNumber.textContent = teamCount || 1; // At least the current user
     }
-
-    // --- Status ---
-    const statusMetric = document.querySelector('#plan-metric-status .plan-metric-value');
-    if (statusMetric) {
-        if (totalItems === 0) {
-            statusMetric.textContent = 'Draft';
-        } else if (lockedCount === totalItems) {
-            statusMetric.textContent = 'Ready';
-        } else if (lockedCount > 0) {
-            statusMetric.textContent = 'In Progress';
-        } else {
-            statusMetric.textContent = 'Planning';
-        }
-    }
-
-    // --- Plan Health (Vitality + Sentiment Goodness) ---
-    const healthMetric = document.querySelector('#plan-metric-health .plan-metric-value');
-    if (healthMetric) {
-        const planEmoji = state.vitality?.planGoodnessEmoji || state.vitality?.planNetEmoji || '⚖️';
-        healthMetric.textContent = planEmoji;
-    }
-
-    // Hide dashboard if no items and no team (very early state)
-    dashboard.style.display = (totalItems === 0 && teamCount <= 1) ? 'none' : '';
 }
 
 // Generate summary for the items section
@@ -13436,45 +13365,6 @@ export function setupPresentationEventListeners() {
 
     // Search modal event listeners
     setupSearchModalEventListeners();
-
-    // Plan summary dashboard metric click handlers (scroll to relevant sections)
-    const dashboard = document.getElementById('plan-summary-dashboard');
-    if (dashboard) {
-        dashboard.addEventListener('click', (e) => {
-            const metric = e.target.closest('.plan-summary-metric');
-            if (!metric) return;
-
-            const metricId = metric.id;
-            if (metricId === 'plan-metric-items') {
-                // Scroll to first item in the list
-                const firstItem = itineraryItemsListEl?.querySelector('.itinerary-item');
-                if (firstItem) {
-                    firstItem.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            } else if (metricId === 'plan-metric-budget') {
-                // Open checkout/total summary
-                const totalBtn = document.getElementById('presentation-header-total');
-                if (totalBtn) totalBtn.click();
-            } else if (metricId === 'plan-metric-team') {
-                // Scroll to collaborators section (first accordion)
-                const headerSection = modal?.querySelector('.itinerary-accordion[data-section="header"]');
-                if (headerSection) {
-                    headerSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    // Expand it if collapsed
-                    if (!accordionState.header) {
-                        toggleAccordion('header');
-                    }
-                }
-            } else if (metricId === 'plan-metric-status' || metricId === 'plan-metric-health') {
-                // Show a toast with current plan status detail
-                const statusVal = document.querySelector('#plan-metric-status .plan-metric-value')?.textContent;
-                const healthVal = document.querySelector('#plan-metric-health .plan-metric-value')?.textContent;
-                const itemCount = state.cart.items.size + state.cart.lockedItems.size;
-                const lockedCount = state.cart.lockedItems.size;
-                showToast(`Plan: ${statusVal} ${healthVal} \u2022 ${lockedCount} confirmed, ${itemCount} total items`, 3000);
-            }
-        });
-    }
 }
 
 // ============================================
