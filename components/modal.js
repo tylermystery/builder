@@ -1587,17 +1587,36 @@ function getBreadcrumbs(record) {
 let modalCommentsCache = new Map(); // recordId -> { messages: [], timestamp }
 let modalReplyingTo = null; // { messageId, senderName }
 
+// =============================================================================
+// CONSOLIDATED RSB FOR DETAIL MODAL
+// Mirrors the presentation view RSB with modal-appropriate styling
+// =============================================================================
+
+// RSB layout configs (same as presentation.js)
+const MODAL_RSB_LAYOUTS = [
+    { id: 'bar', label: 'Tiered Rows', icon: '☰' },
+    { id: 'radial-grid', label: 'Radial Grid', icon: '◎' },
+    { id: 'orbit', label: 'Orbit', icon: '◌' },
+    { id: 'minimal', label: 'Minimal', icon: '—' }
+];
+
+const MODAL_RSB_INITIAL_TIERS = 2;
+let modalRSBRadialTierIndex = 0;
+let modalRSBReplyingTo = null;
+
+function getModalRSBLayout() {
+    return document.body.dataset.rsbLayout || 'bar';
+}
+
 /**
  * Initialize the reactions section in the detail modal.
- * Shows the quick bar, populates the tiered picker, and renders existing reactions.
- * Only activates when there's an active session context (plan mode).
+ * Replaces the old quick bar + tiered picker with the consolidated RSB panel.
  * @param {string} recordId - The item record ID
  */
 function initModalReactions(recordId) {
     const section = document.getElementById('modal-reactions-section');
     if (!section) return;
 
-    // Only show reactions if we have a session (plan context)
     const hasSession = state.session.id && state.session.id.startsWith('rec');
     const isPresentationActive = document.body.classList.contains('presentation-active');
 
@@ -1606,253 +1625,636 @@ function initModalReactions(recordId) {
         return;
     }
 
-    section.style.display = 'flex';
+    section.style.display = 'block';
 
-    const quickBar = document.getElementById('modal-reactions-quick-bar');
-    const expandBtn = document.getElementById('modal-reactions-expand-btn');
-    const picker = document.getElementById('modal-reactions-picker');
-    const summary = document.getElementById('modal-reactions-summary');
-    const scoreBadge = document.getElementById('modal-reactions-score-badge');
+    // Clear old content and replace with consolidated RSB
+    section.innerHTML = '';
+    section.className = 'modal-reactions-section modal-rsb-host';
 
-    if (!quickBar || !expandBtn || !picker) return;
-
-    // Get current user and existing reactions
-    let currentUser;
-    try {
-        currentUser = getCurrentUser();
-    } catch (e) {
-        currentUser = { id: 'anonymous', name: 'Anonymous' };
-    }
-
-    const allReactions = state.session.reactions.get(recordId);
-    const currentUserReaction = (allReactions instanceof Map) ? allReactions.get(currentUser.id) : null;
-
-    // Render quick reaction bar (first tier emojis)
-    const quickEmojis = EMOJI_REACTIONS;
-    quickBar.innerHTML = quickEmojis.map(emoji => {
-        const score = REACTION_SCORES[emoji] || 0;
-        const scoreLabel = score > 0 ? `+${score.toFixed(1)}` : score.toFixed(1);
-        const isSelected = currentUserReaction === emoji;
-        return `<button class="modal-reaction-btn ${isSelected ? 'selected' : ''}"
-                    data-emoji="${emoji}" data-record-id="${recordId}"
-                    title="${emoji} ${scoreLabel} ranking impact">
-                    ${emoji}
-                </button>`;
-    }).join('');
-
-    // Render expand button handler
-    expandBtn.onclick = () => {
-        const isOpen = picker.style.display !== 'none';
-        picker.style.display = isOpen ? 'none' : '';
-        expandBtn.querySelector('.expand-btn-icon').textContent = isOpen ? '+' : '−';
-        expandBtn.childNodes[1].textContent = isOpen ? ' More Reactions' : ' Less';
-        if (!isOpen) {
-            renderTieredEmojiPicker(recordId, picker, currentUserReaction);
-        }
-    };
-
-    // Attach click handler for quick bar
-    quickBar.onclick = (e) => {
-        const btn = e.target.closest('.modal-reaction-btn');
-        if (!btn) return;
-        e.stopPropagation();
-        handleModalReactionSelect(btn.dataset.recordId, btn.dataset.emoji);
-    };
-
-    // Render reaction summary
-    renderModalReactionsSummary(recordId, summary, scoreBadge);
-
-    const openActionMenuFromEl = (el) => {
-        if (!el) return;
-        const rect = el.getBoundingClientRect();
-        openActionMenu(recordId, {
-            x: rect.left + rect.width / 2,
-            y: rect.top + rect.height / 2
-        });
-    };
-
-    if (summary) {
-        summary.onclick = (e) => {
-            e.stopPropagation();
-            openActionMenuFromEl(summary);
-        };
-        summary.title = 'Open reactions and actions';
-    }
-    if (scoreBadge) {
-        scoreBadge.onclick = (e) => {
-            e.stopPropagation();
-            openActionMenuFromEl(scoreBadge);
-        };
-        scoreBadge.title = 'Open reactions and actions';
-    }
+    const panel = buildModalRSBPanelDOM(recordId);
+    section.appendChild(panel);
 }
 
 /**
- * Render the tiered emoji picker - scrollable, starts standard, becomes obscure.
- * Each tier has a label and score impact tooltip on hover.
+ * Build the consolidated RSB panel DOM for the modal.
  */
-function renderTieredEmojiPicker(recordId, container, currentUserReaction) {
-    let currentUser;
+function buildModalRSBPanelDOM(recordId) {
+    const panel = document.createElement('div');
+    panel.className = 'rsb-panel rsb-panel--modal visible';
+    panel.dataset.recordId = recordId;
+
+    // Tabs
+    const tabs = document.createElement('div');
+    tabs.className = 'rsb-tabs';
+
+    const allReactions = state.session.reactions?.get(recordId);
+    const reactionCount = (allReactions instanceof Map) ? allReactions.size : 0;
+
+    // We don't have direct access to the presentation's componentCommentsCache,
+    // so we'll use the modal's own cache mechanism
+    const commentCount = modalCommentsCache.get(recordId)?.messages?.length || 0;
+
+    const tabConfigs = [
+        { id: 'reactions', label: 'React', badge: '' },
+        { id: 'summary', label: 'Summary', badge: reactionCount > 0 ? reactionCount : '' },
+        { id: 'comments', label: 'Comments', badge: commentCount > 0 ? commentCount : '' }
+    ];
+
+    tabConfigs.forEach((tc, idx) => {
+        const tab = document.createElement('button');
+        tab.className = `rsb-tab${idx === 0 ? ' active' : ''}`;
+        tab.dataset.tab = tc.id;
+        tab.innerHTML = `${tc.label}${tc.badge ? `<span class="rsb-tab-badge">${tc.badge}</span>` : ''}`;
+        tab.addEventListener('click', (e) => {
+            e.stopPropagation();
+            switchModalRSBTab(panel, tc.id);
+        });
+        tabs.appendChild(tab);
+    });
+    panel.appendChild(tabs);
+
+    // Tab: Reactions
+    const reactionsContent = document.createElement('div');
+    reactionsContent.className = 'rsb-tab-content active';
+    reactionsContent.dataset.tabContent = 'reactions';
+    buildModalRSBReactionsContent(reactionsContent, recordId);
+    panel.appendChild(reactionsContent);
+
+    // Tab: Summary
+    const summaryContent = document.createElement('div');
+    summaryContent.className = 'rsb-tab-content';
+    summaryContent.dataset.tabContent = 'summary';
+    buildModalRSBSummaryContent(summaryContent, recordId);
+    panel.appendChild(summaryContent);
+
+    // Tab: Comments
+    const commentsContent = document.createElement('div');
+    commentsContent.className = 'rsb-tab-content';
+    commentsContent.dataset.tabContent = 'comments';
+    buildModalRSBCommentsContent(commentsContent, recordId);
+    panel.appendChild(commentsContent);
+
+    return panel;
+}
+
+function switchModalRSBTab(panel, tabId) {
+    panel.querySelectorAll('.rsb-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
+    panel.querySelectorAll('.rsb-tab-content').forEach(c => c.classList.toggle('active', c.dataset.tabContent === tabId));
+}
+
+/**
+ * Build the reactions tab for the modal RSB.
+ */
+function buildModalRSBReactionsContent(container, recordId) {
+    container.innerHTML = '';
+    const layout = getModalRSBLayout();
+
+    // Layout toggle
+    const toggleRow = document.createElement('div');
+    toggleRow.className = 'rsb-layout-toggle';
+    MODAL_RSB_LAYOUTS.forEach(l => {
+        const btn = document.createElement('button');
+        btn.className = `rsb-layout-btn${l.id === layout ? ' active' : ''}`;
+        btn.title = l.label;
+        btn.textContent = l.icon;
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.body.dataset.rsbLayout = l.id;
+            try { localStorage.setItem('rsb-layout', l.id); } catch (_) {}
+            buildModalRSBReactionsContent(container, recordId);
+        });
+        toggleRow.appendChild(btn);
+    });
+    container.appendChild(toggleRow);
+
+    let currentUserEmoji = null;
     try {
-        currentUser = getCurrentUser();
-    } catch (e) {
-        currentUser = { id: 'anonymous', name: 'Anonymous' };
+        const user = getCurrentUser();
+        const reactions = state.session.reactions?.get(recordId);
+        if (reactions instanceof Map) currentUserEmoji = reactions.get(user.id);
+    } catch (_) {}
+
+    const emojiLayout = document.createElement('div');
+    emojiLayout.className = 'rsb-emoji-layout';
+
+    switch (layout) {
+        case 'radial-grid':
+            buildModalRSBRadialGrid(emojiLayout, recordId, currentUserEmoji, container);
+            break;
+        case 'orbit':
+            buildModalRSBOrbit(emojiLayout, recordId, currentUserEmoji);
+            break;
+        case 'minimal':
+            buildModalRSBMinimal(emojiLayout, recordId, currentUserEmoji);
+            break;
+        default:
+            buildModalRSBTieredRows(emojiLayout, recordId, currentUserEmoji);
+            break;
     }
 
-    const allReactions = state.session.reactions.get(recordId);
-    const userReaction = currentUserReaction || ((allReactions instanceof Map) ? allReactions.get(currentUser.id) : null);
+    container.appendChild(emojiLayout);
+}
 
-    let html = '<div class="modal-emoji-tiers-scroll">';
+function buildModalRSBEmojiButton(emoji, recordId, currentUserEmoji) {
+    const btn = document.createElement('button');
+    btn.className = `rsb-emoji-btn${currentUserEmoji === emoji ? ' selected' : ''}`;
+    btn.textContent = emoji;
+    btn.dataset.emoji = emoji;
+    btn.dataset.recordId = recordId;
+    const score = REACTION_SCORES[emoji] || 0;
+    btn.dataset.scoreLabel = `${score >= 0 ? '+' : ''}${score.toFixed(1)}`;
 
-    EMOJI_TIERS.forEach((tier, tierIndex) => {
-        html += `<div class="modal-emoji-tier" data-tier="${tierIndex}">
-            <div class="modal-emoji-tier-header">
-                <span class="tier-label">${tier.label}</span>
-                <span class="tier-description">${tier.description}</span>
-            </div>
-            <div class="modal-emoji-tier-grid">`;
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleModalRSBEmojiSelect(recordId, emoji);
+    });
+    return btn;
+}
 
-        tier.emojis.forEach(emoji => {
-            const score = REACTION_SCORES[emoji] || 0;
-            const scoreLabel = score > 0 ? `+${score.toFixed(1)}` : score.toFixed(1);
-            const impact = score >= 3 ? 'high-positive' :
-                           score >= 1 ? 'positive' :
-                           score >= -0.5 ? 'neutral' :
-                           score >= -2 ? 'negative' : 'high-negative';
-            const isSelected = userReaction === emoji;
-            html += `<button class="modal-reaction-btn modal-tier-emoji ${isSelected ? 'selected' : ''}"
-                        data-emoji="${emoji}" data-record-id="${recordId}"
-                        data-impact="${impact}"
-                        title="${emoji} ${scoreLabel} ranking impact">
-                        <span class="tier-emoji-char">${emoji}</span>
-                        <span class="tier-emoji-score ${impact}">${scoreLabel}</span>
-                    </button>`;
+function buildModalRSBTieredRows(container, recordId, currentUserEmoji) {
+    const tiersEl = document.createElement('div');
+    tiersEl.className = 'rsb-emoji-tiers';
+
+    const tiers = EMOJI_TIERS;
+    const initialCount = Math.min(MODAL_RSB_INITIAL_TIERS, tiers.length);
+
+    for (let i = 0; i < initialCount; i++) {
+        tiersEl.appendChild(buildModalRSBTierRow(tiers[i], recordId, currentUserEmoji));
+    }
+
+    if (tiers.length > initialCount) {
+        const expandBtn = document.createElement('div');
+        expandBtn.className = 'rsb-expand-more';
+        expandBtn.textContent = `Show ${tiers.length - initialCount} more tiers...`;
+        expandBtn.dataset.expanded = 'false';
+        expandBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (expandBtn.dataset.expanded === 'false') {
+                for (let i = initialCount; i < tiers.length; i++) {
+                    tiersEl.insertBefore(buildModalRSBTierRow(tiers[i], recordId, currentUserEmoji), expandBtn);
+                }
+                expandBtn.textContent = 'Show fewer';
+                expandBtn.dataset.expanded = 'true';
+            } else {
+                const rows = tiersEl.querySelectorAll('.rsb-emoji-tier');
+                for (let i = rows.length - 1; i >= initialCount; i--) rows[i].remove();
+                expandBtn.textContent = `Show ${tiers.length - initialCount} more tiers...`;
+                expandBtn.dataset.expanded = 'false';
+            }
         });
+        tiersEl.appendChild(expandBtn);
+    }
 
-        html += '</div></div>';
+    container.appendChild(tiersEl);
+}
+
+function buildModalRSBTierRow(tier, recordId, currentUserEmoji) {
+    const row = document.createElement('div');
+    row.className = 'rsb-emoji-tier';
+    const label = document.createElement('div');
+    label.className = 'rsb-emoji-tier-label';
+    label.innerHTML = `${tier.label} <span class="rsb-emoji-tier-hint">${tier.description}</span>`;
+    row.appendChild(label);
+
+    const grid = document.createElement('div');
+    grid.className = 'rsb-emoji-tier-grid';
+    tier.emojis.forEach(emoji => {
+        grid.appendChild(buildModalRSBEmojiButton(emoji, recordId, currentUserEmoji));
+    });
+    row.appendChild(grid);
+    return row;
+}
+
+function buildModalRSBRadialGrid(container, recordId, currentUserEmoji, parentContainer) {
+    const radial = document.createElement('div');
+    radial.className = 'rsb-radial-container';
+
+    const center = document.createElement('div');
+    center.className = 'rsb-radial-center';
+    const reactions = state.session.reactions?.get(recordId);
+    let summaryEmoji = '😊';
+    let avgScore = 0;
+    if (reactions && reactions instanceof Map && reactions.size > 0) {
+        let total = 0;
+        reactions.forEach(e => { total += (REACTION_SCORES[e] || 0); });
+        avgScore = total / reactions.size;
+        let closestDiff = Infinity;
+        Object.entries(REACTION_SCORES).forEach(([e, s]) => {
+            const d = Math.abs(s - avgScore);
+            if (d < closestDiff) { closestDiff = d; summaryEmoji = e; }
+        });
+    }
+    center.innerHTML = `
+        <span class="rsb-radial-center-emoji">${summaryEmoji}</span>
+        <span class="rsb-radial-center-score">${avgScore !== 0 ? (avgScore >= 0 ? '+' : '') + avgScore.toFixed(1) : ''}</span>
+    `;
+    radial.appendChild(center);
+
+    const tiers = EMOJI_TIERS;
+    const innerTier = tiers[modalRSBRadialTierIndex] || tiers[0];
+    const outerTier = tiers[Math.min(modalRSBRadialTierIndex + 1, tiers.length - 1)] || tiers[0];
+
+    const ring1 = document.createElement('div');
+    ring1.className = 'rsb-radial-ring';
+    ring1.dataset.ring = '1';
+    const r1 = 65;
+    innerTier.emojis.forEach((emoji, i) => {
+        const angle = (i / innerTier.emojis.length) * Math.PI * 2 - Math.PI / 2;
+        const btn = buildModalRSBEmojiButton(emoji, recordId, currentUserEmoji);
+        btn.style.left = `calc(50% + ${Math.cos(angle) * r1}px - 18px)`;
+        btn.style.top = `calc(50% + ${Math.sin(angle) * r1}px - 18px)`;
+        ring1.appendChild(btn);
+    });
+    radial.appendChild(ring1);
+
+    if (outerTier !== innerTier) {
+        const ring2 = document.createElement('div');
+        ring2.className = 'rsb-radial-ring';
+        ring2.dataset.ring = '2';
+        const r2 = 100;
+        outerTier.emojis.slice(0, 12).forEach((emoji, i) => {
+            const count = Math.min(outerTier.emojis.length, 12);
+            const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
+            const btn = buildModalRSBEmojiButton(emoji, recordId, currentUserEmoji);
+            btn.style.left = `calc(50% + ${Math.cos(angle) * r2}px - 14px)`;
+            btn.style.top = `calc(50% + ${Math.sin(angle) * r2}px - 14px)`;
+            ring2.appendChild(btn);
+        });
+        radial.appendChild(ring2);
+    }
+
+    // Navigation
+    const navPrev = document.createElement('button');
+    navPrev.className = 'rsb-radial-nav';
+    navPrev.textContent = '◀';
+    navPrev.style.cssText = 'left: 4px; top: 50%; transform: translateY(-50%);';
+    navPrev.addEventListener('click', (e) => {
+        e.stopPropagation();
+        modalRSBRadialTierIndex = Math.max(0, modalRSBRadialTierIndex - 1);
+        buildModalRSBReactionsContent(parentContainer, recordId);
     });
 
-    html += '</div>';
-    container.innerHTML = html;
-
-    // Attach click handler
-    container.onclick = (e) => {
-        const btn = e.target.closest('.modal-reaction-btn');
-        if (!btn) return;
+    const navNext = document.createElement('button');
+    navNext.className = 'rsb-radial-nav';
+    navNext.textContent = '▶';
+    navNext.style.cssText = 'right: 4px; top: 50%; transform: translateY(-50%);';
+    navNext.addEventListener('click', (e) => {
         e.stopPropagation();
-        handleModalReactionSelect(btn.dataset.recordId, btn.dataset.emoji);
-    };
+        modalRSBRadialTierIndex = Math.min(tiers.length - 2, modalRSBRadialTierIndex + 1);
+        buildModalRSBReactionsContent(parentContainer, recordId);
+    });
+    radial.appendChild(navPrev);
+    radial.appendChild(navNext);
+
+    const tierLabel = document.createElement('div');
+    tierLabel.className = 'rsb-emoji-tier-label';
+    tierLabel.style.textAlign = 'center';
+    tierLabel.style.justifyContent = 'center';
+    tierLabel.innerHTML = `${innerTier.label} <span class="rsb-emoji-tier-hint">(${modalRSBRadialTierIndex + 1}/${tiers.length})</span>`;
+    radial.appendChild(tierLabel);
+
+    container.appendChild(radial);
+}
+
+function buildModalRSBOrbit(container, recordId, currentUserEmoji) {
+    const orbit = document.createElement('div');
+    orbit.className = 'rsb-orbit-container';
+
+    const center = document.createElement('div');
+    center.className = 'rsb-radial-center';
+    center.innerHTML = '<span class="rsb-radial-center-emoji">😊</span>';
+    orbit.appendChild(center);
+
+    const tiers = EMOJI_TIERS;
+    const track1 = document.createElement('div');
+    track1.className = 'rsb-orbit-track';
+    track1.dataset.track = '1';
+    tiers[0].emojis.forEach((emoji, i) => {
+        const angle = (i / tiers[0].emojis.length) * 360;
+        const btn = buildModalRSBEmojiButton(emoji, recordId, currentUserEmoji);
+        btn.style.left = '50%';
+        btn.style.top = '0';
+        btn.style.transform = `rotate(${angle}deg) translateY(-75px) rotate(-${angle}deg)`;
+        track1.appendChild(btn);
+    });
+    orbit.appendChild(track1);
+
+    if (tiers.length > 1) {
+        const track2 = document.createElement('div');
+        track2.className = 'rsb-orbit-track';
+        track2.dataset.track = '2';
+        tiers[1].emojis.slice(0, 10).forEach((emoji, i) => {
+            const angle = (i / 10) * 360;
+            const btn = buildModalRSBEmojiButton(emoji, recordId, currentUserEmoji);
+            btn.style.left = '50%';
+            btn.style.top = '0';
+            btn.style.transform = `rotate(${angle}deg) translateY(-110px) rotate(-${angle}deg)`;
+            track2.appendChild(btn);
+        });
+        orbit.appendChild(track2);
+    }
+
+    container.appendChild(orbit);
+}
+
+function buildModalRSBMinimal(container, recordId, currentUserEmoji) {
+    const row = document.createElement('div');
+    row.className = 'rsb-minimal-row';
+    EMOJI_TIERS[0].emojis.forEach(emoji => {
+        row.appendChild(buildModalRSBEmojiButton(emoji, recordId, currentUserEmoji));
+    });
+    container.appendChild(row);
 }
 
 /**
- * Handle selecting a reaction emoji in the modal.
- * Toggles if same emoji, replaces if different.
+ * Handle emoji selection from the modal RSB.
  */
-function handleModalReactionSelect(recordId, emoji) {
+function handleModalRSBEmojiSelect(recordId, emoji) {
     let currentUser;
-    try {
-        currentUser = getCurrentUser();
-    } catch (e) {
-        currentUser = { id: 'anonymous', name: 'Anonymous' };
-    }
+    try { currentUser = getCurrentUser(); }
+    catch (_) { currentUser = { id: 'anonymous', name: 'Anonymous' }; }
 
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, new Map());
     }
 
     const itemReactions = state.session.reactions.get(recordId);
-
-    // Toggle: if same emoji clicked, remove reaction; otherwise set new one
     if (itemReactions.get(currentUser.id) === emoji) {
         itemReactions.delete(currentUser.id);
     } else {
         itemReactions.set(currentUser.id, emoji);
     }
 
-    // Re-render the modal reactions UI
+    // Re-render the modal RSB
     initModalReactions(recordId);
 
-    // Also update presentation view if it's active
-    const presentationReactionContainer = document.querySelector(`.itinerary-item-reactions[data-record-id="${recordId}"]`);
-    if (presentationReactionContainer && typeof window.renderPresentationReactions === 'function') {
-        window.renderPresentationReactions(recordId, presentationReactionContainer);
-    }
-
-    // Update emoji indicator on presentation card
+    // Update presentation view if active
     const emojiIndicator = document.querySelector(`.item-emoji-indicator[data-record-id="${recordId}"]`);
     if (emojiIndicator && typeof window.updatePresentationEmojiIndicator === 'function') {
         window.updatePresentationEmojiIndicator(recordId);
     }
 
-    // Trigger save to persist
+    // Trigger save and vitality recalc
     triggerSave();
-
-    // Recalculate vitality (sentiment changed, so goodness scores need updating)
     requestVitalityRecalc();
 
-    log('Modal', `Reaction ${emoji} set for item ${recordId} by ${currentUser.id}`);
+    log('Modal', `RSB reaction ${emoji} set for item ${recordId} by ${currentUser.id}`);
 }
 
 /**
- * Render the reaction summary showing who reacted and the overall score
+ * Build the summary tab for the modal RSB.
  */
-function renderModalReactionsSummary(recordId, summaryEl, scoreBadgeEl) {
-    const allReactions = state.session.reactions.get(recordId);
+function buildModalRSBSummaryContent(container, recordId) {
+    container.innerHTML = '';
+    const summaryDiv = document.createElement('div');
+    summaryDiv.className = 'rsb-reaction-summary';
 
+    const allReactions = state.session.reactions?.get(recordId);
     if (!allReactions || !(allReactions instanceof Map) || allReactions.size === 0) {
-        if (summaryEl) summaryEl.innerHTML = '<span class="modal-reactions-empty">No reactions yet — tap to react</span>';
-        if (scoreBadgeEl) {
-            scoreBadgeEl.textContent = '';
-            scoreBadgeEl.style.display = 'none';
-        }
+        summaryDiv.innerHTML = '<div class="rsb-summary-empty">No reactions yet — use the React tab to be first!</div>';
+        container.appendChild(summaryDiv);
         return;
     }
 
-    // Calculate total score
+    const emojiCounts = {};
     let totalScore = 0;
-    const reactionCounts = {};
-    allReactions.forEach((emoji, userId) => {
+    allReactions.forEach((emoji) => {
+        emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
         totalScore += (REACTION_SCORES[emoji] || 0);
-        reactionCounts[emoji] = (reactionCounts[emoji] || 0) + 1;
     });
+    const avg = totalScore / allReactions.size;
 
-    // Score badge
-    if (scoreBadgeEl) {
-        const scoreText = totalScore > 0 ? `+${totalScore.toFixed(1)}` : totalScore.toFixed(1);
-        const scoreClass = totalScore > 2 ? 'score-positive' : totalScore < -1 ? 'score-negative' : 'score-neutral';
-        scoreBadgeEl.textContent = `${scoreText} impact`;
-        scoreBadgeEl.className = `modal-reactions-score-badge ${scoreClass}`;
-        scoreBadgeEl.style.display = 'inline-block';
-        scoreBadgeEl.title = `Combined ranking impact from ${allReactions.size} reaction${allReactions.size !== 1 ? 's' : ''}`;
+    // Pills
+    const pillsDiv = document.createElement('div');
+    pillsDiv.className = 'rsb-summary-pills';
+    Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]).forEach(([emoji, count]) => {
+        const score = REACTION_SCORES[emoji] || 0;
+        const pill = document.createElement('span');
+        pill.className = 'rsb-summary-pill';
+        pill.innerHTML = `
+            <span class="rsb-summary-pill-emoji">${emoji}</span>
+            <span class="rsb-summary-pill-count">${count}</span>
+            <span class="rsb-summary-pill-score">${score >= 0 ? '+' : ''}${score.toFixed(1)}</span>
+        `;
+        pillsDiv.appendChild(pill);
+    });
+    summaryDiv.appendChild(pillsDiv);
+
+    // Who
+    const whoDiv = document.createElement('div');
+    whoDiv.className = 'rsb-summary-who';
+    const names = [];
+    allReactions.forEach((emoji, userId) => {
+        const name = state.session.userProfiles?.get(userId) || 'Someone';
+        names.push(`${name} ${emoji}`);
+    });
+    whoDiv.textContent = names.length <= 3 ? names.join(', ') : `${names.slice(0, 2).join(', ')} & ${names.length - 2} more`;
+    summaryDiv.appendChild(whoDiv);
+
+    // Average
+    let closestEmoji = '😊';
+    let closestDiff = Infinity;
+    Object.entries(REACTION_SCORES).forEach(([e, s]) => {
+        const d = Math.abs(s - avg);
+        if (d < closestDiff) { closestDiff = d; closestEmoji = e; }
+    });
+    const avgDiv = document.createElement('div');
+    avgDiv.className = 'rsb-summary-avg';
+    avgDiv.innerHTML = `
+        <span class="rsb-summary-avg-emoji">${closestEmoji}</span>
+        <span class="rsb-summary-avg-label">Average Sentiment</span>
+        <span class="rsb-summary-avg-score">${avg >= 0 ? '+' : ''}${avg.toFixed(2)}</span>
+    `;
+    summaryDiv.appendChild(avgDiv);
+
+    container.appendChild(summaryDiv);
+}
+
+/**
+ * Build the comments tab for the modal RSB.
+ */
+function buildModalRSBCommentsContent(container, recordId) {
+    container.innerHTML = '';
+    const section = document.createElement('div');
+    section.className = 'rsb-comments-section';
+
+    // Load comments asynchronously
+    loadModalRSBComments(section, recordId);
+
+    container.appendChild(section);
+}
+
+async function loadModalRSBComments(section, recordId) {
+    const cached = modalCommentsCache.get(recordId);
+    let comments = [];
+
+    if (cached && (Date.now() - cached.timestamp) < 30000) {
+        comments = cached.messages || [];
+    } else {
+        try {
+            const allMessages = await api.fetchChatMessages(state.session.id);
+            comments = allMessages.filter(msg => {
+                const itemLink = msg.fields?.['Item Link'];
+                return itemLink && (Array.isArray(itemLink) ? itemLink.includes(recordId) : itemLink === recordId);
+            });
+            modalCommentsCache.set(recordId, { messages: comments, timestamp: Date.now() });
+        } catch (err) {
+            log('Modal', `Error loading RSB comments: ${err.message}`);
+        }
     }
 
-    // Summary - top emojis with counts
-    if (summaryEl) {
-        const sorted = Object.entries(reactionCounts).sort((a, b) => b[1] - a[1]);
-        const pills = sorted.map(([emoji, count]) => {
-            const score = REACTION_SCORES[emoji] || 0;
-            const scoreLabel = score > 0 ? `+${score.toFixed(1)}` : score.toFixed(1);
-            return `<span class="modal-reaction-pill" title="${count} reaction${count !== 1 ? 's' : ''} (${scoreLabel} each)">
-                        ${emoji}<span class="pill-count">${count}</span>
-                    </span>`;
-        }).join('');
+    // Comments list
+    const list = document.createElement('div');
+    list.className = 'rsb-comments-list';
 
-        // Show who reacted
-        const userNames = [];
-        allReactions.forEach((emoji, userId) => {
-            const name = state.session.userProfiles?.get(userId) || 'Someone';
-            userNames.push(`${name} ${emoji}`);
+    if (comments.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'rsb-comments-empty';
+        empty.textContent = 'No comments yet. Start the conversation!';
+        list.appendChild(empty);
+    } else {
+        comments.forEach(comment => {
+            const commentEl = document.createElement('div');
+            commentEl.className = 'rsb-comment';
+            const author = comment.fields?.SenderName || 'Someone';
+            const content = comment.fields?.Content || '';
+            const time = comment.fields?.CreatedTime || '';
+            let timeStr = '';
+            if (time) {
+                try { timeStr = new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); } catch (_) {}
+            }
+            commentEl.innerHTML = `
+                <span class="rsb-comment-author">${escapeHtml(author)}</span>
+                <span class="rsb-comment-text">${escapeHtml(content)}</span>
+                ${timeStr ? `<span class="rsb-comment-time">${timeStr}</span>` : ''}
+                <button class="rsb-comment-reply-btn" data-author="${escapeHtml(author)}">↩</button>
+            `;
+            const replyBtn = commentEl.querySelector('.rsb-comment-reply-btn');
+            if (replyBtn) {
+                replyBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    modalRSBReplyingTo = { author, commentId: comment.id };
+                    const indicator = section.querySelector('.rsb-comment-reply-indicator');
+                    if (indicator) {
+                        indicator.style.display = 'flex';
+                        indicator.querySelector('span').textContent = `Replying to ${author}`;
+                    }
+                    const input = section.querySelector('.rsb-comment-input');
+                    if (input) input.focus();
+                });
+            }
+            list.appendChild(commentEl);
         });
-        const whoText = userNames.length <= 3
-            ? userNames.join(', ')
-            : `${userNames.slice(0, 2).join(', ')} & ${userNames.length - 2} more`;
+        requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
+    }
+    section.appendChild(list);
 
-        summaryEl.innerHTML = `
-            <div class="modal-reactions-pills">${pills}</div>
-            <div class="modal-reactions-who">${whoText}</div>
-        `;
+    // Reply indicator
+    const replyIndicator = document.createElement('div');
+    replyIndicator.className = 'rsb-comment-reply-indicator';
+    replyIndicator.style.display = 'none';
+    replyIndicator.innerHTML = `<span>Replying to ...</span><button class="rsb-comment-reply-cancel">✕</button>`;
+    replyIndicator.querySelector('.rsb-comment-reply-cancel').addEventListener('click', (e) => {
+        e.stopPropagation();
+        modalRSBReplyingTo = null;
+        replyIndicator.style.display = 'none';
+    });
+    section.appendChild(replyIndicator);
+
+    // Input row
+    const inputRow = document.createElement('div');
+    inputRow.className = 'rsb-comment-input-row';
+    const input = document.createElement('textarea');
+    input.className = 'rsb-comment-input';
+    input.placeholder = 'Add a comment...';
+    input.rows = 1;
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            submitModalRSBComment(recordId, section);
+        }
+    });
+    inputRow.appendChild(input);
+
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'rsb-comment-submit-btn';
+    submitBtn.textContent = '→';
+    submitBtn.title = 'Send';
+    submitBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        submitModalRSBComment(recordId, section);
+    });
+    inputRow.appendChild(submitBtn);
+    section.appendChild(inputRow);
+
+    // Open full button
+    const openFullBtn = document.createElement('button');
+    openFullBtn.className = 'rsb-open-full-btn';
+    openFullBtn.textContent = 'Open Full Conversation →';
+    openFullBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isPresentationActive = document.body.classList.contains('presentation-active');
+        if (isPresentationActive) {
+            openUCPForItem(recordId);
+        } else {
+            showForumPanel({ filter: 'comments', componentId: recordId });
+        }
+    });
+    section.appendChild(openFullBtn);
+}
+
+async function submitModalRSBComment(recordId, section) {
+    const input = section.querySelector('.rsb-comment-input');
+    if (!input) return;
+    let content = input.value.trim();
+    if (!content) return;
+
+    let currentUser;
+    try { currentUser = getCurrentUser(); } catch (_) { return; }
+    if (!state.session.id || !currentUser) return;
+
+    if (modalRSBReplyingTo) {
+        content = `@${modalRSBReplyingTo.author}: ${content}`;
+    }
+
+    input.disabled = true;
+
+    try {
+        // Use the chat message API to post the comment linked to this item
+        await api.postChatMessage(
+            state.session.id,
+            currentUser.id,
+            currentUser.name || currentUser.email || 'Anonymous',
+            content,
+            recordId
+        );
+
+        input.value = '';
+        modalRSBReplyingTo = null;
+        const indicator = section.querySelector('.rsb-comment-reply-indicator');
+        if (indicator) indicator.style.display = 'none';
+
+        // Invalidate cache and refresh
+        modalCommentsCache.delete(recordId);
+        section.innerHTML = '';
+        await loadModalRSBComments(section, recordId);
+
+        ui.showToast('Comment posted!', 'success');
+    } catch (err) {
+        log('Modal', `Error posting RSB comment: ${err.message}`);
+        ui.showToast('Failed to post comment.', 'error');
+    } finally {
+        input.disabled = false;
+        input.focus();
     }
 }
+
+// Keep the old functions as stubs to avoid breaking any external references
+function renderTieredEmojiPicker() { /* consolidated into RSB */ }
+function handleModalReactionSelect(recordId, emoji) {
+    handleModalRSBEmojiSelect(recordId, emoji);
+}
+function renderModalReactionsSummary() { /* consolidated into RSB summary tab */ }
 
 // ============================================
 // MODAL COMMENTS SYSTEM

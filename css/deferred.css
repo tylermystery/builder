@@ -5570,22 +5570,20 @@ hr.total-divider {
 /* Reactions bar floats above the modal content box */
 .modal-reactions-section {
     display: none;
-    flex-direction: row;
-    align-items: center;
-    gap: 6px;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-radius: 24px;
-    padding: 6px 12px;
-    margin-bottom: 8px;
-    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.2);
     max-width: 90%;
-    width: auto;
-    flex-wrap: wrap;
-    justify-content: center;
+    width: 400px;
+    margin-bottom: 8px;
     position: relative;
     z-index: 1001;
+}
+
+/* When the consolidated RSB is active in the modal */
+.modal-reactions-section.modal-rsb-host {
+    display: block;
+}
+
+.modal-rsb-host .rsb-panel--modal {
+    max-height: 55vh;
 }
 
 .modal-reactions-score-badge {
@@ -15897,10 +15895,15 @@ hr.total-divider {
 }
 
 /* ========================================
-   INTERACTIVE REACTION ZONE (Compact Cards)
+   CONSOLIDATED REACTION SUMMARY BAR
+   Unified reaction+comments component for
+   compact cards & detail modal.
    ======================================== */
 
-/* The reaction zone wraps the meta bar and becomes interactive on hover */
+/* ── Layout toggle (A/B test) stored as data-rsb-layout on body ── */
+/* Layouts: "bar" (default), "radial-grid", "orbit", "minimal" */
+
+/* The reaction zone wraps everything and becomes the summary bar */
 .compact-card-reaction-zone {
     position: relative;
     margin-top: 6px;
@@ -15909,7 +15912,7 @@ hr.total-divider {
     cursor: default;
 }
 
-/* Ghost hint: subtle reaction prompt shown by default */
+/* ── Summary hint bar (always visible) ── */
 .reaction-zone-hint {
     display: flex;
     align-items: center;
@@ -15924,6 +15927,7 @@ hr.total-divider {
     gap: 6px;
     flex: 1;
     min-width: 0;
+    cursor: pointer;
 }
 
 .reaction-zone-summary-emoji {
@@ -15995,61 +15999,236 @@ hr.total-divider {
     transform: scale(1.1);
 }
 
-/* ── Emoji Explorer Popover ── */
-.reaction-zone-explorer {
+/* Preview state: when hovering an emoji, the summary updates */
+.reaction-zone-summary.previewing .reaction-zone-summary-emoji {
+    transform: scale(1.3);
+    filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.4));
+}
+
+.reaction-zone-summary.previewing .reaction-zone-summary-text {
+    color: rgba(147, 197, 253, 0.9);
+}
+
+.reaction-zone-summary.previewing .reaction-zone-summary-score {
+    color: rgba(147, 197, 253, 0.8);
+}
+
+/* ========================================
+   RSB EXPANDED PANEL (shared by card & modal)
+   ======================================== */
+.rsb-panel {
     position: absolute;
     bottom: 100%;
-    left: 0;
-    right: 0;
-    z-index: 20;
-    background: rgba(20, 20, 30, 0.95);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 12px 12px 0 0;
-    padding: 8px 6px 6px;
+    left: -8px;
+    right: -8px;
+    z-index: 50;
+    background: rgba(16, 16, 26, 0.97);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 14px 14px 0 0;
+    padding: 0;
     opacity: 0;
     transform: translateY(8px);
     pointer-events: none;
-    transition: opacity 0.18s ease, transform 0.18s ease;
-    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
+    transition: opacity 0.2s ease, transform 0.2s ease, max-height 0.25s ease;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255,255,255,0.06) inset;
     max-height: 0;
     overflow: hidden;
 }
 
-.reaction-zone-explorer.visible {
+.rsb-panel.visible {
     opacity: 1;
     transform: translateY(0);
     pointer-events: auto;
-    max-height: 280px;
+    max-height: 75vh;
     overflow-y: auto;
     overflow-x: hidden;
 }
 
-/* Scrollbar styling for the explorer */
-.reaction-zone-explorer::-webkit-scrollbar {
-    width: 4px;
+/* When used in the detail modal */
+.rsb-panel.rsb-panel--modal {
+    position: relative;
+    bottom: auto;
+    left: 0;
+    right: 0;
+    border-radius: 14px;
+    background: rgba(245, 245, 250, 0.98);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    max-height: 60vh;
+    margin-bottom: 12px;
 }
 
-.reaction-zone-explorer::-webkit-scrollbar-track {
-    background: transparent;
+.rsb-panel.rsb-panel--modal.visible {
+    max-height: 60vh;
 }
 
-.reaction-zone-explorer::-webkit-scrollbar-thumb {
+.rsb-panel::-webkit-scrollbar { width: 4px; }
+.rsb-panel::-webkit-scrollbar-track { background: transparent; }
+.rsb-panel::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.15);
     border-radius: 2px;
 }
+.rsb-panel--modal::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+}
 
-/* Tier row in the explorer */
-.explorer-tier {
+/* ── Tab navigation at top of panel ── */
+.rsb-tabs {
+    display: flex;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0 6px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: inherit;
+}
+
+.rsb-panel--modal .rsb-tabs {
+    border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+.rsb-tab {
+    flex: 1;
+    padding: 8px 4px 6px;
+    font-size: 0.7em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.35);
+    text-align: center;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+    border-bottom: 2px solid transparent;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+}
+
+.rsb-panel--modal .rsb-tab {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+.rsb-tab:hover {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.rsb-panel--modal .rsb-tab:hover {
+    color: rgba(0, 0, 0, 0.7);
+}
+
+.rsb-tab.active {
+    color: rgba(147, 197, 253, 1);
+    border-bottom-color: rgba(147, 197, 253, 0.8);
+}
+
+.rsb-panel--modal .rsb-tab.active {
+    color: #667eea;
+    border-bottom-color: #667eea;
+}
+
+.rsb-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    font-size: 0.85em;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 0 4px;
+    margin-left: 4px;
+}
+
+.rsb-tab.active .rsb-tab-badge {
+    background: rgba(147, 197, 253, 0.2);
+}
+
+.rsb-panel--modal .rsb-tab-badge {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.rsb-panel--modal .rsb-tab.active .rsb-tab-badge {
+    background: rgba(102, 126, 234, 0.15);
+}
+
+/* ── Tab content sections ── */
+.rsb-tab-content {
+    display: none;
+    padding: 8px;
+}
+
+.rsb-tab-content.active {
+    display: block;
+}
+
+/* ========================================
+   RSB: Reactions Tab — Emoji Layouts
+   ======================================== */
+
+/* ── Layout selector toggle ── */
+.rsb-layout-toggle {
+    display: flex;
+    gap: 2px;
+    padding: 4px 6px 6px;
+    justify-content: flex-end;
+}
+
+.rsb-layout-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: transparent;
+    cursor: pointer;
+    font-size: 0.7em;
+    color: rgba(255, 255, 255, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.12s ease;
+    padding: 0;
+}
+
+.rsb-panel--modal .rsb-layout-btn {
+    border-color: rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.3);
+}
+
+.rsb-layout-btn:hover {
+    color: rgba(255, 255, 255, 0.7);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.rsb-layout-btn.active {
+    color: rgba(147, 197, 253, 1);
+    border-color: rgba(147, 197, 253, 0.5);
+    background: rgba(147, 197, 253, 0.1);
+}
+
+.rsb-panel--modal .rsb-layout-btn.active {
+    color: #667eea;
+    border-color: rgba(102, 126, 234, 0.4);
+    background: rgba(102, 126, 234, 0.08);
+}
+
+/* ── Layout: Tiered Rows (default "bar") ── */
+.rsb-emoji-layout { position: relative; }
+
+.rsb-emoji-tiers { }
+
+.rsb-emoji-tier {
     margin-bottom: 4px;
 }
 
-.explorer-tier:last-child {
+.rsb-emoji-tier:last-child {
     margin-bottom: 0;
 }
 
-.explorer-tier-label {
+.rsb-emoji-tier-label {
     font-size: 0.62em;
     font-weight: 600;
     color: rgba(255, 255, 255, 0.3);
@@ -16061,21 +16240,29 @@ hr.total-divider {
     gap: 4px;
 }
 
-.explorer-tier-score-hint {
+.rsb-panel--modal .rsb-emoji-tier-label {
+    color: rgba(0, 0, 0, 0.35);
+}
+
+.rsb-emoji-tier-hint {
     font-weight: 400;
     color: rgba(255, 255, 255, 0.2);
     font-size: 0.9em;
 }
 
-.explorer-tier-emojis {
+.rsb-panel--modal .rsb-emoji-tier-hint {
+    color: rgba(0, 0, 0, 0.25);
+}
+
+.rsb-emoji-tier-grid {
     display: flex;
     flex-wrap: wrap;
     gap: 2px;
     padding: 0 2px;
 }
 
-/* Individual emoji button in the explorer */
-.explorer-emoji-btn {
+/* Individual emoji button (used across all layouts) */
+.rsb-emoji-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -16092,25 +16279,30 @@ hr.total-divider {
     line-height: 1;
 }
 
-.explorer-emoji-btn:hover {
+.rsb-emoji-btn:hover {
     background: rgba(255, 255, 255, 0.12);
     border-color: rgba(255, 255, 255, 0.2);
     transform: scale(1.25);
     z-index: 2;
 }
 
-.explorer-emoji-btn.selected {
+.rsb-panel--modal .rsb-emoji-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.12);
+}
+
+.rsb-emoji-btn.selected {
     background: rgba(59, 130, 246, 0.2);
     border-color: rgba(59, 130, 246, 0.5);
     box-shadow: 0 0 8px rgba(59, 130, 246, 0.25);
 }
 
-.explorer-emoji-btn.selected:hover {
+.rsb-emoji-btn.selected:hover {
     background: rgba(59, 130, 246, 0.3);
 }
 
 /* Score tooltip on hover */
-.explorer-emoji-btn::after {
+.rsb-emoji-btn::after {
     content: attr(data-score-label);
     position: absolute;
     bottom: calc(100% + 4px);
@@ -16127,27 +16319,13 @@ hr.total-divider {
     transition: opacity 0.12s ease, transform 0.12s ease;
 }
 
-.explorer-emoji-btn:hover::after {
+.rsb-emoji-btn:hover::after {
     opacity: 1;
     transform: translateX(-50%) scale(1);
 }
 
-/* Preview state: when hovering an emoji, the summary updates */
-.reaction-zone-summary.previewing .reaction-zone-summary-emoji {
-    transform: scale(1.3);
-    filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.4));
-}
-
-.reaction-zone-summary.previewing .reaction-zone-summary-text {
-    color: rgba(147, 197, 253, 0.9);
-}
-
-.reaction-zone-summary.previewing .reaction-zone-summary-score {
-    color: rgba(147, 197, 253, 0.8);
-}
-
 /* Expand more tiers indicator */
-.explorer-expand-more {
+.rsb-expand-more {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -16160,113 +16338,643 @@ hr.total-divider {
     margin-top: 4px;
 }
 
-.explorer-expand-more:hover {
+.rsb-panel--modal .rsb-expand-more {
+    color: rgba(0, 0, 0, 0.35);
+    border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+.rsb-expand-more:hover {
     color: rgba(255, 255, 255, 0.6);
 }
 
-/* ── Conversation preview in reaction zone ── */
-.reaction-zone-convo-preview {
+.rsb-panel--modal .rsb-expand-more:hover {
+    color: rgba(0, 0, 0, 0.6);
+}
+
+/* ── Layout: Radial Grid ── */
+.rsb-radial-container {
+    position: relative;
+    width: 100%;
+    min-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 0;
+}
+
+.rsb-radial-center {
     position: absolute;
-    bottom: 100%;
-    left: 0;
-    right: 0;
-    z-index: 19;
-    background: rgba(20, 20, 30, 0.95);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 12px 12px 0 0;
-    padding: 8px 10px;
-    opacity: 0;
-    transform: translateY(8px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(59, 130, 246, 0.12);
+    border: 2px solid rgba(59, 130, 246, 0.3);
+    z-index: 3;
+    transition: all 0.2s ease;
+}
+
+.rsb-panel--modal .rsb-radial-center {
+    background: rgba(102, 126, 234, 0.1);
+    border-color: rgba(102, 126, 234, 0.25);
+}
+
+.rsb-radial-center-emoji {
+    font-size: 1.4em;
+    line-height: 1;
+}
+
+.rsb-radial-center-score {
+    font-size: 0.55em;
+    font-weight: 700;
+    color: rgba(147, 197, 253, 0.9);
+}
+
+.rsb-panel--modal .rsb-radial-center-score {
+    color: #667eea;
+}
+
+.rsb-radial-ring {
+    position: absolute;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
-    transition: opacity 0.18s ease, transform 0.18s ease;
-    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
-    max-height: 0;
+}
+
+.rsb-radial-ring .rsb-emoji-btn {
+    position: absolute;
+    pointer-events: auto;
+    transition: all 0.2s ease;
+}
+
+/* Ring 1 (inner): larger buttons */
+.rsb-radial-ring[data-ring="1"] .rsb-emoji-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 1.3em;
+}
+
+/* Ring 2 (outer): smaller buttons, dimmer by default */
+.rsb-radial-ring[data-ring="2"] .rsb-emoji-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 0.95em;
+    opacity: 0.5;
+}
+
+.rsb-radial-ring[data-ring="2"] .rsb-emoji-btn:hover {
+    opacity: 1;
+}
+
+/* Ring navigation arrows */
+.rsb-radial-nav {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65em;
+    transition: all 0.15s ease;
+    z-index: 5;
+    padding: 0;
+}
+
+.rsb-panel--modal .rsb-radial-nav {
+    border-color: rgba(0, 0, 0, 0.12);
+    background: rgba(0, 0, 0, 0.03);
+    color: rgba(0, 0, 0, 0.35);
+}
+
+.rsb-radial-nav:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.8);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* ── Layout: Orbit (animated circular) ── */
+.rsb-orbit-container {
+    position: relative;
+    width: 100%;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 0;
     overflow: hidden;
 }
 
-.reaction-zone-convo-preview.visible {
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
-    max-height: 200px;
-    overflow-y: auto;
+@keyframes rsb-orbit-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
-.convo-preview-header {
+.rsb-orbit-track {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.rsb-panel--modal .rsb-orbit-track {
+    border-color: rgba(0, 0, 0, 0.06);
+}
+
+.rsb-orbit-track[data-track="1"] {
+    width: 150px;
+    height: 150px;
+    animation: rsb-orbit-spin 60s linear infinite;
+}
+
+.rsb-orbit-track[data-track="2"] {
+    width: 220px;
+    height: 220px;
+    animation: rsb-orbit-spin 90s linear infinite reverse;
+}
+
+.rsb-orbit-track .rsb-emoji-btn {
+    position: absolute;
+    /* counter-rotate so emoji stays upright */
+}
+
+.rsb-orbit-track[data-track="1"] .rsb-emoji-btn {
+    animation: rsb-orbit-spin 60s linear infinite reverse;
+}
+
+.rsb-orbit-track[data-track="2"] .rsb-emoji-btn {
+    animation: rsb-orbit-spin 90s linear infinite;
+}
+
+/* Pause orbit on hover */
+.rsb-orbit-container:hover .rsb-orbit-track {
+    animation-play-state: paused;
+}
+.rsb-orbit-container:hover .rsb-orbit-track .rsb-emoji-btn {
+    animation-play-state: paused;
+}
+
+/* ── Layout: Minimal (just quick row) ── */
+.rsb-minimal-row {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    gap: 4px;
+    padding: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.rsb-minimal-row .rsb-emoji-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 1.25em;
+}
+
+/* ========================================
+   RSB: Reaction Summary Tab
+   ======================================== */
+.rsb-reaction-summary {
+    padding: 4px 0;
+}
+
+.rsb-summary-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
     margin-bottom: 6px;
 }
 
-.convo-preview-title {
-    font-size: 0.72em;
+.rsb-summary-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 3px 8px;
+    font-size: 0.78em;
+    transition: all 0.12s ease;
+}
+
+.rsb-panel--modal .rsb-summary-pill {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.06);
+}
+
+.rsb-summary-pill-emoji {
+    font-size: 1.1em;
+}
+
+.rsb-summary-pill-count {
     font-weight: 600;
     color: rgba(255, 255, 255, 0.6);
+    font-size: 0.9em;
+}
+
+.rsb-panel--modal .rsb-summary-pill-count {
+    color: rgba(0, 0, 0, 0.6);
+}
+
+.rsb-summary-pill-score {
+    font-size: 0.75em;
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.rsb-panel--modal .rsb-summary-pill-score {
+    color: rgba(0, 0, 0, 0.3);
+}
+
+.rsb-summary-who {
+    font-size: 0.72em;
+    color: rgba(255, 255, 255, 0.4);
+    padding: 2px 0;
+    line-height: 1.4;
+}
+
+.rsb-panel--modal .rsb-summary-who {
+    color: rgba(0, 0, 0, 0.45);
+}
+
+.rsb-summary-avg {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 0 2px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    margin-top: 4px;
+}
+
+.rsb-panel--modal .rsb-summary-avg {
+    border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+.rsb-summary-avg-emoji {
+    font-size: 1.3em;
+}
+
+.rsb-summary-avg-label {
+    font-size: 0.68em;
+    color: rgba(255, 255, 255, 0.35);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-.convo-preview-open-btn {
-    font-size: 0.68em;
-    color: rgba(99, 102, 241, 0.8);
-    background: rgba(99, 102, 241, 0.1);
-    border: 1px solid rgba(99, 102, 241, 0.2);
-    padding: 2px 8px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.15s ease;
+.rsb-panel--modal .rsb-summary-avg-label {
+    color: rgba(0, 0, 0, 0.4);
 }
 
-.convo-preview-open-btn:hover {
-    background: rgba(99, 102, 241, 0.2);
-    color: rgba(99, 102, 241, 1);
+.rsb-summary-avg-score {
+    font-size: 0.85em;
+    font-weight: 700;
+    color: rgba(147, 197, 253, 0.9);
 }
 
-.convo-preview-msg {
+.rsb-panel--modal .rsb-summary-avg-score {
+    color: #667eea;
+}
+
+.rsb-summary-empty {
     font-size: 0.75em;
-    color: rgba(255, 255, 255, 0.55);
-    padding: 4px 0;
+    color: rgba(255, 255, 255, 0.3);
+    text-align: center;
+    padding: 12px 0;
+    font-style: italic;
+}
+
+.rsb-panel--modal .rsb-summary-empty {
+    color: rgba(0, 0, 0, 0.35);
+}
+
+/* ========================================
+   RSB: Comments Tab
+   ======================================== */
+.rsb-comments-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.rsb-comments-list {
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.rsb-comments-list::-webkit-scrollbar { width: 3px; }
+.rsb-comments-list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
+.rsb-panel--modal .rsb-comments-list::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.1); }
+
+.rsb-comment {
+    padding: 5px 6px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    font-size: 0.78em;
     line-height: 1.4;
 }
 
-.convo-preview-msg:last-child {
+.rsb-panel--modal .rsb-comment {
+    border-bottom-color: rgba(0, 0, 0, 0.04);
+}
+
+.rsb-comment:last-child {
     border-bottom: none;
 }
 
-.convo-preview-msg-author {
+.rsb-comment-author {
     font-weight: 600;
     color: rgba(255, 255, 255, 0.7);
     margin-right: 4px;
 }
 
-.convo-preview-empty {
-    font-size: 0.72em;
-    color: rgba(255, 255, 255, 0.3);
-    font-style: italic;
-    padding: 8px 0;
-    text-align: center;
+.rsb-panel--modal .rsb-comment-author {
+    color: rgba(0, 0, 0, 0.7);
 }
 
-/* Mobile adjustments for reaction zone */
+.rsb-comment-text {
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.rsb-panel--modal .rsb-comment-text {
+    color: rgba(0, 0, 0, 0.6);
+}
+
+.rsb-comment-time {
+    font-size: 0.8em;
+    color: rgba(255, 255, 255, 0.25);
+    margin-left: 6px;
+}
+
+.rsb-panel--modal .rsb-comment-time {
+    color: rgba(0, 0, 0, 0.3);
+}
+
+.rsb-comment-reply-btn {
+    font-size: 0.75em;
+    color: rgba(99, 102, 241, 0.7);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 2px;
+    margin-left: 4px;
+    transition: color 0.12s ease;
+}
+
+.rsb-comment-reply-btn:hover {
+    color: rgba(99, 102, 241, 1);
+}
+
+.rsb-comments-empty {
+    font-size: 0.75em;
+    color: rgba(255, 255, 255, 0.3);
+    text-align: center;
+    padding: 10px 0;
+    font-style: italic;
+    cursor: pointer;
+}
+
+.rsb-panel--modal .rsb-comments-empty {
+    color: rgba(0, 0, 0, 0.35);
+}
+
+/* ── Comment input area ── */
+.rsb-comment-input-row {
+    display: flex;
+    gap: 4px;
+    padding: 6px 0 2px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    margin-top: 2px;
+    align-items: flex-end;
+}
+
+.rsb-panel--modal .rsb-comment-input-row {
+    border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+.rsb-comment-input {
+    flex: 1;
+    min-height: 28px;
+    max-height: 60px;
+    padding: 4px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.78em;
+    resize: none;
+    outline: none;
+    transition: border-color 0.15s ease;
+    font-family: inherit;
+}
+
+.rsb-panel--modal .rsb-comment-input {
+    border-color: rgba(0, 0, 0, 0.12);
+    background: rgba(0, 0, 0, 0.03);
+    color: rgba(0, 0, 0, 0.8);
+}
+
+.rsb-comment-input:focus {
+    border-color: rgba(59, 130, 246, 0.5);
+}
+
+.rsb-comment-input::placeholder {
+    color: rgba(255, 255, 255, 0.25);
+}
+
+.rsb-panel--modal .rsb-comment-input::placeholder {
+    color: rgba(0, 0, 0, 0.3);
+}
+
+.rsb-comment-submit-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(59, 130, 246, 0.2);
+    color: rgba(147, 197, 253, 0.8);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8em;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.rsb-comment-submit-btn:hover {
+    background: rgba(59, 130, 246, 0.4);
+    color: rgba(147, 197, 253, 1);
+}
+
+.rsb-panel--modal .rsb-comment-submit-btn {
+    background: rgba(102, 126, 234, 0.15);
+    color: #667eea;
+}
+
+.rsb-comment-submit-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.rsb-comment-reply-indicator {
+    font-size: 0.68em;
+    color: rgba(99, 102, 241, 0.7);
+    padding: 2px 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.rsb-comment-reply-cancel {
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.12s ease;
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: inherit;
+    padding: 0;
+}
+
+.rsb-comment-reply-cancel:hover {
+    opacity: 1;
+}
+
+.rsb-open-full-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    padding: 5px 0;
+    font-size: 0.68em;
+    color: rgba(99, 102, 241, 0.7);
+    background: none;
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+.rsb-panel--modal .rsb-open-full-btn {
+    border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+.rsb-open-full-btn:hover {
+    color: rgba(99, 102, 241, 1);
+}
+
+/* Mobile adjustments */
 @media (max-width: 480px) {
-    .explorer-emoji-btn {
+    .rsb-emoji-btn {
         width: 36px;
         height: 36px;
         font-size: 1.2em;
     }
 
-    .reaction-zone-explorer {
-        padding: 10px 8px 8px;
+    .rsb-panel {
+        left: -4px;
+        right: -4px;
+    }
+
+    .rsb-radial-container {
+        min-height: 180px;
     }
 
     .reaction-zone-comments-btn {
         padding: 3px 8px;
         font-size: 0.72em;
     }
+}
+
+/* ========================================
+   RSB: Layout Toggle Floating Button
+   ======================================== */
+.rsb-layout-toggle-fab {
+    position: fixed;
+    bottom: 80px;
+    right: 16px;
+    z-index: 9999;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(99, 102, 241, 0.9);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    font-size: 0.85em;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+body.presentation-active .rsb-layout-toggle-fab {
+    display: flex;
+}
+
+.rsb-layout-toggle-fab:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* Layout toggle popup */
+.rsb-layout-popup {
+    position: fixed;
+    bottom: 122px;
+    right: 16px;
+    z-index: 10000;
+    background: rgba(20, 20, 35, 0.97);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 8px;
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    min-width: 160px;
+}
+
+.rsb-layout-popup.visible {
+    display: flex;
+}
+
+.rsb-layout-popup-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.78em;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    text-align: left;
+    width: 100%;
+}
+
+.rsb-layout-popup-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.rsb-layout-popup-item.active {
+    background: rgba(99, 102, 241, 0.15);
+    color: rgba(147, 197, 253, 1);
+}
+
+.rsb-layout-popup-icon {
+    font-size: 1.2em;
+    width: 22px;
+    text-align: center;
 }
 
 /* ========================================

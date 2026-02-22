@@ -3832,18 +3832,117 @@ function initializeCompactCardClicks() {
 }
 
 // =============================================================================
-// INTERACTIVE REACTION ZONE (Compact Cards)
+// CONSOLIDATED REACTION SUMMARY BAR (RSB)
+// Unified reactions + comments + emoji picker for compact cards & detail modal
 // =============================================================================
 
-// Track which reaction zone explorer is currently open
-let activeReactionZone = null;
-let activeConvoPreview = null;
-// Number of tiers to show initially vs expanded
-const EXPLORER_INITIAL_TIERS = 2;
+// Track which RSB panel is currently open
+let activeRSBPanel = null;
+// Current RSB layout mode: 'bar' | 'radial-grid' | 'orbit' | 'minimal'
+let rsbLayoutMode = 'bar';
+// Number of tiers to show initially
+const RSB_INITIAL_TIERS = 2;
+// Radial ring tier index for navigation
+let rsbRadialTierIndex = 0;
+// Reply-to state for inline comments
+let rsbReplyingTo = null;
+
+// Layout configs for A/B testing
+const RSB_LAYOUTS = [
+    { id: 'bar', label: 'Tiered Rows', icon: '☰', description: 'Classic tiered layout' },
+    { id: 'radial-grid', label: 'Radial Grid', icon: '◎', description: 'Circular emoji arrangement' },
+    { id: 'orbit', label: 'Orbit', icon: '◌', description: 'Animated orbital layout' },
+    { id: 'minimal', label: 'Minimal', icon: '—', description: 'Quick row only' }
+];
+
+/**
+ * Get the current RSB layout mode, checking body attribute first.
+ */
+function getRSBLayout() {
+    return document.body.dataset.rsbLayout || rsbLayoutMode || 'bar';
+}
+
+/**
+ * Set the RSB layout mode globally.
+ */
+function setRSBLayout(layout) {
+    rsbLayoutMode = layout;
+    document.body.dataset.rsbLayout = layout;
+    // Re-render any open RSB panel
+    if (activeRSBPanel) {
+        const zone = activeRSBPanel;
+        const recordId = zone.dataset.recordId;
+        closeRSBPanel(zone);
+        // Remove old panel so it rebuilds
+        const oldPanel = zone.querySelector('.rsb-panel');
+        if (oldPanel) oldPanel.remove();
+        openRSBPanel(zone, recordId);
+    }
+    try { localStorage.setItem('rsb-layout', layout); } catch (_) {}
+}
+
+/**
+ * Initialize the layout toggle FAB and restore saved layout.
+ */
+function initRSBLayoutToggle() {
+    // Restore saved layout preference
+    try {
+        const saved = localStorage.getItem('rsb-layout');
+        if (saved && RSB_LAYOUTS.some(l => l.id === saved)) {
+            rsbLayoutMode = saved;
+            document.body.dataset.rsbLayout = saved;
+        }
+    } catch (_) {}
+
+    // Create FAB if not already present
+    if (document.querySelector('.rsb-layout-toggle-fab')) return;
+
+    const fab = document.createElement('button');
+    fab.className = 'rsb-layout-toggle-fab';
+    fab.title = 'Switch reaction bar layout';
+    fab.textContent = '⚙';
+    fab.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleRSBLayoutPopup();
+    });
+    document.body.appendChild(fab);
+
+    // Create popup
+    const popup = document.createElement('div');
+    popup.className = 'rsb-layout-popup';
+    popup.id = 'rsb-layout-popup';
+    RSB_LAYOUTS.forEach(layout => {
+        const item = document.createElement('button');
+        item.className = `rsb-layout-popup-item${layout.id === getRSBLayout() ? ' active' : ''}`;
+        item.dataset.layout = layout.id;
+        item.innerHTML = `<span class="rsb-layout-popup-icon">${layout.icon}</span> ${layout.label}`;
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setRSBLayout(layout.id);
+            popup.querySelectorAll('.rsb-layout-popup-item').forEach(i => i.classList.remove('active'));
+            item.classList.add('active');
+            popup.classList.remove('visible');
+        });
+        popup.appendChild(item);
+    });
+    document.body.appendChild(popup);
+
+    // Close popup on outside click
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.rsb-layout-toggle-fab') && !e.target.closest('.rsb-layout-popup')) {
+            popup.classList.remove('visible');
+        }
+    });
+}
+
+function toggleRSBLayoutPopup() {
+    const popup = document.getElementById('rsb-layout-popup');
+    if (popup) popup.classList.toggle('visible');
+}
 
 /**
  * Initialize interactive reaction zones on all compact cards.
- * Each zone shows an emoji explorer on hover/click and a conversation toggle.
+ * Each zone becomes a consolidated RSB with reactions, summary, and comments.
  */
 function initializeReactionZones() {
     if (!itineraryItemsListEl) return;
@@ -3852,141 +3951,221 @@ function initializeReactionZones() {
     zones.forEach(zone => {
         const recordId = zone.dataset.recordId;
 
-        // ── Hover: show explorer after a short delay ──
+        // ── Hover: show RSB panel after a short delay ──
         let hoverTimer = null;
         zone.addEventListener('mouseenter', () => {
             hoverTimer = setTimeout(() => {
-                showEmojiExplorer(zone, recordId);
-            }, 250);
+                openRSBPanel(zone, recordId);
+            }, 300);
         });
 
         zone.addEventListener('mouseleave', (e) => {
             clearTimeout(hoverTimer);
-            // Don't close if the mouse moved into the explorer itself
             const related = e.relatedTarget;
-            if (related && (related.closest('.reaction-zone-explorer') || related.closest('.compact-card-reaction-zone'))) {
+            if (related && (related.closest('.rsb-panel') || related.closest('.compact-card-reaction-zone'))) {
                 return;
             }
-            hideEmojiExplorer(zone);
+            closeRSBPanel(zone);
         });
 
-        // ── Click on the summary area: toggle explorer ──
+        // ── Click on the summary area: toggle RSB panel ──
         const summary = zone.querySelector('.reaction-zone-summary');
         if (summary) {
             summary.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const explorer = zone.querySelector('.reaction-zone-explorer');
-                if (explorer && explorer.classList.contains('visible')) {
-                    hideEmojiExplorer(zone);
+                const panel = zone.querySelector('.rsb-panel');
+                if (panel && panel.classList.contains('visible')) {
+                    closeRSBPanel(zone);
                 } else {
-                    showEmojiExplorer(zone, recordId);
+                    openRSBPanel(zone, recordId);
                 }
             });
         }
 
-        // ── Comments button: toggle conversation preview or open UCP ──
+        // ── Comments button: open RSB with comments tab active ──
         const commentsBtn = zone.querySelector('.reaction-zone-comments-btn');
         if (commentsBtn) {
             commentsBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const rid = commentsBtn.dataset.recordId;
-                // On mobile or small screens, open the UCP directly
-                if (window.innerWidth < 768) {
-                    openConversationForItem(rid);
-                } else {
-                    toggleConvoPreview(zone, rid);
-                }
+                openRSBPanel(zone, rid, 'comments');
             });
         }
     });
 
-    // Close any open explorer when clicking outside
-    document.addEventListener('click', handleReactionZoneOutsideClick);
+    // Close any open RSB panel when clicking outside
+    document.addEventListener('click', handleRSBOutsideClick);
+
+    // Initialize layout toggle FAB
+    initRSBLayoutToggle();
 }
 
 /**
- * Handle clicks outside the reaction zone to close open explorers.
+ * Handle clicks outside the RSB to close open panels.
  */
-function handleReactionZoneOutsideClick(e) {
-    if (activeReactionZone && !e.target.closest('.compact-card-reaction-zone')) {
-        hideEmojiExplorer(activeReactionZone);
-    }
-    if (activeConvoPreview && !e.target.closest('.compact-card-reaction-zone')) {
-        hideConvoPreview(activeConvoPreview);
+function handleRSBOutsideClick(e) {
+    if (activeRSBPanel && !e.target.closest('.compact-card-reaction-zone') && !e.target.closest('.rsb-panel')) {
+        closeRSBPanel(activeRSBPanel);
     }
 }
 
 /**
- * Build and show the emoji explorer popover for a reaction zone.
+ * Open the RSB panel for a reaction zone.
  * @param {HTMLElement} zone - The reaction zone container
  * @param {string} recordId - The item record ID
+ * @param {string} [activeTab='reactions'] - Which tab to show initially
  */
-function showEmojiExplorer(zone, recordId) {
-    // Close any other open explorer first
-    if (activeReactionZone && activeReactionZone !== zone) {
-        hideEmojiExplorer(activeReactionZone);
+function openRSBPanel(zone, recordId, activeTab) {
+    // Close any other open panel first
+    if (activeRSBPanel && activeRSBPanel !== zone) {
+        closeRSBPanel(activeRSBPanel);
     }
-    // Close conversation preview if open on this zone
-    hideConvoPreview(zone);
 
-    let explorer = zone.querySelector('.reaction-zone-explorer');
-    if (!explorer) {
-        explorer = buildEmojiExplorerDOM(recordId);
-        zone.appendChild(explorer);
+    let panel = zone.querySelector('.rsb-panel');
+    if (!panel) {
+        panel = buildRSBPanelDOM(recordId, false);
+        zone.appendChild(panel);
 
-        // Keep explorer open when mousing over it
-        explorer.addEventListener('mouseenter', () => {
-            explorer._keepOpen = true;
+        // Keep panel open when mousing over it
+        panel.addEventListener('mouseenter', () => {
+            panel._keepOpen = true;
         });
-        explorer.addEventListener('mouseleave', (e) => {
-            explorer._keepOpen = false;
+        panel.addEventListener('mouseleave', (e) => {
+            panel._keepOpen = false;
             const related = e.relatedTarget;
             if (!related || !related.closest('.compact-card-reaction-zone')) {
-                hideEmojiExplorer(zone);
+                closeRSBPanel(zone);
             }
         });
     } else {
-        // Refresh content in case reactions changed
-        refreshEmojiExplorerContent(explorer, recordId);
+        refreshRSBPanel(panel, recordId);
+    }
+
+    // Switch to requested tab
+    if (activeTab) {
+        switchRSBTab(panel, activeTab);
     }
 
     requestAnimationFrame(() => {
-        explorer.classList.add('visible');
+        panel.classList.add('visible');
     });
 
-    activeReactionZone = zone;
+    activeRSBPanel = zone;
 }
 
 /**
- * Hide the emoji explorer for a reaction zone.
- * @param {HTMLElement} zone - The reaction zone container
+ * Close the RSB panel.
  */
-function hideEmojiExplorer(zone) {
+function closeRSBPanel(zone) {
     if (!zone) return;
-    const explorer = zone.querySelector('.reaction-zone-explorer');
-    if (explorer && explorer._keepOpen) return;
-    if (explorer) {
-        explorer.classList.remove('visible');
-    }
+    const panel = zone.querySelector('.rsb-panel');
+    if (panel && panel._keepOpen) return;
+    if (panel) panel.classList.remove('visible');
     // Restore summary from preview state
     const summary = zone.querySelector('.reaction-zone-summary');
     if (summary) summary.classList.remove('previewing');
-    if (activeReactionZone === zone) activeReactionZone = null;
+    if (activeRSBPanel === zone) activeRSBPanel = null;
+    rsbReplyingTo = null;
 }
 
 /**
- * Build the emoji explorer DOM element with tiered emoji rows.
- * Layout: rows ordered by sentiment (positive to negative) with
- * increasing obscurity as more tiers load.
+ * Build the complete RSB panel DOM with tabs for reactions, summary, and comments.
  * @param {string} recordId - The item record ID
- * @returns {HTMLElement} The explorer element
+ * @param {boolean} isModal - Whether this is for the detail modal
+ * @returns {HTMLElement}
  */
-function buildEmojiExplorerDOM(recordId) {
-    const explorer = document.createElement('div');
-    explorer.className = 'reaction-zone-explorer';
-    explorer.dataset.recordId = recordId;
+function buildRSBPanelDOM(recordId, isModal) {
+    const panel = document.createElement('div');
+    panel.className = `rsb-panel${isModal ? ' rsb-panel--modal' : ''}`;
+    panel.dataset.recordId = recordId;
 
-    // Get current user's reaction
+    // ── Tabs ──
+    const tabs = document.createElement('div');
+    tabs.className = 'rsb-tabs';
+
+    const reactionCount = getItemReactionCount(recordId);
+    const commentCacheKey = `item:${recordId}`;
+    const comments = componentCommentsCache.get(commentCacheKey) || [];
+
+    const tabConfigs = [
+        { id: 'reactions', label: 'React', badge: '' },
+        { id: 'summary', label: 'Summary', badge: reactionCount > 0 ? reactionCount : '' },
+        { id: 'comments', label: 'Comments', badge: comments.length > 0 ? comments.length : '' }
+    ];
+
+    tabConfigs.forEach((tc, idx) => {
+        const tab = document.createElement('button');
+        tab.className = `rsb-tab${idx === 0 ? ' active' : ''}`;
+        tab.dataset.tab = tc.id;
+        tab.innerHTML = `${tc.label}${tc.badge ? `<span class="rsb-tab-badge">${tc.badge}</span>` : ''}`;
+        tab.addEventListener('click', (e) => {
+            e.stopPropagation();
+            switchRSBTab(panel, tc.id);
+        });
+        tabs.appendChild(tab);
+    });
+    panel.appendChild(tabs);
+
+    // ── Tab content: Reactions ──
+    const reactionsContent = document.createElement('div');
+    reactionsContent.className = 'rsb-tab-content active';
+    reactionsContent.dataset.tabContent = 'reactions';
+    buildRSBReactionsContent(reactionsContent, recordId, isModal);
+    panel.appendChild(reactionsContent);
+
+    // ── Tab content: Summary ──
+    const summaryContent = document.createElement('div');
+    summaryContent.className = 'rsb-tab-content';
+    summaryContent.dataset.tabContent = 'summary';
+    buildRSBSummaryContent(summaryContent, recordId);
+    panel.appendChild(summaryContent);
+
+    // ── Tab content: Comments ──
+    const commentsContent = document.createElement('div');
+    commentsContent.className = 'rsb-tab-content';
+    commentsContent.dataset.tabContent = 'comments';
+    buildRSBCommentsContent(commentsContent, recordId);
+    panel.appendChild(commentsContent);
+
+    return panel;
+}
+
+/**
+ * Switch between tabs in the RSB panel.
+ */
+function switchRSBTab(panel, tabId) {
+    panel.querySelectorAll('.rsb-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === tabId);
+    });
+    panel.querySelectorAll('.rsb-tab-content').forEach(c => {
+        c.classList.toggle('active', c.dataset.tabContent === tabId);
+    });
+}
+
+/**
+ * Build the reactions tab content based on current layout mode.
+ */
+function buildRSBReactionsContent(container, recordId, isModal) {
+    container.innerHTML = '';
+    const layout = getRSBLayout();
+
+    // Layout toggle row (small buttons to switch between layouts)
+    const toggleRow = document.createElement('div');
+    toggleRow.className = 'rsb-layout-toggle';
+    RSB_LAYOUTS.forEach(l => {
+        const btn = document.createElement('button');
+        btn.className = `rsb-layout-btn${l.id === layout ? ' active' : ''}`;
+        btn.title = l.description;
+        btn.textContent = l.icon;
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setRSBLayout(l.id);
+        });
+        toggleRow.appendChild(btn);
+    });
+    container.appendChild(toggleRow);
+
+    // Get current user's emoji
     let currentUserEmoji = null;
     try {
         const user = getCurrentUser();
@@ -3996,135 +4175,588 @@ function buildEmojiExplorerDOM(recordId) {
         }
     } catch (_) { /* anonymous */ }
 
-    // Build initial tiers (first 2 for quick access)
-    const tiers = EMOJI_TIERS;
-    const initialCount = Math.min(EXPLORER_INITIAL_TIERS, tiers.length);
+    const emojiLayout = document.createElement('div');
+    emojiLayout.className = 'rsb-emoji-layout';
 
-    for (let i = 0; i < initialCount; i++) {
-        explorer.appendChild(buildExplorerTierRow(tiers[i], recordId, currentUserEmoji));
+    switch (layout) {
+        case 'radial-grid':
+            buildRSBRadialGrid(emojiLayout, recordId, currentUserEmoji, isModal);
+            break;
+        case 'orbit':
+            buildRSBOrbit(emojiLayout, recordId, currentUserEmoji, isModal);
+            break;
+        case 'minimal':
+            buildRSBMinimal(emojiLayout, recordId, currentUserEmoji);
+            break;
+        default: // 'bar'
+            buildRSBTieredRows(emojiLayout, recordId, currentUserEmoji);
+            break;
     }
 
-    // Add "show more" button if there are additional tiers
+    container.appendChild(emojiLayout);
+}
+
+/**
+ * Build tiered rows layout (default "bar" layout).
+ */
+function buildRSBTieredRows(container, recordId, currentUserEmoji) {
+    const tiersEl = document.createElement('div');
+    tiersEl.className = 'rsb-emoji-tiers';
+
+    const tiers = EMOJI_TIERS;
+    const initialCount = Math.min(RSB_INITIAL_TIERS, tiers.length);
+
+    for (let i = 0; i < initialCount; i++) {
+        tiersEl.appendChild(buildRSBTierRow(tiers[i], recordId, currentUserEmoji));
+    }
+
+    // Expand more button
     if (tiers.length > initialCount) {
         const expandBtn = document.createElement('div');
-        expandBtn.className = 'explorer-expand-more';
+        expandBtn.className = 'rsb-expand-more';
         expandBtn.textContent = `Show ${tiers.length - initialCount} more tiers...`;
         expandBtn.dataset.expanded = 'false';
         expandBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             if (expandBtn.dataset.expanded === 'false') {
-                // Add remaining tiers
                 for (let i = initialCount; i < tiers.length; i++) {
-                    explorer.insertBefore(
-                        buildExplorerTierRow(tiers[i], recordId, currentUserEmoji),
-                        expandBtn
-                    );
+                    tiersEl.insertBefore(buildRSBTierRow(tiers[i], recordId, currentUserEmoji), expandBtn);
                 }
                 expandBtn.textContent = 'Show fewer';
                 expandBtn.dataset.expanded = 'true';
             } else {
-                // Remove the extra tiers
-                const tierRows = explorer.querySelectorAll('.explorer-tier');
-                for (let i = tierRows.length - 1; i >= initialCount; i--) {
-                    tierRows[i].remove();
+                const rows = tiersEl.querySelectorAll('.rsb-emoji-tier');
+                for (let i = rows.length - 1; i >= initialCount; i--) {
+                    rows[i].remove();
                 }
                 expandBtn.textContent = `Show ${tiers.length - initialCount} more tiers...`;
                 expandBtn.dataset.expanded = 'false';
             }
         });
-        explorer.appendChild(expandBtn);
+        tiersEl.appendChild(expandBtn);
     }
 
-    return explorer;
+    container.appendChild(tiersEl);
 }
 
 /**
- * Build a single tier row for the emoji explorer.
- * @param {Object} tier - The tier config from EMOJI_TIERS
- * @param {string} recordId - The item record ID
- * @param {string|null} currentUserEmoji - The current user's selected emoji
- * @returns {HTMLElement}
+ * Build a single tier row.
  */
-function buildExplorerTierRow(tier, recordId, currentUserEmoji) {
-    const tierRow = document.createElement('div');
-    tierRow.className = 'explorer-tier';
+function buildRSBTierRow(tier, recordId, currentUserEmoji) {
+    const row = document.createElement('div');
+    row.className = 'rsb-emoji-tier';
 
-    // Tier label
     const label = document.createElement('div');
-    label.className = 'explorer-tier-label';
-    label.innerHTML = `${tier.label} <span class="explorer-tier-score-hint">${tier.description}</span>`;
-    tierRow.appendChild(label);
+    label.className = 'rsb-emoji-tier-label';
+    label.innerHTML = `${tier.label} <span class="rsb-emoji-tier-hint">${tier.description}</span>`;
+    row.appendChild(label);
 
-    // Emoji grid
     const grid = document.createElement('div');
-    grid.className = 'explorer-tier-emojis';
+    grid.className = 'rsb-emoji-tier-grid';
 
     tier.emojis.forEach(emoji => {
-        const btn = document.createElement('button');
-        btn.className = `explorer-emoji-btn${currentUserEmoji === emoji ? ' selected' : ''}`;
-        btn.textContent = emoji;
-        btn.dataset.emoji = emoji;
-        btn.dataset.recordId = recordId;
+        grid.appendChild(buildRSBEmojiButton(emoji, recordId, currentUserEmoji));
+    });
+
+    row.appendChild(grid);
+    return row;
+}
+
+/**
+ * Build a single emoji button for any RSB layout.
+ */
+function buildRSBEmojiButton(emoji, recordId, currentUserEmoji) {
+    const btn = document.createElement('button');
+    btn.className = `rsb-emoji-btn${currentUserEmoji === emoji ? ' selected' : ''}`;
+    btn.textContent = emoji;
+    btn.dataset.emoji = emoji;
+    btn.dataset.recordId = recordId;
+    const score = REACTION_SCORES[emoji] || 0;
+    btn.dataset.scoreLabel = `${score >= 0 ? '+' : ''}${score.toFixed(1)}`;
+
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleRSBEmojiSelect(recordId, emoji, btn);
+    });
+
+    btn.addEventListener('mouseenter', () => {
+        handleRSBEmojiPreview(recordId, emoji);
+    });
+    btn.addEventListener('mouseleave', () => {
+        clearRSBEmojiPreview(recordId);
+    });
+
+    return btn;
+}
+
+/**
+ * Build radial grid layout - emojis arranged in circular rings.
+ */
+function buildRSBRadialGrid(container, recordId, currentUserEmoji, isModal) {
+    const radial = document.createElement('div');
+    radial.className = 'rsb-radial-container';
+
+    // Center hub showing current summary
+    const center = document.createElement('div');
+    center.className = 'rsb-radial-center';
+    const summaryEmoji = getItemSummaryEmoji(recordId) || '😊';
+    const reactions = state.session.reactions?.get(recordId);
+    let avgScore = 0;
+    if (reactions && reactions instanceof Map && reactions.size > 0) {
+        let total = 0;
+        reactions.forEach(e => { total += (REACTION_SCORES[e] || 0); });
+        avgScore = total / reactions.size;
+    }
+    center.innerHTML = `
+        <span class="rsb-radial-center-emoji">${summaryEmoji}</span>
+        <span class="rsb-radial-center-score">${avgScore !== 0 ? (avgScore >= 0 ? '+' : '') + avgScore.toFixed(1) : ''}</span>
+    `;
+    radial.appendChild(center);
+
+    // Get current tier emojis for the rings
+    const tiers = EMOJI_TIERS;
+    const innerTier = tiers[rsbRadialTierIndex] || tiers[0];
+    const outerTier = tiers[Math.min(rsbRadialTierIndex + 1, tiers.length - 1)] || tiers[0];
+
+    // Inner ring (primary tier)
+    const ring1 = document.createElement('div');
+    ring1.className = 'rsb-radial-ring';
+    ring1.dataset.ring = '1';
+    const r1 = 65; // radius for inner ring
+    innerTier.emojis.forEach((emoji, i) => {
+        const angle = (i / innerTier.emojis.length) * Math.PI * 2 - Math.PI / 2;
+        const btn = buildRSBEmojiButton(emoji, recordId, currentUserEmoji);
+        const x = Math.cos(angle) * r1;
+        const y = Math.sin(angle) * r1;
+        btn.style.left = `calc(50% + ${x}px - 18px)`;
+        btn.style.top = `calc(50% + ${y}px - 18px)`;
+        ring1.appendChild(btn);
+    });
+    radial.appendChild(ring1);
+
+    // Outer ring (next tier, dimmer)
+    if (outerTier !== innerTier) {
+        const ring2 = document.createElement('div');
+        ring2.className = 'rsb-radial-ring';
+        ring2.dataset.ring = '2';
+        const r2 = 100;
+        outerTier.emojis.slice(0, 12).forEach((emoji, i) => {
+            const count = Math.min(outerTier.emojis.length, 12);
+            const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
+            const btn = buildRSBEmojiButton(emoji, recordId, currentUserEmoji);
+            const x = Math.cos(angle) * r2;
+            const y = Math.sin(angle) * r2;
+            btn.style.left = `calc(50% + ${x}px - 14px)`;
+            btn.style.top = `calc(50% + ${y}px - 14px)`;
+            ring2.appendChild(btn);
+        });
+        radial.appendChild(ring2);
+    }
+
+    // Navigation arrows to cycle through tiers
+    const navPrev = document.createElement('button');
+    navPrev.className = 'rsb-radial-nav';
+    navPrev.textContent = '◀';
+    navPrev.style.cssText = 'left: 4px; top: 50%; transform: translateY(-50%);';
+    navPrev.title = 'Previous tier';
+    navPrev.addEventListener('click', (e) => {
+        e.stopPropagation();
+        rsbRadialTierIndex = Math.max(0, rsbRadialTierIndex - 1);
+        rebuildRSBReactionsContent(container.closest('.rsb-tab-content') || container.closest('[data-tab-content="reactions"]'), recordId, isModal);
+    });
+
+    const navNext = document.createElement('button');
+    navNext.className = 'rsb-radial-nav';
+    navNext.textContent = '▶';
+    navNext.style.cssText = 'right: 4px; top: 50%; transform: translateY(-50%);';
+    navNext.title = 'Next tier';
+    navNext.addEventListener('click', (e) => {
+        e.stopPropagation();
+        rsbRadialTierIndex = Math.min(tiers.length - 2, rsbRadialTierIndex + 1);
+        rebuildRSBReactionsContent(container.closest('.rsb-tab-content') || container.closest('[data-tab-content="reactions"]'), recordId, isModal);
+    });
+
+    radial.appendChild(navPrev);
+    radial.appendChild(navNext);
+
+    // Tier label
+    const tierLabel = document.createElement('div');
+    tierLabel.className = 'rsb-emoji-tier-label';
+    tierLabel.style.textAlign = 'center';
+    tierLabel.style.justifyContent = 'center';
+    tierLabel.innerHTML = `${innerTier.label} <span class="rsb-emoji-tier-hint">(${rsbRadialTierIndex + 1}/${tiers.length})</span>`;
+    radial.appendChild(tierLabel);
+
+    container.appendChild(radial);
+}
+
+/**
+ * Build orbit layout - emojis orbiting around center.
+ */
+function buildRSBOrbit(container, recordId, currentUserEmoji, isModal) {
+    const orbit = document.createElement('div');
+    orbit.className = 'rsb-orbit-container';
+
+    // Center hub
+    const center = document.createElement('div');
+    center.className = 'rsb-radial-center';
+    const summaryEmoji = getItemSummaryEmoji(recordId) || '😊';
+    center.innerHTML = `<span class="rsb-radial-center-emoji">${summaryEmoji}</span>`;
+    orbit.appendChild(center);
+
+    const tiers = EMOJI_TIERS;
+    // Track 1: Quick reactions
+    const track1 = document.createElement('div');
+    track1.className = 'rsb-orbit-track';
+    track1.dataset.track = '1';
+    const t1Emojis = tiers[0].emojis;
+    t1Emojis.forEach((emoji, i) => {
+        const angle = (i / t1Emojis.length) * 360;
+        const btn = buildRSBEmojiButton(emoji, recordId, currentUserEmoji);
+        btn.style.left = '50%';
+        btn.style.top = '0';
+        btn.style.transform = `rotate(${angle}deg) translateY(-75px) rotate(-${angle}deg)`;
+        track1.appendChild(btn);
+    });
+    orbit.appendChild(track1);
+
+    // Track 2: Positive vibes
+    if (tiers.length > 1) {
+        const track2 = document.createElement('div');
+        track2.className = 'rsb-orbit-track';
+        track2.dataset.track = '2';
+        const t2Emojis = tiers[1].emojis.slice(0, 10);
+        t2Emojis.forEach((emoji, i) => {
+            const angle = (i / t2Emojis.length) * 360;
+            const btn = buildRSBEmojiButton(emoji, recordId, currentUserEmoji);
+            btn.style.left = '50%';
+            btn.style.top = '0';
+            btn.style.transform = `rotate(${angle}deg) translateY(-110px) rotate(-${angle}deg)`;
+            track2.appendChild(btn);
+        });
+        orbit.appendChild(track2);
+    }
+
+    container.appendChild(orbit);
+}
+
+/**
+ * Build minimal layout - just a single row of quick emojis.
+ */
+function buildRSBMinimal(container, recordId, currentUserEmoji) {
+    const row = document.createElement('div');
+    row.className = 'rsb-minimal-row';
+
+    // Show first tier plus a selection from other tiers
+    const quickEmojis = EMOJI_TIERS[0].emojis;
+    quickEmojis.forEach(emoji => {
+        row.appendChild(buildRSBEmojiButton(emoji, recordId, currentUserEmoji));
+    });
+
+    container.appendChild(row);
+}
+
+/**
+ * Helper to rebuild the reactions content when layout changes.
+ */
+function rebuildRSBReactionsContent(contentEl, recordId, isModal) {
+    if (!contentEl) return;
+    buildRSBReactionsContent(contentEl, recordId, isModal);
+}
+
+/**
+ * Build the reaction summary tab content.
+ */
+function buildRSBSummaryContent(container, recordId) {
+    container.innerHTML = '';
+
+    const summaryDiv = document.createElement('div');
+    summaryDiv.className = 'rsb-reaction-summary';
+
+    const reactions = state.session.reactions?.get(recordId);
+
+    if (!reactions || !(reactions instanceof Map) || reactions.size === 0) {
+        summaryDiv.innerHTML = '<div class="rsb-summary-empty">No reactions yet — react to be the first!</div>';
+        container.appendChild(summaryDiv);
+        return;
+    }
+
+    // Build pills for each unique emoji
+    const emojiCounts = {};
+    let totalScore = 0;
+    reactions.forEach((emoji) => {
+        emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
+        totalScore += (REACTION_SCORES[emoji] || 0);
+    });
+    const avg = totalScore / reactions.size;
+
+    const pillsDiv = document.createElement('div');
+    pillsDiv.className = 'rsb-summary-pills';
+    const sorted = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]);
+    sorted.forEach(([emoji, count]) => {
         const score = REACTION_SCORES[emoji] || 0;
-        btn.dataset.scoreLabel = `${score >= 0 ? '+' : ''}${score.toFixed(1)}`;
+        const pill = document.createElement('span');
+        pill.className = 'rsb-summary-pill';
+        pill.innerHTML = `
+            <span class="rsb-summary-pill-emoji">${emoji}</span>
+            <span class="rsb-summary-pill-count">${count}</span>
+            <span class="rsb-summary-pill-score">${score >= 0 ? '+' : ''}${score.toFixed(1)}</span>
+        `;
+        pillsDiv.appendChild(pill);
+    });
+    summaryDiv.appendChild(pillsDiv);
 
-        // Click: select/toggle this emoji
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            handleReactionZoneEmojiSelect(recordId, emoji, btn);
-        });
+    // Who reacted
+    const whoDiv = document.createElement('div');
+    whoDiv.className = 'rsb-summary-who';
+    const userNames = [];
+    reactions.forEach((emoji, userId) => {
+        const name = state.session.userProfiles?.get(userId) || 'Someone';
+        userNames.push(`${name} ${emoji}`);
+    });
+    const whoText = userNames.length <= 3
+        ? userNames.join(', ')
+        : `${userNames.slice(0, 2).join(', ')} & ${userNames.length - 2} more`;
+    whoDiv.textContent = whoText;
+    summaryDiv.appendChild(whoDiv);
 
-        // Hover: live preview on the summary
-        btn.addEventListener('mouseenter', () => {
-            handleReactionZoneEmojiPreview(recordId, emoji);
-        });
-        btn.addEventListener('mouseleave', () => {
-            clearReactionZoneEmojiPreview(recordId);
-        });
-
-        grid.appendChild(btn);
+    // Average score
+    let closestEmoji = '😊';
+    let closestDiff = Infinity;
+    Object.entries(REACTION_SCORES).forEach(([e, s]) => {
+        const d = Math.abs(s - avg);
+        if (d < closestDiff) { closestDiff = d; closestEmoji = e; }
     });
 
-    tierRow.appendChild(grid);
-    return tierRow;
+    const avgDiv = document.createElement('div');
+    avgDiv.className = 'rsb-summary-avg';
+    avgDiv.innerHTML = `
+        <span class="rsb-summary-avg-emoji">${closestEmoji}</span>
+        <span class="rsb-summary-avg-label">Average Sentiment</span>
+        <span class="rsb-summary-avg-score">${avg >= 0 ? '+' : ''}${avg.toFixed(2)}</span>
+    `;
+    summaryDiv.appendChild(avgDiv);
+
+    container.appendChild(summaryDiv);
 }
 
 /**
- * Refresh the emoji explorer content (selected states) without rebuilding.
- * @param {HTMLElement} explorer - The explorer element
- * @param {string} recordId - The item record ID
+ * Build the comments tab content with inline reply support.
  */
-function refreshEmojiExplorerContent(explorer, recordId) {
-    let currentUserEmoji = null;
-    try {
-        const user = getCurrentUser();
-        const reactions = state.session.reactions?.get(recordId);
-        if (reactions instanceof Map) {
-            currentUserEmoji = reactions.get(user.id);
+function buildRSBCommentsContent(container, recordId) {
+    container.innerHTML = '';
+
+    const section = document.createElement('div');
+    section.className = 'rsb-comments-section';
+
+    const cacheKey = `item:${recordId}`;
+    const comments = componentCommentsCache.get(cacheKey) || [];
+
+    // Comments list
+    const list = document.createElement('div');
+    list.className = 'rsb-comments-list';
+
+    if (comments.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'rsb-comments-empty';
+        empty.textContent = 'No comments yet. Start the conversation!';
+        list.appendChild(empty);
+    } else {
+        comments.forEach(comment => {
+            const commentEl = document.createElement('div');
+            commentEl.className = 'rsb-comment';
+            const author = comment.fields?.SenderName || comment.senderName || 'Someone';
+            const content = comment.fields?.Content || comment.content || '';
+            const time = comment.fields?.CreatedTime || comment.createdTime || '';
+            let timeStr = '';
+            if (time) {
+                try {
+                    const d = new Date(time);
+                    timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                } catch (_) {}
+            }
+
+            commentEl.innerHTML = `
+                <span class="rsb-comment-author">${escapeHtml(author)}</span>
+                <span class="rsb-comment-text">${escapeHtml(content)}</span>
+                ${timeStr ? `<span class="rsb-comment-time">${timeStr}</span>` : ''}
+                <button class="rsb-comment-reply-btn" data-author="${escapeHtml(author)}">↩</button>
+            `;
+
+            // Reply button handler
+            const replyBtn = commentEl.querySelector('.rsb-comment-reply-btn');
+            if (replyBtn) {
+                replyBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    rsbReplyingTo = { author, commentId: comment.id };
+                    const replyIndicator = container.querySelector('.rsb-comment-reply-indicator');
+                    if (replyIndicator) {
+                        replyIndicator.style.display = 'flex';
+                        replyIndicator.querySelector('span').textContent = `Replying to ${author}`;
+                    }
+                    const input = container.querySelector('.rsb-comment-input');
+                    if (input) input.focus();
+                });
+            }
+
+            list.appendChild(commentEl);
+        });
+        // Auto-scroll to latest
+        requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
+    }
+    section.appendChild(list);
+
+    // Reply indicator
+    const replyIndicator = document.createElement('div');
+    replyIndicator.className = 'rsb-comment-reply-indicator';
+    replyIndicator.style.display = 'none';
+    replyIndicator.innerHTML = `
+        <span>Replying to ...</span>
+        <button class="rsb-comment-reply-cancel">✕</button>
+    `;
+    replyIndicator.querySelector('.rsb-comment-reply-cancel').addEventListener('click', (e) => {
+        e.stopPropagation();
+        rsbReplyingTo = null;
+        replyIndicator.style.display = 'none';
+    });
+    section.appendChild(replyIndicator);
+
+    // Comment input row
+    const inputRow = document.createElement('div');
+    inputRow.className = 'rsb-comment-input-row';
+
+    const input = document.createElement('textarea');
+    input.className = 'rsb-comment-input';
+    input.placeholder = 'Add a comment...';
+    input.rows = 1;
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            submitRSBComment(recordId, container);
         }
-    } catch (_) { /* anonymous */ }
-
-    const buttons = explorer.querySelectorAll('.explorer-emoji-btn');
-    buttons.forEach(btn => {
-        btn.classList.toggle('selected', btn.dataset.emoji === currentUserEmoji);
     });
+    inputRow.appendChild(input);
+
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'rsb-comment-submit-btn';
+    submitBtn.textContent = '→';
+    submitBtn.title = 'Send';
+    submitBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        submitRSBComment(recordId, container);
+    });
+    inputRow.appendChild(submitBtn);
+    section.appendChild(inputRow);
+
+    // "Open Full" button
+    const openFullBtn = document.createElement('button');
+    openFullBtn.className = 'rsb-open-full-btn';
+    openFullBtn.textContent = 'Open Full Conversation →';
+    openFullBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openConversationForItem(recordId);
+    });
+    section.appendChild(openFullBtn);
+
+    container.appendChild(section);
 }
 
 /**
- * Handle emoji selection from the reaction zone explorer.
- * @param {string} recordId - The item record ID
- * @param {string} emoji - The selected emoji
- * @param {HTMLElement} btn - The button element
+ * Submit a comment from the RSB inline input.
  */
-function handleReactionZoneEmojiSelect(recordId, emoji, btn) {
+async function submitRSBComment(recordId, container) {
+    const input = container.querySelector('.rsb-comment-input');
+    if (!input) return;
+
+    let content = input.value.trim();
+    if (!content) return;
+
+    const sessionId = state.session.id;
+    let currentUser;
+    try { currentUser = getCurrentUser(); } catch (_) { return; }
+    if (!sessionId || !currentUser) return;
+
+    // Prepend reply mention if replying
+    if (rsbReplyingTo) {
+        content = `@${rsbReplyingTo.author}: ${content}`;
+    }
+
+    input.disabled = true;
+
+    try {
+        await api.postComponentComment(
+            sessionId,
+            api.COMPONENT_TYPES.ITEM,
+            recordId,
+            currentUser.id,
+            currentUser.name || currentUser.email || 'Anonymous',
+            content,
+            rsbReplyingTo?.commentId || null
+        );
+
+        // Clear input
+        input.value = '';
+        rsbReplyingTo = null;
+        const replyIndicator = container.querySelector('.rsb-comment-reply-indicator');
+        if (replyIndicator) replyIndicator.style.display = 'none';
+
+        // Refresh comments cache and rebuild
+        const cacheKey = `item:${recordId}`;
+        const freshComments = await api.fetchComponentComments(sessionId, api.COMPONENT_TYPES.ITEM, recordId);
+        componentCommentsCache.set(cacheKey, freshComments);
+        buildRSBCommentsContent(container, recordId);
+
+        // Update comment count badge on the reaction zone
+        const zone = document.querySelector(`.compact-card-reaction-zone[data-record-id="${recordId}"]`);
+        if (zone) {
+            const countEl = zone.querySelector('.reaction-zone-comments-btn span:last-child');
+            if (countEl) countEl.textContent = freshComments.length || '';
+        }
+
+        // Update tab badge
+        const panel = container.closest('.rsb-panel');
+        if (panel) {
+            const commentsTab = panel.querySelector('.rsb-tab[data-tab="comments"]');
+            if (commentsTab) {
+                const badge = commentsTab.querySelector('.rsb-tab-badge');
+                if (badge) {
+                    badge.textContent = freshComments.length;
+                } else if (freshComments.length > 0) {
+                    commentsTab.innerHTML += `<span class="rsb-tab-badge">${freshComments.length}</span>`;
+                }
+            }
+        }
+    } catch (err) {
+        log('RSB', `Error posting comment: ${err.message}`);
+        showToast('Failed to post comment. Please try again.', 'error');
+    } finally {
+        input.disabled = false;
+        input.focus();
+    }
+}
+
+/**
+ * Handle emoji selection from the RSB.
+ */
+function handleRSBEmojiSelect(recordId, emoji, btn) {
     // Reuse the existing selectEmoji function which handles state, Pusher, and save
     selectEmoji(recordId, emoji);
 
-    // Update selected state in the explorer
-    const explorer = btn.closest('.reaction-zone-explorer');
-    if (explorer) {
-        refreshEmojiExplorerContent(explorer, recordId);
+    // Update selected state in all visible RSB emoji buttons for this record
+    document.querySelectorAll(`.rsb-emoji-btn[data-record-id="${recordId}"]`).forEach(b => {
+        b.classList.toggle('selected', b.dataset.emoji === emoji && !btn.classList.contains('selected'));
+    });
+
+    // Refresh the whole panel if it's open
+    const zone = document.querySelector(`.compact-card-reaction-zone[data-record-id="${recordId}"]`);
+    if (zone) {
+        const panel = zone.querySelector('.rsb-panel');
+        if (panel) refreshRSBPanel(panel, recordId);
     }
+
+    // Also refresh any modal RSB
+    const modalPanel = document.querySelector('.rsb-panel--modal[data-record-id="' + recordId + '"]');
+    if (modalPanel) refreshRSBPanel(modalPanel, recordId);
 
     // Update the reaction zone summary on this card
     updateReactionZoneSummary(recordId);
@@ -4132,10 +4764,8 @@ function handleReactionZoneEmojiSelect(recordId, emoji, btn) {
 
 /**
  * Live preview: show what the summary would look like with this emoji.
- * @param {string} recordId - The item record ID
- * @param {string} emoji - The emoji being previewed
  */
-function handleReactionZoneEmojiPreview(recordId, emoji) {
+function handleRSBEmojiPreview(recordId, emoji) {
     const zone = document.querySelector(`.compact-card-reaction-zone[data-record-id="${recordId}"]`);
     if (!zone) return;
 
@@ -4145,12 +4775,11 @@ function handleReactionZoneEmojiPreview(recordId, emoji) {
     const scoreEl = zone.querySelector('.reaction-zone-summary-score');
     if (!summaryEl) return;
 
-    // Calculate preview
     const previewData = calculateReactionPreview(recordId, emoji);
 
     summaryEl.classList.add('previewing');
     if (emojiEl) emojiEl.textContent = previewData.summaryEmoji;
-    if (textEl) textEl.textContent = `Preview: ${emoji} would ${previewData.isToggleOff ? 'remove' : 'change'} to ${previewData.summaryEmoji}`;
+    if (textEl) textEl.textContent = `Preview: ${emoji} → ${previewData.summaryEmoji}`;
     if (scoreEl) {
         scoreEl.textContent = `${previewData.average >= 0 ? '+' : ''}${previewData.average.toFixed(1)}`;
     }
@@ -4158,25 +4787,18 @@ function handleReactionZoneEmojiPreview(recordId, emoji) {
 
 /**
  * Clear the live preview and restore actual values.
- * @param {string} recordId - The item record ID
  */
-function clearReactionZoneEmojiPreview(recordId) {
+function clearRSBEmojiPreview(recordId) {
     const zone = document.querySelector(`.compact-card-reaction-zone[data-record-id="${recordId}"]`);
     if (!zone) return;
-
     const summaryEl = zone.querySelector('.reaction-zone-summary');
     if (!summaryEl) return;
     summaryEl.classList.remove('previewing');
-
-    // Restore actual summary
     updateReactionZoneSummary(recordId);
 }
 
 /**
  * Calculate what the reaction summary would look like if the user toggled this emoji.
- * @param {string} recordId - The item record ID
- * @param {string} previewEmojiValue - The emoji being previewed
- * @returns {Object} { count, total, average, summaryEmoji, isToggleOff }
  */
 function calculateReactionPreview(recordId, previewEmojiValue) {
     const reactions = state.session.reactions?.get(recordId);
@@ -4185,11 +4807,8 @@ function calculateReactionPreview(recordId, previewEmojiValue) {
     let currentUserReaction = null;
 
     let currentUser;
-    try {
-        currentUser = getCurrentUser();
-    } catch (_) {
-        currentUser = { id: 'anonymous', name: 'Anonymous' };
-    }
+    try { currentUser = getCurrentUser(); }
+    catch (_) { currentUser = { id: 'anonymous', name: 'Anonymous' }; }
 
     if (reactions && reactions instanceof Map) {
         reactions.forEach((emoji, userId) => {
@@ -4200,41 +4819,31 @@ function calculateReactionPreview(recordId, previewEmojiValue) {
     }
 
     const isToggleOff = currentUserReaction === previewEmojiValue;
-
     if (isToggleOff) {
-        // Removing: subtract current reaction
         total -= (REACTION_SCORES[currentUserReaction] || 0);
         count -= 1;
     } else if (currentUserReaction) {
-        // Changing: swap
         total -= (REACTION_SCORES[currentUserReaction] || 0);
         total += (REACTION_SCORES[previewEmojiValue] || 0);
     } else {
-        // Adding new
         total += (REACTION_SCORES[previewEmojiValue] || 0);
         count += 1;
     }
 
     const average = count > 0 ? total / count : 0;
-
     let summaryEmoji = '😊';
     if (count > 0) {
         let closestDiff = Infinity;
         Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
             const diff = Math.abs(score - average);
-            if (diff < closestDiff) {
-                closestDiff = diff;
-                summaryEmoji = emoji;
-            }
+            if (diff < closestDiff) { closestDiff = diff; summaryEmoji = emoji; }
         });
     }
-
     return { count, total, average, summaryEmoji, isToggleOff };
 }
 
 /**
  * Update the reaction zone summary display for an item.
- * @param {string} recordId - The item record ID
  */
 function updateReactionZoneSummary(recordId) {
     const zone = document.querySelector(`.compact-card-reaction-zone[data-record-id="${recordId}"]`);
@@ -4260,10 +4869,7 @@ function updateReactionZoneSummary(recordId) {
         let closestDiff = Infinity;
         Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
             const diff = Math.abs(score - avg);
-            if (diff < closestDiff) {
-                closestDiff = diff;
-                summaryEmoji = emoji;
-            }
+            if (diff < closestDiff) { closestDiff = diff; summaryEmoji = emoji; }
         });
         scoreText = `${avg >= 0 ? '+' : ''}${avg.toFixed(1)}`;
         const sorted = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]);
@@ -4280,152 +4886,79 @@ function updateReactionZoneSummary(recordId) {
 }
 
 /**
- * Toggle the conversation preview panel for an item.
- * @param {HTMLElement} zone - The reaction zone container
- * @param {string} recordId - The item record ID
+ * Refresh an open RSB panel with current data.
  */
-function toggleConvoPreview(zone, recordId) {
-    let preview = zone.querySelector('.reaction-zone-convo-preview');
-    if (preview && preview.classList.contains('visible')) {
-        hideConvoPreview(zone);
-        return;
+function refreshRSBPanel(panel, recordId) {
+    // Refresh tab badges
+    const reactionCount = getItemReactionCount(recordId);
+    const cacheKey = `item:${recordId}`;
+    const comments = componentCommentsCache.get(cacheKey) || [];
+
+    const summaryTab = panel.querySelector('.rsb-tab[data-tab="summary"]');
+    const commentsTab = panel.querySelector('.rsb-tab[data-tab="comments"]');
+    if (summaryTab) {
+        let badge = summaryTab.querySelector('.rsb-tab-badge');
+        if (reactionCount > 0) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'rsb-tab-badge';
+                summaryTab.appendChild(badge);
+            }
+            badge.textContent = reactionCount;
+        } else if (badge) {
+            badge.remove();
+        }
+    }
+    if (commentsTab) {
+        let badge = commentsTab.querySelector('.rsb-tab-badge');
+        if (comments.length > 0) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'rsb-tab-badge';
+                commentsTab.appendChild(badge);
+            }
+            badge.textContent = comments.length;
+        } else if (badge) {
+            badge.remove();
+        }
     }
 
-    // Close emoji explorer if open
-    hideEmojiExplorer(zone);
-
-    // Close other conversation previews
-    if (activeConvoPreview && activeConvoPreview !== zone) {
-        hideConvoPreview(activeConvoPreview);
+    // Refresh active tab content
+    const activeContent = panel.querySelector('.rsb-tab-content.active');
+    if (activeContent) {
+        const tabId = activeContent.dataset.tabContent;
+        const isModal = panel.classList.contains('rsb-panel--modal');
+        switch (tabId) {
+            case 'reactions':
+                buildRSBReactionsContent(activeContent, recordId, isModal);
+                break;
+            case 'summary':
+                buildRSBSummaryContent(activeContent, recordId);
+                break;
+            case 'comments':
+                buildRSBCommentsContent(activeContent, recordId);
+                break;
+        }
     }
-
-    if (!preview) {
-        preview = buildConvoPreviewDOM(recordId);
-        zone.appendChild(preview);
-    } else {
-        refreshConvoPreviewContent(preview, recordId);
-    }
-
-    requestAnimationFrame(() => {
-        preview.classList.add('visible');
-    });
-
-    activeConvoPreview = zone;
 }
 
 /**
- * Hide the conversation preview for a zone.
- * @param {HTMLElement} zone - The reaction zone container
- */
-function hideConvoPreview(zone) {
-    if (!zone) return;
-    const preview = zone.querySelector('.reaction-zone-convo-preview');
-    if (preview) preview.classList.remove('visible');
-    if (activeConvoPreview === zone) activeConvoPreview = null;
-}
-
-/**
- * Build the conversation preview DOM.
+ * Build and return an RSB panel for the detail modal.
+ * This is the consolidated replacement for the old modal reactions section.
  * @param {string} recordId - The item record ID
  * @returns {HTMLElement}
  */
-function buildConvoPreviewDOM(recordId) {
-    const preview = document.createElement('div');
-    preview.className = 'reaction-zone-convo-preview';
-    preview.dataset.recordId = recordId;
-
-    const cacheKey = `item:${recordId}`;
-    const comments = componentCommentsCache.get(cacheKey) || [];
-
-    const header = document.createElement('div');
-    header.className = 'convo-preview-header';
-    header.innerHTML = `
-        <span class="convo-preview-title">Comments (${comments.length})</span>
-        <button class="convo-preview-open-btn" data-record-id="${recordId}">Open Full</button>
-    `;
-    preview.appendChild(header);
-
-    // Wire up the "Open Full" button to show the unified chat panel
-    const openBtn = header.querySelector('.convo-preview-open-btn');
-    if (openBtn) {
-        openBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openConversationForItem(recordId);
-        });
-    }
-
-    if (comments.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'convo-preview-empty';
-        empty.textContent = 'No comments yet. Click to start a conversation.';
-        empty.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openConversationForItem(recordId);
-        });
-        preview.appendChild(empty);
-    } else {
-        // Show last 3 comments
-        const recentComments = comments.slice(-3);
-        recentComments.forEach(comment => {
-            const msgEl = document.createElement('div');
-            msgEl.className = 'convo-preview-msg';
-            const author = comment.fields?.SenderName || comment.senderName || 'Someone';
-            const content = comment.fields?.Content || comment.content || '';
-            const truncated = content.length > 80 ? content.substring(0, 80) + '...' : content;
-            msgEl.innerHTML = `<span class="convo-preview-msg-author">${author}:</span> ${truncated}`;
-            preview.appendChild(msgEl);
-        });
-    }
-
-    return preview;
-}
-
-/**
- * Refresh conversation preview content without rebuilding.
- * @param {HTMLElement} preview - The preview element
- * @param {string} recordId - The item record ID
- */
-function refreshConvoPreviewContent(preview, recordId) {
-    // Rebuild content
-    const cacheKey = `item:${recordId}`;
-    const comments = componentCommentsCache.get(cacheKey) || [];
-    const title = preview.querySelector('.convo-preview-title');
-    if (title) title.textContent = `Comments (${comments.length})`;
-
-    // Remove old messages
-    preview.querySelectorAll('.convo-preview-msg, .convo-preview-empty').forEach(el => el.remove());
-
-    if (comments.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'convo-preview-empty';
-        empty.textContent = 'No comments yet. Click to start a conversation.';
-        empty.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openConversationForItem(recordId);
-        });
-        preview.appendChild(empty);
-    } else {
-        const recentComments = comments.slice(-3);
-        recentComments.forEach(comment => {
-            const msgEl = document.createElement('div');
-            msgEl.className = 'convo-preview-msg';
-            const author = comment.fields?.SenderName || comment.senderName || 'Someone';
-            const content = comment.fields?.Content || comment.content || '';
-            const truncated = content.length > 80 ? content.substring(0, 80) + '...' : content;
-            msgEl.innerHTML = `<span class="convo-preview-msg-author">${author}:</span> ${truncated}`;
-            preview.appendChild(msgEl);
-        });
-    }
+function buildModalRSBPanel(recordId) {
+    const panel = buildRSBPanelDOM(recordId, true);
+    panel.classList.add('visible');
+    return panel;
 }
 
 /**
  * Open the conversation/UCP for a specific item.
- * @param {string} recordId - The item record ID
  */
 function openConversationForItem(recordId) {
-    // Show the unified chat panel and attempt to filter/scroll to this item's comments
     showUnifiedChatPanel();
-    // Scroll to this item's comment section in the presentation view
     const commentSection = document.querySelector(`.component-comments-section[data-component-id="${recordId}"]`);
     if (commentSection) {
         const body = commentSection.querySelector(`.component-comments-body[data-component-id="${recordId}"]`);
