@@ -3161,16 +3161,16 @@ async function renderCompactCard(item) {
     let reactionZoneSummaryEmoji = '😊';
     let reactionZoneScoreText = '';
     let reactionZoneSummaryText = 'React';
-    let reactionCount = 0;
+    let rzReactionCount = 0;
     if (reactions && reactions instanceof Map && reactions.size > 0) {
-        reactionCount = reactions.size;
+        rzReactionCount = reactions.size;
         let total = 0;
         const emojiCounts = {};
         reactions.forEach((emoji) => {
             total += (REACTION_SCORES[emoji] || 0);
             emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
         });
-        const average = total / reactionCount;
+        const average = total / rzReactionCount;
         // Find closest emoji to average score
         let closestDiff = Infinity;
         Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
@@ -3184,7 +3184,7 @@ async function renderCompactCard(item) {
         // Build compact pill summary of top emojis
         const sorted = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]);
         const top3 = sorted.slice(0, 3).map(([emoji, count]) => `${emoji}${count > 1 ? count : ''}`).join(' ');
-        reactionZoneSummaryText = `${reactionCount} reaction${reactionCount !== 1 ? 's' : ''} ${top3}`;
+        reactionZoneSummaryText = `${rzReactionCount} reaction${rzReactionCount !== 1 ? 's' : ''} ${top3}`;
     }
 
     // --- Comment count for reaction zone ---
