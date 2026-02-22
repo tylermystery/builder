@@ -5,7 +5,7 @@ console.log('[MODULE DEBUG] presentation.js module starting to load...', perform
 
 import { state, setState, getRecordById, invalidateRecordsIndex } from '../state.js';
 import * as api from '../api.js';
-import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, REACTION_SCORES, getModalZIndex } from '../config.js';
+import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, EMOJI_TIERS, REACTION_SCORES, getModalZIndex } from '../config.js';
 import { updateUrl, getRecordPrice, parseOptions, flattenOptionGroups } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getCurrentUser, sendMessage as sendChatMessage, getReplyingToMessage, clearReplyState } from '../chat.js';
@@ -2417,6 +2417,9 @@ function selectEmoji(recordId, emoji) {
     // Update the reactions summary
     renderReactionsSummary();
 
+    // Update the reaction zone summary on compact cards
+    updateReactionZoneSummary(recordId);
+
     // Update the event-level emoji indicator
     updateEventEmojiIndicator();
 
@@ -3153,30 +3156,42 @@ async function renderCompactCard(item) {
         pillsHTML = `<div class="compact-card-pills">${pillElements}${morePill}</div>`;
     }
 
-    // --- Compact reaction bar ---
+    // --- Reaction zone summary ---
     const reactions = state.session.reactions?.get(recordId);
-    let reactionBarHTML = '';
+    let reactionZoneSummaryEmoji = '😊';
+    let reactionZoneScoreText = '';
+    let reactionZoneSummaryText = 'React';
+    let reactionCount = 0;
     if (reactions && reactions instanceof Map && reactions.size > 0) {
+        reactionCount = reactions.size;
+        let total = 0;
         const emojiCounts = {};
         reactions.forEach((emoji) => {
+            total += (REACTION_SCORES[emoji] || 0);
             emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
         });
+        const average = total / reactionCount;
+        // Find closest emoji to average score
+        let closestDiff = Infinity;
+        Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
+            const diff = Math.abs(score - average);
+            if (diff < closestDiff) {
+                closestDiff = diff;
+                reactionZoneSummaryEmoji = emoji;
+            }
+        });
+        reactionZoneScoreText = `${average >= 0 ? '+' : ''}${average.toFixed(1)}`;
+        // Build compact pill summary of top emojis
         const sorted = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]);
-        const top3 = sorted.slice(0, 3).map(([emoji, count]) =>
-            `<span class="compact-reaction-pill" title="${emoji} ${count}">${emoji}<span class="compact-reaction-count">${count}</span></span>`
-        ).join('');
-        const moreReactions = sorted.length > 3 ? `<span class="compact-reaction-pill compact-reaction-overflow">+${sorted.length - 3}</span>` : '';
-        const totalReactions = reactions.size;
-        reactionBarHTML = `<span class="compact-card-reactions" data-record-id="${recordId}" title="${totalReactions} reaction${totalReactions !== 1 ? 's' : ''}">${top3}${moreReactions}</span>`;
+        const top3 = sorted.slice(0, 3).map(([emoji, count]) => `${emoji}${count > 1 ? count : ''}`).join(' ');
+        reactionZoneSummaryText = `${reactionCount} reaction${reactionCount !== 1 ? 's' : ''} ${top3}`;
     }
 
-    // --- Comment count badge ---
+    // --- Comment count for reaction zone ---
     const commentCacheKey = `item:${recordId}`;
     const cachedComments = componentCommentsCache.get(commentCacheKey);
     const commentCount = cachedComments?.length || 0;
-    const commentBadgeHTML = commentCount > 0
-        ? `<span class="compact-badge-pill compact-badge-comment" title="${commentCount} comment${commentCount !== 1 ? 's' : ''}"><span class="compact-badge-icon">💬</span><span class="compact-badge-count">${commentCount}</span></span>`
-        : '';
+    const commentsBtnHTML = `<button class="reaction-zone-comments-btn" data-record-id="${recordId}" data-component-id="${recordId}" title="${commentCount > 0 ? commentCount + ' comment' + (commentCount !== 1 ? 's' : '') : 'Add a comment'}"><span class="reaction-zone-comments-icon">💬</span><span>${commentCount || ''}</span></button>`;
 
     // --- Task status badge in meta bar ---
     const taskStatusForBadge = getElementTaskStatus('item', recordId);
@@ -3276,13 +3291,19 @@ async function renderCompactCard(item) {
                 </div>
                 ${provenanceHTML}
                 ${pillsHTML}
-                <div class="compact-card-meta">
-                    ${reactionBarHTML}
-                    <span class="compact-card-badges">
-                        ${timeBadgeHTML}
-                        ${taskBadgeHTML}
-                        ${commentBadgeHTML}
-                    </span>
+                <div class="compact-card-reaction-zone" data-record-id="${recordId}">
+                    <div class="reaction-zone-hint">
+                        <div class="reaction-zone-summary" data-record-id="${recordId}">
+                            <span class="reaction-zone-summary-emoji">${reactionZoneSummaryEmoji}</span>
+                            <span class="reaction-zone-summary-text">${reactionZoneSummaryText}</span>
+                            ${reactionZoneScoreText ? `<span class="reaction-zone-summary-score">${reactionZoneScoreText}</span>` : ''}
+                        </div>
+                        <div class="reaction-zone-actions">
+                            ${timeBadgeHTML}
+                            ${taskBadgeHTML}
+                            ${commentsBtnHTML}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -3698,6 +3719,9 @@ async function renderAllItems() {
     // Attach click handlers for compact cards
     initializeCompactCardClicks();
 
+    // Initialize interactive reaction zones on compact cards
+    initializeReactionZones();
+
     // Render the reactions summary after items
     renderReactionsSummary();
     updateEventEmojiIndicator();
@@ -3735,7 +3759,7 @@ function initializeCompactCardClicks() {
     itemCards.forEach(card => {
         card.addEventListener('click', (e) => {
             // Don't trigger on status badge, emoji indicator, vitality badge, or split button clicks
-            const isExcluded = e.target.closest('.compact-card-status') || e.target.closest('.compact-card-emoji') || e.target.closest('.compact-card-split-btn') || e.target.closest('.compact-card-vitality') || e.target.closest('.valuation-vitality-emoji') || e.target.closest('.vitality-score-badge');
+            const isExcluded = e.target.closest('.compact-card-status') || e.target.closest('.compact-card-emoji') || e.target.closest('.compact-card-split-btn') || e.target.closest('.compact-card-vitality') || e.target.closest('.valuation-vitality-emoji') || e.target.closest('.vitality-score-badge') || e.target.closest('.compact-card-reaction-zone');
             if (isExcluded) {
                 console.log('[Presentation DEBUG] Compact card click EXCLUDED (vitality/status/emoji element):', e.target.className);
                 return;
@@ -3805,6 +3829,613 @@ function initializeCompactCardClicks() {
             }
         });
     });
+}
+
+// =============================================================================
+// INTERACTIVE REACTION ZONE (Compact Cards)
+// =============================================================================
+
+// Track which reaction zone explorer is currently open
+let activeReactionZone = null;
+let activeConvoPreview = null;
+// Number of tiers to show initially vs expanded
+const EXPLORER_INITIAL_TIERS = 2;
+
+/**
+ * Initialize interactive reaction zones on all compact cards.
+ * Each zone shows an emoji explorer on hover/click and a conversation toggle.
+ */
+function initializeReactionZones() {
+    if (!itineraryItemsListEl) return;
+
+    const zones = itineraryItemsListEl.querySelectorAll('.compact-card-reaction-zone[data-record-id]');
+    zones.forEach(zone => {
+        const recordId = zone.dataset.recordId;
+
+        // ── Hover: show explorer after a short delay ──
+        let hoverTimer = null;
+        zone.addEventListener('mouseenter', () => {
+            hoverTimer = setTimeout(() => {
+                showEmojiExplorer(zone, recordId);
+            }, 250);
+        });
+
+        zone.addEventListener('mouseleave', (e) => {
+            clearTimeout(hoverTimer);
+            // Don't close if the mouse moved into the explorer itself
+            const related = e.relatedTarget;
+            if (related && (related.closest('.reaction-zone-explorer') || related.closest('.compact-card-reaction-zone'))) {
+                return;
+            }
+            hideEmojiExplorer(zone);
+        });
+
+        // ── Click on the summary area: toggle explorer ──
+        const summary = zone.querySelector('.reaction-zone-summary');
+        if (summary) {
+            summary.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const explorer = zone.querySelector('.reaction-zone-explorer');
+                if (explorer && explorer.classList.contains('visible')) {
+                    hideEmojiExplorer(zone);
+                } else {
+                    showEmojiExplorer(zone, recordId);
+                }
+            });
+        }
+
+        // ── Comments button: toggle conversation preview or open UCP ──
+        const commentsBtn = zone.querySelector('.reaction-zone-comments-btn');
+        if (commentsBtn) {
+            commentsBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const rid = commentsBtn.dataset.recordId;
+                // On mobile or small screens, open the UCP directly
+                if (window.innerWidth < 768) {
+                    openConversationForItem(rid);
+                } else {
+                    toggleConvoPreview(zone, rid);
+                }
+            });
+        }
+    });
+
+    // Close any open explorer when clicking outside
+    document.addEventListener('click', handleReactionZoneOutsideClick);
+}
+
+/**
+ * Handle clicks outside the reaction zone to close open explorers.
+ */
+function handleReactionZoneOutsideClick(e) {
+    if (activeReactionZone && !e.target.closest('.compact-card-reaction-zone')) {
+        hideEmojiExplorer(activeReactionZone);
+    }
+    if (activeConvoPreview && !e.target.closest('.compact-card-reaction-zone')) {
+        hideConvoPreview(activeConvoPreview);
+    }
+}
+
+/**
+ * Build and show the emoji explorer popover for a reaction zone.
+ * @param {HTMLElement} zone - The reaction zone container
+ * @param {string} recordId - The item record ID
+ */
+function showEmojiExplorer(zone, recordId) {
+    // Close any other open explorer first
+    if (activeReactionZone && activeReactionZone !== zone) {
+        hideEmojiExplorer(activeReactionZone);
+    }
+    // Close conversation preview if open on this zone
+    hideConvoPreview(zone);
+
+    let explorer = zone.querySelector('.reaction-zone-explorer');
+    if (!explorer) {
+        explorer = buildEmojiExplorerDOM(recordId);
+        zone.appendChild(explorer);
+
+        // Keep explorer open when mousing over it
+        explorer.addEventListener('mouseenter', () => {
+            explorer._keepOpen = true;
+        });
+        explorer.addEventListener('mouseleave', (e) => {
+            explorer._keepOpen = false;
+            const related = e.relatedTarget;
+            if (!related || !related.closest('.compact-card-reaction-zone')) {
+                hideEmojiExplorer(zone);
+            }
+        });
+    } else {
+        // Refresh content in case reactions changed
+        refreshEmojiExplorerContent(explorer, recordId);
+    }
+
+    requestAnimationFrame(() => {
+        explorer.classList.add('visible');
+    });
+
+    activeReactionZone = zone;
+}
+
+/**
+ * Hide the emoji explorer for a reaction zone.
+ * @param {HTMLElement} zone - The reaction zone container
+ */
+function hideEmojiExplorer(zone) {
+    if (!zone) return;
+    const explorer = zone.querySelector('.reaction-zone-explorer');
+    if (explorer && explorer._keepOpen) return;
+    if (explorer) {
+        explorer.classList.remove('visible');
+    }
+    // Restore summary from preview state
+    const summary = zone.querySelector('.reaction-zone-summary');
+    if (summary) summary.classList.remove('previewing');
+    if (activeReactionZone === zone) activeReactionZone = null;
+}
+
+/**
+ * Build the emoji explorer DOM element with tiered emoji rows.
+ * Layout: rows ordered by sentiment (positive to negative) with
+ * increasing obscurity as more tiers load.
+ * @param {string} recordId - The item record ID
+ * @returns {HTMLElement} The explorer element
+ */
+function buildEmojiExplorerDOM(recordId) {
+    const explorer = document.createElement('div');
+    explorer.className = 'reaction-zone-explorer';
+    explorer.dataset.recordId = recordId;
+
+    // Get current user's reaction
+    let currentUserEmoji = null;
+    try {
+        const user = getCurrentUser();
+        const reactions = state.session.reactions?.get(recordId);
+        if (reactions instanceof Map) {
+            currentUserEmoji = reactions.get(user.id);
+        }
+    } catch (_) { /* anonymous */ }
+
+    // Build initial tiers (first 2 for quick access)
+    const tiers = EMOJI_TIERS;
+    const initialCount = Math.min(EXPLORER_INITIAL_TIERS, tiers.length);
+
+    for (let i = 0; i < initialCount; i++) {
+        explorer.appendChild(buildExplorerTierRow(tiers[i], recordId, currentUserEmoji));
+    }
+
+    // Add "show more" button if there are additional tiers
+    if (tiers.length > initialCount) {
+        const expandBtn = document.createElement('div');
+        expandBtn.className = 'explorer-expand-more';
+        expandBtn.textContent = `Show ${tiers.length - initialCount} more tiers...`;
+        expandBtn.dataset.expanded = 'false';
+        expandBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (expandBtn.dataset.expanded === 'false') {
+                // Add remaining tiers
+                for (let i = initialCount; i < tiers.length; i++) {
+                    explorer.insertBefore(
+                        buildExplorerTierRow(tiers[i], recordId, currentUserEmoji),
+                        expandBtn
+                    );
+                }
+                expandBtn.textContent = 'Show fewer';
+                expandBtn.dataset.expanded = 'true';
+            } else {
+                // Remove the extra tiers
+                const tierRows = explorer.querySelectorAll('.explorer-tier');
+                for (let i = tierRows.length - 1; i >= initialCount; i--) {
+                    tierRows[i].remove();
+                }
+                expandBtn.textContent = `Show ${tiers.length - initialCount} more tiers...`;
+                expandBtn.dataset.expanded = 'false';
+            }
+        });
+        explorer.appendChild(expandBtn);
+    }
+
+    return explorer;
+}
+
+/**
+ * Build a single tier row for the emoji explorer.
+ * @param {Object} tier - The tier config from EMOJI_TIERS
+ * @param {string} recordId - The item record ID
+ * @param {string|null} currentUserEmoji - The current user's selected emoji
+ * @returns {HTMLElement}
+ */
+function buildExplorerTierRow(tier, recordId, currentUserEmoji) {
+    const tierRow = document.createElement('div');
+    tierRow.className = 'explorer-tier';
+
+    // Tier label
+    const label = document.createElement('div');
+    label.className = 'explorer-tier-label';
+    label.innerHTML = `${tier.label} <span class="explorer-tier-score-hint">${tier.description}</span>`;
+    tierRow.appendChild(label);
+
+    // Emoji grid
+    const grid = document.createElement('div');
+    grid.className = 'explorer-tier-emojis';
+
+    tier.emojis.forEach(emoji => {
+        const btn = document.createElement('button');
+        btn.className = `explorer-emoji-btn${currentUserEmoji === emoji ? ' selected' : ''}`;
+        btn.textContent = emoji;
+        btn.dataset.emoji = emoji;
+        btn.dataset.recordId = recordId;
+        const score = REACTION_SCORES[emoji] || 0;
+        btn.dataset.scoreLabel = `${score >= 0 ? '+' : ''}${score.toFixed(1)}`;
+
+        // Click: select/toggle this emoji
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleReactionZoneEmojiSelect(recordId, emoji, btn);
+        });
+
+        // Hover: live preview on the summary
+        btn.addEventListener('mouseenter', () => {
+            handleReactionZoneEmojiPreview(recordId, emoji);
+        });
+        btn.addEventListener('mouseleave', () => {
+            clearReactionZoneEmojiPreview(recordId);
+        });
+
+        grid.appendChild(btn);
+    });
+
+    tierRow.appendChild(grid);
+    return tierRow;
+}
+
+/**
+ * Refresh the emoji explorer content (selected states) without rebuilding.
+ * @param {HTMLElement} explorer - The explorer element
+ * @param {string} recordId - The item record ID
+ */
+function refreshEmojiExplorerContent(explorer, recordId) {
+    let currentUserEmoji = null;
+    try {
+        const user = getCurrentUser();
+        const reactions = state.session.reactions?.get(recordId);
+        if (reactions instanceof Map) {
+            currentUserEmoji = reactions.get(user.id);
+        }
+    } catch (_) { /* anonymous */ }
+
+    const buttons = explorer.querySelectorAll('.explorer-emoji-btn');
+    buttons.forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.emoji === currentUserEmoji);
+    });
+}
+
+/**
+ * Handle emoji selection from the reaction zone explorer.
+ * @param {string} recordId - The item record ID
+ * @param {string} emoji - The selected emoji
+ * @param {HTMLElement} btn - The button element
+ */
+function handleReactionZoneEmojiSelect(recordId, emoji, btn) {
+    // Reuse the existing selectEmoji function which handles state, Pusher, and save
+    selectEmoji(recordId, emoji);
+
+    // Update selected state in the explorer
+    const explorer = btn.closest('.reaction-zone-explorer');
+    if (explorer) {
+        refreshEmojiExplorerContent(explorer, recordId);
+    }
+
+    // Update the reaction zone summary on this card
+    updateReactionZoneSummary(recordId);
+}
+
+/**
+ * Live preview: show what the summary would look like with this emoji.
+ * @param {string} recordId - The item record ID
+ * @param {string} emoji - The emoji being previewed
+ */
+function handleReactionZoneEmojiPreview(recordId, emoji) {
+    const zone = document.querySelector(`.compact-card-reaction-zone[data-record-id="${recordId}"]`);
+    if (!zone) return;
+
+    const summaryEl = zone.querySelector('.reaction-zone-summary');
+    const emojiEl = zone.querySelector('.reaction-zone-summary-emoji');
+    const textEl = zone.querySelector('.reaction-zone-summary-text');
+    const scoreEl = zone.querySelector('.reaction-zone-summary-score');
+    if (!summaryEl) return;
+
+    // Calculate preview
+    const previewData = calculateReactionPreview(recordId, emoji);
+
+    summaryEl.classList.add('previewing');
+    if (emojiEl) emojiEl.textContent = previewData.summaryEmoji;
+    if (textEl) textEl.textContent = `Preview: ${emoji} would ${previewData.isToggleOff ? 'remove' : 'change'} to ${previewData.summaryEmoji}`;
+    if (scoreEl) {
+        scoreEl.textContent = `${previewData.average >= 0 ? '+' : ''}${previewData.average.toFixed(1)}`;
+    }
+}
+
+/**
+ * Clear the live preview and restore actual values.
+ * @param {string} recordId - The item record ID
+ */
+function clearReactionZoneEmojiPreview(recordId) {
+    const zone = document.querySelector(`.compact-card-reaction-zone[data-record-id="${recordId}"]`);
+    if (!zone) return;
+
+    const summaryEl = zone.querySelector('.reaction-zone-summary');
+    if (!summaryEl) return;
+    summaryEl.classList.remove('previewing');
+
+    // Restore actual summary
+    updateReactionZoneSummary(recordId);
+}
+
+/**
+ * Calculate what the reaction summary would look like if the user toggled this emoji.
+ * @param {string} recordId - The item record ID
+ * @param {string} previewEmojiValue - The emoji being previewed
+ * @returns {Object} { count, total, average, summaryEmoji, isToggleOff }
+ */
+function calculateReactionPreview(recordId, previewEmojiValue) {
+    const reactions = state.session.reactions?.get(recordId);
+    let total = 0;
+    let count = 0;
+    let currentUserReaction = null;
+
+    let currentUser;
+    try {
+        currentUser = getCurrentUser();
+    } catch (_) {
+        currentUser = { id: 'anonymous', name: 'Anonymous' };
+    }
+
+    if (reactions && reactions instanceof Map) {
+        reactions.forEach((emoji, userId) => {
+            total += (REACTION_SCORES[emoji] || 0);
+            count += 1;
+            if (userId === currentUser.id) currentUserReaction = emoji;
+        });
+    }
+
+    const isToggleOff = currentUserReaction === previewEmojiValue;
+
+    if (isToggleOff) {
+        // Removing: subtract current reaction
+        total -= (REACTION_SCORES[currentUserReaction] || 0);
+        count -= 1;
+    } else if (currentUserReaction) {
+        // Changing: swap
+        total -= (REACTION_SCORES[currentUserReaction] || 0);
+        total += (REACTION_SCORES[previewEmojiValue] || 0);
+    } else {
+        // Adding new
+        total += (REACTION_SCORES[previewEmojiValue] || 0);
+        count += 1;
+    }
+
+    const average = count > 0 ? total / count : 0;
+
+    let summaryEmoji = '😊';
+    if (count > 0) {
+        let closestDiff = Infinity;
+        Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
+            const diff = Math.abs(score - average);
+            if (diff < closestDiff) {
+                closestDiff = diff;
+                summaryEmoji = emoji;
+            }
+        });
+    }
+
+    return { count, total, average, summaryEmoji, isToggleOff };
+}
+
+/**
+ * Update the reaction zone summary display for an item.
+ * @param {string} recordId - The item record ID
+ */
+function updateReactionZoneSummary(recordId) {
+    const zone = document.querySelector(`.compact-card-reaction-zone[data-record-id="${recordId}"]`);
+    if (!zone) return;
+
+    const emojiEl = zone.querySelector('.reaction-zone-summary-emoji');
+    const textEl = zone.querySelector('.reaction-zone-summary-text');
+    const scoreEl = zone.querySelector('.reaction-zone-summary-score');
+
+    const reactions = state.session.reactions?.get(recordId);
+    let summaryEmoji = '😊';
+    let summaryText = 'React';
+    let scoreText = '';
+
+    if (reactions && reactions instanceof Map && reactions.size > 0) {
+        let total = 0;
+        const emojiCounts = {};
+        reactions.forEach((emoji) => {
+            total += (REACTION_SCORES[emoji] || 0);
+            emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
+        });
+        const avg = total / reactions.size;
+        let closestDiff = Infinity;
+        Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
+            const diff = Math.abs(score - avg);
+            if (diff < closestDiff) {
+                closestDiff = diff;
+                summaryEmoji = emoji;
+            }
+        });
+        scoreText = `${avg >= 0 ? '+' : ''}${avg.toFixed(1)}`;
+        const sorted = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]);
+        const top3 = sorted.slice(0, 3).map(([emoji, count]) => `${emoji}${count > 1 ? count : ''}`).join(' ');
+        summaryText = `${reactions.size} reaction${reactions.size !== 1 ? 's' : ''} ${top3}`;
+    }
+
+    if (emojiEl) emojiEl.textContent = summaryEmoji;
+    if (textEl) textEl.textContent = summaryText;
+    if (scoreEl) {
+        scoreEl.textContent = scoreText;
+        scoreEl.style.display = scoreText ? '' : 'none';
+    }
+}
+
+/**
+ * Toggle the conversation preview panel for an item.
+ * @param {HTMLElement} zone - The reaction zone container
+ * @param {string} recordId - The item record ID
+ */
+function toggleConvoPreview(zone, recordId) {
+    let preview = zone.querySelector('.reaction-zone-convo-preview');
+    if (preview && preview.classList.contains('visible')) {
+        hideConvoPreview(zone);
+        return;
+    }
+
+    // Close emoji explorer if open
+    hideEmojiExplorer(zone);
+
+    // Close other conversation previews
+    if (activeConvoPreview && activeConvoPreview !== zone) {
+        hideConvoPreview(activeConvoPreview);
+    }
+
+    if (!preview) {
+        preview = buildConvoPreviewDOM(recordId);
+        zone.appendChild(preview);
+    } else {
+        refreshConvoPreviewContent(preview, recordId);
+    }
+
+    requestAnimationFrame(() => {
+        preview.classList.add('visible');
+    });
+
+    activeConvoPreview = zone;
+}
+
+/**
+ * Hide the conversation preview for a zone.
+ * @param {HTMLElement} zone - The reaction zone container
+ */
+function hideConvoPreview(zone) {
+    if (!zone) return;
+    const preview = zone.querySelector('.reaction-zone-convo-preview');
+    if (preview) preview.classList.remove('visible');
+    if (activeConvoPreview === zone) activeConvoPreview = null;
+}
+
+/**
+ * Build the conversation preview DOM.
+ * @param {string} recordId - The item record ID
+ * @returns {HTMLElement}
+ */
+function buildConvoPreviewDOM(recordId) {
+    const preview = document.createElement('div');
+    preview.className = 'reaction-zone-convo-preview';
+    preview.dataset.recordId = recordId;
+
+    const cacheKey = `item:${recordId}`;
+    const comments = componentCommentsCache.get(cacheKey) || [];
+
+    const header = document.createElement('div');
+    header.className = 'convo-preview-header';
+    header.innerHTML = `
+        <span class="convo-preview-title">Comments (${comments.length})</span>
+        <button class="convo-preview-open-btn" data-record-id="${recordId}">Open Full</button>
+    `;
+    preview.appendChild(header);
+
+    // Wire up the "Open Full" button to show the unified chat panel
+    const openBtn = header.querySelector('.convo-preview-open-btn');
+    if (openBtn) {
+        openBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openConversationForItem(recordId);
+        });
+    }
+
+    if (comments.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'convo-preview-empty';
+        empty.textContent = 'No comments yet. Click to start a conversation.';
+        empty.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openConversationForItem(recordId);
+        });
+        preview.appendChild(empty);
+    } else {
+        // Show last 3 comments
+        const recentComments = comments.slice(-3);
+        recentComments.forEach(comment => {
+            const msgEl = document.createElement('div');
+            msgEl.className = 'convo-preview-msg';
+            const author = comment.fields?.SenderName || comment.senderName || 'Someone';
+            const content = comment.fields?.Content || comment.content || '';
+            const truncated = content.length > 80 ? content.substring(0, 80) + '...' : content;
+            msgEl.innerHTML = `<span class="convo-preview-msg-author">${author}:</span> ${truncated}`;
+            preview.appendChild(msgEl);
+        });
+    }
+
+    return preview;
+}
+
+/**
+ * Refresh conversation preview content without rebuilding.
+ * @param {HTMLElement} preview - The preview element
+ * @param {string} recordId - The item record ID
+ */
+function refreshConvoPreviewContent(preview, recordId) {
+    // Rebuild content
+    const cacheKey = `item:${recordId}`;
+    const comments = componentCommentsCache.get(cacheKey) || [];
+    const title = preview.querySelector('.convo-preview-title');
+    if (title) title.textContent = `Comments (${comments.length})`;
+
+    // Remove old messages
+    preview.querySelectorAll('.convo-preview-msg, .convo-preview-empty').forEach(el => el.remove());
+
+    if (comments.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'convo-preview-empty';
+        empty.textContent = 'No comments yet. Click to start a conversation.';
+        empty.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openConversationForItem(recordId);
+        });
+        preview.appendChild(empty);
+    } else {
+        const recentComments = comments.slice(-3);
+        recentComments.forEach(comment => {
+            const msgEl = document.createElement('div');
+            msgEl.className = 'convo-preview-msg';
+            const author = comment.fields?.SenderName || comment.senderName || 'Someone';
+            const content = comment.fields?.Content || comment.content || '';
+            const truncated = content.length > 80 ? content.substring(0, 80) + '...' : content;
+            msgEl.innerHTML = `<span class="convo-preview-msg-author">${author}:</span> ${truncated}`;
+            preview.appendChild(msgEl);
+        });
+    }
+}
+
+/**
+ * Open the conversation/UCP for a specific item.
+ * @param {string} recordId - The item record ID
+ */
+function openConversationForItem(recordId) {
+    // Show the unified chat panel and attempt to filter/scroll to this item's comments
+    showUnifiedChatPanel();
+    // Scroll to this item's comment section in the presentation view
+    const commentSection = document.querySelector(`.component-comments-section[data-component-id="${recordId}"]`);
+    if (commentSection) {
+        const body = commentSection.querySelector(`.component-comments-body[data-component-id="${recordId}"]`);
+        if (body && body.style.display === 'none') {
+            body.style.display = '';
+            const toggle = commentSection.querySelector('.component-comments-toggle');
+            if (toggle) toggle.classList.add('expanded');
+        }
+        commentSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
 }
 
 // Initialize toggle handlers for combined sources sections
@@ -10288,6 +10919,9 @@ async function initializePresentationChat() {
             // Update the reactions summary
             renderReactionsSummary();
 
+            // Update the reaction zone summary on compact cards
+            updateReactionZoneSummary(recordId);
+
             // Update the event-level emoji indicator
             updateEventEmojiIndicator();
         }
@@ -10966,6 +11600,9 @@ function handleReactionClick(e) {
 
     // Update the reactions summary
     renderReactionsSummary();
+
+    // Update the reaction zone summary on compact cards
+    updateReactionZoneSummary(recordId);
 
     // Update the event-level emoji indicator
     updateEventEmojiIndicator();

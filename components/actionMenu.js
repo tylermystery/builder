@@ -802,6 +802,33 @@ function handleEmojiSelect(recordId, emoji) {
         window.renderPresentationReactions(recordId, presentationContainer);
     }
 
+    // Update reaction zone summary on compact cards (if present)
+    const reactionZone = document.querySelector(`.compact-card-reaction-zone[data-record-id="${recordId}"]`);
+    if (reactionZone) {
+        const emojiEl = reactionZone.querySelector('.reaction-zone-summary-emoji');
+        const textEl = reactionZone.querySelector('.reaction-zone-summary-text');
+        const scoreEl = reactionZone.querySelector('.reaction-zone-summary-score');
+        if (emojiEl || textEl || scoreEl) {
+            // Recalculate summary
+            const updatedReactions = state.session.reactions?.get(recordId);
+            if (updatedReactions && updatedReactions instanceof Map && updatedReactions.size > 0) {
+                let total = 0;
+                const emojiCounts = {};
+                updatedReactions.forEach((e) => { total += (REACTION_SCORES[e] || 0); emojiCounts[e] = (emojiCounts[e] || 0) + 1; });
+                const avg = total / updatedReactions.size;
+                let closestDiff = Infinity, bestEmoji = '😊';
+                Object.entries(REACTION_SCORES).forEach(([e, s]) => { const d = Math.abs(s - avg); if (d < closestDiff) { closestDiff = d; bestEmoji = e; } });
+                if (emojiEl) emojiEl.textContent = bestEmoji;
+                if (textEl) { const sorted = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]); const top3 = sorted.slice(0, 3).map(([e, c]) => `${e}${c > 1 ? c : ''}`).join(' '); textEl.textContent = `${updatedReactions.size} reaction${updatedReactions.size !== 1 ? 's' : ''} ${top3}`; }
+                if (scoreEl) { scoreEl.textContent = `${avg >= 0 ? '+' : ''}${avg.toFixed(1)}`; scoreEl.style.display = ''; }
+            } else {
+                if (emojiEl) emojiEl.textContent = '😊';
+                if (textEl) textEl.textContent = 'React';
+                if (scoreEl) { scoreEl.textContent = ''; scoreEl.style.display = 'none'; }
+            }
+        }
+    }
+
     log('ActionMenu', `Reaction ${emoji} toggled for item ${recordId}`);
 }
 

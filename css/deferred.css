@@ -15897,6 +15897,379 @@ hr.total-divider {
 }
 
 /* ========================================
+   INTERACTIVE REACTION ZONE (Compact Cards)
+   ======================================== */
+
+/* The reaction zone wraps the meta bar and becomes interactive on hover */
+.compact-card-reaction-zone {
+    position: relative;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: default;
+}
+
+/* Ghost hint: subtle reaction prompt shown by default */
+.reaction-zone-hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 26px;
+    transition: opacity 0.15s ease;
+}
+
+.reaction-zone-summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
+.reaction-zone-summary-emoji {
+    font-size: 1.1em;
+    transition: transform 0.2s ease;
+}
+
+.reaction-zone-summary-text {
+    font-size: 0.78em;
+    color: rgba(255, 255, 255, 0.45);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.2s ease;
+}
+
+.reaction-zone-summary-score {
+    font-size: 0.72em;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.35);
+    margin-left: 4px;
+    transition: color 0.2s ease;
+}
+
+.reaction-zone-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+/* Comment count chip in the reaction zone */
+.reaction-zone-comments-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.1);
+    color: rgba(147, 197, 253, 0.7);
+    font-size: 0.75em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.reaction-zone-comments-btn:hover {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.35);
+    color: rgba(147, 197, 253, 1);
+    transform: scale(1.05);
+}
+
+.reaction-zone-comments-icon {
+    font-size: 0.9em;
+}
+
+/* Hover: brighten summary */
+.compact-card:hover .reaction-zone-summary-text {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.compact-card:hover .reaction-zone-summary-score {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.compact-card:hover .reaction-zone-summary-emoji {
+    transform: scale(1.1);
+}
+
+/* ── Emoji Explorer Popover ── */
+.reaction-zone-explorer {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    background: rgba(20, 20, 30, 0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px 12px 0 0;
+    padding: 8px 6px 6px;
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
+    max-height: 0;
+    overflow: hidden;
+}
+
+.reaction-zone-explorer.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+    max-height: 280px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Scrollbar styling for the explorer */
+.reaction-zone-explorer::-webkit-scrollbar {
+    width: 4px;
+}
+
+.reaction-zone-explorer::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.reaction-zone-explorer::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 2px;
+}
+
+/* Tier row in the explorer */
+.explorer-tier {
+    margin-bottom: 4px;
+}
+
+.explorer-tier:last-child {
+    margin-bottom: 0;
+}
+
+.explorer-tier-label {
+    font-size: 0.62em;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 4px 3px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.explorer-tier-score-hint {
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.2);
+    font-size: 0.9em;
+}
+
+.explorer-tier-emojis {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 0 2px;
+}
+
+/* Individual emoji button in the explorer */
+.explorer-emoji-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    font-size: 1.15em;
+    transition: all 0.12s ease;
+    position: relative;
+    padding: 0;
+    line-height: 1;
+}
+
+.explorer-emoji-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: scale(1.25);
+    z-index: 2;
+}
+
+.explorer-emoji-btn.selected {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.5);
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.25);
+}
+
+.explorer-emoji-btn.selected:hover {
+    background: rgba(59, 130, 246, 0.3);
+}
+
+/* Score tooltip on hover */
+.explorer-emoji-btn::after {
+    content: attr(data-score-label);
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%) scale(0.8);
+    background: rgba(0, 0, 0, 0.85);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.6em;
+    padding: 2px 5px;
+    border-radius: 4px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.explorer-emoji-btn:hover::after {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+}
+
+/* Preview state: when hovering an emoji, the summary updates */
+.reaction-zone-summary.previewing .reaction-zone-summary-emoji {
+    transform: scale(1.3);
+    filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.4));
+}
+
+.reaction-zone-summary.previewing .reaction-zone-summary-text {
+    color: rgba(147, 197, 253, 0.9);
+}
+
+.reaction-zone-summary.previewing .reaction-zone-summary-score {
+    color: rgba(147, 197, 253, 0.8);
+}
+
+/* Expand more tiers indicator */
+.explorer-expand-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    font-size: 0.68em;
+    color: rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    transition: color 0.15s ease;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    margin-top: 4px;
+}
+
+.explorer-expand-more:hover {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* ── Conversation preview in reaction zone ── */
+.reaction-zone-convo-preview {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    z-index: 19;
+    background: rgba(20, 20, 30, 0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px 12px 0 0;
+    padding: 8px 10px;
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
+    max-height: 0;
+    overflow: hidden;
+}
+
+.reaction-zone-convo-preview.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.convo-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.convo-preview-title {
+    font-size: 0.72em;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.convo-preview-open-btn {
+    font-size: 0.68em;
+    color: rgba(99, 102, 241, 0.8);
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    padding: 2px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.convo-preview-open-btn:hover {
+    background: rgba(99, 102, 241, 0.2);
+    color: rgba(99, 102, 241, 1);
+}
+
+.convo-preview-msg {
+    font-size: 0.75em;
+    color: rgba(255, 255, 255, 0.55);
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    line-height: 1.4;
+}
+
+.convo-preview-msg:last-child {
+    border-bottom: none;
+}
+
+.convo-preview-msg-author {
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    margin-right: 4px;
+}
+
+.convo-preview-empty {
+    font-size: 0.72em;
+    color: rgba(255, 255, 255, 0.3);
+    font-style: italic;
+    padding: 8px 0;
+    text-align: center;
+}
+
+/* Mobile adjustments for reaction zone */
+@media (max-width: 480px) {
+    .explorer-emoji-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 1.2em;
+    }
+
+    .reaction-zone-explorer {
+        padding: 10px 8px 8px;
+    }
+
+    .reaction-zone-comments-btn {
+        padding: 3px 8px;
+        font-size: 0.72em;
+    }
+}
+
+/* ========================================
    UNIFIED CHECKOUT: Chip In Section
    ======================================== */
 
