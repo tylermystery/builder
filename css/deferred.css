@@ -3134,6 +3134,262 @@
     display: none;
 }
 
+/* ─── Live Stream Toolbar (v3.8) ──────────────────────────────────────────── */
+
+/* Toolbar container in header right section */
+.live-stream-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#presentation-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Go Live button */
+.live-go-live-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(220, 53, 69, 0.2);
+    border: 1px solid rgba(220, 53, 69, 0.4);
+    color: rgba(255, 255, 255, 0.95);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.8em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+    backdrop-filter: blur(4px);
+    white-space: nowrap;
+}
+
+.live-go-live-btn:hover {
+    background: rgba(220, 53, 69, 0.4);
+    box-shadow: 0 2px 10px rgba(220, 53, 69, 0.3);
+}
+
+.live-go-live-btn:active {
+    transform: scale(0.97);
+}
+
+/* Stream controls row (visible when live) */
+.live-stream-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* LIVE indicator badge */
+.live-indicator {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(220, 53, 69, 0.3);
+    border: 1px solid rgba(220, 53, 69, 0.5);
+    padding: 3px 10px;
+    border-radius: 16px;
+    font-size: 0.7em;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+    backdrop-filter: blur(4px);
+}
+
+.live-dot {
+    width: 8px;
+    height: 8px;
+    background: #dc3545;
+    border-radius: 50%;
+    animation: live-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.live-text {
+    text-transform: uppercase;
+}
+
+.live-viewer-count {
+    opacity: 0.8;
+    font-weight: 400;
+}
+
+.live-viewer-count::before {
+    content: '\00B7 ';
+}
+
+/* Toolbar control buttons (mute, camera, end) */
+.live-toolbar-btn {
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.live-control-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.85em;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.live-control-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.live-control-btn:active {
+    transform: scale(0.93);
+}
+
+.live-control-btn.muted {
+    background: rgba(220, 53, 69, 0.3);
+    border-color: rgba(220, 53, 69, 0.5);
+}
+
+/* End stream button */
+.live-end-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(220, 53, 69, 0.35);
+    border: 1px solid rgba(220, 53, 69, 0.5);
+    color: #fff;
+    font-size: 0.85em;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.live-end-btn:hover {
+    background: rgba(220, 53, 69, 0.55);
+}
+
+.live-end-btn:active {
+    transform: scale(0.93);
+}
+
+.live-btn-icon {
+    font-size: 1em;
+    line-height: 1;
+}
+
+.live-btn-label {
+    font-size: 0.85em;
+}
+
+/* ─── Live Video Preview Strip ────────────────────────────────────────────── */
+
+.live-video-strip {
+    position: relative;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    max-height: 200px;
+}
+
+.live-video-strip.collapsed {
+    max-height: 0;
+    border-bottom: none;
+}
+
+.live-video-strip-inner {
+    display: flex;
+    gap: 4px;
+    padding: 6px 12px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.2) transparent;
+}
+
+/* Individual video cell */
+.live-video-cell {
+    flex: 0 0 auto;
+    width: 160px;
+    height: 120px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(30, 30, 40, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    position: relative;
+}
+
+.live-video-local {
+    border-color: rgba(220, 53, 69, 0.5);
+}
+
+.live-video-cell video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.live-video-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.7em;
+    gap: 4px;
+}
+
+.live-video-placeholder span:first-child {
+    font-size: 2em;
+}
+
+/* Collapse/expand toggle for video strip */
+.live-video-strip-toggle {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    color: rgba(255, 255, 255, 0.7);
+    padding: 2px 16px;
+    font-size: 0.6em;
+    cursor: pointer;
+    z-index: 1;
+    transition: background 0.2s ease;
+}
+
+.live-video-strip-toggle:hover {
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+}
+
+.live-video-strip.collapsed .live-strip-toggle-icon {
+    transform: rotate(180deg);
+    display: inline-block;
+}
+
+.live-strip-toggle-icon {
+    display: inline-block;
+    transition: transform 0.3s ease;
+}
+
 .back-icon, .share-icon {
     font-size: 1.1em;
     font-weight: bold;

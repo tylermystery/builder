@@ -76,16 +76,38 @@
 - `css/deferred.css` — Styles for `.compact-reaction-summary`, `.compact-reaction-score`, `.thread-summary-emoji`
 
 ---
-## Version 3.8: Real-World Live Integration (📋 PLANNED — Development Paused)
-**Core Objective:** Integrate a live video/audio communication layer that interacts with the Airtable-backed project hierarchy and the Pusher-based chat system. This module aims to bring real-world synchronization into the Warehouse OS.
+## Version 3.8: Real-World Live Integration (Phase 1 IN PROGRESS)
+**Core Objective:** Integrate a live video/audio communication layer that interacts with the Airtable-backed project hierarchy and the Pusher-based chat system. This module brings real-world synchronization into the Warehouse OS.
 
-**Status:** Development is currently **on pause** while the team focuses on real-world synchronization planning and key design decisions. The v3.7 emoji reaction system (Phases 1–2) is stable and complete. Phases 3–6 of the v3.7 reaction overhaul are deferred in favor of this new module.
+**Design Decisions (Finalized):**
 
-**Planned Components:**
-- **Video Integration:** WebRTC provider (Daily.co or Agora) embedded as a "Warehouse Live" component in `unifiedChatPanel.js`, with a new `liveStreamOverlay.js` for video toggle UI
-- **Contextual Tagging:** Chat messages sent during live streams can be pinned to a specific `projectID` from `state.projectData`
-- **AI Transcription Bridge:** Netlify Function (`/functions/stream-processor`) for live transcript processing with keyword-driven task/record creation via Airtable
-- **Theater Mode:** Global "Theater Mode" in `index.html` displaying project dashboard and live stream simultaneously with real-time vitality score updates
-- **State Management:** Global `state.currentProject` updates when streamer switches focus, triggering `refreshFlowLines()` in VitalityUI
+| # | Decision | Resolution |
+|---|----------|------------|
+| 1 | WebRTC Provider | **Agora** — lower-level API control, custom UI flexibility aligned with Warehouse OS aesthetic |
+| 2 | State Model | **Plan = Project = Session.** Auto-created top-level plan serves as default workspace |
+| 3 | Vitality UI | **Keep dormant.** Emoji reactions/summaries serve as the vitality/score layer for now |
+| 4 | Transcription Pipeline | **Agora Real-Time Transcription (RTT)** — provider-side transcription forwarded to Netlify Function |
+| 5 | Video Layout | **Video chat toolbar in presentation header** with collapsible video strip below header. Current plan board layout preserved |
+| 6 | Authentication | **Authenticated users start streams** (always tied to a plan). **Viewers don't need auth** |
+| 7 | Voice Commands | **"Ryry"** wake word with confirmation toast + 5-second undo window |
+| 8 | Top-Level Plan | **Auto-created** on first login — serves as default workspace for video sessions |
+| 9 | Viewer Access | **Shareable link + in-plan LIVE indicator** (both mechanisms) |
+
+**Phase 1: Foundation — Agora SDK & Basic Video (IN PROGRESS)**
+- Added Agora SDK lazy-loading via CDN (`components/liveStream.js`)
+- Created Agora token generation Netlify Function (`netlify/functions/agora-token.js`)
+- Added video chat toolbar to presentation header (Go Live, Mute, Camera, End Stream)
+- Added collapsible video preview strip below header for local/remote video
+- Extended `state.js` with stream state (`state.stream.*`) and top-level plan (`state.topLevelPlan.*`)
+- Added Agora + Ryry configuration to `config.js`
+- Integrated toolbar with `presentation.js` (init, cleanup, event handlers)
+- Added auto top-level plan creation in `auth.js` login flow via `api.ensureTopLevelPlan()`
+
+**Remaining Phases:**
+- **Phase 2:** Chat panel full-screen mode & stream-plan association
+- **Phase 3:** Contextual tagging (pin messages to plan items during streams)
+- **Phase 4:** AI Transcription Bridge (Ryry voice commands via Agora RTT)
+- **Phase 5:** Shareable stream links & viewer experience
+- **Phase 6:** Polish, state sync, & real-time reactions during streams
 
 **Design Constraint:** Maintain the "Authenticity" ethos — the UI should feel like a "Warehouse OS," not a corporate meeting tool.

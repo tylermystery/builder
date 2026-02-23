@@ -3,6 +3,34 @@ export const STRIPE_PUBLISHABLE_KEY = 'pk_live_opXi3umu9588LiitWvYhdk9H';
 export const CLOUDINARY_CLOUD_NAME = 'daedqizre';
 export const RECORDS_PER_LOAD = 10;
 
+// --- Agora Live Stream Configuration (v3.8) ---
+export const AGORA_APP_ID = typeof window !== 'undefined' && window.__AGORA_APP_ID__ || '';
+export const AGORA_SDK_URL = 'https://download.agora.io/sdk/release/AgoraRTC_N-4.22.0.js';
+export const LIVE_STREAM_CONFIG = {
+    codec: 'vp8',
+    mode: 'live',             // 'live' mode for broadcast scenario (host + audience)
+    role: 'host',             // default role, overridden per user
+    videoProfile: {
+        width: 640,
+        height: 360,
+        frameRate: 15,
+        bitrateMin: 200,
+        bitrateMax: 600,
+    },
+    audioProfile: 'speech_low_quality',  // optimized for voice, lower bandwidth
+};
+
+// Ryry AI Assistant voice command configuration
+export const RYRY_CONFIG = {
+    wakeWord: 'ryry',
+    commands: {
+        LOG_TASK: { keywords: ['log task'], description: 'Create a new task in the current plan' },
+        SET_PRIORITY: { keywords: ['set priority'], description: 'Set priority on the most recent task' },
+        PROJECT_UPDATE: { keywords: ['project update'], description: 'Post a project update to the plan chat' },
+    },
+    confirmationTimeoutMs: 5000,  // 5 second undo window for voice commands
+};
+
 // Base categories for item classification
 export const BASE_CATEGORIES = [
     { id: 'Activities', label: 'Activities', icon: '🎯', color: '#1565c0', bg: '#e3f2fd', border: '#90caf9' },

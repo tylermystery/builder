@@ -20,12 +20,14 @@ The application is built on a modular architecture to ensure maintainability and
 - **components/sidebar.js:** Controls the right-hand "Event Plan" panel and the "Favorites" carousel.
 - **components/backgroundEngine.js:** The central engine that manages the animated WebGL canvas background and its reactive "energy" state.
 - **components/effects/fluid.js:** The WebGL shader plugin that renders the "Fluid Energy" vortex.
+- **components/liveStream.js:** (v3.8) Agora WebRTC live stream integration module. Handles SDK lazy-loading, client lifecycle (join/leave/publish/subscribe), local audio/video track management, remote user tracking, and stream state synchronization. Provides a callback-based API for the presentation layer to respond to stream events.
 
 ## Serverless Functions (`netlify/functions/`)
 - **/api/process-email:** Receives email data from a webhook, uses the Gemini AI API to parse for sales information, and creates or updates records in the Airtable CRM.
 - **/api/auth-start & /api/auth-verify:** Handle the passwordless "magic link" authentication flow.
 - **/api/update-user-prefs:** Updates an authenticated user's record in Airtable with their notification preferences, such as phone number.
 - **/api/send-notification:** Triggered when a new chat message is posted. It fetches collaborators for the session and sends real-time SMS alerts via Twilio to users who have opted in.
+- **/api/agora-token:** (v3.8) Generates temporary Agora RTC tokens for live stream authentication. Validates that stream hosts are authenticated; viewers receive audience-role tokens. Returns test-mode responses when Agora credentials are not yet configured.
 - **Other Functions:** Proxies for Calendar, Cloudinary, Payments, and Chat services.
 
 ## Utility Modules

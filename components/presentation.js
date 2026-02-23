@@ -25,6 +25,7 @@ import { initializeUnifiedChatPanel, showUnifiedChatPanel, hideUnifiedChatPanel,
 import { initVitalityUI, cleanupVitalityUI, refreshFlowLines } from '../vitality/vitalityUI.js';
 import { requestVitalityRecalc, recalculateVitality } from '../vitality/vitalityEngine.js';
 import { openActionMenu, closeActionMenu, isActionMenuOpen, registerActionHandler } from './actionMenu.js';
+import * as liveStream from './liveStream.js';
 
 console.log('[MODULE DEBUG] presentation.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -142,6 +143,21 @@ let floatingChatBtn = null;
 
 // Reactions summary DOM element
 let reactionsSummaryEl = null;
+
+// v3.8: Live stream toolbar DOM element references
+let liveStreamToolbar = null;
+let liveGoLiveBtn = null;
+let liveStreamControls = null;
+let liveToggleAudioBtn = null;
+let liveToggleVideoBtn = null;
+let liveEndStreamBtn = null;
+let liveViewerCountEl = null;
+let liveAudioIcon = null;
+let liveVideoIcon = null;
+let liveVideoStrip = null;
+let liveLocalVideoEl = null;
+let liveRemoteVideosEl = null;
+let liveVideoStripToggle = null;
 
 // Track loaded images for each item
 const itemImagesCache = new Map();
@@ -538,6 +554,21 @@ function ensureDOMElements() {
         itemsSummaryEl: !!itemsSummaryEl
     });
     */
+
+    // v3.8: Live stream toolbar DOM elements
+    liveStreamToolbar = document.getElementById('live-stream-toolbar');
+    liveGoLiveBtn = document.getElementById('live-go-live-btn');
+    liveStreamControls = document.getElementById('live-stream-controls');
+    liveToggleAudioBtn = document.getElementById('live-toggle-audio');
+    liveToggleVideoBtn = document.getElementById('live-toggle-video');
+    liveEndStreamBtn = document.getElementById('live-end-stream');
+    liveViewerCountEl = document.getElementById('live-viewer-count');
+    liveAudioIcon = document.getElementById('live-audio-icon');
+    liveVideoIcon = document.getElementById('live-video-icon');
+    liveVideoStrip = document.getElementById('live-video-strip');
+    liveLocalVideoEl = document.getElementById('live-local-video');
+    liveRemoteVideosEl = document.getElementById('live-remote-videos');
+    liveVideoStripToggle = document.getElementById('live-video-strip-toggle');
 
     if (!modal) {
         console.error('[Presentation] Modal element #presentation-modal-overlay not found in DOM');
@@ -9745,6 +9776,288 @@ async function dissolveGroup(groupId) {
     triggerSave();
 }
 
+// ─── v3.8: Live Stream Toolbar ──────────────────────────────────────────────
+
+/**
+ * Initialize the live stream toolbar in the presentation header.
+ * Shows/hides the toolbar based on auth state and sets up event listeners.
+ */
+function initializeLiveStreamToolbar() {
+    if (!liveStreamToolbar) return;
+
+    // Register liveStream callbacks
+    liveStream.registerCallbacks({
+        onStreamStarted: handleStreamStarted,
+        onStreamEnded: handleStreamEnded,
+        onRemoteUserJoined: handleRemoteUserJoined,
+        onRemoteUserLeft: handleRemoteUserLeft,
+        onViewerCountChanged: handleViewerCountChanged,
+        onError: handleStreamError,
+    });
+
+    // Show toolbar (visible to all users; Go Live button checks auth)
+    liveStreamToolbar.style.display = '';
+
+    // Go Live button
+    if (liveGoLiveBtn) {
+        liveGoLiveBtn.addEventListener('click', handleGoLiveClick);
+    }
+
+    // Stream control buttons
+    if (liveToggleAudioBtn) {
+        liveToggleAudioBtn.addEventListener('click', handleToggleAudio);
+    }
+    if (liveToggleVideoBtn) {
+        liveToggleVideoBtn.addEventListener('click', handleToggleVideo);
+    }
+    if (liveEndStreamBtn) {
+        liveEndStreamBtn.addEventListener('click', handleEndStream);
+    }
+
+    // Video strip collapse toggle
+    if (liveVideoStripToggle) {
+        liveVideoStripToggle.addEventListener('click', () => {
+            if (liveVideoStrip) {
+                liveVideoStrip.classList.toggle('collapsed');
+            }
+        });
+    }
+
+    // Update toolbar state to match current stream state
+    updateLiveStreamToolbarUI();
+
+    log('Presentation', 'Live stream toolbar initialized');
+}
+
+/**
+ * Update the toolbar UI to reflect the current stream state.
+ */
+function updateLiveStreamToolbarUI() {
+    if (!liveStreamToolbar) return;
+
+    const isLive = state.stream.isActive;
+    const isHost = state.stream.isHost;
+
+    // Toggle between Go Live button and stream controls
+    if (liveGoLiveBtn) {
+        liveGoLiveBtn.style.display = isLive ? 'none' : '';
+    }
+    if (liveStreamControls) {
+        liveStreamControls.style.display = isLive ? '' : 'none';
+    }
+
+    // Update audio/video toggle icons
+    if (liveAudioIcon) {
+        const audioEnabled = state.stream.localAudioEnabled;
+        liveAudioIcon.textContent = audioEnabled ? '\u{1F3A4}' : '\u{1F507}';
+        if (liveToggleAudioBtn) {
+            liveToggleAudioBtn.classList.toggle('muted', !audioEnabled);
+            liveToggleAudioBtn.title = audioEnabled ? 'Mute microphone' : 'Unmute microphone';
+        }
+    }
+    if (liveVideoIcon) {
+        const videoEnabled = state.stream.localVideoEnabled;
+        liveVideoIcon.textContent = videoEnabled ? '\u{1F4F7}' : '\u{1F6AB}';
+        if (liveToggleVideoBtn) {
+            liveToggleVideoBtn.classList.toggle('muted', !videoEnabled);
+            liveToggleVideoBtn.title = videoEnabled ? 'Turn off camera' : 'Turn on camera';
+        }
+    }
+
+    // Show/hide controls based on host vs viewer
+    if (!isHost && isLive) {
+        // Viewers can't toggle audio/video or end stream
+        if (liveToggleAudioBtn) liveToggleAudioBtn.style.display = 'none';
+        if (liveToggleVideoBtn) liveToggleVideoBtn.style.display = 'none';
+        if (liveEndStreamBtn) liveEndStreamBtn.style.display = 'none';
+    } else if (isHost && isLive) {
+        if (liveToggleAudioBtn) liveToggleAudioBtn.style.display = '';
+        if (liveToggleVideoBtn) liveToggleVideoBtn.style.display = '';
+        if (liveEndStreamBtn) liveEndStreamBtn.style.display = '';
+    }
+
+    // Update viewer count
+    if (liveViewerCountEl) {
+        liveViewerCountEl.textContent = state.stream.viewerCount || 0;
+    }
+
+    // Show/hide video strip
+    if (liveVideoStrip) {
+        liveVideoStrip.style.display = isLive ? '' : 'none';
+    }
+}
+
+/**
+ * Handle "Go Live" button click.
+ */
+async function handleGoLiveClick() {
+    // Check authentication
+    if (!state.session.user?.isAuthenticated) {
+        showToast('Sign in to go live');
+        showUserModal();
+        return;
+    }
+
+    // Check for session/plan context
+    if (!state.session.id) {
+        showToast('A plan is required to start a live stream');
+        return;
+    }
+
+    // Disable button during initialization
+    if (liveGoLiveBtn) {
+        liveGoLiveBtn.disabled = true;
+        const label = liveGoLiveBtn.querySelector('.live-btn-label');
+        if (label) label.textContent = 'Starting...';
+    }
+
+    try {
+        const channelName = `plan-${state.session.id}`;
+        const success = await liveStream.startStream({
+            channelName,
+            videoContainer: liveLocalVideoEl,
+        });
+
+        if (!success) {
+            showToast('Failed to start stream. Please check camera/mic permissions.');
+        }
+    } catch (error) {
+        console.error('[Presentation] Go Live error:', error);
+        showToast('Error starting stream: ' + (error.message || 'Unknown error'));
+    } finally {
+        // Re-enable button
+        if (liveGoLiveBtn) {
+            liveGoLiveBtn.disabled = false;
+            const label = liveGoLiveBtn.querySelector('.live-btn-label');
+            if (label) label.textContent = 'Go Live';
+        }
+    }
+}
+
+async function handleToggleAudio() {
+    const enabled = await liveStream.toggleAudio();
+    updateLiveStreamToolbarUI();
+}
+
+async function handleToggleVideo() {
+    const enabled = await liveStream.toggleVideo();
+    updateLiveStreamToolbarUI();
+}
+
+async function handleEndStream() {
+    await liveStream.endStream();
+    // UI update happens via callback
+}
+
+function handleStreamStarted(channelName, uid) {
+    log('Presentation', `Stream started: channel=${channelName}, uid=${uid}`);
+    updateLiveStreamToolbarUI();
+
+    // Clear the placeholder in the local video container
+    if (liveLocalVideoEl) {
+        const placeholder = liveLocalVideoEl.querySelector('.live-video-placeholder');
+        if (placeholder) placeholder.style.display = 'none';
+    }
+
+    // Broadcast stream status via Pusher if available
+    if (presentationChatChannel) {
+        presentationChatChannel.trigger('client-stream-started', {
+            channelName,
+            hostUserId: state.session.user?.id,
+            hostName: state.session.user?.name || 'Someone',
+        });
+    }
+
+    showToast('You are now live!');
+}
+
+function handleStreamEnded() {
+    log('Presentation', 'Stream ended');
+    updateLiveStreamToolbarUI();
+
+    // Clear video containers
+    if (liveLocalVideoEl) {
+        liveLocalVideoEl.innerHTML = '<div class="live-video-placeholder"><span>\u{1F4F9}</span><span>Camera off</span></div>';
+    }
+    if (liveRemoteVideosEl) {
+        liveRemoteVideosEl.innerHTML = '';
+    }
+
+    // Broadcast stream ended via Pusher
+    if (presentationChatChannel) {
+        presentationChatChannel.trigger('client-stream-ended', {
+            hostUserId: state.session.user?.id,
+        });
+    }
+
+    showToast('Stream ended');
+}
+
+function handleRemoteUserJoined(uid, mediaType, totalRemote) {
+    log('Presentation', `Remote user ${uid} joined (${mediaType}), total: ${totalRemote}`);
+
+    if (mediaType === 'video' && liveRemoteVideosEl) {
+        // Create a video cell for the remote user if it doesn't exist
+        let cell = liveRemoteVideosEl.querySelector(`[data-remote-uid="${uid}"]`);
+        if (!cell) {
+            cell = document.createElement('div');
+            cell.className = 'live-video-cell';
+            cell.setAttribute('data-remote-uid', uid);
+            liveRemoteVideosEl.appendChild(cell);
+        }
+        liveStream.playRemoteVideo(uid, cell);
+    }
+
+    updateLiveStreamToolbarUI();
+}
+
+function handleRemoteUserLeft(uid, totalRemote) {
+    log('Presentation', `Remote user ${uid} left, total: ${totalRemote}`);
+
+    if (liveRemoteVideosEl) {
+        const cell = liveRemoteVideosEl.querySelector(`[data-remote-uid="${uid}"]`);
+        if (cell) cell.remove();
+    }
+
+    updateLiveStreamToolbarUI();
+}
+
+function handleViewerCountChanged(count) {
+    if (liveViewerCountEl) {
+        liveViewerCountEl.textContent = count;
+    }
+}
+
+function handleStreamError(errorType, message) {
+    console.error(`[Presentation] Stream error (${errorType}):`, message);
+    showToast(message || 'Stream error occurred');
+}
+
+/**
+ * Cleanup live stream resources when leaving presentation view.
+ */
+function cleanupLiveStreamToolbar() {
+    if (liveGoLiveBtn) {
+        liveGoLiveBtn.removeEventListener('click', handleGoLiveClick);
+    }
+    if (liveToggleAudioBtn) {
+        liveToggleAudioBtn.removeEventListener('click', handleToggleAudio);
+    }
+    if (liveToggleVideoBtn) {
+        liveToggleVideoBtn.removeEventListener('click', handleToggleVideo);
+    }
+    if (liveEndStreamBtn) {
+        liveEndStreamBtn.removeEventListener('click', handleEndStream);
+    }
+
+    // End any active stream
+    if (state.stream.isActive) {
+        liveStream.endStream();
+    }
+}
+
+// ─── End Live Stream Toolbar ────────────────────────────────────────────────
+
 // Initialize merge dialog event listeners
 function initializeMergeDialogListeners() {
     // Close button
@@ -14370,6 +14683,9 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Initialize merge dialog event listeners
     initializeMergeDialogListeners();
 
+    // v3.8: Initialize live stream toolbar
+    initializeLiveStreamToolbar();
+
     log('Presentation', 'Itinerary view rendered successfully');
     if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] ========== showPresentationView COMPLETE ==========');
 }
@@ -14383,6 +14699,9 @@ export function hidePresentationView() {
 
     // Clean up Vitality UI (flow lines, etc.)
     cleanupVitalityUI();
+
+    // v3.8: Clean up live stream toolbar
+    cleanupLiveStreamToolbar();
 
     // Hide the Unified Chat Panel
     hideUnifiedChatPanel();

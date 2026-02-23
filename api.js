@@ -6170,3 +6170,81 @@ export async function upsertCommunityFund(itemRecordId, itemName, donationAmount
         return null;
     }
 }
+
+// ─── v3.8: Top-Level Plan Auto-Creation ─────────────────────────────────────
+
+/**
+ * Ensure a top-level plan exists for the authenticated user.
+ * If the user has no sessions or no session marked as a top-level plan,
+ * create one automatically. This serves as the user's default workspace
+ * for video sessions and other features that require a plan context.
+ *
+ * @param {string} userId - The authenticated user's ID
+ * @param {string} userName - The user's display name
+ * @param {string} storeId - Optional store ID context
+ * @returns {Promise<{id: string, name: string}|null>} The top-level plan info, or null on failure
+ */
+export async function ensureTopLevelPlan(userId, userName, storeId = null) {
+    if (!userId) {
+        log('API', 'ensureTopLevelPlan: No user ID provided');
+        return null;
+    }
+
+    try {
+        // Check if user already has a top-level plan by looking for a session
+        // with the special "TopLevel" tag in its name or Goals field
+        const sessions = await fetchUserSessions(userId, storeId);
+
+        // Look for an existing top-level plan (identified by a marker in Goals)
+        const topLevelPlan = sessions.find(session => {
+            const goals = session.fields?.Goals || '';
+            return goals.includes('[top-level-plan]');
+        });
+
+        if (topLevelPlan) {
+            log('API', `Found existing top-level plan: ${topLevelPlan.id} (${topLevelPlan.fields?.Name || 'Unnamed'})`);
+            return {
+                id: topLevelPlan.id,
+                name: topLevelPlan.fields?.Name || 'My Workspace',
+            };
+        }
+
+        // No top-level plan exists - create one
+        const planName = userName ? `${userName}'s Workspace` : 'My Workspace';
+        log('API', `Creating top-level plan for user ${userId}: "${planName}"`);
+
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fields: {
+                    Name: planName,
+                    Collaborators: userId,
+                    Goals: '[top-level-plan] Default workspace for live sessions and quick collaboration',
+                    ...(storeId ? { Stores: [storeId] } : {}),
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[API] Error creating top-level plan:', errorText);
+            return null;
+        }
+
+        const data = await response.json();
+        log('API', `Top-level plan created: ${data.id}`);
+
+        return {
+            id: data.id,
+            name: planName,
+        };
+    } catch (error) {
+        console.error('[API] ensureTopLevelPlan error:', error);
+        return null;
+    }
+}

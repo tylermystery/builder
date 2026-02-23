@@ -112,6 +112,23 @@ export let state = {
         isLoading: true,          // True while permissions are being fetched
         permissionRecord: null,   // The Collaborator_Permissions record if exists
     },
+    // v3.8: Live Stream State (Agora WebRTC)
+    stream: {
+        isActive: false,           // Whether a stream is currently live in this session
+        isHost: false,             // Whether the current user is the stream host
+        hostUserId: null,          // User ID of the stream host
+        channelName: null,         // Agora channel name (derived from plan/session ID)
+        startedAt: null,           // Timestamp when stream started
+        viewerCount: 0,            // Current number of viewers
+        localAudioEnabled: true,   // Local microphone state
+        localVideoEnabled: true,   // Local camera state
+        shareableLink: null,       // Shareable URL for the stream
+    },
+    // v3.8: Top-level plan reference
+    topLevelPlan: {
+        id: null,                  // Session ID of the auto-created top-level plan
+        name: null,                // Name of the top-level plan
+    },
 };
 
 /**
@@ -246,6 +263,22 @@ export function setState(newState) {
         updatedState.permissions = {
             ...state.permissions,
             ...newState.permissions
+        };
+    }
+
+    // Deep merge for stream state (v3.8)
+    if (newState.stream) {
+        updatedState.stream = {
+            ...state.stream,
+            ...newState.stream
+        };
+    }
+
+    // Deep merge for top-level plan (v3.8)
+    if (newState.topLevelPlan) {
+        updatedState.topLevelPlan = {
+            ...state.topLevelPlan,
+            ...newState.topLevelPlan
         };
     }
 
