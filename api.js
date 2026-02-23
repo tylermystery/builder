@@ -612,7 +612,18 @@ export async function loadSessionFromAirtable(sessionId) {
                     // Backward compatibility: plain recordId keys (no "::") are migrated
                     // to compound keys as "recordId::original" (Decision 3A)
                     const normalizedKey = reactionKey.includes('::') ? reactionKey : `${reactionKey}::original`;
-                    state.session.reactions.set(normalizedKey, new Map(Object.entries(reactionsObject[reactionKey])));
+                    const userReactionsRaw = reactionsObject[reactionKey];
+                    const userReactionsMap = new Map();
+                    for (const [userId, emojiData] of Object.entries(userReactionsRaw)) {
+                        // Support both legacy (string) and new (array) format
+                        if (Array.isArray(emojiData)) {
+                            userReactionsMap.set(userId, new Set(emojiData));
+                        } else if (typeof emojiData === 'string') {
+                            // Migrate legacy single-emoji to Set with one element
+                            userReactionsMap.set(userId, new Set([emojiData]));
+                        }
+                    }
+                    state.session.reactions.set(normalizedKey, userReactionsMap);
                 }
 
                 state.session.userProfiles = new Map(Object.entries(savedState.userProfiles || {}));
@@ -916,7 +927,19 @@ export async function saveSessionToAirtable() {
 
     const reactionsForSaving = {};
     for (const [recordId, userReactionsMap] of state.session.reactions.entries()) {
-        reactionsForSaving[recordId] = Object.fromEntries(userReactionsMap);
+        const userObj = {};
+        for (const [userId, emojiData] of userReactionsMap.entries()) {
+            // Save Sets as arrays; preserve legacy strings for backward compat
+            if (emojiData instanceof Set) {
+                userObj[userId] = Array.from(emojiData);
+            } else if (typeof emojiData === 'string') {
+                // Legacy: wrap single string in array for forward compat
+                userObj[userId] = [emojiData];
+            } else {
+                userObj[userId] = emojiData;
+            }
+        }
+        reactionsForSaving[recordId] = userObj;
     }
 
     // Collect custom item records that are in the cart (ideas or locked)

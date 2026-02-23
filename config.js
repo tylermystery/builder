@@ -160,6 +160,90 @@ export const EMOJI_TIERS = [
     }
 ];
 
+// ─── Democratic Averaging & Multi-Emoji Utilities ────────────────────────────
+
+/**
+ * Compute the democratic average score from multi-emoji reactions.
+ * Algorithm:
+ *   1. For each user, compute the average of their emoji scores.
+ *   2. The democratic average = mean of all per-user averages.
+ * This ensures each user has equal weight regardless of how many emojis they added.
+ *
+ * @param {Map<string, Set<string>>} reactionsMap - Map<userId, Set<emoji>>
+ * @returns {{ democraticAverage: number, summaryEmoji: string, userCount: number, totalReactions: number }}
+ */
+export function computeDemocraticAverage(reactionsMap) {
+    if (!reactionsMap || !(reactionsMap instanceof Map) || reactionsMap.size === 0) {
+        return { democraticAverage: 0, summaryEmoji: '😊', userCount: 0, totalReactions: 0 };
+    }
+
+    let userCount = 0;
+    let totalReactions = 0;
+    let sumOfUserAverages = 0;
+
+    for (const [, emojiData] of reactionsMap) {
+        // Support both Set (new) and string (legacy) formats
+        const emojiSet = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+        if (emojiSet.size === 0) continue;
+
+        let userTotal = 0;
+        for (const emoji of emojiSet) {
+            userTotal += (REACTION_SCORES[emoji] || 0);
+            totalReactions++;
+        }
+        const userAvg = userTotal / emojiSet.size;
+        sumOfUserAverages += userAvg;
+        userCount++;
+    }
+
+    if (userCount === 0) {
+        return { democraticAverage: 0, summaryEmoji: '😊', userCount: 0, totalReactions: 0 };
+    }
+
+    const democraticAverage = sumOfUserAverages / userCount;
+
+    // Find the closest emoji from the full REACTION_SCORES table
+    let summaryEmoji = '😊';
+    let closestDiff = Infinity;
+    for (const [emoji, score] of Object.entries(REACTION_SCORES)) {
+        const diff = Math.abs(score - democraticAverage);
+        if (diff < closestDiff) {
+            closestDiff = diff;
+            summaryEmoji = emoji;
+        }
+    }
+
+    return { democraticAverage, summaryEmoji, userCount, totalReactions };
+}
+
+/**
+ * Generate a short hash for a photo URL to create stable compound reaction keys.
+ * Format: recordId::photo::hash
+ * @param {string} url - The photo URL
+ * @returns {string} An 8-character hex hash
+ */
+export function hashPhotoUrl(url) {
+    if (!url) return '00000000';
+    let hash = 0;
+    for (let i = 0; i < url.length; i++) {
+        const char = url.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    // Convert to positive hex string, pad to 8 chars
+    return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+/**
+ * Build a compound reaction key for a photo.
+ * @param {string} recordId - The parent item record ID
+ * @param {string} photoUrl - The photo URL
+ * @returns {string} Compound key like "recordId::photo::a1b2c3d4"
+ */
+export function getPhotoReactionKey(recordId, photoUrl) {
+    return `${recordId}::photo::${hashPhotoUrl(photoUrl)}`;
+}
+
 export const CONSTANTS = {
     CLOUDINARY_CLOUD_NAME: 'daedqizre',
     FIELD_NAMES: {

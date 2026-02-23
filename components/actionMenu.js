@@ -15,9 +15,10 @@
 //   - Magnetic cursor tracking with large selection zones
 
 import { state, getRecordById } from '../state.js';
-import { EMOJI_TIERS, REACTION_SCORES, getModalZIndex } from '../config.js';
+import { EMOJI_TIERS, REACTION_SCORES, getModalZIndex, computeDemocraticAverage } from '../config.js';
 import { requestVitalityRecalc, getNetEmoji } from '../vitality/vitalityEngine.js';
 import { REALM_META } from '../vitality/vitalityProfiles.js';
+import { isVitalityUIDormant } from '../vitality/vitalityUI.js';
 import { getCurrentUser } from '../chat.js';
 import { triggerSave } from '../events.js';
 import { showToast } from '../ui.js';
@@ -401,18 +402,22 @@ function buildTopBar(recordId) {
 
     const scores = state.vitality?.itemScores?.get(recordId);
     const reactionSummary = getReactionSummary(recordId);
-    const goodnessEmoji = scores?.goodnessEmoji || scores?.netEmoji || '\u2696\uFE0F';
+    const vitalityDormant = isVitalityUIDormant();
+    // When vitality is dormant, use reaction summary emoji; otherwise use goodness emoji
+    const displayEmoji = vitalityDormant
+        ? (reactionSummary.count > 0 ? reactionSummary.summaryEmoji : '\uD83D\uDE0A')
+        : (scores?.goodnessEmoji || scores?.netEmoji || '\u2696\uFE0F');
     const record = getRecordById(recordId);
     const name = record?.fields?.Name || 'Item';
 
     // Item name as title
     const title = document.createElement('div');
     title.className = 'vc2-top-title';
-    title.innerHTML = `<span class="vc2-top-goodness">${goodnessEmoji}</span> <span class="vc2-top-name">${escapeHtml(name)}</span>`;
+    title.innerHTML = `<span class="vc2-top-goodness">${displayEmoji}</span> <span class="vc2-top-name">${escapeHtml(name)}</span>`;
     topBar.appendChild(title);
 
-    // Vitality summary inline
-    if (scores) {
+    // Vitality summary inline (skip when dormant)
+    if (scores && !vitalityDormant) {
         const vitalityBar = document.createElement('div');
         vitalityBar.className = 'vc2-vitality-bar';
         vitalityBar.id = 'vc2-vitality-bar';
@@ -615,8 +620,9 @@ function buildCenterPanel(recordId, record) {
 function buildCenterHub(recordId) {
     const scores = state.vitality?.itemScores?.get(recordId);
     const reactionSummary = getReactionSummary(recordId);
+    const vitalityDormant = isVitalityUIDormant();
 
-    const goodnessEmoji = scores?.goodnessEmoji || scores?.netEmoji || '\u2696\uFE0F';
+    // When dormant, only show reaction-based summary; skip goodness score
     const summaryEmoji = reactionSummary.count > 0 ? reactionSummary.summaryEmoji : '\uD83D\uDE0A';
     const summaryScore = reactionSummary.count > 0
         ? `${reactionSummary.average >= 0 ? '+' : ''}${reactionSummary.average.toFixed(2)}`
@@ -629,9 +635,12 @@ function buildCenterHub(recordId) {
     hub.className = 'vc2-center-hub';
     hub.id = 'action-menu-center';
 
+    // When vitality is dormant, skip the goodness emoji entirely
+    const goodnessHTML = vitalityDormant ? '' : `<span class="vc2-hub-goodness" title="Goodness Score">${scores?.goodnessEmoji || scores?.netEmoji || '\u2696\uFE0F'}</span>`;
+
     hub.innerHTML = `
         <div class="vc2-hub-row">
-            <span class="vc2-hub-goodness" title="Goodness Score">${goodnessEmoji}</span>
+            ${goodnessHTML}
             <span class="action-menu-center-emoji" id="action-menu-center-emoji">${summaryEmoji}</span>
             <span class="action-menu-center-score" id="action-menu-center-score">${summaryScore}</span>
         </div>
@@ -674,16 +683,26 @@ function buildPeopleReactions(recordId) {
     const section = document.createElement('div');
     section.className = 'vc2-people-reactions';
 
+    // Count total individual reactions across all users
+    let totalReactionCount = 0;
+    reactions.forEach((emojiData) => {
+        const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+        totalReactionCount += emojis.size;
+    });
+
     const label = document.createElement('div');
     label.className = 'vc2-people-label';
-    label.textContent = `${reactions.size} reaction${reactions.size !== 1 ? 's' : ''}`;
+    label.textContent = `${totalReactionCount} reaction${totalReactionCount !== 1 ? 's' : ''} from ${reactions.size} user${reactions.size !== 1 ? 's' : ''}`;
     section.appendChild(label);
 
-    // Group by emoji
+    // Group by emoji across all users
     const emojiGroups = new Map();
-    reactions.forEach((emoji, userId) => {
-        if (!emojiGroups.has(emoji)) emojiGroups.set(emoji, []);
-        emojiGroups.get(emoji).push(userId);
+    reactions.forEach((emojiData, userId) => {
+        const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+        for (const emoji of emojis) {
+            if (!emojiGroups.has(emoji)) emojiGroups.set(emoji, []);
+            emojiGroups.get(emoji).push(userId);
+        }
     });
 
     emojiGroups.forEach((userIds, emoji) => {
@@ -869,12 +888,17 @@ function buildEmojiStrip(recordId) {
     const isMobile = window.innerWidth < 768;
     const itemSize = isMobile ? EMOJI_ITEM_SIZE_MOBILE : EMOJI_ITEM_SIZE;
 
-    let currentUserEmoji = null;
+    let currentUserEmojiSet = null;
     try {
         const user = getCurrentUser();
         const reactions = state.session.reactions?.get(recordId);
         if (reactions instanceof Map) {
-            currentUserEmoji = reactions.get(user.id);
+            const emojiData = reactions.get(user.id);
+            if (emojiData instanceof Set) {
+                currentUserEmojiSet = emojiData;
+            } else if (typeof emojiData === 'string') {
+                currentUserEmojiSet = new Set([emojiData]);
+            }
         }
     } catch (_) { /* anonymous */ }
 
@@ -892,7 +916,7 @@ function buildEmojiStrip(recordId) {
     emojis.forEach((emoji, i) => {
         const score = REACTION_SCORES[emoji] || 0;
         const scoreLabel = score > 0 ? `+${score.toFixed(1)}` : score.toFixed(1);
-        const isSelected = currentUserEmoji === emoji;
+        const isSelected = currentUserEmojiSet instanceof Set ? currentUserEmojiSet.has(emoji) : false;
 
         const btn = document.createElement('button');
         btn.className = `action-menu-emoji-btn vc2-emoji-btn${isSelected ? ' selected' : ''}`;
@@ -945,33 +969,14 @@ function getReactionSummary(recordId) {
         return { count: 0, total: 0, average: 0, summaryEmoji: '\uD83D\uDE0A' };
     }
 
-    let total = 0;
-    let count = 0;
-    reactions.forEach((emoji) => {
-        total += (REACTION_SCORES[emoji] || 0);
-        count += 1;
-    });
+    // Use democratic averaging for multi-emoji model
+    const { democraticAverage, summaryEmoji, userCount, totalReactions } = computeDemocraticAverage(reactions);
 
-    const average = count > 0 ? total / count : 0;
-
-    let summaryEmoji = '\uD83D\uDE0A';
-    let closestDiff = Infinity;
-    Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
-        const diff = Math.abs(score - average);
-        if (diff < closestDiff) {
-            closestDiff = diff;
-            summaryEmoji = emoji;
-        }
-    });
-
-    return { count, total, average, summaryEmoji };
+    return { count: totalReactions, total: democraticAverage * userCount, average: democraticAverage, summaryEmoji };
 }
 
 function getPreviewSummary(recordId, previewEmojiValue) {
     const reactions = state.session.reactions?.get(recordId);
-    let total = 0;
-    let count = 0;
-    let currentUserReaction = null;
 
     let currentUser;
     try {
@@ -980,34 +985,33 @@ function getPreviewSummary(recordId, previewEmojiValue) {
         currentUser = { id: 'anonymous', name: 'Anonymous' };
     }
 
+    // Build a temporary copy with the preview emoji toggled
+    const tempReactions = new Map();
     if (reactions && reactions instanceof Map) {
-        reactions.forEach((emoji, userId) => {
-            total += (REACTION_SCORES[emoji] || 0);
-            count += 1;
-            if (userId === currentUser.id) currentUserReaction = emoji;
-        });
-    }
-
-    if (currentUserReaction) {
-        total -= (REACTION_SCORES[currentUserReaction] || 0);
-    } else {
-        count += 1;
-    }
-
-    total += (REACTION_SCORES[previewEmojiValue] || 0);
-    const average = count > 0 ? total / count : 0;
-
-    let summaryEmoji = previewEmojiValue || '\uD83D\uDE0A';
-    let closestDiff = Infinity;
-    Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
-        const diff = Math.abs(score - average);
-        if (diff < closestDiff) {
-            closestDiff = diff;
-            summaryEmoji = emoji;
+        for (const [userId, emojiData] of reactions) {
+            const emojiSet = emojiData instanceof Set ? new Set(emojiData) : new Set([emojiData]);
+            tempReactions.set(userId, emojiSet);
         }
-    });
+    }
 
-    return { count, total, average, summaryEmoji };
+    // Toggle the preview emoji for the current user
+    if (!tempReactions.has(currentUser.id)) {
+        tempReactions.set(currentUser.id, new Set());
+    }
+    const userSet = tempReactions.get(currentUser.id);
+    if (userSet.has(previewEmojiValue)) {
+        userSet.delete(previewEmojiValue);
+    } else {
+        userSet.add(previewEmojiValue);
+    }
+    // Clean up empty set
+    if (userSet.size === 0) {
+        tempReactions.delete(currentUser.id);
+    }
+
+    const { democraticAverage, summaryEmoji, userCount, totalReactions } = computeDemocraticAverage(tempReactions);
+
+    return { count: totalReactions, total: democraticAverage * userCount, average: democraticAverage, summaryEmoji };
 }
 
 function escapeHtml(str) {
@@ -1149,14 +1153,29 @@ function handleEmojiSelect(recordId, emoji) {
 
     const itemReactions = state.session.reactions.get(recordId);
 
-    if (itemReactions.get(currentUser.id) === emoji) {
-        itemReactions.delete(currentUser.id);
+    // Multi-emoji model: each user has a Set of emojis
+    let userEmojiSet = itemReactions.get(currentUser.id);
+    if (!(userEmojiSet instanceof Set)) {
+        // Migrate from legacy string format
+        userEmojiSet = userEmojiSet ? new Set([userEmojiSet]) : new Set();
+    }
+
+    // Toggle: if emoji already in set, remove it; otherwise add it
+    if (userEmojiSet.has(emoji)) {
+        userEmojiSet.delete(emoji);
         showToast(`Removed ${emoji} reaction`, 'info');
     } else {
-        itemReactions.set(currentUser.id, emoji);
+        userEmojiSet.add(emoji);
         const record = getRecordById(recordId);
         const name = record?.fields?.Name || 'Item';
         showToast(`${emoji} added to "${name}"`, 'success');
+    }
+
+    // Clean up empty sets, otherwise store the updated set
+    if (userEmojiSet.size === 0) {
+        itemReactions.delete(currentUser.id);
+    } else {
+        itemReactions.set(currentUser.id, userEmojiSet);
     }
 
     triggerSave();
@@ -1183,15 +1202,17 @@ function handleEmojiSelect(recordId, emoji) {
         if (emojiEl || textEl || scoreEl) {
             const updatedReactions = state.session.reactions?.get(recordId);
             if (updatedReactions && updatedReactions instanceof Map && updatedReactions.size > 0) {
-                let total = 0;
+                // Use democratic averaging for multi-emoji model
+                const { democraticAverage, summaryEmoji, totalReactions } = computeDemocraticAverage(updatedReactions);
+                // Count individual emojis across all users for display
                 const emojiCounts = {};
-                updatedReactions.forEach((e) => { total += (REACTION_SCORES[e] || 0); emojiCounts[e] = (emojiCounts[e] || 0) + 1; });
-                const avg = total / updatedReactions.size;
-                let closestDiff = Infinity, bestEmoji = '\uD83D\uDE0A';
-                Object.entries(REACTION_SCORES).forEach(([e, s]) => { const d = Math.abs(s - avg); if (d < closestDiff) { closestDiff = d; bestEmoji = e; } });
-                if (emojiEl) emojiEl.textContent = bestEmoji;
-                if (textEl) { const sorted = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]); const top3 = sorted.slice(0, 3).map(([e, c]) => `${e}${c > 1 ? c : ''}`).join(' '); textEl.textContent = `${updatedReactions.size} reaction${updatedReactions.size !== 1 ? 's' : ''} ${top3}`; }
-                if (scoreEl) { scoreEl.textContent = `${avg >= 0 ? '+' : ''}${avg.toFixed(1)}`; scoreEl.style.display = ''; }
+                updatedReactions.forEach((emojiData) => {
+                    const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+                    for (const e of emojis) { emojiCounts[e] = (emojiCounts[e] || 0) + 1; }
+                });
+                if (emojiEl) emojiEl.textContent = summaryEmoji;
+                if (textEl) { const sorted = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]); const top3 = sorted.slice(0, 3).map(([e, c]) => `${e}${c > 1 ? c : ''}`).join(' '); textEl.textContent = `${totalReactions} reaction${totalReactions !== 1 ? 's' : ''} ${top3}`; }
+                if (scoreEl) { scoreEl.textContent = `${democraticAverage >= 0 ? '+' : ''}${democraticAverage.toFixed(1)}`; scoreEl.style.display = ''; }
             } else {
                 if (emojiEl) emojiEl.textContent = '\uD83D\uDE0A';
                 if (textEl) textEl.textContent = 'React';
@@ -1292,8 +1313,7 @@ function refreshEmojiStrip() {
 
 function updateCenterHub(recordId) {
     const reactionSummary = getReactionSummary(recordId);
-    const scores = state.vitality?.itemScores?.get(recordId);
-    const goodnessEmoji = scores?.goodnessEmoji || scores?.netEmoji || '\u2696\uFE0F';
+    const vitalityDormant = isVitalityUIDormant();
 
     const summaryEmoji = reactionSummary.count > 0 ? reactionSummary.summaryEmoji : '\uD83D\uDE0A';
     const summaryScore = reactionSummary.count > 0
@@ -1308,7 +1328,16 @@ function updateCenterHub(recordId) {
     const centerScore = document.getElementById('action-menu-center-score');
     const centerLabel = document.getElementById('action-menu-center-label');
 
-    if (goodnessEl) goodnessEl.textContent = goodnessEmoji;
+    // When vitality is dormant, hide the goodness element
+    if (goodnessEl) {
+        if (vitalityDormant) {
+            goodnessEl.style.display = 'none';
+        } else {
+            const scores = state.vitality?.itemScores?.get(recordId);
+            goodnessEl.textContent = scores?.goodnessEmoji || scores?.netEmoji || '\u2696\uFE0F';
+            goodnessEl.style.display = '';
+        }
+    }
     if (centerEmoji) {
         centerEmoji.textContent = summaryEmoji;
         centerEmoji.classList.remove('previewing');

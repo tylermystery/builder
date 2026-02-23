@@ -5,7 +5,7 @@ console.log('[MODULE DEBUG] presentation.js module starting to load...', perform
 
 import { state, setState, getRecordById, invalidateRecordsIndex } from '../state.js';
 import * as api from '../api.js';
-import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, EMOJI_TIERS, REACTION_SCORES, getModalZIndex } from '../config.js';
+import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, EMOJI_TIERS, REACTION_SCORES, getModalZIndex, computeDemocraticAverage } from '../config.js';
 import { updateUrl, getRecordPrice, parseOptions, flattenOptionGroups } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getCurrentUser, sendMessage as sendChatMessage, getReplyingToMessage, clearReplyState } from '../chat.js';
@@ -1249,9 +1249,13 @@ function getItemReactionScore(recordId) {
     const reactions = state.session.reactions.get(recordId);
     if (!reactions || !(reactions instanceof Map)) return 0;
 
+    // Multi-emoji model: sum all emoji scores across all users
     let score = 0;
-    reactions.forEach((emoji) => {
-        score += getReactionScore(emoji);
+    reactions.forEach((emojiData) => {
+        const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+        for (const emoji of emojis) {
+            score += getReactionScore(emoji);
+        }
     });
     return score;
 }
@@ -1260,15 +1264,21 @@ function getItemReactionScore(recordId) {
 function getItemReactionCount(recordId) {
     const reactions = state.session.reactions.get(recordId);
     if (!reactions || !(reactions instanceof Map)) return 0;
-    return reactions.size;
+    // Count total individual reactions across all users
+    let count = 0;
+    reactions.forEach((emojiData) => {
+        const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+        count += emojis.size;
+    });
+    return count;
 }
 
 /**
  * Get a summary emoji that represents the overall sentiment/activity for an item
- * based on the average score of all reactions. Returns the emoji whose score is
- * closest to the calculated average score from all collaborators' reactions.
+ * based on the democratic average of all reactions. Returns the emoji whose score is
+ * closest to the calculated democratic average from all collaborators' reactions.
  * @param {string} recordId - The item record ID
- * @returns {string} A single emoji closest to the average reaction score, or empty string if none
+ * @returns {string} A single emoji closest to the democratic average score, or empty string if none
  */
 function getItemSummaryEmoji(recordId) {
     const reactions = state.session.reactions.get(recordId);
@@ -1276,33 +1286,8 @@ function getItemSummaryEmoji(recordId) {
         return '';
     }
 
-    // Calculate the average score from all reactions
-    let totalScore = 0;
-    let reactionCount = 0;
-    reactions.forEach((emoji) => {
-        totalScore += getReactionScore(emoji);
-        reactionCount++;
-    });
-
-    if (reactionCount === 0) {
-        return '';
-    }
-
-    const averageScore = totalScore / reactionCount;
-
-    // Find the emoji with the score closest to the average
-    let closestEmoji = '';
-    let closestDifference = Infinity;
-
-    Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
-        const difference = Math.abs(score - averageScore);
-        if (difference < closestDifference) {
-            closestDifference = difference;
-            closestEmoji = emoji;
-        }
-    });
-
-    return closestEmoji || '💬';
+    const { summaryEmoji } = computeDemocraticAverage(reactions);
+    return summaryEmoji || '💬';
 }
 
 /**
@@ -1357,18 +1342,12 @@ function getEventSummaryEmoji() {
             return;
         }
 
-        // Calculate this component's average score (same as getItemSummaryEmoji)
-        let totalScore = 0;
-        let reactionCount = 0;
-        reactions.forEach((emoji) => {
-            totalScore += getReactionScore(emoji);
-            reactionCount++;
-        });
+        // Calculate this component's democratic average score
+        const { democraticAverage, totalReactions } = computeDemocraticAverage(reactions);
 
-        if (reactionCount > 0) {
-            const averageScore = totalScore / reactionCount;
-            componentAverages.push(averageScore);
-            totalReactionCount += reactionCount;
+        if (totalReactions > 0) {
+            componentAverages.push(democraticAverage);
+            totalReactionCount += totalReactions;
         }
     });
 
@@ -1628,17 +1607,20 @@ function createSentimentPopupHTML() {
         const record = getRecordById(item.recordId);
         const name = record?.fields.Name || 'Unknown Item';
         const reactions = state.session.reactions.get(item.recordId);
-        const reactionCount = reactions instanceof Map ? reactions.size : 0;
         const totalScore = getItemReactionScore(item.recordId);
+        const reactionCount = getItemReactionCount(item.recordId);
 
         // Calculate average score per reaction for positioning on scale
         const avgScore = reactionCount > 0 ? totalScore / reactionCount : 0;
 
-        // Get emoji breakdown
+        // Get emoji breakdown (across all users' Sets)
         const emojiBreakdown = {};
         if (reactions instanceof Map) {
-            reactions.forEach((emoji) => {
-                emojiBreakdown[emoji] = (emojiBreakdown[emoji] || 0) + 1;
+            reactions.forEach((emojiData) => {
+                const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+                for (const emoji of emojis) {
+                    emojiBreakdown[emoji] = (emojiBreakdown[emoji] || 0) + 1;
+                }
             });
         }
 
@@ -2398,11 +2380,24 @@ function selectEmoji(recordId, emoji) {
 
     const itemReactions = state.session.reactions.get(recordId);
 
-    // Toggle if same emoji, otherwise set new
-    if (itemReactions.get(currentUser.id) === emoji) {
+    // Multi-emoji model: each user has a Set of emojis
+    let userEmojiSet = itemReactions.get(currentUser.id);
+    if (!(userEmojiSet instanceof Set)) {
+        userEmojiSet = userEmojiSet ? new Set([userEmojiSet]) : new Set();
+    }
+
+    // Toggle: if emoji already in set, remove it; otherwise add it
+    if (userEmojiSet.has(emoji)) {
+        userEmojiSet.delete(emoji);
+    } else {
+        userEmojiSet.add(emoji);
+    }
+
+    // Clean up empty sets, otherwise store the updated set
+    if (userEmojiSet.size === 0) {
         itemReactions.delete(currentUser.id);
     } else {
-        itemReactions.set(currentUser.id, emoji);
+        itemReactions.set(currentUser.id, userEmojiSet);
     }
 
     // Re-render reactions for this item
@@ -2425,10 +2420,14 @@ function selectEmoji(recordId, emoji) {
 
     // Broadcast item reaction update via Pusher for real-time sync
     if (presentationChatChannel) {
-        // Convert Map to object for Pusher transmission
+        // Convert Map<userId, Set<emoji>> to object for Pusher transmission
         const reactionsObj = {};
-        itemReactions.forEach((userEmoji, odUserId) => {
-            reactionsObj[odUserId] = userEmoji;
+        itemReactions.forEach((emojiData, odUserId) => {
+            if (emojiData instanceof Set) {
+                reactionsObj[odUserId] = Array.from(emojiData);
+            } else {
+                reactionsObj[odUserId] = emojiData;
+            }
         });
         presentationChatChannel.trigger('client-item-reaction-update', {
             recordId,
@@ -2446,12 +2445,17 @@ function renderReactions(recordId, reactionContainer) {
     if (!(allReactions instanceof Map)) {
         allReactions = new Map();
     }
-    const currentUserReaction = allReactions.get(currentUser.id);
+    // Get current user's emoji set
+    const currentUserEmojiSet = allReactions.get(currentUser.id);
 
     // Quick reaction buttons (8 most common)
-    const buttonsHTML = EMOJI_REACTIONS.map(emoji =>
-        `<button class="reaction-btn ${currentUserReaction === emoji ? 'selected' : ''}" data-emoji="${emoji}" data-record-id="${recordId}">${emoji}</button>`
-    ).join('');
+    const buttonsHTML = EMOJI_REACTIONS.map(emoji => {
+        // Check if this emoji is in the user's set
+        const isSelected = currentUserEmojiSet instanceof Set
+            ? currentUserEmojiSet.has(emoji)
+            : currentUserEmojiSet === emoji;
+        return `<button class="reaction-btn ${isSelected ? 'selected' : ''}" data-emoji="${emoji}" data-record-id="${recordId}">${emoji}</button>`;
+    }).join('');
 
     // More button to open full picker
     const moreButtonHTML = `<button class="reaction-btn reaction-more-btn" data-record-id="${recordId}" title="More reactions">+</button>`;
@@ -2459,9 +2463,10 @@ function renderReactions(recordId, reactionContainer) {
     // Summary showing who reacted (simplified - just names and emojis)
     let summaryHTML = '';
     if (allReactions.size > 0) {
-        summaryHTML = Array.from(allReactions.entries()).map(([userId, reaction]) => {
+        summaryHTML = Array.from(allReactions.entries()).map(([userId, emojiData]) => {
             const name = state.session.userProfiles.get(userId) || 'A User';
-            return `<span class="reaction-user">${name}: ${reaction}</span>`;
+            const emojiStr = emojiData instanceof Set ? Array.from(emojiData).join('') : emojiData;
+            return `<span class="reaction-user">${name}: ${emojiStr}</span>`;
         }).join('');
     }
 
@@ -3163,24 +3168,17 @@ async function renderCompactCard(item) {
     let reactionZoneSummaryText = 'React';
     let rzReactionCount = 0;
     if (reactions && reactions instanceof Map && reactions.size > 0) {
-        rzReactionCount = reactions.size;
-        let total = 0;
+        const { democraticAverage, summaryEmoji: bestEmoji, totalReactions } = computeDemocraticAverage(reactions);
+        rzReactionCount = totalReactions;
         const emojiCounts = {};
-        reactions.forEach((emoji) => {
-            total += (REACTION_SCORES[emoji] || 0);
-            emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
-        });
-        const average = total / rzReactionCount;
-        // Find closest emoji to average score
-        let closestDiff = Infinity;
-        Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
-            const diff = Math.abs(score - average);
-            if (diff < closestDiff) {
-                closestDiff = diff;
-                reactionZoneSummaryEmoji = emoji;
+        reactions.forEach((emojiData) => {
+            const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+            for (const emoji of emojis) {
+                emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
             }
         });
-        reactionZoneScoreText = `${average >= 0 ? '+' : ''}${average.toFixed(1)}`;
+        reactionZoneSummaryEmoji = bestEmoji;
+        reactionZoneScoreText = `${democraticAverage >= 0 ? '+' : ''}${democraticAverage.toFixed(1)}`;
         // Build compact pill summary of top emojis
         const sorted = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]);
         const top3 = sorted.slice(0, 3).map(([emoji, count]) => `${emoji}${count > 1 ? count : ''}`).join(' ');
@@ -3416,9 +3414,12 @@ async function renderCompactGroupCard(group) {
     for (const gId of groupItems) {
         const memberReactions = state.session.reactions?.get(gId);
         if (memberReactions && memberReactions instanceof Map) {
-            memberReactions.forEach((emoji) => {
-                groupEmojiCounts[emoji] = (groupEmojiCounts[emoji] || 0) + 1;
-                groupTotalReactions++;
+            memberReactions.forEach((emojiData) => {
+                const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+                for (const emoji of emojis) {
+                    groupEmojiCounts[emoji] = (groupEmojiCounts[emoji] || 0) + 1;
+                    groupTotalReactions++;
+                }
             });
         }
     }
@@ -4481,14 +4482,19 @@ function buildRSBSummaryContent(container, recordId) {
         return;
     }
 
-    // Build pills for each unique emoji
+    // Build pills for each unique emoji (multi-emoji model)
     const emojiCounts = {};
     let totalScore = 0;
-    reactions.forEach((emoji) => {
-        emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
-        totalScore += (REACTION_SCORES[emoji] || 0);
+    let totalEmojiCount = 0;
+    reactions.forEach((emojiData) => {
+        const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+        for (const emoji of emojis) {
+            emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
+            totalScore += (REACTION_SCORES[emoji] || 0);
+            totalEmojiCount++;
+        }
     });
-    const avg = totalScore / reactions.size;
+    const avg = totalEmojiCount > 0 ? totalScore / totalEmojiCount : 0;
 
     const pillsDiv = document.createElement('div');
     pillsDiv.className = 'rsb-summary-pills';
@@ -4510,9 +4516,10 @@ function buildRSBSummaryContent(container, recordId) {
     const whoDiv = document.createElement('div');
     whoDiv.className = 'rsb-summary-who';
     const userNames = [];
-    reactions.forEach((emoji, userId) => {
+    reactions.forEach((emojiData, userId) => {
         const name = state.session.userProfiles?.get(userId) || 'Someone';
-        userNames.push(`${name} ${emoji}`);
+        const emojiStr = emojiData instanceof Set ? Array.from(emojiData).join('') : emojiData;
+        userNames.push(`${name} ${emojiStr}`);
     });
     const whoText = userNames.length <= 3
         ? userNames.join(', ')
@@ -4802,44 +4809,39 @@ function clearRSBEmojiPreview(recordId) {
  */
 function calculateReactionPreview(recordId, previewEmojiValue) {
     const reactions = state.session.reactions?.get(recordId);
-    let total = 0;
-    let count = 0;
-    let currentUserReaction = null;
 
     let currentUser;
     try { currentUser = getCurrentUser(); }
     catch (_) { currentUser = { id: 'anonymous', name: 'Anonymous' }; }
 
+    // Build a temporary copy with the preview emoji toggled for the current user
+    const tempReactions = new Map();
     if (reactions && reactions instanceof Map) {
-        reactions.forEach((emoji, userId) => {
-            total += (REACTION_SCORES[emoji] || 0);
-            count += 1;
-            if (userId === currentUser.id) currentUserReaction = emoji;
-        });
+        for (const [userId, emojiData] of reactions) {
+            const emojiSet = emojiData instanceof Set ? new Set(emojiData) : new Set([emojiData]);
+            tempReactions.set(userId, emojiSet);
+        }
     }
 
-    const isToggleOff = currentUserReaction === previewEmojiValue;
+    // Toggle the preview emoji for the current user
+    if (!tempReactions.has(currentUser.id)) {
+        tempReactions.set(currentUser.id, new Set());
+    }
+    const userSet = tempReactions.get(currentUser.id);
+    const isToggleOff = userSet.has(previewEmojiValue);
     if (isToggleOff) {
-        total -= (REACTION_SCORES[currentUserReaction] || 0);
-        count -= 1;
-    } else if (currentUserReaction) {
-        total -= (REACTION_SCORES[currentUserReaction] || 0);
-        total += (REACTION_SCORES[previewEmojiValue] || 0);
+        userSet.delete(previewEmojiValue);
     } else {
-        total += (REACTION_SCORES[previewEmojiValue] || 0);
-        count += 1;
+        userSet.add(previewEmojiValue);
+    }
+    // Clean up empty set
+    if (userSet.size === 0) {
+        tempReactions.delete(currentUser.id);
     }
 
-    const average = count > 0 ? total / count : 0;
-    let summaryEmoji = '😊';
-    if (count > 0) {
-        let closestDiff = Infinity;
-        Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
-            const diff = Math.abs(score - average);
-            if (diff < closestDiff) { closestDiff = diff; summaryEmoji = emoji; }
-        });
-    }
-    return { count, total, average, summaryEmoji, isToggleOff };
+    const { democraticAverage, summaryEmoji, totalReactions } = computeDemocraticAverage(tempReactions);
+
+    return { count: totalReactions, total: democraticAverage * tempReactions.size, average: democraticAverage, summaryEmoji, isToggleOff };
 }
 
 /**
@@ -4859,22 +4861,19 @@ function updateReactionZoneSummary(recordId) {
     let scoreText = '';
 
     if (reactions && reactions instanceof Map && reactions.size > 0) {
-        let total = 0;
+        const { democraticAverage, summaryEmoji: bestEmoji, totalReactions } = computeDemocraticAverage(reactions);
         const emojiCounts = {};
-        reactions.forEach((emoji) => {
-            total += (REACTION_SCORES[emoji] || 0);
-            emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
+        reactions.forEach((emojiData) => {
+            const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+            for (const emoji of emojis) {
+                emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
+            }
         });
-        const avg = total / reactions.size;
-        let closestDiff = Infinity;
-        Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
-            const diff = Math.abs(score - avg);
-            if (diff < closestDiff) { closestDiff = diff; summaryEmoji = emoji; }
-        });
-        scoreText = `${avg >= 0 ? '+' : ''}${avg.toFixed(1)}`;
+        summaryEmoji = bestEmoji;
+        scoreText = `${democraticAverage >= 0 ? '+' : ''}${democraticAverage.toFixed(1)}`;
         const sorted = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]);
         const top3 = sorted.slice(0, 3).map(([emoji, count]) => `${emoji}${count > 1 ? count : ''}`).join(' ');
-        summaryText = `${reactions.size} reaction${reactions.size !== 1 ? 's' : ''} ${top3}`;
+        summaryText = `${totalReactions} reaction${totalReactions !== 1 ? 's' : ''} ${top3}`;
     }
 
     if (emojiEl) emojiEl.textContent = summaryEmoji;
@@ -7398,8 +7397,13 @@ async function addReactionToItem(recordId, emoji) {
     // Use current user ID or generate anonymous ID
     const userId = state.session.user?.id || `anon-${Date.now()}`;
 
-    // Add/update reaction
-    itemReactions.set(userId, emoji);
+    // Multi-emoji model: add emoji to user's set
+    let userEmojiSet = itemReactions.get(userId);
+    if (!(userEmojiSet instanceof Set)) {
+        userEmojiSet = userEmojiSet ? new Set([userEmojiSet]) : new Set();
+    }
+    userEmojiSet.add(emoji);
+    itemReactions.set(userId, userEmojiSet);
 
     // Get item name for toast
     const record = getRecordById(recordId);
@@ -9759,14 +9763,17 @@ function calculateReactionRankings() {
     // Calculate scores for all items
     const itemsWithScores = combinedList.map(item => {
         const reactions = state.session.reactions.get(item.recordId);
-        const reactionCount = reactions instanceof Map ? reactions.size : 0;
+        const reactionCount = getItemReactionCount(item.recordId);
         const score = getItemReactionScore(item.recordId);
 
-        // Get emoji breakdown
+        // Get emoji breakdown (across all users' Sets)
         const emojiBreakdown = {};
         if (reactions instanceof Map) {
-            reactions.forEach((emoji) => {
-                emojiBreakdown[emoji] = (emojiBreakdown[emoji] || 0) + 1;
+            reactions.forEach((emojiData) => {
+                const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+                for (const emoji of emojis) {
+                    emojiBreakdown[emoji] = (emojiBreakdown[emoji] || 0) + 1;
+                }
             });
         }
 
@@ -11435,8 +11442,13 @@ async function initializePresentationChat() {
             // Clear existing and rebuild from received data
             itemReactions.clear();
             if (reactions && typeof reactions === 'object') {
-                Object.entries(reactions).forEach(([odUserId, userEmoji]) => {
-                    itemReactions.set(odUserId, userEmoji);
+                Object.entries(reactions).forEach(([odUserId, emojiData]) => {
+                    // Support both array (new multi-emoji) and string (legacy) formats
+                    if (Array.isArray(emojiData)) {
+                        itemReactions.set(odUserId, new Set(emojiData));
+                    } else if (typeof emojiData === 'string') {
+                        itemReactions.set(odUserId, new Set([emojiData]));
+                    }
                 });
             }
 
@@ -12116,10 +12128,24 @@ function handleReactionClick(e) {
 
     const itemReactions = state.session.reactions.get(recordId);
 
-    if (itemReactions.get(currentUser.id) === emoji) {
+    // Multi-emoji model: each user has a Set of emojis
+    let userEmojiSet = itemReactions.get(currentUser.id);
+    if (!(userEmojiSet instanceof Set)) {
+        userEmojiSet = userEmojiSet ? new Set([userEmojiSet]) : new Set();
+    }
+
+    // Toggle: if emoji already in set, remove it; otherwise add it
+    if (userEmojiSet.has(emoji)) {
+        userEmojiSet.delete(emoji);
+    } else {
+        userEmojiSet.add(emoji);
+    }
+
+    // Clean up empty sets, otherwise store the updated set
+    if (userEmojiSet.size === 0) {
         itemReactions.delete(currentUser.id);
     } else {
-        itemReactions.set(currentUser.id, emoji);
+        itemReactions.set(currentUser.id, userEmojiSet);
     }
 
     // Re-render reactions for this item
@@ -12142,10 +12168,14 @@ function handleReactionClick(e) {
 
     // Broadcast item reaction update via Pusher for real-time sync
     if (presentationChatChannel) {
-        // Convert Map to object for Pusher transmission
+        // Convert Map<userId, Set<emoji>> to object for Pusher transmission
         const reactionsObj = {};
-        itemReactions.forEach((userEmoji, odUserId) => {
-            reactionsObj[odUserId] = userEmoji;
+        itemReactions.forEach((emojiData, odUserId) => {
+            if (emojiData instanceof Set) {
+                reactionsObj[odUserId] = Array.from(emojiData);
+            } else {
+                reactionsObj[odUserId] = emojiData;
+            }
         });
         presentationChatChannel.trigger('client-item-reaction-update', {
             recordId,

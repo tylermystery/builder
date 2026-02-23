@@ -261,9 +261,8 @@ function getAllPlanItems() {
  * Compute the sentiment score for a single item from reactions.
  * Returns a value normalized to -1..+1.
  * Uses REACTION_SCORES config for per-emoji weights.
- * The raw score range for a single reaction is roughly -5..+5,
- * so we normalize by dividing by 5.
- * When multiple reactions exist, we use the average reaction score.
+ * Multi-emoji model: each user has a Set of emojis. Democratic averaging
+ * ensures each user has equal weight regardless of how many emojis they added.
  * @param {string} recordId - Record ID
  * @returns {{ raw: number, normalized: number, count: number }}
  */
@@ -272,14 +271,34 @@ export function getItemSentiment(recordId) {
     if (!reactions || !(reactions instanceof Map) || reactions.size === 0) {
         return { raw: 0, normalized: 0, count: 0 };
     }
-    let total = 0;
-    reactions.forEach((emoji) => {
-        total += (REACTION_SCORES[emoji] || 0);
+
+    // Democratic averaging: each user's contribution = average of their emoji scores
+    let userCount = 0;
+    let totalReactions = 0;
+    let sumOfUserAverages = 0;
+
+    reactions.forEach((emojiData) => {
+        const emojis = emojiData instanceof Set ? emojiData : new Set([typeof emojiData === 'string' ? emojiData : null].filter(Boolean));
+        if (emojis.size === 0) return;
+
+        let userTotal = 0;
+        for (const emoji of emojis) {
+            userTotal += (REACTION_SCORES[emoji] || 0);
+            totalReactions++;
+        }
+        const userAvg = userTotal / emojis.size;
+        sumOfUserAverages += userAvg;
+        userCount++;
     });
-    const avg = total / reactions.size;
+
+    if (userCount === 0) {
+        return { raw: 0, normalized: 0, count: 0 };
+    }
+
+    const democraticAvg = sumOfUserAverages / userCount;
     // Normalize: reaction scores range roughly -5..+5, map to -1..+1
-    const normalized = Math.max(-1, Math.min(1, avg / 5));
-    return { raw: total, normalized, count: reactions.size };
+    const normalized = Math.max(-1, Math.min(1, democraticAvg / 5));
+    return { raw: sumOfUserAverages, normalized, count: totalReactions };
 }
 
 /**

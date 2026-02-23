@@ -143,8 +143,9 @@ export function invalidateRecordsIndex() {
  * Get aggregate reactions across all variations for an item.
  * With per-variation compound keys (recordId::variationAuthorId),
  * this aggregates reactions across all variations into a single Map.
+ * Multi-emoji model: each user has a Set<emoji> of their reactions.
  * @param {string} recordId
- * @returns {Map<userId, emoji>} Aggregated reactions
+ * @returns {Map<userId, Set<emoji>>} Aggregated reactions (multi-emoji per user)
  */
 export function getAggregateReactions(recordId) {
     const aggregate = new Map();
@@ -153,8 +154,17 @@ export function getAggregateReactions(recordId) {
     for (const [key, reactionsMap] of state.session.reactions.entries()) {
         if (key === recordId || key.startsWith(prefix)) {
             if (reactionsMap instanceof Map) {
-                for (const [userId, emoji] of reactionsMap.entries()) {
-                    aggregate.set(userId, emoji);
+                for (const [userId, emojiData] of reactionsMap.entries()) {
+                    if (!aggregate.has(userId)) {
+                        aggregate.set(userId, new Set());
+                    }
+                    const userSet = aggregate.get(userId);
+                    // Support both old (string) and new (Set) format
+                    if (emojiData instanceof Set) {
+                        for (const e of emojiData) userSet.add(e);
+                    } else if (typeof emojiData === 'string') {
+                        userSet.add(emojiData);
+                    }
                 }
             }
         }
