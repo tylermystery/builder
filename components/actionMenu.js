@@ -14,7 +14,7 @@
 //   - Top edge: Vitality analytics + tier selector
 //   - Magnetic cursor tracking with large selection zones
 
-import { state, getRecordById } from '../state.js';
+import { state, getRecordById, getAggregateReactions } from '../state.js';
 import { EMOJI_TIERS, REACTION_SCORES, getModalZIndex, computeDemocraticAverage } from '../config.js';
 import { requestVitalityRecalc, getNetEmoji } from '../vitality/vitalityEngine.js';
 import { REALM_META } from '../vitality/vitalityProfiles.js';
@@ -964,19 +964,22 @@ function buildEmojiStrip(recordId) {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getReactionSummary(recordId) {
-    const reactions = state.session.reactions?.get(recordId);
-    if (!reactions || !(reactions instanceof Map) || reactions.size === 0) {
+    // Use hierarchical aggregate (direct + variations)
+    const reactions = getAggregateReactions(recordId);
+    if (!reactions || reactions.size === 0) {
         return { count: 0, total: 0, average: 0, summaryEmoji: '\uD83D\uDE0A' };
     }
 
     // Use democratic averaging for multi-emoji model
     const { democraticAverage, summaryEmoji, userCount, totalReactions } = computeDemocraticAverage(reactions);
+    console.log(`[SUMMARY-DEBUG] actionMenu.getReactionSummary(${recordId}): ${totalReactions} reactions, ${userCount} users, avg: ${democraticAverage.toFixed(2)} → ${summaryEmoji}`);
 
     return { count: totalReactions, total: democraticAverage * userCount, average: democraticAverage, summaryEmoji };
 }
 
 function getPreviewSummary(recordId, previewEmojiValue) {
-    const reactions = state.session.reactions?.get(recordId);
+    // Use hierarchical aggregate for preview base
+    const reactions = getAggregateReactions(recordId);
 
     let currentUser;
     try {

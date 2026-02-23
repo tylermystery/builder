@@ -3,7 +3,7 @@ const PRES_DEBUG = typeof window !== 'undefined' && window.__PRES_DEBUG__;
 
 console.log('[MODULE DEBUG] presentation.js module starting to load...', performance.now().toFixed(2) + 'ms');
 
-import { state, setState, getRecordById, invalidateRecordsIndex } from '../state.js';
+import { state, setState, getRecordById, invalidateRecordsIndex, getAggregateReactions } from '../state.js';
 import * as api from '../api.js';
 import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, EMOJI_TIERS, REACTION_SCORES, getModalZIndex, computeDemocraticAverage } from '../config.js';
 import { updateUrl, getRecordPrice, parseOptions, flattenOptionGroups } from '../utils.js';
@@ -19,7 +19,7 @@ import { showUserModal } from '../auth.js';
 import { showToast } from '../ui.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { resizeImageForUpload } from '../utils/imageResizer.js';
-import { refreshForumData, onNewItemReceived } from './forumPanel.js';
+import { refreshForumData, onNewItemReceived, getComponentMessageReactions } from './forumPanel.js';
 import { initializeToastNotifications, handlePusherEvent as handleToastPusherEvent } from './toastNotifications.js';
 import { initializeUnifiedChatPanel, showUnifiedChatPanel, hideUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage } from './unifiedChatPanel.js';
 import { initVitalityUI, cleanupVitalityUI, refreshFlowLines } from '../vitality/vitalityUI.js';
@@ -1282,33 +1282,65 @@ function getItemReactionScore(recordId) {
     return score;
 }
 
-// Get reaction count for an item
+// Get reaction count for an item (hierarchical: includes variations + comments)
 function getItemReactionCount(recordId) {
-    const reactions = state.session.reactions.get(recordId);
-    if (!reactions || !(reactions instanceof Map)) return 0;
+    const aggregateReactions = getAggregateReactions(recordId);
+    if (!aggregateReactions || aggregateReactions.size === 0) return 0;
     // Count total individual reactions across all users
     let count = 0;
-    reactions.forEach((emojiData) => {
+    aggregateReactions.forEach((emojiData) => {
         const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
         count += emojis.size;
     });
+    // Also count comment reactions
+    try {
+        const commentReactions = getComponentMessageReactions(recordId);
+        if (commentReactions && commentReactions.size > 0) {
+            commentReactions.forEach((emojiData) => {
+                const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+                count += emojis.size;
+            });
+        }
+    } catch (e) { /* comment reactions may not be available during early init */ }
     return count;
 }
 
 /**
- * Get a summary emoji that represents the overall sentiment/activity for an item
- * based on the democratic average of all reactions. Returns the emoji whose score is
- * closest to the calculated democratic average from all collaborators' reactions.
+ * Get a hierarchical summary emoji for an item, incorporating:
+ * 1. Direct reactions on the item
+ * 2. Reactions on variations/options (via compound keys like recordId::*)
+ * 3. Reactions from comment threads linked to this item (via componentId)
+ * Returns the emoji whose score is closest to the combined democratic average.
  * @param {string} recordId - The item record ID
  * @returns {string} A single emoji closest to the democratic average score, or empty string if none
  */
 function getItemSummaryEmoji(recordId) {
-    const reactions = state.session.reactions.get(recordId);
-    if (!reactions || !(reactions instanceof Map) || reactions.size === 0) {
+    // Step 1: Get aggregate reactions across direct + variations (compound keys)
+    const aggregateReactions = getAggregateReactions(recordId);
+
+    // Step 2: Merge in comment/thread reactions linked to this item
+    let commentReactionsMerged = false;
+    try {
+        const commentReactions = getComponentMessageReactions(recordId);
+        if (commentReactions && commentReactions.size > 0) {
+            for (const [userId, emojiSet] of commentReactions) {
+                if (!aggregateReactions.has(userId)) aggregateReactions.set(userId, new Set());
+                const userSet = aggregateReactions.get(userId);
+                for (const emoji of emojiSet) userSet.add(emoji);
+            }
+            commentReactionsMerged = true;
+        }
+    } catch (e) {
+        // getComponentMessageReactions may not be available during early init
+        console.log(`[SUMMARY-DEBUG] getItemSummaryEmoji(${recordId}): comment reactions unavailable (${e.message})`);
+    }
+
+    if (!aggregateReactions || aggregateReactions.size === 0) {
         return '';
     }
 
-    const { summaryEmoji } = computeDemocraticAverage(reactions);
+    const { summaryEmoji, democraticAverage, userCount, totalReactions } = computeDemocraticAverage(aggregateReactions);
+    console.log(`[SUMMARY-DEBUG] getItemSummaryEmoji(${recordId}): hierarchical summary → ${summaryEmoji} (avg: ${democraticAverage.toFixed(2)}, ${userCount} users, ${totalReactions} reactions, commentsIncluded: ${commentReactionsMerged})`);
     return summaryEmoji || '💬';
 }
 
@@ -1322,6 +1354,7 @@ function updateItemEmojiIndicator(recordId) {
 
     const summaryEmoji = getItemSummaryEmoji(recordId);
     const reactionCount = getItemReactionCount(recordId);
+    console.log(`[SUMMARY-DEBUG] updateItemEmojiIndicator(${recordId}): summaryEmoji=${summaryEmoji}, reactionCount=${reactionCount}`);
 
     if (summaryEmoji && reactionCount > 0) {
         emojiIndicator.innerHTML = `<span class="emoji-indicator-emoji">${summaryEmoji}</span>${reactionCount > 1 ? `<span class="emoji-indicator-count">${reactionCount}</span>` : ''}`;
@@ -1343,10 +1376,10 @@ function updateItemEmojiIndicator(recordId) {
 }
 
 /**
- * Calculate the event-level emoji by averaging all component summary emojis.
- * Uses the same averaging logic as individual components, but aggregates
- * the averaged scores from each component that has reactions.
- * @returns {{emoji: string, count: number, totalReactions: number}} Event emoji, component count, and total reactions
+ * Calculate the plan-level emoji by averaging all item hierarchical summary scores.
+ * Uses getAggregateReactions (which includes variations) + comment reactions per item,
+ * then averages those per-item democratic averages for the plan-level score.
+ * @returns {{emoji: string, count: number, totalReactions: number, averageScore: number}} Plan emoji data
  */
 function getEventSummaryEmoji() {
     // Get all items in the plan (locked and favorites/ideas)
@@ -1359,13 +1392,24 @@ function getEventSummaryEmoji() {
     let totalReactionCount = 0;
 
     allItemIds.forEach(recordId => {
-        const reactions = state.session.reactions.get(recordId);
-        if (!reactions || !(reactions instanceof Map) || reactions.size === 0) {
-            return;
-        }
+        // Use hierarchical aggregate (direct + variations)
+        const aggregateReactions = getAggregateReactions(recordId);
 
-        // Calculate this component's democratic average score
-        const { democraticAverage, totalReactions } = computeDemocraticAverage(reactions);
+        // Also merge in comment reactions
+        try {
+            const commentReactions = getComponentMessageReactions(recordId);
+            if (commentReactions && commentReactions.size > 0) {
+                for (const [userId, emojiSet] of commentReactions) {
+                    if (!aggregateReactions.has(userId)) aggregateReactions.set(userId, new Set());
+                    const userSet = aggregateReactions.get(userId);
+                    for (const emoji of emojiSet) userSet.add(emoji);
+                }
+            }
+        } catch (e) { /* comment reactions may not be available */ }
+
+        if (!aggregateReactions || aggregateReactions.size === 0) return;
+
+        const { democraticAverage, totalReactions } = computeDemocraticAverage(aggregateReactions);
 
         if (totalReactions > 0) {
             componentAverages.push(democraticAverage);
@@ -1375,10 +1419,11 @@ function getEventSummaryEmoji() {
 
     // No components with reactions
     if (componentAverages.length === 0) {
-        return { emoji: '', count: 0, totalReactions: 0 };
+        console.log(`[SUMMARY-DEBUG] getEventSummaryEmoji: no items with reactions across ${allItemIds.length} plan items`);
+        return { emoji: '', count: 0, totalReactions: 0, averageScore: 0 };
     }
 
-    // Calculate the average of all component averages (event-level average)
+    // Calculate the average of all component averages (plan-level average)
     const eventAverageScore = componentAverages.reduce((sum, avg) => sum + avg, 0) / componentAverages.length;
 
     // Find the emoji with the score closest to the event average
@@ -1393,10 +1438,12 @@ function getEventSummaryEmoji() {
         }
     });
 
+    console.log(`[SUMMARY-DEBUG] getEventSummaryEmoji: ${componentAverages.length}/${allItemIds.length} items with reactions, planAvg: ${eventAverageScore.toFixed(2)} → ${closestEmoji}, ${totalReactionCount} total reactions`);
     return {
         emoji: closestEmoji || '💬',
         count: componentAverages.length,
-        totalReactions: totalReactionCount
+        totalReactions: totalReactionCount,
+        averageScore: eventAverageScore
     };
 }
 
@@ -1409,7 +1456,8 @@ function updateEventEmojiIndicator() {
     const eventEmojiEl = document.getElementById('event-emoji-indicator');
     if (!eventEmojiEl) return;
 
-    const { emoji, count, totalReactions } = getEventSummaryEmoji();
+    const { emoji, count, totalReactions, averageScore } = getEventSummaryEmoji();
+    console.log(`[SUMMARY-DEBUG] updateEventEmojiIndicator: emoji=${emoji}, count=${count}, totalReactions=${totalReactions}, avgScore=${averageScore?.toFixed(2) || 'N/A'}`);
 
     if (emoji && count > 0) {
         // Show count of components with reactions if more than 1
@@ -3186,10 +3234,21 @@ async function renderCompactCard(item) {
         pillsHTML = `<div class="compact-card-pills">${pillElements}${morePill}</div>`;
     }
 
-    // --- Reaction zone summary ---
-    const reactions = state.session.reactions?.get(recordId);
-    if (!reactions && state.session.reactions?.size > 0) {
-        console.log(`[REACTIONS-DEBUG] Compact card ${recordId}: no reactions found. Available keys: [${Array.from(state.session.reactions.keys()).slice(0, 5).join(', ')}${state.session.reactions.size > 5 ? '...' : ''}]`);
+    // --- Reaction zone summary (hierarchical: direct + variations + comments) ---
+    const reactions = getAggregateReactions(recordId);
+    // Merge comment reactions into the aggregate
+    try {
+        const commentReactions = getComponentMessageReactions(recordId);
+        if (commentReactions && commentReactions.size > 0) {
+            for (const [userId, emojiSet] of commentReactions) {
+                if (!reactions.has(userId)) reactions.set(userId, new Set());
+                const userSet = reactions.get(userId);
+                for (const emoji of emojiSet) userSet.add(emoji);
+            }
+        }
+    } catch (e) { /* comment reactions may not be available during early init */ }
+    if (reactions.size === 0 && state.session.reactions?.size > 0) {
+        console.log(`[SUMMARY-DEBUG] Compact card ${recordId}: no hierarchical reactions found. Available keys: [${Array.from(state.session.reactions.keys()).slice(0, 5).join(', ')}${state.session.reactions.size > 5 ? '...' : ''}]`);
     }
     let reactionZoneSummaryEmoji = '😊';
     let reactionZoneScoreText = '';
@@ -3436,21 +3495,51 @@ async function renderCompactGroupCard(group) {
         groupTaskBadgeHTML = taskChips;
     }
 
-    // --- Aggregate reaction bar across group members ---
+    // --- Aggregate reaction bar across group members (with democratic average) ---
+    // Merge all member reactions into a single Map<userId, Set<emoji>> for democratic averaging
+    const groupMergedReactions = new Map();
     const groupEmojiCounts = {};
     let groupTotalReactions = 0;
     for (const gId of groupItems) {
-        const memberReactions = state.session.reactions?.get(gId);
-        if (memberReactions && memberReactions instanceof Map) {
-            memberReactions.forEach((emojiData) => {
-                const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
-                for (const emoji of emojis) {
+        const memberReactions = getAggregateReactions(gId);
+        if (memberReactions && memberReactions.size > 0) {
+            for (const [userId, emojiSet] of memberReactions) {
+                if (!groupMergedReactions.has(userId)) groupMergedReactions.set(userId, new Set());
+                const userSet = groupMergedReactions.get(userId);
+                for (const emoji of emojiSet) {
+                    userSet.add(emoji);
                     groupEmojiCounts[emoji] = (groupEmojiCounts[emoji] || 0) + 1;
                     groupTotalReactions++;
                 }
-            });
+            }
         }
+        // Also include comment reactions for each group member
+        try {
+            const memberCommentReactions = getComponentMessageReactions(gId);
+            if (memberCommentReactions && memberCommentReactions.size > 0) {
+                for (const [userId, emojiSet] of memberCommentReactions) {
+                    if (!groupMergedReactions.has(userId)) groupMergedReactions.set(userId, new Set());
+                    const userSet = groupMergedReactions.get(userId);
+                    for (const emoji of emojiSet) {
+                        userSet.add(emoji);
+                        groupEmojiCounts[emoji] = (groupEmojiCounts[emoji] || 0) + 1;
+                        groupTotalReactions++;
+                    }
+                }
+            }
+        } catch (e) { /* comment reactions may not be available */ }
     }
+
+    // Compute group-level democratic average
+    let groupSummaryEmoji = '';
+    let groupSummaryScore = '';
+    if (groupMergedReactions.size > 0) {
+        const { democraticAverage, summaryEmoji, userCount, totalReactions } = computeDemocraticAverage(groupMergedReactions);
+        groupSummaryEmoji = summaryEmoji;
+        groupSummaryScore = `${democraticAverage >= 0 ? '+' : ''}${democraticAverage.toFixed(1)}`;
+        console.log(`[SUMMARY-DEBUG] renderCompactGroupCard(${groupId}): group democratic avg → ${summaryEmoji} (avg: ${democraticAverage.toFixed(2)}, ${userCount} users, ${totalReactions} reactions across ${groupItems.length} members)`);
+    }
+
     let groupReactionBarHTML = '';
     if (groupTotalReactions > 0) {
         const sortedGroupEmoji = Object.entries(groupEmojiCounts).sort((a, b) => b[1] - a[1]);
@@ -3458,7 +3547,11 @@ async function renderCompactGroupCard(group) {
             `<span class="compact-reaction-pill" title="${emoji} ${count}">${emoji}<span class="compact-reaction-count">${count}</span></span>`
         ).join('');
         const moreGroupReactions = sortedGroupEmoji.length > 3 ? `<span class="compact-reaction-pill compact-reaction-overflow">+${sortedGroupEmoji.length - 3}</span>` : '';
-        groupReactionBarHTML = `<span class="compact-card-reactions" title="${groupTotalReactions} reaction${groupTotalReactions !== 1 ? 's' : ''} across group">${top3Group}${moreGroupReactions}</span>`;
+        // Include group summary emoji + score at the start of the reaction bar
+        const summaryPill = groupSummaryEmoji
+            ? `<span class="compact-reaction-pill compact-reaction-summary" title="Group sentiment: ${groupSummaryEmoji} (${groupSummaryScore})">${groupSummaryEmoji}<span class="compact-reaction-score">${groupSummaryScore}</span></span>`
+            : '';
+        groupReactionBarHTML = `<span class="compact-card-reactions" title="${groupTotalReactions} reaction${groupTotalReactions !== 1 ? 's' : ''} across group">${summaryPill}${top3Group}${moreGroupReactions}</span>`;
     }
 
     // Build group meta bar HTML (only if there's content)
@@ -4327,17 +4420,17 @@ function buildRSBRadialGrid(container, recordId, currentUserEmoji, isModal) {
     const radial = document.createElement('div');
     radial.className = 'rsb-radial-container';
 
-    // Center hub showing current summary
+    // Center hub showing current hierarchical summary
     const center = document.createElement('div');
     center.className = 'rsb-radial-center';
     const summaryEmoji = getItemSummaryEmoji(recordId) || '😊';
-    const reactions = state.session.reactions?.get(recordId);
+    // Use hierarchical aggregate for the radial center score
+    const reactions = getAggregateReactions(recordId);
     let avgScore = 0;
     if (reactions && reactions instanceof Map && reactions.size > 0) {
-        // Fix: use computeDemocraticAverage instead of iterating Map values as strings
         const { democraticAverage } = computeDemocraticAverage(reactions);
         avgScore = democraticAverage;
-        console.log(`[REACTIONS-DEBUG] buildRSBRadialGrid(${recordId}): democraticAverage=${avgScore.toFixed(2)}, users=${reactions.size}`);
+        console.log(`[SUMMARY-DEBUG] buildRSBRadialGrid(${recordId}): hierarchical democraticAverage=${avgScore.toFixed(2)}, users=${reactions.size}`);
     }
     center.innerHTML = `
         <span class="rsb-radial-center-emoji">${summaryEmoji}</span>
@@ -4505,9 +4598,20 @@ function buildRSBSummaryContent(container, recordId) {
     const summaryDiv = document.createElement('div');
     summaryDiv.className = 'rsb-reaction-summary';
 
-    const reactions = state.session.reactions?.get(recordId);
+    // Use hierarchical aggregate: direct + variations + comments
+    const reactions = getAggregateReactions(recordId);
+    try {
+        const commentReactions = getComponentMessageReactions(recordId);
+        if (commentReactions && commentReactions.size > 0) {
+            for (const [userId, emojiSet] of commentReactions) {
+                if (!reactions.has(userId)) reactions.set(userId, new Set());
+                const userSet = reactions.get(userId);
+                for (const emoji of emojiSet) userSet.add(emoji);
+            }
+        }
+    } catch (e) { /* comment reactions may not be available */ }
 
-    if (!reactions || !(reactions instanceof Map) || reactions.size === 0) {
+    if (!reactions || reactions.size === 0) {
         summaryDiv.innerHTML = '<div class="rsb-summary-empty">No reactions yet — react to be the first!</div>';
         container.appendChild(summaryDiv);
         return;
@@ -4523,9 +4627,9 @@ function buildRSBSummaryContent(container, recordId) {
             totalEmojiCount++;
         }
     });
-    // Fix: use democratic average (equal weight per user) instead of flat average
+    // Use democratic average (equal weight per user) for hierarchical summary
     const { democraticAverage: avg, summaryEmoji: democraticEmoji } = computeDemocraticAverage(reactions);
-    console.log(`[REACTIONS-DEBUG] buildRSBSummaryContent(${recordId}): democraticAvg=${avg.toFixed(2)}, totalEmojis=${totalEmojiCount}, users=${reactions.size}`);
+    console.log(`[SUMMARY-DEBUG] buildRSBSummaryContent(${recordId}): hierarchical democraticAvg=${avg.toFixed(2)}, totalEmojis=${totalEmojiCount}, users=${reactions.size}`);
 
     const pillsDiv = document.createElement('div');
     pillsDiv.className = 'rsb-summary-pills';
@@ -4878,7 +4982,7 @@ function calculateReactionPreview(recordId, previewEmojiValue) {
 }
 
 /**
- * Update the reaction zone summary display for an item.
+ * Update the reaction zone summary display for an item (hierarchical).
  */
 function updateReactionZoneSummary(recordId) {
     const zone = document.querySelector(`.compact-card-reaction-zone[data-record-id="${recordId}"]`);
@@ -4888,8 +4992,20 @@ function updateReactionZoneSummary(recordId) {
     const textEl = zone.querySelector('.reaction-zone-summary-text');
     const scoreEl = zone.querySelector('.reaction-zone-summary-score');
 
-    const reactions = state.session.reactions?.get(recordId);
-    console.log(`[REACTIONS-DEBUG] updateReactionZoneSummary(${recordId}): reactions found=${!!reactions}, isMap=${reactions instanceof Map}, size=${reactions?.size || 0}`);
+    // Use hierarchical aggregate: direct + variations + comments
+    const reactions = getAggregateReactions(recordId);
+    try {
+        const commentReactions = getComponentMessageReactions(recordId);
+        if (commentReactions && commentReactions.size > 0) {
+            for (const [userId, emojiSet] of commentReactions) {
+                if (!reactions.has(userId)) reactions.set(userId, new Set());
+                const userSet = reactions.get(userId);
+                for (const emoji of emojiSet) userSet.add(emoji);
+            }
+        }
+    } catch (e) { /* comment reactions may not be available */ }
+
+    console.log(`[SUMMARY-DEBUG] updateReactionZoneSummary(${recordId}): hierarchical reactions size=${reactions.size}`);
     let summaryEmoji = '😊';
     let summaryText = 'React';
     let scoreText = '';

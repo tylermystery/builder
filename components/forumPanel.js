@@ -4,6 +4,7 @@
 
 import { state, getRecordById } from '../state.js';
 import { log } from '../utils/debug.js';
+import { computeDemocraticAverage, convertMessageReactions } from '../config.js';
 import * as api from '../api.js';
 
 // Store reference to getCurrentUser - will be set via setter to avoid circular dependency
@@ -828,6 +829,87 @@ async function buildThreadStructure() {
     forumMessages = topLevelMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 }
 
+// ─── Phase 2: Thread & Component Summary Layer ────────────────────────────────
+
+/**
+ * Compute a summary emoji for a thread (parent message + all replies).
+ * Aggregates all message reactions across the thread using the democratic average.
+ * @param {Object} message - A top-level message object with .reactions and .replies[]
+ * @returns {{ summaryEmoji: string, democraticAverage: number, userCount: number, totalReactions: number }}
+ */
+function getThreadSummaryEmoji(message) {
+    // Collect all messages in the thread: parent + replies
+    const allMessages = [message, ...(message.replies || [])];
+
+    // Merge all message reactions into a single Map<userId, Set<emoji>>
+    const mergedReactions = new Map();
+    let messageCount = 0;
+
+    for (const msg of allMessages) {
+        if (!msg.reactions || Object.keys(msg.reactions).length === 0) continue;
+        messageCount++;
+        const converted = convertMessageReactions(msg.reactions);
+        for (const [userId, emojiSet] of converted) {
+            if (!mergedReactions.has(userId)) mergedReactions.set(userId, new Set());
+            const userSet = mergedReactions.get(userId);
+            for (const emoji of emojiSet) userSet.add(emoji);
+        }
+    }
+
+    if (mergedReactions.size === 0) {
+        console.log(`[SUMMARY-DEBUG] getThreadSummaryEmoji(${message.id}): no reactions across ${allMessages.length} messages`);
+        return { summaryEmoji: '', democraticAverage: 0, userCount: 0, totalReactions: 0 };
+    }
+
+    const result = computeDemocraticAverage(mergedReactions);
+    console.log(`[SUMMARY-DEBUG] getThreadSummaryEmoji(${message.id}): ${messageCount} msgs with reactions, ${allMessages.length} total msgs, ${result.userCount} users, ${result.totalReactions} reactions → ${result.summaryEmoji} (avg: ${result.democraticAverage.toFixed(2)})`);
+    return result;
+}
+
+/**
+ * Get aggregated message reactions for a specific component (plan item).
+ * Finds all forum messages linked to the given componentId and merges their reactions
+ * into a single Map<userId, Set<emoji>> for use by the hierarchical item summary.
+ * @param {string} componentId - The item recordId to find comments for
+ * @returns {Map<string, Set<string>>} Merged reactions Map<userId, Set<emoji>>
+ */
+export function getComponentMessageReactions(componentId) {
+    if (!componentId) return new Map();
+
+    // Find all messages (top-level and replies) linked to this component
+    const linkedMessages = [];
+    for (const msg of forumMessages) {
+        if (msg.componentId === componentId) {
+            linkedMessages.push(msg);
+            // Also include all replies in this thread
+            if (msg.replies) linkedMessages.push(...msg.replies);
+        }
+        // Check replies of other threads for component-linked replies
+        if (msg.replies) {
+            for (const reply of msg.replies) {
+                if (reply.componentId === componentId && !linkedMessages.includes(reply)) {
+                    linkedMessages.push(reply);
+                }
+            }
+        }
+    }
+
+    // Merge all their reactions
+    const mergedReactions = new Map();
+    for (const msg of linkedMessages) {
+        if (!msg.reactions || Object.keys(msg.reactions).length === 0) continue;
+        const converted = convertMessageReactions(msg.reactions);
+        for (const [userId, emojiSet] of converted) {
+            if (!mergedReactions.has(userId)) mergedReactions.set(userId, new Set());
+            const userSet = mergedReactions.get(userId);
+            for (const emoji of emojiSet) userSet.add(emoji);
+        }
+    }
+
+    console.log(`[SUMMARY-DEBUG] getComponentMessageReactions(${componentId}): ${linkedMessages.length} linked messages, ${mergedReactions.size} users with reactions`);
+    return mergedReactions;
+}
+
 /**
  * Show loading state in the forum panel
  */
@@ -1023,11 +1105,18 @@ function createThreadElement(message) {
 
     // Thread indicator and replies
     if (message.replyCount > 0) {
+        // Phase 2: Compute thread-level summary emoji
+        const threadSummary = getThreadSummaryEmoji(message);
+        const threadEmojiHTML = threadSummary.summaryEmoji
+            ? `<span class="thread-summary-emoji" title="Thread sentiment: ${threadSummary.summaryEmoji} (${threadSummary.totalReactions} reactions from ${threadSummary.userCount} users, avg: ${threadSummary.democraticAverage >= 0 ? '+' : ''}${threadSummary.democraticAverage.toFixed(1)})">${threadSummary.summaryEmoji}</span>`
+            : '';
+
         const threadIndicator = document.createElement('button');
         threadIndicator.className = `forum-thread-indicator ${isExpanded ? 'expanded' : ''}`;
         threadIndicator.innerHTML = `
             <span class="thread-arrow">${isExpanded ? '▼' : '▶'}</span>
             <span class="thread-count">${message.replyCount} ${message.replyCount === 1 ? 'reply' : 'replies'}</span>
+            ${threadEmojiHTML}
         `;
         threadIndicator.addEventListener('click', () => {
             toggleThreadExpansion(message.id, threadWrapper);

@@ -1,7 +1,7 @@
 // REPLACE THE ENTIRE CONTENTS of components/modal.js
 console.log('[MODULE DEBUG] modal.js module starting to load...', performance.now().toFixed(2) + 'ms');
 
-import { state, getRecordById } from '../state.js';
+import { state, getRecordById, getAggregateReactions } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage } from '../config.js';
@@ -1647,15 +1647,15 @@ function buildModalRSBPanelDOM(recordId) {
     const tabs = document.createElement('div');
     tabs.className = 'rsb-tabs';
 
-    const allReactions = state.session.reactions?.get(recordId);
-    // Fix: count total reactions (all emojis across all users), not just user count
+    // Use hierarchical aggregate for reaction count
+    const allReactions = getAggregateReactions(recordId);
     let reactionCount = 0;
     if (allReactions instanceof Map) {
         allReactions.forEach((emojiData) => {
             reactionCount += (emojiData instanceof Set) ? emojiData.size : 1;
         });
     }
-    console.log(`[REACTIONS-DEBUG] buildModalRSBPanelDOM(${recordId}): reactionCount=${reactionCount}, users=${allReactions instanceof Map ? allReactions.size : 0}`);
+    console.log(`[SUMMARY-DEBUG] buildModalRSBPanelDOM(${recordId}): hierarchical reactionCount=${reactionCount}, users=${allReactions instanceof Map ? allReactions.size : 0}`);
 
     // We don't have direct access to the presentation's componentCommentsCache,
     // so we'll use the modal's own cache mechanism
@@ -1848,15 +1848,15 @@ function buildModalRSBRadialGrid(container, recordId, currentUserEmoji, parentCo
 
     const center = document.createElement('div');
     center.className = 'rsb-radial-center';
-    const reactions = state.session.reactions?.get(recordId);
+    // Use hierarchical aggregate for the radial center score
+    const reactions = getAggregateReactions(recordId);
     let summaryEmoji = '😊';
     let avgScore = 0;
     if (reactions && reactions instanceof Map && reactions.size > 0) {
-        // Fix: use computeDemocraticAverage instead of iterating Map values as strings
         const result = computeDemocraticAverage(reactions);
         avgScore = result.democraticAverage;
         summaryEmoji = result.summaryEmoji;
-        console.log(`[REACTIONS-DEBUG] buildModalRSBRadialGrid(${recordId}): democraticAverage=${avgScore.toFixed(2)}, summaryEmoji=${summaryEmoji}`);
+        console.log(`[SUMMARY-DEBUG] buildModalRSBRadialGrid(${recordId}): hierarchical democraticAverage=${avgScore.toFixed(2)}, summaryEmoji=${summaryEmoji}, users=${result.userCount}`);
     }
     center.innerHTML = `
         <span class="rsb-radial-center-emoji">${summaryEmoji}</span>
@@ -2044,8 +2044,10 @@ function buildModalRSBSummaryContent(container, recordId) {
     const summaryDiv = document.createElement('div');
     summaryDiv.className = 'rsb-reaction-summary';
 
-    const allReactions = state.session.reactions?.get(recordId);
-    if (!allReactions || !(allReactions instanceof Map) || allReactions.size === 0) {
+    // Use hierarchical aggregate: direct + variations
+    const allReactions = getAggregateReactions(recordId);
+    console.log(`[SUMMARY-DEBUG] buildModalRSBSummaryContent(${recordId}): hierarchical reactions size=${allReactions.size}`);
+    if (!allReactions || allReactions.size === 0) {
         summaryDiv.innerHTML = '<div class="rsb-summary-empty">No reactions yet — use the React tab to be first!</div>';
         container.appendChild(summaryDiv);
         return;
@@ -2053,6 +2055,7 @@ function buildModalRSBSummaryContent(container, recordId) {
 
     // Use democratic averaging for multi-emoji model
     const { democraticAverage, summaryEmoji: avgEmoji, userCount, totalReactions } = computeDemocraticAverage(allReactions);
+    console.log(`[SUMMARY-DEBUG] buildModalRSBSummaryContent(${recordId}): avg=${democraticAverage.toFixed(2)}, emoji=${avgEmoji}, ${userCount} users, ${totalReactions} reactions`);
 
     // Count individual emojis across all users
     const emojiCounts = {};

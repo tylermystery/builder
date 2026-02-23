@@ -2,9 +2,9 @@
 // Centralized plan state synchronization module
 // Handles cross-view UI synchronization for event plan data
 
-import { state, getRecordById } from '../state.js';
+import { state, getRecordById, getAggregateReactions } from '../state.js';
 import { log } from './debug.js';
-import { CONSTANTS } from '../config.js';
+import { CONSTANTS, computeDemocraticAverage, REACTION_SCORES } from '../config.js';
 import { getRecordPrice } from '../utils.js';
 import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 
@@ -122,6 +122,35 @@ export function getPlanSummary() {
     const goals = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS);
     const guestCount = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT);
 
+    // --- Phase 2: Plan-level reaction summary ---
+    const allItemIds = [...new Set([
+        ...Array.from(state.cart.lockedItems.keys()),
+        ...Array.from(state.cart.items.keys())
+    ])];
+    const componentAverages = [];
+    let planTotalReactions = 0;
+    for (const itemId of allItemIds) {
+        const agg = getAggregateReactions(itemId);
+        if (!agg || agg.size === 0) continue;
+        const { democraticAverage, totalReactions } = computeDemocraticAverage(agg);
+        if (totalReactions > 0) {
+            componentAverages.push(democraticAverage);
+            planTotalReactions += totalReactions;
+        }
+    }
+    let planReactionEmoji = '';
+    let planReactionScore = 0;
+    let planReactedItemCount = componentAverages.length;
+    if (componentAverages.length > 0) {
+        planReactionScore = componentAverages.reduce((s, a) => s + a, 0) / componentAverages.length;
+        let closestDiff = Infinity;
+        for (const [emoji, score] of Object.entries(REACTION_SCORES)) {
+            const diff = Math.abs(score - planReactionScore);
+            if (diff < closestDiff) { closestDiff = diff; planReactionEmoji = emoji; }
+        }
+    }
+    console.log(`[SUMMARY-DEBUG] getPlanSummary: ${planReactedItemCount}/${allItemIds.length} items with reactions, planReactionScore: ${planReactionScore.toFixed(2)}, emoji: ${planReactionEmoji}, totalReactions: ${planTotalReactions}`);
+
     const summary = {
         lockedItemsCount,
         ideasCount,
@@ -138,6 +167,11 @@ export function getPlanSummary() {
         // Vitality data (available after first recalculation)
         planNetVitality: state.vitality ? state.vitality.planNet : 0,
         planNetEmoji: state.vitality ? state.vitality.planNetEmoji : '⚖️',
+        // Phase 2: Reaction summary data
+        planReactionEmoji,
+        planReactionScore,
+        planTotalReactions,
+        planReactedItemCount,
     };
 
     debugLog('Plan summary generated:', summary);

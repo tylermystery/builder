@@ -15278,6 +15278,36 @@ hr.total-divider {
     font-style: italic;
 }
 
+/* Phase 2: Group-level summary pill (democratic average) */
+.compact-reaction-summary {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.15);
+    font-weight: 600;
+}
+
+.compact-reaction-score {
+    font-size: 0.75em;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+    min-width: 8px;
+    text-align: center;
+}
+
+/* Phase 2: Thread summary emoji in forum panel */
+.thread-summary-emoji {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    font-size: 1em;
+    opacity: 0.9;
+    cursor: default;
+    transition: transform 0.15s ease;
+}
+
+.thread-summary-emoji:hover {
+    transform: scale(1.15);
+}
+
 .compact-card-badges {
     display: flex;
     gap: 4px;

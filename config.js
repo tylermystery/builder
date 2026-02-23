@@ -217,6 +217,29 @@ export function computeDemocraticAverage(reactionsMap) {
 }
 
 /**
+ * Convert message-format reactions to the democratic average input format.
+ * Messages store reactions as { emoji: [userId1, userId2] } while item reactions
+ * use Map<userId, Set<emoji>>. This bridges the two models so computeDemocraticAverage
+ * can be used on message/thread reactions too.
+ *
+ * @param {Object} msgReactions - Message reactions in { emoji: [userId, ...] } format
+ * @returns {Map<string, Set<string>>} Map<userId, Set<emoji>> suitable for computeDemocraticAverage
+ */
+export function convertMessageReactions(msgReactions) {
+    const userMap = new Map();
+    if (!msgReactions || typeof msgReactions !== 'object') return userMap;
+    for (const [emoji, userIds] of Object.entries(msgReactions)) {
+        if (!Array.isArray(userIds)) continue;
+        for (const userId of userIds) {
+            if (!userMap.has(userId)) userMap.set(userId, new Set());
+            userMap.get(userId).add(emoji);
+        }
+    }
+    console.log(`[SUMMARY-DEBUG] convertMessageReactions: ${Object.keys(msgReactions).length} emoji types → ${userMap.size} users`);
+    return userMap;
+}
+
+/**
  * Generate a short hash for a photo URL to create stable compound reaction keys.
  * Format: recordId::photo::hash
  * @param {string} url - The photo URL
