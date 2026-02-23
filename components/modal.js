@@ -1648,7 +1648,14 @@ function buildModalRSBPanelDOM(recordId) {
     tabs.className = 'rsb-tabs';
 
     const allReactions = state.session.reactions?.get(recordId);
-    const reactionCount = (allReactions instanceof Map) ? allReactions.size : 0;
+    // Fix: count total reactions (all emojis across all users), not just user count
+    let reactionCount = 0;
+    if (allReactions instanceof Map) {
+        allReactions.forEach((emojiData) => {
+            reactionCount += (emojiData instanceof Set) ? emojiData.size : 1;
+        });
+    }
+    console.log(`[REACTIONS-DEBUG] buildModalRSBPanelDOM(${recordId}): reactionCount=${reactionCount}, users=${allReactions instanceof Map ? allReactions.size : 0}`);
 
     // We don't have direct access to the presentation's componentCommentsCache,
     // so we'll use the modal's own cache mechanism
@@ -1845,14 +1852,11 @@ function buildModalRSBRadialGrid(container, recordId, currentUserEmoji, parentCo
     let summaryEmoji = '😊';
     let avgScore = 0;
     if (reactions && reactions instanceof Map && reactions.size > 0) {
-        let total = 0;
-        reactions.forEach(e => { total += (REACTION_SCORES[e] || 0); });
-        avgScore = total / reactions.size;
-        let closestDiff = Infinity;
-        Object.entries(REACTION_SCORES).forEach(([e, s]) => {
-            const d = Math.abs(s - avgScore);
-            if (d < closestDiff) { closestDiff = d; summaryEmoji = e; }
-        });
+        // Fix: use computeDemocraticAverage instead of iterating Map values as strings
+        const result = computeDemocraticAverage(reactions);
+        avgScore = result.democraticAverage;
+        summaryEmoji = result.summaryEmoji;
+        console.log(`[REACTIONS-DEBUG] buildModalRSBRadialGrid(${recordId}): democraticAverage=${avgScore.toFixed(2)}, summaryEmoji=${summaryEmoji}`);
     }
     center.innerHTML = `
         <span class="rsb-radial-center-emoji">${summaryEmoji}</span>
@@ -1983,6 +1987,7 @@ function handleModalRSBEmojiSelect(recordId, emoji) {
     let currentUser;
     try { currentUser = getCurrentUser(); }
     catch (_) { currentUser = { id: 'anonymous', name: 'Anonymous' }; }
+    console.log(`[REACTIONS-DEBUG] handleModalRSBEmojiSelect: recordId="${recordId}", emoji="${emoji}", userId="${currentUser.id}"`);
 
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, new Map());
@@ -2022,6 +2027,11 @@ function handleModalRSBEmojiSelect(recordId, emoji) {
     // Trigger save and vitality recalc
     triggerSave();
     requestVitalityRecalc();
+
+    // Broadcast via Pusher for real-time sync with other users
+    if (typeof window.broadcastReactionUpdate === 'function') {
+        window.broadcastReactionUpdate(recordId, itemReactions, currentUser.id);
+    }
 
     log('Modal', `RSB reaction ${emoji} set for item ${recordId} by ${currentUser.id}`);
 }

@@ -158,6 +158,28 @@ const accordionState = {
 let presentationPusher = null;
 let presentationChatChannel = null;
 
+// Expose a function for other modules (e.g. modal.js) to broadcast reaction updates via Pusher
+window.broadcastReactionUpdate = function(recordId, itemReactions, userId) {
+    if (!presentationChatChannel) {
+        console.log('[REACTIONS-DEBUG] broadcastReactionUpdate: no Pusher channel available');
+        return;
+    }
+    const reactionsObj = {};
+    itemReactions.forEach((emojiData, odUserId) => {
+        if (emojiData instanceof Set) {
+            reactionsObj[odUserId] = Array.from(emojiData);
+        } else {
+            reactionsObj[odUserId] = emojiData;
+        }
+    });
+    console.log(`[REACTIONS-DEBUG] broadcastReactionUpdate via Pusher: recordId="${recordId}"`, JSON.stringify(reactionsObj));
+    presentationChatChannel.trigger('client-item-reaction-update', {
+        recordId,
+        reactions: reactionsObj,
+        userId
+    });
+};
+
 // Chat elements (may not exist in all presentation contexts)
 let chatMessagesEl = null;
 let presentationMessageInput = null;
@@ -2373,6 +2395,7 @@ function handleEmojiPickerClick(e) {
 // Select an emoji reaction for an item
 function selectEmoji(recordId, emoji) {
     const currentUser = getCurrentUser();
+    console.log(`[REACTIONS-DEBUG] selectEmoji called: recordId="${recordId}", emoji="${emoji}", userId="${currentUser.id}"`);
 
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, new Map());
@@ -2399,6 +2422,7 @@ function selectEmoji(recordId, emoji) {
     } else {
         itemReactions.set(currentUser.id, userEmojiSet);
     }
+    console.log(`[REACTIONS-DEBUG] selectEmoji result: key="${recordId}", userEmojis=[${Array.from(userEmojiSet)}], totalUsers=${itemReactions.size}`);
 
     // Re-render reactions for this item
     const reactionContainer = document.querySelector(`.itinerary-item-reactions[data-record-id="${recordId}"]`);
@@ -2429,6 +2453,7 @@ function selectEmoji(recordId, emoji) {
                 reactionsObj[odUserId] = emojiData;
             }
         });
+        console.log(`[REACTIONS-DEBUG] Pusher broadcast: recordId="${recordId}", payload=`, JSON.stringify(reactionsObj));
         presentationChatChannel.trigger('client-item-reaction-update', {
             recordId,
             reactions: reactionsObj,
@@ -3163,6 +3188,9 @@ async function renderCompactCard(item) {
 
     // --- Reaction zone summary ---
     const reactions = state.session.reactions?.get(recordId);
+    if (!reactions && state.session.reactions?.size > 0) {
+        console.log(`[REACTIONS-DEBUG] Compact card ${recordId}: no reactions found. Available keys: [${Array.from(state.session.reactions.keys()).slice(0, 5).join(', ')}${state.session.reactions.size > 5 ? '...' : ''}]`);
+    }
     let reactionZoneSummaryEmoji = '😊';
     let reactionZoneScoreText = '';
     let reactionZoneSummaryText = 'React';
@@ -4268,7 +4296,9 @@ function buildRSBTierRow(tier, recordId, currentUserEmoji) {
  */
 function buildRSBEmojiButton(emoji, recordId, currentUserEmoji) {
     const btn = document.createElement('button');
-    btn.className = `rsb-emoji-btn${currentUserEmoji === emoji ? ' selected' : ''}`;
+    // Fix: currentUserEmoji is a Set in multi-emoji model, not a string
+    const isSelected = currentUserEmoji instanceof Set ? currentUserEmoji.has(emoji) : currentUserEmoji === emoji;
+    btn.className = `rsb-emoji-btn${isSelected ? ' selected' : ''}`;
     btn.textContent = emoji;
     btn.dataset.emoji = emoji;
     btn.dataset.recordId = recordId;
@@ -4304,9 +4334,10 @@ function buildRSBRadialGrid(container, recordId, currentUserEmoji, isModal) {
     const reactions = state.session.reactions?.get(recordId);
     let avgScore = 0;
     if (reactions && reactions instanceof Map && reactions.size > 0) {
-        let total = 0;
-        reactions.forEach(e => { total += (REACTION_SCORES[e] || 0); });
-        avgScore = total / reactions.size;
+        // Fix: use computeDemocraticAverage instead of iterating Map values as strings
+        const { democraticAverage } = computeDemocraticAverage(reactions);
+        avgScore = democraticAverage;
+        console.log(`[REACTIONS-DEBUG] buildRSBRadialGrid(${recordId}): democraticAverage=${avgScore.toFixed(2)}, users=${reactions.size}`);
     }
     center.innerHTML = `
         <span class="rsb-radial-center-emoji">${summaryEmoji}</span>
@@ -4484,17 +4515,17 @@ function buildRSBSummaryContent(container, recordId) {
 
     // Build pills for each unique emoji (multi-emoji model)
     const emojiCounts = {};
-    let totalScore = 0;
     let totalEmojiCount = 0;
     reactions.forEach((emojiData) => {
         const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
         for (const emoji of emojis) {
             emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
-            totalScore += (REACTION_SCORES[emoji] || 0);
             totalEmojiCount++;
         }
     });
-    const avg = totalEmojiCount > 0 ? totalScore / totalEmojiCount : 0;
+    // Fix: use democratic average (equal weight per user) instead of flat average
+    const { democraticAverage: avg, summaryEmoji: democraticEmoji } = computeDemocraticAverage(reactions);
+    console.log(`[REACTIONS-DEBUG] buildRSBSummaryContent(${recordId}): democraticAvg=${avg.toFixed(2)}, totalEmojis=${totalEmojiCount}, users=${reactions.size}`);
 
     const pillsDiv = document.createElement('div');
     pillsDiv.className = 'rsb-summary-pills';
@@ -4527,18 +4558,11 @@ function buildRSBSummaryContent(container, recordId) {
     whoDiv.textContent = whoText;
     summaryDiv.appendChild(whoDiv);
 
-    // Average score
-    let closestEmoji = '😊';
-    let closestDiff = Infinity;
-    Object.entries(REACTION_SCORES).forEach(([e, s]) => {
-        const d = Math.abs(s - avg);
-        if (d < closestDiff) { closestDiff = d; closestEmoji = e; }
-    });
-
+    // Average score - use the democratic emoji already computed above
     const avgDiv = document.createElement('div');
     avgDiv.className = 'rsb-summary-avg';
     avgDiv.innerHTML = `
-        <span class="rsb-summary-avg-emoji">${closestEmoji}</span>
+        <span class="rsb-summary-avg-emoji">${democraticEmoji}</span>
         <span class="rsb-summary-avg-label">Average Sentiment</span>
         <span class="rsb-summary-avg-score">${avg >= 0 ? '+' : ''}${avg.toFixed(2)}</span>
     `;
@@ -4749,9 +4773,18 @@ function handleRSBEmojiSelect(recordId, emoji, btn) {
     // Reuse the existing selectEmoji function which handles state, Pusher, and save
     selectEmoji(recordId, emoji);
 
-    // Update selected state in all visible RSB emoji buttons for this record
+    // Update selected state in all visible RSB emoji buttons based on current user's Set
+    let currentUserSet = null;
+    try {
+        const user = getCurrentUser();
+        const reactions = state.session.reactions?.get(recordId);
+        if (reactions instanceof Map) {
+            currentUserSet = reactions.get(user.id);
+        }
+    } catch (_) { /* anonymous */ }
     document.querySelectorAll(`.rsb-emoji-btn[data-record-id="${recordId}"]`).forEach(b => {
-        b.classList.toggle('selected', b.dataset.emoji === emoji && !btn.classList.contains('selected'));
+        const isInSet = currentUserSet instanceof Set ? currentUserSet.has(b.dataset.emoji) : false;
+        b.classList.toggle('selected', isInSet);
     });
 
     // Refresh the whole panel if it's open
@@ -4856,6 +4889,7 @@ function updateReactionZoneSummary(recordId) {
     const scoreEl = zone.querySelector('.reaction-zone-summary-score');
 
     const reactions = state.session.reactions?.get(recordId);
+    console.log(`[REACTIONS-DEBUG] updateReactionZoneSummary(${recordId}): reactions found=${!!reactions}, isMap=${reactions instanceof Map}, size=${reactions?.size || 0}`);
     let summaryEmoji = '😊';
     let summaryText = 'React';
     let scoreText = '';
@@ -11432,6 +11466,7 @@ async function initializePresentationChat() {
     presentationChatChannel.bind('client-item-reaction-update', (data) => {
         if (data.userId !== currentUser.id) {
             const { recordId, reactions } = data;
+            console.log(`[REACTIONS-DEBUG] Pusher received: recordId="${recordId}", from="${data.userId}", payload=`, JSON.stringify(reactions));
 
             // Update local state from received reactions object
             if (!state.session.reactions.has(recordId)) {
@@ -12121,6 +12156,7 @@ function handleReactionClick(e) {
 
     const emoji = button.dataset.emoji;
     const currentUser = getCurrentUser();
+    console.log(`[REACTIONS-DEBUG] handleReactionClick: recordId="${recordId}", emoji="${emoji}", userId="${currentUser.id}"`);
 
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, new Map());

@@ -608,10 +608,16 @@ export async function loadSessionFromAirtable(sessionId) {
 
                 const reactionsObject = savedState.itemReactions || {};
                 state.session.reactions = new Map();
+                console.log('[REACTIONS-DEBUG] Loading reactions from saved state. Keys found:', Object.keys(reactionsObject));
                 for (const reactionKey in reactionsObject) {
-                    // Backward compatibility: plain recordId keys (no "::") are migrated
-                    // to compound keys as "recordId::original" (Decision 3A)
-                    const normalizedKey = reactionKey.includes('::') ? reactionKey : `${reactionKey}::original`;
+                    // Reverse any prior "::original" normalization so runtime lookups
+                    // using plain recordId work correctly. Photo compound keys (::photo::)
+                    // are preserved as-is for future Phase 5 support.
+                    let finalKey = reactionKey;
+                    if (reactionKey.endsWith('::original')) {
+                        finalKey = reactionKey.replace('::original', '');
+                        console.log(`[REACTIONS-DEBUG] De-normalized key "${reactionKey}" -> "${finalKey}"`);
+                    }
                     const userReactionsRaw = reactionsObject[reactionKey];
                     const userReactionsMap = new Map();
                     for (const [userId, emojiData] of Object.entries(userReactionsRaw)) {
@@ -623,7 +629,23 @@ export async function loadSessionFromAirtable(sessionId) {
                             userReactionsMap.set(userId, new Set([emojiData]));
                         }
                     }
-                    state.session.reactions.set(normalizedKey, userReactionsMap);
+                    // If finalKey already exists (e.g. both "rec123" and "rec123::original"
+                    // are present), merge the user reactions rather than overwriting
+                    if (state.session.reactions.has(finalKey)) {
+                        const existingMap = state.session.reactions.get(finalKey);
+                        for (const [userId, emojiSet] of userReactionsMap.entries()) {
+                            if (existingMap.has(userId)) {
+                                const existing = existingMap.get(userId);
+                                for (const e of emojiSet) existing.add(e);
+                            } else {
+                                existingMap.set(userId, emojiSet);
+                            }
+                        }
+                        console.log(`[REACTIONS-DEBUG] Merged duplicate key "${finalKey}"`);
+                    } else {
+                        state.session.reactions.set(finalKey, userReactionsMap);
+                    }
+                    console.log(`[REACTIONS-DEBUG] Loaded reaction key="${finalKey}", users=${(state.session.reactions.get(finalKey))?.size || 0}`);
                 }
 
                 state.session.userProfiles = new Map(Object.entries(savedState.userProfiles || {}));
@@ -941,6 +963,7 @@ export async function saveSessionToAirtable() {
         }
         reactionsForSaving[recordId] = userObj;
     }
+    console.log('[REACTIONS-DEBUG] Saving reactions. Keys:', Object.keys(reactionsForSaving), 'Total keys:', Object.keys(reactionsForSaving).length);
 
     // Collect custom item records that are in the cart (ideas or locked)
     // These need to be persisted since they don't exist in Airtable

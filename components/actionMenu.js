@@ -1143,6 +1143,7 @@ function handleEmojiSelect(recordId, emoji) {
     } catch (_) {
         currentUser = { id: 'anonymous', name: 'Anonymous' };
     }
+    console.log(`[REACTIONS-DEBUG] handleEmojiSelect (actionMenu): recordId="${recordId}", emoji="${emoji}", userId="${currentUser.id}"`);
 
     if (!state.session.reactions) {
         state.session.reactions = new Map();
@@ -1180,6 +1181,11 @@ function handleEmojiSelect(recordId, emoji) {
 
     triggerSave();
     requestVitalityRecalc();
+
+    // Broadcast via Pusher for real-time sync with other users
+    if (typeof window.broadcastReactionUpdate === 'function') {
+        window.broadcastReactionUpdate(recordId, itemReactions, currentUser.id);
+    }
 
     // Refresh displays
     refreshEmojiStrip();
