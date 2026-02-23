@@ -6248,3 +6248,135 @@ export async function ensureTopLevelPlan(userId, userName, storeId = null) {
         return null;
     }
 }
+
+// ─── v3.8 Phase 2: Stream-Plan Association ──────────────────────────────────
+
+/**
+ * Update stream metadata on a session record in Airtable.
+ * Called when a host starts a live stream to associate the stream with the plan.
+ *
+ * @param {string} sessionId - The session/plan record ID
+ * @param {Object} streamData - Stream metadata fields
+ * @param {boolean} streamData.StreamActive - Whether stream is active
+ * @param {string} streamData.StreamHostUserId - Host user ID
+ * @param {string} streamData.StreamStartedAt - ISO timestamp
+ * @param {string} streamData.AgoraChannelName - Agora channel name
+ * @returns {Promise<boolean>} Success status
+ */
+export async function updateStreamMetadata(sessionId, streamData) {
+    if (!sessionId) return false;
+
+    try {
+        // Store stream metadata in the session's "Items with Variations" JSON
+        // which is used as a general-purpose metadata store for sessions
+        const sessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+        const getResponse = await fetch(sessionUrl, {
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!getResponse.ok) {
+            throw new Error(`Failed to fetch session: ${getResponse.status}`);
+        }
+
+        const sessionRecord = await getResponse.json();
+        let sessionMeta = {};
+        try {
+            sessionMeta = JSON.parse(sessionRecord.fields?.['Items with Variations'] || '{}');
+        } catch { sessionMeta = {}; }
+
+        // Add stream metadata under a dedicated key
+        sessionMeta._streamMeta = {
+            active: streamData.StreamActive,
+            hostUserId: streamData.StreamHostUserId,
+            startedAt: streamData.StreamStartedAt,
+            channelName: streamData.AgoraChannelName,
+        };
+
+        const updateResponse = await fetch(sessionUrl, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fields: {
+                    'Items with Variations': JSON.stringify(sessionMeta)
+                }
+            })
+        });
+
+        if (!updateResponse.ok) {
+            throw new Error(`Failed to update stream metadata: ${updateResponse.status}`);
+        }
+
+        log('API', `Stream metadata updated for session ${sessionId}`);
+        return true;
+    } catch (error) {
+        console.error('[API] updateStreamMetadata error:', error);
+        return false;
+    }
+}
+
+/**
+ * Clear stream metadata from a session record when the stream ends.
+ *
+ * @param {string} sessionId - The session/plan record ID
+ * @returns {Promise<boolean>} Success status
+ */
+export async function clearStreamMetadata(sessionId) {
+    if (!sessionId) return false;
+
+    try {
+        const sessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+        const getResponse = await fetch(sessionUrl, {
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!getResponse.ok) {
+            throw new Error(`Failed to fetch session: ${getResponse.status}`);
+        }
+
+        const sessionRecord = await getResponse.json();
+        let sessionMeta = {};
+        try {
+            sessionMeta = JSON.parse(sessionRecord.fields?.['Items with Variations'] || '{}');
+        } catch { sessionMeta = {}; }
+
+        // Clear the stream metadata
+        sessionMeta._streamMeta = {
+            active: false,
+            hostUserId: null,
+            startedAt: null,
+            channelName: null,
+        };
+
+        const updateResponse = await fetch(sessionUrl, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fields: {
+                    'Items with Variations': JSON.stringify(sessionMeta)
+                }
+            })
+        });
+
+        if (!updateResponse.ok) {
+            throw new Error(`Failed to clear stream metadata: ${updateResponse.status}`);
+        }
+
+        log('API', `Stream metadata cleared for session ${sessionId}`);
+        return true;
+    } catch (error) {
+        console.error('[API] clearStreamMetadata error:', error);
+        return false;
+    }
+}

@@ -21,7 +21,7 @@ import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { resizeImageForUpload } from '../utils/imageResizer.js';
 import { refreshForumData, onNewItemReceived, getComponentMessageReactions } from './forumPanel.js';
 import { initializeToastNotifications, handlePusherEvent as handleToastPusherEvent } from './toastNotifications.js';
-import { initializeUnifiedChatPanel, showUnifiedChatPanel, hideUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage } from './unifiedChatPanel.js';
+import { initializeUnifiedChatPanel, showUnifiedChatPanel, hideUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage, updateUCPVideoArea, updateUCPLiveBadge, isUCPFullscreen } from './unifiedChatPanel.js';
 import { initVitalityUI, cleanupVitalityUI, refreshFlowLines } from '../vitality/vitalityUI.js';
 import { requestVitalityRecalc, recalculateVitality } from '../vitality/vitalityEngine.js';
 import { openActionMenu, closeActionMenu, isActionMenuOpen, registerActionHandler } from './actionMenu.js';
@@ -158,6 +158,7 @@ let liveVideoStrip = null;
 let liveLocalVideoEl = null;
 let liveRemoteVideosEl = null;
 let liveVideoStripToggle = null;
+let presentationLiveBadge = null;
 
 // Track loaded images for each item
 const itemImagesCache = new Map();
@@ -569,6 +570,7 @@ function ensureDOMElements() {
     liveLocalVideoEl = document.getElementById('live-local-video');
     liveRemoteVideosEl = document.getElementById('live-remote-videos');
     liveVideoStripToggle = document.getElementById('live-video-strip-toggle');
+    presentationLiveBadge = document.getElementById('presentation-live-badge');
 
     if (!modal) {
         console.error('[Presentation] Modal element #presentation-modal-overlay not found in DOM');
@@ -9888,6 +9890,25 @@ function updateLiveStreamToolbarUI() {
 }
 
 /**
+ * v3.8 Phase 2: Update the LIVE badge on the presentation header title.
+ * Also updates the UCP live badge and video area.
+ */
+function updatePresentationLiveBadge() {
+    const isLive = state.stream.isActive;
+
+    // Update presentation header badge
+    if (presentationLiveBadge) {
+        presentationLiveBadge.style.display = isLive ? '' : 'none';
+    }
+
+    // Update UCP live badge
+    updateUCPLiveBadge();
+
+    // Update UCP video area visibility
+    updateUCPVideoArea();
+}
+
+/**
  * Handle "Go Live" button click.
  */
 async function handleGoLiveClick() {
@@ -9952,6 +9973,7 @@ async function handleEndStream() {
 function handleStreamStarted(channelName, uid) {
     log('Presentation', `Stream started: channel=${channelName}, uid=${uid}`);
     updateLiveStreamToolbarUI();
+    updatePresentationLiveBadge();
 
     // Clear the placeholder in the local video container
     if (liveLocalVideoEl) {
@@ -9968,12 +9990,23 @@ function handleStreamStarted(channelName, uid) {
         });
     }
 
+    // v3.8 Phase 2: Persist stream metadata to Airtable (non-blocking)
+    if (state.session.id) {
+        api.updateStreamMetadata(state.session.id, {
+            StreamActive: true,
+            StreamHostUserId: state.session.user?.id,
+            StreamStartedAt: new Date().toISOString(),
+            AgoraChannelName: channelName,
+        }).catch(err => console.warn('[Presentation] Stream metadata update failed:', err.message));
+    }
+
     showToast('You are now live!');
 }
 
 function handleStreamEnded() {
     log('Presentation', 'Stream ended');
     updateLiveStreamToolbarUI();
+    updatePresentationLiveBadge();
 
     // Clear video containers
     if (liveLocalVideoEl) {
@@ -9988,6 +10021,12 @@ function handleStreamEnded() {
         presentationChatChannel.trigger('client-stream-ended', {
             hostUserId: state.session.user?.id,
         });
+    }
+
+    // v3.8 Phase 2: Clear stream metadata in Airtable (non-blocking)
+    if (state.session.id) {
+        api.clearStreamMetadata(state.session.id)
+            .catch(err => console.warn('[Presentation] Stream metadata clear failed:', err.message));
     }
 
     showToast('Stream ended');
@@ -11933,6 +11972,39 @@ async function initializePresentationChat() {
 
             // Update the event-level emoji indicator
             updateEventEmojiIndicator();
+        }
+    });
+
+    // v3.8: Handle stream-started broadcast from another user (viewer auto-join)
+    presentationChatChannel.bind('client-stream-started', (data) => {
+        if (data.hostUserId !== currentUser.id) {
+            log('Presentation', `Stream started by ${data.hostName} (channel: ${data.channelName})`);
+            setState({
+                stream: {
+                    isActive: true,
+                    isHost: false,
+                    hostUserId: data.hostUserId,
+                    channelName: data.channelName,
+                    startedAt: Date.now(),
+                }
+            });
+            updateLiveStreamToolbarUI();
+            updatePresentationLiveBadge();
+            showToast(`${data.hostName} is now live!`);
+
+            // Auto-join as viewer
+            liveStream.joinAsViewer({ channelName: data.channelName });
+        }
+    });
+
+    // v3.8: Handle stream-ended broadcast from another user
+    presentationChatChannel.bind('client-stream-ended', (data) => {
+        if (data.hostUserId !== currentUser.id) {
+            log('Presentation', 'Remote stream ended');
+            liveStream.endStream();
+            updateLiveStreamToolbarUI();
+            updatePresentationLiveBadge();
+            showToast('Stream has ended');
         }
     });
 

@@ -27,7 +27,7 @@ The application is built on a modular architecture to ensure maintainability and
 - **/api/auth-start & /api/auth-verify:** Handle the passwordless "magic link" authentication flow.
 - **/api/update-user-prefs:** Updates an authenticated user's record in Airtable with their notification preferences, such as phone number.
 - **/api/send-notification:** Triggered when a new chat message is posted. It fetches collaborators for the session and sends real-time SMS alerts via Twilio to users who have opted in.
-- **/api/agora-token:** (v3.8) Generates temporary Agora RTC tokens for live stream authentication. Validates that stream hosts are authenticated; viewers receive audience-role tokens. Returns test-mode responses when Agora credentials are not yet configured.
+- **/api/agora-token:** (v3.8) Generates temporary Agora RTC tokens using the official `agora-token` AccessToken2 format. Validates that stream hosts are authenticated; viewers receive audience-role tokens. Returns test-mode responses when Agora credentials are not yet configured.
 - **Other Functions:** Proxies for Calendar, Cloudinary, Payments, and Chat services.
 
 ## Utility Modules

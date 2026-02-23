@@ -4,6 +4,7 @@
   "dependencies": {
     "@netlify/blobs": "^8.1.0",
     "@sendgrid/mail": "^8.1.3",
+    "agora-token": "^2.0.5",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
     "node-fetch": "^2.6.7",

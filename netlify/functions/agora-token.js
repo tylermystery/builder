@@ -9,56 +9,13 @@
 // can still initialize in testing mode (Agora allows tokenless joins in
 // testing projects).
 
-const crypto = require('crypto');
+const { RtcTokenBuilder, Role } = require('agora-token/src/RtcTokenBuilder2');
 
 const AGORA_APP_ID = process.env.AGORA_APP_ID || '';
 const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || '';
 
-// Token privilege expiration: 24 hours
+// Token privilege expiration: 24 hours (in seconds)
 const TOKEN_EXPIRY_SECONDS = 86400;
-
-// Agora Role constants
-const ROLE_PUBLISHER = 1;
-const ROLE_SUBSCRIBER = 2;
-
-/**
- * Build an Agora RTC token using HMAC-SHA256.
- * This implements the AccessToken2 algorithm without requiring the agora-access-token npm package.
- *
- * @param {string} appId
- * @param {string} appCertificate
- * @param {string} channelName
- * @param {number} uid
- * @param {number} role - 1 = publisher, 2 = subscriber
- * @param {number} expireTimestamp - Unix timestamp when token expires
- * @returns {string} The generated token
- */
-function buildToken(appId, appCertificate, channelName, uid, role, expireTimestamp) {
-    // Simple token generation using Agora's token algorithm
-    // For production, consider using the official agora-token package
-    const timestamp = Math.floor(Date.now() / 1000);
-    const salt = crypto.randomInt(1, 99999999);
-
-    const message = `${appId}${channelName}${uid}${salt}${timestamp}${role}${expireTimestamp}`;
-    const signature = crypto
-        .createHmac('sha256', appCertificate)
-        .update(message)
-        .digest('hex');
-
-    // Encode token components as base64
-    const tokenData = {
-        appId,
-        channelName,
-        uid,
-        salt,
-        ts: timestamp,
-        role,
-        expire: expireTimestamp,
-        sig: signature,
-    };
-
-    return Buffer.from(JSON.stringify(tokenData)).toString('base64');
-}
 
 exports.handler = async (event) => {
     // CORS headers
@@ -112,7 +69,7 @@ exports.handler = async (event) => {
         }
 
         // Determine Agora role
-        const agoraRole = role === 'host' ? ROLE_PUBLISHER : ROLE_SUBSCRIBER;
+        const agoraRole = role === 'host' ? Role.PUBLISHER : Role.SUBSCRIBER;
 
         // Host must be authenticated (check for userId)
         if (role === 'host' && !userId) {
@@ -123,16 +80,18 @@ exports.handler = async (event) => {
             };
         }
 
-        // Build token
-        const expireTimestamp = Math.floor(Date.now() / 1000) + TOKEN_EXPIRY_SECONDS;
-        const token = buildToken(
+        // Build token using official Agora AccessToken2 format
+        const token = RtcTokenBuilder.buildTokenWithUid(
             AGORA_APP_ID,
             AGORA_APP_CERTIFICATE,
             channelName,
             uid,
             agoraRole,
-            expireTimestamp
+            TOKEN_EXPIRY_SECONDS,
+            TOKEN_EXPIRY_SECONDS
         );
+
+        const expireAt = Math.floor(Date.now() / 1000) + TOKEN_EXPIRY_SECONDS;
 
         console.log(`[agora-token] Token generated for channel="${channelName}" role="${role}" uid=${uid}`);
 
@@ -144,7 +103,7 @@ exports.handler = async (event) => {
                 appId: AGORA_APP_ID,
                 channel: channelName,
                 uid: uid,
-                expireAt: expireTimestamp,
+                expireAt,
             }),
         };
 

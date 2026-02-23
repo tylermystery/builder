@@ -3390,6 +3390,206 @@
     transition: transform 0.3s ease;
 }
 
+/* ─── v3.8 Phase 2: Presentation LIVE Badge ──────────────────────────────────── */
+
+.presentation-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(220, 53, 69, 0.3);
+    border: 1px solid rgba(220, 53, 69, 0.5);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.65em;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    vertical-align: middle;
+    margin-left: 6px;
+    backdrop-filter: blur(4px);
+    cursor: pointer;
+}
+
+/* ─── v3.8 Phase 2: UCP Full-Screen Mode ─────────────────────────────────────── */
+
+/* Full-screen expand button */
+.ucp-fullscreen-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    font-size: 1em;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: background 0.2s ease, color 0.2s ease;
+    line-height: 1;
+}
+
+.ucp-fullscreen-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+/* UCP LIVE badge in header */
+.ucp-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(220, 53, 69, 0.3);
+    border: 1px solid rgba(220, 53, 69, 0.5);
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 0.6em;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-left: 4px;
+}
+
+.ucp-live-badge .live-dot {
+    width: 6px;
+    height: 6px;
+}
+
+/* Full-screen panel mode */
+.unified-chat-panel.ucp-fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    max-width: 100vw;
+    height: 100vh;
+    z-index: 10000;
+    border-radius: 0;
+    border: none;
+    transform: none;
+    display: flex;
+    flex-direction: column;
+    background: rgba(10, 10, 18, 0.98);
+    backdrop-filter: blur(20px);
+}
+
+/* Body class to hide content behind fullscreen UCP */
+body.ucp-fullscreen-active {
+    overflow: hidden;
+}
+
+/* ─── v3.8 Phase 2: UCP Video Area (Full-screen mode) ────────────────────────── */
+
+.ucp-video-area {
+    flex: 0 0 auto;
+    max-height: 55vh;
+    min-height: 200px;
+    background: rgba(0, 0, 0, 0.5);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.ucp-video-main {
+    flex: 1;
+    position: relative;
+    min-height: 160px;
+    background: rgba(15, 15, 25, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ucp-video-main video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+}
+
+.ucp-video-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 0.85em;
+}
+
+.ucp-video-placeholder span:first-child {
+    font-size: 2.5em;
+}
+
+/* Video tiles strip for remote participants */
+.ucp-video-tiles {
+    display: flex;
+    gap: 4px;
+    padding: 4px 8px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    background: rgba(0, 0, 0, 0.3);
+    min-height: 0;
+}
+
+.ucp-video-tiles:empty {
+    display: none;
+}
+
+.ucp-video-tile {
+    flex: 0 0 auto;
+    width: 120px;
+    height: 90px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(30, 30, 40, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.ucp-video-tile video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* In fullscreen mode, content area fills remaining space */
+.unified-chat-panel.ucp-fullscreen .ucp-content {
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* In fullscreen mode, input area stays at bottom */
+.unified-chat-panel.ucp-fullscreen .ucp-input-area {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 10px 16px;
+}
+
+/* ─── v3.8 Phase 2: Project Dashboard LIVE Badge ─────────────────────────────── */
+
+.project-tree-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(220, 53, 69, 0.3);
+    border: 1px solid rgba(220, 53, 69, 0.5);
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 0.55em;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+
+.project-tree-live-badge .live-dot {
+    width: 5px;
+    height: 5px;
+}
+
 .back-icon, .share-icon {
     font-size: 1.1em;
     font-weight: bold;

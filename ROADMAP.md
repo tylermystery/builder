@@ -76,7 +76,7 @@
 - `css/deferred.css` — Styles for `.compact-reaction-summary`, `.compact-reaction-score`, `.thread-summary-emoji`
 
 ---
-## Version 3.8: Real-World Live Integration (Phase 1 IN PROGRESS)
+## Version 3.8: Real-World Live Integration (Phase 2 IN PROGRESS)
 **Core Objective:** Integrate a live video/audio communication layer that interacts with the Airtable-backed project hierarchy and the Pusher-based chat system. This module brings real-world synchronization into the Warehouse OS.
 
 **Design Decisions (Finalized):**
@@ -93,18 +93,28 @@
 | 8 | Top-Level Plan | **Auto-created** on first login — serves as default workspace for video sessions |
 | 9 | Viewer Access | **Shareable link + in-plan LIVE indicator** (both mechanisms) |
 
-**Phase 1: Foundation — Agora SDK & Basic Video (IN PROGRESS)**
+**Phase 1: Foundation — Agora SDK & Basic Video (COMPLETE)**
 - Added Agora SDK lazy-loading via CDN (`components/liveStream.js`)
-- Created Agora token generation Netlify Function (`netlify/functions/agora-token.js`)
+- Created Agora token generation Netlify Function (`netlify/functions/agora-token.js`) — upgraded to official `agora-token` AccessToken2 format
 - Added video chat toolbar to presentation header (Go Live, Mute, Camera, End Stream)
 - Added collapsible video preview strip below header for local/remote video
 - Extended `state.js` with stream state (`state.stream.*`) and top-level plan (`state.topLevelPlan.*`)
 - Added Agora + Ryry configuration to `config.js`
 - Integrated toolbar with `presentation.js` (init, cleanup, event handlers)
 - Added auto top-level plan creation in `auth.js` login flow via `api.ensureTopLevelPlan()`
+- Added Pusher listeners for `client-stream-started` / `client-stream-ended` with auto viewer join
+
+**Phase 2: Chat Panel Full-Screen Mode & Stream-Plan Association (IN PROGRESS)**
+- Added full-screen expand/collapse toggle to unified chat panel header
+- Added video area (host video + remote tiles) shown in full-screen mode when stream is active
+- Added LIVE badge to presentation header title (pulsing indicator next to plan name)
+- Added LIVE badge to UCP header (next to online count)
+- Added LIVE badge to projects dashboard tree nodes (when plan has active stream)
+- Added `api.updateStreamMetadata()` / `api.clearStreamMetadata()` for Airtable persistence
+- Stream start/end now writes metadata to session record's `_streamMeta` in Airtable
+- Added full-screen CSS with Warehouse OS aesthetic (dark immersive backdrop, frosted glass)
 
 **Remaining Phases:**
-- **Phase 2:** Chat panel full-screen mode & stream-plan association
 - **Phase 3:** Contextual tagging (pin messages to plan items during streams)
 - **Phase 4:** AI Transcription Bridge (Ryry voice commands via Agora RTT)
 - **Phase 5:** Shareable stream links & viewer experience

@@ -5426,6 +5426,10 @@ body.ucp-panel-open .unified-chat-panel {
                 <div id="presentation-header-center">
                     <div class="presentation-header-title-row">
                         <span id="presentation-event-label" class="presentation-event-label">Viewing Plan</span>
+                        <span id="presentation-live-badge" class="presentation-live-badge" style="display: none;">
+                            <span class="live-dot"></span>
+                            <span>LIVE</span>
+                        </span>
                         <button id="plan-focus-regenerate-btn" class="plan-focus-regenerate-btn" title="Regenerate plan focus from goals" aria-label="Regenerate plan focus" style="display: none;">&#x21BB;</button>
                     </div>
                     <div id="goal-chips-container" class="goal-chips-container"></div>
@@ -5852,8 +5856,15 @@ body.ucp-panel-open .unified-chat-panel {
             <div class="ucp-header-left">
                 <h3 class="ucp-title">Conversations</h3>
                 <span id="ucp-online-count" class="ucp-online-badge" title="People online">0</span>
+                <span id="ucp-live-badge" class="ucp-live-badge" style="display: none;">
+                    <span class="live-dot"></span>
+                    <span>LIVE</span>
+                </span>
             </div>
             <div class="ucp-header-right">
+                <button id="ucp-fullscreen-btn" class="ucp-fullscreen-btn" title="Expand to full screen" aria-label="Toggle full screen">
+                    <span id="ucp-fullscreen-icon">&#x26F6;</span>
+                </button>
                 <button id="ucp-menu-btn" class="ucp-menu-btn" title="Chat options" aria-label="Chat options">
                     <span class="ucp-menu-icon">&#x22EE;</span>
                 </button>
@@ -5861,6 +5872,16 @@ body.ucp-panel-open .unified-chat-panel {
                     <span>&times;</span>
                 </button>
             </div>
+        </div>
+        <!-- v3.8: Video area (shown in full-screen mode when stream is active) -->
+        <div id="ucp-video-area" class="ucp-video-area" style="display: none;">
+            <div id="ucp-video-main" class="ucp-video-main">
+                <div class="ucp-video-placeholder">
+                    <span>&#x1F4F9;</span>
+                    <span>No active stream</span>
+                </div>
+            </div>
+            <div id="ucp-video-tiles" class="ucp-video-tiles"></div>
         </div>
         <div class="ucp-filters">
             <button class="ucp-filter-btn active" data-filter="all">All</button>

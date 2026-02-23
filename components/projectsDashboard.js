@@ -321,6 +321,10 @@ function renderProjectNode(project, depth) {
     item.className = 'project-tree-item';
     item.dataset.projectId = project.id;
 
+    // v3.8: Show LIVE badge if this project has an active stream
+    const isLive = state.stream?.isActive && state.stream?.channelName === `plan-${project.id}`;
+    const liveBadge = isLive ? '<span class="project-tree-live-badge"><span class="live-dot"></span>LIVE</span>' : '';
+
     // Create node
     const node = document.createElement('div');
     node.className = `project-tree-node${isCurrentSession ? ' active' : ''}`;
@@ -328,6 +332,7 @@ function renderProjectNode(project, depth) {
         <span class="project-tree-expand ${hasChildren ? (isExpanded ? 'expanded' : '') : 'no-children'}">▶</span>
         <span class="project-tree-icon">${icon}</span>
         <span class="project-tree-name" title="${name}">${name}</span>
+        ${liveBadge}
         <span class="project-tree-meta">${date || (itemCount ? `${itemCount} items` : '')}</span>
     `;
 

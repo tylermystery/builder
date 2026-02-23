@@ -24,6 +24,7 @@ let openEmojiPicker = null;
 let initialized = false;
 let shouldScrollToBottom = true;
 let hideCompleted = false; // Toggle to hide/show completed tasks and their linked comments
+let isFullscreen = false; // v3.8: Full-screen mode state
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '🔥', '🎉', '😮', '👀', '💯'];
 
@@ -63,6 +64,7 @@ export function initializeUnifiedChatPanel() {
     setupChatMenuActions();
     setupTaskCreationListener();
     setupHideCompletedToggle();
+    setupFullscreenToggle();
 
     initialized = true;
     log('UCP', 'Unified Chat Panel initialized.');
@@ -103,6 +105,15 @@ export async function showUnifiedChatPanel() {
 }
 
 export function hideUnifiedChatPanel() {
+    // Exit fullscreen if active
+    if (isFullscreen) {
+        const panel = document.getElementById('unified-chat-panel');
+        if (panel) panel.classList.remove('ucp-fullscreen');
+        document.body.classList.remove('ucp-fullscreen-active');
+        isFullscreen = false;
+        const icon = document.getElementById('ucp-fullscreen-icon');
+        if (icon) icon.innerHTML = '&#x26F6;';
+    }
     document.body.classList.remove('ucp-panel-open');
     document.body.classList.remove('ucp-panel-active');
     panelOpen = false;
@@ -1563,6 +1574,75 @@ export async function openUCPForItem(recordId) {
         input.placeholder = 'Comment on this item...';
         setTimeout(() => input.focus(), 100);
     }
+}
+
+// ===== v3.8: FULL-SCREEN MODE =====
+
+function setupFullscreenToggle() {
+    const btn = document.getElementById('ucp-fullscreen-btn');
+    if (btn) {
+        btn.addEventListener('click', toggleFullscreen);
+    }
+}
+
+export function toggleFullscreen() {
+    const panel = document.getElementById('unified-chat-panel');
+    if (!panel) return;
+
+    isFullscreen = !isFullscreen;
+
+    if (isFullscreen) {
+        panel.classList.add('ucp-fullscreen');
+        document.body.classList.add('ucp-fullscreen-active');
+    } else {
+        panel.classList.remove('ucp-fullscreen');
+        document.body.classList.remove('ucp-fullscreen-active');
+    }
+
+    // Update icon
+    const icon = document.getElementById('ucp-fullscreen-icon');
+    if (icon) {
+        icon.innerHTML = isFullscreen ? '&#x2716;' : '&#x26F6;';
+    }
+
+    // Update button title
+    const btn = document.getElementById('ucp-fullscreen-btn');
+    if (btn) {
+        btn.title = isFullscreen ? 'Exit full screen' : 'Expand to full screen';
+    }
+
+    // Show/hide video area based on stream state
+    updateUCPVideoArea();
+}
+
+export function updateUCPVideoArea() {
+    const videoArea = document.getElementById('ucp-video-area');
+    if (!videoArea) return;
+
+    const streamActive = state.stream?.isActive;
+
+    // Show video area only when in fullscreen AND stream is active
+    if (isFullscreen && streamActive) {
+        videoArea.style.display = '';
+    } else {
+        videoArea.style.display = 'none';
+    }
+}
+
+export function updateUCPLiveBadge() {
+    const badge = document.getElementById('ucp-live-badge');
+    if (!badge) return;
+
+    badge.style.display = state.stream?.isActive ? '' : 'none';
+}
+
+export function isUCPFullscreen() {
+    return isFullscreen;
+}
+
+export function exitFullscreen() {
+    if (!isFullscreen) return;
+    toggleFullscreen();
 }
 
 // ===== UTILITIES =====
