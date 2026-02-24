@@ -128,7 +128,7 @@ function loadAgoraSDK() {
         script.async = true;
         script.onload = () => {
             if (window.AgoraRTC) {
-                window.AgoraRTC.setLogLevel(2); // WARNING level
+                window.AgoraRTC.setLogLevel(3); // ERROR level — suppress SDK autoplay warnings (handled by our overlay)
 
                 // Handle autoplay policy — browsers block audio/video autoplay
                 // without user interaction. Show a "click to unmute" overlay.
@@ -165,16 +165,16 @@ function showAutoplayOverlay() {
         </div>
     `;
 
-    overlay.addEventListener('click', () => {
+    overlay.addEventListener('click', async () => {
         console.log('[Viewer] User clicked autoplay overlay — resuming audio');
-        // Resume all remote audio tracks
+        // Resume all remote audio tracks — play() returns a Promise
         for (const [uid, tracks] of remoteUsers) {
             if (tracks.audioTrack) {
                 try {
-                    tracks.audioTrack.play();
+                    await tracks.audioTrack.play();
                     console.log(`[Viewer] Resumed audio for user ${uid}`);
                 } catch (e) {
-                    console.warn(`[Viewer] Failed to resume audio for user ${uid}:`, e);
+                    console.warn(`[Viewer] Failed to resume audio for user ${uid}:`, e.message);
                 }
             }
         }
@@ -263,12 +263,11 @@ async function handleUserPublished(user, mediaType) {
     if (mediaType === 'audio') {
         remote.audioTrack = user.audioTrack;
         console.log(`[Viewer] Playing audio for user ${user.uid}`);
-        try {
-            user.audioTrack.play();
-        } catch (e) {
-            console.warn(`[Viewer] Audio play() failed for user ${user.uid} (autoplay policy):`, e.message);
-            // The AgoraRTC.onAutoplayFailed handler will show the overlay
-        }
+        // play() returns a Promise — use .catch() to handle autoplay rejection
+        // gracefully. The AgoraRTC.onAutoplayFailed callback shows the overlay.
+        user.audioTrack.play().catch(e => {
+            console.log(`[Viewer] Audio autoplay blocked for user ${user.uid} — click-to-unmute overlay will handle`);
+        });
     }
 
     updateViewerCount();
