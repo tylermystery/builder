@@ -21,6 +21,8 @@ const statusEnded = document.getElementById('viewer-status-ended');
 const statusError = document.getElementById('viewer-status-error');
 const errorMessage = document.getElementById('viewer-error-message');
 
+const collabLink = document.getElementById('viewer-collab-link');
+
 // Phase 6 DOM
 const reactionOverlay = document.getElementById('viewer-reaction-overlay');
 const reactionBar = document.getElementById('viewer-reaction-bar');
@@ -69,6 +71,9 @@ async function init() {
         // 2. Update UI with stream info
         if (planNameEl) planNameEl.textContent = streamInfo.planName || 'Live Stream';
         if (headerRight) headerRight.style.display = '';
+        if (collabLink) {
+            collabLink.href = `/?session=${encodeURIComponent(sessionId)}&view=present`;
+        }
 
         // 3. Load Agora SDK and join as viewer
         await loadAgoraSDK();
@@ -270,9 +275,22 @@ async function handleUserPublished(user, mediaType) {
         // First video user (host) goes in main container, others in grid
         if (remoteUsers.size === 1) {
             try {
-                console.log(`[Viewer] Video container visible: ${videoContainer?.style.display !== 'none'}, dimensions: ${videoContainer?.offsetWidth}x${videoContainer?.offsetHeight}`);
+                const rect = videoContainer?.getBoundingClientRect();
+                console.log(`[Viewer] Video container visible: ${videoContainer?.style.display !== 'none'}, dimensions: ${videoContainer?.offsetWidth}x${videoContainer?.offsetHeight}, rect: ${rect ? `${Math.round(rect.width)}x${Math.round(rect.height)}` : 'N/A'}`);
+                console.log(`[Viewer] Video container parent dimensions: ${videoArea?.offsetWidth}x${videoArea?.offsetHeight}`);
+                console.log(`[Viewer] videoTrack exists: ${!!user.videoTrack}, videoTrack._ID: ${user.videoTrack?._ID || 'N/A'}`);
                 user.videoTrack.play(videoContainer);
                 console.log(`[Viewer] Video play() called successfully for user ${user.uid}`);
+                // Check dimensions after a short delay to confirm rendering
+                setTimeout(() => {
+                    const postRect = videoContainer?.getBoundingClientRect();
+                    const videoEl = videoContainer?.querySelector('video');
+                    console.log(`[Viewer] Post-play container rect: ${postRect ? `${Math.round(postRect.width)}x${Math.round(postRect.height)}` : 'N/A'}`);
+                    console.log(`[Viewer] Video element found: ${!!videoEl}, dimensions: ${videoEl ? `${videoEl.videoWidth}x${videoEl.videoHeight}` : 'N/A'}`);
+                    if (videoEl) {
+                        console.log(`[Viewer] Video element computed style: width=${getComputedStyle(videoEl).width}, height=${getComputedStyle(videoEl).height}`);
+                    }
+                }, 1000);
             } catch (e) {
                 console.error(`[Viewer] Video play error for user ${user.uid}:`, e);
             }
@@ -465,7 +483,11 @@ function showVideo() {
     if (statusLoading) statusLoading.style.display = 'none';
     if (statusEnded) statusEnded.style.display = 'none';
     if (statusError) statusError.style.display = 'none';
-    if (videoContainer) videoContainer.style.display = '';
+    if (videoContainer) {
+        videoContainer.style.display = '';
+        const rect = videoContainer.getBoundingClientRect();
+        console.log(`[Viewer] showVideo() — container display set to '', rect: ${Math.round(rect.width)}x${Math.round(rect.height)}, parent rect: ${Math.round(videoArea?.getBoundingClientRect().width)}x${Math.round(videoArea?.getBoundingClientRect().height)}`);
+    }
 }
 
 function showEnded(planName) {

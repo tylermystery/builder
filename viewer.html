@@ -112,9 +112,17 @@
         }
 
         .viewer-video-container {
-            width: 100%;
-            height: 100%;
-            position: relative;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+
+        /* Agora SDK injects a wrapper div > video element */
+        .viewer-video-container > div {
+            width: 100% !important;
+            height: 100% !important;
         }
 
         .viewer-video-container video {
@@ -645,7 +653,7 @@
     <!-- Footer -->
     <footer class="viewer-footer">
         <span>Powered by WhatTheFunFinder</span>
-        <a href="/">Open Full App</a>
+        <a href="/" id="viewer-collab-link" target="_blank">View Plan</a>
     </footer>
 
     <script src="/viewer.js" type="module"></script>
