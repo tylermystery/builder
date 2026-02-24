@@ -165,18 +165,32 @@ function showAutoplayOverlay() {
         </div>
     `;
 
-    overlay.addEventListener('click', async () => {
-        console.log('[Viewer] User clicked autoplay overlay — resuming audio');
-        // Resume all remote audio tracks — play() returns a Promise
+    overlay.addEventListener('click', () => {
+        console.log('[Viewer] User clicked autoplay overlay — resuming media');
+        // Resume all remote audio and video tracks after user interaction
+        let isFirst = true;
         for (const [uid, tracks] of remoteUsers) {
             if (tracks.audioTrack) {
                 try {
-                    await tracks.audioTrack.play();
+                    tracks.audioTrack.play();
                     console.log(`[Viewer] Resumed audio for user ${uid}`);
                 } catch (e) {
                     console.warn(`[Viewer] Failed to resume audio for user ${uid}:`, e.message);
                 }
             }
+            // Re-play video in case browser also blocked muted video autoplay
+            if (tracks.videoTrack) {
+                try {
+                    if (isFirst) {
+                        tracks.videoTrack.play(videoContainer);
+                    }
+                    // For additional users, renderRemoteGrid() handles playback
+                    console.log(`[Viewer] Resumed video for user ${uid}`);
+                } catch (e) {
+                    console.warn(`[Viewer] Failed to resume video for user ${uid}:`, e.message);
+                }
+            }
+            isFirst = false;
         }
         overlay.remove();
         autoplayOverlayShown = false;
@@ -255,7 +269,13 @@ async function handleUserPublished(user, mediaType) {
 
         // First video user (host) goes in main container, others in grid
         if (remoteUsers.size === 1) {
-            user.videoTrack.play(videoContainer);
+            try {
+                console.log(`[Viewer] Video container visible: ${videoContainer?.style.display !== 'none'}, dimensions: ${videoContainer?.offsetWidth}x${videoContainer?.offsetHeight}`);
+                user.videoTrack.play(videoContainer);
+                console.log(`[Viewer] Video play() called successfully for user ${user.uid}`);
+            } catch (e) {
+                console.error(`[Viewer] Video play error for user ${user.uid}:`, e);
+            }
         } else {
             renderRemoteGrid();
         }
@@ -263,11 +283,14 @@ async function handleUserPublished(user, mediaType) {
     if (mediaType === 'audio') {
         remote.audioTrack = user.audioTrack;
         console.log(`[Viewer] Playing audio for user ${user.uid}`);
-        // play() returns a Promise — use .catch() to handle autoplay rejection
-        // gracefully. The AgoraRTC.onAutoplayFailed callback shows the overlay.
-        user.audioTrack.play().catch(e => {
-            console.log(`[Viewer] Audio autoplay blocked for user ${user.uid} — click-to-unmute overlay will handle`);
-        });
+        // Agora SDK's RemoteAudioTrack.play() returns void (not a Promise).
+        // Autoplay failures are handled by the AgoraRTC.onAutoplayFailed callback
+        // which shows the click-to-unmute overlay.
+        try {
+            user.audioTrack.play();
+        } catch (e) {
+            console.log(`[Viewer] Audio play error for user ${user.uid}:`, e.message);
+        }
     }
 
     updateViewerCount();
