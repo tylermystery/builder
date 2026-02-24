@@ -3261,6 +3261,54 @@
     border-color: rgba(220, 53, 69, 0.5);
 }
 
+/* v3.8 Phase 5: Copy stream link button */
+#live-copy-link {
+    position: relative;
+}
+
+#live-copy-link:hover::after {
+    content: 'Copy stream link';
+    position: absolute;
+    bottom: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.85);
+    color: rgba(255, 255, 255, 0.9);
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.65em;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* v3.8 Phase 6: Host-side floating reaction overlay */
+.host-reaction-overlay {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 300px;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 50;
+}
+
+.host-floating-emoji {
+    position: absolute;
+    bottom: 20%;
+    font-size: 2em;
+    animation: hostFloatUp 2.2s ease-out forwards;
+    pointer-events: none;
+    will-change: transform, opacity;
+}
+
+@keyframes hostFloatUp {
+    0% { transform: translateY(0) scale(1); opacity: 1; }
+    60% { opacity: 1; }
+    100% { transform: translateY(-350px) scale(0.6); opacity: 0; }
+}
+
 /* End stream button */
 .live-end-btn {
     width: 32px;

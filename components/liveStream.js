@@ -3,7 +3,7 @@
 // Handles SDK lifecycle, video/audio tracks, and stream state management
 
 import { state, setState } from '../state.js';
-import { AGORA_APP_ID, AGORA_SDK_URL, LIVE_STREAM_CONFIG } from '../config.js';
+import { AGORA_SDK_URL, LIVE_STREAM_CONFIG } from '../config.js';
 import { log } from '../utils/debug.js';
 
 // --- Module State ---
@@ -84,9 +84,11 @@ function createClient() {
 
 /**
  * Fetch an Agora RTC token from our Netlify function.
+ * Returns the full response including appId, token, and channel info.
  * @param {string} channelName
  * @param {number} uid - Agora numeric UID (0 for auto-assign)
  * @param {string} role - 'host' or 'audience'
+ * @returns {Promise<{token: string|null, appId: string, channel: string, uid: number, testMode?: boolean}>}
  */
 async function fetchToken(channelName, uid = 0, role = 'host') {
     try {
@@ -106,8 +108,7 @@ async function fetchToken(channelName, uid = 0, role = 'host') {
             throw new Error(errorData.error || `Token request failed: ${response.status}`);
         }
 
-        const data = await response.json();
-        return data.token;
+        return await response.json();
     } catch (error) {
         console.error('[LiveStream] Token fetch error:', error);
         throw error;
@@ -248,9 +249,14 @@ export async function startStream(options = {}) {
             }
         );
 
-        // 5. Fetch token
-        const appId = AGORA_APP_ID || window.__AGORA_APP_ID__ || '';
-        const token = appId ? await fetchToken(channelName, 0, 'host') : null;
+        // 5. Fetch token and App ID from server
+        const tokenData = await fetchToken(channelName, 0, 'host');
+        const appId = tokenData.appId;
+        const token = tokenData.token || null;
+
+        if (!appId) {
+            throw new Error('Agora App ID not configured on server. Please set AGORA_APP_ID environment variable.');
+        }
 
         // 6. Join channel
         const uid = await agoraClient.join(appId, channelName, token, null);
@@ -314,8 +320,13 @@ export async function joinAsViewer(options = {}) {
         // Audience role - no publishing
         await agoraClient.setClientRole('audience');
 
-        const appId = AGORA_APP_ID || window.__AGORA_APP_ID__ || '';
-        const token = appId ? await fetchToken(channelName, 0, 'audience') : null;
+        const tokenData = await fetchToken(channelName, 0, 'audience');
+        const appId = tokenData.appId;
+        const token = tokenData.token || null;
+
+        if (!appId) {
+            throw new Error('Agora App ID not configured on server.');
+        }
 
         const uid = await agoraClient.join(appId, channelName, token, null);
         log('LiveStream', `Joined channel "${channelName}" as viewer (uid: ${uid})`);
@@ -366,6 +377,7 @@ export async function endStream() {
                 localAudioEnabled: true,
                 localVideoEnabled: true,
                 shareableLink: null,
+                focusItemId: null,
             }
         });
 
@@ -434,11 +446,21 @@ export function isAgoraLoaded() {
 }
 
 /**
- * Check if an Agora App ID is configured.
- * @returns {boolean}
+ * Check if Agora is configured by pinging the token endpoint.
+ * Caches the result after the first successful check.
+ * @returns {Promise<boolean>}
  */
-export function isAgoraConfigured() {
-    return !!(AGORA_APP_ID || window.__AGORA_APP_ID__);
+let _agoraConfiguredCache = null;
+export async function isAgoraConfigured() {
+    if (_agoraConfiguredCache !== null) return _agoraConfiguredCache;
+    try {
+        const data = await fetchToken('__config_check__', 0, 'audience');
+        _agoraConfiguredCache = !!data.appId && !data.testMode;
+        return _agoraConfiguredCache;
+    } catch {
+        _agoraConfiguredCache = false;
+        return false;
+    }
 }
 
 /**

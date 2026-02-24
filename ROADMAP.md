@@ -76,7 +76,7 @@
 - `css/deferred.css` — Styles for `.compact-reaction-summary`, `.compact-reaction-score`, `.thread-summary-emoji`
 
 ---
-## Version 3.8: Real-World Live Integration (Phase 2 IN PROGRESS)
+## Version 3.8: Real-World Live Integration (Phase 6 COMPLETE — ALL PHASES DONE)
 **Core Objective:** Integrate a live video/audio communication layer that interacts with the Airtable-backed project hierarchy and the Pusher-based chat system. This module brings real-world synchronization into the Warehouse OS.
 
 **Design Decisions (Finalized):**
@@ -92,6 +92,12 @@
 | 7 | Voice Commands | **"Ryry"** wake word with confirmation toast + 5-second undo window |
 | 8 | Top-Level Plan | **Auto-created** on first login — serves as default workspace for video sessions |
 | 9 | Viewer Access | **Shareable link + in-plan LIVE indicator** (both mechanisms) |
+| 10 | Viewer Page Architecture | **Dedicated `viewer.html`** — lightweight standalone page for unauthenticated viewers |
+| 11 | Shareable URL Format | **`/watch/{sessionId}`** — maps directly to plan session, Netlify redirect to `viewer.html` |
+| 12 | Viewer Chat | **Public Pusher channel** (`stream-{sessionId}`) with server-side relay via `viewer-chat.js` function. Viewers choose display name, ephemeral messages (no Airtable persistence) |
+| 13 | Viewer Reactions | **Floating emoji overlay** on both viewer and host sides, relayed via server-side Pusher trigger |
+| 14 | Caption Sync | **Final transcripts** relayed to viewer public channel, throttled to 500ms intervals |
+| 15 | Focus Sync | **Server-side relay** of focus item name to public channel; also persisted in `_streamMeta` for mid-stream joins |
 
 **Phase 1: Foundation — Agora SDK & Basic Video (COMPLETE)**
 - Added Agora SDK lazy-loading via CDN (`components/liveStream.js`)
@@ -104,7 +110,7 @@
 - Added auto top-level plan creation in `auth.js` login flow via `api.ensureTopLevelPlan()`
 - Added Pusher listeners for `client-stream-started` / `client-stream-ended` with auto viewer join
 
-**Phase 2: Chat Panel Full-Screen Mode & Stream-Plan Association (IN PROGRESS)**
+**Phase 2: Chat Panel Full-Screen Mode & Stream-Plan Association (COMPLETE)**
 - Added full-screen expand/collapse toggle to unified chat panel header
 - Added video area (host video + remote tiles) shown in full-screen mode when stream is active
 - Added LIVE badge to presentation header title (pulsing indicator next to plan name)
@@ -114,10 +120,81 @@
 - Stream start/end now writes metadata to session record's `_streamMeta` in Airtable
 - Added full-screen CSS with Warehouse OS aesthetic (dark immersive backdrop, frosted glass)
 
-**Remaining Phases:**
-- **Phase 3:** Contextual tagging (pin messages to plan items during streams)
-- **Phase 4:** AI Transcription Bridge (Ryry voice commands via Agora RTT)
-- **Phase 5:** Shareable stream links & viewer experience
-- **Phase 6:** Polish, state sync, & real-time reactions during streams
+**Phase 3: Contextual Tagging — Pin Messages to Plan Items During Streams (COMPLETE)**
+- Added focus item bar to UCP (select dropdown shown during active streams to set current discussion topic)
+- Auto-tagging: Messages sent while a focus item is active are automatically tagged to that plan item
+- Pin-to-item action button on messages during active streams (📌 Pin) with compact item picker dropdown
+- Unpin action to remove existing item associations
+- Real-time Pusher sync for focus item changes (`client-focus-item`) and message pins (`client-pin-message`)
+- Focus bar updates input placeholder to show current focus context
+- Added `state.stream.focusItemId` for focus item tracking
+- Focus item resets when stream ends
+
+**Phase 4: AI Transcription Bridge — Ryry Voice Commands (COMPLETE)**
+- Created `components/voiceCommands.js` module using browser Web Speech API for zero-latency, free speech recognition
+- Wake word detection: "Ryry" activates command listening mode with 8-second command window
+- Command parsing against `RYRY_CONFIG` keywords: LOG_TASK, SET_PRIORITY, PROJECT_UPDATE
+- 5-second confirmation toast with visual countdown and Undo button before command execution
+- Live captions bar below video strip showing real-time transcription text
+- Transcription toggle button (microphone icon) in stream toolbar — host only, visible when stream active
+- Voice command handlers: task creation, priority setting on most recent task, project update posting to chat
+- Auto-restart on recognition silence/timeout for continuous listening during stream
+- Transcription auto-stops when stream ends
+
+**Phase 5: Shareable Stream Links & Viewer Experience (COMPLETE)**
+- Created standalone `viewer.html` page with Warehouse OS dark aesthetic for unauthenticated viewers
+- Created `viewer.js` client script — loads Agora SDK, joins as audience, renders video with status states
+- URL pattern: `/watch/{sessionId}` — Netlify redirect to `viewer.html`, session ID parsed from URL path
+- Created `netlify/functions/get-stream-info.js` — public API endpoint to check stream status via Airtable `_streamMeta`
+- Viewer page flow: check stream status → load Agora SDK → join as audience → render host video
+- Stream status polling (15s interval) to detect when stream ends (no Pusher needed for viewers)
+- Added "Copy Link" button (link icon) to stream toolbar — visible to host only during active stream
+- Shareable link auto-generated on stream start: `{origin}/watch/{sessionId}`, stored in `state.stream.shareableLink`
+- Copy-to-clipboard with visual confirmation feedback (checkmark icon flash)
+- Viewer page states: loading spinner, live video, stream ended, and error — all with appropriate messaging
+- Added `/api/get-stream-info` and `/watch/*` redirects to `netlify.toml`
+- Added CSS tooltip for copy link button and viewer page inline styles matching Warehouse OS aesthetic
+
+**Phase 6: Polish, State Sync, & Real-Time Reactions During Streams (COMPLETE)**
+
+*Sub-Phase 6A: Viewer Chat via Pusher Public Channel*
+- Created `netlify/functions/viewer-chat.js` — server-side Pusher relay for viewer messages, reactions, captions, and state updates
+- Viewers subscribe to public Pusher channel `stream-{sessionId}` (no auth required)
+- Messages relayed to both public channel (other viewers) and presence channel (host) via server-side trigger
+- Viewer name stored in `sessionStorage`, prompted inline on first message
+- Rate limiting: 1 message/second per IP, 500ms cooldown for reactions
+- Chat displayed as semi-transparent overlay on right side of viewer video area
+- Host sees viewer messages in presentation chat with "(Viewer)" badge
+- Ephemeral messages — no Airtable persistence (live stream only)
+
+*Sub-Phase 6B: Floating Emoji Reactions*
+- Reaction bar on viewer page with 6 emoji buttons (fire, heart, clap, laugh, rocket, 100)
+- Floating emoji animation over video area (CSS `@keyframes floatUp`, randomized horizontal position)
+- Host reaction overlay: viewer reactions float over the host's interface via Pusher relay
+- 500ms cooldown between reactions to prevent spam
+- CSS-only animation with `animationend` cleanup
+
+*Sub-Phase 6C: Stream State Sync (Captions + Focus Topic)*
+- Captions: Final transcripts from host's Web Speech API relayed to viewer page via `stream-caption` Pusher event (throttled 500ms)
+- Focus topic: When host changes focus item, relayed to viewers via `stream-state-update` Pusher event
+- `get-stream-info` extended with `focusItemName` for viewers joining mid-stream
+- Viewer page displays captions in bottom-center overlay bar and focus topic in top-center indicator
+
+*Sub-Phase 6D: Polish & Error Handling*
+- Agora reconnection with exponential backoff (3 attempts: 2s, 5s, 10s delays)
+- Visual reconnection status shown in captions bar area
+- Pusher connection state monitoring with console logging
+- Graceful cleanup on stream end: disconnect Agora, unbind Pusher, hide interactive elements
+- Mobile-responsive viewer chat: full-width at 600px breakpoint
+
+*Bug Fixes Applied During Phase 6*
+- Fixed session save overwriting `_streamMeta` — session saves now preserve stream metadata when stream is active
+- Fixed voice command `commandBuffer` bug — rawText was empty string due to premature buffer clear
+- Added flexible wake word matching for speech recognition variations (e.g., "ry ry", "rye rye")
+- Added flexible command keyword matching (strips filler words like "a", "the", "my" between keyword parts)
+- Expanded command keyword aliases: "add task", "create task", "new task" for LOG_TASK; "mark priority", "change priority" for SET_PRIORITY; etc.
+- Added debug logging to `get-stream-info.js` and `viewer.js` for stream status troubleshooting
+
+**All 6 phases of v3.8 Real-World Live Integration are now complete.**
 
 **Design Constraint:** Maintain the "Authenticity" ethos — the UI should feel like a "Warehouse OS," not a corporate meeting tool.

@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Stream — WhatTheFunFinder</title>
+    <meta name="description" content="Watch a live stream on WhatTheFunFinder">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-primary: #0d0d12;
+            --bg-surface: rgba(20, 20, 30, 0.85);
+            --bg-glass: rgba(255, 255, 255, 0.06);
+            --border-subtle: rgba(255, 255, 255, 0.1);
+            --border-accent: rgba(255, 255, 255, 0.2);
+            --text-primary: rgba(255, 255, 255, 0.95);
+            --text-secondary: rgba(255, 255, 255, 0.6);
+            --text-muted: rgba(255, 255, 255, 0.4);
+            --accent-red: #dc3545;
+            --accent-red-glow: rgba(220, 53, 69, 0.3);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ─── Header ────────────────────────────────────────────────── */
+        .viewer-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            background: var(--bg-surface);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-subtle);
+            z-index: 10;
+        }
+
+        .viewer-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .viewer-logo {
+            font-size: 0.85em;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-decoration: none;
+            letter-spacing: -0.3px;
+        }
+
+        .viewer-plan-name {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: var(--text-primary);
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .viewer-live-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: var(--accent-red-glow);
+            border: 1px solid rgba(220, 53, 69, 0.5);
+            padding: 3px 10px;
+            border-radius: 16px;
+            font-size: 0.7em;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .viewer-live-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--accent-red);
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        .viewer-viewer-count {
+            font-size: 0.8em;
+            color: var(--text-secondary);
+        }
+
+        /* ─── Video Area ────────────────────────────────────────────── */
+        .viewer-video-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            position: relative;
+            min-height: 300px;
+        }
+
+        .viewer-video-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .viewer-video-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* ─── Status Overlay ────────────────────────────────────────── */
+        .viewer-status {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            padding: 40px;
+            text-align: center;
+            min-height: 400px;
+        }
+
+        .viewer-status-icon {
+            font-size: 3em;
+            opacity: 0.6;
+        }
+
+        .viewer-status-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .viewer-status-message {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+            max-width: 400px;
+            line-height: 1.5;
+        }
+
+        .viewer-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border-subtle);
+            border-top-color: var(--accent-red);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .viewer-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 24px;
+            background: var(--accent-red-glow);
+            border: 1px solid rgba(220, 53, 69, 0.5);
+            color: #fff;
+            font-size: 0.9em;
+            font-weight: 600;
+            border-radius: 24px;
+            cursor: pointer;
+            transition: background 0.2s ease, transform 0.1s ease;
+            text-decoration: none;
+        }
+
+        .viewer-btn:hover {
+            background: rgba(220, 53, 69, 0.45);
+        }
+
+        .viewer-btn:active {
+            transform: scale(0.97);
+        }
+
+        /* ─── Footer ────────────────────────────────────────────────── */
+        .viewer-footer {
+            padding: 12px 20px;
+            background: var(--bg-surface);
+            backdrop-filter: blur(12px);
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.75em;
+            color: var(--text-muted);
+        }
+
+        .viewer-footer a {
+            color: var(--text-secondary);
+            text-decoration: none;
+        }
+
+        .viewer-footer a:hover {
+            color: var(--text-primary);
+        }
+
+        /* ─── Remote Videos Grid (multiple remote streams) ──────────── */
+        .viewer-remote-grid {
+            display: none;
+            gap: 4px;
+            padding: 6px 12px;
+            background: rgba(0, 0, 0, 0.4);
+            border-top: 1px solid var(--border-subtle);
+            overflow-x: auto;
+        }
+
+        .viewer-remote-grid.has-videos {
+            display: flex;
+        }
+
+        .viewer-remote-cell {
+            flex: 0 0 auto;
+            width: 160px;
+            height: 120px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: rgba(30, 30, 40, 0.8);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .viewer-remote-cell video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* ─── Phase 6: Reaction Overlay ─────────────────────────────── */
+        .viewer-reaction-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 5;
+        }
+
+        .viewer-floating-emoji {
+            position: absolute;
+            bottom: 10%;
+            font-size: 2em;
+            animation: floatUp 2.2s ease-out forwards;
+            pointer-events: none;
+            will-change: transform, opacity;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            60% { opacity: 1; }
+            100% { transform: translateY(-350px) scale(0.6); opacity: 0; }
+        }
+
+        /* ─── Phase 6: Reaction Bar ─────────────────────────────────── */
+        .viewer-reaction-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--bg-surface);
+            backdrop-filter: blur(12px);
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .viewer-reaction-btn {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-subtle);
+            border-radius: 24px;
+            padding: 6px 12px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: transform 0.15s ease, background 0.2s ease;
+            line-height: 1;
+        }
+
+        .viewer-reaction-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            transform: scale(1.15);
+        }
+
+        .viewer-reaction-btn:active {
+            transform: scale(0.9);
+        }
+
+        .viewer-reaction-btn.cooldown {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        /* ─── Phase 6: Chat Overlay ─────────────────────────────────── */
+        .viewer-chat-overlay {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(to right, transparent 0%, rgba(0,0,0,0.6) 20%, rgba(0,0,0,0.75) 100%);
+            z-index: 6;
+            pointer-events: none;
+        }
+
+        .viewer-chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            gap: 6px;
+            pointer-events: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.15) transparent;
+        }
+
+        .viewer-chat-msg {
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-size: 0.82em;
+            line-height: 1.35;
+            animation: chatFadeIn 0.3s ease;
+            max-width: 100%;
+            word-wrap: break-word;
+        }
+
+        .viewer-chat-msg .chat-sender {
+            font-weight: 600;
+            color: var(--accent-red);
+            margin-right: 4px;
+        }
+
+        .viewer-chat-msg .chat-sender.host-badge {
+            color: #ffc107;
+        }
+
+        .viewer-chat-msg .chat-text {
+            color: var(--text-primary);
+        }
+
+        @keyframes chatFadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .viewer-chat-form {
+            display: flex;
+            gap: 6px;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.5);
+            border-top: 1px solid var(--border-subtle);
+            pointer-events: auto;
+        }
+
+        .viewer-chat-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 6px 12px;
+            color: var(--text-primary);
+            font-size: 0.82em;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .viewer-chat-input:focus {
+            border-color: var(--accent-red);
+        }
+
+        .viewer-chat-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .viewer-chat-send {
+            background: var(--accent-red-glow);
+            border: 1px solid rgba(220, 53, 69, 0.5);
+            color: #fff;
+            font-size: 0.8em;
+            font-weight: 600;
+            padding: 6px 14px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .viewer-chat-send:hover {
+            background: rgba(220, 53, 69, 0.45);
+        }
+
+        /* ─── Phase 6: Captions Bar ─────────────────────────────────── */
+        .viewer-captions-bar {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 70%;
+            padding: 6px 16px;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            border-radius: 12px;
+            font-size: 0.85em;
+            color: var(--text-primary);
+            text-align: center;
+            z-index: 4;
+            transition: opacity 0.3s;
+        }
+
+        .viewer-captions-bar:empty {
+            opacity: 0;
+        }
+
+        /* ─── Phase 6: Focus Topic Indicator ────────────────────────── */
+        .viewer-focus-indicator {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 4px 14px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            border-radius: 12px;
+            font-size: 0.75em;
+            color: var(--text-secondary);
+            z-index: 4;
+            transition: opacity 0.3s;
+        }
+
+        .viewer-focus-indicator:empty {
+            opacity: 0;
+        }
+
+        /* ─── Phase 6: Viewer Name Prompt ───────────────────────────── */
+        .viewer-name-prompt {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-surface);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-accent);
+            border-radius: 16px;
+            padding: 16px 20px;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 260px;
+        }
+
+        .viewer-name-prompt label {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+        }
+
+        .viewer-name-prompt input {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 8px 12px;
+            color: var(--text-primary);
+            font-size: 0.9em;
+            outline: none;
+        }
+
+        .viewer-name-prompt input:focus {
+            border-color: var(--accent-red);
+        }
+
+        .viewer-name-prompt button {
+            background: var(--accent-red-glow);
+            border: 1px solid rgba(220, 53, 69, 0.5);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 16px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85em;
+        }
+
+        /* ─── Autoplay Overlay ──────────────────────────────────────── */
+        .viewer-autoplay-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.55);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 15;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .viewer-autoplay-overlay:hover {
+            background: rgba(0, 0, 0, 0.45);
+        }
+
+        .viewer-autoplay-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            padding: 24px 36px;
+            background: var(--bg-surface);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-accent);
+            border-radius: 20px;
+            animation: autoplayPulse 2s ease-in-out infinite;
+        }
+
+        .viewer-autoplay-icon {
+            font-size: 2.2em;
+        }
+
+        .viewer-autoplay-text {
+            font-size: 0.95em;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        @keyframes autoplayPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.04); }
+        }
+
+        /* ─── Responsive ────────────────────────────────────────────── */
+        @media (max-width: 768px) {
+            .viewer-chat-overlay {
+                width: 220px;
+            }
+        }
+        @media (max-width: 600px) {
+            .viewer-header { padding: 8px 12px; }
+            .viewer-plan-name { max-width: 150px; font-size: 0.8em; }
+            .viewer-logo { font-size: 0.75em; }
+            .viewer-chat-overlay {
+                width: 100%;
+                top: auto;
+                bottom: 0;
+                height: 180px;
+                background: rgba(0, 0, 0, 0.8);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="viewer-header">
+        <div class="viewer-header-left">
+            <a href="/" class="viewer-logo">WhatTheFunFinder</a>
+            <span id="viewer-plan-name" class="viewer-plan-name"></span>
+        </div>
+        <div class="viewer-header-right" id="viewer-header-right" style="display: none;">
+            <span class="viewer-live-badge">
+                <span class="viewer-live-dot"></span>
+                <span>LIVE</span>
+            </span>
+            <span id="viewer-count" class="viewer-viewer-count"></span>
+        </div>
+    </header>
+
+    <!-- Main Video Area -->
+    <main class="viewer-video-area" id="viewer-video-area">
+        <!-- Status: Loading -->
+        <div id="viewer-status-loading" class="viewer-status">
+            <div class="viewer-spinner"></div>
+            <div class="viewer-status-title">Connecting to stream...</div>
+            <div class="viewer-status-message">Please wait while the stream loads.</div>
+        </div>
+
+        <!-- Status: Stream Ended -->
+        <div id="viewer-status-ended" class="viewer-status" style="display: none;">
+            <div class="viewer-status-icon">&#x1F4F9;</div>
+            <div class="viewer-status-title">Stream has ended</div>
+            <div class="viewer-status-message">This live stream is no longer active. Check back later or explore plans on WhatTheFunFinder.</div>
+            <a href="/" class="viewer-btn">Browse Plans</a>
+        </div>
+
+        <!-- Status: Error -->
+        <div id="viewer-status-error" class="viewer-status" style="display: none;">
+            <div class="viewer-status-icon">&#x26A0;</div>
+            <div class="viewer-status-title">Unable to connect</div>
+            <div id="viewer-error-message" class="viewer-status-message">Something went wrong while connecting to the stream.</div>
+            <button class="viewer-btn" onclick="location.reload()">Try Again</button>
+        </div>
+
+        <!-- Video Container (hidden until stream connects) -->
+        <div id="viewer-video-container" class="viewer-video-container" style="display: none;"></div>
+
+        <!-- Phase 6: Reaction overlay (floats over video) -->
+        <div id="viewer-reaction-overlay" class="viewer-reaction-overlay"></div>
+
+        <!-- Phase 6: Chat overlay (right side of video) -->
+        <div id="viewer-chat-overlay" class="viewer-chat-overlay" style="display: none;">
+            <div class="viewer-chat-messages" id="viewer-chat-messages"></div>
+            <form class="viewer-chat-form" id="viewer-chat-form">
+                <input type="text" id="viewer-chat-input" class="viewer-chat-input" placeholder="Say something..." maxlength="200" autocomplete="off">
+                <button type="submit" class="viewer-chat-send">Send</button>
+            </form>
+        </div>
+
+        <!-- Phase 6: Captions bar (bottom center of video) -->
+        <div id="viewer-captions-bar" class="viewer-captions-bar" style="display: none;"></div>
+
+        <!-- Phase 6: Focus topic indicator (top center of video) -->
+        <div id="viewer-focus-indicator" class="viewer-focus-indicator" style="display: none;"></div>
+    </main>
+
+    <!-- Remote Videos Strip (for additional participants) -->
+    <div id="viewer-remote-grid" class="viewer-remote-grid"></div>
+
+    <!-- Phase 6: Reaction bar -->
+    <div id="viewer-reaction-bar" class="viewer-reaction-bar" style="display: none;">
+        <button class="viewer-reaction-btn" data-emoji="&#x1F525;">&#x1F525;</button>
+        <button class="viewer-reaction-btn" data-emoji="&#x2764;&#xFE0F;">&#x2764;&#xFE0F;</button>
+        <button class="viewer-reaction-btn" data-emoji="&#x1F44F;">&#x1F44F;</button>
+        <button class="viewer-reaction-btn" data-emoji="&#x1F602;">&#x1F602;</button>
+        <button class="viewer-reaction-btn" data-emoji="&#x1F680;">&#x1F680;</button>
+        <button class="viewer-reaction-btn" data-emoji="&#x1F4AF;">&#x1F4AF;</button>
+    </div>
+
+    <!-- Footer -->
+    <footer class="viewer-footer">
+        <span>Powered by WhatTheFunFinder</span>
+        <a href="/">Open Full App</a>
+    </footer>
+
+    <script src="/viewer.js" type="module"></script>
+</body>
+</html>

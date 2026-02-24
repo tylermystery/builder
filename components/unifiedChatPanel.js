@@ -3,7 +3,7 @@
 // Single main thread timeline with nested item comments and sub-threads on replies
 // Features: chronological timeline, inline reactions, task modal, message editing
 
-import { state, getRecordById } from '../state.js';
+import { state, setState, getRecordById } from '../state.js';
 import { log } from '../utils/debug.js';
 import * as api from '../api.js';
 import { showToast } from '../ui.js';
@@ -65,6 +65,7 @@ export function initializeUnifiedChatPanel() {
     setupTaskCreationListener();
     setupHideCompletedToggle();
     setupFullscreenToggle();
+    setupFocusBar();
 
     initialized = true;
     log('UCP', 'Unified Chat Panel initialized.');
@@ -83,6 +84,8 @@ export async function showUnifiedChatPanel() {
     shouldScrollToBottom = true;
 
     populateAttachSelect();
+    populateFocusSelect();
+    updateFocusBarUI();
     await loadPanelData();
     updateOnlineCount();
 
@@ -458,6 +461,15 @@ function getDateLabel(timestamp) {
 function updateInputPlaceholder() {
     const input = document.getElementById('ucp-message-input');
     if (!input) return;
+
+    // v3.8 Phase 3: Show focus item context in placeholder
+    if (state.stream?.isActive && state.stream?.focusItemId && currentFilter === 'all') {
+        const record = getRecordById(state.stream.focusItemId);
+        const name = record?.fields?.Name || 'focused item';
+        input.placeholder = `Message about ${name}...`;
+        return;
+    }
+
     switch (currentFilter) {
         case 'comments': input.placeholder = 'Comment on a plan item...'; break;
         case 'ideas': input.placeholder = 'Share an idea...'; break;
@@ -641,6 +653,19 @@ function createActionsRow(message, isOwn) {
     }
     taskBtn.addEventListener('click', () => openTaskModalFromMessage(message));
     actions.appendChild(taskBtn);
+
+    // v3.8 Phase 3: Pin to item button (shown when stream is active)
+    if (state.stream?.isActive) {
+        const pinBtn = document.createElement('button');
+        const isPinned = !!message.componentId;
+        pinBtn.className = `ucp-action-btn ucp-pin-btn${isPinned ? ' pinned' : ''}`;
+        pinBtn.innerHTML = isPinned ? '📌 Pinned' : '📌 Pin';
+        pinBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showPinPicker(message.id, actions);
+        });
+        actions.appendChild(pinBtn);
+    }
 
     // Keep actions row visible when a task is linked
     if (hasLinkedTask) {
@@ -1433,7 +1458,13 @@ async function handleMessageSubmit(e) {
             await loadPanelData();
         } else {
             const attachSelect = document.getElementById('ucp-attach-select');
-            const itemId = attachSelect?.value || null;
+            let itemId = attachSelect?.value || null;
+
+            // v3.8 Phase 3: Auto-tag to focus item if no explicit attachment and stream is active
+            if (!itemId && state.stream?.isActive && state.stream?.focusItemId) {
+                itemId = state.stream.focusItemId;
+            }
+
             if (sendChatMessageFn) {
                 await sendChatMessageFn(message, itemId);
             } else {
@@ -1643,6 +1674,430 @@ export function isUCPFullscreen() {
 export function exitFullscreen() {
     if (!isFullscreen) return;
     toggleFullscreen();
+}
+
+// ===== v3.8 PHASE 3: FOCUS ITEM BAR & CONTEXTUAL TAGGING =====
+
+/**
+ * Set up the focus item bar (shown during active streams).
+ * The focus item bar allows the host (or editors) to designate a plan item
+ * as the current discussion topic. Messages sent while a focus item is active
+ * are auto-tagged to that item.
+ */
+function setupFocusBar() {
+    const focusSelect = document.getElementById('ucp-focus-select');
+    const clearBtn = document.getElementById('ucp-focus-clear');
+
+    if (focusSelect) {
+        focusSelect.addEventListener('change', () => {
+            const itemId = focusSelect.value || null;
+            setFocusItem(itemId);
+        });
+    }
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            setFocusItem(null);
+        });
+    }
+}
+
+/**
+ * Set or clear the focus item for the current stream.
+ * Updates state, UI, and broadcasts via Pusher.
+ * @param {string|null} itemId - Plan item record ID, or null to clear
+ */
+function setFocusItem(itemId) {
+    console.warn('[SYNC DEBUG] setFocusItem called:', {
+        itemId,
+        previousFocusItemId: state.stream?.focusItemId,
+        streamActive: state.stream?.isActive,
+    });
+    setState({ stream: { focusItemId: itemId || null } });
+    updateFocusBarUI();
+
+    // Broadcast to other users via custom event
+    window.dispatchEvent(new CustomEvent('ucp-focus-item-changed', {
+        detail: { itemId: itemId || null }
+    }));
+    console.warn('[SYNC DEBUG] setFocusItem: dispatched ucp-focus-item-changed window event');
+
+    if (itemId) {
+        const record = getRecordById(itemId);
+        const name = record?.fields?.Name || 'Item';
+        log('UCP', `Focus item set: ${name} (${itemId})`);
+    } else {
+        log('UCP', 'Focus item cleared');
+    }
+}
+
+/**
+ * Update the focus bar UI to reflect current state.
+ * Shows bar when stream is active, highlights when focus item is set.
+ */
+export function updateFocusBarUI() {
+    const bar = document.getElementById('ucp-focus-bar');
+    const select = document.getElementById('ucp-focus-select');
+    const clearBtn = document.getElementById('ucp-focus-clear');
+    if (!bar) {
+        console.warn('[SYNC DEBUG] updateFocusBarUI: #ucp-focus-bar element not found in DOM');
+        return;
+    }
+
+    const streamActive = state.stream?.isActive;
+    const focusItemId = state.stream?.focusItemId;
+
+    console.warn('[SYNC DEBUG] updateFocusBarUI:', {
+        streamActive,
+        focusItemId,
+        barCurrentDisplay: bar.style.display,
+        selectValue: select?.value,
+        selectOptionCount: select?.options?.length,
+    });
+
+    // Show/hide focus bar based on stream state
+    bar.style.display = streamActive ? '' : 'none';
+
+    if (!streamActive) return;
+
+    // Toggle active state
+    if (focusItemId) {
+        bar.classList.add('has-focus');
+        if (clearBtn) clearBtn.style.display = '';
+    } else {
+        bar.classList.remove('has-focus');
+        if (clearBtn) clearBtn.style.display = 'none';
+    }
+
+    // Sync select value
+    if (select && select.value !== (focusItemId || '')) {
+        const optionExists = Array.from(select.options).some(opt => opt.value === focusItemId);
+        console.warn('[SYNC DEBUG] updateFocusBarUI: syncing select value', {
+            currentSelectValue: select.value,
+            targetFocusItemId: focusItemId,
+            optionExistsInDropdown: optionExists,
+        });
+        if (!optionExists && focusItemId) {
+            // Option not in dropdown — repopulate and try again
+            console.warn('[SYNC DEBUG] updateFocusBarUI: focus item not in dropdown, repopulating');
+            populateFocusSelect();
+        }
+        select.value = focusItemId || '';
+    }
+}
+
+/**
+ * Populate the focus item select dropdown with current plan items.
+ * Mirrors the attach select but for the focus bar.
+ */
+export function populateFocusSelect() {
+    const select = document.getElementById('ucp-focus-select');
+    if (!select) return;
+
+    const currentValue = select.value;
+    select.innerHTML = '<option value="">No focus item</option>';
+
+    const planItemIds = new Set();
+    if (state.cart?.lockedItems) {
+        state.cart.lockedItems.forEach((info, id) => planItemIds.add(id));
+    }
+    if (state.cart?.items) {
+        state.cart.items.forEach((info, id) => planItemIds.add(id));
+    }
+
+    if (planItemIds.size === 0 && state.records?.all) {
+        state.records.all.forEach(r => { if (r?.id) planItemIds.add(r.id); });
+    }
+
+    const entries = [];
+    planItemIds.forEach(id => {
+        const record = getRecordById(id);
+        const name = record?.fields?.Name || record?.fields?.['Item Name'] || 'Unknown';
+        entries.push({ id, name });
+    });
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+
+    entries.forEach(({ id, name }) => {
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = name;
+        select.appendChild(option);
+    });
+
+    // Restore selection if still valid
+    if (currentValue) {
+        select.value = currentValue;
+    }
+}
+
+/**
+ * Apply focus item from a remote Pusher event.
+ * @param {string|null} itemId
+ */
+export function applyRemoteFocusItem(itemId) {
+    console.warn('[SYNC DEBUG] applyRemoteFocusItem called:', {
+        itemId,
+        previousFocusItemId: state.stream?.focusItemId,
+        streamActive: state.stream?.isActive,
+        isHost: state.stream?.isHost,
+    });
+    setState({ stream: { focusItemId: itemId || null } });
+    // Ensure dropdown is populated before trying to update UI
+    populateFocusSelect();
+    updateFocusBarUI();
+    if (itemId) {
+        const record = getRecordById(itemId);
+        const name = record?.fields?.Name || 'Item';
+        console.warn('[SYNC DEBUG] applyRemoteFocusItem: showing toast for focus:', name);
+        showToast(`Focus: ${name}`);
+    } else {
+        console.warn('[SYNC DEBUG] applyRemoteFocusItem: showing toast for cleared focus');
+        showToast('Focus item cleared');
+    }
+}
+
+/**
+ * Apply a remote pin event — update the context badge on a message in the DOM.
+ * @param {string} messageId
+ * @param {string|null} itemId
+ */
+export function applyRemotePin(messageId, itemId) {
+    console.warn('[SYNC DEBUG] applyRemotePin called:', {
+        messageId,
+        itemId,
+        ucpMessagesCount: ucpMessages.length,
+        panelOpen,
+    });
+
+    // Update in-memory message
+    const msg = ucpMessages.find(m => m.id === messageId);
+    if (msg) {
+        msg.componentId = itemId || null;
+        console.warn('[SYNC DEBUG] applyRemotePin: in-memory message updated');
+    } else {
+        console.warn('[SYNC DEBUG] applyRemotePin: WARNING - message not found in ucpMessages, id:', messageId,
+            'Available IDs (first 5):', ucpMessages.slice(0, 5).map(m => m.id));
+    }
+
+    // Update DOM
+    const msgEl = document.querySelector(`.ucp-msg[data-message-id="${messageId}"]`);
+    if (!msgEl) {
+        console.warn('[SYNC DEBUG] applyRemotePin: WARNING - DOM element not found for message:', messageId,
+            'UCP panel open:', panelOpen);
+        return;
+    }
+
+    console.warn('[SYNC DEBUG] applyRemotePin: DOM element found, applying pin UI');
+
+    if (itemId) {
+        const record = getRecordById(itemId);
+        const itemName = record?.fields?.Name || 'Item';
+
+        // Check if context badge exists already
+        let contextBadge = msgEl.querySelector('.ucp-msg-context:not(.ucp-msg-context-idea)');
+        if (contextBadge) {
+            const nameEl = contextBadge.querySelector('.ucp-context-name');
+            if (nameEl) nameEl.textContent = itemName;
+        } else {
+            contextBadge = document.createElement('div');
+            contextBadge.className = 'ucp-msg-context';
+            contextBadge.innerHTML = `<span class="ucp-context-icon">📌</span> <span class="ucp-context-name">${escapeHtml(itemName)}</span>`;
+            const header = msgEl.querySelector('.ucp-msg-header');
+            if (header) {
+                msgEl.insertBefore(contextBadge, header);
+            } else {
+                msgEl.prepend(contextBadge);
+            }
+        }
+
+        // Add comment styling
+        msgEl.classList.add('ucp-msg-comment');
+
+        // Update pin button
+        const pinBtn = msgEl.querySelector('.ucp-pin-btn');
+        if (pinBtn) {
+            pinBtn.classList.add('pinned');
+            pinBtn.innerHTML = '📌 Pinned';
+        }
+    } else {
+        // Remove pin
+        const contextBadge = msgEl.querySelector('.ucp-msg-context:not(.ucp-msg-context-idea)');
+        if (contextBadge) contextBadge.remove();
+        msgEl.classList.remove('ucp-msg-comment');
+
+        const pinBtn = msgEl.querySelector('.ucp-pin-btn');
+        if (pinBtn) {
+            pinBtn.classList.remove('pinned');
+            pinBtn.innerHTML = '📌 Pin';
+        }
+    }
+}
+
+/**
+ * Pin a message to a specific plan item.
+ * Updates Airtable, local state, DOM, and broadcasts via Pusher.
+ * @param {string} messageId
+ * @param {string} itemId
+ */
+async function pinMessageToItem(messageId, itemId) {
+    const record = getRecordById(itemId);
+    const itemName = record?.fields?.Name || 'Item';
+
+    console.warn('[SYNC DEBUG] pinMessageToItem called:', {
+        messageId,
+        itemId,
+        itemName,
+        messageIdStartsWithRec: messageId?.startsWith('rec'),
+    });
+
+    // Update Airtable — await to catch errors visibly
+    api.updateChatMessageItemLink(messageId, itemId).then(result => {
+        console.warn('[SYNC DEBUG] pinMessageToItem: Airtable update succeeded:', {
+            messageId,
+            itemId,
+            resultId: result?.id,
+        });
+    }).catch(err => {
+        console.warn('[SYNC DEBUG] pinMessageToItem: Airtable update FAILED:', {
+            messageId,
+            itemId,
+            error: err.message,
+        });
+    });
+
+    // Update local message state
+    const msg = ucpMessages.find(m => m.id === messageId);
+    if (msg) {
+        msg.componentId = itemId;
+        console.warn('[SYNC DEBUG] pinMessageToItem: local message updated');
+    } else {
+        console.warn('[SYNC DEBUG] pinMessageToItem: WARNING - message not found in ucpMessages array, id:', messageId);
+    }
+
+    // Update DOM immediately
+    applyRemotePin(messageId, itemId);
+
+    // Broadcast via window event (presentation.js picks up and sends Pusher)
+    window.dispatchEvent(new CustomEvent('ucp-pin-message', {
+        detail: { messageId, itemId }
+    }));
+    console.warn('[SYNC DEBUG] pinMessageToItem: dispatched ucp-pin-message window event');
+
+    showToast(`Pinned to ${itemName}`);
+}
+
+/**
+ * Unpin a message from its current plan item.
+ * @param {string} messageId
+ */
+async function unpinMessage(messageId) {
+    console.warn('[SYNC DEBUG] unpinMessage called:', { messageId });
+
+    api.updateChatMessageItemLink(messageId, null).then(result => {
+        console.warn('[SYNC DEBUG] unpinMessage: Airtable unpin succeeded:', { messageId, resultId: result?.id });
+    }).catch(err => {
+        console.warn('[SYNC DEBUG] unpinMessage: Airtable unpin FAILED:', { messageId, error: err.message });
+    });
+
+    const msg = ucpMessages.find(m => m.id === messageId);
+    if (msg) {
+        msg.componentId = null;
+    }
+
+    applyRemotePin(messageId, null);
+
+    window.dispatchEvent(new CustomEvent('ucp-pin-message', {
+        detail: { messageId, itemId: null }
+    }));
+    console.warn('[SYNC DEBUG] unpinMessage: dispatched ucp-pin-message window event');
+
+    showToast('Pin removed');
+}
+
+/**
+ * Show a compact pin picker dropdown attached to the pin button.
+ * @param {string} messageId
+ * @param {HTMLElement} actionsContainer
+ */
+function showPinPicker(messageId, actionsContainer) {
+    // Remove any existing pin picker
+    const existing = document.querySelector('.ucp-pin-picker.open');
+    if (existing) existing.remove();
+
+    const msg = ucpMessages.find(m => m.id === messageId);
+    const currentItemId = msg?.componentId;
+
+    const picker = document.createElement('div');
+    picker.className = 'ucp-pin-picker open';
+
+    // Gather plan items
+    const planItemIds = new Set();
+    if (state.cart?.lockedItems) {
+        state.cart.lockedItems.forEach((info, id) => planItemIds.add(id));
+    }
+    if (state.cart?.items) {
+        state.cart.items.forEach((info, id) => planItemIds.add(id));
+    }
+    if (planItemIds.size === 0 && state.records?.all) {
+        state.records.all.forEach(r => { if (r?.id) planItemIds.add(r.id); });
+    }
+
+    const entries = [];
+    planItemIds.forEach(id => {
+        const record = getRecordById(id);
+        const name = record?.fields?.Name || record?.fields?.['Item Name'] || 'Unknown';
+        entries.push({ id, name });
+    });
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+
+    if (entries.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'ucp-pin-picker-item';
+        empty.textContent = 'No plan items available';
+        empty.style.color = '#999';
+        empty.style.cursor = 'default';
+        picker.appendChild(empty);
+    } else {
+        entries.forEach(({ id, name }) => {
+            const btn = document.createElement('button');
+            btn.className = 'ucp-pin-picker-item';
+            btn.textContent = name;
+            if (id === currentItemId) {
+                btn.style.fontWeight = '600';
+                btn.style.color = '#5a5aab';
+            }
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                picker.remove();
+                pinMessageToItem(messageId, id);
+            });
+            picker.appendChild(btn);
+        });
+    }
+
+    // Unpin option if already pinned
+    if (currentItemId) {
+        const unpinBtn = document.createElement('button');
+        unpinBtn.className = 'ucp-pin-picker-item unpin';
+        unpinBtn.textContent = 'Remove pin';
+        unpinBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            picker.remove();
+            unpinMessage(messageId);
+        });
+        picker.appendChild(unpinBtn);
+    }
+
+    actionsContainer.appendChild(picker);
+
+    // Close on outside click
+    const closeHandler = (e) => {
+        if (!picker.contains(e.target)) {
+            picker.remove();
+            document.removeEventListener('click', closeHandler);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 10);
 }
 
 // ===== UTILITIES =====

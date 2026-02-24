@@ -21,11 +21,12 @@ import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { resizeImageForUpload } from '../utils/imageResizer.js';
 import { refreshForumData, onNewItemReceived, getComponentMessageReactions } from './forumPanel.js';
 import { initializeToastNotifications, handlePusherEvent as handleToastPusherEvent } from './toastNotifications.js';
-import { initializeUnifiedChatPanel, showUnifiedChatPanel, hideUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage, updateUCPVideoArea, updateUCPLiveBadge, isUCPFullscreen } from './unifiedChatPanel.js';
+import { initializeUnifiedChatPanel, showUnifiedChatPanel, hideUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage, updateUCPVideoArea, updateUCPLiveBadge, isUCPFullscreen, updateFocusBarUI, populateFocusSelect, applyRemoteFocusItem, applyRemotePin } from './unifiedChatPanel.js';
 import { initVitalityUI, cleanupVitalityUI, refreshFlowLines } from '../vitality/vitalityUI.js';
 import { requestVitalityRecalc, recalculateVitality } from '../vitality/vitalityEngine.js';
 import { openActionMenu, closeActionMenu, isActionMenuOpen, registerActionHandler } from './actionMenu.js';
 import * as liveStream from './liveStream.js';
+import * as voiceCommands from './voiceCommands.js';
 
 console.log('[MODULE DEBUG] presentation.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -151,6 +152,7 @@ let liveStreamControls = null;
 let liveToggleAudioBtn = null;
 let liveToggleVideoBtn = null;
 let liveEndStreamBtn = null;
+let liveCopyLinkBtn = null;
 let liveViewerCountEl = null;
 let liveAudioIcon = null;
 let liveVideoIcon = null;
@@ -159,6 +161,22 @@ let liveLocalVideoEl = null;
 let liveRemoteVideosEl = null;
 let liveVideoStripToggle = null;
 let presentationLiveBadge = null;
+
+// v3.8 Phase 4: Voice command UI elements
+let liveTranscriptionBtn = null;
+let liveCaptionsBar = null;
+let liveCaptionsText = null;
+let liveCaptionsStatusText = null;
+let liveCaptionsStatus = null;
+let hostReactionOverlay = null; // v3.8 Phase 6: Floating reaction overlay
+let voiceCommandToast = null;
+let voiceCommandToastTitle = null;
+let voiceCommandToastDesc = null;
+let voiceCommandToastCountdown = null;
+let voiceCommandToastProgress = null;
+let voiceCommandUndoBtn = null;
+let isTranscriptionActive = false;
+let voiceCmdCountdownInterval = null;
 
 // Track loaded images for each item
 const itemImagesCache = new Map();
@@ -563,6 +581,7 @@ function ensureDOMElements() {
     liveToggleAudioBtn = document.getElementById('live-toggle-audio');
     liveToggleVideoBtn = document.getElementById('live-toggle-video');
     liveEndStreamBtn = document.getElementById('live-end-stream');
+    liveCopyLinkBtn = document.getElementById('live-copy-link');
     liveViewerCountEl = document.getElementById('live-viewer-count');
     liveAudioIcon = document.getElementById('live-audio-icon');
     liveVideoIcon = document.getElementById('live-video-icon');
@@ -571,6 +590,20 @@ function ensureDOMElements() {
     liveRemoteVideosEl = document.getElementById('live-remote-videos');
     liveVideoStripToggle = document.getElementById('live-video-strip-toggle');
     presentationLiveBadge = document.getElementById('presentation-live-badge');
+
+    // v3.8 Phase 4: Voice command UI elements
+    liveTranscriptionBtn = document.getElementById('live-toggle-transcription');
+    liveCaptionsBar = document.getElementById('live-captions-bar');
+    liveCaptionsText = document.getElementById('live-captions-text');
+    liveCaptionsStatusText = document.getElementById('live-captions-status-text');
+    liveCaptionsStatus = document.getElementById('live-captions-status');
+    hostReactionOverlay = document.getElementById('host-reaction-overlay');
+    voiceCommandToast = document.getElementById('voice-command-toast');
+    voiceCommandToastTitle = document.getElementById('voice-command-toast-title');
+    voiceCommandToastDesc = document.getElementById('voice-command-toast-desc');
+    voiceCommandToastCountdown = document.getElementById('voice-command-toast-countdown');
+    voiceCommandToastProgress = document.getElementById('voice-command-toast-progress');
+    voiceCommandUndoBtn = document.getElementById('voice-command-undo-btn');
 
     if (!modal) {
         console.error('[Presentation] Modal element #presentation-modal-overlay not found in DOM');
@@ -9815,6 +9848,9 @@ function initializeLiveStreamToolbar() {
     if (liveEndStreamBtn) {
         liveEndStreamBtn.addEventListener('click', handleEndStream);
     }
+    if (liveCopyLinkBtn) {
+        liveCopyLinkBtn.addEventListener('click', handleCopyStreamLink);
+    }
 
     // Video strip collapse toggle
     if (liveVideoStripToggle) {
@@ -9824,6 +9860,27 @@ function initializeLiveStreamToolbar() {
             }
         });
     }
+
+    // v3.8 Phase 4: Transcription toggle button
+    if (liveTranscriptionBtn) {
+        liveTranscriptionBtn.addEventListener('click', handleToggleTranscription);
+        // Show button only if browser supports speech recognition
+        if (voiceCommands.isSpeechRecognitionSupported()) {
+            liveTranscriptionBtn.style.display = '';
+        }
+    }
+
+    // v3.8 Phase 4: Voice command undo button
+    if (voiceCommandUndoBtn) {
+        voiceCommandUndoBtn.addEventListener('click', handleVoiceCommandUndo);
+    }
+
+    // v3.8 Phase 4: Register voice command callbacks
+    voiceCommands.registerVoiceCallbacks({
+        onTranscript: handleVoiceTranscript,
+        onCommand: handleVoiceCommandExecution,
+        onStatus: handleVoiceStatus,
+    });
 
     // Update toolbar state to match current stream state
     updateLiveStreamToolbarUI();
@@ -9872,10 +9929,18 @@ function updateLiveStreamToolbarUI() {
         if (liveToggleAudioBtn) liveToggleAudioBtn.style.display = 'none';
         if (liveToggleVideoBtn) liveToggleVideoBtn.style.display = 'none';
         if (liveEndStreamBtn) liveEndStreamBtn.style.display = 'none';
+        if (liveCopyLinkBtn) liveCopyLinkBtn.style.display = 'none';
     } else if (isHost && isLive) {
         if (liveToggleAudioBtn) liveToggleAudioBtn.style.display = '';
         if (liveToggleVideoBtn) liveToggleVideoBtn.style.display = '';
         if (liveEndStreamBtn) liveEndStreamBtn.style.display = '';
+        // v3.8 Phase 5: Show copy link button for host during active stream
+        if (liveCopyLinkBtn) liveCopyLinkBtn.style.display = '';
+    }
+
+    // v3.8 Phase 4: Show transcription button when stream is active (host only)
+    if (liveTranscriptionBtn && voiceCommands.isSpeechRecognitionSupported()) {
+        liveTranscriptionBtn.style.display = (isLive && isHost) ? '' : 'none';
     }
 
     // Update viewer count
@@ -9966,14 +10031,360 @@ async function handleToggleVideo() {
 }
 
 async function handleEndStream() {
+    // v3.8 Phase 4: Stop transcription when stream ends
+    if (isTranscriptionActive) {
+        stopTranscription();
+    }
     await liveStream.endStream();
     // UI update happens via callback
+}
+
+// ===== v3.8 Phase 5: Shareable Stream Link =====
+
+async function handleCopyStreamLink() {
+    const link = state.stream.shareableLink;
+    if (!link) {
+        showToast('Stream link not available');
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(link);
+        showToast('Stream link copied to clipboard');
+        // Brief visual feedback on button
+        if (liveCopyLinkBtn) {
+            const icon = liveCopyLinkBtn.querySelector('.live-btn-icon');
+            if (icon) {
+                const original = icon.textContent;
+                icon.textContent = '\u2705'; // checkmark
+                setTimeout(() => { icon.textContent = original; }, 1500);
+            }
+        }
+    } catch (err) {
+        // Fallback for older browsers
+        const input = document.createElement('input');
+        input.value = link;
+        input.style.position = 'fixed';
+        input.style.opacity = '0';
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        showToast('Stream link copied');
+    }
+}
+
+// ===== v3.8 Phase 4: Voice Commands & Transcription =====
+
+function handleToggleTranscription() {
+    if (isTranscriptionActive) {
+        stopTranscription();
+    } else {
+        startTranscription();
+    }
+}
+
+function startTranscription() {
+    if (!state.stream?.isActive) {
+        showToast('Start a stream before enabling voice commands');
+        return;
+    }
+
+    const started = voiceCommands.startListening();
+    if (started) {
+        isTranscriptionActive = true;
+        if (liveTranscriptionBtn) {
+            liveTranscriptionBtn.classList.add('transcription-active');
+            liveTranscriptionBtn.title = 'Ryry is listening (click to stop)';
+        }
+        if (liveCaptionsBar) {
+            liveCaptionsBar.style.display = '';
+        }
+        log('Presentation', 'Transcription started');
+    }
+}
+
+function stopTranscription() {
+    voiceCommands.stopListening();
+    isTranscriptionActive = false;
+    if (liveTranscriptionBtn) {
+        liveTranscriptionBtn.classList.remove('transcription-active');
+        liveTranscriptionBtn.title = 'Toggle Ryry voice commands';
+    }
+    if (liveCaptionsBar) {
+        liveCaptionsBar.style.display = 'none';
+    }
+    hideVoiceCommandToast();
+    log('Presentation', 'Transcription stopped');
+}
+
+/**
+ * Handle live transcript updates — display as captions.
+ * v3.8 Phase 6: Also relay final transcripts to viewers via server.
+ */
+let _lastCaptionRelayTime = 0;
+function handleVoiceTranscript({ text, isFinal }) {
+    if (!liveCaptionsText) return;
+    liveCaptionsText.textContent = text;
+    liveCaptionsText.className = isFinal ? 'live-captions-text final' : 'live-captions-text';
+    // Clear final text after a few seconds
+    if (isFinal) {
+        setTimeout(() => {
+            if (liveCaptionsText.textContent === text) {
+                liveCaptionsText.textContent = '';
+            }
+        }, 4000);
+    }
+
+    // v3.8 Phase 6: Relay final transcripts to viewer public channel (throttled)
+    if (isFinal && state.stream?.isActive && state.stream?.isHost && state.session?.id) {
+        const now = Date.now();
+        if (now - _lastCaptionRelayTime > 500) {
+            _lastCaptionRelayTime = now;
+            fetch('/api/viewer-chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId: state.session.id,
+                    senderName: 'host',
+                    content: text,
+                    type: 'caption',
+                    isFinal: true,
+                }),
+            }).catch(() => {}); // Non-blocking
+        }
+    }
+}
+
+/**
+ * Handle voice status changes — update captions bar status indicator.
+ */
+function handleVoiceStatus({ status, message, data }) {
+    console.warn('[VoiceCmd UI] Status:', status, message);
+
+    if (liveCaptionsStatusText) {
+        liveCaptionsStatusText.textContent = message;
+    }
+    if (liveCaptionsStatus) {
+        liveCaptionsStatus.classList.toggle('wake-active', status === 'wake');
+    }
+
+    if (status === 'confirm' && data) {
+        showVoiceCommandToast(data);
+    } else if (status === 'executed') {
+        hideVoiceCommandToast();
+        showToast(message);
+    } else if (status === 'cancelled') {
+        hideVoiceCommandToast();
+        showToast(message);
+    } else if (status === 'error' || status === 'unsupported') {
+        showToast(message);
+    }
+}
+
+/**
+ * Show the voice command confirmation toast with countdown.
+ */
+function showVoiceCommandToast(command) {
+    if (!voiceCommandToast) return;
+
+    if (voiceCommandToastTitle) {
+        voiceCommandToastTitle.textContent = `Ryry: "${command.keyword}"`;
+    }
+    if (voiceCommandToastDesc) {
+        voiceCommandToastDesc.textContent = command.payload
+            ? `"${command.payload}" — ${command.description}`
+            : command.description;
+    }
+
+    voiceCommandToast.style.display = '';
+
+    // Start countdown
+    let secondsLeft = 5;
+    if (voiceCommandToastCountdown) {
+        voiceCommandToastCountdown.textContent = secondsLeft;
+    }
+    if (voiceCommandToastProgress) {
+        voiceCommandToastProgress.style.width = '100%';
+        voiceCommandToastProgress.style.transition = 'none';
+        // Force reflow then animate
+        voiceCommandToastProgress.offsetHeight;
+        voiceCommandToastProgress.style.transition = `width ${secondsLeft}s linear`;
+        voiceCommandToastProgress.style.width = '0%';
+    }
+
+    clearInterval(voiceCmdCountdownInterval);
+    voiceCmdCountdownInterval = setInterval(() => {
+        secondsLeft--;
+        if (voiceCommandToastCountdown) {
+            voiceCommandToastCountdown.textContent = Math.max(0, secondsLeft);
+        }
+        if (secondsLeft <= 0) {
+            clearInterval(voiceCmdCountdownInterval);
+            hideVoiceCommandToast();
+        }
+    }, 1000);
+}
+
+/**
+ * Hide the voice command confirmation toast.
+ */
+function hideVoiceCommandToast() {
+    if (voiceCommandToast) {
+        voiceCommandToast.style.display = 'none';
+    }
+    clearInterval(voiceCmdCountdownInterval);
+}
+
+/**
+ * Handle undo button click on voice command toast.
+ */
+function handleVoiceCommandUndo() {
+    voiceCommands.cancelPendingCommand();
+    hideVoiceCommandToast();
+    showToast('Voice command cancelled');
+}
+
+/**
+ * Execute a confirmed voice command.
+ * This is called after the 5-second undo window expires.
+ */
+async function handleVoiceCommandExecution({ type, payload, rawText, description }) {
+    const currentUser = getCurrentUser();
+    const sessionId = state.session?.id;
+
+    console.warn('[VoiceCmd] Executing command:', { type, payload, rawText });
+
+    switch (type) {
+        case 'LOG_TASK': {
+            // Create a task in the current plan
+            const taskName = payload || 'Voice task';
+            try {
+                const result = await api.createTask(sessionId, {
+                    Name: taskName,
+                    Description: `Created via Ryry voice command: "${rawText}"`,
+                });
+                if (result) {
+                    showToast(`Task created: ${taskName}`);
+                    log('Presentation', `Voice command created task: ${taskName}`);
+                } else {
+                    showToast('Failed to create task');
+                }
+            } catch (err) {
+                console.error('[VoiceCmd] Failed to create task:', err);
+                showToast('Error creating task');
+            }
+            break;
+        }
+
+        case 'SET_PRIORITY': {
+            // Set priority on the most recent task
+            const priority = payload || 'high';
+            const normalizedPriority = normalizePriority(priority);
+            try {
+                // Get the most recent task for this project
+                const tasks = state.tasks?.all;
+                if (tasks && tasks.size > 0) {
+                    // Find the most recently created task
+                    let latestTask = null;
+                    let latestTime = 0;
+                    tasks.forEach((task) => {
+                        const createdTime = new Date(task.createdTime || 0).getTime();
+                        if (createdTime > latestTime) {
+                            latestTime = createdTime;
+                            latestTask = task;
+                        }
+                    });
+
+                    if (latestTask) {
+                        await api.updateTask(latestTask.id, { Priority: normalizedPriority });
+                        showToast(`Priority set to ${normalizedPriority} on: ${latestTask.fields?.Name || 'task'}`);
+                    } else {
+                        showToast('No tasks found to set priority on');
+                    }
+                } else {
+                    showToast('No tasks found to set priority on');
+                }
+            } catch (err) {
+                console.error('[VoiceCmd] Failed to set priority:', err);
+                showToast('Error setting priority');
+            }
+            break;
+        }
+
+        case 'PROJECT_UPDATE': {
+            // Post a message to the plan chat
+            const message = payload || rawText;
+            try {
+                if (sessionId && currentUser) {
+                    await api.postChatMessage(
+                        sessionId,
+                        currentUser.id,
+                        currentUser.name,
+                        `[PROJECT UPDATE] ${message}`,
+                        null
+                    );
+                    showToast('Project update posted');
+                    log('Presentation', `Voice command posted project update: ${message}`);
+                } else {
+                    showToast('Cannot post update: no active session');
+                }
+            } catch (err) {
+                console.error('[VoiceCmd] Failed to post project update:', err);
+                showToast('Error posting update');
+            }
+            break;
+        }
+
+        default:
+            console.warn('[VoiceCmd] Unknown command type:', type);
+            showToast(`Unknown command: ${type}`);
+    }
+}
+
+/**
+ * Normalize priority text from voice input to a standard value.
+ */
+function normalizePriority(text) {
+    const lower = text.toLowerCase().trim();
+    if (lower.includes('high') || lower.includes('urgent') || lower.includes('critical')) return 'high';
+    if (lower.includes('medium') || lower.includes('normal') || lower.includes('moderate')) return 'medium';
+    if (lower.includes('low') || lower.includes('minor')) return 'low';
+    return 'medium'; // default
+}
+
+/**
+ * v3.8 Phase 6: Spawn a floating emoji reaction over the host's video area.
+ * Used when viewers send reactions.
+ */
+function spawnHostReactionOverlay(emoji) {
+    if (!hostReactionOverlay) return;
+    // Show overlay if hidden
+    if (hostReactionOverlay.style.display === 'none') {
+        hostReactionOverlay.style.display = '';
+    }
+
+    const el = document.createElement('span');
+    el.className = 'host-floating-emoji';
+    el.textContent = emoji;
+    el.style.left = `${60 + Math.random() * 35}%`;
+    hostReactionOverlay.appendChild(el);
+
+    el.addEventListener('animationend', () => el.remove());
+    setTimeout(() => { if (el.parentNode) el.remove(); }, 3000);
 }
 
 function handleStreamStarted(channelName, uid) {
     log('Presentation', `Stream started: channel=${channelName}, uid=${uid}`);
     updateLiveStreamToolbarUI();
     updatePresentationLiveBadge();
+
+    // v3.8 Phase 6: Show reaction overlay
+    if (hostReactionOverlay) hostReactionOverlay.style.display = '';
+
+    // v3.8 Phase 3: Show focus bar and populate items
+    populateFocusSelect();
+    updateFocusBarUI();
 
     // Clear the placeholder in the local video container
     if (liveLocalVideoEl) {
@@ -9991,13 +10402,23 @@ function handleStreamStarted(channelName, uid) {
     }
 
     // v3.8 Phase 2: Persist stream metadata to Airtable (non-blocking)
+    const streamStartedIso = new Date().toISOString();
     if (state.session.id) {
         api.updateStreamMetadata(state.session.id, {
             StreamActive: true,
             StreamHostUserId: state.session.user?.id,
-            StreamStartedAt: new Date().toISOString(),
+            StreamStartedAt: streamStartedIso,
             AgoraChannelName: channelName,
         }).catch(err => console.warn('[Presentation] Stream metadata update failed:', err.message));
+    }
+    // Store ISO timestamp in stream state so session save can preserve _streamMeta
+    setState({ stream: { startedAtIso: streamStartedIso } });
+
+    // v3.8 Phase 5: Generate shareable viewer link
+    if (state.session.id) {
+        const shareableLink = `${window.location.origin}/watch/${encodeURIComponent(state.session.id)}`;
+        setState({ stream: { shareableLink } });
+        log('Presentation', `Shareable link: ${shareableLink}`);
     }
 
     showToast('You are now live!');
@@ -10007,6 +10428,18 @@ function handleStreamEnded() {
     log('Presentation', 'Stream ended');
     updateLiveStreamToolbarUI();
     updatePresentationLiveBadge();
+    updateFocusBarUI(); // v3.8 Phase 3: Hide focus bar
+
+    // v3.8 Phase 6: Hide reaction overlay
+    if (hostReactionOverlay) {
+        hostReactionOverlay.style.display = 'none';
+        hostReactionOverlay.innerHTML = '';
+    }
+
+    // v3.8 Phase 4: Stop transcription when stream ends
+    if (isTranscriptionActive) {
+        stopTranscription();
+    }
 
     // Clear video containers
     if (liveLocalVideoEl) {
@@ -10087,6 +10520,9 @@ function cleanupLiveStreamToolbar() {
     }
     if (liveEndStreamBtn) {
         liveEndStreamBtn.removeEventListener('click', handleEndStream);
+    }
+    if (liveCopyLinkBtn) {
+        liveCopyLinkBtn.removeEventListener('click', handleCopyStreamLink);
     }
 
     // End any active stream
@@ -11746,9 +12182,14 @@ async function initializePresentationChat() {
 
     const channelName = `presence-session-${sessionId}`;
     presentationChatChannel = presentationPusher.subscribe(channelName);
+    console.warn('[SYNC DEBUG] Pusher: subscribing to channel:', channelName);
 
     // Bind presence events
     presentationChatChannel.bind('pusher:subscription_succeeded', (members) => {
+        console.warn('[SYNC DEBUG] Pusher: subscription_succeeded on', channelName, {
+            memberCount: members?.count,
+            socketId: presentationPusher?.connection?.socket_id,
+        });
         if (presentationMessageInput) {
             presentationMessageInput.disabled = false;
             presentationMessageInput.placeholder = 'Type a message...';
@@ -11990,6 +12431,8 @@ async function initializePresentationChat() {
             });
             updateLiveStreamToolbarUI();
             updatePresentationLiveBadge();
+            populateFocusSelect();
+            updateFocusBarUI();
             showToast(`${data.hostName} is now live!`);
 
             // Auto-join as viewer
@@ -12004,8 +12447,147 @@ async function initializePresentationChat() {
             liveStream.endStream();
             updateLiveStreamToolbarUI();
             updatePresentationLiveBadge();
+            updateFocusBarUI();
             showToast('Stream has ended');
         }
+    });
+
+    // v3.8 Phase 3: Handle focus item change broadcast from another user
+    // Use socketId (unique per connection) instead of userId for echo prevention,
+    // so same-user different-browser scenarios still receive updates.
+    presentationChatChannel.bind('client-focus-item', (data) => {
+        const mySocketId = presentationPusher?.connection?.socket_id;
+        const isEcho = data.socketId && data.socketId === mySocketId;
+        console.warn('[SYNC DEBUG] Received client-focus-item:', {
+            itemId: data.itemId,
+            senderSocketId: data.socketId,
+            senderUserId: data.userId,
+            mySocketId,
+            myUserId: currentUser.id,
+            isEcho,
+            streamActive: state.stream?.isActive,
+        });
+        if (!isEcho) {
+            log('Presentation', `Remote focus item change: ${data.itemId || 'cleared'}`);
+            applyRemoteFocusItem(data.itemId || null);
+        } else {
+            console.warn('[SYNC DEBUG] Ignoring own focus-item echo');
+        }
+    });
+
+    // v3.8 Phase 3: Handle pin message broadcast from another user
+    presentationChatChannel.bind('client-pin-message', (data) => {
+        const mySocketId = presentationPusher?.connection?.socket_id;
+        const isEcho = data.socketId && data.socketId === mySocketId;
+        console.warn('[SYNC DEBUG] Received client-pin-message:', {
+            messageId: data.messageId,
+            itemId: data.itemId,
+            senderSocketId: data.socketId,
+            senderUserId: data.userId,
+            mySocketId,
+            myUserId: currentUser.id,
+            isEcho,
+        });
+        if (!isEcho) {
+            log('Presentation', `Remote pin: message ${data.messageId} → item ${data.itemId || 'none'}`);
+            applyRemotePin(data.messageId, data.itemId || null);
+        } else {
+            console.warn('[SYNC DEBUG] Ignoring own pin-message echo');
+        }
+    });
+
+    // v3.8 Phase 3: Bridge UCP focus/pin events to Pusher broadcasts
+    // Include socketId for echo prevention (allows same-user, different-browser sync)
+    window.addEventListener('ucp-focus-item-changed', (e) => {
+        const socketId = presentationPusher?.connection?.socket_id;
+        const channelSubscribed = presentationChatChannel?.subscribed;
+        console.warn('[SYNC DEBUG] Bridge: ucp-focus-item-changed window event received:', {
+            itemId: e.detail.itemId,
+            hasChannel: !!presentationChatChannel,
+            channelSubscribed,
+            socketId,
+        });
+        if (presentationChatChannel) {
+            if (!channelSubscribed) {
+                console.warn('[SYNC DEBUG] WARNING: Channel not yet subscribed, trigger may fail');
+            }
+            const sent = presentationChatChannel.trigger('client-focus-item', {
+                itemId: e.detail.itemId,
+                userId: currentUser.id,
+                socketId: socketId,
+            });
+            console.warn('[SYNC DEBUG] Pusher trigger client-focus-item result:', sent);
+        } else {
+            console.warn('[SYNC DEBUG] ERROR: No presentationChatChannel — focus event not sent');
+        }
+    });
+
+    window.addEventListener('ucp-pin-message', (e) => {
+        const socketId = presentationPusher?.connection?.socket_id;
+        const channelSubscribed = presentationChatChannel?.subscribed;
+        console.warn('[SYNC DEBUG] Bridge: ucp-pin-message window event received:', {
+            messageId: e.detail.messageId,
+            itemId: e.detail.itemId,
+            hasChannel: !!presentationChatChannel,
+            channelSubscribed,
+            socketId,
+        });
+        if (presentationChatChannel) {
+            if (!channelSubscribed) {
+                console.warn('[SYNC DEBUG] WARNING: Channel not yet subscribed, trigger may fail');
+            }
+            const sent = presentationChatChannel.trigger('client-pin-message', {
+                messageId: e.detail.messageId,
+                itemId: e.detail.itemId,
+                userId: currentUser.id,
+                socketId: socketId,
+            });
+            console.warn('[SYNC DEBUG] Pusher trigger client-pin-message result:', sent);
+        } else {
+            console.warn('[SYNC DEBUG] ERROR: No presentationChatChannel — pin event not sent');
+        }
+    });
+
+    // v3.8 Phase 6: Handle viewer messages from the public stream channel (relayed by server)
+    presentationChatChannel.bind('viewer-message', (data) => {
+        log('Presentation', `Viewer message from ${data.senderName}: ${data.content}`);
+        // Display in presentation chat as a viewer message
+        addPresentationMessageToUI(
+            `${data.senderName} (Viewer)`,
+            data.content,
+            false,
+            data.timestamp,
+            null,
+            { isViewerMessage: true }
+        );
+    });
+
+    // v3.8 Phase 6: Handle viewer reactions (floating emoji overlay on host side)
+    presentationChatChannel.bind('viewer-reaction', (data) => {
+        spawnHostReactionOverlay(data.emoji);
+    });
+
+    // v3.8 Phase 6: Bridge focus item changes to viewer public channel
+    window.addEventListener('ucp-focus-item-changed', (e) => {
+        if (!state.stream?.isActive || !state.stream?.isHost) return;
+        const itemId = e.detail?.itemId;
+        // Find item name for display on viewer page
+        let itemName = '';
+        if (itemId) {
+            const record = state.records.all.find(r => r && r.id === itemId);
+            itemName = record?.fields?.Name || 'Item';
+        }
+        // Relay to viewer public channel via server
+        fetch('/api/viewer-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sessionId: state.session.id,
+                senderName: 'host',
+                content: itemName,
+                type: 'state-update',
+            }),
+        }).catch(err => console.warn('[Presentation] Focus state relay failed:', err.message));
     });
 
     // Set up message form submission
