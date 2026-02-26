@@ -1,26 +1,17 @@
 /**
  * AI-powered Merge Estimator
  * Estimates the result of combining two items either as Options (category) or as Hybrid (blend)
- * Uses Google Gemini AI to intelligently estimate merge outcomes.
+ * Uses multi-provider AI with automatic fallback (Gemini → OpenAI → Anthropic)
  */
 
-const fetch = require('node-fetch');
-const { GEMINI_API_KEY } = process.env;
+const { generateText, parseJsonResponse } = require('./utils/ai-provider');
 
 /**
  * Estimate merge result using AI
- * @param {Object[]} items - Array of item data objects (supports 2+)
- * @param {string} mergeType - Type of merge: 'options' or 'hybrid'
- * @returns {Promise<Object>} - Estimated merge result
  */
 async function estimateMergeWithAI(items, mergeType) {
     const itemNames = items.map(i => `"${i.name}"`).join(' + ');
     console.log(`[Debug] estimateMergeWithAI: Estimating ${mergeType} merge for ${itemNames}`);
-
-    if (!GEMINI_API_KEY) {
-        console.error("[Debug] CRITICAL: GEMINI_API_KEY is missing!");
-        throw new Error("Server configuration error: Missing Gemini API Key.");
-    }
 
     // Build item descriptions for the prompt
     const itemDescriptions = items.map((item, idx) => `Item ${idx + 1}:
@@ -72,57 +63,24 @@ IMPORTANT: Be creative but practical. The hybrid should be something that could 
         throw new Error(`Invalid merge type: ${mergeType}`);
     }
 
-    const payload = {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-            temperature: 0.7, // Slightly higher temperature for creative responses
-            maxOutputTokens: 1024,
-        }
-    };
-
-    const modelId = "gemini-2.0-flash";
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
-
-    console.log(`[Debug] estimateMergeWithAI: Sending request to Gemini...`);
-    const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+    const aiResult = await generateText(prompt, {
+        temperature: 0.7,
+        maxTokens: 1024,
+        caller: 'estimate-merge',
     });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[Debug] Gemini API error: ${response.status} - ${errorText}`);
-        throw new Error(`Gemini API error: ${response.status}`);
+    if (!aiResult.ok) {
+        const err = new Error(aiResult.error || 'AI merge estimation failed');
+        err.statusCode = aiResult.statusCode || 500;
+        err.quotaExhausted = aiResult.quotaExhausted || false;
+        throw err;
     }
 
-    const data = await response.json();
-    console.log(`[Debug] estimateMergeWithAI: Received response from Gemini`);
+    console.log(`[Debug] estimateMergeWithAI: Response from ${aiResult.providerName}`);
 
-    // Extract the text content from Gemini's response
-    const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!textContent) {
-        console.error('[Debug] No text content in Gemini response:', JSON.stringify(data));
-        throw new Error('No content in AI response');
-    }
-
-    // Parse the JSON from the response
-    // Handle markdown code blocks if present
-    let jsonStr = textContent.trim();
-    if (jsonStr.startsWith('```json')) {
-        jsonStr = jsonStr.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-    } else if (jsonStr.startsWith('```')) {
-        jsonStr = jsonStr.replace(/^```\s*/, '').replace(/\s*```$/, '');
-    }
-
-    try {
-        const result = JSON.parse(jsonStr);
-        console.log(`[Debug] estimateMergeWithAI: Successfully parsed result:`, result);
-        return result;
-    } catch (parseError) {
-        console.error('[Debug] Failed to parse AI response as JSON:', jsonStr);
-        throw new Error('Failed to parse AI response');
-    }
+    const result = parseJsonResponse(aiResult.text);
+    console.log(`[Debug] estimateMergeWithAI: Successfully parsed result:`, result);
+    return result;
 }
 
 exports.handler = async (event) => {
@@ -194,12 +152,16 @@ exports.handler = async (event) => {
 
     } catch (error) {
         console.error('[estimate-merge] Error:', error);
+        const statusCode = error.statusCode === 429 ? 429 : 500;
+        const isQuota = error.quotaExhausted || false;
         return {
-            statusCode: 500,
+            statusCode,
             headers: { 'Access-Control-Allow-Origin': '*' },
             body: JSON.stringify({
                 error: 'Failed to estimate merge',
-                message: error.message
+                message: error.message,
+                quotaExhausted: isQuota,
+                retryable: statusCode === 429 && !isQuota
             })
         };
     }

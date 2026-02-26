@@ -1,6 +1,9 @@
 // FILE: netlify/functions/profile-item.js
-const fetch = require('node-fetch');
-const { AIRTABLE_PAT, BASE_ID, GEMINI_API_KEY } = process.env;
+// AI-powered Universal Profiler for catalog items
+// Uses multi-provider AI with automatic fallback (Gemini → OpenAI → Anthropic)
+
+const { AIRTABLE_PAT, BASE_ID } = process.env;
+const { generateText, parseJsonResponse } = require('./utils/ai-provider');
 
 const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD'; // Main catalog table
 const RANKINGS_FIELD = 'Rankings'; // The field to update
@@ -8,38 +11,10 @@ const NAME_FIELD = 'Name';
 const DESCRIPTION_FIELD = 'Description';
 
 /**
- * Extracts a JSON object from a string, even if it's wrapped in markdown.
- * @param {string} text - The raw text response from the AI.
- * @returns {object} The parsed JSON object.
+ * Calls AI to generate a "Universal Profile" for an item.
  */
-function cleanAndParseGeminiJson(text) {
-  console.log('[Debug] Raw Gemini Text:', text);
-  // Look for the first { and the last } to get the JSON block
-  const jsonMatch = text.match(/{[\s\S]*}/);
-  if (!jsonMatch) {
-    throw new Error('Gemini response did not contain a valid JSON object.');
-  }
-  const jsonString = jsonMatch[0];
-  try {
-    return JSON.parse(jsonString);
-  } catch (parseError) {
-    console.error('[Debug] Failed to parse extracted JSON:', parseError);
-    throw new Error(`Failed to parse AI response as JSON: ${parseError.message}`);
-  }
-}
-
-/**
- * Calls the Gemini API to generate a "Universal Profile" for an item.
- * @param {string} itemName - The name of the item.
- * @param {string} itemDescription - The description of the item.
- * @returns {object} The parsed "Universal Profile" JSON object.
- */
-async function getProfileFromGemini(itemName, itemDescription) {
-    console.log(`[Debug] getProfileFromGemini: Profiling item: ${itemName}`);
-    if (!GEMINI_API_KEY) {
-        console.error("[Debug] CRITICAL: GEMINI_API_KEY is missing!");
-        throw new Error("Server configuration error: Missing Gemini API Key.");
-    }
+async function getProfileFromAI(itemName, itemDescription) {
+    console.log(`[Debug] getProfileFromAI: Profiling item: ${itemName}`);
 
     const prompt = `
       You are an expert event profiler for an event planning company.
@@ -48,7 +23,7 @@ async function getProfileFromGemini(itemName, itemDescription) {
 
       The JSON must have this exact structure:
       {
-        "profileSource": "ai_v1_gemini_profile",
+        "profileSource": "ai_v1_multi_provider_profile",
         "Pillars": { "Activities": 0, "Food/Drink": 0, "Venue": 0, "Extras": 0 },
         "Vibe": { "Energy": 0, "Relaxation": 0, "Formality": 0, "Novelty": 0 },
         "Intellect": { "Creative": 0, "Analytical": 0 },
@@ -63,42 +38,23 @@ async function getProfileFromGemini(itemName, itemDescription) {
       4.  **Tags (CRITICAL):** Populate this array with lowercase string keywords.
           * **Attribute Tags:** Descriptive words (e.g., "competitive", "outdoor", "relaxing", "loud", "daytime").
           * **Concrete Noun Tags:** Specific keywords for content, theme, or category (e.g., "go-kart", "racing", "museum", "art", "science", "tacos", "mexican food", "bar").
-    `;
 
-    const payload = {
-        contents: [
-            {
-                parts: [
-                    { text: prompt },
-                    { text: `Item Name: "${itemName}"\nItem Description: "${itemDescription || 'No description provided.'}"` }
-                ]
-            }
-        ],
-    };
+Item Name: "${itemName}"
+Item Description: "${itemDescription || 'No description provided.'}"`;
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
-    
-    console.log(`[Debug] getProfileFromGemini: Sending request to Gemini...`);
-    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    console.log(`[Debug] getProfileFromGemini: Received status ${response.status} from Gemini.`);
+    const aiResult = await generateText(prompt, {
+        caller: 'profile-item',
+    });
 
-    if (!response.ok) {
-        let errorBody = await response.text();
-        console.error("[Debug] Gemini API Error Response Body:", errorBody);
-        throw new Error(`Gemini API call failed with status ${response.status}`);
+    if (!aiResult.ok) {
+        const err = new Error(aiResult.error || 'AI profiling failed');
+        err.statusCode = aiResult.statusCode || 500;
+        err.quotaExhausted = aiResult.quotaExhausted || false;
+        throw err;
     }
 
-    const result = await response.json();
-    let jsonText = '';
-    try {
-        jsonText = result.candidates[0].content.parts[0].text;
-    } catch (e) {
-        console.error('[Debug] Error extracting text from Gemini response structure:', JSON.stringify(result, null, 2));
-        throw new Error('Could not extract text from Gemini response.');
-    }
-    
-    console.log(`[Debug] getProfileFromGemini: Received text response from Gemini.`);
-    return cleanAndParseGeminiJson(jsonText); // This will parse and return the object
+    console.log(`[Debug] getProfileFromAI: Response from ${aiResult.providerName}`);
+    return parseJsonResponse(aiResult.text);
 }
 
 exports.handler = async (event) => {
@@ -135,15 +91,15 @@ exports.handler = async (event) => {
         }
          console.log(`[Debug] Fetched item. Name: ${itemName}`);
 
-        // 2. Generate the Universal Profile via Gemini
-        const profileJson = await getProfileFromGemini(itemName, itemDescription);
+        // 2. Generate the Universal Profile via AI
+        const profileJson = await getProfileFromAI(itemName, itemDescription);
         console.log(`[Debug] AI profile generated for ${recordId}.`);
 
         // 3. Update the Item record in Airtable
         const patchUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEMS_TABLE}/${recordId}`;
         const payload = {
             fields: {
-                [RANKINGS_FIELD]: JSON.stringify(profileJson, null, 2) // Pretty-print the JSON
+                [RANKINGS_FIELD]: JSON.stringify(profileJson, null, 2)
             }
         };
 
@@ -172,9 +128,11 @@ exports.handler = async (event) => {
 
     } catch (error) {
         console.error('[ERROR] /api/profile-item handler failed:', error.message, error.stack);
+        const statusCode = error.statusCode === 429 ? 429 : 500;
+        const isQuota = error.quotaExhausted || false;
         return {
-            statusCode: 500,
-            body: JSON.stringify({ error: `Function execution failed: ${error.message}` })
+            statusCode,
+            body: JSON.stringify({ error: `Function execution failed: ${error.message}`, quotaExhausted: isQuota, retryable: statusCode === 429 && !isQuota })
         };
     }
 };

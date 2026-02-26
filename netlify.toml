@@ -6,6 +6,10 @@
 [functions."send-daily-digest"]
   schedule = "0 9 * * *"
 
+# Scheduled function: Airtable backup to Netlify Blobs every 6 hours
+[functions."airtable-backup"]
+  schedule = "0 */6 * * *"
+
 # Cache headers for static assets - improves repeat visit performance
 [[headers]]
   for = "/*.js"
@@ -143,6 +147,11 @@
   [[redirects]]
   from = "/api/get-items-for-profiling"
   to = "/.netlify/functions/airtable"
+  status = 200
+
+[[redirects]]
+  from = "/api/airtable-backup"
+  to = "/.netlify/functions/airtable-backup"
   status = 200
 
 # --- SEO & Google Merchant Center ---

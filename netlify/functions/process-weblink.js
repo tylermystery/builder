@@ -1,38 +1,15 @@
 // netlify/functions/process-weblink.js
 // Hybrid Search AI Processor - Handles both specific items and broad category queries
+// Uses multi-provider AI with automatic fallback (Gemini → OpenAI → Anthropic)
 
-const fetch = require('node-fetch');
-const { GEMINI_API_KEY } = process.env;
-
-/**
- * Extracts a JSON object from a string, even if it's wrapped in markdown.
- * @param {string} text - The raw text response from the AI.
- * @returns {object} The parsed JSON object.
- */
-function cleanAndParseGeminiJson(text) {
-  console.log('[Debug] Raw Gemini Text:', text);
-  const jsonMatch = text.match(/{[\s\S]*}/);
-  if (!jsonMatch) {
-    throw new Error('Gemini response did not contain a valid JSON object.');
-  }
-  const jsonString = jsonMatch[0];
-  try {
-    return JSON.parse(jsonString);
-  } catch (parseError) {
-    console.error('[Debug] Failed to parse extracted JSON:', parseError);
-    throw new Error(`Failed to parse AI response as JSON: ${parseError.message}`);
-  }
-}
+const { generateText, parseJsonResponse } = require('./utils/ai-provider');
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
 
-  if (!GEMINI_API_KEY) {
-    console.error("CRITICAL: GEMINI_API_KEY is not set.");
-    return { statusCode: 500, body: JSON.stringify({ error: 'Server configuration error.' }) };
-  }
+  console.log(`[process-weblink] Handler invoked. Method: ${event.httpMethod}`);
 
   try {
     const { query } = JSON.parse(event.body);
@@ -40,7 +17,7 @@ exports.handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ error: 'Missing "query" in request body.' }) };
     }
 
-    console.log(`[process-weblink] Parsing query: ${query}`);
+    console.log(`[process-weblink] Parsing query: "${query}"`);
 
     // Enhanced AI prompt for hybrid search - handles both specific items and broad categories
     // Now includes comprehensive business info: website, location, availability, lead time, rankings
@@ -139,251 +116,41 @@ Return this structure with 3-5 top recommendations, EACH with comprehensive info
       "GoodToKnow": "Additional helpful info",
       "ImageKeywords": "space-separated keywords for photo search",
       "Rankings": { "Fun": 8, "Social": 7, "Active": 3, "Creative": 5, "Learning": 6, "Relaxing": 4 }
-    },
-    {
-      "Name": "Specific Place 2",
-      "Description": "1-2 sentence description",
-      "Confidence": <0.0-1.0>,
-      "Price": <number>,
-      "PricingType": "<per person|per charter|per bus|per vehicle|per hour|per group|flat rate>",
-      "ServiceType": "Partner Activity",
-      "Website": "https://example2.com",
-      "Location": "Address or area",
-      "Availability": "Hours/booking info",
-      "LeadTime": "Booking lead time",
-      "GoodToKnow": "Additional helpful info",
-      "ImageKeywords": "space-separated keywords for photo search",
-      "Rankings": { "Fun": 7, "Social": 8, "Active": 5, "Creative": 6, "Learning": 4, "Relaxing": 5 }
     }
   ],
   "relatedKeywords": ["related1", "related2", "related3", "related4", "related5"]
 }
 
-=== EXAMPLES ===
+Query: "${query}"`;
 
-Example Query: "https://www.exploratorium.edu/after-dark"
-Example Response (Specific):
-{
-  "itemType": "Specific",
-  "Name": "Exploratorium After Dark",
-  "Description": "A renowned hands-on museum of science and art, open for adults-only (18+) evenings with a cash bar and music.",
-  "Confidence": 0.95,
-  "Price": 40,
-  "PricingType": "per person",
-  "ServiceType": "Partner Activity",
-  "Website": "https://www.exploratorium.edu/visit/after-dark",
-  "Location": "Pier 15, Embarcadero, San Francisco, CA 94111",
-  "Availability": "Thursday evenings 6-10pm (18+ only)",
-  "LeadTime": "Book 1 week ahead for guaranteed entry, walk-ins if not sold out",
-  "GoodToKnow": "Cash bar available, no outside food/drinks, coat check available",
-  "ImageKeywords": "museum science interactive",
-  "Rankings": {
-    "Fun": 9,
-    "Social": 8,
-    "Active": 4,
-    "Creative": 7,
-    "Learning": 9,
-    "Relaxing": 5
-  },
-  "relatedKeywords": ["museums", "nightlife", "interactive", "science", "date night"]
-}
-
-Example Query: "Italian food"
-Example Response (Grouping):
-{
-  "itemType": "Grouping",
-  "name": "Top Italian Options",
-  "Description": "Excellent Italian dining experiences in the San Francisco Bay Area, from casual trattorias to fine dining.",
-  "children": [
-    {
-      "Name": "Flour + Water",
-      "Description": "Award-winning Mission district spot known for fresh pasta and wood-fired Neapolitan pizza.",
-      "Confidence": 0.85,
-      "Price": 65,
-      "PricingType": "per person",
-      "ServiceType": "Partner Activity",
-      "Website": "https://www.flourandwater.com",
-      "Location": "2401 Harrison St, San Francisco, CA 94110",
-      "Availability": "Dinner nightly 5:30-10pm, limited walk-in bar seating",
-      "LeadTime": "Reservations recommended 2-3 weeks ahead for dinner",
-      "GoodToKnow": "Street parking only, counter seating available for walk-ins, excellent wine list",
-      "ImageKeywords": "italian restaurant pasta",
-      "Rankings": { "Fun": 7, "Social": 8, "Active": 1, "Creative": 6, "Learning": 3, "Relaxing": 7 }
-    },
-    {
-      "Name": "Delfina",
-      "Description": "Neighborhood Italian favorite serving seasonal Californian-Italian cuisine in a warm atmosphere.",
-      "Confidence": 0.82,
-      "Price": 55,
-      "PricingType": "per person",
-      "ServiceType": "Partner Activity",
-      "Website": "https://www.delfinasf.com",
-      "Location": "3621 18th St, San Francisco, CA 94110",
-      "Availability": "Dinner Tue-Sun 5:30-10pm, closed Mondays",
-      "LeadTime": "Book 1-2 weeks ahead, easier on weeknights",
-      "GoodToKnow": "Connected to Pizzeria Delfina next door, cozy intimate space",
-      "ImageKeywords": "italian dining fine",
-      "Rankings": { "Fun": 6, "Social": 7, "Active": 1, "Creative": 5, "Learning": 3, "Relaxing": 8 }
-    },
-    {
-      "Name": "Cotogna",
-      "Description": "Michael Tusk's rustic Italian kitchen featuring house-made pastas and wood-fired dishes.",
-      "Confidence": 0.80,
-      "Price": 75,
-      "PricingType": "per person",
-      "ServiceType": "Partner Activity",
-      "Website": "https://www.cotognasf.com",
-      "Location": "490 Pacific Ave, San Francisco, CA 94133",
-      "Availability": "Lunch Mon-Fri, Dinner nightly, Sunday brunch",
-      "LeadTime": "Reservations 1-2 weeks ahead, lunch easier to book",
-      "GoodToKnow": "Adjacent to sister restaurant Quince, valet parking available",
-      "ImageKeywords": "italian restaurant rustic",
-      "Rankings": { "Fun": 7, "Social": 7, "Active": 1, "Creative": 6, "Learning": 4, "Relaxing": 7 }
-    }
-  ],
-  "relatedKeywords": ["pasta", "pizza", "fine dining", "trattorias", "wine bars"]
-}
-
-Example Query: "Team Building"
-Example Response (Grouping):
-{
-  "itemType": "Grouping",
-  "name": "Top Team Building Options",
-  "Description": "Engaging team building activities in the Bay Area to strengthen collaboration and have fun.",
-  "children": [
-    {
-      "Name": "Escape Room SF",
-      "Description": "Challenging themed escape rooms that require teamwork and communication to solve puzzles.",
-      "Confidence": 0.70,
-      "Price": 35,
-      "PricingType": "per person",
-      "ServiceType": "Partner Activity",
-      "Website": "https://www.escapesf.com",
-      "Location": "Multiple locations in San Francisco",
-      "Availability": "Daily 10am-10pm, groups of 4-8 per room",
-      "LeadTime": "Book 1-2 weeks ahead for weekends, shorter for weekdays",
-      "GoodToKnow": "Private rooms available for corporate events, difficulty levels vary by room",
-      "ImageKeywords": "escape room puzzle",
-      "Rankings": { "Fun": 9, "Social": 9, "Active": 3, "Creative": 8, "Learning": 5, "Relaxing": 2 }
-    },
-    {
-      "Name": "Urban Putt",
-      "Description": "Indoor miniature golf in a creative, art-filled space perfect for casual team outings.",
-      "Confidence": 0.88,
-      "Price": 15,
-      "PricingType": "per person",
-      "ServiceType": "Partner Activity",
-      "Website": "https://www.urbanputt.com",
-      "Location": "1096 South Van Ness Ave, San Francisco, CA 94110",
-      "Availability": "Mon-Thu 4pm-12am, Fri-Sun 11am-12am, 21+ after 8pm",
-      "LeadTime": "Walk-ins welcome, groups 8+ should reserve",
-      "GoodToKnow": "Full bar and restaurant on-site, artist-designed holes, private event space available",
-      "ImageKeywords": "mini golf indoor",
-      "Rankings": { "Fun": 9, "Social": 8, "Active": 2, "Creative": 7, "Learning": 2, "Relaxing": 6 }
-    },
-    {
-      "Name": "The Winery SF",
-      "Description": "Wine blending workshops where teams create their own custom blend in an urban winery.",
-      "Confidence": 0.75,
-      "Price": 75,
-      "PricingType": "per person",
-      "ServiceType": "Partner Activity",
-      "Website": "https://www.winery-sf.com",
-      "Location": "200 California St, San Francisco, CA 94111",
-      "Availability": "Classes Wed-Sun, private events available any day",
-      "LeadTime": "Book 2-3 weeks ahead for group workshops",
-      "GoodToKnow": "Take home your custom-labeled bottle, food pairings available, 21+ only",
-      "ImageKeywords": "wine tasting winery",
-      "Rankings": { "Fun": 8, "Social": 8, "Active": 2, "Creative": 9, "Learning": 7, "Relaxing": 7 }
-    }
-  ],
-  "relatedKeywords": ["corporate events", "group activities", "workshops", "games", "bonding"]
-}
-
-Example Query: "charter bus rental"
-Example Response (Grouping):
-{
-  "itemType": "Grouping",
-  "name": "Top Charter Bus Options",
-  "Description": "Charter bus and coach rental services in the Bay Area for group transportation needs.",
-  "children": [
-    {
-      "Name": "SF Charter Bus Company",
-      "Description": "Full-service charter bus rental with professional drivers for corporate events, weddings, and group outings.",
-      "Confidence": 0.55,
-      "Price": 1200,
-      "PricingType": "per charter",
-      "ServiceType": "Partner Activity",
-      "Website": "https://www.sfcharterbus.com",
-      "Location": "San Francisco Bay Area - pickup anywhere",
-      "Availability": "24/7 availability, advance booking recommended",
-      "LeadTime": "Book 2-4 weeks ahead for best availability",
-      "GoodToKnow": "Buses seat 30-56 passengers, ADA accessible options available, WiFi on most buses",
-      "ImageKeywords": "charter bus transportation",
-      "Rankings": { "Fun": 5, "Social": 8, "Active": 1, "Creative": 1, "Learning": 1, "Relaxing": 6 }
-    },
-    {
-      "Name": "Bay Area Party Bus",
-      "Description": "Luxury party buses with premium sound systems, lighting, and bar setups for celebrations.",
-      "Confidence": 0.60,
-      "Price": 800,
-      "PricingType": "per bus",
-      "ServiceType": "Partner Activity",
-      "Website": "https://www.bayareapartybus.com",
-      "Location": "Serves entire Bay Area",
-      "Availability": "Evenings and weekends most popular, weekday availability",
-      "LeadTime": "Book 1-3 weeks ahead, longer for peak season",
-      "GoodToKnow": "BYOB allowed, fits 20-40 passengers, 4-hour minimum rental",
-      "ImageKeywords": "party bus luxury",
-      "Rankings": { "Fun": 9, "Social": 9, "Active": 2, "Creative": 3, "Learning": 1, "Relaxing": 4 }
-    },
-    {
-      "Name": "Wine Country Tour Coaches",
-      "Description": "Comfortable coach buses perfect for wine country tours and corporate retreats.",
-      "Confidence": 0.58,
-      "Price": 950,
-      "PricingType": "per charter",
-      "ServiceType": "Partner Activity",
-      "Website": "https://www.winecountrytours.com",
-      "Location": "San Francisco, Napa, Sonoma",
-      "Availability": "Daily tours and private charters available",
-      "LeadTime": "Book 1-2 weeks ahead for private charters",
-      "GoodToKnow": "Includes experienced driver familiar with wine country routes, cooler for wine purchases",
-      "ImageKeywords": "tour bus wine",
-      "Rankings": { "Fun": 8, "Social": 8, "Active": 1, "Creative": 2, "Learning": 5, "Relaxing": 7 }
-    }
-  ],
-  "relatedKeywords": ["transportation", "group travel", "coach rental", "party bus", "shuttle service"]
-}
-`;
-
-    console.log('[process-weblink] Sending data to Gemini API for hybrid search.');
-    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: aiPrompt }, { text: `Query: "${query}"` }] }]
-      })
+    console.log('[process-weblink] Sending query to AI provider (with fallback).');
+    const aiResult = await generateText(aiPrompt, {
+      caller: 'process-weblink',
+      maxRetries: 1,
     });
 
-    if (!geminiResponse.ok) {
-      const errorBody = await geminiResponse.text();
-      console.error('[process-weblink] Gemini API Error:', errorBody);
-      throw new Error(`Gemini API request failed: ${errorBody}`);
+    if (!aiResult.ok) {
+      console.error('[process-weblink] AI provider failed:', aiResult.error);
+      const isQuota = aiResult.quotaExhausted || false;
+      return {
+        statusCode: isQuota ? 429 : 500,
+        body: JSON.stringify({
+          error: isQuota
+            ? 'AI quota exceeded. The AI search feature is temporarily unavailable. You can still add items manually.'
+            : 'AI service is currently unavailable. Please try again in a moment.',
+          retryable: !isQuota,
+          quotaExhausted: isQuota,
+          provider: aiResult.provider,
+        })
+      };
     }
 
-    const geminiResult = await geminiResponse.json();
-    const geminiTextResponse = geminiResult?.candidates?.[0]?.content?.parts?.[0]?.text;
+    console.log(`[process-weblink] AI response received from ${aiResult.providerName}`);
 
-    if (!geminiTextResponse) {
-      throw new Error('Could not find text in Gemini response.');
-    }
-
-    const extractedData = cleanAndParseGeminiJson(geminiTextResponse);
+    const extractedData = parseJsonResponse(aiResult.text);
 
     // Log the response type for debugging
-    console.log(`[process-weblink] Success. Response type: ${extractedData.itemType}`);
-    console.log('[process-weblink] Parsed data:', JSON.stringify(extractedData, null, 2));
+    console.log(`[process-weblink] Success via ${aiResult.providerName}. Response type: ${extractedData.itemType}`);
 
     // === IMAGE DEBUG: Log ImageKeywords specifically ===
     console.log('[IMAGE DEBUG] ========== PROCESS-WEBLINK IMAGE DATA ==========');
@@ -396,15 +163,17 @@ Example Response (Grouping):
     }
     console.log('[IMAGE DEBUG] ====================================================');
 
-    // Return the JSON data - frontend will handle both Specific and Grouping types
+    // Return the JSON data with provider info - frontend will handle both Specific and Grouping types
     return {
       statusCode: 200,
-      body: JSON.stringify(extractedData),
+      body: JSON.stringify({ ...extractedData, _aiProvider: aiResult.provider }),
     };
 
   } catch (error) {
     console.error('--- [process-weblink] FUNCTION FAILED ---');
-    console.error('Error details:', error.message);
-    return { statusCode: 500, body: JSON.stringify({ error: 'Failed to process search: ' + error.message }) };
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    return { statusCode: 500, body: JSON.stringify({ error: 'Failed to process search: ' + error.message, errorName: error.name, debugStack: error.stack?.split('\n').slice(0, 3).join(' | ') }) };
   }
 };

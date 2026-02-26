@@ -23,6 +23,7 @@ import { initializeProjectsDashboard, updateProjectsData, showProjectsLoading } 
 import { initializeWtfPlansPanel, syncWtfPlansPanelWithUrl, refreshWtfPlansData, isWtfPlansPanelOpen, trackRecentPlan } from './components/wtfPlansPanel.js';
 import { initializeForumPanel, syncForumPanelWithUrl } from './components/forumPanel.js';
 import { applyCloudinaryTransform } from './utils/imageOptimizer.js';
+import { loadTempIterations, loadTempReactions } from './components/refinementHandler.js';
 
 console.log('[MODULE DEBUG] main.js all imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 const imageCache = new Map();
@@ -30,6 +31,98 @@ window.imageCache = imageCache;
 
 window.applyFiltersAndSort = applyFiltersAndSort;
 window.showReceiptModal = showReceiptModal;
+
+// ─── Invite Flow: Process pending invite after login ────────────────
+async function handlePendingInvite() {
+    const pendingInviteStr = sessionStorage.getItem('pendingInvite');
+    if (!pendingInviteStr) return;
+
+    try {
+        const pendingInvite = JSON.parse(pendingInviteStr);
+        const { sessionId: inviteSessionId, role: inviteRole } = pendingInvite;
+
+        // Only process if we have a valid session and authenticated user
+        if (!inviteSessionId || !state.session.user?.isAuthenticated || !state.session.user?.id) {
+            log('Main', 'handlePendingInvite: Missing session or user, skipping.');
+            return;
+        }
+
+        log('Main', `Processing pending invite: session=${inviteSessionId}, role=${inviteRole}, user=${state.session.user.id}`);
+
+        // Create the permission record with the invited role
+        const role = inviteRole || 'editor';
+        await api.createPermissionRecord(inviteSessionId, state.session.user.id, role);
+        log('Main', `Permission record created: ${role} for user ${state.session.user.id} on session ${inviteSessionId}`);
+
+        // Show welcome toast
+        const planName = state.eventDetails?.combined?.get?.('eventName') || state.eventDetails?.combined?.get?.('Event Name') || 'the plan';
+        const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+        ui.showToast(`Welcome! You've joined "${planName}" as ${roleLabel}.`, 6000, 'success');
+
+        // Clear the pending invite
+        sessionStorage.removeItem('pendingInvite');
+
+    } catch (error) {
+        console.error('[Main] Error processing pending invite:', error);
+        sessionStorage.removeItem('pendingInvite');
+    }
+}
+
+// ─── Offline Mode Banner Management ────────────────────────────────
+function _setupOfflineBanner() {
+    api.onAirtableStatusChange((isOnline) => {
+        const banner = document.getElementById('airtable-offline-banner');
+        if (!banner) return;
+
+        if (isOnline) {
+            // Airtable came back online
+            const pendingCount = api.getPendingWriteCount();
+            if (pendingCount > 0) {
+                banner.querySelector('#offline-banner-text').textContent =
+                    'Reconnected! Syncing your changes...';
+                banner.style.background = 'linear-gradient(90deg, #4caf50, #388e3c)';
+                // Auto-hide after sync
+                setTimeout(() => {
+                    if (api.getPendingWriteCount() === 0) {
+                        banner.style.display = 'none';
+                    }
+                }, 5000);
+            } else {
+                banner.querySelector('#offline-banner-text').textContent =
+                    'Reconnected to data service.';
+                banner.style.background = 'linear-gradient(90deg, #4caf50, #388e3c)';
+                setTimeout(() => { banner.style.display = 'none'; }, 3000);
+            }
+        } else {
+            // Airtable is offline
+            banner.querySelector('#offline-banner-text').textContent =
+                'Data service temporarily unavailable \u2014 showing cached catalog data.';
+            banner.style.background = 'linear-gradient(90deg, #ff9800, #f57c00)';
+            banner.style.display = '';
+            _updateQueueBadge();
+        }
+    });
+}
+
+function _updateQueueBadge() {
+    const badge = document.getElementById('offline-banner-queue');
+    if (!badge) return;
+    const count = api.getPendingWriteCount();
+    if (count > 0) {
+        badge.textContent = `(${count} pending save${count > 1 ? 's' : ''})`;
+        badge.style.display = '';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+// ────────────────────────────────────────────────────────────────────
+
+// Expose cache diagnostics for debugging from browser console
+window.debugAirtableCache = () => {
+    const info = api.getCacheInfo();
+    console.log('[AirtableCache] Current status:', info);
+    return info;
+};
 
 /**
  * Handles the return from a Stripe ACH payment redirect (Financial Connections).
@@ -483,6 +576,9 @@ async function initialize() {
      document.addEventListener('userLoggedIn', () => {
          log('Main', "'userLoggedIn' event caught, reapplying filters and reinitializing chat.");
 
+         // Process any pending invite (Phase 1b: auto-associate invitee with plan)
+         handlePendingInvite();
+
          // Skip catalog operations if in presentation mode
          const currentUrlParams = new URLSearchParams(window.location.search);
          const currentlyInPresentation = currentUrlParams.get('view') === 'present';
@@ -605,10 +701,35 @@ async function initialize() {
     try {
         console.log('[INIT DEBUG] ========== FETCHING INITIAL DATA ==========');
         console.log('[INIT DEBUG] Calling api.fetchAllStores and api.fetchAllRecords...');
-        const fetchStart = performance.now();
-        const [stores, records] = await Promise.all([api.fetchAllStores(), api.fetchAllRecords()]);
-        const fetchEnd = performance.now();
-        console.log(`[INIT DEBUG] Data fetched in ${(fetchEnd - fetchStart).toFixed(0)}ms: ${stores.length} stores, ${records.length} records`);
+
+        // Retry wrapper for initial data fetch — Airtable can return transient 500 errors
+        let stores, records;
+        const maxInitRetries = 1;
+        for (let initAttempt = 0; initAttempt <= maxInitRetries; initAttempt++) {
+            try {
+                const fetchStart = performance.now();
+                [stores, records] = await Promise.all([api.fetchAllStores(), api.fetchAllRecords()]);
+                const fetchEnd = performance.now();
+                console.log(`[INIT DEBUG] Data fetched in ${(fetchEnd - fetchStart).toFixed(0)}ms: ${stores.length} stores, ${records.length} records`);
+                if (initAttempt > 0) {
+                    console.log(`[INIT DEBUG] ✅ Succeeded on initialization attempt ${initAttempt + 1}`);
+                }
+                break; // success
+            } catch (fetchError) {
+                if (initAttempt < maxInitRetries) {
+                    const retryDelay = 3000 * (initAttempt + 1);
+                    console.warn(`[INIT DEBUG] ⚠️ Data fetch failed (attempt ${initAttempt + 1}/${maxInitRetries + 1}). Retrying in ${retryDelay}ms...`, fetchError.message);
+                    const loadingMsg = document.getElementById('loading-message');
+                    if (loadingMsg) {
+                        loadingMsg.textContent = `Connection issue — retrying (${initAttempt + 1}/${maxInitRetries + 1})...`;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, retryDelay));
+                    continue;
+                }
+                throw fetchError; // exhausted retries
+            }
+        }
+
         log('Main', `Fetched ${stores.length} stores and ${records.length} records.`);
 
         // Prioritize AI-generated Rankings over default profiles
@@ -645,15 +766,44 @@ async function initialize() {
         console.log('[INIT DEBUG] State updated with stores and records. state.records.all.length:', state.records.all.length, 'state.stores.all.length:', state.stores.all.length);
         log('Main', `Fetched ${stores.length} stores and ${records.length} items. Applied AI-generated Rankings where available.`);
 
+        // Show offline banner if data came from local cache
+        if (!api.isAirtableOnline()) {
+            const banner = document.getElementById('airtable-offline-banner');
+            if (banner) banner.style.display = '';
+            const cacheInfo = api.getCacheInfo();
+            console.log('[INIT DEBUG] ⚠️ Running in OFFLINE MODE with cached data:', cacheInfo);
+            const loadingMsg = document.getElementById('loading-message');
+            if (loadingMsg) {
+                loadingMsg.textContent = 'Loaded from cache — some data may be outdated.';
+            }
+        }
+
     } catch (error) {
         console.error("Failed to load initial store/item data:", error);
+        const isServerError = error.message && error.message.includes('500');
+        const retrySeconds = 20;
         document.getElementById('loading-message').innerHTML = `
             <div style='color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 20px; text-align: center; max-width: 500px; margin: 0 auto;'>
                 <p style='margin: 0 0 15px 0; font-weight: bold;'>Unable to Load Catalog</p>
-                <p style='margin: 0 0 15px 0;'>We couldn't connect to load the event catalog. Please check your internet connection and try again.</p>
-                <button onclick="window.location.reload()" style='background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;'>Retry</button>
+                <p style='margin: 0 0 15px 0;'>${isServerError
+                    ? 'The data service is temporarily unavailable (server error). This usually resolves on its own.'
+                    : 'We couldn\'t connect to load the event catalog. Please check your internet connection.'
+                }</p>
+                <p id='retry-countdown' style='margin: 0 0 15px 0; font-size: 13px; color: #555;'>Auto-retrying in <span id='retry-timer'>${retrySeconds}</span>s...</p>
+                <button onclick="window.location.reload()" style='background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;'>Retry Now</button>
             </div>
         `;
+        // Auto-retry countdown
+        let remaining = retrySeconds;
+        const countdownInterval = setInterval(() => {
+            remaining--;
+            const timerEl = document.getElementById('retry-timer');
+            if (timerEl) timerEl.textContent = remaining;
+            if (remaining <= 0) {
+                clearInterval(countdownInterval);
+                window.location.reload();
+            }
+        }, 1000);
         ui.toggleLoading(true);
         return;
     }
@@ -708,6 +858,66 @@ async function initialize() {
               activeShop = state.stores.all.find(s => s.id === state.session.storeId);
               log('Main', `Determined shop from loaded session: ${state.session.storeId}. Found shop: ${!!activeShop}`);
          }
+
+        // Load unauthenticated user's temp iterations/reactions from localStorage (Decision 4)
+        if (!state.session.user.isAuthenticated) {
+            loadTempIterations();
+            loadTempReactions();
+        }
+
+        // --- Phase 1b: Invite flow handling ---
+        const isInvite = urlParams.get('invite') === 'true';
+        const inviteEmail = urlParams.get('email');
+        const inviteRole = urlParams.get('role');
+
+        if (isInvite) {
+            log('Main', `Invite link detected. Email: ${inviteEmail}, Role: ${inviteRole}`);
+
+            // Store invite info for post-login association
+            if (inviteEmail || inviteRole) {
+                sessionStorage.setItem('pendingInvite', JSON.stringify({
+                    sessionId: sessionId,
+                    email: inviteEmail || '',
+                    role: inviteRole || 'editor'
+                }));
+            }
+
+            if (!state.session.user.isAuthenticated) {
+                // Pre-fill sign-in email from invite URL
+                if (inviteEmail) {
+                    const signinEmailInput = document.getElementById('signin-email');
+                    if (signinEmailInput) {
+                        signinEmailInput.value = inviteEmail;
+                    }
+                    localStorage.setItem('lastSignInEmail', inviteEmail);
+                }
+
+                // Show a brief welcome banner before prompting sign-in
+                const planName = state.session.name || state.eventDetails?.combined?.get?.('Event Name') || 'a plan';
+                log('Main', `Invitee landing: prompting auth for plan "${planName}"`);
+
+                // Small delay to let the UI settle, then prompt sign-in
+                setTimeout(() => {
+                    showUserModal();
+                    const signinMessage = document.getElementById('signin-message');
+                    if (signinMessage) {
+                        signinMessage.style.color = '#667eea';
+                        signinMessage.textContent = `You've been invited to collaborate! Sign in with your email to join.`;
+                    }
+                }, 800);
+            } else {
+                // User is already authenticated - process the invite immediately
+                log('Main', 'Invitee already authenticated, processing invite...');
+                handlePendingInvite();
+            }
+
+            // Clean invite params from URL to avoid re-triggering
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete('invite');
+            cleanUrl.searchParams.delete('email');
+            cleanUrl.searchParams.delete('role');
+            history.replaceState({}, '', cleanUrl.toString());
+        }
     }
 
     if (!activeShop) {
@@ -736,8 +946,12 @@ async function initialize() {
         log('Main', `Active Shop set to: ${activeShop.fields.Name} (ID: ${activeShop.id})`);
 
         if (!state.session.id) {
-            log('Main', 'No session ID found, creating new session for guest chat...');
-            await api.saveSessionToAirtable(); 
+            if (api.isAirtableOnline()) {
+                log('Main', 'No session ID found, creating new session for guest chat...');
+                await api.saveSessionToAirtable();
+            } else {
+                log('Main', 'No session ID found, but Airtable is offline — skipping session creation.');
+            }
         }
 
         const titleElement = document.getElementById('main-shop-title');
@@ -846,6 +1060,7 @@ async function initialize() {
         console.log('[INIT DEBUG] Calling initializeEventListeners...');
         initializeEventListeners(imageCache, window.flatpickr, shopSettings);
         console.log('[INIT DEBUG] initializeEventListeners completed.');
+        _setupOfflineBanner();
 
         // Skip footer update in presentation mode (footer not visible)
         if (!isInPresentationMode) {

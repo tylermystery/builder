@@ -2587,6 +2587,74 @@ body.presentation-active #chat-widget {
     border: 1px solid #ce93d8;
 }
 
+/* Base category chip in display mode */
+.base-category-chip {
+    font-weight: 600;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.base-category-chip:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Tag badge in display mode */
+.tag-badge {
+    transition: transform 0.15s ease;
+}
+
+.tag-badge:hover {
+    transform: scale(1.05);
+}
+
+/* Categorization editor panel */
+.categorization-editor {
+    animation: catEditorSlideDown 0.2s ease-out;
+}
+
+@keyframes catEditorSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Editor chips hover */
+.cat-editor-chip:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.tag-editor-chip:hover {
+    transform: scale(1.05);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* Edit button for re-opening categorization editor */
+.categorize-edit-btn:hover {
+    border-color: #999;
+    color: #333;
+    background: #f5f5f5;
+}
+
+/* Scrollbar for tag container */
+.categorization-editor div::-webkit-scrollbar {
+    width: 4px;
+}
+
+.categorization-editor div::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.categorization-editor div::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 2px;
+}
+
 /* Solution accuracy badge in sidebar */
 .solution-accuracy-badge {
     display: inline-flex;
@@ -4098,6 +4166,7 @@ body.presentation-active #chat-widget {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: 6px;
     padding: 8px 14px;
     min-height: 36px;
     background: rgba(255, 255, 255, 0.85);
@@ -4106,14 +4175,32 @@ body.presentation-active #chat-widget {
     font-size: 0.9em;
     color: #495057;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s;
+    transition: all 0.2s ease;
     white-space: nowrap;
     box-sizing: border-box;
+    position: relative;
+}
+
+.collaborator-name-btn::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #adb5bd;
+    flex-shrink: 0;
+    transition: background-color 0.3s;
+}
+
+.collaborator-name-btn.online::before {
+    background: #28a745;
+    box-shadow: 0 0 4px rgba(40, 167, 69, 0.5);
 }
 
 .collaborator-name-btn:hover {
     background: rgba(255, 255, 255, 1);
-    border-color: rgba(0, 0, 0, 0.2);
+    border-color: rgba(0, 123, 255, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 /* Add/Share button at the end of the collaborators list */
@@ -14865,7 +14952,7 @@ hr.total-divider {
 /* ── Vitality summary panel ── */
 .action-menu-vitality-summary {
     position: absolute;
-    bottom: -56px;
+    top: 280px;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(15, 23, 42, 0.94);
@@ -14876,6 +14963,28 @@ hr.total-divider {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
     border: 1px solid rgba(255, 255, 255, 0.12);
     z-index: 5;
+}
+.action-menu-footnote {
+    opacity: 0.85;
+    font-size: 0.95em;
+}
+
+.action-menu-guest-note {
+    position: absolute;
+    top: 170px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.85);
+    color: #e2e8f0;
+    font-size: 0.65em;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    pointer-events: none;
+    z-index: 6;
 }
 
 .action-menu-summary-title {
@@ -14987,7 +15096,11 @@ hr.total-divider {
         min-width: 170px;
         max-width: 220px;
         padding: 8px 10px;
-        bottom: -48px;
+        top: 220px;
+    }
+    .action-menu-guest-note {
+        top: 140px;
+        font-size: 0.6em;
     }
 }
 

@@ -1,24 +1,16 @@
 /**
  * AI-powered Top Options Generator
  * Analyzes an item's name, description, and category to generate recommended variations/options
- * Uses Google Gemini AI to intelligently determine appropriate option groups
+ * Uses multi-provider AI with automatic fallback (Gemini → OpenAI → Anthropic)
  */
 
-const fetch = require('node-fetch');
-const { GEMINI_API_KEY } = process.env;
+const { generateText } = require('./utils/ai-provider');
 
 /**
  * Generate top recommended options for an item using AI
- * @param {Object} itemData - Item information including name, description, category
- * @returns {Promise<string>} - Options string in bracket format
  */
 async function generateTopOptionsWithAI(itemData) {
     console.log(`[Debug] generateTopOptionsWithAI: Processing item: ${itemData.name}`);
-
-    if (!GEMINI_API_KEY) {
-        console.error("[Debug] CRITICAL: GEMINI_API_KEY is missing!");
-        throw new Error("Server configuration error: Missing Gemini API Key.");
-    }
 
     const prompt = `You are an expert at creating product variations and options for a catalog/menu system.
 
@@ -60,48 +52,23 @@ Rules for the format:
 
 Generate options now:`;
 
-    const payload = {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1024,
-        }
-    };
-
-    const modelId = "gemini-2.0-flash";
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
-
-    console.log(`[Debug] generateTopOptionsWithAI: Sending request to Gemini...`);
-    const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+    const aiResult = await generateText(prompt, {
+        temperature: 0.7,
+        maxTokens: 1024,
+        caller: 'generate-top-options',
     });
 
-    console.log(`[Debug] generateTopOptionsWithAI: Received status ${response.status} from Gemini.`);
-
-    if (!response.ok) {
-        let errorBody = await response.text();
-        try { errorBody = JSON.parse(errorBody); } catch (e) { /* Ignore */ }
-        console.error("[Debug] Gemini API Error Response Body:", errorBody);
-        let errorMessage = `Gemini API call failed with status ${response.status}`;
-        if (response.status === 400) errorMessage += ". Check payload/prompt structure.";
-        if (response.status === 403) errorMessage += ". Check API key permissions/billing.";
-        if (response.status === 429) errorMessage += ". Rate limit exceeded.";
-        throw new Error(errorMessage);
+    if (!aiResult.ok) {
+        const err = new Error(aiResult.error || 'AI options generation failed');
+        err.statusCode = aiResult.statusCode || 500;
+        err.quotaExhausted = aiResult.quotaExhausted || false;
+        throw err;
     }
 
-    const result = await response.json();
-    let optionsText = '';
+    console.log(`[Debug] generateTopOptionsWithAI: Response from ${aiResult.providerName}`);
 
-    try {
-        optionsText = result.candidates[0].content.parts[0].text;
-        // Clean up any markdown code blocks if present
-        optionsText = optionsText.replace(/```[\w]*\n?/g, '').trim();
-    } catch (e) {
-        console.error('[Debug] Error extracting text from Gemini response structure:', JSON.stringify(result, null, 2));
-        throw new Error('Could not extract text from Gemini response.');
-    }
+    // Clean up any markdown code blocks if present
+    let optionsText = aiResult.text.replace(/```[\w]*\n?/g, '').trim();
 
     console.log(`[Debug] generateTopOptionsWithAI: Generated options:\n${optionsText}`);
     return optionsText;
@@ -146,14 +113,7 @@ exports.handler = async (event) => {
 
         console.log(`[Debug] Processing item: ${name}`);
 
-        // Generate options using AI
-        const optionsString = await generateTopOptionsWithAI({
-            name,
-            description,
-            category,
-            price,
-            pricingType
-        });
+        const optionsString = await generateTopOptionsWithAI({ name, description, category, price, pricingType });
 
         return {
             statusCode: 200,
@@ -170,10 +130,12 @@ exports.handler = async (event) => {
 
     } catch (error) {
         console.error('[ERROR] generate-top-options handler failed:', error.message, error.stack);
+        const statusCode = error.statusCode === 429 ? 429 : 500;
+        const isQuota = error.quotaExhausted || false;
         return {
-            statusCode: 500,
+            statusCode,
             headers: { 'Access-Control-Allow-Origin': '*' },
-            body: JSON.stringify({ error: `Failed to generate options: ${error.message}` })
+            body: JSON.stringify({ error: `Failed to generate options: ${error.message}`, quotaExhausted: isQuota, retryable: statusCode === 429 && !isQuota })
         };
     }
 };

@@ -1,13 +1,14 @@
 /**
  * AI Image Generation Function
  * Generates an AI-approximated image for manually added items based on their name, description, and metadata.
- * Uses Google's Imagen 4 Fast model via Gemini API for quick, high-quality image generation.
+ * Uses multi-provider AI with automatic fallback (Imagen → DALL-E 3)
  * Uploads the result to Cloudinary for persistent storage.
  */
 
 const crypto = require('crypto');
+const { generateImage } = require('./utils/ai-provider');
 
-const { GEMINI_API_KEY, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, CLOUDINARY_CLOUD_NAME } = process.env;
+const { CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, CLOUDINARY_CLOUD_NAME } = process.env;
 
 /**
  * Generate a descriptive prompt for image generation based on item metadata
@@ -15,82 +16,29 @@ const { GEMINI_API_KEY, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, CLOUDINARY_CL
 function buildImagePrompt(itemData) {
     const { name, description, category, serviceType, tags } = itemData;
 
-    // Build a descriptive prompt for the image
     const parts = [];
-
-    // Start with what we're creating
     parts.push(`Professional product/service photo of "${name}"`);
 
-    // Add category context if available
     if (category) {
         parts.push(`in the ${category} category`);
     }
 
-    // Add service type context if available
     if (serviceType && serviceType !== 'Custom Item') {
         parts.push(`as a ${serviceType}`);
     }
 
-    // Add description-based details if not too long
     if (description && description.length < 200 && !description.includes('Manually added')) {
         parts.push(`. ${description}`);
     }
 
-    // Add tags for additional context
     if (tags && tags.length > 0) {
         const tagList = Array.isArray(tags) ? tags.slice(0, 5).join(', ') : tags;
         parts.push(`. Keywords: ${tagList}`);
     }
 
-    // Add style guidance
     parts.push('. Clean, professional photography style with good lighting. White or neutral background preferred. High quality product shot.');
 
     return parts.join(' ');
-}
-
-/**
- * Generate an image using Google's Imagen 4 Fast model via Gemini API
- */
-async function generateImageWithImagen(prompt) {
-    console.log('[AI IMAGE] Generating image with Google Imagen 4 Fast...');
-    console.log('[AI IMAGE] Prompt:', prompt);
-
-    // Use Imagen 4 Fast for quick generation (ideal for high-volume, low-latency)
-    const modelId = 'imagen-4.0-fast-generate-001';
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:predict`;
-
-    const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-            'x-goog-api-key': GEMINI_API_KEY,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            instances: [{ prompt: prompt }],
-            parameters: {
-                sampleCount: 1,
-                aspectRatio: '1:1',
-                personGeneration: 'allow_adult'
-            }
-        })
-    });
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[AI IMAGE] Imagen API error:', response.status, errorText);
-        throw new Error(`Imagen API error: ${response.status} - ${errorText}`);
-    }
-
-    const result = await response.json();
-    console.log('[AI IMAGE] Imagen API response received');
-
-    // Extract the base64 image data from the response
-    if (!result.predictions || !result.predictions[0] || !result.predictions[0].bytesBase64Encoded) {
-        console.error('[AI IMAGE] Unexpected response structure:', JSON.stringify(result).substring(0, 500));
-        throw new Error('Invalid response from Imagen API - no image data');
-    }
-
-    return result.predictions[0].bytesBase64Encoded;
 }
 
 /**
@@ -102,14 +50,12 @@ async function uploadToCloudinary(base64Image, itemId, sessionId) {
     const uploadUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
     const uploadTimestamp = Math.floor(Date.now() / 1000);
 
-    // Generate unique identifiers
     const timestamp = Date.now();
     const sanitizedSessionId = (sessionId || 'ai-gen').replace(/[^a-zA-Z0-9_-]/g, '_');
     const sanitizedItemId = (itemId || 'manual').replace(/[^a-zA-Z0-9_-]/g, '_');
     const publicId = `ai_generated_${sanitizedSessionId}_${sanitizedItemId}_${timestamp}`;
     const displayName = `ai-generated-${sanitizedItemId}-${timestamp}`;
 
-    // Build params for signing
     const params = {
         display_name: displayName,
         folder: 'ai-generated-images',
@@ -118,7 +64,6 @@ async function uploadToCloudinary(base64Image, itemId, sessionId) {
         tags: `ai-generated,session-${sanitizedSessionId},item-${sanitizedItemId}`
     };
 
-    // Create signature
     const signatureString = Object.keys(params)
         .sort()
         .map(key => `${key}=${params[key]}`)
@@ -126,10 +71,8 @@ async function uploadToCloudinary(base64Image, itemId, sessionId) {
 
     const signature = crypto.createHash('sha1').update(signatureString).digest('hex');
 
-    // Prepare the data URL
     const dataUrl = `data:image/png;base64,${base64Image}`;
 
-    // Use FormData for upload
     const formData = new FormData();
     formData.append('file', dataUrl);
     formData.append('api_key', CLOUDINARY_API_KEY);
@@ -166,18 +109,9 @@ async function uploadToCloudinary(base64Image, itemId, sessionId) {
 exports.handler = async function(event, context) {
     console.log('[AI IMAGE FUNC] ====== generate-ai-image function called ======');
     console.log('[AI IMAGE FUNC] HTTP Method:', event.httpMethod);
-    console.log('[AI IMAGE FUNC] Path:', event.path);
-    console.log('[AI IMAGE FUNC] Headers:', JSON.stringify(event.headers));
-    console.log('[AI IMAGE FUNC] Body length:', event.body?.length || 0);
-    console.log('[AI IMAGE FUNC] isBase64Encoded:', event.isBase64Encoded);
-    console.log('[AI IMAGE FUNC] GEMINI_API_KEY set:', !!GEMINI_API_KEY);
-    console.log('[AI IMAGE FUNC] CLOUDINARY_CLOUD_NAME set:', !!CLOUDINARY_CLOUD_NAME);
-    console.log('[AI IMAGE FUNC] CLOUDINARY_API_KEY set:', !!CLOUDINARY_API_KEY);
-    console.log('[AI IMAGE FUNC] CLOUDINARY_API_SECRET set:', !!CLOUDINARY_API_SECRET);
 
     // Handle CORS preflight
     if (event.httpMethod === 'OPTIONS') {
-        console.log('[AI IMAGE FUNC] Handling OPTIONS preflight');
         return {
             statusCode: 200,
             headers: {
@@ -190,7 +124,6 @@ exports.handler = async function(event, context) {
     }
 
     if (event.httpMethod !== 'POST') {
-        console.log('[AI IMAGE FUNC] Invalid method, rejecting');
         return {
             statusCode: 405,
             headers: {
@@ -198,19 +131,6 @@ exports.handler = async function(event, context) {
                 'Access-Control-Allow-Origin': '*'
             },
             body: JSON.stringify({ error: 'Method Not Allowed' })
-        };
-    }
-
-    // Check required environment variables
-    if (!GEMINI_API_KEY) {
-        console.error('[AI IMAGE] Missing GEMINI_API_KEY');
-        return {
-            statusCode: 500,
-            headers: {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            body: JSON.stringify({ error: 'AI image generation not configured - missing Gemini API key' })
         };
     }
 
@@ -227,17 +147,13 @@ exports.handler = async function(event, context) {
     }
 
     try {
-        // Parse request body
         let body;
         try {
             let rawBody = event.body;
-            console.log('[AI IMAGE FUNC] Raw body (first 200 chars):', rawBody?.substring(0, 200));
             if (event.isBase64Encoded && event.body) {
                 rawBody = Buffer.from(event.body, 'base64').toString('utf-8');
-                console.log('[AI IMAGE FUNC] Decoded base64 body (first 200 chars):', rawBody?.substring(0, 200));
             }
             body = JSON.parse(rawBody);
-            console.log('[AI IMAGE FUNC] Parsed body:', JSON.stringify(body));
         } catch (parseError) {
             console.error('[AI IMAGE FUNC] JSON parse error:', parseError.message);
             return {
@@ -250,11 +166,9 @@ exports.handler = async function(event, context) {
             };
         }
 
-        const { name, description, category, serviceType, tags, itemId, sessionId } = body;
-        console.log('[AI IMAGE FUNC] Extracted fields:', { name, description: description?.substring(0, 50), category, serviceType, tags, itemId, sessionId });
+        const { name, description, category, serviceType, tags, itemId, sessionId, customPrompt } = body;
 
         if (!name) {
-            console.error('[AI IMAGE FUNC] Missing name field');
             return {
                 statusCode: 400,
                 headers: {
@@ -265,19 +179,42 @@ exports.handler = async function(event, context) {
             };
         }
 
-        console.log('[AI IMAGE FUNC] Starting image generation for:', name);
         console.log('[AI IMAGE] Generating image for:', name);
-        console.log('[AI IMAGE] Item ID:', itemId);
-        console.log('[AI IMAGE] Description:', description?.substring(0, 100));
 
         // Build the image generation prompt
-        const prompt = buildImagePrompt({ name, description, category, serviceType, tags });
+        const prompt = customPrompt || buildImagePrompt({ name, description, category, serviceType, tags });
 
-        // Generate the image using Imagen
-        const base64Image = await generateImageWithImagen(prompt);
+        // Generate the image using multi-provider AI (Imagen → DALL-E 3)
+        const imageResult = await generateImage(prompt, {
+            caller: 'generate-ai-image',
+            maxRetries: 1,
+        });
+
+        if (!imageResult.ok) {
+            console.error('[AI IMAGE] Image generation failed:', imageResult.error);
+            const isQuota = imageResult.quotaExhausted || false;
+            const statusCode = isQuota ? 429 : 500;
+            return {
+                statusCode,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                body: JSON.stringify({
+                    error: isQuota
+                        ? 'AI image generation quota exceeded. Images will use placeholders.'
+                        : 'Failed to generate AI image',
+                    message: imageResult.error,
+                    retryable: !isQuota,
+                    quotaExhausted: isQuota
+                })
+            };
+        }
+
+        console.log(`[AI IMAGE] Image generated via ${imageResult.providerName}`);
 
         // Upload to Cloudinary
-        const cloudinaryResult = await uploadToCloudinary(base64Image, itemId, sessionId);
+        const cloudinaryResult = await uploadToCloudinary(imageResult.base64, itemId, sessionId);
 
         return {
             statusCode: 200,
@@ -292,7 +229,8 @@ exports.handler = async function(event, context) {
                 width: cloudinaryResult.width,
                 height: cloudinaryResult.height,
                 isAIGenerated: true,
-                prompt: prompt
+                prompt: prompt,
+                _aiProvider: imageResult.provider,
             })
         };
 
@@ -300,15 +238,21 @@ exports.handler = async function(event, context) {
         console.error('[AI IMAGE] Function error:', error.message);
         console.error('[AI IMAGE] Stack:', error.stack);
 
+        const statusCode = error.statusCode === 429 ? 429 : 500;
+        const isQuota = error.quotaExhausted || false;
         return {
-            statusCode: 500,
+            statusCode,
             headers: {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
             body: JSON.stringify({
-                error: 'Failed to generate AI image',
-                message: error.message
+                error: isQuota
+                    ? 'AI image generation quota exceeded. Images will use placeholders.'
+                    : 'Failed to generate AI image',
+                message: error.message,
+                retryable: statusCode === 429 && !isQuota,
+                quotaExhausted: isQuota
             })
         };
     }

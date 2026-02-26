@@ -4,6 +4,19 @@ import { state, invalidateRecordsIndex, getRecordById } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
+import { serializeIterations, deserializeIterations } from './components/refinementHandler.js';
+import {
+    cacheItems, getCachedItems,
+    cacheStores, getCachedStores,
+    cacheSession, getCachedSession,
+    enqueueWrite, setAirtableStatus, isAirtableOnline,
+    startHealthChecks, onAirtableStatusChange,
+    checkAirtableHealth, getPendingWriteCount,
+    getCacheInfo, flushWriteQueue
+} from './utils/airtableCache.js';
+
+// Re-export cache utilities for use by main.js and other modules
+export { isAirtableOnline, onAirtableStatusChange, getCacheInfo, getPendingWriteCount, flushWriteQueue };
 
 const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
@@ -61,6 +74,63 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
             throw new Error(`Request timed out after ${timeoutMs}ms`);
         }
         throw error;
+    }
+}
+// --------------------------------
+
+/**
+ * Fetch wrapper with automatic retry + exponential backoff for 429 rate limit responses.
+ * Used by client-side AI function callers to gracefully handle server-side rate limits.
+ * Does NOT retry if the server signals quota exhaustion (quotaExhausted: true).
+ * @param {string} url - The URL to fetch
+ * @param {object} options - Fetch options
+ * @param {number} maxRetries - Maximum number of retries (default: 1)
+ * @returns {Promise<Response>}
+ */
+async function fetchWithClientRetry(url, options, maxRetries = 1) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const response = await fetch(url, options);
+        if (response.status === 429 && attempt < maxRetries) {
+            // Check if server says quota is exhausted (don't retry)
+            try {
+                const cloned = response.clone();
+                const data = await cloned.json();
+                if (data.quotaExhausted) {
+                    log('API', `Quota exhausted on ${url}. Not retrying.`);
+                    return response;
+                }
+            } catch (e) { /* ignore parse errors, fall through to retry */ }
+            const backoffMs = Math.min(2000 * Math.pow(2, attempt) + Math.random() * 1000, 6000);
+            log('API', `Rate limited (429) on ${url}. Retry ${attempt + 1}/${maxRetries} after ${Math.round(backoffMs)}ms`);
+            await new Promise(resolve => setTimeout(resolve, backoffMs));
+            continue;
+        }
+        return response;
+    }
+}
+
+// --- Airtable fetch with retry for transient 500 errors ---
+/**
+ * Fetch wrapper that retries on Airtable 500 (SERVER_ERROR) responses with exponential backoff.
+ * Airtable occasionally returns transient 500s that resolve on retry.
+ * @param {string} url - The URL to fetch
+ * @param {object} options - Fetch options
+ * @param {number} maxRetries - Maximum retries on 500 (default: 3)
+ * @returns {Promise<Response>}
+ */
+async function fetchWithAirtableRetry(url, options, maxRetries = 2) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const response = await fetch(url, options);
+        if (response.status === 500 && attempt < maxRetries) {
+            const backoffMs = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 5000);
+            console.warn(`[AIRTABLE RETRY] 500 error on attempt ${attempt + 1}/${maxRetries + 1}. Retrying in ${Math.round(backoffMs)}ms... URL: ${url.substring(0, 80)}...`);
+            await new Promise(resolve => setTimeout(resolve, backoffMs));
+            continue;
+        }
+        if (attempt > 0 && response.ok) {
+            console.log(`[AIRTABLE RETRY] ✅ Succeeded on attempt ${attempt + 1} for: ${url.substring(0, 80)}...`);
+        }
+        return response;
     }
 }
 // --------------------------------
@@ -422,6 +492,11 @@ export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
     log('API', `Loading session from URL: ${url}`);
+
+    let record;
+    let loadedFromCache = false;
+
+    // Step 1: Fetch session record from Airtable (or fall back to cache)
     try {
         const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
         console.log(`[SESSION-LOAD] Airtable response: ${response.status}`);
@@ -430,10 +505,36 @@ export async function loadSessionFromAirtable(sessionId) {
             console.error('[SESSION-LOAD] ❌ Airtable error:', errorData);
             throw new Error(`Could not fetch session data. Status: ${response.status}`);
         }
-        const record = await response.json();
+        record = await response.json();
+
+        // Cache session for offline access
+        cacheSession(sessionId, record);
+
         console.log(`[SESSION-LOAD] ✅ Session loaded: "${record.fields?.Name}" (${record.id})`);
         console.log(`[SESSION-LOAD] Plan details - Date: ${record.fields.Date}, Goals: ${record.fields.Goals?.substring(0, 50)}...`);
         log('API', `Session loaded: ${record.fields.Name || 'Unnamed Session'} (ID: ${sessionId})`);
+    } catch (fetchError) {
+        // Attempt to load session from local cache when Airtable is unreachable
+        const cached = getCachedSession(sessionId);
+        if (cached) {
+            console.warn(`[SESSION-LOAD] ⚠️ Airtable unreachable, loading session from local cache (cached ${new Date(cached.timestamp).toLocaleString()})`);
+            record = cached.record;
+            loadedFromCache = true;
+            setAirtableStatus(false);
+            startHealthChecks(PERSONAL_ACCESS_TOKEN, BASE_ID);
+        } else {
+            console.error('[SESSION-LOAD] ❌ Error loading session (no cache available):', fetchError.message);
+            log('API', `Failed to load session: ${fetchError.message}`);
+            state.session.id = null;
+            alert("Could not load the shared session. It might have been deleted or there was a network issue.");
+            window.history.replaceState({}, document.title, window.location.pathname + window.location.search.replace(/&?session=[^&]+/, ''));
+            console.log('[SESSION-LOAD] ========== END (error) ==========');
+            return;
+        }
+    }
+
+    // Step 2: Process the session record (whether from Airtable or cache)
+    try {
 
         // Reset parts of state before loading new session data
         state.cart.items = new Map();
@@ -471,7 +572,8 @@ export async function loadSessionFromAirtable(sessionId) {
 
             // Auto-associate authenticated user as collaborator when opening a plan
             // This ensures the plan appears in their plans list immediately
-            if (!isCollaborator) {
+            // Skip when loaded from cache (Airtable is unreachable)
+            if (!isCollaborator && !loadedFromCache) {
                 console.log(`[SESSION-LOAD] User ${state.session.user.id} not yet collaborator on session ${sessionId}, adding...`);
                 // Await the association to ensure plan appears in wtfplans list immediately
                 try {
@@ -506,8 +608,11 @@ export async function loadSessionFromAirtable(sessionId) {
 
                 const reactionsObject = savedState.itemReactions || {};
                 state.session.reactions = new Map();
-                for (const recordId in reactionsObject) {
-                    state.session.reactions.set(recordId, new Map(Object.entries(reactionsObject[recordId])));
+                for (const reactionKey in reactionsObject) {
+                    // Backward compatibility: plain recordId keys (no "::") are migrated
+                    // to compound keys as "recordId::original" (Decision 3A)
+                    const normalizedKey = reactionKey.includes('::') ? reactionKey : `${reactionKey}::original`;
+                    state.session.reactions.set(normalizedKey, new Map(Object.entries(reactionsObject[reactionKey])));
                 }
 
                 state.session.userProfiles = new Map(Object.entries(savedState.userProfiles || {}));
@@ -575,6 +680,16 @@ export async function loadSessionFromAirtable(sessionId) {
                 state.session.relatedGroups = Array.isArray(savedState.relatedGroups) ? savedState.relatedGroups : [];
                 console.log('[SESSION-LOAD DEBUG] Restored relatedGroups:', state.session.relatedGroups);
 
+                // Restore item iterations / variations (Decision 1C: Hybrid storage)
+                if (savedState.itemIterations && typeof savedState.itemIterations === 'object') {
+                    const activeIndices = savedState.activeVariationIndices || {};
+                    for (const [recordId, iterData] of Object.entries(savedState.itemIterations)) {
+                        const activeIndex = activeIndices[recordId] || 0;
+                        deserializeIterations(recordId, iterData, activeIndex);
+                    }
+                    console.log(`[SESSION-LOAD DEBUG] Restored iterations for ${Object.keys(savedState.itemIterations).length} items`);
+                }
+
                 // DEBUG: Log restored archived/completed items
                 console.log('[SESSION-LOAD DEBUG] Restored archivedItems:', {
                     rawData: savedState.archivedItems,
@@ -595,6 +710,17 @@ export async function loadSessionFromAirtable(sessionId) {
                 // and solution items (solution-*)
                 if (savedState.aiRecords && Object.keys(savedState.aiRecords).length > 0) {
                     const customRecordsToRestore = Object.values(savedState.aiRecords);
+                    const restoredWithCategorization = customRecordsToRestore.filter(r => r && r._categorization);
+                    console.log('[SESSION-LOAD DEBUG] Restoring custom records', {
+                        total: customRecordsToRestore.length,
+                        withCategorization: restoredWithCategorization.length,
+                        sample: restoredWithCategorization.slice(0, 5).map(r => ({
+                            recordId: r.id,
+                            recordName: r.fields?.Name,
+                            baseCategories: r._categorization?.baseCategories || [],
+                            tagsCount: r._categorization?.tags?.length || 0
+                        }))
+                    });
                     for (const customRecord of customRecordsToRestore) {
                         // Only add if not already in state.records.all
                         if (!state.records.all.some(r => r.id === customRecord.id)) {
@@ -683,18 +809,20 @@ export async function loadSessionFromAirtable(sessionId) {
         }
 
         console.log(`[SESSION-LOAD] ✅ Session ready - items: ${state.cart.items.size}, locked: ${state.cart.lockedItems.size}, details: ${state.eventDetails.combined.size}`);
+        if (loadedFromCache) {
+            console.log('[SESSION-LOAD] ⚠️ Session loaded from OFFLINE CACHE — some data may be outdated');
+        }
         console.log('[SESSION-LOAD] Dispatching sessionReady event...');
         document.dispatchEvent(new CustomEvent('sessionReady'));
         log('API', `Finished loading session ${sessionId}. Fired sessionReady event.`);
         console.log('[SESSION-LOAD] ========== END (success) ==========');
 
-    } catch (error) {
-        console.error('[SESSION-LOAD] ❌ Error loading session:', error.message);
-        log('API', `Failed to load session: ${error.message}`);
+    } catch (processError) {
+        console.error('[SESSION-LOAD] ❌ Error processing session data:', processError.message);
+        log('API', `Failed to process session: ${processError.message}`);
         state.session.id = null;
-        alert("Could not load the shared session. It might have been deleted or there was a network issue.");
-        window.history.replaceState({}, document.title, window.location.pathname + window.location.search.replace(/&?session=[^&]+/, ''));
-        console.log('[SESSION-LOAD] ========== END (error) ==========');
+        alert("Could not process the session data. Please try refreshing the page.");
+        console.log('[SESSION-LOAD] ========== END (process error) ==========');
     }
 }
 
@@ -735,6 +863,35 @@ export async function updatePaymentHistory(sessionId, paymentHistory) {
     }
 }
 
+/**
+ * Serialize all item iterations for session persistence (Decision 1C: Hybrid storage).
+ * Returns item-level iteration data stored within the session JSON.
+ * @returns {Object} Map of recordId -> serialized iteration data
+ */
+function serializeAllIterations() {
+    const result = {};
+    for (const [recordId, iterData] of state.session.itemIterations.entries()) {
+        const serialized = serializeIterations(recordId);
+        if (serialized) {
+            result[recordId] = serialized;
+        }
+    }
+    return result;
+}
+
+/**
+ * Get the session-level active variation index for each item (Decision 1C: Hybrid).
+ * Each session can have a different variation selected for the same item.
+ * @returns {Object} Map of recordId -> active iteration index
+ */
+function getActiveVariationIndices() {
+    const result = {};
+    for (const [recordId, iterData] of state.session.itemIterations.entries()) {
+        result[recordId] = iterData.currentIndex || 0;
+    }
+    return result;
+}
+
 
 export async function saveSessionToAirtable() {
     const hasPlanData = state.cart.items.size > 0 || state.cart.lockedItems.size > 0;
@@ -771,6 +928,7 @@ export async function saveSessionToAirtable() {
         ...Array.from(state.cart.lockedItems.keys())
     ];
     const customRecordsToSave = {};
+    let customCategorizationCount = 0;
     for (const itemId of allCartItemIds) {
         // Custom items include AI-generated items, manually added items, and solution items
         const isCustomItem = itemId.startsWith('ai-') || itemId.startsWith('manual-') || itemId.startsWith('solution-');
@@ -784,6 +942,17 @@ export async function saveSessionToAirtable() {
             }
 
             if (customRecord) {
+                if (customRecord._categorization) {
+                    customCategorizationCount += 1;
+                    console.log('[SESSION-SAVE DEBUG] Custom record categorization detected', {
+                        recordId: customRecord.id,
+                        recordName: customRecord.fields?.Name,
+                        baseCategories: customRecord._categorization.baseCategories || [],
+                        tagsCount: customRecord._categorization.tags?.length || 0,
+                        fieldsCategories: customRecord.fields?.Categories,
+                        fieldsCategory: customRecord.fields?.Category
+                    });
+                }
                 customRecordsToSave[itemId] = {
                     id: customRecord.id,
                     fields: customRecord.fields,
@@ -798,6 +967,22 @@ export async function saveSessionToAirtable() {
                 };
             }
         }
+    }
+
+    const categorizationRecords = state.records.all.filter(r => r && r._categorization);
+    if (categorizationRecords.length > 0) {
+        const nonCustomCategorized = categorizationRecords.filter(r => !(r.id || '').startsWith('ai-') && !(r.id || '').startsWith('manual-') && !(r.id || '').startsWith('solution-'));
+        console.log('[SESSION-SAVE DEBUG] Records with _categorization in state', {
+            total: categorizationRecords.length,
+            customCount: customCategorizationCount,
+            nonCustomCount: nonCustomCategorized.length,
+            nonCustomSample: nonCustomCategorized.slice(0, 5).map(r => ({
+                recordId: r.id,
+                recordName: r.fields?.Name,
+                fieldsCategories: r.fields?.Categories,
+                fieldsCategory: r.fields?.Category
+            }))
+        });
     }
 
     const sessionData = {
@@ -830,7 +1015,11 @@ export async function saveSessionToAirtable() {
         // Store full custom record data for persistence across refreshes
         // Uses 'aiRecords' key for backward compatibility with existing sessions
         // Contains both AI-generated items and manually added items
-        aiRecords: customRecordsToSave
+        aiRecords: customRecordsToSave,
+        // Item iterations / variations (Decision 1C: Hybrid - item-level data + session-level active indices)
+        itemIterations: serializeAllIterations(),
+        // Session-level active variation indices (which variation is selected per item in this session)
+        activeVariationIndices: getActiveVariationIndices()
     };
 
     // DEBUG: Log what's being saved for archived/completed items
@@ -934,6 +1123,31 @@ export async function saveSessionToAirtable() {
 
     } catch (error) {
         log('API', `Failed to save session: ${error.message}`);
+
+        // If this is a server error or network error, queue the write for later
+        const isServerOrNetworkError = error.message.includes('500') ||
+            error.message.includes('502') || error.message.includes('503') ||
+            error.message.includes('Failed to fetch') || error.message.includes('NetworkError') ||
+            error.message.includes('timed out');
+
+        if (isUpdate && isServerOrNetworkError) {
+            // Queue the session update for when Airtable comes back
+            const requestBody = JSON.stringify(payload);
+            enqueueWrite({
+                type: 'session_save',
+                url: url,
+                method: method,
+                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
+                body: requestBody
+            });
+            setAirtableStatus(false);
+            startHealthChecks(PERSONAL_ACCESS_TOKEN, BASE_ID);
+            state.ui.saveState = 'QUEUED';
+            if (typeof ui !== 'undefined' && ui.updateSaveShareButton) ui.updateSaveShareButton();
+            console.warn('[SESSION-SAVE] ⚠️ Save queued for when Airtable comes back online');
+            return true; // Return true so the app doesn't show an error to the user
+        }
+
         state.ui.saveState = 'ERROR';
         if (typeof ui !== 'undefined' && ui.updateSaveShareButton) ui.updateSaveShareButton();
         alert(`Error saving your plan: ${error.message}. Please try refreshing the page and trying again.`);
@@ -1051,6 +1265,73 @@ export async function addItemToSession(sessionId, itemId, itemInfo = {}) {
     }
 }
 
+// --- Server-side backup helpers (Netlify Blobs) ---
+let _serverBackupCache = null; // In-memory cache to avoid duplicate fetches within same page load
+
+/**
+ * Trigger a server-side backup of Airtable data to Netlify Blobs.
+ * Called after successful Airtable fetches (fire-and-forget, non-blocking).
+ */
+function _triggerServerBackup() {
+    // Fire-and-forget — don't await, don't block the UI
+    fetch('/api/airtable-backup', { method: 'POST' })
+        .then(res => {
+            if (res.ok) {
+                console.log('[BACKUP] ✅ Server-side Airtable backup triggered successfully');
+            } else {
+                console.warn('[BACKUP] Server backup trigger returned:', res.status);
+            }
+        })
+        .catch(err => {
+            console.warn('[BACKUP] Failed to trigger server backup (non-critical):', err.message);
+        });
+}
+
+/**
+ * Fetch backed-up catalog data from the server-side Netlify Blobs backup.
+ * Used as a last resort when both Airtable and localStorage cache are unavailable.
+ * @returns {Promise<{items: Array, stores: Array, backupTimestamp: number, backupAge: number} | null>}
+ */
+async function _fetchFromServerBackup() {
+    // Return cached result if we already fetched this page load
+    if (_serverBackupCache) {
+        console.log('[BACKUP] Returning in-memory cached backup data');
+        return _serverBackupCache;
+    }
+
+    try {
+        console.log('[BACKUP] Fetching from /api/airtable-backup...');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const response = await fetch('/api/airtable-backup', {
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            // Try to read the error body for diagnostic info
+            let errorDetail = '';
+            try {
+                const errorBody = await response.json();
+                errorDetail = JSON.stringify(errorBody);
+            } catch (_) {
+                try { errorDetail = await response.text(); } catch (_2) { /* ignore */ }
+            }
+            console.warn(`[BACKUP] Server backup returned: ${response.status} ${response.statusText}`, errorDetail ? `| Detail: ${errorDetail}` : '');
+            return null;
+        }
+
+        const data = await response.json();
+        _serverBackupCache = data;
+        console.log(`[BACKUP] Retrieved server backup: ${data.items?.length || 0} items, ${data.stores?.length || 0} stores, age: ${data.backupAge ? Math.round(data.backupAge / 60000) + 'm' : 'unknown'}`);
+        return data;
+    } catch (err) {
+        console.warn('[BACKUP] Failed to fetch server backup:', err.message);
+        return null;
+    }
+}
+// --- End server-side backup helpers ---
+
 // REPLACE this function in api.js (around line 348)
 
 export async function fetchAllRecords() {
@@ -1114,14 +1395,15 @@ export async function fetchAllRecords() {
 
             console.log(`[FETCH DEBUG] Requesting URL (page ${allRecords.length > 0 ? Math.ceil(allRecords.length / 100) + 1 : 1}):`, url.substring(0, 100) + '...');
 
-            const response = await fetch(url, {
+            const response = await fetchWithAirtableRetry(url, {
                 headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
             });
 
             if (!response.ok) {
                 // Log status and potentially body for debugging
                 const errorText = await response.text();
-                console.error(`[FETCH DEBUG] Airtable Error fetching items (URL: ${url}): Status ${response.status}`, errorText);
+                console.error(`[FETCH DEBUG] Airtable Error fetching items: Status ${response.status}`, errorText);
+                console.error(`[FETCH DEBUG] Response headers:`, Object.fromEntries([...response.headers.entries()].filter(([k]) => k.startsWith('x-') || k === 'content-type')));
                 throw new Error(`Failed to fetch items from Airtable. Status: ${response.status}`);
             }
             const data = await response.json();
@@ -1173,10 +1455,47 @@ export async function fetchAllRecords() {
         console.log('[FETCH DEBUG] Packages after Name filter:', filteredPackages.length);
 
         console.log('[FETCH DEBUG] ========== fetchAllRecords COMPLETE ==========');
+
+        // Cache successfully fetched records for offline fallback
+        setAirtableStatus(true);
+        cacheItems(filteredRecords);
+
+        // Trigger server-side backup in the background (fire-and-forget)
+        _triggerServerBackup();
+
         return filteredRecords;
     } catch (error) {
         console.error("[FETCH DEBUG] Error fetching all item records:", error);
-        throw error; // Re-throw the error to be caught by the caller
+
+        // Tier 2: Attempt to serve from localStorage cache
+        console.warn('[FETCH DEBUG] ⏳ Tier 2: Checking localStorage cache for items...');
+        const cached = getCachedItems();
+        if (cached) {
+            setAirtableStatus(false);
+            startHealthChecks(PERSONAL_ACCESS_TOKEN, BASE_ID);
+            console.warn(`[FETCH DEBUG] ✅ Tier 2 SUCCESS: Serving ${cached.records.length} items from local cache (cached ${cached.isStale ? 'STALE - ' : ''}${new Date(cached.timestamp).toLocaleString()})`);
+            return cached.records;
+        }
+        console.warn('[FETCH DEBUG] ❌ Tier 2 FAILED: No local cache available');
+
+        // Tier 3: Attempt to serve from server-side Netlify Blobs backup
+        console.warn('[FETCH DEBUG] ⏳ Tier 3: Trying server-side Netlify Blobs backup...');
+        try {
+            const backup = await _fetchFromServerBackup();
+            if (backup && backup.items && backup.items.length > 0) {
+                setAirtableStatus(false);
+                startHealthChecks(PERSONAL_ACCESS_TOKEN, BASE_ID);
+                // Also populate localStorage cache from the backup for future use
+                cacheItems(backup.items);
+                console.warn(`[FETCH DEBUG] ✅ Tier 3 SUCCESS: Serving ${backup.items.length} items from server backup (backed up ${backup.backupAge ? Math.round(backup.backupAge / 60000) + 'm ago' : 'unknown time ago'})`);
+                return backup.items;
+            }
+            console.warn('[FETCH DEBUG] ❌ Tier 3 FAILED: No backup data available (backup may not have been seeded yet)');
+        } catch (backupError) {
+            console.warn('[FETCH DEBUG] ❌ Tier 3 ERROR:', backupError.message);
+        }
+
+        throw error; // All fallbacks exhausted, re-throw
     }
 }
 
@@ -1188,12 +1507,13 @@ export async function fetchAllStores() {
     try {
         do {
             const url = offset ? `${baseUrl}&offset=${offset}` : baseUrl;
-            const response = await fetch(url, {
+            const response = await fetchWithAirtableRetry(url, {
                 headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
             });
             if (!response.ok) {
-                const errorData = await response.json();
-                 console.error('Airtable Error fetching stores:', errorData);
+                const errorText = await response.text();
+                console.error('[FETCH DEBUG] Airtable Error fetching stores: Status', response.status, errorText);
+                console.error(`[FETCH DEBUG] Response headers:`, Object.fromEntries([...response.headers.entries()].filter(([k]) => k.startsWith('x-') || k === 'content-type')));
                 throw new Error(`Failed to fetch stores from Airtable. Status: ${response.status}`);
             }
             const data = await response.json();
@@ -1201,10 +1521,44 @@ export async function fetchAllStores() {
             offset = data.offset;
         } while (offset);
         log('API', `Total stores fetched: ${records.length}`);
-        return records.filter(record => record.fields && record.fields.Name);
+        const filteredStores = records.filter(record => record.fields && record.fields.Name);
+
+        // Cache successfully fetched stores for offline fallback
+        setAirtableStatus(true);
+        cacheStores(filteredStores);
+
+        return filteredStores;
     } catch (error) {
         console.error("Error fetching all stores:", error);
-        throw error;
+
+        // Tier 2: Attempt to serve from localStorage cache
+        console.warn('[FETCH DEBUG] ⏳ Tier 2: Checking localStorage cache for stores...');
+        const cached = getCachedStores();
+        if (cached) {
+            setAirtableStatus(false);
+            startHealthChecks(PERSONAL_ACCESS_TOKEN, BASE_ID);
+            console.warn(`[FETCH DEBUG] ✅ Tier 2 SUCCESS: Serving ${cached.records.length} stores from local cache (cached ${cached.isStale ? 'STALE - ' : ''}${new Date(cached.timestamp).toLocaleString()})`);
+            return cached.records;
+        }
+        console.warn('[FETCH DEBUG] ❌ Tier 2 FAILED: No local store cache available');
+
+        // Tier 3: Attempt to serve from server-side Netlify Blobs backup
+        console.warn('[FETCH DEBUG] ⏳ Tier 3: Trying server-side Netlify Blobs backup for stores...');
+        try {
+            const backup = await _fetchFromServerBackup();
+            if (backup && backup.stores && backup.stores.length > 0) {
+                setAirtableStatus(false);
+                startHealthChecks(PERSONAL_ACCESS_TOKEN, BASE_ID);
+                cacheStores(backup.stores);
+                console.warn(`[FETCH DEBUG] ✅ Tier 3 SUCCESS: Serving ${backup.stores.length} stores from server backup (backed up ${backup.backupAge ? Math.round(backup.backupAge / 60000) + 'm ago' : 'unknown time ago'})`);
+                return backup.stores;
+            }
+            console.warn('[FETCH DEBUG] ❌ Tier 3 FAILED: No backup store data available');
+        } catch (backupError) {
+            console.warn('[FETCH DEBUG] ❌ Tier 3 ERROR:', backupError.message);
+        }
+
+        throw error; // All fallbacks exhausted, re-throw
     }
 }
 
@@ -5378,7 +5732,7 @@ export async function digSolutionDetails(solutionRecord) {
     log('API', `Digging for details on solution: ${solutionData.name}`);
 
     try {
-        const response = await fetch('/.netlify/functions/dig-solution-details', {
+        const response = await fetchWithClientRetry('/.netlify/functions/dig-solution-details', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -5389,6 +5743,11 @@ export async function digSolutionDetails(solutionRecord) {
         if (!response.ok) {
             const errorText = await response.text();
             console.error('Error from dig-solution-details function:', errorText);
+            // Check for quota exhaustion or rate limits
+            const isQuota = errorText.includes('quota') || errorText.includes('RESOURCE_EXHAUSTED');
+            if (response.status === 429 || isQuota) {
+                return { success: false, error: isQuota ? 'AI quota exceeded. Research is temporarily unavailable.' : 'AI service is busy. Please try again in a moment.', retryable: !isQuota, quotaExhausted: isQuota };
+            }
             throw new Error(`Failed to research solution: ${errorText}`);
         }
 
@@ -5423,7 +5782,7 @@ export async function categorizeItem(itemRecord) {
     log('API', `Categorizing item: ${itemData.name}`);
 
     try {
-        const response = await fetch('/.netlify/functions/categorize-item', {
+        const response = await fetchWithClientRetry('/.netlify/functions/categorize-item', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -5434,11 +5793,16 @@ export async function categorizeItem(itemRecord) {
         if (!response.ok) {
             const errorText = await response.text();
             console.error('Error from categorize-item function:', errorText);
+            // Check for quota exhaustion or rate limits
+            const isQuota = errorText.includes('quota') || errorText.includes('RESOURCE_EXHAUSTED');
+            if (response.status === 429 || isQuota) {
+                return { success: false, error: isQuota ? 'AI quota exceeded. Categorization is temporarily unavailable.' : 'AI service is busy. Please try again in a moment.', retryable: !isQuota, quotaExhausted: isQuota };
+            }
             throw new Error(`Failed to categorize item: ${errorText}`);
         }
 
         const result = await response.json();
-        log('API', `Successfully categorized ${itemData.name} with ${result.categorization?.categories?.length || 0} categories`);
+        log('API', `Successfully categorized ${itemData.name} with ${result.categorization?.baseCategories?.length || 0} categories and ${result.categorization?.tags?.length || 0} tags`);
         return result;
     } catch (error) {
         console.error('Error categorizing item:', error);
@@ -5760,4 +6124,3 @@ export async function upsertCommunityFund(itemRecordId, itemName, donationAmount
         return null;
     }
 }
-

@@ -1,4 +1,4 @@
-const fetch = require('node-fetch');
+// Use Node.js 22 built-in fetch instead of node-fetch to avoid module resolution issues
 // NOTE: We assume CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, and CLOUDINARY_CLOUD_NAME
 // are set as Netlify Environment Variables.
 const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, URL } = process.env;

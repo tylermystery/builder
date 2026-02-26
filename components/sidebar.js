@@ -727,12 +727,10 @@ function openInvitePopup() {
     popup.style.display = 'block';
 
     // Clear any previous inputs and status
-    const nameInput = document.getElementById('collab-name');
     const emailInput = document.getElementById('collab-email');
     const statusEl = document.getElementById('invite-status');
     const btn = document.getElementById('invite-btn');
 
-    if (nameInput) nameInput.value = '';
     if (emailInput) emailInput.value = '';
     if (statusEl) statusEl.textContent = '';
     if (btn) {
@@ -740,8 +738,8 @@ function openInvitePopup() {
         btn.disabled = false;
     }
 
-    // Focus on the name input
-    if (nameInput) nameInput.focus();
+    // Focus on the email input
+    if (emailInput) emailInput.focus();
 }
 
 /**
@@ -2000,19 +1998,25 @@ export async function updateEventPlanSection() {
 // --- END REPLACED FUNCTION ---
 
 async function handleInvite() {
-    const nameInput = document.getElementById('collab-name');
     const emailInput = document.getElementById('collab-email');
-    const roleSelect = document.getElementById('collab-role'); // Phase 4: Role selector
+    const roleSelect = document.getElementById('collab-role');
     const statusEl = document.getElementById('invite-status');
     const btn = document.getElementById('invite-btn');
 
-    const name = nameInput.value.trim();
     const email = emailInput.value.trim();
-    const role = roleSelect ? roleSelect.value : 'editor'; // Default to editor
+    const role = roleSelect ? roleSelect.value : 'editor';
 
-    if (!name || !email) {
-        statusEl.textContent = "Please enter both name and email.";
-        statusEl.style.color = "#dc3545"; // Bootstrap danger red
+    if (!email) {
+        statusEl.textContent = "Please enter an email address.";
+        statusEl.style.color = "#dc3545";
+        return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        statusEl.textContent = "Please enter a valid email address.";
+        statusEl.style.color = "#dc3545";
         return;
     }
 
@@ -2021,54 +2025,27 @@ async function handleInvite() {
     statusEl.textContent = "";
 
     try {
-        // Generate summary HTML
-        let summaryHtml = `
-            <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
-                <thead>
-                    <tr style="background-color: #f8f9fa; text-align: left;">
-                        <th style="padding: 8px; border-bottom: 2px solid #dee2e6;">Item</th>
-                        <th style="padding: 8px; border-bottom: 2px solid #dee2e6; text-align: center;">Qty</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
+        const inviterName = state.session.user?.name || "A friend";
+        const sessionName = state.eventDetails?.combined?.get?.('eventName') || state.eventDetails?.combined?.get?.('Event Name') || '';
 
-        state.cart.lockedItems.forEach((info, id) => {
-            const record = getRecordById(id);
-            if (record) {
-                summaryHtml += `
-                    <tr>
-                        <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>${record.fields.Name}</strong></td>
-                        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${info.quantity || 1}</td>
-                    </tr>
-                `;
-            }
-        });
-        summaryHtml += '</tbody></table>';
-
-        const inviterName = state.session.user.name || "A friend";
-
-        // Phase 4: Include role in the invitation request
-        const response = await fetch('/api/invite-collaborator', {
+        const response = await fetch('/api/send-invite', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                eventId: state.session.id,
-                collaboratorName: name,
-                collaboratorEmail: email,
+                email: email,
+                sessionId: state.session.id,
+                invitedBy: state.session.user?.id || '',
                 inviterName: inviterName,
-                planSummaryHtml: summaryHtml,
-                role: role // Phase 4: Include selected role
+                role: role,
+                sessionName: sessionName
             })
         });
 
         if (response.ok) {
             statusEl.textContent = "Invitation sent!";
-            statusEl.style.color = "#28a745"; // Bootstrap success green
-            nameInput.value = '';
+            statusEl.style.color = "#28a745";
             emailInput.value = '';
-            if (roleSelect) roleSelect.value = 'editor'; // Reset role to default
-            // Close the popup after showing success message
+            if (roleSelect) roleSelect.value = 'editor';
             setTimeout(() => {
                  closeInvitePopup();
                  statusEl.textContent = "";
@@ -2110,13 +2087,10 @@ async function updateInviteControls() {
         }
 
         inviteSection.innerHTML = `
-            <h4 style="margin-top: 0; color: #0056b3; font-size: 1em; display: flex; align-items: center; gap: 5px;">💌 Invite Collaborator</h4>
-            <p style="font-size: 0.85em; color: #666; margin-bottom: 10px; margin-top: 5px;">Share this plan with a friend.</p>
-            <div style="display: flex; gap: 5px; margin-bottom: 5px;">
-                <input type="text" id="collab-name" placeholder="Friend's Name" style="flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.9em;">
-            </div>
+            <h4 style="margin-top: 0; color: #0056b3; font-size: 1em; display: flex; align-items: center; gap: 5px;">&#128236; Invite Collaborator</h4>
+            <p style="font-size: 0.85em; color: #666; margin-bottom: 10px; margin-top: 5px;">Share this plan with a friend. They'll sign in with this email.</p>
             <div style="display: flex; gap: 5px; margin-bottom: 10px;">
-                <input type="email" id="collab-email" placeholder="Friend's Email" style="flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.9em;">
+                <input type="email" id="collab-email" placeholder="Friend's Email" style="flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.9em;" autocomplete="email">
             </div>
             <button id="invite-btn" style="width: 100%; padding: 8px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.9em; transition: background-color 0.2s;">Send Invite</button>
             <div id="invite-status" style="font-size: 0.85em; margin-top: 5px; text-align: center; min-height: 1.2em;"></div>

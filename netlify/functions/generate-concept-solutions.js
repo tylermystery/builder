@@ -2,24 +2,16 @@
  * AI-powered Concept-to-Solutions Generator
  * For conceptual/idea items, generates specific solutions (catalog items or AI-parsed providers)
  * instead of product variations.
- * Uses Google Gemini AI to intelligently find solutions for a concept/goal.
+ * Uses multi-provider AI with automatic fallback (Gemini → OpenAI → Anthropic)
  */
 
-const fetch = require('node-fetch');
-const { GEMINI_API_KEY } = process.env;
+const { generateText, parseJsonResponse } = require('./utils/ai-provider');
 
 /**
  * Generate solutions for a concept/idea using AI
- * @param {Object} conceptData - Concept information including name, description, category
- * @returns {Promise<Object>} - Solutions array with structured data
  */
 async function generateSolutionsWithAI(conceptData) {
     console.log(`[Debug] generateSolutionsWithAI: Processing concept: ${conceptData.name}`);
-
-    if (!GEMINI_API_KEY) {
-        console.error("[Debug] CRITICAL: GEMINI_API_KEY is missing!");
-        throw new Error("Server configuration error: Missing Gemini API Key.");
-    }
 
     const prompt = `You are an expert event planner and service finder. Given a conceptual idea or goal, generate specific solutions or providers that could fulfill it.
 
@@ -58,67 +50,29 @@ Example response format:
 
 Generate solutions now:`;
 
-    const payload = {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 2048,
-        }
-    };
-
-    const modelId = "gemini-2.0-flash";
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
-
-    console.log(`[Debug] generateSolutionsWithAI: Sending request to Gemini...`);
-    const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+    const aiResult = await generateText(prompt, {
+        temperature: 0.7,
+        maxTokens: 2048,
+        caller: 'generate-concept-solutions',
     });
 
-    console.log(`[Debug] generateSolutionsWithAI: Received status ${response.status} from Gemini.`);
-
-    if (!response.ok) {
-        let errorBody = await response.text();
-        try { errorBody = JSON.parse(errorBody); } catch (e) { /* Ignore */ }
-        console.error("[Debug] Gemini API Error Response Body:", errorBody);
-        let errorMessage = `Gemini API call failed with status ${response.status}`;
-        if (response.status === 400) errorMessage += ". Check payload/prompt structure.";
-        if (response.status === 403) errorMessage += ". Check API key permissions/billing.";
-        if (response.status === 429) errorMessage += ". Rate limit exceeded.";
-        throw new Error(errorMessage);
+    if (!aiResult.ok) {
+        const err = new Error(aiResult.error || 'AI solution generation failed');
+        err.statusCode = aiResult.statusCode || 500;
+        err.quotaExhausted = aiResult.quotaExhausted || false;
+        throw err;
     }
 
-    const result = await response.json();
-    let solutionsText = '';
+    console.log(`[Debug] generateSolutionsWithAI: Response from ${aiResult.providerName}`);
 
-    try {
-        solutionsText = result.candidates[0].content.parts[0].text;
-        // Clean up any markdown code blocks if present
-        solutionsText = solutionsText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    } catch (e) {
-        console.error('[Debug] Error extracting text from Gemini response structure:', JSON.stringify(result, null, 2));
-        throw new Error('Could not extract text from Gemini response.');
+    let solutions = parseJsonResponse(aiResult.text);
+
+    // Handle if response is an object wrapping the array
+    if (!Array.isArray(solutions) && solutions.solutions) {
+        solutions = solutions.solutions;
     }
-
-    console.log(`[Debug] generateSolutionsWithAI: Raw solutions text:\n${solutionsText}`);
-
-    // Parse the JSON response
-    let solutions;
-    try {
-        solutions = JSON.parse(solutionsText);
-        if (!Array.isArray(solutions)) {
-            throw new Error('Response is not an array');
-        }
-    } catch (e) {
-        console.error('[Debug] Failed to parse solutions JSON:', e.message);
-        // Try to extract JSON array from the text
-        const jsonMatch = solutionsText.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-            solutions = JSON.parse(jsonMatch[0]);
-        } else {
-            throw new Error('Could not parse solutions from AI response');
-        }
+    if (!Array.isArray(solutions)) {
+        throw new Error('AI response is not an array of solutions');
     }
 
     // Validate and normalize solutions
@@ -129,7 +83,7 @@ Generate solutions now:`;
         estimatedPrice: sol.estimatedPrice || 'Varies',
         confidence: ['high', 'medium', 'low'].includes(sol.confidence) ? sol.confidence : 'medium',
         searchTerms: Array.isArray(sol.searchTerms) ? sol.searchTerms : [],
-        isSolution: true // Flag to identify this as a solution item
+        isSolution: true
     }));
 
     console.log(`[Debug] generateSolutionsWithAI: Parsed ${solutions.length} solutions`);
@@ -175,14 +129,7 @@ exports.handler = async (event) => {
 
         console.log(`[Debug] Processing concept: ${name}`);
 
-        // Generate solutions using AI
-        const solutions = await generateSolutionsWithAI({
-            name,
-            description,
-            category,
-            location,
-            budget
-        });
+        const solutions = await generateSolutionsWithAI({ name, description, category, location, budget });
 
         return {
             statusCode: 200,
@@ -199,10 +146,12 @@ exports.handler = async (event) => {
 
     } catch (error) {
         console.error('[ERROR] generate-concept-solutions handler failed:', error.message, error.stack);
+        const statusCode = error.statusCode === 429 ? 429 : 500;
+        const isQuota = error.quotaExhausted || false;
         return {
-            statusCode: 500,
+            statusCode,
             headers: { 'Access-Control-Allow-Origin': '*' },
-            body: JSON.stringify({ error: `Failed to generate solutions: ${error.message}` })
+            body: JSON.stringify({ error: `Failed to generate solutions: ${error.message}`, quotaExhausted: isQuota, retryable: statusCode === 429 && !isQuota })
         };
     }
 };

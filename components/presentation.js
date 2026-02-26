@@ -1320,16 +1320,18 @@ function updateItemEmojiIndicator(recordId) {
         emojiIndicator.innerHTML = `<span class="emoji-indicator-emoji">${summaryEmoji}</span>${reactionCount > 1 ? `<span class="emoji-indicator-count">${reactionCount}</span>` : ''}`;
         emojiIndicator.style.display = 'inline-flex';
         emojiIndicator.classList.add('has-reactions');
+        emojiIndicator.classList.remove('no-reactions');
         // Update tooltip with ranking info
         const tooltip = getItemRankingTooltip(recordId);
         if (tooltip) {
             emojiIndicator.title = tooltip;
         }
     } else {
-        emojiIndicator.innerHTML = '';
-        emojiIndicator.style.display = 'none';
+        emojiIndicator.innerHTML = '<span class="emoji-indicator-emoji">\u{1F60A}</span><span class="emoji-indicator-prompt">React</span>';
+        emojiIndicator.style.display = 'inline-flex';
         emojiIndicator.classList.remove('has-reactions');
-        emojiIndicator.removeAttribute('title');
+        emojiIndicator.classList.add('no-reactions');
+        emojiIndicator.title = 'Tap to react';
     }
 }
 
@@ -2463,7 +2465,7 @@ function renderReactions(recordId, reactionContainer) {
     reactionContainer.innerHTML = `
         <div class="reaction-bar-buttons">${buttonsHTML}${moreButtonHTML}</div>
         <div class="reaction-info-row">
-            <div class="reaction-summary-display">${summaryHTML || 'No reactions yet'}</div>
+            <div class="reaction-summary-display">${summaryHTML || 'Tap an emoji to share your reaction'}</div>
         </div>
     `;
 }
@@ -2783,7 +2785,7 @@ async function renderItineraryItem(item, index) {
     const reactionCount = getItemReactionCount(recordId);
     const emojiIndicatorHTML = summaryEmoji && reactionCount > 0
         ? `<span class="item-emoji-indicator has-reactions" data-record-id="${recordId}" style="display: inline-flex;"><span class="emoji-indicator-emoji">${summaryEmoji}</span>${reactionCount > 1 ? `<span class="emoji-indicator-count">${reactionCount}</span>` : ''}</span>`
-        : `<span class="item-emoji-indicator" data-record-id="${recordId}" style="display: none;"></span>`;
+        : `<span class="item-emoji-indicator no-reactions" data-record-id="${recordId}" style="display: inline-flex;" title="Tap to react"><span class="emoji-indicator-emoji">😊</span><span class="emoji-indicator-prompt">React</span></span>`;
 
     // Check for combined items indicator
     const combinedSources = getCombinedSources(recordId);
@@ -2904,7 +2906,7 @@ async function renderItineraryItem(item, index) {
                             <button class="component-comments-toggle" data-component-id="${recordId}" title="Show comments">
                                 <span class="comments-icon">💬</span>
                                 <span class="comments-count" data-component-id="${recordId}">0</span>
-                                <span class="comments-label">Comments</span>
+                                <span class="comments-label">Add a comment</span>
                                 <span class="comments-toggle-icon">▼</span>
                             </button>
                         </div>
@@ -3654,6 +3656,26 @@ async function renderAllItems() {
                 <div class="single-item-nudge-content">
                     <span class="nudge-icon" aria-hidden="true">💡</span>
                     <p class="nudge-text">Add more items to compare options, merge ideas, and build your perfect plan.</p>
+                </div>
+            </div>
+        `);
+    }
+
+    // Show welcome engagement tip for collaborators viewing the plan
+    // Only show once per session (tracked via sessionStorage)
+    const welcomeTipKey = `welcomeTipShown_${state.session.id}`;
+    const hasShownWelcomeTip = sessionStorage.getItem(welcomeTipKey);
+    if (!hasShownWelcomeTip && combinedList.length > 0) {
+        sessionStorage.setItem(welcomeTipKey, 'true');
+        itemsHTML.unshift(`
+            <div class="board-welcome-tip" role="status" aria-label="Welcome tip">
+                <div class="welcome-tip-content">
+                    <span class="welcome-tip-icon" aria-hidden="true">👋</span>
+                    <div class="welcome-tip-text">
+                        <p class="welcome-tip-title">Welcome to the plan!</p>
+                        <p class="welcome-tip-body">Tap the <strong>React</strong> badge on any item to share your opinion, or expand an item to leave a comment.</p>
+                    </div>
+                    <button class="welcome-tip-dismiss" aria-label="Dismiss tip" title="Dismiss">×</button>
                 </div>
             </div>
         `);
@@ -9880,6 +9902,12 @@ function updatePresentationPresenceUI(members) {
     const count = members.count;
     if (presentationWhosHereCount) presentationWhosHereCount.innerText = count;
 
+    // Track which member IDs are currently online
+    const onlineMemberIds = new Set();
+    members.each((member) => {
+        onlineMemberIds.add(member.id);
+    });
+
     if (presentationWhosHereList) {
         presentationWhosHereList.innerHTML = '';
         members.each((member) => {
@@ -9898,6 +9926,28 @@ function updatePresentationPresenceUI(members) {
             userElement.innerHTML = `<span class="presence-dot"></span>${displayName}${member.id === currentUser.id ? ' (You)' : ''}`;
             presentationWhosHereList.appendChild(userElement);
         });
+    }
+
+    // Update collaborator name buttons with online presence indicators
+    const collabBtns = document.querySelectorAll('.collaborator-name-btn[data-collaborator-id]');
+    collabBtns.forEach(btn => {
+        const collabId = btn.dataset.collaboratorId;
+        if (onlineMemberIds.has(collabId)) {
+            btn.classList.add('online');
+        } else {
+            btn.classList.remove('online');
+        }
+    });
+
+    // Update Team metric count to show online/total
+    const teamMetric = document.querySelector('#plan-metric-team .plan-metric-value');
+    if (teamMetric) {
+        const totalTeam = state.session.userProfiles?.size || 1;
+        if (count > 1) {
+            teamMetric.textContent = `${count}/${totalTeam}`;
+        } else {
+            teamMetric.textContent = totalTeam;
+        }
     }
 }
 
@@ -10741,6 +10791,21 @@ function handleItemAccordionClick(e) {
     const itemAccordionHeader = e.target.closest('.item-accordion-header');
     if (!itemAccordionHeader) return;
 
+    // If clicking on the emoji indicator, open the action menu instead of toggling accordion
+    const emojiIndicator = e.target.closest('.item-emoji-indicator');
+    if (emojiIndicator) {
+        e.stopPropagation();
+        const recordId = emojiIndicator.dataset.recordId;
+        if (recordId) {
+            const rect = emojiIndicator.getBoundingClientRect();
+            openActionMenu(recordId, {
+                x: rect.left + rect.width / 2,
+                y: rect.top + rect.height / 2
+            });
+        }
+        return;
+    }
+
     // Don't trigger accordion on interactive elements (buttons, links, etc.)
     if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.reaction-btn')) {
         return;
@@ -11288,6 +11353,12 @@ async function toggleComponentComments(componentId) {
 
         // Load comments if not cached
         await loadComponentComments(componentId);
+
+        // Auto-focus the comment input for quick engagement
+        setTimeout(() => {
+            const input = body.querySelector(`.component-comment-input[data-component-id="${componentId}"]`);
+            if (input) input.focus();
+        }, 150);
     } else {
         // Hide comments
         body.style.display = 'none';
@@ -12698,6 +12769,19 @@ function updateCommentCount(componentId, count) {
     const countEl = document.querySelector(`.comments-count[data-component-id="${componentId}"]`);
     if (countEl) {
         countEl.textContent = count;
+        if (count > 0) {
+            countEl.classList.add('has-comments');
+        } else {
+            countEl.classList.remove('has-comments');
+        }
+    }
+    // Update the label text to be more inviting when comments exist
+    const toggle = document.querySelector(`.component-comments-toggle[data-component-id="${componentId}"]`);
+    if (toggle) {
+        const label = toggle.querySelector('.comments-label');
+        if (label) {
+            label.textContent = count > 0 ? `Comment${count !== 1 ? 's' : ''}` : 'Add a comment';
+        }
     }
 }
 
@@ -13246,6 +13330,21 @@ export function setupPresentationEventListeners() {
     // Handle suggestion button clicks (for empty state recommendations)
     itineraryItemsListEl.addEventListener('click', handleSuggestionClick);
 
+    // Handle welcome tip dismiss
+    itineraryItemsListEl.addEventListener('click', (e) => {
+        const dismissBtn = e.target.closest('.welcome-tip-dismiss');
+        if (dismissBtn) {
+            e.stopPropagation();
+            const tipEl = dismissBtn.closest('.board-welcome-tip');
+            if (tipEl) {
+                tipEl.style.transition = 'opacity 0.3s, transform 0.3s';
+                tipEl.style.opacity = '0';
+                tipEl.style.transform = 'translateY(-10px)';
+                setTimeout(() => tipEl.remove(), 300);
+            }
+        }
+    });
+
     // Handle component comments interactions
     console.log('[Events DEBUG] Adding handleComponentCommentsClick listener to itineraryItemsListEl');
     itineraryItemsListEl.addEventListener('click', handleComponentCommentsClick);
@@ -13337,6 +13436,45 @@ export function setupPresentationEventListeners() {
 
     // Search modal event listeners
     setupSearchModalEventListeners();
+
+    // Plan summary dashboard metric click handlers (scroll to relevant sections)
+    const dashboard = document.getElementById('plan-summary-dashboard');
+    if (dashboard) {
+        dashboard.addEventListener('click', (e) => {
+            const metric = e.target.closest('.plan-summary-metric');
+            if (!metric) return;
+
+            const metricId = metric.id;
+            if (metricId === 'plan-metric-items') {
+                // Scroll to first item in the list
+                const firstItem = itineraryItemsListEl?.querySelector('.itinerary-item');
+                if (firstItem) {
+                    firstItem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            } else if (metricId === 'plan-metric-budget') {
+                // Open checkout/total summary
+                const totalBtn = document.getElementById('presentation-header-total');
+                if (totalBtn) totalBtn.click();
+            } else if (metricId === 'plan-metric-team') {
+                // Scroll to collaborators section (first accordion)
+                const headerSection = modal?.querySelector('.itinerary-accordion[data-section="header"]');
+                if (headerSection) {
+                    headerSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    // Expand it if collapsed
+                    if (!accordionState.header) {
+                        toggleAccordion('header');
+                    }
+                }
+            } else if (metricId === 'plan-metric-status' || metricId === 'plan-metric-health') {
+                // Show a toast with current plan status detail
+                const statusVal = document.querySelector('#plan-metric-status .plan-metric-value')?.textContent;
+                const healthVal = document.querySelector('#plan-metric-health .plan-metric-value')?.textContent;
+                const itemCount = state.cart.items.size + state.cart.lockedItems.size;
+                const lockedCount = state.cart.lockedItems.size;
+                showToast(`Plan: ${statusVal} ${healthVal} \u2022 ${lockedCount} confirmed, ${itemCount} total items`, 3000);
+            }
+        });
+    }
 }
 
 // ============================================

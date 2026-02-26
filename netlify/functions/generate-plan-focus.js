@@ -1,26 +1,16 @@
 /**
  * AI-powered Plan Focus Generator
  * Generates a plan title and description based on goal items.
- * Uses Google Gemini AI to synthesize goal item names/descriptions into a cohesive plan focus.
+ * Uses multi-provider AI with automatic fallback (Gemini → OpenAI → Anthropic)
  */
 
-const fetch = require('node-fetch');
-const { GEMINI_API_KEY } = process.env;
+const { generateText, parseJsonResponse } = require('./utils/ai-provider');
 
 /**
  * Generate plan title and description from goal items using AI
- * @param {Array<Object>} goalItems - Array of { name, description } objects
- * @param {string|null} currentTitle - Current plan title (if any)
- * @param {string|null} currentDescription - Current plan description (if any)
- * @returns {Promise<Object>} - Generated title and description
  */
 async function generatePlanFocusWithAI(goalItems, currentTitle, currentDescription) {
     console.log(`[Debug] generatePlanFocusWithAI: Generating focus from ${goalItems.length} goal items`);
-
-    if (!GEMINI_API_KEY) {
-        console.error("[Debug] CRITICAL: GEMINI_API_KEY is missing!");
-        throw new Error("Server configuration error: Missing Gemini API Key.");
-    }
 
     const goalItemsList = goalItems.map((item, i) => {
         let entry = `${i + 1}. Name: ${item.name}`;
@@ -58,55 +48,24 @@ Respond with a JSON object (and nothing else) with this exact structure:
 
 IMPORTANT: Be creative but practical. The title should feel natural for an event plan name.`;
 
-    const payload = {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 512,
-        }
-    };
-
-    const modelId = "gemini-2.0-flash";
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
-
-    console.log(`[Debug] generatePlanFocusWithAI: Sending request to Gemini...`);
-    const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+    const aiResult = await generateText(prompt, {
+        temperature: 0.7,
+        maxTokens: 512,
+        caller: 'generate-plan-focus',
     });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[Debug] Gemini API error: ${response.status} - ${errorText}`);
-        throw new Error(`Gemini API error: ${response.status}`);
+    if (!aiResult.ok) {
+        const err = new Error(aiResult.error || 'AI plan focus generation failed');
+        err.statusCode = aiResult.statusCode || 500;
+        err.quotaExhausted = aiResult.quotaExhausted || false;
+        throw err;
     }
 
-    const data = await response.json();
-    console.log(`[Debug] generatePlanFocusWithAI: Received response from Gemini`);
+    console.log(`[Debug] generatePlanFocusWithAI: Response from ${aiResult.providerName}`);
 
-    const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!textContent) {
-        console.error('[Debug] No text content in Gemini response:', JSON.stringify(data));
-        throw new Error('No content in AI response');
-    }
-
-    // Parse the JSON from the response
-    let jsonStr = textContent.trim();
-    if (jsonStr.startsWith('```json')) {
-        jsonStr = jsonStr.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-    } else if (jsonStr.startsWith('```')) {
-        jsonStr = jsonStr.replace(/^```\s*/, '').replace(/\s*```$/, '');
-    }
-
-    try {
-        const result = JSON.parse(jsonStr);
-        console.log(`[Debug] generatePlanFocusWithAI: Successfully parsed result:`, result);
-        return result;
-    } catch (parseError) {
-        console.error('[Debug] Failed to parse AI response as JSON:', jsonStr);
-        throw new Error('Failed to parse AI response');
-    }
+    const result = parseJsonResponse(aiResult.text);
+    console.log(`[Debug] generatePlanFocusWithAI: Successfully parsed result:`, result);
+    return result;
 }
 
 exports.handler = async (event) => {
@@ -161,12 +120,16 @@ exports.handler = async (event) => {
 
     } catch (error) {
         console.error('[generate-plan-focus] Error:', error);
+        const statusCode = error.statusCode === 429 ? 429 : 500;
+        const isQuota = error.quotaExhausted || false;
         return {
-            statusCode: 500,
+            statusCode,
             headers: { 'Access-Control-Allow-Origin': '*' },
             body: JSON.stringify({
                 error: 'Failed to generate plan focus',
-                message: error.message
+                message: error.message,
+                quotaExhausted: isQuota,
+                retryable: statusCode === 429 && !isQuota
             })
         };
     }
