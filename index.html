@@ -4138,74 +4138,30 @@ body.ucp-panel-open .unified-chat-panel {
 /* ==========================================
    Plan Summary Dashboard - Blueprint/Pitch-Deck Quick Overview
    ========================================== */
-.plan-summary-dashboard {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 6px 24px;
-    background: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(12px) saturate(1.4);
-    -webkit-backdrop-filter: blur(12px) saturate(1.4);
-    border-radius: 0;
-    border: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: none;
-}
-
-.plan-summary-metrics {
-    display: flex;
+/* Team count badge in people container */
+.team-count-badge {
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    gap: 0;
-    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    font-size: 0.85em;
+    color: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(4px);
+    white-space: nowrap;
 }
 
-.plan-summary-metric {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 6px 18px;
-    min-width: 65px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    position: relative;
+.team-count-icon {
+    font-size: 1em;
+    line-height: 1;
 }
 
-.plan-summary-metric:hover {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.plan-summary-metric:active {
-    transform: scale(0.96);
-}
-
-.plan-metric-value {
-    font-size: 1.15em;
-    font-weight: 700;
+.team-count-number {
+    font-weight: 600;
+    font-size: 0.95em;
     color: rgba(255, 255, 255, 0.95);
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-    line-height: 1.2;
-    transition: transform 0.3s ease;
-}
-
-.plan-summary-metric:hover .plan-metric-value {
-    transform: scale(1.05);
-}
-
-.plan-metric-label {
-    font-size: 0.62em;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.6);
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    margin-top: 1px;
-}
-
-.plan-summary-divider {
-    width: 1px;
-    height: 24px;
-    background: rgba(255, 255, 255, 0.15);
-    flex-shrink: 0;
 }
 
 /* Blueprint-style subtle grid on the items area */
@@ -4271,25 +4227,9 @@ body.ucp-panel-open .unified-chat-panel {
 }
 
 @media (max-width: 600px) {
-    .plan-summary-dashboard {
-        padding: 4px 12px;
-    }
-
-    .plan-summary-metric {
-        padding: 4px 10px;
-        min-width: 55px;
-    }
-
-    .plan-metric-value {
-        font-size: 1em;
-    }
-
-    .plan-metric-label {
-        font-size: 0.58em;
-    }
-
-    .plan-summary-divider {
-        height: 20px;
+    .team-count-badge {
+        padding: 3px 8px;
+        font-size: 0.8em;
     }
 }
     </style>
@@ -5472,62 +5412,33 @@ body.ucp-panel-open .unified-chat-panel {
         <!-- Background Canvas for Presentation View -->
         <canvas id="presentation-bg-canvas" class="presentation-bg-canvas"></canvas>
 
-        <!-- Presentation View Header - Mirrors Main Site Header -->
+        <!-- Presentation View Header - Clean single-row layout -->
         <header id="presentation-header" class="presentation-header">
             <div class="header-content">
-                <!-- Left: Hamburger Menu and Logo -->
+                <!-- Left: Hamburger Menu only -->
                 <div id="presentation-header-left">
                     <button id="presentation-back-btn" class="header-icon-btn" title="WTF Plans" aria-label="Open WTF Plans menu">
                         <span class="hamburger-icon">&#9776;</span>
                     </button>
-                    <div id="presentation-logo-container" class="presentation-logo-container"></div>
-                    <h1 id="presentation-shop-title" class="presentation-shop-title"></h1>
                 </div>
 
-                <!-- Center: Event Name with Event-Level Emoji -->
+                <!-- Center: Plan Title (full display, wraps if needed) -->
                 <div id="presentation-header-center">
                     <div class="presentation-header-title-row">
                         <span id="presentation-event-label" class="presentation-event-label">Viewing Plan</span>
                         <button id="plan-focus-regenerate-btn" class="plan-focus-regenerate-btn" title="Regenerate plan focus from goals" aria-label="Regenerate plan focus" style="display: none;">&#x21BB;</button>
-                        <span id="event-emoji-indicator" class="event-emoji-indicator"></span>
                     </div>
                     <div id="goal-chips-container" class="goal-chips-container"></div>
                 </div>
 
-                <!-- Right: Total Cost only (Add button moved to items, Share merged with people) -->
+                <!-- Right: Vitality emoji (injected by vitalityUI.js) + Price -->
                 <div id="presentation-header-right">
                     <button id="presentation-header-total" class="presentation-header-total" title="View checkout" aria-label="View checkout summary"></button>
                 </div>
             </div>
-            <!-- Plan Summary Metrics Strip - compact sub-header -->
-            <div id="plan-summary-dashboard" class="plan-summary-dashboard">
-                <div class="plan-summary-metrics">
-                    <div class="plan-summary-metric" id="plan-metric-items" title="Plan items">
-                        <span class="plan-metric-value">0</span>
-                        <span class="plan-metric-label">Items</span>
-                    </div>
-                    <div class="plan-summary-divider"></div>
-                    <div class="plan-summary-metric" id="plan-metric-budget" title="Estimated budget">
-                        <span class="plan-metric-value">$0</span>
-                        <span class="plan-metric-label">Budget</span>
-                    </div>
-                    <div class="plan-summary-divider"></div>
-                    <div class="plan-summary-metric" id="plan-metric-team" title="Team members">
-                        <span class="plan-metric-value">0</span>
-                        <span class="plan-metric-label">Team</span>
-                    </div>
-                    <div class="plan-summary-divider"></div>
-                    <div class="plan-summary-metric" id="plan-metric-status" title="Overall status">
-                        <span class="plan-metric-value">--</span>
-                        <span class="plan-metric-label">Status</span>
-                    </div>
-                    <div class="plan-summary-divider"></div>
-                    <div class="plan-summary-metric" id="plan-metric-health" title="Plan vitality health">
-                        <span class="plan-metric-value">⚖️</span>
-                        <span class="plan-metric-label">Health</span>
-                    </div>
-                </div>
-            </div>
+            <!-- Hidden elements for logo/shop-title (kept for JS compatibility) -->
+            <div id="presentation-logo-container" class="presentation-logo-container" style="display:none;"></div>
+            <h1 id="presentation-shop-title" class="presentation-shop-title" style="display:none;"></h1>
         </header>
 
         <!-- Search Modal for Presentation View -->
@@ -5591,9 +5502,13 @@ body.ucp-panel-open .unified-chat-panel {
                 <section class="itinerary-section itinerary-header itinerary-accordion" data-section="header">
                     <div class="itinerary-accordion-header" data-section="header">
                         <div class="itinerary-accordion-title-row">
-                            <!-- People List: Current user button, team members, then add/share button -->
+                            <!-- People List: Team count badge, current user, team members, share button -->
                             <div id="itinerary-collaborators" class="itinerary-collaborators">
                                 <div class="collaborators-inline-list">
+                                    <span id="team-count-badge" class="team-count-badge" title="Team members">
+                                        <span class="team-count-icon">&#128101;</span>
+                                        <span id="team-count-number" class="team-count-number">1</span>
+                                    </span>
                                     <button id="presentation-account-btn" class="presentation-account-btn collaborator-btn" title="Account settings"></button>
                                     <div id="itinerary-collaborators-list" class="collaborators-list collaborators-inline"></div>
                                     <button id="collaborators-add-share-btn" class="collaborator-btn add-share-btn" title="Add people or share this plan">
