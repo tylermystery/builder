@@ -1,0 +1,662 @@
+/* collab.css — Standalone Collaborator View Styles */
+
+/* ================================
+   Reset & Base
+   ================================ */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background: #f5f6fa;
+    color: #2d3436;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+body.collab-overlay-open {
+    overflow: hidden;
+}
+
+/* ================================
+   Loading
+   ================================ */
+.collab-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    color: #636e72;
+}
+
+.collab-loading p {
+    margin-top: 16px;
+    font-size: 1rem;
+}
+
+.collab-loading a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.collab-loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #dfe6e9;
+    border-top-color: #007bff;
+    border-radius: 50%;
+    animation: collab-spin 0.8s linear infinite;
+}
+
+@keyframes collab-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ================================
+   Header
+   ================================ */
+#collab-header {
+    background: #fff;
+    border-bottom: 1px solid #e1e5e9;
+    padding: 16px 24px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+}
+
+.collab-header-content {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.collab-header-left {
+    flex: 1;
+    min-width: 0;
+}
+
+#collab-event-name {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #2d3436;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.collab-meta {
+    display: flex;
+    gap: 16px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+
+.collab-meta-item {
+    font-size: 0.85rem;
+    color: #636e72;
+}
+
+.collab-meta-item:empty {
+    display: none;
+}
+
+.collab-header-right {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    align-items: center;
+}
+
+/* ================================
+   Buttons
+   ================================ */
+.collab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.collab-btn-share {
+    background: #007bff;
+    color: #fff;
+}
+
+.collab-btn-share:hover {
+    background: #0056b3;
+}
+
+.collab-btn-secondary {
+    background: #f1f3f5;
+    color: #495057;
+}
+
+.collab-btn-secondary:hover {
+    background: #e9ecef;
+}
+
+/* ================================
+   Tabs
+   ================================ */
+#collab-tabs {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 12px 24px 0;
+    display: flex;
+    gap: 4px;
+}
+
+.collab-tab {
+    padding: 8px 20px;
+    border: none;
+    background: transparent;
+    color: #636e72;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s ease;
+}
+
+.collab-tab:hover {
+    color: #2d3436;
+}
+
+.collab-tab.active {
+    color: #007bff;
+    border-bottom-color: #007bff;
+    font-weight: 600;
+}
+
+.tab-count {
+    font-size: 0.8rem;
+    color: #b2bec3;
+}
+
+.collab-tab.active .tab-count {
+    color: #74b9ff;
+}
+
+/* ================================
+   Plan Summary Bar
+   ================================ */
+#collab-plan-summary {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 12px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+#collab-reaction-overview {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+#collab-cost-summary {
+    font-size: 0.9rem;
+    color: #636e72;
+}
+
+#collab-cost-summary strong {
+    color: #2d3436;
+}
+
+.collab-cost-label {
+    font-size: 0.85rem;
+}
+
+/* ================================
+   Feed Grid
+   ================================ */
+#collab-feed {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 16px 24px 40px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+/* ================================
+   Card
+   ================================ */
+.collab-card {
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.collab-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+}
+
+.collab-card-image {
+    width: 100%;
+    height: 200px;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    cursor: pointer;
+}
+
+.collab-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.collab-badge-locked {
+    background: rgba(40, 167, 69, 0.9);
+    color: #fff;
+}
+
+.collab-badge-idea {
+    background: rgba(255, 193, 7, 0.9);
+    color: #333;
+}
+
+.collab-card-body {
+    padding: 14px 16px 16px;
+}
+
+.collab-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.collab-card-name {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #2d3436;
+    cursor: pointer;
+}
+
+.collab-card-name:hover {
+    color: #007bff;
+}
+
+.collab-card-score {
+    font-size: 0.85rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.collab-card-score.positive {
+    color: #28a745;
+}
+
+.collab-card-score.negative {
+    color: #dc3545;
+}
+
+.collab-card-option {
+    font-size: 0.8rem;
+    color: #636e72;
+    margin-top: 2px;
+    font-style: italic;
+}
+
+.collab-card-price {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #2d3436;
+    margin-top: 6px;
+}
+
+.collab-card-note {
+    font-size: 0.8rem;
+    color: #636e72;
+    font-style: italic;
+    margin-top: 6px;
+    padding: 6px 8px;
+    background: #f8f9fa;
+    border-radius: 6px;
+}
+
+/* ================================
+   Reactions
+   ================================ */
+.collab-card-reactions {
+    margin-top: 10px;
+}
+
+.collab-card-reactions-summary {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    min-height: 24px;
+}
+
+.collab-reaction-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 8px;
+    background: #f1f3f5;
+    border-radius: 12px;
+    font-size: 0.8rem;
+}
+
+.collab-card-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.collab-reaction-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e1e5e9;
+    background: #fff;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.collab-reaction-btn:hover {
+    background: #f1f3f5;
+    transform: scale(1.15);
+}
+
+.collab-reaction-btn.selected {
+    background: #e3f2fd;
+    border-color: #007bff;
+    box-shadow: 0 0 0 1px #007bff;
+}
+
+/* ================================
+   Empty State
+   ================================ */
+.collab-empty {
+    text-align: center;
+    padding: 60px 24px;
+    color: #636e72;
+}
+
+.collab-empty p:first-child {
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.collab-empty-sub {
+    margin-top: 8px;
+    font-size: 0.9rem;
+    color: #b2bec3;
+}
+
+/* ================================
+   Detail Overlay
+   ================================ */
+.collab-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.collab-detail-content {
+    background: #fff;
+    border-radius: 16px;
+    max-width: 800px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+.collab-close-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    font-size: 1.4rem;
+    cursor: pointer;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    transition: background 0.15s;
+}
+
+.collab-close-btn:hover {
+    background: #f1f3f5;
+}
+
+#collab-detail-gallery {
+    position: relative;
+}
+
+#collab-detail-main-image {
+    width: 100%;
+    height: 350px;
+    background-size: cover;
+    background-position: center;
+    border-radius: 16px 16px 0 0;
+}
+
+#collab-detail-thumbnails {
+    display: flex;
+    gap: 6px;
+    padding: 10px 16px;
+    overflow-x: auto;
+}
+
+.collab-detail-thumb {
+    width: 60px;
+    height: 60px;
+    border-radius: 8px;
+    background-size: cover;
+    background-position: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    border: 2px solid transparent;
+    transition: border-color 0.15s;
+}
+
+.collab-detail-thumb:hover {
+    border-color: #b2bec3;
+}
+
+.collab-detail-thumb.active {
+    border-color: #007bff;
+}
+
+#collab-detail-info {
+    padding: 16px 24px 24px;
+}
+
+#collab-detail-name {
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+
+.collab-detail-price {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2d3436;
+    margin-top: 4px;
+}
+
+#collab-detail-description {
+    margin-top: 12px;
+    font-size: 0.95rem;
+    color: #636e72;
+    line-height: 1.6;
+}
+
+#collab-detail-note {
+    margin-top: 16px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+#collab-detail-note h4 {
+    font-size: 0.85rem;
+    color: #636e72;
+    margin-bottom: 4px;
+}
+
+.collab-reactions-section {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #e1e5e9;
+}
+
+.collab-reaction-bar {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.collab-reaction-summary {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.collab-reaction-who {
+    font-size: 0.85rem;
+    color: #636e72;
+}
+
+/* ================================
+   Toast
+   ================================ */
+.collab-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: #2d3436;
+    color: #fff;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    z-index: 200;
+    transition: transform 0.3s ease;
+    pointer-events: none;
+}
+
+.collab-toast.show {
+    transform: translateX(-50%) translateY(0);
+}
+
+/* ================================
+   Muted text
+   ================================ */
+.collab-muted {
+    color: #b2bec3;
+    font-size: 0.85rem;
+}
+
+/* ================================
+   Responsive
+   ================================ */
+@media (max-width: 640px) {
+    #collab-header {
+        padding: 12px 16px;
+    }
+
+    .collab-header-content {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .collab-header-right {
+        width: 100%;
+        justify-content: stretch;
+    }
+
+    .collab-header-right .collab-btn {
+        flex: 1;
+        justify-content: center;
+    }
+
+    #collab-event-name {
+        font-size: 1.2rem;
+    }
+
+    #collab-tabs {
+        padding: 10px 16px 0;
+    }
+
+    .collab-tab {
+        padding: 6px 14px;
+        font-size: 0.85rem;
+    }
+
+    #collab-feed {
+        padding: 12px 16px 40px;
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .collab-card-image {
+        height: 180px;
+    }
+
+    .collab-overlay {
+        padding: 0;
+        align-items: flex-end;
+    }
+
+    .collab-detail-content {
+        max-height: 95vh;
+        border-radius: 16px 16px 0 0;
+    }
+
+    #collab-detail-main-image {
+        height: 250px;
+        border-radius: 16px 16px 0 0;
+    }
+
+    #collab-plan-summary {
+        padding: 10px 16px;
+    }
+}

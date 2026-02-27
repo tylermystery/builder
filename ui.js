@@ -151,12 +151,12 @@ export function applyCartLabels(labels) {
         cartNameEl.value = labels.cartNamePlaceholder;
     }
 
-    const notesLabelEl = document.querySelector('label[for=\\\"header-goals\\\"]');
+    const notesLabelEl = document.querySelector('label[for=\"header-goals\"]');
     if (notesLabelEl && labels.notesLabel) {
         notesLabelEl.textContent = labels.notesLabel;
     }
 
-    const dateLabelEl = document.querySelector('label[for=\\\"event-date-picker\\\"]');
+    const dateLabelEl = document.querySelector('label[for=\"event-date-picker\"]');
     if (dateLabelEl && labels.dateLabel) {
         dateLabelEl.textContent = labels.dateLabel;
     }
@@ -439,7 +439,7 @@ export function updateCatalogHeader() {
         
         const pathContainer = document.createElement('div');
         pathContainer.id = 'breadcrumb-path-container';
-        pathContainer.innerHTML = `<a href=\\\"#\\\" class=\\\"breadcrumb-link\\\" data-filter=\\\"all\\\">All Categories</a> &gt; <span>${view === 'plan' ? 'My Plan' : 'My Likes'}</span>`;
+        pathContainer.innerHTML = `<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a> &gt; <span>${view === 'plan' ? 'My Plan' : 'My Likes'}</span>`;
         breadcrumbsEl.appendChild(pathContainer);
         return; 
     }
@@ -494,7 +494,7 @@ export function updateCatalogHeader() {
     }
     
     const path = [];
-    path.push(`<a href=\\\"#\\\" class=\\\"breadcrumb-link\\\" data-filter=\\\"all\\\">All Categories</a>`);
+    path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a>`);
 
     const findRecordByName = (filterName) => {
         return state.records.all.find(r => r.fields.Name?.toLowerCase() === filterName.replace(/-/g, ' '));
@@ -507,7 +507,7 @@ export function updateCatalogHeader() {
         activeFiltersHtml.push(createFilterChip('Category: ' + categoryName, 'category-filter', categoryFilter));
         filterCount++; 
         
-        path.push(`<a href=\\\"#\\\" class=\\\"breadcrumb-link\\\" data-filter=\\\"${categoryFilter}\\\">${categoryName}</a>`);
+        path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"${categoryFilter}\">${categoryName}</a>`);
     }
 
     subcategoryFilters.forEach(subcatFilter => {
@@ -519,14 +519,15 @@ export function updateCatalogHeader() {
         path.push(`<span>${subcatName}</span>`);
     });
 
-    // --- THIS IS THE FIX: Removed \n from Set and filter ---
     if (isRecommendedSort && goalsInput && goalsInput.length > 0) {
-        const STOP_WORDS = new Set(['a', 'an', 'the', 'for', 'with', 'and', 'is', 'of', 'to', 'in', 'on', 'at', 'my', 'it', 'big', 'small', 'all', 'new', 'old', 'about', 'want']);
+        const STOP_WORDS = new Set([
+            'a', 'an', 'the', 'for', 'with', 'and', 'is', 'of', 'to', 'in', 'on', 
+            'at', 'my', 'it', 'big', 'small', 'all', 'new', 'old', 'about', 'want'
+        ]);
 
-        const goalWords = goalsInput.split(/[\\\\s,]+/).filter(word => 
+        const goalWords = goalsInput.split(/[\s,]+/).filter(word =>
             word.length > 2 && !STOP_WORDS.has(word.toLowerCase())
         );
-    // --- END FIX ---
 
         goalWords.forEach(goal => {
             if (goal.toLowerCase() !== searchTerm.toLowerCase()) {
@@ -550,8 +551,9 @@ export function updateCatalogHeader() {
         chipContainer.id = 'filter-chip-container';
         
         chipContainer.innerHTML = `
-            <span class=\\\"chip-label\\\">Active Filters:</span>
-            ${activeFiltersHtml.join('')}\n            <button id=\\\"clear-all-chips-btn\\\" class=\\\"filter-chip-clear-all\\\">Clear Filters</button>
+            <span class=\"chip-label\">Active Filters:</span>
+            ${activeFiltersHtml.join('')}
+            <button id=\"clear-all-chips-btn\" class=\"filter-chip-clear-all\">Clear Filters</button>
         `;
         breadcrumbsEl.appendChild(chipContainer); 
 
@@ -581,10 +583,11 @@ export function handleFilterChipClear(e) {
     const applyFilters = () => window.applyFiltersAndSort(window.imageCache);
 
 
-    // --- VVV V2.7 GOAL CHIP LOGIC VVV ---\n    if (type === 'goal-filter') {
+    // --- VVV V2.7 GOAL CHIP LOGIC VVV ---
+    if (type === 'goal-filter') {
         const goalsInput = document.getElementById('header-goals');
         if (goalsInput) {
-            const goalWords = goalsInput.value.split(/[\\\\s,]+/).filter(Boolean); // Cleaned regex
+            const goalWords = goalsInput.value.split(/[\s,]+/).filter(Boolean);
             const updatedGoals = goalWords.filter(word => word.toLowerCase() !== value.toLowerCase()).join(' ');
             
             goalsInput.value = updatedGoals;
@@ -594,15 +597,18 @@ export function handleFilterChipClear(e) {
             return; 
         }
     }
-    // --- ^^^ END V2.7 GOAL CHIP LOGIC ^^^\n
+    // --- ^^^ END V2.7 GOAL CHIP LOGIC ^^^
+
     switch (type) {
         case 'name-filter':
             document.getElementById('name-filter').value = '';
             break;
         case 'status-filter':
-            // --- THIS IS THE FIX ---\n            // It should be .value, not .css('display')
+            // --- THIS IS THE FIX ---
+            // It should be .value, not .css('display')
             document.getElementById('status-filter').value = 'Available';
-            // --- END FIX ---\n            break;
+            // --- END FIX ---
+            break;
         case 'headcount-filter':
             document.getElementById('headcount-filter').value = 'any';
             document.getElementById('headcount-custom').value = '';
@@ -616,7 +622,8 @@ export function handleFilterChipClear(e) {
             const datePicker = document.getElementById('date-filter')?._flatpickr;
             if (datePicker) {
                  datePicker.clear();
-                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);\n            }
+                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+            }
             break;
         case 'category-filter':
             updateUrl({ category: null, subcategory: null, view: null });
@@ -639,7 +646,7 @@ function createFilterChip(text, type, value) {
     const isGoal = type === 'goal-filter';
     const tooltip = isGoal ? 'Click to remove this goal from the Goals / Notes box.' : 'Clear Filter';
 
-    return `<div class=\\\"filter-chip ${isGoal ? 'goal-chip' : ''}\\\" data-filter-type=\\\"${type}\\\" data-filter-value=\\\"${value}\\\" data-tippy-content=\\\"${tooltip}\\\">\\n                <span>${text}</span>\\n                <button title=\\\"${tooltip}\\\">×</button>\\n            </div>`;
+    return `<div class=\"filter-chip ${isGoal ? 'goal-chip' : ''}\" data-filter-type=\"${type}\" data-filter-value=\"${value}\" data-tippy-content=\"${tooltip}\">\n                <span>${text}</span>\n                <button title=\"${tooltip}\">×</button>\n            </div>`;
 }
 
 export function showLoginPromptForLikes() {
@@ -667,10 +674,8 @@ export function showLoginPromptForLikes() {
         profileButton.parentNode.appendChild(promptElement);
     }
 
-    // --- THIS IS THE FIX: Removed stray \n ---
     if (promptTimeout) clearTimeout(promptTimeout);
-    // --- END FIX ---
-    
+
     requestAnimationFrame(() => {
          promptElement.style.opacity = '1';
     });

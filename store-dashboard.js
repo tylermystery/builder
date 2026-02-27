@@ -1,12 +1,14 @@
 // In: store-dashboard.js
 // Action: REPLACE THE ENTIRE FILE with this code.
 
-// --- NEW: API Configuration ---\nconst AIRTABLE_PAT = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
+// --- NEW: API Configuration ---
+const AIRTABLE_PAT = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
 const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD';
 // Use the *relative* path to the Netlify function
 const PROFILE_ENDPOINT = '/api/profile-item';
-// --- NEW: Use the relative path to our proxy function ---\nconst GET_ITEMS_ENDPOINT = '/api/get-items-for-profiling';
+// --- NEW: Use the relative path to our proxy function ---
+const GET_ITEMS_ENDPOINT = '/api/get-items-for-profiling';
 
 
 /**
