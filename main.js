@@ -5,17 +5,28 @@
 console.log('[main.js] 0. File execution started.');
 // --- DEBUG ---
 
+// Import debug first so console capture hooks are installed early
+import { log, injectDebugPanel } from './utils/debug.js';
+console.log('[main.js] 0a. Debug module loaded. Console capture active.');
+
 import { state, setState } from './state.js';
+console.log('[main.js] 0b. state.js imported.');
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
+console.log('[main.js] 0c. api.js imported. Exports:', Object.keys(api).join(', '));
 import * as ui from './ui.js';
+console.log('[main.js] 0d. ui.js imported. Exports:', Object.keys(ui).join(', '));
 import { applyFiltersAndSort } from './filtering.js';
-import { log } from './utils/debug.js';
+console.log('[main.js] 0e. filtering.js imported.');
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
+console.log('[main.js] 0f. availability.js imported.');
 import { debounce, updateUrl } from './utils.js';
-import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js'; 
+import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js';
+console.log('[main.js] 0g. events.js imported.');
 import { initializeSessionChat } from './chat.js';
-import { setupCalendarEventListeners } from './components/calendarView.js'; 
+console.log('[main.js] 0h. chat.js imported.');
+import { setupCalendarEventListeners } from './components/calendarView.js';
+console.log('[main.js] 0i. calendarView.js imported.');
 
 // --- DEBUG ---
 console.log('[main.js] 1. Importing auth.js...');
@@ -148,8 +159,11 @@ async function initialize() {
     });
 
     ui.toggleLoading(true);
+    console.log('[main.js] 5a. Fetching stores and records from Airtable...');
+    const mainFetchStart = Date.now();
     try {
         const [stores, records] = await Promise.all([api.fetchAllStores(), api.fetchAllRecords()]);
+        console.log('[main.js] 5b. Fetch complete in', Date.now() - mainFetchStart, 'ms. Stores:', stores.length, 'Records:', records.length);
 
         const DEFAULT_V21_PROFILE = JSON.stringify({
             "profileSource": "system_default_v21",
@@ -194,7 +208,10 @@ async function initialize() {
 
     if (sessionId) {
          log('Main', `Session ID found in URL: ${sessionId}. Loading session...`);
-         await api.loadSessionFromAirtable(sessionId); 
+         console.log('[main.js] 5d. Loading session from Airtable:', sessionId);
+         const sessionLoadStart = Date.now();
+         await api.loadSessionFromAirtable(sessionId);
+         console.log('[main.js] 5e. Session load complete in', Date.now() - sessionLoadStart, 'ms. state.session.id =', state.session.id, 'cart.lockedItems.size =', state.cart.lockedItems.size, 'cart.items.size =', state.cart.items.size);
          if (!activeShop && state.session.storeId) {
               activeShop = state.stores.all.find(s => s.id === state.session.storeId);
               log('Main', `Determined shop from loaded session: ${state.session.storeId}. Found shop: ${!!activeShop}`);
@@ -441,16 +458,20 @@ async function initialize() {
         // --- DEBUG ---
         console.log('[main.js] 7. Calling backgroundEngine.loadEffect(fluidEffect, null).'); 
         // --- DEBUG ---
-        backgroundEngine.loadEffect(fluidEffect, null); 
+        backgroundEngine.loadEffect(fluidEffect, null);
         // --- END FIX ---
         // --- DEBUG ---
         console.log('[main.js] 8. End of initialize() function.');
         // --- DEBUG ---
 
+        // Inject the floating debug panel
+        injectDebugPanel();
+
     } else {
         console.error("CRITICAL: Could not determine an active shop. Catalog cannot be displayed.");
         document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display. Please check configuration.</p>`;
-        ui.toggleLoading(true); 
+        ui.toggleLoading(true);
+        injectDebugPanel();
     }
 }
 

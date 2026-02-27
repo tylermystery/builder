@@ -21,9 +21,10 @@ async function fetchUpcomingEvents() {
         return [];
     }
 
-    // --- NEW DEBUGGING LOGS ---\n    console.log(`[Calendar Debug] Checking ${state.records.all.length} total records from state.records.all.`);
+    // --- NEW DEBUGGING LOGS ---
+    console.log(`[Calendar Debug] Checking ${state.records.all.length} total records from state.records.all.`);
     let checkedCount = 0;
-    // --- END DEBUGGING LOGS ---\n
+    // --- END DEBUGGING LOGS ---
     const eventItems = state.records.all.filter(record => {
         checkedCount++;
         const itemType = record.fields['Item Type'];
@@ -38,13 +39,14 @@ async function fetchUpcomingEvents() {
         if (checkedCount <= 25 || isOneOfYourEvents) {
             console.log(`[Calendar Debug] Checking: \"${eventName}\" | Item Type: \"${itemType}\" | Has Date: ${!!hasDate} | Is \"Event\": ${isEvent}`);
         }
-        // --- END DEBUGGING LOGS ---\n        
+        // --- END DEBUGGING LOGS ---
         return isEvent && hasDate;
     });
 
-    // --- MODIFIED LOG ---\n    log('Calendar', `Found ${eventItems.length} public events after checking ${checkedCount} total records.`);
-    // --- END MODIFIED LOG ---\n
-    
+    // --- MODIFIED LOG ---
+    log('Calendar', `Found ${eventItems.length} public events after checking ${checkedCount} total records.`);
+    // --- END MODIFIED LOG ---
+
     // Map to the format our calendar logic will use
     return eventItems.map(record => {
         return {
@@ -94,7 +96,8 @@ function renderDailyEvents(date) {
              // --- END FIX ---
         }
 
-        // --- ADDED: On-click logic ---\n        listItem.addEventListener('click', () => {
+        // --- ADDED: On-click logic ---
+        listItem.addEventListener('click', () => {
             log('Calendar', `Event item clicked: ${event.name}`);
             // Find the full record from our pre-fetched list
             const fullRecord = event.record;
@@ -107,7 +110,7 @@ function renderDailyEvents(date) {
                 log('Calendar', 'Error: Could not find full record for this event.');
             }
         });
-        // --- END ADDED ---\n        
+        // --- END ADDED ---
         dailyEventList.appendChild(listItem);
     });
 }

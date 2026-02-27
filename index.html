@@ -538,6 +538,12 @@
         </div>
     </div>
     
+    <!-- Early debug bootstrap to capture import/parse errors -->
+    <script type="module">
+        import './utils/debug.js';
+        console.log('[index.html] Debug module pre-loaded. Console capture active.');
+    </script>
+
     <script type="module" src="main.js"></script>
     <!-- FIX: Removed Markdown []() wrapper from link -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plan Collaborator View</title>
+    <link rel="icon" href="data:;" />
+    <link rel="stylesheet" href="css/collab.css">
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+    <script src="https://unpkg.com/tippy.js@6"></script>
+</head>
+<body>
+    <div id="collab-loading" class="collab-loading">
+        <div class="collab-loading-spinner"></div>
+        <p>Loading plan...</p>
+    </div>
+
+    <div id="collab-root" style="display: none;">
+        <!-- Plan Header -->
+        <header id="collab-header">
+            <div class="collab-header-content">
+                <div class="collab-header-left">
+                    <h1 id="collab-event-name">Plan</h1>
+                    <div class="collab-meta">
+                        <span id="collab-event-date" class="collab-meta-item"></span>
+                        <span id="collab-event-goals" class="collab-meta-item"></span>
+                    </div>
+                </div>
+                <div class="collab-header-right">
+                    <button id="collab-share-btn" class="collab-btn collab-btn-share" title="Copy shareable link">Share Link</button>
+                    <a id="collab-back-link" href="/" class="collab-btn collab-btn-secondary">Open Full App</a>
+                </div>
+            </div>
+        </header>
+
+        <!-- Status Filter Tabs -->
+        <nav id="collab-tabs">
+            <button class="collab-tab active" data-filter="all">All</button>
+            <button class="collab-tab" data-filter="locked">Plan <span id="tab-count-locked" class="tab-count"></span></button>
+            <button class="collab-tab" data-filter="ideas">Ideas <span id="tab-count-ideas" class="tab-count"></span></button>
+        </nav>
+
+        <!-- Reaction Summary Bar -->
+        <div id="collab-plan-summary" style="display: none;">
+            <div id="collab-reaction-overview"></div>
+            <div id="collab-cost-summary"></div>
+        </div>
+
+        <!-- Ideas Feed -->
+        <main id="collab-feed"></main>
+
+        <!-- Empty State -->
+        <div id="collab-empty" class="collab-empty" style="display: none;">
+            <p>No items in this plan yet.</p>
+            <p class="collab-empty-sub">Items added to this session will appear here.</p>
+        </div>
+
+        <!-- Expanded Item Detail (overlay) -->
+        <div id="collab-detail-overlay" class="collab-overlay" style="display: none;">
+            <div class="collab-detail-content">
+                <button id="collab-detail-close" class="collab-close-btn">&times;</button>
+                <div id="collab-detail-gallery">
+                    <div id="collab-detail-main-image"></div>
+                    <div id="collab-detail-thumbnails"></div>
+                </div>
+                <div id="collab-detail-info">
+                    <h2 id="collab-detail-name"></h2>
+                    <p id="collab-detail-price" class="collab-detail-price"></p>
+                    <p id="collab-detail-description"></p>
+                    <div id="collab-detail-note" style="display: none;">
+                        <h4>Note</h4>
+                        <p id="collab-detail-note-text"></p>
+                    </div>
+                    <div id="collab-detail-reactions" class="collab-reactions-section">
+                        <div id="collab-detail-reaction-buttons" class="collab-reaction-bar"></div>
+                        <div id="collab-detail-reaction-summary" class="collab-reaction-summary"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="collab-toast" class="collab-toast"></div>
+
+    <!-- Early debug bootstrap to capture import/parse errors -->
+    <script type="module">
+        import './utils/debug.js';
+        console.log('[collab.html] Debug module pre-loaded. Console capture active.');
+    </script>
+
+    <script type="module" src="components/collabView.js"></script>
+</body>
+</html>
