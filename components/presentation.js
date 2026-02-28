@@ -13,6 +13,7 @@ import { triggerSave } from '../events.js';
 import { showDetailModal, showGroupDetailModal, showCheckoutModal, getShopSettings } from './modal.js';
 import { Shader } from '../utils/shader.js';
 import { showWtfPlansPanel } from './wtfPlansPanel.js';
+import { createCalendarExportButtons, initializeCalendarExportListeners } from '../utils/calendarExport.js';
 import { updateEventPlanSection, updateIdeasCarousel } from './sidebar.js';
 import { syncPlanState, registerSyncCallback, unregisterSyncCallback } from '../utils/planStateSync.js';
 import { showUserModal } from '../auth.js';
@@ -1135,6 +1136,13 @@ async function renderRsvpSection() {
 
     // Render RSVP list
     await renderRsvpList(rsvpListContainer, eventRecord);
+
+    // Render calendar export buttons (available for all users - no auth required)
+    const calendarExportContainer = document.getElementById('presentation-calendar-export');
+    if (calendarExportContainer && eventRecord.fields.Date) {
+        calendarExportContainer.innerHTML = createCalendarExportButtons(eventRecord);
+        initializeCalendarExportListeners(eventRecord, calendarExportContainer);
+    }
 }
 
 /**

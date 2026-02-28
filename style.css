@@ -11756,6 +11756,28 @@ hr.total-divider {
     height: 14px;
 }
 
+/* Calendar export in detail modal */
+.modal-calendar-export {
+    margin: 12px 0;
+}
+
+.modal-calendar-export .calendar-export-container {
+    background-color: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* Calendar export in presentation view */
+.presentation-calendar-export {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.presentation-calendar-export .calendar-export-container {
+    margin: 0;
+    background-color: rgba(255, 255, 255, 0.6);
+}
+
 /* ===================================================================
    AI STRATEGIC PROJECT MANAGER STYLES
    =================================================================== */

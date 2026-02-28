@@ -2294,9 +2294,21 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 if (updatedRecord) {
                     const recordIndex = state.records.all.findIndex(r => r.id === recordId);
                     if (recordIndex > -1) state.records.all[recordIndex] = updatedRecord;
-                    
+
                     if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
                         ui.showDetailModal(updatedRecord);
+                    }
+
+                    // Show confirmation toast
+                    if (wasActive) {
+                        ui.showToast('RSVP removed.');
+                    } else {
+                        const labels = { yes: "You're going!", maybe: "Marked as maybe.", no: "Marked as can't go." };
+                        const confirmMsg = labels[rsvpType] || 'RSVP updated!';
+                        ui.showToast(rsvpType === 'yes' || rsvpType === 'maybe'
+                            ? `${confirmMsg} A confirmation email is on its way.`
+                            : confirmMsg
+                        );
                     }
                 } else {
                     throw new Error('RSVP update failed.');

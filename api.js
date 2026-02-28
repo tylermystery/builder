@@ -3602,7 +3602,18 @@ export async function updateRsvpForEvent(eventId, userId, rsvpType) {
         }
 
         log('API', `Successfully updated RSVP for user ${userId} to event ${eventId}`);
-        return await patchResponse.json();
+        const updatedRecord = await patchResponse.json();
+
+        // Send RSVP confirmation email for Yes/Maybe (fire-and-forget)
+        if (rsvpType === 'yes' || rsvpType === 'maybe') {
+            fetch('/api/send-rsvp-confirmation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ eventRecordId: eventId, userId, rsvpType })
+            }).catch(err => console.error('RSVP confirmation email trigger failed:', err));
+        }
+
+        return updatedRecord;
 
     } catch (error) {
         console.error(`Failed to update RSVP for event ${eventId}:`, error);

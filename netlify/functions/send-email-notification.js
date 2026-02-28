@@ -33,11 +33,26 @@ const NOTIFICATION_TEMPLATES = {
     `
   },
   rsvp: {
-    subject: (data) => `RSVP Update for "${data.sessionName}"`,
+    subject: (data) => `RSVP Update: ${data.senderName} responded to "${data.sessionName}"`,
     html: (data) => `
-      <p>Hi ${data.recipientName},</p>
-      <p><strong>${data.senderName}</strong> responded "${data.rsvpType}" to your event, "${data.sessionName}".</p>
-      <p><a href="${data.viewPlanUrl}">View RSVPs</a></p>
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 0;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 28px 32px; border-radius: 12px 12px 0 0; text-align: center;">
+          <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: rgba(255,255,255,0.8); margin-bottom: 8px;">RSVP Update</div>
+          <div style="font-size: 20px; font-weight: 700; color: white;">${data.sessionName}</div>
+        </div>
+        <div style="padding: 28px 32px; background: white; border: 1px solid #eee; border-top: none; border-radius: 0 0 12px 12px;">
+          <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${data.recipientName},</p>
+          <div style="padding: 16px; background: #f8f9fb; border-radius: 10px; border-left: 4px solid ${data.rsvpType === 'Yes' ? '#28a745' : data.rsvpType === 'Maybe' ? '#ffc107' : '#dc3545'}; margin-bottom: 20px;">
+            <strong style="color: #333;">${data.senderName}</strong>
+            <span style="color: #555;"> responded </span>
+            <strong style="color: ${data.rsvpType === 'Yes' ? '#28a745' : data.rsvpType === 'Maybe' ? '#b8860b' : '#dc3545'};">"${data.rsvpType}"</strong>
+            <span style="color: #555;"> to your event.</span>
+          </div>
+          <div style="text-align: center; margin-top: 24px;">
+            <a href="${data.viewPlanUrl}" style="display: inline-block; padding: 12px 28px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">View RSVPs</a>
+          </div>
+        </div>
+      </div>
     `
   },
   task: {
