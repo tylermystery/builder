@@ -104,6 +104,26 @@ function isTransientError(status) {
 }
 
 /**
+ * Detect whether a 400 error is actually a billing/plan/access issue rather
+ * than a prompt/content problem.  These should trigger fallback, not stop
+ * the chain.
+ */
+function isBillingOrAccessError(bodyText) {
+    const lower = (bodyText || '').toLowerCase();
+    return (
+        lower.includes('paid plan') ||
+        lower.includes('upgrade your account') ||
+        lower.includes('billing') ||
+        lower.includes('subscription required') ||
+        lower.includes('not available on') ||
+        lower.includes('enable billing') ||
+        lower.includes('payment required') ||
+        lower.includes('free tier') ||
+        lower.includes('plan does not include')
+    );
+}
+
+/**
  * Determine if we should attempt the next provider in the fallback chain.
  */
 function shouldFallback(status, bodyText, providerKey) {
@@ -115,6 +135,8 @@ function shouldFallback(status, bodyText, providerKey) {
     if (status === 429) return true;
     // Auth/credential errors → fallback (wrong API key, no access)
     if (status === 401 || status === 403) return true;
+    // 400 errors that are billing/access issues, not prompt issues → fallback
+    if (status === 400 && isBillingOrAccessError(bodyText)) return true;
     return false;
 }
 
@@ -703,7 +725,10 @@ async function generateImage(prompt, config = {}) {
                 }
                 lastError = { status, errorText, provider: providerKey };
                 if (shouldFallback(status, errorText || '', providerKey)) {
-                    console.log(`[ai-provider] [${caller}] Image gen ${providerName} failed (${status}). Falling back to next provider.`);
+                    const reason = (status === 400 && isBillingOrAccessError(errorText || ''))
+                        ? 'billing/plan access issue (not a prompt problem)'
+                        : `error ${status}`;
+                    console.log(`[ai-provider] [${caller}] Image gen ${providerName} failed — ${reason}. Falling back to next provider.`);
                     break;
                 }
                 // Only stop chain on 400 Bad Request (content/prompt issue)
