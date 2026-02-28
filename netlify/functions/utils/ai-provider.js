@@ -21,6 +21,15 @@ const {
     AI_IMAGE_PROVIDER = 'auto'
 } = process.env;
 
+// Debug: Log API key availability at module load time (NEVER log actual key values)
+console.log('[ai-provider] Module loaded. API key status:', {
+    GEMINI_API_KEY: GEMINI_API_KEY ? `configured (${GEMINI_API_KEY.length} chars, starts with ${GEMINI_API_KEY.substring(0, 4)}...)` : 'NOT SET',
+    OPENAI_API_KEY: OPENAI_API_KEY ? `configured (${OPENAI_API_KEY.length} chars, starts with ${OPENAI_API_KEY.substring(0, 5)}...)` : 'NOT SET',
+    ANTHROPIC_API_KEY: ANTHROPIC_API_KEY ? `configured (${ANTHROPIC_API_KEY.length} chars)` : 'NOT SET',
+    AI_TEXT_PROVIDER,
+    AI_IMAGE_PROVIDER,
+});
+
 // ---------------------------------------------------------------------------
 // Provider configuration
 // ---------------------------------------------------------------------------
@@ -95,6 +104,26 @@ function isTransientError(status) {
 }
 
 /**
+ * Detect whether a 400 error is actually a billing/plan/access issue rather
+ * than a prompt/content problem.  These should trigger fallback, not stop
+ * the chain.
+ */
+function isBillingOrAccessError(bodyText) {
+    const lower = (bodyText || '').toLowerCase();
+    return (
+        lower.includes('paid plan') ||
+        lower.includes('upgrade your account') ||
+        lower.includes('billing') ||
+        lower.includes('subscription required') ||
+        lower.includes('not available on') ||
+        lower.includes('enable billing') ||
+        lower.includes('payment required') ||
+        lower.includes('free tier') ||
+        lower.includes('plan does not include')
+    );
+}
+
+/**
  * Determine if we should attempt the next provider in the fallback chain.
  */
 function shouldFallback(status, bodyText, providerKey) {
@@ -106,6 +135,8 @@ function shouldFallback(status, bodyText, providerKey) {
     if (status === 429) return true;
     // Auth/credential errors → fallback (wrong API key, no access)
     if (status === 401 || status === 403) return true;
+    // 400 errors that are billing/access issues, not prompt issues → fallback
+    if (status === 400 && isBillingOrAccessError(bodyText)) return true;
     return false;
 }
 
@@ -344,35 +375,63 @@ const VISION_CALLERS = {
 async function callGeminiImage(prompt, config) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-fast-generate-001:predict`;
 
+    console.log('[ai-provider] [callGeminiImage] Making request to Imagen API');
+    console.log('[ai-provider] [callGeminiImage] Prompt length:', prompt.length);
+    console.log('[ai-provider] [callGeminiImage] Config:', { aspectRatio: config.aspectRatio || '1:1' });
+    console.log('[ai-provider] [callGeminiImage] API key present:', !!GEMINI_API_KEY);
+
+    const requestBody = {
+        instances: [{ prompt }],
+        parameters: {
+            sampleCount: 1,
+            aspectRatio: config.aspectRatio || '1:1',
+            personGeneration: 'allow_adult',
+        },
+    };
+    console.log('[ai-provider] [callGeminiImage] Request body (without prompt):', JSON.stringify({
+        instances: [{ prompt: prompt.substring(0, 100) + '...' }],
+        parameters: requestBody.parameters,
+    }));
+
+    const _start = Date.now();
     const response = await fetch(url, {
         method: 'POST',
         headers: {
             'x-goog-api-key': GEMINI_API_KEY,
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-            instances: [{ prompt }],
-            parameters: {
-                sampleCount: 1,
-                aspectRatio: config.aspectRatio || '1:1',
-                personGeneration: 'allow_adult',
-            },
-        }),
+        body: JSON.stringify(requestBody),
     });
+    const _elapsed = Date.now() - _start;
+
+    console.log('[ai-provider] [callGeminiImage] Response status:', response.status, 'in', _elapsed, 'ms');
+    console.log('[ai-provider] [callGeminiImage] Response headers content-type:', response.headers.get('content-type'));
 
     if (!response.ok) {
         const errorText = await response.text();
+        console.error('[ai-provider] [callGeminiImage] ERROR response body:', errorText.substring(0, 500));
         return { ok: false, status: response.status, errorText };
     }
 
     const result = await response.json();
     const b64 = result?.predictions?.[0]?.bytesBase64Encoded;
-    if (!b64) return { ok: false, status: 500, errorText: 'No image data in Imagen response' };
+    console.log('[ai-provider] [callGeminiImage] Response parsed. Has predictions:', !!result?.predictions, 'predictions count:', result?.predictions?.length || 0);
+    console.log('[ai-provider] [callGeminiImage] Base64 data present:', !!b64, 'length:', b64?.length || 0);
+
+    if (!b64) {
+        console.error('[ai-provider] [callGeminiImage] No image data in response. Full response keys:', Object.keys(result || {}));
+        return { ok: false, status: 500, errorText: 'No image data in Imagen response' };
+    }
     return { ok: true, base64: b64, format: 'png' };
 }
 
 async function callOpenAIImage(prompt, config) {
     const url = 'https://api.openai.com/v1/images/generations';
+
+    console.log('[ai-provider] [callOpenAIImage] Making request to DALL-E 3 API');
+    console.log('[ai-provider] [callOpenAIImage] Prompt length:', prompt.length);
+    console.log('[ai-provider] [callOpenAIImage] Config size:', config.size || '1024x1024');
+    console.log('[ai-provider] [callOpenAIImage] API key present:', !!OPENAI_API_KEY);
 
     const body = {
         model: 'dall-e-3',
@@ -383,6 +442,7 @@ async function callOpenAIImage(prompt, config) {
         quality: 'standard',
     };
 
+    const _start = Date.now();
     const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -391,15 +451,26 @@ async function callOpenAIImage(prompt, config) {
         },
         body: JSON.stringify(body),
     });
+    const _elapsed = Date.now() - _start;
+
+    console.log('[ai-provider] [callOpenAIImage] Response status:', response.status, 'in', _elapsed, 'ms');
+    console.log('[ai-provider] [callOpenAIImage] Response headers content-type:', response.headers.get('content-type'));
 
     if (!response.ok) {
         const errorText = await response.text();
+        console.error('[ai-provider] [callOpenAIImage] ERROR response body:', errorText.substring(0, 500));
         return { ok: false, status: response.status, errorText };
     }
 
     const result = await response.json();
     const b64 = result?.data?.[0]?.b64_json;
-    if (!b64) return { ok: false, status: 500, errorText: 'No image data in DALL-E response' };
+    console.log('[ai-provider] [callOpenAIImage] Response parsed. Has data:', !!result?.data, 'data count:', result?.data?.length || 0);
+    console.log('[ai-provider] [callOpenAIImage] Base64 data present:', !!b64, 'length:', b64?.length || 0);
+
+    if (!b64) {
+        console.error('[ai-provider] [callOpenAIImage] No image data in response. Full response keys:', Object.keys(result || {}));
+        return { ok: false, status: 500, errorText: 'No image data in DALL-E response' };
+    }
     return { ok: true, base64: b64, format: 'png' };
 }
 
@@ -413,13 +484,24 @@ const IMAGE_CALLERS = {
 // ---------------------------------------------------------------------------
 
 function buildProviderChain(preference, providerMap, fallbackOrder) {
+    console.log('[ai-provider] [buildProviderChain] preference:', preference, 'fallbackOrder:', fallbackOrder);
+    const availability = {};
+    for (const key of fallbackOrder) {
+        availability[key] = providerMap[key]?.available() || false;
+    }
+    console.log('[ai-provider] [buildProviderChain] Provider availability:', availability);
+
     if (preference !== 'auto' && providerMap[preference]?.available()) {
         // Preferred provider first, then others as fallback
         const chain = [preference, ...fallbackOrder.filter(k => k !== preference)];
-        return chain.filter(k => providerMap[k]?.available());
+        const result = chain.filter(k => providerMap[k]?.available());
+        console.log('[ai-provider] [buildProviderChain] Using preferred chain:', result);
+        return result;
     }
     // Auto: use fallback order, filter to available
-    return fallbackOrder.filter(k => providerMap[k]?.available());
+    const result = fallbackOrder.filter(k => providerMap[k]?.available());
+    console.log('[ai-provider] [buildProviderChain] Using auto chain:', result);
+    return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -592,9 +674,15 @@ async function analyzeImage(prompt, base64ImageData, config = {}) {
  */
 async function generateImage(prompt, config = {}) {
     const { maxRetries = 1, caller = 'unknown' } = config;
+    console.log(`[ai-provider] [${caller}] ====== generateImage called ======`);
+    console.log(`[ai-provider] [${caller}] Prompt (first 200 chars):`, prompt.substring(0, 200));
+    console.log(`[ai-provider] [${caller}] Config:`, { ...config, maxRetries, caller });
+
     const chain = buildProviderChain(AI_IMAGE_PROVIDER, IMAGE_PROVIDERS, IMAGE_FALLBACK_ORDER);
 
     if (chain.length === 0) {
+        console.error(`[ai-provider] [${caller}] NO PROVIDERS AVAILABLE! AI_IMAGE_PROVIDER=${AI_IMAGE_PROVIDER}`);
+        console.error(`[ai-provider] [${caller}] GEMINI_API_KEY set: ${!!GEMINI_API_KEY}, OPENAI_API_KEY set: ${!!OPENAI_API_KEY}`);
         return { ok: false, error: 'No AI image providers configured. Set GEMINI_API_KEY or OPENAI_API_KEY.', provider: 'none' };
     }
 
@@ -605,45 +693,62 @@ async function generateImage(prompt, config = {}) {
     for (const providerKey of chain) {
         const callFn = IMAGE_CALLERS[providerKey];
         const providerName = IMAGE_PROVIDERS[providerKey].name;
+        console.log(`[ai-provider] [${caller}] ---- Starting provider: ${providerName} (${providerKey}) ----`);
 
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
             try {
-                console.log(`[ai-provider] [${caller}] Image gen: trying ${providerName} (attempt ${attempt + 1})`);
+                console.log(`[ai-provider] [${caller}] Image gen: trying ${providerName} (attempt ${attempt + 1}/${maxRetries + 1})`);
+                const _attemptStart = Date.now();
                 const result = await callFn(prompt, config);
+                const _attemptElapsed = Date.now() - _attemptStart;
 
                 if (result.ok) {
-                    console.log(`[ai-provider] [${caller}] Image gen success with ${providerName}`);
+                    console.log(`[ai-provider] [${caller}] Image gen SUCCESS with ${providerName} in ${_attemptElapsed}ms`);
+                    console.log(`[ai-provider] [${caller}] Result: base64 length=${result.base64?.length || 0}, format=${result.format}`);
                     return { ok: true, base64: result.base64, format: result.format, provider: providerKey, providerName };
                 }
 
                 const { status, errorText } = result;
-                console.error(`[ai-provider] [${caller}] Image gen ${providerName} returned ${status}: ${errorText?.substring(0, 200)}`);
+                console.error(`[ai-provider] [${caller}] Image gen ${providerName} FAILED in ${_attemptElapsed}ms - status ${status}`);
+                console.error(`[ai-provider] [${caller}] Image gen ${providerName} error: ${errorText?.substring(0, 300)}`);
 
                 if (isQuotaError(providerKey, status, errorText || '')) {
+                    console.warn(`[ai-provider] [${caller}] QUOTA EXHAUSTED for ${providerName}. Skipping retries, falling back.`);
                     lastError = { status, errorText, provider: providerKey, quotaExhausted: true };
                     break;
                 }
                 if (isTransientError(status) && attempt < maxRetries) {
-                    await sleep(Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 6000));
+                    const backoffMs = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 6000);
+                    console.log(`[ai-provider] [${caller}] Transient error (${status}). Retrying in ${Math.round(backoffMs)}ms...`);
+                    await sleep(backoffMs);
                     continue;
                 }
                 lastError = { status, errorText, provider: providerKey };
                 if (shouldFallback(status, errorText || '', providerKey)) {
-                    console.log(`[ai-provider] [${caller}] Image gen ${providerName} failed (${status}). Falling back.`);
+                    const reason = (status === 400 && isBillingOrAccessError(errorText || ''))
+                        ? 'billing/plan access issue (not a prompt problem)'
+                        : `error ${status}`;
+                    console.log(`[ai-provider] [${caller}] Image gen ${providerName} failed — ${reason}. Falling back to next provider.`);
                     break;
                 }
                 // Only stop chain on 400 Bad Request (content/prompt issue)
                 if (status === 400) {
+                    console.error(`[ai-provider] [${caller}] 400 Bad Request from ${providerName} — stopping chain (likely prompt issue)`);
                     return { ok: false, error: `${providerName}: ${errorText}`, provider: providerKey };
                 }
+                console.warn(`[ai-provider] [${caller}] Non-retryable, non-fallback error from ${providerName}: ${status}`);
                 break;
             } catch (networkError) {
-                console.error(`[ai-provider] [${caller}] Image gen ${providerName} network error:`, networkError.message);
+                console.error(`[ai-provider] [${caller}] Image gen ${providerName} NETWORK ERROR:`, networkError.message);
+                console.error(`[ai-provider] [${caller}] Network error stack:`, networkError.stack);
                 lastError = { status: 0, errorText: networkError.message, provider: providerKey };
                 break;
             }
         }
     }
+
+    console.error(`[ai-provider] [${caller}] ====== ALL PROVIDERS FAILED ======`);
+    console.error(`[ai-provider] [${caller}] Last error:`, JSON.stringify(lastError));
 
     return {
         ok: false,

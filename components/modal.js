@@ -13,6 +13,7 @@ import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { resizeImageForUpload } from '../utils/imageResizer.js';
 import { triggerSave } from '../events.js';
 import { showForumPanel } from './forumPanel.js';
+import { createCalendarExportButtons, initializeCalendarExportListeners } from '../utils/calendarExport.js';
 import { openUCPForItem } from './unifiedChatPanel.js';
 import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
@@ -4988,7 +4989,17 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             modalItemDescription.parentElement.insertBefore(eventInfoSection, modalItemDescription);
         }
 
-        // Calendar export buttons removed for published events - not needed for viewing
+        // Calendar export buttons - available for ALL users (no auth required)
+        if (record.fields.Date) {
+            const existingCalendarExport = document.querySelector('.modal-calendar-export');
+            if (existingCalendarExport) existingCalendarExport.remove();
+
+            const calendarContainer = document.createElement('div');
+            calendarContainer.className = 'modal-calendar-export calendar-export-compact';
+            calendarContainer.innerHTML = createCalendarExportButtons(record);
+            modalItemDescription.parentElement.insertBefore(calendarContainer, modalItemDescription);
+            initializeCalendarExportListeners(record, calendarContainer);
+        }
         }
 
         // RSVP list section - only shown for authenticated users (moved outside the isUserRegistered check)
