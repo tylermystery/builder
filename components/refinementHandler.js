@@ -483,32 +483,58 @@ export function syncModalToIteration(recordId, iterationIndex) {
 export async function generateVersionImage(recordId, iterationIndex) {
     const record = state.session.itemIterations.get(recordId);
     if (!record || !record.iterations[iterationIndex]) {
+        console.error('[RefinementHandler] Iteration not found:', { recordId, iterationIndex, hasRecord: !!record });
         throw new Error('Iteration not found');
     }
 
     const iteration = record.iterations[iterationIndex];
 
     try {
+        const payload = {
+            name: iteration.title || 'Refined Item',
+            description: iteration.description || '',
+            category: iteration.realm || '',
+            tags: (iteration.tags || []).join(', '),
+            itemId: `${recordId}-v${iterationIndex}`,
+            sessionId: state.session.id || 'refinement',
+            customPrompt: iteration.imagePrompt || null
+        };
+
+        console.log('[RefinementHandler] Generating version image:', {
+            recordId,
+            iterationIndex,
+            title: iteration.title,
+            hasCustomPrompt: !!iteration.imagePrompt,
+        });
+        console.log('[RefinementHandler] Request payload:', JSON.stringify(payload));
+
+        const _start = Date.now();
         const response = await fetch('/.netlify/functions/generate-ai-image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                name: iteration.title || 'Refined Item',
-                description: iteration.description || '',
-                category: iteration.realm || '',
-                tags: (iteration.tags || []).join(', '),
-                itemId: `${recordId}-v${iterationIndex}`,
-                sessionId: state.session.id || 'refinement',
-                customPrompt: iteration.imagePrompt || null
-            })
+            body: JSON.stringify(payload)
         });
+        const _elapsed = Date.now() - _start;
+
+        console.log('[RefinementHandler] Response received in', _elapsed, 'ms, status:', response.status, 'ok:', response.ok);
 
         if (!response.ok) {
+            const errorBody = await response.text();
+            console.error('[RefinementHandler] Image generation FAILED:', response.status, errorBody.substring(0, 500));
             throw new Error(`Image generation failed: ${response.status}`);
         }
 
         const data = await response.json();
+        console.log('[RefinementHandler] Response data:', JSON.stringify({
+            success: data.success,
+            hasImageUrl: !!data.imageUrl,
+            imageUrlPrefix: data.imageUrl?.substring(0, 60),
+            _aiProvider: data._aiProvider,
+            error: data.error,
+        }));
+
         if (!data.success || !data.imageUrl) {
+            console.error('[RefinementHandler] No image URL in response:', data);
             throw new Error(data.error || 'No image URL in response');
         }
 

@@ -16540,6 +16540,16 @@ async function createPresentationResultCard(record, isAI = false) {
 
     if (isAIDiscoveryItem && hasOnlyPlaceholderImage && hasNoCustomImagesForGen && !genAlreadyAttempted && !genInProgress) {
         console.log('[AI IMAGE AUTO-GEN PRES] Queuing background AI image generation for:', record.fields?.Name);
+        console.log('[AI IMAGE AUTO-GEN PRES] Conditions met:', {
+            isAIDiscoveryItem,
+            hasOnlyPlaceholderImage,
+            imageSource,
+            hasNoCustomImagesForGen,
+            genAlreadyAttempted,
+            genInProgress,
+            currentActive: window._aiImageGenerationActive,
+            queueLength: window._aiImageGenerationQueue?.length || 0,
+        });
         window._aiImageGenerationInProgress.add(record.id);
 
         const generateForCard = async () => {
@@ -16555,14 +16565,29 @@ async function createPresentationResultCard(record, isAI = false) {
                     sessionId: state.session?.id || 'unsaved'
                 };
 
+                console.log('[AI IMAGE AUTO-GEN PRES] Sending request for:', record.fields?.Name);
+                console.log('[AI IMAGE AUTO-GEN PRES] Payload:', JSON.stringify(genPayload));
+                const _fetchStart = Date.now();
+
                 const aiResp = await fetch('/.netlify/functions/generate-ai-image', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(genPayload)
                 });
+                const _fetchElapsed = Date.now() - _fetchStart;
+
+                console.log('[AI IMAGE AUTO-GEN PRES] Response received in', _fetchElapsed, 'ms');
+                console.log('[AI IMAGE AUTO-GEN PRES] Status:', aiResp.status, 'ok:', aiResp.ok);
 
                 if (aiResp.ok) {
                     const aiResult = await aiResp.json();
+                    console.log('[AI IMAGE AUTO-GEN PRES] Response JSON:', JSON.stringify({
+                        success: aiResult.success,
+                        hasImageUrl: !!aiResult.imageUrl,
+                        imageUrlPrefix: aiResult.imageUrl?.substring(0, 60),
+                        _aiProvider: aiResult._aiProvider,
+                        error: aiResult.error,
+                    }));
                     if (aiResult.success && aiResult.imageUrl) {
                         // Store the AI image in the record so it persists
                         const aiGenImage = { url: aiResult.imageUrl, isAIGenerated: true, prompt: aiResult.prompt };
@@ -16603,8 +16628,10 @@ async function createPresentationResultCard(record, isAI = false) {
                         window._aiImageGenerationAttempted.add(record.id);
                     }
                 } else {
+                    const errorBody = await aiResp.text();
                     window._aiImageGenerationAttempted.add(record.id);
-                    console.warn('[AI IMAGE AUTO-GEN PRES] FAILED:', await aiResp.text());
+                    console.warn('[AI IMAGE AUTO-GEN PRES] FAILED for:', record.fields?.Name);
+                    console.warn('[AI IMAGE AUTO-GEN PRES] Status:', aiResp.status, 'Body:', errorBody.substring(0, 500));
                 }
             } catch (err) {
                 window._aiImageGenerationAttempted.add(record.id);
@@ -16998,14 +17025,24 @@ async function handleDigInto(record, button, card) {
                                 sessionId: state.session?.id || 'unsaved'
                             };
 
+                            console.log('[AI IMAGE AUTO-GEN DIG] Payload:', JSON.stringify(digGenPayload));
+                            const _digStart = Date.now();
+
                             const digAiResp = await fetch('/.netlify/functions/generate-ai-image', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify(digGenPayload)
                             });
+                            const _digElapsed = Date.now() - _digStart;
+                            console.log('[AI IMAGE AUTO-GEN DIG] Response in', _digElapsed, 'ms, status:', digAiResp.status);
 
                             if (digAiResp.ok) {
                                 const digAiResult = await digAiResp.json();
+                                console.log('[AI IMAGE AUTO-GEN DIG] Result:', JSON.stringify({
+                                    success: digAiResult.success,
+                                    hasImageUrl: !!digAiResult.imageUrl,
+                                    _aiProvider: digAiResult._aiProvider,
+                                }));
                                 if (digAiResult.success && digAiResult.imageUrl) {
                                     const digAiImg = { url: digAiResult.imageUrl, isAIGenerated: true, prompt: digAiResult.prompt };
                                     record.fields._customImages = [digAiImg];
@@ -17025,14 +17062,18 @@ async function handleDigInto(record, button, card) {
                                     }
                                     console.log('[AI IMAGE AUTO-GEN DIG] SUCCESS:', digAiResult.imageUrl);
                                 } else {
+                                    console.warn('[AI IMAGE AUTO-GEN DIG] Response OK but no imageUrl:', JSON.stringify(digAiResult));
                                     window._aiImageGenerationAttempted?.add(record.id);
                                 }
                             } else {
+                                const errBody = await digAiResp.text();
+                                console.warn('[AI IMAGE AUTO-GEN DIG] FAILED status:', digAiResp.status, 'body:', errBody.substring(0, 500));
                                 window._aiImageGenerationAttempted?.add(record.id);
                             }
                         } catch (digGenErr) {
                             window._aiImageGenerationAttempted?.add(record.id);
                             console.warn('[AI IMAGE AUTO-GEN DIG] EXCEPTION:', digGenErr.message);
+                            console.warn('[AI IMAGE AUTO-GEN DIG] Stack:', digGenErr.stack);
                         } finally {
                             window._aiImageGenerationInProgress?.delete(record.id);
                         }

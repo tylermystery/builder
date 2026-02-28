@@ -107,8 +107,11 @@ async function uploadToCloudinary(base64Image, itemId, sessionId) {
 
 // Main Handler
 exports.handler = async function(event, context) {
+    const _startTime = Date.now();
     console.log('[AI IMAGE FUNC] ====== generate-ai-image function called ======');
     console.log('[AI IMAGE FUNC] HTTP Method:', event.httpMethod);
+    console.log('[AI IMAGE FUNC] Timestamp:', new Date().toISOString());
+    console.log('[AI IMAGE FUNC] Body length:', event.body?.length || 0, 'isBase64Encoded:', event.isBase64Encoded);
 
     // Handle CORS preflight
     if (event.httpMethod === 'OPTIONS') {
@@ -133,6 +136,13 @@ exports.handler = async function(event, context) {
             body: JSON.stringify({ error: 'Method Not Allowed' })
         };
     }
+
+    // Debug: Log credential availability (NEVER log actual values)
+    console.log('[AI IMAGE FUNC] Credentials check:', {
+        CLOUDINARY_CLOUD_NAME: !!CLOUDINARY_CLOUD_NAME ? `set (${CLOUDINARY_CLOUD_NAME.length} chars)` : 'MISSING',
+        CLOUDINARY_API_KEY: !!CLOUDINARY_API_KEY ? `set (${CLOUDINARY_API_KEY.length} chars)` : 'MISSING',
+        CLOUDINARY_API_SECRET: !!CLOUDINARY_API_SECRET ? `set (${CLOUDINARY_API_SECRET.length} chars)` : 'MISSING',
+    });
 
     if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
         console.error('[AI IMAGE] Missing Cloudinary credentials');
@@ -168,6 +178,17 @@ exports.handler = async function(event, context) {
 
         const { name, description, category, serviceType, tags, itemId, sessionId, customPrompt } = body;
 
+        console.log('[AI IMAGE FUNC] Parsed request body:', {
+            name: name || '(empty)',
+            description: description ? `${description.substring(0, 100)}...` : '(empty)',
+            category: category || '(empty)',
+            serviceType: serviceType || '(empty)',
+            tags: tags || '(empty)',
+            itemId: itemId || '(empty)',
+            sessionId: sessionId || '(empty)',
+            hasCustomPrompt: !!customPrompt,
+        });
+
         if (!name) {
             return {
                 statusCode: 400,
@@ -183,11 +204,27 @@ exports.handler = async function(event, context) {
 
         // Build the image generation prompt
         const prompt = customPrompt || buildImagePrompt({ name, description, category, serviceType, tags });
+        console.log('[AI IMAGE FUNC] Generated prompt:', prompt.substring(0, 300));
+        console.log('[AI IMAGE FUNC] Prompt length:', prompt.length);
 
         // Generate the image using multi-provider AI (Imagen → DALL-E 3)
+        console.log('[AI IMAGE FUNC] Calling generateImage()...');
+        const _genStartTime = Date.now();
         const imageResult = await generateImage(prompt, {
             caller: 'generate-ai-image',
             maxRetries: 1,
+        });
+        const _genElapsed = Date.now() - _genStartTime;
+        console.log('[AI IMAGE FUNC] generateImage() completed in', _genElapsed, 'ms');
+        console.log('[AI IMAGE FUNC] generateImage() result:', {
+            ok: imageResult.ok,
+            provider: imageResult.provider,
+            providerName: imageResult.providerName,
+            hasBase64: !!imageResult.base64,
+            base64Length: imageResult.base64?.length || 0,
+            format: imageResult.format,
+            error: imageResult.error || null,
+            quotaExhausted: imageResult.quotaExhausted || false,
         });
 
         if (!imageResult.ok) {
@@ -214,7 +251,18 @@ exports.handler = async function(event, context) {
         console.log(`[AI IMAGE] Image generated via ${imageResult.providerName}`);
 
         // Upload to Cloudinary
+        console.log('[AI IMAGE FUNC] Uploading to Cloudinary...', {
+            base64Length: imageResult.base64?.length || 0,
+            itemId,
+            sessionId,
+        });
+        const _uploadStartTime = Date.now();
         const cloudinaryResult = await uploadToCloudinary(imageResult.base64, itemId, sessionId);
+        const _uploadElapsed = Date.now() - _uploadStartTime;
+        console.log('[AI IMAGE FUNC] Cloudinary upload completed in', _uploadElapsed, 'ms');
+
+        const _totalElapsed = Date.now() - _startTime;
+        console.log('[AI IMAGE FUNC] ====== TOTAL TIME:', _totalElapsed, 'ms ======');
 
         return {
             statusCode: 200,
@@ -235,8 +283,11 @@ exports.handler = async function(event, context) {
         };
 
     } catch (error) {
+        const _totalElapsed = Date.now() - _startTime;
         console.error('[AI IMAGE] Function error:', error.message);
         console.error('[AI IMAGE] Stack:', error.stack);
+        console.error('[AI IMAGE] Error type:', error.constructor.name);
+        console.error('[AI IMAGE] Error occurred after', _totalElapsed, 'ms');
 
         const statusCode = error.statusCode === 429 ? 429 : 500;
         const isQuota = error.quotaExhausted || false;
