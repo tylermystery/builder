@@ -4326,15 +4326,9 @@ function applyTagChipStyle(chip, isSelected) {
 let isModalRendering = false;
 
 export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = null) {
-    console.log('[MODAL DEBUG] ========== showDetailModal called ==========');
-    console.log('[MODAL DEBUG] record:', record?.id, record?.fields?.Name);
-    console.log('[MODAL DEBUG] modalOverlay element:', !!modalOverlay);
-    console.log('[MODAL DEBUG] isModalRendering:', isModalRendering);
-
     // Prevent concurrent modal renders that could cause duplicate content
     if (isModalRendering) {
         log('Modal', 'Modal is already rendering, skipping duplicate call');
-        console.log('[MODAL DEBUG] BLOCKED: Modal is already rendering, skipping.');
         return;
     }
     isModalRendering = true;
@@ -4344,30 +4338,6 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     // DEBUG: Comprehensive entry point logging for direct modal URL debugging
     const deferredCssLink = document.querySelector('link[href*="deferred.css"]');
     const deferredCssLoaded = deferredCssLink && deferredCssLink.rel === 'stylesheet';
-    const isDirectUrlAccess = !document.referrer || document.referrer === '' ||
-                              (new URL(document.referrer).pathname !== window.location.pathname);
-
-    console.log('[MODAL-DEBUG] showDetailModal entry:', {
-        recordId: record.id,
-        recordName: record.fields?.Name,
-        timestamp: performance.now().toFixed(2) + 'ms',
-        isDirectUrlAccess,
-        documentReferrer: document.referrer || 'none',
-        // CSS Loading State
-        deferredCssRel: deferredCssLink ? deferredCssLink.rel : 'not found',
-        deferredCssLoaded,
-        totalStylesheets: document.styleSheets.length,
-        // DOM State
-        documentReadyState: document.readyState,
-        modalOverlayExists: !!document.getElementById('detail-modal-overlay'),
-        modalOverlayDisplay: modalOverlay ? window.getComputedStyle(modalOverlay).display : 'N/A',
-        bodyClasses: document.body.className
-    });
-
-    // If CSS not loaded yet, add a note (main.js now handles waiting for CSS on direct URL access)
-    if (!deferredCssLoaded) {
-        console.log('[MODAL-DEBUG] Note: Deferred CSS not yet loaded. main.js should have waited for it on direct URL access.');
-    }
 
     const detailSpecs = [
         { fieldName: 'Duration', label: 'Duration' },
@@ -7936,23 +7906,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     const isPresentationActive = document.body.classList.contains('presentation-active');
     const modalZIndex = getModalZIndex('detail');
 
-    // DEBUG: Log modal overlay state before activation
-    console.log('[Modal DEBUG] Before activation:', {
-        overlayId: modalOverlay.id,
-        overlayClasses: modalOverlay.className,
-        computedDisplay: window.getComputedStyle(modalOverlay).display,
-        computedOpacity: window.getComputedStyle(modalOverlay).opacity,
-        computedBgColor: window.getComputedStyle(modalOverlay).backgroundColor,
-        computedPosition: window.getComputedStyle(modalOverlay).position,
-        computedZIndex: window.getComputedStyle(modalOverlay).zIndex,
-        deferredCssLoaded: !!document.querySelector('link[href*="deferred.css"][rel="stylesheet"]'),
-        criticalCssExists: !!document.querySelector('style'),
-        isPresentationActive,
-        calculatedZIndex: modalZIndex
-    });
-
     modalOverlay.classList.add('active');
-    console.log('[MODAL DEBUG] Detail modal overlay activated (classList.add active)');
 
     // CRITICAL FIX: Apply essential overlay styles inline to ensure they work
     // even if CSS hasn't fully loaded (direct URL access scenario)
@@ -8111,67 +8065,6 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             } else {
                 console.log('[Modal DEBUG] ✓ Modal is correctly above presentation view');
             }
-        }
-    });
-
-    // DEBUG: Log final modal rendering completion state
-    console.log('[MODAL-DEBUG] showDetailModal complete:', {
-        recordId: record.id,
-        timestamp: performance.now().toFixed(2) + 'ms',
-        deferredCssLoadedNow: !!document.querySelector('link[href*="deferred.css"][rel="stylesheet"]'),
-        modalOverlayActive: modalOverlay.classList.contains('active'),
-        modalContentVisible: !!modalOverlay.querySelector('.modal-content'),
-        // Check background page elements to see if they have proper styling
-        pageElementStyles: {
-            eventPlanPanel: (() => {
-                const el = document.getElementById('event-plan-panel');
-                if (!el) return 'not found';
-                const styles = window.getComputedStyle(el);
-                return {
-                    backgroundColor: styles.backgroundColor,
-                    backdropFilter: styles.backdropFilter || styles.webkitBackdropFilter || 'none',
-                    display: styles.display,
-                    position: styles.position,
-                    visibility: styles.visibility,
-                    // Expected from deferred.css: rgba(255, 255, 255, 0.7)
-                    hasExpectedBg: styles.backgroundColor.includes('rgba(255, 255, 255') || styles.backgroundColor.includes('255, 255, 255')
-                };
-            })(),
-            filterControls: (() => {
-                const el = document.getElementById('filter-controls');
-                if (!el) return 'not found';
-                const styles = window.getComputedStyle(el);
-                return {
-                    backgroundColor: styles.backgroundColor,
-                    backdropFilter: styles.backdropFilter || styles.webkitBackdropFilter || 'none',
-                    display: styles.display,
-                    // Expected from deferred.css: rgba(255, 255, 255, 0.7)
-                    hasExpectedBg: styles.backgroundColor.includes('rgba(255, 255, 255') || styles.backgroundColor.includes('255, 255, 255')
-                };
-            })(),
-            sidebarContainer: (() => {
-                const el = document.getElementById('sidebar-container');
-                if (!el) return 'not found';
-                const styles = window.getComputedStyle(el);
-                return {
-                    display: styles.display,
-                    width: styles.width,
-                    visibility: styles.visibility
-                };
-            })(),
-            header: (() => {
-                const el = document.querySelector('header, .header, #header');
-                if (!el) return 'not found';
-                const styles = window.getComputedStyle(el);
-                return {
-                    backgroundColor: styles.backgroundColor,
-                    position: styles.position
-                };
-            })(),
-            catalogBgColor: (() => {
-                const el = document.querySelector('#catalog-container, .catalog-container');
-                return el ? window.getComputedStyle(el).backgroundColor : 'not found';
-            })()
         }
     });
 
@@ -8510,7 +8403,6 @@ export async function showGroupDetailModal(group, allRecords) {
 }
 
 export function hideDetailModal() {
-    console.log('[MODAL DEBUG] hideDetailModal called. modalOverlay:', !!modalOverlay, 'isActive:', modalOverlay?.classList?.contains('active'));
     // Reset the rendering guard when modal is closed
     isModalRendering = false;
 
