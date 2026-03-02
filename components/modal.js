@@ -4589,25 +4589,37 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         // Mark as in-progress to prevent duplicate attempts
         window._aiImageGenerationInProgress.add(record.id);
 
-        try {
-            const requestPayload = {
-                name: record.fields?.Name || 'Unnamed Item',
-                description: record.fields?.Description || '',
-                category: record.fields?.Category || '',
-                serviceType: record.fields?.ServiceType || record.fields?.['Service Type'] || '',
-                tags: record.fields?.['Media Tags'] || '',
-                itemId: record.id,
-                sessionId: state.session?.id || 'unsaved'
-            };
+        // Fire AI image generation in the background — don't block modal rendering.
+        // A loading indicator is shown on the image area; when the AI image arrives,
+        // the modal's main image, thumbnails, cache, and indicators are updated live.
+        const aiGenRecordId = record.id;
+        const aiGenRequestPayload = {
+            name: record.fields?.Name || 'Unnamed Item',
+            description: record.fields?.Description || '',
+            category: record.fields?.Category || '',
+            serviceType: record.fields?.ServiceType || record.fields?.['Service Type'] || '',
+            tags: record.fields?.['Media Tags'] || '',
+            itemId: record.id,
+            sessionId: state.session?.id || 'unsaved'
+        };
 
-            console.log('[AI IMAGE AUTO-GEN] Request payload:', JSON.stringify(requestPayload));
+        console.log('[AI IMAGE AUTO-GEN] Request payload:', JSON.stringify(aiGenRequestPayload));
 
-            const aiImageResponse = await fetch('/.netlify/functions/generate-ai-image', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestPayload)
-            });
+        // Show loading indicator on the image area
+        const aiImageLoadingIndicator = document.createElement('div');
+        aiImageLoadingIndicator.className = 'modal-ai-image-loading';
+        aiImageLoadingIndicator.innerHTML = `
+            <div class="modal-ai-image-spinner"></div>
+            <span class="modal-ai-image-loading-text">Generating AI image...</span>
+        `;
+        // Append to modalMainImage (will overlay on top of placeholder)
+        modalMainImage.appendChild(aiImageLoadingIndicator);
 
+        fetch('/.netlify/functions/generate-ai-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(aiGenRequestPayload)
+        }).then(async (aiImageResponse) => {
             console.log('[AI IMAGE AUTO-GEN] Response status:', aiImageResponse.status);
 
             if (aiImageResponse.ok) {
@@ -4615,10 +4627,6 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                 console.log('[AI IMAGE AUTO-GEN] Response JSON:', JSON.stringify(aiImageResult));
 
                 if (aiImageResult.success && aiImageResult.imageUrl) {
-                    // Update imageUrls with the AI-generated image
-                    imageUrls = [aiImageResult.imageUrl];
-                    imageSource = 'ai_generated';
-
                     // Store the AI image in the record so it persists
                     const aiGeneratedImage = {
                         url: aiImageResult.imageUrl,
@@ -4627,7 +4635,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     };
 
                     // Update record in state
-                    const recordIndex = state.records.all.findIndex(r => r.id === record.id);
+                    const recordIndex = state.records.all.findIndex(r => r.id === aiGenRecordId);
                     if (recordIndex !== -1) {
                         state.records.all[recordIndex].fields._customImages = [aiGeneratedImage];
                         state.records.all[recordIndex].fields._hasAIGeneratedImage = true;
@@ -4642,26 +4650,74 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
                     console.log('[AI IMAGE AUTO-GEN] SUCCESS - AI image stored:', aiImageResult.imageUrl);
                     log('Modal', `AI image auto-generated for ${record.fields?.Name}: ${aiImageResult.imageUrl}`);
+
+                    // Update the modal live if it's still showing this record
+                    const currentModalOverlay = document.getElementById('detail-modal-overlay');
+                    if (currentModalOverlay && currentModalOverlay.dataset.recordId === aiGenRecordId && currentModalOverlay.classList.contains('active')) {
+                        const liveMainImage = document.getElementById('modal-main-image');
+                        if (liveMainImage) {
+                            // Remove loading indicator
+                            const loadingEl = liveMainImage.querySelector('.modal-ai-image-loading');
+                            if (loadingEl) loadingEl.remove();
+
+                            // Update main image
+                            const optimizedUrl = aiImageResult.imageUrl.includes('cloudinary')
+                                ? applyCloudinaryTransform(aiImageResult.imageUrl, 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+                                : aiImageResult.imageUrl;
+                            liveMainImage.style.backgroundImage = `url('${optimizedUrl}')`;
+
+                            // Update AI indicator
+                            const existingIndicator = liveMainImage.querySelector('.ai-image-source-modal');
+                            if (existingIndicator) {
+                                existingIndicator.textContent = 'AI Generated';
+                                existingIndicator.className = 'ai-image-source-modal approximation';
+                                existingIndicator.title = 'This image was AI-generated based on item details. Upload your own photos to replace it.';
+                            }
+
+                            // Update first thumbnail if it exists
+                            const liveThumbnailStrip = document.getElementById('modal-thumbnail-strip');
+                            if (liveThumbnailStrip) {
+                                const firstThumb = liveThumbnailStrip.querySelector('.thumbnail-img');
+                                if (firstThumb) {
+                                    const optimizedThumb = aiImageResult.imageUrl.includes('cloudinary')
+                                        ? applyCloudinaryTransform(aiImageResult.imageUrl, 'w_150,h_150,c_fill,f_auto,q_auto')
+                                        : aiImageResult.imageUrl;
+                                    firstThumb.style.backgroundImage = `url('${optimizedThumb}')`;
+                                }
+                            }
+                        }
+
+                        // Update image cache
+                        if (typeof window.itemImagesCache !== 'undefined') {
+                            window.itemImagesCache.set(aiGenRecordId, { images: [aiImageResult.imageUrl], currentIndex: 0 });
+                        }
+                    } else {
+                        // Modal closed or showing different record — remove loading indicator if still in DOM
+                        const staleLoading = document.querySelector('.modal-ai-image-loading');
+                        if (staleLoading) staleLoading.remove();
+                    }
                 } else {
                     console.log('[AI IMAGE AUTO-GEN] Response OK but missing success or imageUrl:', aiImageResult);
-                    // Mark as attempted even if no image returned (to prevent retry loops)
-                    window._aiImageGenerationAttempted.add(record.id);
+                    window._aiImageGenerationAttempted.add(aiGenRecordId);
+                    // Remove loading indicator
+                    const loadingEl = document.querySelector('.modal-ai-image-loading');
+                    if (loadingEl) loadingEl.remove();
                 }
             } else {
                 const errorText = await aiImageResponse.text();
                 console.warn('[AI IMAGE AUTO-GEN] FAILED:', errorText);
-                // Mark as attempted to prevent retry on failure
-                window._aiImageGenerationAttempted.add(record.id);
+                window._aiImageGenerationAttempted.add(aiGenRecordId);
+                const loadingEl = document.querySelector('.modal-ai-image-loading');
+                if (loadingEl) loadingEl.remove();
             }
-        } catch (aiError) {
+        }).catch((aiError) => {
             console.warn('[AI IMAGE AUTO-GEN] EXCEPTION:', aiError.message);
-            console.warn('[AI IMAGE AUTO-GEN] Stack:', aiError.stack);
-            // Mark as attempted to prevent retry on exception
-            window._aiImageGenerationAttempted.add(record.id);
-        } finally {
-            // Always remove from in-progress when done
-            window._aiImageGenerationInProgress.delete(record.id);
-        }
+            window._aiImageGenerationAttempted.add(aiGenRecordId);
+            const loadingEl = document.querySelector('.modal-ai-image-loading');
+            if (loadingEl) loadingEl.remove();
+        }).finally(() => {
+            window._aiImageGenerationInProgress.delete(aiGenRecordId);
+        });
     }
 
     // Merge comment-uploaded images from presentation view's itemImagesCache
