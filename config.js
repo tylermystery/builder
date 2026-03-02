@@ -131,5 +131,117 @@ export const CONSTANTS = {
         GUEST_COUNT: 'guestCount',
         GOALS: 'goals',
         SPECIAL_REQUESTS: 'specialRequests',
+    },
+    // Centralized z-index values for proper layering hierarchy
+    // Higher numbers appear above lower numbers
+    Z_INDEX: {
+        // Base layers
+        KALEIDOSCOPE_BG: -1,           // Background canvas behind everything
+        CONTENT: 1,                     // Main page content
+
+        // Header and navigation
+        HEADER: 1000,                   // Main header (sticky)
+        HAMBURGER_DROPDOWN: 1000,       // Hamburger menu dropdown
+
+        // Presentation view (fullscreen mode)
+        PRESENTATION_VIEW: 1000,        // Presentation fullpage overlay
+        PRESENTATION_CONTENT: 1,        // Content within presentation (relative)
+
+        // Modals - base level (when no presentation active)
+        MODAL_OVERLAY: 1000,            // Base modal overlay
+        MODAL_CLOSE_BTN: 1010,          // Modal close button
+
+        // Modals - elevated level (when presentation is active)
+        MODAL_OVERLAY_ELEVATED: 1100,   // Modal overlay above presentation
+
+        // Chat widget
+        CHAT_TOGGLE: 1001,              // Chat toggle button
+        CHAT_CONTAINER: 1050,           // Chat widget container
+
+        // Popups and pickers
+        REACTION_PICKER: 10001,         // Reaction picker popup (very high to ensure visibility)
+
+        // Search modal in presentation
+        PRESENTATION_SEARCH: 3000,      // Presentation search modal
+        PRESENTATION_SEARCH_CONTENT: 2000, // Presentation search content
+
+        // Debug and system
+        DEBUG_PANEL: 10000,             // Debug panel
+        TASK_DETAIL_MODAL: 10002,       // Task detail modal (admin)
+
+        // Netlify Identity (external)
+        NETLIFY_IDENTITY: 100000,       // Netlify identity widget
     }
 };
+
+/**
+ * Get the appropriate z-index for modals based on current state
+ * @param {string} type - The type of z-index ('modal', 'checkout', 'picker')
+ * @returns {number} - The z-index value to use
+ */
+export function getModalZIndex(type = 'modal') {
+    const isPresentationActive = document.body.classList.contains('presentation-active');
+
+    switch (type) {
+        case 'modal':
+        case 'checkout':
+        case 'detail':
+            return isPresentationActive
+                ? CONSTANTS.Z_INDEX.MODAL_OVERLAY_ELEVATED
+                : CONSTANTS.Z_INDEX.MODAL_OVERLAY;
+        case 'picker':
+        case 'reaction':
+            return CONSTANTS.Z_INDEX.REACTION_PICKER;
+        case 'close-btn':
+            return CONSTANTS.Z_INDEX.MODAL_CLOSE_BTN;
+        default:
+            return isPresentationActive
+                ? CONSTANTS.Z_INDEX.MODAL_OVERLAY_ELEVATED
+                : CONSTANTS.Z_INDEX.MODAL_OVERLAY;
+    }
+}
+
+/**
+ * Debug function to log all z-index values for visible elements
+ * Call this from console: window.debugZIndex()
+ */
+export function debugZIndex() {
+    const elements = [
+        { selector: '#presentation-modal-overlay', name: 'Presentation View' },
+        { selector: '#detail-modal-overlay', name: 'Detail Modal' },
+        { selector: '#checkout-modal-overlay', name: 'Checkout Modal' },
+        { selector: '.reaction-picker', name: 'Reaction Picker' },
+        { selector: '.comment-reaction-picker', name: 'Comment Reaction Picker' },
+        { selector: '#main-header', name: 'Main Header' },
+        { selector: '.hamburger-dropdown', name: 'Hamburger Dropdown' },
+        { selector: '#chat-widget-container', name: 'Chat Widget' },
+        { selector: '.modal-overlay.active', name: 'Active Modal Overlay' },
+    ];
+
+    console.group('[Z-INDEX DEBUG] Current z-index values:');
+    console.log('Presentation Active:', document.body.classList.contains('presentation-active'));
+
+    elements.forEach(({ selector, name }) => {
+        const el = document.querySelector(selector);
+        if (el) {
+            const computed = window.getComputedStyle(el);
+            const isActive = el.classList.contains('active');
+            console.log(`${name} (${selector}):`, {
+                zIndex: computed.zIndex,
+                inlineZIndex: el.style.zIndex || 'none',
+                display: computed.display,
+                position: computed.position,
+                isActive,
+                visible: computed.display !== 'none' && computed.visibility !== 'hidden'
+            });
+        }
+    });
+
+    console.groupEnd();
+    return 'Z-index debug complete. Check console for details.';
+}
+
+// Expose debug function globally for console access
+if (typeof window !== 'undefined') {
+    window.debugZIndex = debugZIndex;
+}

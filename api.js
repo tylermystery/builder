@@ -2123,11 +2123,12 @@ export const COMPONENT_TYPES = {
  * @param {string} senderId - The user ID posting the comment
  * @param {string} senderName - Display name of the sender
  * @param {string} content - The comment content
+ * @param {string} [parentCommentId] - Optional parent comment ID for replies
  * @returns {Promise<object|null>} The created record or null on failure
  */
-export async function postComponentComment(sessionId, componentType, componentId, senderId, senderName, content) {
+export async function postComponentComment(sessionId, componentType, componentId, senderId, senderName, content, parentCommentId = null) {
     console.log('[ComponentComment DEBUG] ========== postComponentComment CALLED ==========');
-    console.log('[ComponentComment DEBUG] Params:', { sessionId, componentType, componentId, senderId, senderName, contentLength: content?.length });
+    console.log('[ComponentComment DEBUG] Params:', { sessionId, componentType, componentId, senderId, senderName, contentLength: content?.length, parentCommentId });
 
     if (!sessionId || !sessionId.startsWith('rec')) {
         console.log('[ComponentComment DEBUG] ❌ Invalid sessionId:', sessionId);
@@ -2150,6 +2151,12 @@ export async function postComponentComment(sessionId, componentType, componentId
         SenderID: senderId,
         SenderName: senderName
     };
+
+    // Add parent comment ID if this is a reply
+    if (parentCommentId && parentCommentId.startsWith('rec')) {
+        fields.ParentMessageID = parentCommentId;
+        console.log('[ComponentComment DEBUG] Adding ParentMessageID for reply:', parentCommentId);
+    }
 
     if (componentType === COMPONENT_TYPES.ITEM && componentId && componentId.startsWith('rec')) {
         // Item comment: link to both session AND item
@@ -3418,11 +3425,15 @@ export async function fetchTasks(projectId) {
     log('API', `Fetching tasks for project: ${projectId}`);
 
     // Filter tasks by the ProjectId field (linked to Sessions)
-    const formula = `FIND('${projectId}', ARRAYJOIN({ProjectId}))`;
-    const encodedFormula = encodeURIComponent(formula);
+    // IMPORTANT: ARRAYJOIN on a linked record field returns display values (names), not record IDs
+    // We need a ProjectId_Rollup field in Airtable that exposes the record IDs as text
+    // If that field doesn't exist, we'll fall back to client-side filtering
 
     // Request fields needed for task display
-    const fieldsQuery = [
+    // Note: Only request fields that exist in the Airtable Tasks table
+    // SourceType, SourceCommentId, LinkedPlanItemId, AffiliatedTaskId are NOT stored in Airtable
+    // Comment-to-task linking is tracked client-side via _commentTaskLinks in session data
+    const fieldsToFetch = [
         'Name',
         'Description',
         'Status',
@@ -3434,11 +3445,18 @@ export async function fetchTasks(projectId) {
         'Order',
         'LinkedItem',
         'CreatedTime'
-    ].map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
+    ];
+    const fieldsQuery = fieldsToFetch.map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
 
-    // Sort by Order field first, then by DueDate
+    console.log('[TASK PERSISTENCE DEBUG] fetchTasks fields requested:', fieldsToFetch);
+
+    // First, try filtering server-side with ProjectId_Rollup (if it exists in Airtable)
+    const formulaWithRollup = `FIND('${projectId}', {ProjectId_Rollup})`;
+    const encodedFormula = encodeURIComponent(formulaWithRollup);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}&sort%5B0%5D%5Bfield%5D=Order&sort%5B0%5D%5Bdirection%5D=asc&sort%5B1%5D%5Bfield%5D=DueDate&sort%5B1%5D%5Bdirection%5D=asc`;
 
+    console.log('[TASK PERSISTENCE DEBUG] Filter formula (using ProjectId_Rollup):', formulaWithRollup);
+    console.log('[TASK PERSISTENCE DEBUG] Looking for tasks linked to project:', projectId);
     console.log('[API DEBUG] fetchTasks URL:', url.substring(0, 150) + '...');
     console.log('[API DEBUG] fetchTasks table name:', TASKS_TABLE_NAME);
 
@@ -3454,11 +3472,13 @@ export async function fetchTasks(projectId) {
         console.log(`[API DEBUG] fetchTasks fetch completed in ${(fetchEnd - fetchStart).toFixed(2)}ms`);
         console.log('[API DEBUG] fetchTasks response status:', response.status, response.statusText);
 
+        // If the filter failed (likely because ProjectId_Rollup field doesn't exist),
+        // fall back to fetching all tasks and filtering client-side
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('[API DEBUG] fetchTasks Airtable error response:', errorText);
-            console.error('Airtable Error fetching tasks:', errorText);
-            throw new Error(`Failed to fetch tasks from Airtable. Status: ${response.status}`);
+            console.log('[TASK PERSISTENCE DEBUG] Server-side filter failed:', errorText);
+            console.log('[TASK PERSISTENCE DEBUG] Falling back to client-side filtering...');
+            return await fetchTasksWithClientSideFilter(projectId, fieldsQuery);
         }
 
         const data = await response.json();
@@ -3467,12 +3487,100 @@ export async function fetchTasks(projectId) {
             recordCount: data.records?.length ?? 0,
             offset: data.offset
         });
-        log('API', `Fetched ${data.records.length} tasks for project ${projectId}`);
-        return data.records;
+
+        // Enhanced persistence debugging
+        console.log('[TASK PERSISTENCE DEBUG] ========== TASKS FETCHED FROM AIRTABLE ==========');
+        console.log('[TASK PERSISTENCE DEBUG] Project ID:', projectId);
+        console.log('[TASK PERSISTENCE DEBUG] Total tasks found (server-side filter):', data.records.length);
+
+        if (data.records.length > 0) {
+            console.log('[TASK PERSISTENCE DEBUG] Task IDs:', data.records.map(t => t.id));
+            console.log('[TASK PERSISTENCE DEBUG] Task names:', data.records.map(t => t.fields?.Name));
+            console.log('[TASK PERSISTENCE DEBUG] First task ProjectId value:', data.records[0].fields?.ProjectId);
+            console.log('[TASK PERSISTENCE DEBUG] ================================================');
+            log('API', `Fetched ${data.records.length} tasks for project ${projectId}`);
+            return data.records;
+        }
+
+        // If server-side filter returned 0 results, try client-side filtering
+        // This handles the case where ProjectId_Rollup field exists but is empty,
+        // or where the field doesn't contain the expected data
+        console.log('[TASK PERSISTENCE DEBUG] No tasks found with server filter, trying client-side filter...');
+        return await fetchTasksWithClientSideFilter(projectId, fieldsQuery);
+
     } catch (error) {
         console.error('[API DEBUG] fetchTasks caught error:', error);
-        console.error('[API DEBUG] fetchTasks error stack:', error?.stack);
-        console.error("Error fetching tasks:", error);
+        console.log('[TASK PERSISTENCE DEBUG] Falling back to client-side filtering after error...');
+        return await fetchTasksWithClientSideFilter(projectId, fieldsQuery);
+    }
+}
+
+/**
+ * Fallback function to fetch all tasks and filter client-side by ProjectId
+ * Used when the server-side filter doesn't work (e.g., ProjectId_Rollup field doesn't exist)
+ * @param {string} projectId - The project/session ID to filter by
+ * @param {string} fieldsQuery - URL query string for fields to fetch
+ * @returns {Promise<Array>} - Array of task records for this project
+ */
+async function fetchTasksWithClientSideFilter(projectId, fieldsQuery) {
+    console.log('[TASK PERSISTENCE DEBUG] ========== CLIENT-SIDE FILTER ==========');
+    console.log('[TASK PERSISTENCE DEBUG] Fetching all tasks and filtering client-side for project:', projectId);
+
+    // Fetch all tasks without a filter (or with a very broad filter)
+    // Note: This is less efficient but works without requiring Airtable schema changes
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}?${fieldsQuery}&sort%5B0%5D%5Bfield%5D=Order&sort%5B0%5D%5Bdirection%5D=asc&sort%5B1%5D%5Bfield%5D=DueDate&sort%5B1%5D%5Bdirection%5D=asc`;
+
+    try {
+        const response = await fetchWithTimeout(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[TASK PERSISTENCE DEBUG] Client-side filter fetch failed:', errorText);
+            return [];
+        }
+
+        const data = await response.json();
+        console.log('[TASK PERSISTENCE DEBUG] Total tasks in table:', data.records.length);
+
+        // Filter client-side by checking if ProjectId array contains the target projectId
+        // The API returns linked records as arrays of record IDs
+        const filteredTasks = data.records.filter(task => {
+            const taskProjectIds = task.fields?.ProjectId;
+            if (!taskProjectIds || !Array.isArray(taskProjectIds)) {
+                return false;
+            }
+            return taskProjectIds.includes(projectId);
+        });
+
+        console.log('[TASK PERSISTENCE DEBUG] Tasks matching project (client-side):', filteredTasks.length);
+        if (filteredTasks.length > 0) {
+            console.log('[TASK PERSISTENCE DEBUG] Matched task IDs:', filteredTasks.map(t => t.id));
+            console.log('[TASK PERSISTENCE DEBUG] Matched task names:', filteredTasks.map(t => t.fields?.Name));
+        }
+
+        // Log sample of all tasks for debugging if no matches found
+        if (filteredTasks.length === 0 && data.records.length > 0) {
+            console.log('[TASK PERSISTENCE DEBUG] No matching tasks found. Sample of all tasks:');
+            data.records.slice(0, 5).forEach((task, index) => {
+                console.log(`[TASK PERSISTENCE DEBUG] Task ${index + 1}:`, {
+                    id: task.id,
+                    name: task.fields?.Name,
+                    projectIdRaw: task.fields?.ProjectId,
+                    projectIdStringified: JSON.stringify(task.fields?.ProjectId),
+                    projectIdType: Array.isArray(task.fields?.ProjectId) ? 'array' : typeof task.fields?.ProjectId,
+                    matchesTarget: Array.isArray(task.fields?.ProjectId) && task.fields.ProjectId.includes(projectId)
+                });
+            });
+        }
+
+        console.log('[TASK PERSISTENCE DEBUG] ================================================');
+        log('API', `Fetched ${filteredTasks.length} tasks for project ${projectId} (client-side filter)`);
+        return filteredTasks;
+
+    } catch (error) {
+        console.error('[TASK PERSISTENCE DEBUG] Client-side filter error:', error);
         return [];
     }
 }
@@ -3524,9 +3632,13 @@ export async function createTask(projectId, taskData) {
     if (taskData.Order !== undefined) {
         fields.Order = taskData.Order;
     }
-    if (taskData.LinkedItem) {
+    // Only set LinkedItem if it's a valid Airtable record ID (starts with 'rec')
+    // This prevents temporary AI-generated IDs from causing Airtable API errors
+    if (taskData.LinkedItem && taskData.LinkedItem.startsWith('rec')) {
         fields.LinkedItem = [taskData.LinkedItem]; // Link to catalog item
     }
+    // Note: SourceCommentId tracking is handled client-side only
+    // The Tasks table in Airtable does not have this field
 
     try {
         const response = await fetch(url, {
@@ -3545,6 +3657,8 @@ export async function createTask(projectId, taskData) {
         }
 
         const data = await response.json();
+        console.log('[TASK PERSISTENCE DEBUG] Task created with fields:', JSON.stringify(data.fields, null, 2));
+        console.log('[TASK PERSISTENCE DEBUG] Task ProjectId:', data.fields?.ProjectId);
         log('API', `Created task: ${data.id}`);
         return data;
     } catch (error) {
@@ -3596,8 +3710,12 @@ export async function updateTask(taskId, taskData) {
     if (taskData.Order !== undefined) {
         fields.Order = taskData.Order;
     }
+    // Only set LinkedItem if null (to clear) or a valid Airtable record ID (starts with 'rec')
+    // This prevents temporary AI-generated IDs from causing Airtable API errors
     if (taskData.LinkedItem !== undefined) {
-        fields.LinkedItem = taskData.LinkedItem ? [taskData.LinkedItem] : null;
+        if (taskData.LinkedItem === null || taskData.LinkedItem.startsWith('rec')) {
+            fields.LinkedItem = taskData.LinkedItem ? [taskData.LinkedItem] : null;
+        }
     }
 
     try {
@@ -4521,6 +4639,203 @@ export async function generateTopOptions(record) {
     } catch (error) {
         console.error('Error generating top options:', error);
         return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Fetch Cloudinary image resources by tags with full metadata including public_id
+ * This returns the full resource objects, not just URLs, enabling AI processing
+ * @param {string|Array} tags - Single tag string or array of tags to search for
+ * @param {number} retries - Number of retries on rate limit (default: 2)
+ * @returns {Promise<Array>} - Array of image resource objects with public_id, secure_url, etc.
+ */
+export async function fetchImageResourcesByTags(tags, retries = 2) {
+    console.log('[IMAGE DEBUG] fetchImageResourcesByTags CALLED with:', {
+        tags: tags,
+        tagsType: typeof tags,
+        isArray: Array.isArray(tags),
+        retriesRemaining: retries
+    });
+
+    if (!tags || (Array.isArray(tags) && tags.length === 0) || (typeof tags === 'string' && !tags.trim())) {
+        log('API', 'fetchImageResourcesByTags: No valid tags provided.');
+        return [];
+    }
+
+    try {
+        let payload;
+        if (Array.isArray(tags)) {
+            const validTags = tags.map(t => String(t).trim()).filter(Boolean);
+            if (validTags.length === 0) return [];
+            payload = { expression: validTags.map(tag => `tags:"${tag}"`).join(' AND ') };
+            log('API', `Fetching image resources by expression: ${payload.expression}`);
+        } else {
+            const tagName = String(tags).trim();
+            if (!tagName) return [];
+
+            const tagParts = tagName.split(/\s+/).filter(Boolean);
+            if (tagParts.length > 1) {
+                payload = { expression: tagParts.map(tag => `tags:"${tag}"`).join(' OR ') };
+                log('API', `Fetching image resources by multi-keyword expression: ${payload.expression}`);
+            } else {
+                payload = { tag: tagName };
+                log('API', `Fetching image resources by single tag: ${tagName}`);
+            }
+        }
+
+        const response = await fetch('/.netlify/functions/cloudinary', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.status === 429 && retries > 0) {
+            log('API', `Cloudinary rate limit hit, retrying in 1000ms... (${retries} retries left)`);
+            await new Promise(res => setTimeout(res, 1000));
+            return fetchImageResourcesByTags(tags, retries - 1);
+        }
+
+        if (!response.ok) {
+            console.warn(`Cloudinary proxy function error: ${response.status} ${response.statusText}`);
+            return [];
+        }
+
+        const data = await response.json();
+        console.log('[IMAGE DEBUG] fetchImageResourcesByTags response:', {
+            hasResources: !!data.resources,
+            resourceCount: data.resources ? data.resources.length : 0
+        });
+
+        if (!data.resources || data.resources.length === 0) {
+            log('API', 'No Cloudinary resources found for the given tags/expression.');
+            return [];
+        }
+
+        // Return full resource objects with public_id, secure_url, format, etc.
+        log('API', `Found ${data.resources.length} image resources from Cloudinary.`);
+        return data.resources;
+
+    } catch (error) {
+        console.error('Failed to fetch image resources from Cloudinary via proxy:', error);
+        return [];
+    }
+}
+
+/**
+ * Process a single image through the AI parsing function
+ * Uses the same Gemini-based analysis as the AI Discovery parsing tool
+ * @param {string} publicId - The Cloudinary public ID of the image to process
+ * @returns {Promise<Object>} - Object with success flag and processing result
+ */
+export async function processImageWithAI(publicId) {
+    if (!publicId || typeof publicId !== 'string') {
+        console.error('processImageWithAI: Invalid publicId provided');
+        return { success: false, error: 'Invalid publicId' };
+    }
+
+    log('API', `Processing image with AI: ${publicId}`);
+
+    try {
+        const response = await fetch('/.netlify/functions/process-image-ai', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ publicId })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            log('API', `Successfully processed image with AI: ${publicId}`);
+            return { success: true, data };
+        } else {
+            console.warn(`AI processing failed for ${publicId}:`, data.error);
+            return { success: false, error: data.error || 'Unknown error' };
+        }
+    } catch (error) {
+        console.error(`Error processing image ${publicId} with AI:`, error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Process multiple images through AI parsing in sequence
+ * Processes images one at a time to avoid overwhelming the AI service
+ * @param {Array<string>} publicIds - Array of Cloudinary public IDs to process
+ * @param {Function} onProgress - Optional callback for progress updates (index, total, result)
+ * @returns {Promise<Object>} - Object with processed count, failed count, and results array
+ */
+export async function processImagesWithAI(publicIds, onProgress = null) {
+    if (!Array.isArray(publicIds) || publicIds.length === 0) {
+        return { processed: 0, failed: 0, results: [] };
+    }
+
+    log('API', `Processing ${publicIds.length} images with AI`);
+
+    const results = [];
+    let processed = 0;
+    let failed = 0;
+
+    for (let i = 0; i < publicIds.length; i++) {
+        const publicId = publicIds[i];
+        const result = await processImageWithAI(publicId);
+
+        if (result.success) {
+            processed++;
+        } else {
+            failed++;
+        }
+
+        results.push({ publicId, ...result });
+
+        if (onProgress) {
+            onProgress(i + 1, publicIds.length, result);
+        }
+
+        // Small delay between requests to avoid rate limiting
+        if (i < publicIds.length - 1) {
+            await new Promise(res => setTimeout(res, 500));
+        }
+    }
+
+    log('API', `AI processing complete: ${processed} processed, ${failed} failed`);
+    return { processed, failed, results };
+}
+
+/**
+ * Scrape website and social media for photos
+ * Extracts og:image, gallery images, structured data images, and other photos from the web
+ * Used for AI-parsed items that don't have Cloudinary photos yet
+ * @param {string} websiteUrl - The URL to scrape for photos
+ * @param {string} businessName - The business name for fallback searches
+ * @param {number} maxImages - Maximum number of images to return (default: 10)
+ * @returns {Promise<Object>} - Object with success flag and array of image objects
+ */
+export async function scrapeWebsitePhotos(websiteUrl, businessName, maxImages = 10) {
+    if (!websiteUrl) {
+        console.log('[API] scrapeWebsitePhotos: No website URL provided');
+        return { success: false, images: [], error: 'No website URL provided' };
+    }
+
+    log('API', `Scraping website for photos: ${websiteUrl}`);
+
+    try {
+        const response = await fetch('/.netlify/functions/scrape-website-photos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ websiteUrl, businessName, maxImages })
+        });
+
+        if (!response.ok) {
+            console.warn(`[API] scrapeWebsitePhotos error: ${response.status} ${response.statusText}`);
+            return { success: false, images: [], error: `HTTP ${response.status}` };
+        }
+
+        const result = await response.json();
+        log('API', `Scraped ${result.images?.length || 0} photos from website`);
+        return result;
+    } catch (error) {
+        console.error('[API] scrapeWebsitePhotos error:', error);
+        return { success: false, images: [], error: error.message };
     }
 }
 

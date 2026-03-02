@@ -1,6 +1,6 @@
-import { state } from '../state.js';
+import { state, setState } from '../state.js';
 import * as api from '../api.js';
-import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, REACTION_SCORES } from '../config.js';
+import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, REACTION_SCORES, getModalZIndex } from '../config.js';
 import { updateUrl, getRecordPrice, parseOptions, flattenOptionGroups } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getCurrentUser, sendMessage as sendChatMessage, getReplyingToMessage, clearReplyState } from '../chat.js';
@@ -11,6 +11,7 @@ import { showWtfPlansPanel } from './wtfPlansPanel.js';
 import { updateEventPlanSection, updateIdeasCarousel } from './sidebar.js';
 import { syncPlanState, registerSyncCallback, unregisterSyncCallback } from '../utils/planStateSync.js';
 import { showUserModal } from '../auth.js';
+import { showToast } from '../ui.js';
 
 console.log('[Presentation DEBUG] presentation.js module loaded');
 console.log('[Presentation DEBUG] QUICK_REACTIONS available:', ['👍', '❤️', '😂', '😮', '😢', '🎉']);
@@ -19,6 +20,28 @@ console.log('[Presentation DEBUG] EMOJI_REACTIONS imported:', EMOJI_REACTIONS);
 
 // Quick emoji reactions available for messages and comments
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
+
+// Task status options for plan elements
+const ELEMENT_TASK_STATUS = {
+    NONE: 'none',           // Default - no status set
+    GTG: 'gtg',             // Good to go / confirmed
+    NO_ACTION: 'no-action', // No action needed
+    CHECK: 'check',         // Needs checking
+    NEEDS_ATTENTION: 'needs-attention' // Needs attention
+};
+
+// Task status labels and icons
+const TASK_STATUS_CONFIG = {
+    [ELEMENT_TASK_STATUS.NONE]: { label: 'Set Status', icon: '○', className: 'task-status-none' },
+    [ELEMENT_TASK_STATUS.GTG]: { label: 'Good to Go', icon: '✓', className: 'task-status-gtg' },
+    [ELEMENT_TASK_STATUS.NO_ACTION]: { label: 'No Action', icon: '—', className: 'task-status-no-action' },
+    [ELEMENT_TASK_STATUS.CHECK]: { label: 'Check', icon: '?', className: 'task-status-check' },
+    [ELEMENT_TASK_STATUS.NEEDS_ATTENTION]: { label: 'Needs Attention', icon: '!', className: 'task-status-attention' }
+};
+
+// Cache for element task statuses (stored in Items with Variations JSON)
+// Key format: 'item:{recordId}' or 'detail:{detailType}'
+let elementTaskStatuses = new Map();
 
 // Cache for component comments - keyed by componentType:componentId
 const componentCommentsCache = new Map();
@@ -123,6 +146,14 @@ const accordionState = {
 // Pusher instance for presentation chat
 let presentationPusher = null;
 let presentationChatChannel = null;
+
+// Chat elements (may not exist in all presentation contexts)
+let chatMessagesEl = null;
+let presentationMessageInput = null;
+let presentationMessageForm = null;
+let presentationUserNameInput = null;
+let presentationWhosHereCount = null;
+let presentationWhosHereList = null;
 
 // Search modal elements
 let presentationAddBtn = null;
@@ -348,23 +379,44 @@ function renderEventHeader() {
     // Event name is now shown only in the presentation header (presentationEventLabel)
     // No longer set in summaryEventNameEl since that element was removed
 
+    // Render goals/notes with task status button
     if (summaryEventNotesEl) {
-        summaryEventNotesEl.textContent = goals;
+        if (goals) {
+            const goalsStatusBtn = renderTaskStatusButton('detail', 'goals');
+            summaryEventNotesEl.innerHTML = `
+                <div class="event-detail-with-status">
+                    ${goalsStatusBtn}
+                    <span class="detail-content">${escapeHtml(goals)}</span>
+                </div>
+            `;
+        } else {
+            summaryEventNotesEl.innerHTML = '';
+        }
     }
 
     // Plan name removed from accordion title per design request
     // The first accordion panel now simply shows the list of users
 
-    if (dateValue && summaryEventDateEl) {
-        const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);
-        summaryEventDateEl.textContent = date.toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric'
-        });
-    } else if (summaryEventDateEl) {
-        summaryEventDateEl.textContent = '';
+    // Render date with task status button
+    if (summaryEventDateEl) {
+        if (dateValue) {
+            const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);
+            const dateStr = date.toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric'
+            });
+            const dateStatusBtn = renderTaskStatusButton('detail', 'date');
+            summaryEventDateEl.innerHTML = `
+                <div class="event-detail-with-status">
+                    ${dateStatusBtn}
+                    <span class="detail-content">${dateStr}</span>
+                </div>
+            `;
+        } else {
+            summaryEventDateEl.innerHTML = '';
+        }
     }
 }
 
@@ -842,10 +894,31 @@ function showExpandedEmojiPicker(recordId, anchorElement) {
     const pickerHTML = createEmojiPickerHTML(recordId);
     console.log('[ExpandedEmojiPicker DEBUG] pickerHTML length:', pickerHTML.length);
 
+    // Get the appropriate z-index for the picker (very high to ensure visibility above presentation view)
+    const pickerZIndex = getModalZIndex('picker');
+    const isPresentationActive = document.body.classList.contains('presentation-active');
+    console.log('[ExpandedEmojiPicker DEBUG] z-index:', pickerZIndex, 'presentation active:', isPresentationActive);
+
     const pickerContainer = document.createElement('div');
     pickerContainer.className = 'emoji-picker-overlay';
     pickerContainer.innerHTML = pickerHTML;
-    console.log('[ExpandedEmojiPicker DEBUG] pickerContainer created');
+
+    // Apply inline styles to ensure the overlay is always visible above presentation view
+    // This prevents CSS load timing issues from hiding the picker
+    pickerContainer.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: ${pickerZIndex};
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        pointer-events: auto;
+    `;
+    console.log('[ExpandedEmojiPicker DEBUG] pickerContainer created with z-index:', pickerZIndex);
 
     // Add to DOM
     document.body.appendChild(pickerContainer);
@@ -854,20 +927,42 @@ function showExpandedEmojiPicker(recordId, anchorElement) {
     // Position near the anchor
     const picker = pickerContainer.querySelector('.emoji-picker-modal');
     const rect = anchorElement.getBoundingClientRect();
-    const scrollTop = window.scrollY || document.documentElement.scrollTop;
     console.log('[ExpandedEmojiPicker DEBUG] anchor rect:', rect);
 
     // Center the picker on screen for mobile, near anchor for desktop
+    // Use fixed positioning to keep the modal within the viewport
     if (window.innerWidth <= 768) {
         picker.style.position = 'fixed';
         picker.style.top = '50%';
         picker.style.left = '50%';
         picker.style.transform = 'translate(-50%, -50%)';
+        picker.style.zIndex = String(pickerZIndex + 1);
         console.log('[ExpandedEmojiPicker DEBUG] Mobile positioning: centered');
     } else {
-        picker.style.position = 'absolute';
-        picker.style.top = `${rect.bottom + scrollTop + 10}px`;
-        picker.style.left = `${Math.max(10, rect.left - 100)}px`;
+        // Use fixed positioning for desktop too, but offset from center based on anchor
+        picker.style.position = 'fixed';
+        // Position the modal near the anchor button, but ensure it's visible
+        const modalWidth = 400; // max-width from CSS
+        const modalHeight = Math.min(window.innerHeight * 0.8, 500); // approximate height
+
+        // Calculate position - try to position below and slightly left of the anchor
+        let top = rect.bottom + 10;
+        let left = rect.left - 100;
+
+        // Ensure modal stays within viewport
+        if (top + modalHeight > window.innerHeight) {
+            top = Math.max(10, rect.top - modalHeight - 10);
+        }
+        if (left < 10) {
+            left = 10;
+        }
+        if (left + modalWidth > window.innerWidth) {
+            left = window.innerWidth - modalWidth - 10;
+        }
+
+        picker.style.top = `${top}px`;
+        picker.style.left = `${left}px`;
+        picker.style.zIndex = String(pickerZIndex + 1);
         console.log('[ExpandedEmojiPicker DEBUG] Desktop positioning:', picker.style.top, picker.style.left);
     }
 
@@ -888,6 +983,17 @@ function showExpandedEmojiPicker(recordId, anchorElement) {
                     width: computedStyle.width,
                     height: computedStyle.height
                 });
+                // Check if it's correctly layered above presentation
+                const presentationView = document.getElementById('itinerary-fullpage-view');
+                if (presentationView) {
+                    const presentationZIndex = window.getComputedStyle(presentationView).zIndex;
+                    console.log('[ExpandedEmojiPicker DEBUG] Presentation z-index:', presentationZIndex);
+                    if (parseInt(computedStyle.zIndex) > parseInt(presentationZIndex)) {
+                        console.log('[ExpandedEmojiPicker DEBUG] ✓ Picker is correctly above presentation view');
+                    } else {
+                        console.warn('[ExpandedEmojiPicker DEBUG] ⚠ Picker may be below presentation view');
+                    }
+                }
             }
         }
     }, 10);
@@ -895,8 +1001,10 @@ function showExpandedEmojiPicker(recordId, anchorElement) {
     // Add event listeners
     pickerContainer.addEventListener('click', handleEmojiPickerClick);
 
-    // Close on outside click
+    // Close on outside click (clicking the overlay background)
     pickerContainer.addEventListener('click', (e) => {
+        // Stop propagation to prevent any parent handlers from firing
+        e.stopPropagation();
         if (e.target === pickerContainer) {
             closeExpandedEmojiPicker();
         }
@@ -922,6 +1030,9 @@ function closeExpandedEmojiPicker() {
 
 // Handle clicks within the emoji picker
 function handleEmojiPickerClick(e) {
+    // Stop propagation to prevent any parent handlers from firing
+    e.stopPropagation();
+
     // Close button
     if (e.target.classList.contains('emoji-picker-close')) {
         closeExpandedEmojiPicker();
@@ -1210,10 +1321,14 @@ async function renderItineraryItem(item, index) {
         ? `<span class="item-emoji-indicator has-reactions" data-record-id="${recordId}" style="display: inline-flex;"><span class="emoji-indicator-emoji">${summaryEmoji}</span>${reactionCount > 1 ? `<span class="emoji-indicator-count">${reactionCount}</span>` : ''}</span>`
         : `<span class="item-emoji-indicator" data-record-id="${recordId}" style="display: none;"></span>`;
 
+    // Task status button for this item
+    const taskStatusButtonHTML = renderTaskStatusButton('item', recordId);
+
     return `
-        <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}">
+        <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}" data-item-name="${escapeHtml(name)}">
             <div class="item-accordion-header" data-record-id="${recordId}">
                 <div class="item-accordion-title-row">
+                    ${taskStatusButtonHTML}
                     <h3 class="item-accordion-title">${name}</h3>
                     ${emojiIndicatorHTML}
                     <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
@@ -1524,6 +1639,632 @@ function renderReactionsSummary() {
             }
         });
     });
+}
+
+// =============================================================================
+// TASK STATUS FUNCTIONS FOR PLAN ELEMENTS
+// =============================================================================
+
+/**
+ * Get task status for an element (item or detail)
+ * @param {string} elementType - 'item' or 'detail'
+ * @param {string} elementId - Record ID for items, detail type key for details
+ * @returns {string} - Task status value from ELEMENT_TASK_STATUS
+ */
+function getElementTaskStatus(elementType, elementId) {
+    const key = `${elementType}:${elementId}`;
+    return elementTaskStatuses.get(key) || ELEMENT_TASK_STATUS.NONE;
+}
+
+/**
+ * Set task status for an element and persist to state
+ * @param {string} elementType - 'item' or 'detail'
+ * @param {string} elementId - Record ID for items, detail type key for details
+ * @param {string} status - Task status value from ELEMENT_TASK_STATUS
+ */
+async function setElementTaskStatus(elementType, elementId, status) {
+    const key = `${elementType}:${elementId}`;
+    elementTaskStatuses.set(key, status);
+
+    // Persist task statuses to session state
+    saveElementTaskStatuses();
+
+    // Update UI
+    updateElementTaskStatusUI(elementType, elementId, status);
+
+    // Trigger save to persist to Airtable
+    triggerSave();
+
+    log('Presentation', `Set task status for ${key}: ${status}`);
+}
+
+/**
+ * Save element task statuses to the session's Items with Variations JSON
+ */
+function saveElementTaskStatuses() {
+    // Store task statuses as a plain object in eventDetails
+    const statusesObj = {};
+    elementTaskStatuses.forEach((status, key) => {
+        if (status !== ELEMENT_TASK_STATUS.NONE) {
+            statusesObj[key] = status;
+        }
+    });
+
+    // Store in eventDetails combined map with a special key
+    state.eventDetails.combined.set('_taskStatuses', statusesObj);
+}
+
+/**
+ * Load element task statuses from session state
+ */
+function loadElementTaskStatuses() {
+    const statusesObj = state.eventDetails.combined.get('_taskStatuses');
+    elementTaskStatuses.clear();
+
+    if (statusesObj && typeof statusesObj === 'object') {
+        Object.entries(statusesObj).forEach(([key, status]) => {
+            elementTaskStatuses.set(key, status);
+        });
+    }
+
+    log('Presentation', `Loaded ${elementTaskStatuses.size} element task statuses`);
+}
+
+// ========== COMMENT-TO-TASK LINK PERSISTENCE ==========
+// Stores mapping of commentId -> taskId for tasks created from comments
+// This is persisted to session data since Airtable Tasks table doesn't have a SourceCommentId field
+
+/**
+ * Save a comment-to-task link to session storage
+ * @param {string} commentId - The comment record ID
+ * @param {string} taskId - The task record ID
+ */
+function saveCommentTaskLink(commentId, taskId) {
+    const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
+    linksObj[commentId] = taskId;
+    state.eventDetails.combined.set('_commentTaskLinks', linksObj);
+
+    console.log('[TASK PERSISTENCE DEBUG] Saved comment-task link:', { commentId, taskId });
+    console.log('[TASK PERSISTENCE DEBUG] All comment-task links:', linksObj);
+
+    // Trigger save to persist to Airtable
+    triggerSave();
+}
+
+/**
+ * Load comment-to-task links from session storage and apply to in-memory tasks
+ * This restores SourceCommentId on task objects so the UI can show linked tasks correctly
+ */
+function loadCommentTaskLinks() {
+    const linksObj = state.eventDetails.combined.get('_commentTaskLinks');
+
+    console.log('[TASK PERSISTENCE DEBUG] ========== LOADING COMMENT-TASK LINKS ==========');
+    console.log('[TASK PERSISTENCE DEBUG] Raw links from session:', linksObj);
+
+    if (!linksObj || typeof linksObj !== 'object') {
+        console.log('[TASK PERSISTENCE DEBUG] No comment-task links found in session');
+        return;
+    }
+
+    const projectId = state.session.id;
+    const projectTasks = state.tasks.byProject.get(projectId) || [];
+
+    console.log('[TASK PERSISTENCE DEBUG] Project ID:', projectId);
+    console.log('[TASK PERSISTENCE DEBUG] Project tasks count:', projectTasks.length);
+
+    let appliedCount = 0;
+    Object.entries(linksObj).forEach(([commentId, taskId]) => {
+        // Find the task and apply the SourceCommentId to its fields
+        const task = projectTasks.find(t => t.id === taskId);
+        if (task) {
+            if (!task.fields) {
+                task.fields = {};
+            }
+            task.fields.SourceCommentId = commentId;
+            appliedCount++;
+            console.log('[TASK PERSISTENCE DEBUG] Applied SourceCommentId to task:', { taskId, commentId, taskName: task.fields?.Name });
+        } else {
+            console.log('[TASK PERSISTENCE DEBUG] Task not found for link:', { commentId, taskId });
+        }
+    });
+
+    console.log('[TASK PERSISTENCE DEBUG] Applied', appliedCount, 'comment-task links');
+    console.log('[TASK PERSISTENCE DEBUG] ==================================================');
+}
+
+/**
+ * Get the task ID linked to a comment, if any
+ * @param {string} commentId - The comment record ID
+ * @returns {string|null} - The linked task ID or null
+ */
+function getLinkedTaskId(commentId) {
+    const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
+    return linksObj[commentId] || null;
+}
+
+/**
+ * Update the UI for a specific element's task status
+ * @param {string} elementType - 'item' or 'detail'
+ * @param {string} elementId - Record ID for items, detail type key for details
+ * @param {string} status - Task status value
+ */
+function updateElementTaskStatusUI(elementType, elementId, status) {
+    const statusBtn = document.querySelector(`.task-status-btn[data-element-type="${elementType}"][data-element-id="${elementId}"]`);
+    if (!statusBtn) return;
+
+    const config = TASK_STATUS_CONFIG[status] || TASK_STATUS_CONFIG[ELEMENT_TASK_STATUS.NONE];
+
+    // Update button appearance
+    statusBtn.innerHTML = `<span class="task-status-icon">${config.icon}</span>`;
+    statusBtn.className = `task-status-btn ${config.className}`;
+    statusBtn.title = config.label;
+}
+
+/**
+ * Render task status button HTML for an element
+ * @param {string} elementType - 'item' or 'detail'
+ * @param {string} elementId - Record ID for items, detail type key for details
+ * @returns {string} - HTML string for the task status button
+ */
+function renderTaskStatusButton(elementType, elementId) {
+    const status = getElementTaskStatus(elementType, elementId);
+    const config = TASK_STATUS_CONFIG[status];
+
+    return `
+        <button class="task-status-btn ${config.className}"
+                data-element-type="${elementType}"
+                data-element-id="${elementId}"
+                title="${config.label}">
+            <span class="task-status-icon">${config.icon}</span>
+        </button>
+    `;
+}
+
+/**
+ * Show task status picker dropdown for an element
+ * @param {HTMLElement} button - The status button that was clicked
+ */
+function showTaskStatusPicker(button) {
+    const elementType = button.dataset.elementType;
+    const elementId = button.dataset.elementId;
+    const currentStatus = getElementTaskStatus(elementType, elementId);
+
+    // Remove any existing picker
+    const existingPicker = document.querySelector('.task-status-picker');
+    if (existingPicker) {
+        existingPicker.remove();
+    }
+
+    // Create picker dropdown
+    const picker = document.createElement('div');
+    picker.className = 'task-status-picker';
+
+    // Build options
+    const optionsHTML = Object.entries(TASK_STATUS_CONFIG)
+        .map(([statusValue, config]) => `
+            <button class="task-status-option ${config.className} ${statusValue === currentStatus ? 'active' : ''}"
+                    data-status="${statusValue}">
+                <span class="option-icon">${config.icon}</span>
+                <span class="option-label">${config.label}</span>
+            </button>
+        `).join('');
+
+    picker.innerHTML = optionsHTML;
+
+    // Position picker near button
+    const rect = button.getBoundingClientRect();
+    picker.style.position = 'fixed';
+    picker.style.top = `${rect.bottom + 4}px`;
+    picker.style.left = `${rect.left}px`;
+    picker.style.zIndex = '10001';
+
+    document.body.appendChild(picker);
+
+    // Handle option clicks
+    picker.addEventListener('click', async (e) => {
+        const option = e.target.closest('.task-status-option');
+        if (option) {
+            const newStatus = option.dataset.status;
+            await setElementTaskStatus(elementType, elementId, newStatus);
+            picker.remove();
+        }
+    });
+
+    // Close picker on outside click
+    const closeHandler = (e) => {
+        if (!picker.contains(e.target) && e.target !== button) {
+            picker.remove();
+            document.removeEventListener('click', closeHandler);
+        }
+    };
+
+    // Delay adding close handler to avoid immediate close
+    setTimeout(() => {
+        document.addEventListener('click', closeHandler);
+    }, 0);
+}
+
+/**
+ * Show task detail popup/modal for refining task details
+ * @param {string} elementType - 'item' or 'detail'
+ * @param {string} elementId - Record ID for items, detail type key for details
+ * @param {string} elementName - Display name of the element
+ */
+function showTaskDetailPopup(elementType, elementId, elementName) {
+    console.log('[TaskStatus DEBUG] showTaskDetailPopup called:', { elementType, elementId, elementName });
+
+    const currentStatus = getElementTaskStatus(elementType, elementId);
+    const config = TASK_STATUS_CONFIG[currentStatus];
+
+    console.log('[TaskStatus DEBUG] Current status:', currentStatus, 'config:', config);
+
+    // Check if user can edit
+    const currentRole = state.permissions?.currentRole;
+    const isLoading = state.permissions?.isLoading !== false;
+    const canEditByRole = api.canEdit(currentRole);
+    // Fallback: If permissions weren't loaded (direct URL access), use session.isOwned
+    const canEditByOwnership = state.session.isOwned === true;
+    const canUserEdit = (!isLoading && canEditByRole) || canEditByOwnership;
+
+    console.log('[Presentation DEBUG] showTaskDetailPopup permission check:', {
+        currentRole,
+        isLoading,
+        canEditByRole,
+        canEditByOwnership,
+        canUserEdit,
+        sessionIsOwned: state.session.isOwned
+    });
+
+    // Build affiliated tasks list
+    const projectTasks = state.tasks.byProject.get(state.session.id) || [];
+    const affiliatableTasksHTML = projectTasks.length > 0 ? `
+        <div class="task-detail-section">
+            <label>Affiliate with Task</label>
+            <select id="task-affiliate-select" class="task-affiliate-select">
+                <option value="">-- No affiliation --</option>
+                ${projectTasks.map(t => `
+                    <option value="${t.id}">${escapeHtml(t.fields?.Name || 'Unnamed Task')}</option>
+                `).join('')}
+            </select>
+        </div>
+    ` : '';
+
+    // Map elementType to componentType for comments
+    // Items use 'item' component type, details (goals, date) use 'header' type
+    const componentType = elementType === 'item' ? api.COMPONENT_TYPES.ITEM : api.COMPONENT_TYPES.HEADER;
+    console.log('[TaskStatus DEBUG] componentType for comments:', componentType);
+
+    // Create modal HTML
+    const modalHTML = `
+        <div id="task-detail-modal-overlay" class="task-detail-modal-overlay">
+            <div class="task-detail-modal">
+                <div class="task-detail-modal-header">
+                    <h3>Task Details</h3>
+                    <button class="task-detail-modal-close" id="task-detail-modal-close">&times;</button>
+                </div>
+                <div class="task-detail-modal-body">
+                    <div class="task-detail-element-name">
+                        <span class="element-label">${elementType === 'item' ? 'Item' : 'Detail'}:</span>
+                        <span class="element-name">${escapeHtml(elementName)}</span>
+                    </div>
+
+                    <div class="task-detail-section">
+                        <label>Status</label>
+                        <div class="task-status-options">
+                            ${Object.entries(TASK_STATUS_CONFIG).map(([statusValue, cfg]) => `
+                                <button class="task-status-option-btn ${cfg.className} ${statusValue === currentStatus ? 'active' : ''}"
+                                        data-status="${statusValue}"
+                                        ${!canUserEdit ? 'disabled' : ''}>
+                                    <span class="option-icon">${cfg.icon}</span>
+                                    <span class="option-label">${cfg.label}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    ${affiliatableTasksHTML}
+
+                    <div class="task-detail-section task-detail-comments-section">
+                        <label>💬 Comments</label>
+                        <div class="task-detail-comments-list" id="task-detail-comments-list">
+                            <div class="comments-loading">Loading comments...</div>
+                        </div>
+                        <div class="task-detail-comment-input-wrapper">
+                            <input type="text"
+                                   class="task-detail-comment-input"
+                                   id="task-detail-comment-input"
+                                   placeholder="Add a comment..."
+                                   ${!canUserEdit ? 'disabled' : ''} />
+                            <button class="task-detail-comment-submit"
+                                    id="task-detail-comment-submit"
+                                    title="Post comment"
+                                    ${!canUserEdit ? 'disabled' : ''}>
+                                <span>→</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="task-detail-modal-footer">
+                    <button class="task-detail-done-btn" id="task-detail-done-btn">Done</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Insert modal
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    const overlay = document.getElementById('task-detail-modal-overlay');
+    const closeBtn = document.getElementById('task-detail-modal-close');
+    const doneBtn = document.getElementById('task-detail-done-btn');
+
+    const closeModal = () => {
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 200);
+    };
+
+    // Attach event listeners
+    closeBtn.addEventListener('click', closeModal);
+    doneBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal();
+    });
+
+    // Handle status option clicks
+    overlay.querySelectorAll('.task-status-option-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!canUserEdit) return;
+
+            const newStatus = btn.dataset.status;
+            await setElementTaskStatus(elementType, elementId, newStatus);
+
+            // Update active state in modal
+            overlay.querySelectorAll('.task-status-option-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+
+    // Handle comment submission
+    const commentInput = document.getElementById('task-detail-comment-input');
+    const commentSubmitBtn = document.getElementById('task-detail-comment-submit');
+
+    const submitPopupComment = async () => {
+        if (!canUserEdit) return;
+
+        const content = commentInput.value.trim();
+        if (!content) return;
+
+        const currentUser = getCurrentUser();
+        if (!currentUser) {
+            showToast('Please sign in to comment', 3000);
+            return;
+        }
+
+        console.log('[TaskStatus DEBUG] Submitting popup comment:', { content, componentType, elementId });
+
+        // Disable input while submitting
+        commentInput.disabled = true;
+        commentSubmitBtn.disabled = true;
+
+        try {
+            const sessionId = state.session.id;
+            const result = await api.postComponentComment(
+                sessionId,
+                componentType,
+                elementId,
+                currentUser.id,
+                currentUser.name || currentUser.email || 'Anonymous',
+                content
+            );
+
+            if (result) {
+                console.log('[TaskStatus DEBUG] Comment posted successfully:', result.id);
+                commentInput.value = '';
+                // Reload comments in the popup
+                await loadTaskDetailComments(overlay, componentType, elementId);
+            } else {
+                console.log('[TaskStatus DEBUG] Failed to post comment');
+                showToast('Failed to post comment', 3000);
+            }
+        } catch (error) {
+            console.log('[TaskStatus DEBUG] Error posting comment:', error);
+            showToast('Failed to post comment', 3000);
+        } finally {
+            if (canUserEdit) {
+                commentInput.disabled = false;
+                commentSubmitBtn.disabled = false;
+            }
+            commentInput.focus();
+        }
+    };
+
+    commentSubmitBtn.addEventListener('click', submitPopupComment);
+    commentInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            submitPopupComment();
+        }
+    });
+
+    // Load comments for this element
+    loadTaskDetailComments(overlay, componentType, elementId);
+
+    // Show modal with animation
+    requestAnimationFrame(() => {
+        overlay.classList.add('active');
+    });
+}
+
+/**
+ * Load and render comments in the task detail popup
+ * @param {HTMLElement} overlay - The modal overlay element
+ * @param {string} componentType - The component type (item or header)
+ * @param {string} elementId - The element ID
+ */
+async function loadTaskDetailComments(overlay, componentType, elementId) {
+    console.log('[TaskStatus DEBUG] loadTaskDetailComments called:', { componentType, elementId });
+
+    const commentsList = overlay.querySelector('#task-detail-comments-list');
+    if (!commentsList) {
+        console.log('[TaskStatus DEBUG] No commentsList element found');
+        return;
+    }
+
+    const sessionId = state.session.id;
+    if (!sessionId) {
+        commentsList.innerHTML = '<div class="comments-empty">No session loaded</div>';
+        return;
+    }
+
+    commentsList.innerHTML = '<div class="comments-loading">Loading comments...</div>';
+
+    try {
+        const comments = await api.fetchComponentComments(sessionId, componentType, elementId);
+        console.log('[TaskStatus DEBUG] Fetched comments for popup:', comments?.length);
+
+        if (!comments || comments.length === 0) {
+            commentsList.innerHTML = '<div class="comments-empty">No comments yet. Be the first to comment!</div>';
+            return;
+        }
+
+        const currentUser = getCurrentUser();
+
+        const commentsHTML = comments.map(comment => {
+            const fields = comment.fields;
+            const isOwn = fields.SenderID === currentUser?.id;
+            const isDeleted = fields.IsDeleted;
+            const isEdited = fields.IsEdited;
+            const timestamp = new Date(comment.createdTime || fields.Timestamp || Date.now());
+            const timeAgo = getTimeAgo(timestamp);
+
+            // Strip out [PLAN_COMMENT:xxx] prefix from display content
+            let displayContent = fields.Content || '';
+            displayContent = displayContent.replace(/^\[PLAN_COMMENT:\w+\]\s*/i, '');
+
+            if (isDeleted) {
+                return `
+                    <div class="task-detail-comment deleted" data-comment-id="${comment.id}">
+                        <em class="deleted-comment-text">This comment was deleted</em>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="task-detail-comment ${isOwn ? 'own-comment' : ''}" data-comment-id="${comment.id}">
+                    <div class="comment-header">
+                        <span class="comment-author">${escapeHtml(fields.SenderName)}${isOwn ? ' (You)' : ''}</span>
+                        <span class="comment-time" title="${timestamp.toLocaleString()}">${timeAgo}</span>
+                        ${isEdited ? '<span class="comment-edited">(edited)</span>' : ''}
+                    </div>
+                    <div class="comment-content">${escapeHtml(displayContent)}</div>
+                </div>
+            `;
+        }).join('');
+
+        commentsList.innerHTML = commentsHTML;
+        console.log('[TaskStatus DEBUG] Rendered', comments.length, 'comments in popup');
+    } catch (error) {
+        console.log('[TaskStatus DEBUG] Error loading popup comments:', error);
+        commentsList.innerHTML = '<div class="comments-error">Failed to load comments</div>';
+    }
+}
+
+/**
+ * Create a task from a comment
+ * @param {string} commentId - The comment record ID
+ * @param {string} commentContent - The comment text content
+ * @param {string} componentId - The component/item ID the comment is on (if any)
+ */
+async function createTaskFromComment(commentId, commentContent, componentId = null) {
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+        showToast('Please sign in to create tasks', 3000);
+        return;
+    }
+
+    // Check permissions
+    const currentRole = state.permissions?.currentRole;
+    const isLoading = state.permissions?.isLoading !== false;
+    const canEditByRole = api.canEdit(currentRole);
+    // Fallback: If permissions weren't loaded (direct URL access), use session.isOwned
+    const canEditByOwnership = state.session.isOwned === true;
+    const canUserEdit = (!isLoading && canEditByRole) || canEditByOwnership;
+
+    console.log('[Presentation DEBUG] createTaskFromComment permission check:', {
+        currentRole,
+        isLoading,
+        canEditByRole,
+        canEditByOwnership,
+        canUserEdit,
+        permissionsState: state.permissions,
+        sessionIsOwned: state.session.isOwned
+    });
+
+    if (!canUserEdit) {
+        showToast('You do not have permission to create tasks', 3000);
+        return;
+    }
+
+    const projectId = state.session.id;
+    if (!projectId) {
+        showToast('No active project', 3000);
+        return;
+    }
+
+    // Get max order for new task
+    const projectTasks = state.tasks.byProject.get(projectId) || [];
+    const maxOrder = projectTasks.reduce((max, t) => Math.max(max, t.fields?.Order || 0), 0);
+
+    // Create task data
+    const taskData = {
+        Name: commentContent.substring(0, 100) + (commentContent.length > 100 ? '...' : ''),
+        Description: commentContent,
+        Status: api.TASK_STATUS.PENDING,
+        Order: maxOrder + 1
+    };
+
+    // Auto-affiliate with plan item if comment is on a component
+    // Only set LinkedItem if it's a valid Airtable record ID (starts with 'rec')
+    // AI-generated items have temporary IDs like 'ai-child-*', 'ai-search-*', etc.
+    if (componentId && componentId.startsWith('rec')) {
+        taskData.LinkedItem = componentId;
+    } else if (componentId) {
+        // For AI-generated items, store the item name in the task name/description instead
+        const itemRecord = state.records.all.find(r => r.id === componentId);
+        if (itemRecord) {
+            const itemName = itemRecord.fields?.Name || itemRecord.fields?.['Item Name'] || 'AI Item';
+            // Prefix the task name with the item name for context
+            taskData.Name = `[${itemName}] ${taskData.Name}`;
+            console.log('[Presentation DEBUG] Task created from AI item - storing item name in task title:', itemName);
+        }
+    }
+
+    try {
+        const newTask = await api.createTask(projectId, taskData);
+        if (newTask) {
+            // Update local state
+            state.tasks.all.set(newTask.id, newTask);
+            const existingTasks = state.tasks.byProject.get(projectId) || [];
+            state.tasks.byProject.set(projectId, [...existingTasks, newTask]);
+
+            // IMPORTANT: Persist the comment-to-task link if commentId is provided
+            if (commentId) {
+                saveCommentTaskLink(commentId, newTask.id);
+
+                // Also apply the SourceCommentId to the in-memory task object
+                if (!newTask.fields) {
+                    newTask.fields = {};
+                }
+                newTask.fields.SourceCommentId = commentId;
+            }
+
+            showToast('Task created from comment!', 2000);
+            log('Presentation', `Created task from comment: ${newTask.id}`);
+        }
+    } catch (error) {
+        console.error('Error creating task from comment:', error);
+        showToast('Failed to create task', 3000);
+    }
 }
 
 function escapeHtml(text) {
@@ -2796,6 +3537,57 @@ function handleItemAccordionClick(e) {
     }
 }
 
+// Handle task status button clicks
+function handleTaskStatusClick(e) {
+    console.log('[TaskStatus DEBUG] handleTaskStatusClick called, target:', e.target);
+
+    const taskStatusBtn = e.target.closest('.task-status-btn');
+    console.log('[TaskStatus DEBUG] taskStatusBtn found:', taskStatusBtn);
+
+    if (!taskStatusBtn) {
+        console.log('[TaskStatus DEBUG] No task-status-btn found, returning');
+        return;
+    }
+
+    e.stopPropagation(); // Prevent triggering other click handlers
+
+    const elementType = taskStatusBtn.dataset.elementType;
+    const elementId = taskStatusBtn.dataset.elementId;
+
+    console.log('[TaskStatus DEBUG] Button data:', { elementType, elementId });
+
+    // Get the element name for the popup
+    let elementName = '';
+    if (elementType === 'item') {
+        // For items, find the item name from the accordion or state
+        const itemAccordion = taskStatusBtn.closest('.itinerary-item');
+        if (itemAccordion) {
+            elementName = itemAccordion.dataset.itemName || '';
+            console.log('[TaskStatus DEBUG] Item name from accordion:', elementName);
+        }
+        // Fallback: get from locked items state
+        if (!elementName) {
+            const lockedItem = state.cart.lockedItems.get(elementId);
+            elementName = lockedItem?.fields?.Name || elementId;
+            console.log('[TaskStatus DEBUG] Item name from state:', elementName);
+        }
+    } else if (elementType === 'detail') {
+        // For details, use a friendly name based on the detail type
+        const detailNames = {
+            'goals': 'Goals/Notes',
+            'date': 'Event Date',
+            'eventName': 'Event Name'
+        };
+        elementName = detailNames[elementId] || elementId;
+        console.log('[TaskStatus DEBUG] Detail name:', elementName);
+    }
+
+    console.log('[TaskStatus DEBUG] Calling showTaskDetailPopup with:', { elementType, elementId, elementName });
+
+    // Show task detail popup instead of simple picker
+    showTaskDetailPopup(elementType, elementId, elementName);
+}
+
 // Initialize accordion states and update UI
 function initializeAccordions() {
     // console.log('[Accordion DEBUG] initializeAccordions called');
@@ -2857,6 +3649,11 @@ function handleReactionClick(e) {
     const button = e.target.closest('.reaction-btn');
     console.log('[ReactionClick DEBUG] button found:', button);
     if (!button) return;
+
+    // Stop propagation to prevent click from bubbling up and triggering
+    // parent handlers (like accordion collapse or presentation view close)
+    e.stopPropagation();
+    e.preventDefault();
 
     const recordId = button.dataset.recordId;
     console.log('[ReactionClick DEBUG] recordId:', recordId);
@@ -3132,7 +3929,7 @@ async function loadComponentComments(componentId) {
 }
 
 /**
- * Render comments for a component
+ * Render comments for a component with nested replies
  */
 function renderComponentComments(componentId, comments) {
     const commentsList = document.querySelector(`.component-comments-list[data-component-id="${componentId}"]`);
@@ -3145,24 +3942,60 @@ function renderComponentComments(componentId, comments) {
         return;
     }
 
-    const commentsHTML = comments.map(comment => {
+    // Get project tasks to check for linked tasks
+    const projectId = state.session.id;
+    const projectTasks = state.tasks.byProject.get(projectId) || [];
+
+    // Separate parent comments from replies and build a map
+    const parentComments = [];
+    const repliesByParent = new Map();
+
+    comments.forEach(comment => {
+        const parentId = comment.fields?.ParentMessageID;
+        if (parentId) {
+            // This is a reply
+            if (!repliesByParent.has(parentId)) {
+                repliesByParent.set(parentId, []);
+            }
+            repliesByParent.get(parentId).push(comment);
+        } else {
+            // This is a parent comment
+            parentComments.push(comment);
+        }
+    });
+
+    console.log('[ComponentComment DEBUG] Rendering nested comments:', {
+        total: comments.length,
+        parents: parentComments.length,
+        repliesMap: repliesByParent.size
+    });
+
+    /**
+     * Render a single comment HTML
+     */
+    const renderSingleComment = (comment, isReply = false) => {
         const fields = comment.fields;
         const isOwn = fields.SenderID === currentUser?.id;
         const isDeleted = fields.IsDeleted;
         const isEdited = fields.IsEdited;
         const reactions = fields.Reactions ? JSON.parse(fields.Reactions) : {};
-        // Use createdTime from Airtable record (at record level, not in fields)
-        // Fall back to fields.Timestamp or current time if neither exists
         const timestamp = new Date(comment.createdTime || fields.Timestamp || Date.now());
         const timeAgo = getTimeAgo(timestamp);
 
         if (isDeleted) {
             return `
-                <div class="component-comment deleted" data-comment-id="${comment.id}">
+                <div class="component-comment deleted ${isReply ? 'comment-reply' : ''}" data-comment-id="${comment.id}">
                     <em class="deleted-comment-text">This comment was deleted</em>
                 </div>
             `;
         }
+
+        // Check if this comment has a linked task
+        const linkedTask = projectTasks.find(t => t.fields?.SourceCommentId === comment.id);
+        const hasLinkedTask = !!linkedTask;
+        const taskBtnHtml = hasLinkedTask
+            ? `<button class="comment-action-btn comment-task-btn has-task" data-action="task" data-linked-task-id="${linkedTask.id}" title="View affiliated task">📋✓</button>`
+            : `<button class="comment-action-btn comment-task-btn" data-action="task" title="Create task from comment">📋</button>`;
 
         // Build reactions HTML
         let reactionsHTML = '';
@@ -3181,18 +4014,26 @@ function renderComponentComments(componentId, comments) {
             reactionsHTML += '</div>';
         }
 
+        // Get reply count for parent comments
+        const replies = repliesByParent.get(comment.id) || [];
+        const replyCountHtml = !isReply && replies.length > 0
+            ? `<span class="comment-reply-count">${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}</span>`
+            : '';
+
         return `
-            <div class="component-comment ${isOwn ? 'own-comment' : ''}" data-comment-id="${comment.id}" data-sender-name="${escapeHtml(fields.SenderName)}" data-content="${escapeHtml(fields.Content)}">
+            <div class="component-comment ${isOwn ? 'own-comment' : ''} ${isReply ? 'comment-reply' : ''}" data-comment-id="${comment.id}" data-sender-name="${escapeHtml(fields.SenderName)}" data-content="${escapeHtml(fields.Content)}">
                 <div class="comment-header">
                     <span class="comment-author">${escapeHtml(fields.SenderName)}${isOwn ? ' (You)' : ''}</span>
                     <span class="comment-time" title="${timestamp.toLocaleString()}">${timeAgo}</span>
                     ${isEdited ? '<span class="comment-edited">(edited)</span>' : ''}
+                    ${replyCountHtml}
                 </div>
                 <div class="comment-content">${escapeHtml(fields.Content)}</div>
                 ${reactionsHTML}
                 <div class="comment-actions">
                     <button class="comment-action-btn" data-action="reply" title="Reply to this comment">↩</button>
                     <button class="comment-action-btn" data-action="react" title="Add reaction">😊</button>
+                    ${taskBtnHtml}
                     ${isOwn ? `
                         <button class="comment-action-btn" data-action="edit" title="Edit comment">✏️</button>
                         <button class="comment-action-btn" data-action="delete" title="Delete comment">🗑️</button>
@@ -3200,7 +4041,37 @@ function renderComponentComments(componentId, comments) {
                 </div>
             </div>
         `;
-    }).join('');
+    };
+
+    // Build the full HTML with nested structure
+    let commentsHTML = '';
+
+    parentComments.forEach(parentComment => {
+        // Render the parent comment
+        commentsHTML += renderSingleComment(parentComment, false);
+
+        // Render nested replies
+        const replies = repliesByParent.get(parentComment.id) || [];
+        if (replies.length > 0) {
+            commentsHTML += '<div class="comment-replies-container">';
+            replies.forEach(reply => {
+                commentsHTML += renderSingleComment(reply, true);
+            });
+            commentsHTML += '</div>';
+        }
+    });
+
+    // Also render any orphan replies (replies without visible parent - rare edge case)
+    // These would be replies to deleted comments or comments not in current view
+    const renderedParentIds = new Set(parentComments.map(c => c.id));
+    repliesByParent.forEach((replies, parentId) => {
+        if (!renderedParentIds.has(parentId)) {
+            // These are orphan replies - render them at top level
+            replies.forEach(reply => {
+                commentsHTML += renderSingleComment(reply, false);
+            });
+        }
+    });
 
     commentsList.innerHTML = commentsHTML;
 }
@@ -3238,8 +4109,9 @@ async function submitComponentComment(componentId) {
 
     // Check if this is a reply - prepend @mention if so
     const isReply = componentCommentReplyingTo && componentCommentReplyingTo.componentId === componentId;
+    const parentCommentId = isReply ? componentCommentReplyingTo.commentId : null;
     if (isReply) {
-        console.log('[ComponentComment DEBUG] This is a reply to:', componentCommentReplyingTo.senderName);
+        console.log('[ComponentComment DEBUG] This is a reply to:', componentCommentReplyingTo.senderName, 'parentId:', parentCommentId);
         // Prepend @mention to the content for display
         content = `@${componentCommentReplyingTo.senderName}: ${content}`;
     }
@@ -3251,14 +4123,15 @@ async function submitComponentComment(componentId) {
 
     try {
         console.log('[ComponentComment DEBUG] Calling api.postComponentComment...');
-        // Post comment via API
+        // Post comment via API with parent comment ID if this is a reply
         const newComment = await api.postComponentComment(
             sessionId,
             api.COMPONENT_TYPES.ITEM,
             componentId,
             currentUser.id,
             currentUser.name,
-            content
+            content,
+            parentCommentId
         );
         console.log('[ComponentComment DEBUG] postComponentComment result:', newComment ? 'SUCCESS (id: ' + newComment.id + ')' : 'FAILED');
 
@@ -3329,7 +4202,7 @@ async function submitComponentComment(componentId) {
 }
 
 /**
- * Handle comment actions (edit, delete, react, reply)
+ * Handle comment actions (edit, delete, react, reply, task)
  */
 async function handleCommentAction(action, commentId) {
     console.log('[ComponentComment DEBUG] handleCommentAction called:', action, commentId);
@@ -3353,7 +4226,502 @@ async function handleCommentAction(action, commentId) {
             console.log('[ComponentComment DEBUG] About to call showCommentReactionPicker');
             showCommentReactionPicker(commentId);
             break;
+        case 'task':
+            console.log('[ComponentComment DEBUG] Creating task from comment');
+            await handleCreateTaskFromComment(commentId);
+            break;
     }
+}
+
+/**
+ * Handle creating a task from a comment or opening existing linked task
+ * @param {string} commentId - The comment record ID
+ */
+async function handleCreateTaskFromComment(commentId) {
+    console.log('[CreateTaskFromComment DEBUG] handleCreateTaskFromComment called:', commentId);
+
+    const commentEl = document.querySelector(`.component-comment[data-comment-id="${commentId}"]`);
+    if (!commentEl) {
+        console.log('[CreateTaskFromComment DEBUG] ❌ Comment element not found for task creation');
+        return;
+    }
+
+    // Check if this comment already has a linked task (from data attribute or from state)
+    const taskBtn = commentEl.querySelector('.comment-task-btn');
+    const linkedTaskId = taskBtn?.dataset.linkedTaskId;
+
+    if (linkedTaskId) {
+        console.log('[CreateTaskFromComment DEBUG] Comment already has linked task:', linkedTaskId);
+        // Open the existing task
+        const task = state.tasks.all.get(linkedTaskId);
+        if (task) {
+            showLinkedTaskPopup(task, commentId);
+            return;
+        } else {
+            console.log('[CreateTaskFromComment DEBUG] Linked task not found in state, allowing new task creation');
+        }
+    }
+
+    // Check if any existing task has this comment as its source
+    const projectId = state.session.id;
+    const projectTasks = state.tasks.byProject.get(projectId) || [];
+    const existingTask = projectTasks.find(t => t.fields?.SourceCommentId === commentId);
+
+    if (existingTask) {
+        console.log('[CreateTaskFromComment DEBUG] Found existing task for this comment:', existingTask.id);
+        // Update the button and show the task
+        if (taskBtn) {
+            taskBtn.dataset.linkedTaskId = existingTask.id;
+            taskBtn.innerHTML = '📋✓';
+            taskBtn.title = 'View affiliated task';
+            taskBtn.classList.add('has-task');
+        }
+        showLinkedTaskPopup(existingTask, commentId);
+        return;
+    }
+
+    const commentContent = commentEl.dataset.content || '';
+    const componentSection = commentEl.closest('.component-comments-section');
+    const componentId = componentSection?.dataset.componentId || null;
+    const componentType = componentSection?.dataset.componentType || 'item';
+
+    console.log('[CreateTaskFromComment DEBUG] Comment data:', { commentContent, componentId, componentType });
+
+    // Get the element name for display in the popup
+    let elementName = 'Unknown';
+    if (componentType === 'item') {
+        // Try to find the item name from the accordion
+        const accordion = commentEl.closest('.itinerary-item-accordion');
+        if (accordion) {
+            elementName = accordion.dataset.itemName || 'Unknown Item';
+        } else {
+            // Fallback: try to get from locked/cart items
+            const itemRecord = state.records.all.find(r => r.id === componentId);
+            if (itemRecord) {
+                elementName = itemRecord.fields?.Name || itemRecord.fields?.['Item Name'] || 'Unknown Item';
+            }
+        }
+    } else if (componentType === 'header') {
+        // Header/detail component
+        elementName = componentId === 'goals' ? 'Goals/Notes' :
+                      componentId === 'date' ? 'Event Date' :
+                      'Event Detail';
+    }
+
+    console.log('[CreateTaskFromComment DEBUG] Element name resolved:', elementName);
+
+    // Show the task creation popup instead of directly creating the task
+    showCreateTaskFromCommentPopup(commentId, commentContent, componentId, componentType, elementName);
+}
+
+/**
+ * Show popup for viewing a linked task from a comment
+ * @param {Object} task - The task object
+ * @param {string} sourceCommentId - The source comment ID
+ */
+function showLinkedTaskPopup(task, sourceCommentId) {
+    console.log('[LinkedTaskPopup DEBUG] showLinkedTaskPopup called:', { taskId: task.id, taskName: task.fields?.Name, sourceCommentId });
+
+    // Check if user can edit
+    const currentRole = state.permissions?.currentRole;
+    const isLoading = state.permissions?.isLoading !== false;
+    const canEditByRole = api.canEdit(currentRole);
+    const canEditByOwnership = state.session.isOwned === true;
+    const canUserEdit = (!isLoading && canEditByRole) || canEditByOwnership;
+
+    const taskName = task.fields?.Name || 'Unnamed Task';
+    const taskDescription = task.fields?.Description || '';
+    const taskStatus = task.fields?.Status || 'pending';
+    const statusConfig = TASK_STATUS_CONFIG[taskStatus] || TASK_STATUS_CONFIG.pending;
+
+    // Create modal HTML
+    const modalHTML = `
+        <div id="linked-task-modal-overlay" class="task-detail-modal-overlay">
+            <div class="task-detail-modal">
+                <div class="task-detail-modal-header">
+                    <h3>📋 Linked Task</h3>
+                    <button class="task-detail-modal-close" id="linked-task-modal-close">&times;</button>
+                </div>
+                <div class="task-detail-modal-body">
+                    <div class="task-detail-section">
+                        <label>Task Name</label>
+                        <div class="linked-task-name">${escapeHtml(taskName)}</div>
+                    </div>
+
+                    ${taskDescription ? `
+                        <div class="task-detail-section">
+                            <label>Description</label>
+                            <div class="linked-task-description">${escapeHtml(taskDescription)}</div>
+                        </div>
+                    ` : ''}
+
+                    <div class="task-detail-section">
+                        <label>Status</label>
+                        <div class="task-status-options">
+                            ${Object.entries(TASK_STATUS_CONFIG).map(([statusValue, cfg]) => `
+                                <button class="task-status-option-btn ${cfg.className} ${statusValue === taskStatus ? 'active' : ''}"
+                                        data-status="${statusValue}"
+                                        ${!canUserEdit ? 'disabled' : ''}>
+                                    <span class="option-icon">${cfg.icon}</span>
+                                    <span class="option-label">${cfg.label}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="linked-task-info">
+                        <span class="info-label">Task ID:</span> ${task.id}
+                    </div>
+                </div>
+                <div class="task-detail-modal-footer">
+                    <button class="task-detail-done-btn" id="linked-task-done-btn">Done</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    console.log('[LinkedTaskPopup DEBUG] Inserting modal HTML');
+
+    // Insert modal
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    const overlay = document.getElementById('linked-task-modal-overlay');
+    const closeBtn = document.getElementById('linked-task-modal-close');
+    const doneBtn = document.getElementById('linked-task-done-btn');
+
+    const closeModal = () => {
+        console.log('[LinkedTaskPopup DEBUG] Closing modal');
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 200);
+    };
+
+    // Attach event listeners
+    closeBtn.addEventListener('click', closeModal);
+    doneBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal();
+    });
+
+    // Handle status option clicks
+    if (canUserEdit) {
+        overlay.querySelectorAll('.task-status-option-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const newStatus = btn.dataset.status;
+                console.log('[LinkedTaskPopup DEBUG] Status change requested:', newStatus);
+
+                // Update the task status
+                const updatedTask = await api.updateTask(task.id, { Status: newStatus });
+
+                if (updatedTask) {
+                    console.log('[LinkedTaskPopup DEBUG] Task status updated successfully');
+                    // Update local state
+                    state.tasks.all.set(task.id, updatedTask);
+                    const projectId = state.session.id;
+                    const projectTasks = state.tasks.byProject.get(projectId) || [];
+                    const taskIndex = projectTasks.findIndex(t => t.id === task.id);
+                    if (taskIndex >= 0) {
+                        projectTasks[taskIndex] = updatedTask;
+                        state.tasks.byProject.set(projectId, [...projectTasks]);
+                    }
+
+                    // Update active state in modal
+                    overlay.querySelectorAll('.task-status-option-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    showToast('Task status updated', 2000);
+                } else {
+                    showToast('Failed to update task status', 3000);
+                }
+            });
+        });
+    }
+
+    // Show modal with animation
+    console.log('[LinkedTaskPopup DEBUG] Showing modal with animation');
+    requestAnimationFrame(() => {
+        overlay.classList.add('active');
+    });
+}
+
+/**
+ * Show popup for creating a task from a comment
+ * @param {string} commentId - The comment record ID
+ * @param {string} commentContent - The comment text content
+ * @param {string} componentId - The component/item ID
+ * @param {string} componentType - The component type ('item' or 'header')
+ * @param {string} elementName - Display name of the element
+ */
+function showCreateTaskFromCommentPopup(commentId, commentContent, componentId, componentType, elementName) {
+    console.log('[CreateTaskFromComment DEBUG] showCreateTaskFromCommentPopup called:', {
+        commentId,
+        commentContent: commentContent?.substring(0, 50) + '...',
+        componentId,
+        componentType,
+        elementName
+    });
+
+    // Check if user can edit
+    const currentRole = state.permissions?.currentRole;
+    const isLoading = state.permissions?.isLoading !== false;
+    const canEditByRole = api.canEdit(currentRole);
+    const canEditByOwnership = state.session.isOwned === true;
+    const canUserEdit = (!isLoading && canEditByRole) || canEditByOwnership;
+
+    console.log('[CreateTaskFromComment DEBUG] Permission check:', {
+        currentRole,
+        canEditByRole,
+        canEditByOwnership,
+        canUserEdit
+    });
+
+    if (!canUserEdit) {
+        showToast('You do not have permission to create tasks', 3000);
+        return;
+    }
+
+    // Truncate comment content for task name (max 100 chars)
+    const suggestedTaskName = commentContent.substring(0, 100) + (commentContent.length > 100 ? '...' : '');
+
+    // Build affiliated tasks list for the dropdown
+    const projectTasks = state.tasks.byProject.get(state.session.id) || [];
+    const affiliatableTasksHTML = projectTasks.length > 0 ? `
+        <div class="task-detail-section">
+            <label>Affiliate with Existing Task</label>
+            <select id="create-task-affiliate-select" class="task-affiliate-select">
+                <option value="">-- No affiliation --</option>
+                ${projectTasks.map(t => `
+                    <option value="${t.id}">${escapeHtml(t.fields?.Name || 'Unnamed Task')}</option>
+                `).join('')}
+            </select>
+        </div>
+    ` : '';
+
+    // Create modal HTML
+    const modalHTML = `
+        <div id="create-task-modal-overlay" class="task-detail-modal-overlay">
+            <div class="task-detail-modal">
+                <div class="task-detail-modal-header">
+                    <h3>📋 Create Task from Comment</h3>
+                    <button class="task-detail-modal-close" id="create-task-modal-close">&times;</button>
+                </div>
+                <div class="task-detail-modal-body">
+                    <div class="task-detail-element-name">
+                        <span class="element-label">${componentType === 'item' ? 'Item' : 'Detail'}:</span>
+                        <span class="element-name">${escapeHtml(elementName)}</span>
+                    </div>
+
+                    <div class="task-detail-section">
+                        <label>Task Name</label>
+                        <input type="text"
+                               id="create-task-name-input"
+                               class="create-task-name-input"
+                               value="${escapeHtml(suggestedTaskName)}"
+                               placeholder="Enter task name..." />
+                    </div>
+
+                    <div class="task-detail-section">
+                        <label>Description</label>
+                        <textarea id="create-task-description-input"
+                                  class="create-task-description-input"
+                                  rows="3"
+                                  placeholder="Task description...">${escapeHtml(commentContent)}</textarea>
+                    </div>
+
+                    <div class="task-detail-section">
+                        <label>Status</label>
+                        <div class="task-status-options">
+                            ${Object.entries(TASK_STATUS_CONFIG).map(([statusValue, cfg]) => `
+                                <button class="task-status-option-btn ${cfg.className} ${statusValue === 'pending' ? 'active' : ''}"
+                                        data-status="${statusValue}">
+                                    <span class="option-icon">${cfg.icon}</span>
+                                    <span class="option-label">${cfg.label}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    ${affiliatableTasksHTML}
+
+                    <div class="task-detail-section create-task-source-info">
+                        <label>Source Comment</label>
+                        <div class="source-comment-preview">"${escapeHtml(commentContent.substring(0, 200))}${commentContent.length > 200 ? '...' : ''}"</div>
+                    </div>
+                </div>
+                <div class="task-detail-modal-footer">
+                    <button class="task-detail-cancel-btn" id="create-task-cancel-btn">Cancel</button>
+                    <button class="task-detail-done-btn create-task-submit-btn" id="create-task-submit-btn">Create Task</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    console.log('[CreateTaskFromComment DEBUG] Inserting modal HTML');
+
+    // Insert modal
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    const overlay = document.getElementById('create-task-modal-overlay');
+    const closeBtn = document.getElementById('create-task-modal-close');
+    const cancelBtn = document.getElementById('create-task-cancel-btn');
+    const submitBtn = document.getElementById('create-task-submit-btn');
+    const nameInput = document.getElementById('create-task-name-input');
+    const descriptionInput = document.getElementById('create-task-description-input');
+
+    console.log('[CreateTaskFromComment DEBUG] Modal elements:', {
+        overlay: !!overlay,
+        closeBtn: !!closeBtn,
+        cancelBtn: !!cancelBtn,
+        submitBtn: !!submitBtn,
+        nameInput: !!nameInput,
+        descriptionInput: !!descriptionInput
+    });
+
+    let selectedStatus = 'pending';
+
+    const closeModal = () => {
+        console.log('[CreateTaskFromComment DEBUG] Closing modal');
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 200);
+    };
+
+    // Attach event listeners
+    closeBtn.addEventListener('click', closeModal);
+    cancelBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal();
+    });
+
+    // Handle status option clicks
+    overlay.querySelectorAll('.task-status-option-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const newStatus = btn.dataset.status;
+            console.log('[CreateTaskFromComment DEBUG] Status selected:', newStatus);
+            selectedStatus = newStatus;
+
+            // Update active state
+            overlay.querySelectorAll('.task-status-option-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+
+    // Handle submit button click
+    submitBtn.addEventListener('click', async () => {
+        console.log('[CreateTaskFromComment DEBUG] Submit button clicked');
+
+        const taskName = nameInput.value.trim();
+        const taskDescription = descriptionInput.value.trim();
+        const affiliateSelect = document.getElementById('create-task-affiliate-select');
+        const affiliatedTaskId = affiliateSelect?.value || null;
+
+        console.log('[CreateTaskFromComment DEBUG] Task data:', {
+            taskName,
+            taskDescription: taskDescription?.substring(0, 50) + '...',
+            selectedStatus,
+            affiliatedTaskId
+        });
+
+        if (!taskName) {
+            showToast('Please enter a task name', 3000);
+            return;
+        }
+
+        // Disable submit button while creating
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Creating...';
+
+        try {
+            const projectId = state.session.id;
+            const projectTasks = state.tasks.byProject.get(projectId) || [];
+            const maxOrder = projectTasks.reduce((max, t) => Math.max(max, t.fields?.Order || 0), 0);
+
+            // Build task data
+            const taskData = {
+                Name: taskName,
+                Description: taskDescription,
+                Status: selectedStatus,
+                Order: maxOrder + 1
+            };
+
+            // Handle item linking - only link if it's a valid Airtable record ID
+            if (componentId && componentId.startsWith('rec')) {
+                taskData.LinkedItem = componentId;
+            } else if (componentId) {
+                // For AI-generated items, include the item name in the task name
+                const itemRecord = state.records.all.find(r => r.id === componentId);
+                if (itemRecord) {
+                    const itemName = itemRecord.fields?.Name || itemRecord.fields?.['Item Name'] || 'AI Item';
+                    if (!taskName.includes(`[${itemName}]`)) {
+                        taskData.Name = `[${itemName}] ${taskName}`;
+                    }
+                    console.log('[CreateTaskFromComment DEBUG] Task linked to AI item:', itemName);
+                }
+            }
+
+            // Store the source comment ID so we can track which tasks came from comments
+            taskData.SourceCommentId = commentId;
+
+            console.log('[CreateTaskFromComment DEBUG] Creating task with data:', taskData);
+
+            const newTask = await api.createTask(projectId, taskData);
+
+            if (newTask) {
+                console.log('[CreateTaskFromComment DEBUG] ✅ Task created successfully:', newTask.id);
+
+                // Update local state
+                state.tasks.all.set(newTask.id, newTask);
+                const existingTasks = state.tasks.byProject.get(projectId) || [];
+                state.tasks.byProject.set(projectId, [...existingTasks, newTask]);
+
+                // IMPORTANT: Persist the comment-to-task link so it survives page refresh
+                // Since Airtable Tasks table doesn't have SourceCommentId field, we store this mapping in session data
+                saveCommentTaskLink(commentId, newTask.id);
+
+                // Also apply the SourceCommentId to the in-memory task object
+                if (!newTask.fields) {
+                    newTask.fields = {};
+                }
+                newTask.fields.SourceCommentId = commentId;
+
+                // Update the task button to show "View Task" instead of "Create Task"
+                const commentEl = document.querySelector(`.component-comment[data-comment-id="${commentId}"]`);
+                if (commentEl) {
+                    const taskBtn = commentEl.querySelector('.comment-task-btn');
+                    if (taskBtn) {
+                        taskBtn.dataset.linkedTaskId = newTask.id;
+                        taskBtn.innerHTML = '📋✓';
+                        taskBtn.title = 'View affiliated task';
+                        taskBtn.classList.add('has-task');
+                        console.log('[CreateTaskFromComment DEBUG] Updated task button to show linked task');
+                    }
+                }
+
+                showToast('Task created successfully!', 2000);
+                closeModal();
+            } else {
+                console.log('[CreateTaskFromComment DEBUG] ❌ Failed to create task');
+                showToast('Failed to create task', 3000);
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Create Task';
+            }
+        } catch (error) {
+            console.error('[CreateTaskFromComment DEBUG] Error creating task:', error);
+            showToast('Failed to create task', 3000);
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Create Task';
+        }
+    });
+
+    // Show modal with animation
+    console.log('[CreateTaskFromComment DEBUG] Showing modal with animation');
+    requestAnimationFrame(() => {
+        overlay.classList.add('active');
+    });
+
+    // Focus on the name input
+    setTimeout(() => {
+        nameInput.focus();
+        nameInput.select();
+    }, 100);
 }
 
 /**
@@ -3834,9 +5202,65 @@ export async function showPresentationView(listType, startRecordId = null) {
     }
     // console.log('[Accordion DEBUG] ensureDOMElements succeeded');
 
+    // Load user permissions if not already loaded (handles direct URL access)
+    if (state.permissions?.isLoading !== false && state.session.id && state.session.user?.isAuthenticated && state.session.user?.id) {
+        console.log('[Presentation DEBUG] Permissions not loaded, fetching user role...');
+        try {
+            const { role, permissionRecord } = await api.fetchUserRole(state.session.id, state.session.user.id);
+            setState({
+                permissions: {
+                    currentRole: role,
+                    isLoading: false,
+                    permissionRecord: permissionRecord
+                }
+            });
+            console.log('[Presentation DEBUG] Permissions loaded:', { role, permissionRecord });
+        } catch (error) {
+            console.error('[Presentation DEBUG] Error loading permissions:', error);
+            // On error, set isLoading to false so fallback (isOwned) can be used
+            setState({
+                permissions: {
+                    currentRole: null,
+                    isLoading: false,
+                    permissionRecord: null
+                }
+            });
+        }
+    }
+
     // Register sync callback to handle updates from other views
     registerSyncCallback('presentation', handlePlanSyncUpdate);
     // console.log('[Presentation DEBUG] Registered plan sync callback');
+
+    // Fetch tasks for this project if not already loaded (critical for comment-task linking)
+    // This ensures comment-created tasks are visible when page is refreshed or link is shared
+    const projectId = state.session.id;
+    if (projectId && !state.tasks.byProject.has(projectId)) {
+        console.log('[Presentation DEBUG] Tasks not loaded for project, fetching...');
+        try {
+            const tasks = await api.fetchTasks(projectId);
+            if (Array.isArray(tasks)) {
+                // Update tasks.all map
+                tasks.forEach(task => {
+                    state.tasks.all.set(task.id, task);
+                });
+                // Update tasks.byProject map
+                state.tasks.byProject.set(projectId, tasks);
+                console.log(`[Presentation DEBUG] Loaded ${tasks.length} tasks for project ${projectId}`);
+
+                // IMPORTANT: After tasks are loaded, restore comment-to-task links from session storage
+                // This applies SourceCommentId to task objects so the UI shows linked tasks correctly
+                loadCommentTaskLinks();
+            }
+        } catch (error) {
+            console.error('[Presentation DEBUG] Error fetching tasks:', error);
+            // Non-blocking - comments will still render, just without task links
+        }
+    } else {
+        console.log('[Presentation DEBUG] Tasks already loaded for project:', projectId);
+        // Even if tasks were already loaded, restore comment-to-task links
+        loadCommentTaskLinks();
+    }
 
     // Mark that catalog will need rendering when exiting presentation view
     // (since we skip catalog rendering while in presentation view)
@@ -3845,6 +5269,9 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Clear image cache and comments cache for fresh load
     itemImagesCache.clear();
     componentCommentsCache.clear();
+
+    // Load task statuses from session state
+    loadElementTaskStatuses();
 
     // Render presentation header (copies logo and title from main header)
     renderPresentationHeader();
@@ -4043,6 +5470,17 @@ export function setupPresentationEventListeners() {
     console.log('[Events DEBUG] Adding handleComponentCommentsClick listener to itineraryItemsListEl');
     itineraryItemsListEl.addEventListener('click', handleComponentCommentsClick);
     itineraryItemsListEl.addEventListener('keydown', handleComponentCommentsKeydown);
+
+    // Handle task status button clicks on items
+    console.log('[Events DEBUG] Adding handleTaskStatusClick listener to itineraryItemsListEl:', itineraryItemsListEl);
+    itineraryItemsListEl.addEventListener('click', handleTaskStatusClick);
+
+    // Handle task status button clicks on event details (date, goals, etc.)
+    const headerAccordionContent = modal.querySelector('.itinerary-header .itinerary-accordion-content');
+    console.log('[Events DEBUG] Adding handleTaskStatusClick listener to headerAccordionContent:', headerAccordionContent);
+    if (headerAccordionContent) {
+        headerAccordionContent.addEventListener('click', handleTaskStatusClick);
+    }
 
     // Note: shareBtn removed - share functionality now in collaborators add/share button
 

@@ -3,7 +3,7 @@
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
-import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
+import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex } from '../config.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
@@ -2366,69 +2366,78 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 newSearchBtn.classList.add('loading');
                 newSearchBtn.disabled = true;
                 const originalText = newSearchBtn.textContent;
-                newSearchBtn.textContent = 'Searching...';
+                newSearchBtn.textContent = 'Searching website...';
 
                 try {
-                    // Build search keywords from record data
-                    const searchTerms = [];
-                    const name = record.fields?.Name || '';
-                    const mediaTags = record.fields?.['Media Tags'] || '';
-                    const category = record.fields?.Category || '';
+                    // For AI-parsed items, scrape the item's website for photos
+                    // These items are not in the catalog yet, so Cloudinary won't have relevant photos
+                    const websiteUrl = record.fields?.['_aiWebsite'];
+                    const businessName = record.fields?.Name || '';
 
-                    if (name) searchTerms.push(name);
-                    if (mediaTags) searchTerms.push(mediaTags);
-                    if (category && !searchTerms.includes(category)) searchTerms.push(category);
+                    log('Modal', `Searching for more photos from website: ${websiteUrl || 'none'}`);
 
-                    const searchQuery = searchTerms.join(' ').trim() || 'activity';
+                    // Build set of existing image URLs to filter duplicates
+                    const existingUrls = new Set(imageUrls.map(url => url.toLowerCase()));
 
-                    log('Modal', `Searching for more photos with: "${searchQuery}"`);
+                    let newImageUrls = [];
 
-                    // Use fetchImagesByTags to search for more images
-                    const additionalImages = await api.fetchImagesByTags(searchQuery);
+                    // Step 1: Try scraping the website for photos
+                    if (websiteUrl) {
+                        newSearchBtn.textContent = 'Scanning website...';
+                        const scrapeResult = await api.scrapeWebsitePhotos(websiteUrl, businessName, 10);
 
-                    if (additionalImages && additionalImages.length > 0) {
-                        // Filter out duplicates
-                        const existingUrls = new Set(imageUrls);
-                        const newImages = additionalImages.filter(url => !existingUrls.has(url));
+                        if (scrapeResult.success && scrapeResult.images && scrapeResult.images.length > 0) {
+                            log('Modal', `Website scrape found ${scrapeResult.images.length} images from sources:`, scrapeResult.sources);
 
-                        if (newImages.length > 0) {
-                            // Add new images to the array
-                            imageUrls.push(...newImages);
+                            // Filter out duplicates
+                            for (const img of scrapeResult.images) {
+                                if (!existingUrls.has(img.url.toLowerCase())) {
+                                    newImageUrls.push(img.url);
+                                    existingUrls.add(img.url.toLowerCase());
+                                }
+                            }
 
-                            // Rebuild thumbnail strip with all images
-                            modalThumbnailStrip.innerHTML = '';
-                            imageUrls.forEach((url, index) => {
-                                const thumb = document.createElement('div');
-                                thumb.className = 'thumbnail-img';
-                                const optimizedThumb = url.includes('cloudinary')
-                                    ? applyCloudinaryTransform(url, 'w_150,h_150,c_fill,f_auto,q_auto')
-                                    : url;
-                                thumb.style.backgroundImage = `url('${optimizedThumb}')`;
-                                if (index === currentPhotoIndex) thumb.classList.add('active');
-                                thumb.addEventListener('click', () => {
-                                    currentPhotoIndex = index;
-                                    const optimizedClickImage = url.includes('cloudinary')
-                                        ? applyCloudinaryTransform(url, 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
-                                        : url;
-                                    modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
-                                    modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
-                                    thumb.classList.add('active');
-                                });
-                                modalThumbnailStrip.appendChild(thumb);
-                            });
-
-                            newSearchBtn.textContent = `Found ${newImages.length} more!`;
-                            setTimeout(() => {
-                                newSearchBtn.textContent = originalText;
-                            }, 2000);
+                            log('Modal', `After deduplication: ${newImageUrls.length} new images`);
                         } else {
-                            newSearchBtn.textContent = 'No new photos found';
-                            setTimeout(() => {
-                                newSearchBtn.textContent = originalText;
-                            }, 2000);
+                            log('Modal', 'Website scrape returned no images');
                         }
                     } else {
-                        newSearchBtn.textContent = 'No photos found';
+                        log('Modal', 'No website URL available for scraping');
+                    }
+
+                    if (newImageUrls.length > 0) {
+                        // Add new images to the array
+                        imageUrls.push(...newImageUrls);
+
+                        // Rebuild thumbnail strip with all images
+                        modalThumbnailStrip.innerHTML = '';
+                        imageUrls.forEach((url, index) => {
+                            const thumb = document.createElement('div');
+                            thumb.className = 'thumbnail-img';
+                            const optimizedThumb = url.includes('cloudinary')
+                                ? applyCloudinaryTransform(url, 'w_150,h_150,c_fill,f_auto,q_auto')
+                                : url;
+                            thumb.style.backgroundImage = `url('${optimizedThumb}')`;
+                            if (index === currentPhotoIndex) thumb.classList.add('active');
+                            thumb.addEventListener('click', () => {
+                                currentPhotoIndex = index;
+                                const optimizedClickImage = url.includes('cloudinary')
+                                    ? applyCloudinaryTransform(url, 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+                                    : url;
+                                modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
+                                modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
+                                thumb.classList.add('active');
+                            });
+                            modalThumbnailStrip.appendChild(thumb);
+                        });
+
+                        newSearchBtn.textContent = `Found ${newImageUrls.length} from website!`;
+                        setTimeout(() => {
+                            newSearchBtn.textContent = originalText;
+                        }, 3000);
+                    } else {
+                        // No images found from website
+                        newSearchBtn.textContent = websiteUrl ? 'No website photos found' : 'No website available';
                         setTimeout(() => {
                             newSearchBtn.textContent = originalText;
                         }, 2000);
@@ -3311,9 +3320,186 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
     ui.updateCardIcon(record.id);
 
+    // Get the appropriate z-index based on presentation state
+    const isPresentationActive = document.body.classList.contains('presentation-active');
+    const modalZIndex = getModalZIndex('detail');
+
+    // DEBUG: Log modal overlay state before activation
+    console.log('[Modal DEBUG] Before activation:', {
+        overlayId: modalOverlay.id,
+        overlayClasses: modalOverlay.className,
+        computedDisplay: window.getComputedStyle(modalOverlay).display,
+        computedOpacity: window.getComputedStyle(modalOverlay).opacity,
+        computedBgColor: window.getComputedStyle(modalOverlay).backgroundColor,
+        computedPosition: window.getComputedStyle(modalOverlay).position,
+        computedZIndex: window.getComputedStyle(modalOverlay).zIndex,
+        deferredCssLoaded: !!document.querySelector('link[href*="deferred.css"][rel="stylesheet"]'),
+        criticalCssExists: !!document.querySelector('style'),
+        isPresentationActive,
+        calculatedZIndex: modalZIndex
+    });
+
     modalOverlay.classList.add('active');
-    modalOverlay.style.display = 'flex';
+
+    // CRITICAL FIX: Apply essential overlay styles inline to ensure they work
+    // even if CSS hasn't fully loaded (direct URL access scenario)
+    // Use dynamic z-index based on presentation state (1100 when presentation active, 1000 otherwise)
+    modalOverlay.style.cssText = `
+        display: flex;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.6);
+        z-index: ${modalZIndex};
+        justify-content: center;
+        align-items: center;
+        opacity: 1;
+        pointer-events: auto;
+    `;
+
+    // Also ensure modal-content has critical styles applied
+    const modalContentEl = modalOverlay.querySelector('.modal-content');
+    if (modalContentEl) {
+        // Check if we're on mobile for responsive styles
+        const isMobile = window.innerWidth <= 768;
+
+        // Apply critical modal content styles inline
+        if (isMobile) {
+            modalContentEl.style.cssText = `
+                background: #fff;
+                border-radius: 12px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                width: 90%;
+                max-width: 1100px;
+                height: auto;
+                max-height: 95vh;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                position: relative;
+                color: #333;
+                transform: scale(1);
+                opacity: 1;
+                pointer-events: auto;
+            `;
+        } else {
+            modalContentEl.style.cssText = `
+                background: #fff;
+                border-radius: 12px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                width: 90%;
+                max-width: 1100px;
+                height: 90vh;
+                max-height: 700px;
+                display: flex;
+                overflow: hidden;
+                position: relative;
+                color: #333;
+                transform: scale(1);
+                opacity: 1;
+                pointer-events: auto;
+            `;
+        }
+
+        // Apply critical styles to modal columns
+        const modalMainColumn = modalContentEl.querySelector('.modal-main-column');
+        if (modalMainColumn) {
+            if (isMobile) {
+                modalMainColumn.style.cssText = `
+                    flex: none;
+                    height: 250px;
+                    display: flex;
+                    flex-direction: column;
+                    min-width: 0;
+                `;
+            } else {
+                modalMainColumn.style.cssText = `
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    min-width: 0;
+                `;
+            }
+        }
+
+        const modalSidebarColumn = modalContentEl.querySelector('.modal-sidebar-column');
+        if (modalSidebarColumn) {
+            if (isMobile) {
+                modalSidebarColumn.style.cssText = `
+                    flex: 1;
+                    padding: 20px;
+                    overflow-y: auto;
+                    display: flex;
+                    flex-direction: column;
+                    min-width: 0;
+                `;
+            } else {
+                modalSidebarColumn.style.cssText = `
+                    flex: 1;
+                    padding: 30px;
+                    overflow-y: auto;
+                    display: flex;
+                    flex-direction: column;
+                    min-width: 0;
+                `;
+            }
+        }
+    }
+
     document.body.classList.add('modal-open');
+
+    // DEBUG: Log modal overlay state after activation
+    requestAnimationFrame(() => {
+        const presentationEl = document.getElementById('presentation-modal-overlay');
+        const presentationZIndex = presentationEl ? window.getComputedStyle(presentationEl).zIndex : 'N/A';
+
+        console.log('[Modal DEBUG] After activation (next frame):', {
+            overlayClasses: modalOverlay.className,
+            computedDisplay: window.getComputedStyle(modalOverlay).display,
+            computedOpacity: window.getComputedStyle(modalOverlay).opacity,
+            computedBgColor: window.getComputedStyle(modalOverlay).backgroundColor,
+            computedPosition: window.getComputedStyle(modalOverlay).position,
+            computedZIndex: window.getComputedStyle(modalOverlay).zIndex,
+            computedWidth: window.getComputedStyle(modalOverlay).width,
+            computedHeight: window.getComputedStyle(modalOverlay).height,
+            inlineStyles: modalOverlay.style.cssText,
+            isPresentationActive: document.body.classList.contains('presentation-active'),
+            presentationZIndex,
+            isModalAbovePresentation: parseInt(window.getComputedStyle(modalOverlay).zIndex) > parseInt(presentationZIndex)
+        });
+
+        // Check if modal-content is rendered correctly
+        const modalContent = modalOverlay.querySelector('.modal-content');
+        if (modalContent) {
+            console.log('[Modal DEBUG] Modal content styles:', {
+                computedBgColor: window.getComputedStyle(modalContent).backgroundColor,
+                computedTransform: window.getComputedStyle(modalContent).transform,
+                computedOpacity: window.getComputedStyle(modalContent).opacity
+            });
+        }
+
+        // Additional debug: Check if background-color is actually being rendered
+        const overlayBgColor = window.getComputedStyle(modalOverlay).backgroundColor;
+        if (overlayBgColor === 'rgba(0, 0, 0, 0)' || overlayBgColor === 'transparent') {
+            console.error('[Modal DEBUG] WARNING: Overlay background is transparent! This should not happen.');
+        }
+
+        // Z-index layering check
+        if (document.body.classList.contains('presentation-active')) {
+            const modalZ = parseInt(window.getComputedStyle(modalOverlay).zIndex);
+            const presZ = parseInt(presentationZIndex);
+            if (modalZ <= presZ) {
+                console.error('[Modal DEBUG] WARNING: Modal z-index is NOT above presentation view!', {
+                    modalZIndex: modalZ,
+                    presentationZIndex: presZ
+                });
+            } else {
+                console.log('[Modal DEBUG] ✓ Modal is correctly above presentation view');
+            }
+        }
+    });
 
     // Reset the rendering guard after modal is fully displayed
     isModalRendering = false;
@@ -3339,7 +3525,26 @@ export function hideDetailModal() {
     if (modalOverlay) {
         modalOverlay.classList.remove('active');
         setTimeout(() => {
+            // Clear inline styles that were set for the direct URL access fix
+            modalOverlay.style.cssText = '';
             modalOverlay.style.display = 'none';
+
+            // Also clear modal-content and column inline styles
+            const modalContentEl = modalOverlay.querySelector('.modal-content');
+            if (modalContentEl) {
+                modalContentEl.style.cssText = '';
+
+                const modalMainColumn = modalContentEl.querySelector('.modal-main-column');
+                if (modalMainColumn) {
+                    modalMainColumn.style.cssText = '';
+                }
+
+                const modalSidebarColumn = modalContentEl.querySelector('.modal-sidebar-column');
+                if (modalSidebarColumn) {
+                    modalSidebarColumn.style.cssText = '';
+                }
+            }
+
             resetModalState();
         }, 300);
         document.body.classList.remove('modal-open');
@@ -3539,12 +3744,47 @@ export async function showCheckoutModal(shopSettings) {
         
         checkoutModalOverlay.cardElement = null; // Clear old reference
 
+        // Get the appropriate z-index based on presentation state
+        const isPresentationActive = document.body.classList.contains('presentation-active');
+        const checkoutZIndex = getModalZIndex('checkout');
+
+        console.log('[Checkout Modal DEBUG] Before activation:', {
+            isPresentationActive,
+            calculatedZIndex: checkoutZIndex
+        });
+
         // --- 8. Show Modal ---\
         checkoutModalOverlay.classList.add('active');
         setTimeout(() => {
-            checkoutModalOverlay.style.display = 'flex';
+            // Apply inline styles with proper z-index for presentation mode
+            checkoutModalOverlay.style.cssText = `
+                display: flex;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.6);
+                z-index: ${checkoutZIndex};
+                justify-content: center;
+                align-items: center;
+                opacity: 1;
+                pointer-events: auto;
+            `;
             if(checkoutCloseBtn) checkoutCloseBtn.focus();
-        }, 0); // <-- FIX: Removed stray \
+
+            // DEBUG: Log z-index after showing
+            requestAnimationFrame(() => {
+                const presentationEl = document.getElementById('presentation-modal-overlay');
+                const presentationZIndex = presentationEl ? window.getComputedStyle(presentationEl).zIndex : 'N/A';
+                console.log('[Checkout Modal DEBUG] After activation:', {
+                    computedZIndex: window.getComputedStyle(checkoutModalOverlay).zIndex,
+                    isPresentationActive: document.body.classList.contains('presentation-active'),
+                    presentationZIndex,
+                    isModalAbovePresentation: parseInt(window.getComputedStyle(checkoutModalOverlay).zIndex) > parseInt(presentationZIndex)
+                });
+            });
+        }, 0);
         document.body.classList.add('modal-open');
 
     } catch (err) {
@@ -3584,9 +3824,11 @@ export function hideCheckoutModal() {
             if (checkoutCloseBtn) {
                 checkoutCloseBtn.removeEventListener('click', hideCheckoutModal);
             }
+            // Clear inline styles that were set for presentation mode z-index fix
+            checkoutModalOverlay.style.cssText = '';
             checkoutModalOverlay.style.display = 'none';
             log('Modal', 'Checkout modal hidden.');
-        }, 300); // <-- FIX: Removed stray \
+        }, 300);
         document.body.classList.remove('modal-open');
     }
 }

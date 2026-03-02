@@ -2602,6 +2602,29 @@
 #detail-modal-overlay.active {
     z-index: 1100;
 }
+
+/* Ensure checkout modal appears above presentation view */
+body.presentation-active #checkout-modal-overlay.active,
+.presentation-fullpage.active ~ #checkout-modal-overlay.active {
+    z-index: 1100;
+}
+
+#checkout-modal-overlay.active {
+    z-index: 1100;
+}
+
+/* Reaction pickers must always appear above everything */
+.reaction-picker,
+.comment-reaction-picker {
+    z-index: 10001 !important;
+    position: fixed;
+}
+
+/* Ensure all modals appear above presentation when presentation is active */
+body.presentation-active .modal-overlay.active {
+    z-index: 1100;
+}
+
 .presentation-fullpage.active {
     display: flex;
 }
@@ -8368,4 +8391,574 @@ hr.total-divider {
     .presentation-carousel-nav.right {
         right: 4px;
     }
+}
+
+/* =============================================================================
+   TASK STATUS UI FOR PLAN ELEMENTS
+   ============================================================================= */
+
+/* Task Status Button - shown on each plan element */
+.task-status-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    margin-right: 8px;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+}
+
+.task-status-btn:hover {
+    transform: scale(1.1);
+}
+
+.task-status-btn .task-status-icon {
+    line-height: 1;
+}
+
+/* Status button colors */
+.task-status-btn.task-status-none {
+    color: rgba(255, 255, 255, 0.4);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.task-status-btn.task-status-none:hover {
+    color: rgba(255, 255, 255, 0.7);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.task-status-btn.task-status-gtg {
+    color: #4ade80;
+    border-color: #4ade80;
+    background: rgba(74, 222, 128, 0.15);
+}
+
+.task-status-btn.task-status-no-action {
+    color: #94a3b8;
+    border-color: #94a3b8;
+    background: rgba(148, 163, 184, 0.15);
+}
+
+.task-status-btn.task-status-check {
+    color: #fbbf24;
+    border-color: #fbbf24;
+    background: rgba(251, 191, 36, 0.15);
+}
+
+.task-status-btn.task-status-attention {
+    color: #f87171;
+    border-color: #f87171;
+    background: rgba(248, 113, 113, 0.15);
+}
+
+/* Task Status Picker Dropdown */
+.task-status-picker {
+    background: rgba(30, 30, 40, 0.98);
+    border-radius: 12px;
+    padding: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 160px;
+}
+
+.task-status-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.8);
+    transition: all 0.15s ease;
+    width: 100%;
+    text-align: left;
+}
+
+.task-status-option:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.task-status-option.active {
+    background: rgba(255, 255, 255, 0.15);
+    font-weight: 500;
+}
+
+.task-status-option .option-icon {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.task-status-option.task-status-gtg { color: #4ade80; }
+.task-status-option.task-status-no-action { color: #94a3b8; }
+.task-status-option.task-status-check { color: #fbbf24; }
+.task-status-option.task-status-attention { color: #f87171; }
+.task-status-option.task-status-none { color: rgba(255, 255, 255, 0.5); }
+
+/* Task Detail Modal */
+.task-detail-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10002;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.task-detail-modal-overlay.active {
+    opacity: 1;
+}
+
+.task-detail-modal {
+    background: rgba(30, 30, 40, 0.98);
+    border-radius: 16px;
+    width: 90%;
+    max-width: 400px;
+    max-height: 80vh;
+    overflow: auto;
+    box-shadow: 0 16px 64px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transform: translateY(20px);
+    transition: transform 0.2s ease;
+}
+
+.task-detail-modal-overlay.active .task-detail-modal {
+    transform: translateY(0);
+}
+
+.task-detail-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.task-detail-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    color: #fff;
+}
+
+.task-detail-modal-close {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.task-detail-modal-close:hover {
+    color: #fff;
+}
+
+.task-detail-modal-body {
+    padding: 20px;
+}
+
+.task-detail-element-name {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.task-detail-element-name .element-label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.task-detail-element-name .element-name {
+    font-size: 16px;
+    color: #fff;
+    font-weight: 500;
+}
+
+.task-detail-section {
+    margin-bottom: 20px;
+}
+
+.task-detail-section label {
+    display: block;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.task-status-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.task-status-option-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border: 1px solid currentColor;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.15s ease;
+    opacity: 0.7;
+}
+
+.task-status-option-btn:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.task-status-option-btn.active {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.1);
+    font-weight: 500;
+}
+
+.task-status-option-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.3;
+}
+
+.task-status-option-btn .option-icon {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.task-affiliate-select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    color: #fff;
+    font-size: 14px;
+}
+
+.task-affiliate-select:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.task-detail-modal-footer {
+    padding: 16px 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    justify-content: flex-end;
+}
+
+.task-detail-done-btn {
+    padding: 10px 24px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.task-detail-done-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Task Detail Popup - Comments Section */
+.task-detail-comments-section {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.task-detail-comments-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    padding-right: 4px;
+}
+
+.task-detail-comments-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.task-detail-comments-list::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 2px;
+}
+
+.task-detail-comments-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+}
+
+.task-detail-comments-list .comments-loading,
+.task-detail-comments-list .comments-empty,
+.task-detail-comments-list .comments-error {
+    padding: 16px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+}
+
+.task-detail-comment {
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border-left: 3px solid transparent;
+}
+
+.task-detail-comment.own-comment {
+    border-left-color: rgba(74, 222, 128, 0.6);
+}
+
+.task-detail-comment.deleted {
+    opacity: 0.5;
+}
+
+.task-detail-comment .comment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    gap: 8px;
+}
+
+.task-detail-comment .comment-author {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.task-detail-comment .comment-time {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.task-detail-comment .comment-edited {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.3);
+    font-style: italic;
+}
+
+.task-detail-comment .comment-content {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.task-detail-comment .deleted-comment-text {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.task-detail-comment-input-wrapper {
+    display: flex;
+    gap: 8px;
+}
+
+.task-detail-comment-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    color: #fff;
+    font-size: 13px;
+}
+
+.task-detail-comment-input:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.task-detail-comment-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.task-detail-comment-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.task-detail-comment-submit {
+    padding: 10px 14px;
+    background: rgba(74, 222, 128, 0.2);
+    border: 1px solid rgba(74, 222, 128, 0.4);
+    border-radius: 8px;
+    color: #4ade80;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.15s ease;
+}
+
+.task-detail-comment-submit:hover:not(:disabled) {
+    background: rgba(74, 222, 128, 0.3);
+}
+
+.task-detail-comment-submit:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Create Task Button in Comment Actions */
+.comment-task-btn {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.comment-task-btn:hover {
+    color: #4ade80;
+    background: rgba(74, 222, 128, 0.1);
+}
+
+/* Create Task from Comment Popup */
+.create-task-name-input,
+.create-task-description-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    color: #fff;
+    font-size: 14px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.create-task-name-input:focus,
+.create-task-description-input:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.create-task-description-input {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.create-task-description-input::placeholder,
+.create-task-name-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.create-task-source-info {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.source-comment-preview {
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.6);
+    font-style: italic;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.task-detail-cancel-btn {
+    padding: 10px 20px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-right: 10px;
+}
+
+.task-detail-cancel-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+}
+
+.create-task-submit-btn {
+    background: rgba(74, 222, 128, 0.2);
+    border-color: rgba(74, 222, 128, 0.4);
+    color: #4ade80;
+}
+
+.create-task-submit-btn:hover:not(:disabled) {
+    background: rgba(74, 222, 128, 0.3);
+}
+
+.create-task-submit-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+    .task-status-btn {
+        width: 22px;
+        height: 22px;
+        min-width: 22px;
+        font-size: 11px;
+        margin-right: 6px;
+    }
+
+    .task-status-options {
+        flex-direction: column;
+    }
+
+    .task-status-option-btn {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
+/* Event Detail with Task Status */
+.event-detail-with-status {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.event-detail-with-status .detail-content {
+    flex: 1;
+}
+
+.itinerary-date .event-detail-with-status,
+.itinerary-notes .event-detail-with-status {
+    display: inline-flex;
+    align-items: center;
 }

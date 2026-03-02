@@ -221,10 +221,13 @@ function renderTaskManager(container, tasks) {
     // Phase 4: Check user permissions - default to read-only while loading
     const currentRole = state.permissions?.currentRole;
     const isLoading = state.permissions?.isLoading !== false;
-    const canUserEdit = !isLoading && api.canEdit(currentRole);
-    const isUserViewer = !isLoading && api.isViewer(currentRole);
+    const canEditByRole = api.canEdit(currentRole);
+    // Fallback: If permissions weren't loaded (direct URL access), use session.isOwned
+    const canEditByOwnership = state.session.isOwned === true;
+    const canUserEdit = (!isLoading && canEditByRole) || canEditByOwnership;
+    const isUserViewer = !isLoading && api.isViewer(currentRole) && !canEditByOwnership;
 
-    console.log('[TaskManager DEBUG] Permission state:', { currentRole, isLoading, canUserEdit, isUserViewer });
+    console.log('[TaskManager DEBUG] Permission state:', { currentRole, isLoading, canEditByRole, canEditByOwnership, canUserEdit, isUserViewer });
 
     // Add a class to the container for permission-based styling
     const permissionClass = isLoading ? 'permissions-loading' : (canUserEdit ? 'can-edit' : 'read-only');
@@ -358,7 +361,10 @@ function renderTaskCard(task) {
     // Phase 4: Check user permissions for task actions
     const currentRole = state.permissions?.currentRole;
     const isLoading = state.permissions?.isLoading !== false;
-    const canUserEdit = !isLoading && api.canEdit(currentRole);
+    const canEditByRole = api.canEdit(currentRole);
+    // Fallback: If permissions weren't loaded (direct URL access), use session.isOwned
+    const canEditByOwnership = state.session.isOwned === true;
+    const canUserEdit = (!isLoading && canEditByRole) || canEditByOwnership;
 
     // Status badge styling
     const statusBadgeClass = getStatusBadgeClass(status);
@@ -534,7 +540,10 @@ function handleTaskClick(e) {
     // Phase 4: Check user permissions before allowing edit actions
     const currentRole = state.permissions?.currentRole;
     const isLoading = state.permissions?.isLoading !== false;
-    const canUserEdit = !isLoading && api.canEdit(currentRole);
+    const canEditByRole = api.canEdit(currentRole);
+    // Fallback: If permissions weren't loaded (direct URL access), use session.isOwned
+    const canEditByOwnership = state.session.isOwned === true;
+    const canUserEdit = (!isLoading && canEditByRole) || canEditByOwnership;
 
     const editBtn = e.target.closest('.task-edit-btn');
     const deleteBtn = e.target.closest('.task-delete-btn');
@@ -607,7 +616,10 @@ async function handleCheckboxChange(e) {
     // Phase 4: Check user permissions before allowing status change
     const currentRole = state.permissions?.currentRole;
     const isLoading = state.permissions?.isLoading !== false;
-    const canUserEdit = !isLoading && api.canEdit(currentRole);
+    const canEditByRole = api.canEdit(currentRole);
+    // Fallback: If permissions weren't loaded (direct URL access), use session.isOwned
+    const canEditByOwnership = state.session.isOwned === true;
+    const canUserEdit = (!isLoading && canEditByRole) || canEditByOwnership;
 
     if (!canUserEdit) {
         e.preventDefault();
@@ -1262,7 +1274,10 @@ function rerenderTaskListSmooth(container) {
         // Reinitialize drag-and-drop if user can edit
         const currentRole = state.permissions?.currentRole;
         const isLoading = state.permissions?.isLoading !== false;
-        const canUserEdit = !isLoading && api.canEdit(currentRole);
+        const canEditByRole = api.canEdit(currentRole);
+        // Fallback: If permissions weren't loaded (direct URL access), use session.isOwned
+        const canEditByOwnership = state.session.isOwned === true;
+        const canUserEdit = (!isLoading && canEditByRole) || canEditByOwnership;
         if (canUserEdit) {
             initializeSortable();
         }

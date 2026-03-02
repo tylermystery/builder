@@ -89,6 +89,13 @@ function syncUiWithUrl() {
         } else if (view === 'itinerary') {
             ui.showItineraryModal();
         } else if (openItemId) {
+            // DEBUG: Check CSS loading state before showing modal
+            console.log('[syncUiWithUrl DEBUG] About to show modal for:', openItemId, {
+                deferredCssLoaded: !!document.querySelector('link[href*="deferred.css"][rel="stylesheet"]'),
+                criticalStyleElements: document.querySelectorAll('style').length,
+                documentReadyState: document.readyState
+            });
+
             const recordToOpen = state.records.all.find(r => r.id === openItemId);
             if (recordToOpen) {
                 ui.showDetailModal(recordToOpen);

@@ -290,11 +290,11 @@ async function loadWtfPlansData() {
 
     // Show loading state
     isLoading = true;
-    container.innerHTML = '<div class="wtf-plans-loading">Loading your plans...</div>';
+    const isAuthenticated = state.session.user.isAuthenticated;
+    container.innerHTML = `<div class="wtf-plans-loading">${isAuthenticated ? 'Loading your plans...' : 'Loading upcoming events...'}</div>`;
 
     try {
         const userId = state.session.user.id;
-        const isAuthenticated = state.session.user.isAuthenticated;
 
         // Fetch data in parallel where possible
         const dataPromises = [];
@@ -328,6 +328,7 @@ async function loadWtfPlansData() {
         await Promise.all(dataPromises);
 
         // RSVPs - filter from records (events user has RSVP'd to)
+        // For non-authenticated users, show upcoming public events they can browse/RSVP to
         if (isAuthenticated && userId) {
             wtfPlansData.rsvps = state.records.all.filter(record => {
                 if (record.fields['Item Type'] !== 'Event') return false;
@@ -337,7 +338,17 @@ async function loadWtfPlansData() {
                 return rsvpYes.includes(userId) || rsvpMaybe.includes(userId) || rsvpNo.includes(userId);
             });
         } else {
-            wtfPlansData.rsvps = [];
+            // For non-authenticated users, show upcoming public events
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            wtfPlansData.rsvps = state.records.all.filter(record => {
+                if (record.fields['Item Type'] !== 'Event') return false;
+                const eventDate = record.fields.Date;
+                if (!eventDate) return false;
+                // Only show events that are today or in the future
+                const eventDateObj = new Date(eventDate + 'T00:00:00');
+                return eventDateObj >= today;
+            });
         }
 
         // Favorites - get liked items
@@ -445,14 +456,21 @@ function getCombinedItems() {
         }
     }
 
-    // Add RSVPs
+    // Add RSVPs (for authenticated users) or Upcoming Events (for non-authenticated)
     if (currentFilter === WTF_PLAN_TYPES.ALL || currentFilter === WTF_PLAN_TYPES.RSVPS) {
+        const isAuthenticated = state.session.user.isAuthenticated;
+        const userId = state.session.user.id;
+
         wtfPlansData.rsvps.forEach(event => {
-            const userId = state.session.user.id;
             let rsvpStatus = '';
-            if ((event.fields.RSVPs || []).includes(userId)) rsvpStatus = 'Going';
-            else if ((event.fields.RSVPMaybe || []).includes(userId)) rsvpStatus = 'Maybe';
-            else if ((event.fields.RSVPNo || []).includes(userId)) rsvpStatus = 'Not Going';
+            if (isAuthenticated && userId) {
+                if ((event.fields.RSVPs || []).includes(userId)) rsvpStatus = 'Going';
+                else if ((event.fields.RSVPMaybe || []).includes(userId)) rsvpStatus = 'Maybe';
+                else if ((event.fields.RSVPNo || []).includes(userId)) rsvpStatus = 'Not Going';
+            } else {
+                // For non-authenticated users, show as "Upcoming" public event
+                rsvpStatus = 'Upcoming';
+            }
 
             items.push({
                 type: 'rsvp',
@@ -463,6 +481,7 @@ function getCombinedItems() {
                 createdTime: event.createdTime,
                 rsvpStatus: rsvpStatus,
                 icon: '🎟️',
+                isPublicEvent: !isAuthenticated, // Flag to indicate this is shown as a public event preview
                 data: event
             });
         });
@@ -507,10 +526,20 @@ function getCombinedItems() {
 
     // Sort by most recent (createdTime or date)
     // Current session items get priority by having a recent createdTime
+    // Public events (for non-authenticated users) are sorted by upcoming date (soonest first)
     items.sort((a, b) => {
         // Current session always goes first
         if (a.isCurrentSession) return -1;
         if (b.isCurrentSession) return 1;
+
+        // Public events for non-authenticated users should be sorted by event date (soonest first)
+        if (a.isPublicEvent && b.isPublicEvent) {
+            const dateA = a.date ? new Date(a.date + 'T00:00:00') : new Date(9999, 11, 31);
+            const dateB = b.date ? new Date(b.date + 'T00:00:00') : new Date(9999, 11, 31);
+            return dateA - dateB; // Soonest first
+        }
+
+        // Regular items sorted by most recent
         const dateA = new Date(a.createdTime || a.date || 0);
         const dateB = new Date(b.createdTime || b.date || 0);
         return dateB - dateA; // Most recent first
@@ -557,8 +586,19 @@ function renderWtfPlansList() {
 function getEmptyMessage() {
     const isAuthenticated = state.session.user.isAuthenticated;
 
+    // For non-authenticated users, show different messages based on filter
     if (!isAuthenticated) {
-        return 'Sign in to see your plans, RSVPs, and favorites.';
+        switch (currentFilter) {
+            case WTF_PLAN_TYPES.RSVPS:
+                return 'No upcoming public events right now. Check back soon!';
+            case WTF_PLAN_TYPES.FAVORITES:
+                return 'Sign in to save your favorites.';
+            case WTF_PLAN_TYPES.PLANS:
+            case WTF_PLAN_TYPES.PROJECTS:
+                return 'Sign in to see your plans and projects.';
+            default:
+                return 'Sign in to see your plans, RSVPs, and favorites.';
+        }
     }
 
     switch (currentFilter) {
