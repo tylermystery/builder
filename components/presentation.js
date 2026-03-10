@@ -19,6 +19,8 @@ import { showUserModal } from '../auth.js';
 import { showToast } from '../ui.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { refreshForumData, onNewItemReceived } from './forumPanel.js';
+import { initializeToastNotifications, handlePusherEvent as handleToastPusherEvent } from './toastNotifications.js';
+import { initializeUnifiedChatPanel, showUnifiedChatPanel, hideUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage } from './unifiedChatPanel.js';
 
 console.log('[MODULE DEBUG] presentation.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -81,6 +83,7 @@ async function handlePlanSyncUpdate(changeType, summary, changeData) {
             generateItemsSummary();
             // Update running total in header
             updatePresentationHeaderTotal();
+            updatePlanSummaryDashboard();
             break;
         case 'dateChanged':
             // Update the date display
@@ -96,6 +99,7 @@ async function handlePlanSyncUpdate(changeType, summary, changeData) {
             initializeAccordions();
             // Update running total in header
             updatePresentationHeaderTotal();
+            updatePlanSummaryDashboard();
             break;
         default:
     }
@@ -717,6 +721,139 @@ function renderCollaborators() {
 
     if (collaboratorsListEl) {
         collaboratorsListEl.innerHTML = html;
+    }
+}
+
+// ============================================
+// INVITE MODAL FOR COLLABORATOR EMAIL INVITES
+// ============================================
+
+/**
+ * Show the invite modal for sending email invitations
+ */
+function showInviteModal() {
+    const overlay = document.getElementById('invite-modal-overlay');
+    const emailInput = document.getElementById('invite-email-input');
+    const statusEl = document.getElementById('invite-status');
+    const sendBtn = document.getElementById('invite-send-btn');
+
+    if (!overlay) return;
+
+    // Reset form
+    if (emailInput) emailInput.value = '';
+    if (statusEl) {
+        statusEl.style.display = 'none';
+        statusEl.textContent = '';
+    }
+    if (sendBtn) sendBtn.disabled = false;
+
+    overlay.classList.add('active');
+
+    // Set up event listeners (only once)
+    if (!overlay._listenersSetup) {
+        overlay._listenersSetup = true;
+
+        // Send invite
+        const form = document.getElementById('invite-form');
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await handleSendInvite();
+            });
+        }
+
+        // Copy link button
+        const copyBtn = document.getElementById('invite-copy-link-btn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                const baseURL = window.location.origin + window.location.pathname;
+                const sessionID = state.session.id;
+                const shareURL = `${baseURL}?session=${sessionID}&view=present`;
+
+                navigator.clipboard.writeText(shareURL).then(() => {
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(() => { copyBtn.textContent = 'Copy Link'; }, 1500);
+                });
+            });
+        }
+
+        // Cancel/close button
+        const cancelBtn = document.getElementById('invite-cancel-btn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', hideInviteModal);
+        }
+
+        // Close on overlay click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) hideInviteModal();
+        });
+    }
+
+    if (emailInput) emailInput.focus();
+}
+
+function hideInviteModal() {
+    const overlay = document.getElementById('invite-modal-overlay');
+    if (overlay) overlay.classList.remove('active');
+}
+
+async function handleSendInvite() {
+    const emailInput = document.getElementById('invite-email-input');
+    const roleSelect = document.getElementById('invite-role-select');
+    const statusEl = document.getElementById('invite-status');
+    const sendBtn = document.getElementById('invite-send-btn');
+
+    const email = emailInput?.value?.trim();
+    const role = roleSelect?.value || 'Editor';
+
+    if (!email) return;
+
+    if (sendBtn) sendBtn.disabled = true;
+    if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.textContent = 'Sending invitation...';
+        statusEl.className = 'invite-status';
+    }
+
+    try {
+        const currentUser = getCurrentUser();
+        const eventName = state.eventDetails?.combined?.get?.('Event Name') || 'Event Plan';
+
+        const response = await fetch('/api/send-invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email,
+                sessionId: state.session.id,
+                invitedBy: currentUser?.id,
+                inviterName: currentUser?.name || 'Someone',
+                role,
+                sessionName: eventName
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to send invitation');
+        }
+
+        if (statusEl) {
+            statusEl.textContent = `Invitation sent to ${email}`;
+            statusEl.className = 'invite-status success';
+        }
+        if (emailInput) emailInput.value = '';
+        if (sendBtn) sendBtn.disabled = false;
+
+        log('Presentation', `Invite sent to ${email} as ${role}`);
+
+    } catch (error) {
+        if (statusEl) {
+            statusEl.textContent = error.message;
+            statusEl.className = 'invite-status error';
+        }
+        if (sendBtn) sendBtn.disabled = false;
+        log('Presentation', `Invite error: ${error.message}`);
     }
 }
 
@@ -2791,7 +2928,7 @@ async function renderCompactCard(item) {
             : sourceTypeBadges.slice(0, 3).join('') + `<span class="provenance-source-badge provenance-source-more">+${sourceTypeBadges.length - 3}</span>`;
         const hybridData = getCombinedHybridData(recordId);
         const hybridLabel = hybridData?.hybridName ? '<span class="provenance-hybrid-icon" title="Hybrid item">✨</span>' : '';
-        provenanceHTML = `<div class="compact-card-provenance" title="${escapeHtml(sourceNames.join(' + '))}">${hybridLabel}<span class="provenance-label">Merged:</span> ${displayBadges}</div>`;
+        provenanceHTML = `<div class="compact-card-provenance" title="${escapeHtml(sourceNames.join(' + '))}">${hybridLabel}<span class="provenance-label">Merged:</span> ${displayBadges}<button class="compact-card-split-btn compact-card-split-hybrid" data-target-id="${recordId}" title="Split hybrid apart">✂</button></div>`;
     }
 
     // --- Goal indicator ---
@@ -2924,12 +3061,32 @@ async function renderCompactCard(item) {
     const photoStyle = optimizedPhoto ? `background-image: url('${optimizedPhoto}')` : '';
     const noPhotoClass = !optimizedPhoto ? 'compact-card-no-photo' : '';
 
+    // --- Price badge on photo ---
+    let priceBadgeHTML = '';
+    if (itemInfo) {
+        const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
+            ? itemInfo.selections
+            : itemInfo.selectedOptionIndex;
+        let unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
+        if (!isNaN(unitPrice) && unitPrice > 0) {
+            const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
+            const totalPrice = unitPrice * effectiveQuantity;
+            const priceText = effectiveQuantity > 1
+                ? `$${totalPrice.toFixed(0)} (${effectiveQuantity}x)`
+                : `$${unitPrice % 1 === 0 ? unitPrice.toFixed(0) : unitPrice.toFixed(2)}`;
+            priceBadgeHTML = `<span class="compact-card-price">${priceText}</span>`;
+        } else if (unitPrice === 0) {
+            priceBadgeHTML = `<span class="compact-card-price price-free">Free</span>`;
+        }
+    }
+
     return `
         <div class="compact-card ${lifecycleClass} ${confidenceClass} ${noPhotoClass}" data-record-id="${recordId}" data-item-type="${type}" data-item-status="${itemStatus}" role="article" tabindex="0" aria-label="${escapeHtml(name)}${showStatus ? ', ' + taskConfig.label : ''}">
             <div class="compact-card-photo" style="${photoStyle}">
                 ${statusOverlayHTML}
                 ${emojiOverlayHTML}
                 ${lifecycleBadgeHTML}
+                ${priceBadgeHTML}
             </div>
             <div class="compact-card-body">
                 <div class="compact-card-title-row">
@@ -2976,7 +3133,8 @@ async function renderCompactGroupCard(group) {
     const optimizedPhoto = photoUrl ? applyCloudinaryTransform(photoUrl, 'w_400,h_250,c_fill,f_auto,q_auto') : '';
 
     // Member name pills with lifecycle indicators
-    const memberPills = groupItems.slice(0, 3).map(gId => {
+    const maxPills = Math.min(groupItems.length, 4);
+    const memberPills = groupItems.slice(0, maxPills).map(gId => {
         const gRec = getRecordById(gId);
         const memberName = escapeHtml(gRec?.fields?.Name || 'Option');
         const isGoal = state.session.goalItems?.has(gId);
@@ -2991,7 +3149,7 @@ async function renderCompactGroupCard(group) {
         else if (isGoal) { pillStateClass = 'pill-goal'; pillIcon = '⭐ '; }
         return `<span class="compact-card-pill ${pillStateClass}">${pillIcon}${memberName}</span>`;
     }).join('');
-    const moreCount = groupItems.length - 3;
+    const moreCount = groupItems.length - maxPills;
     const morePill = moreCount > 0 ? `<span class="compact-card-pill compact-card-pill-more">+${moreCount} more</span>` : '';
 
     // Aggregate lifecycle summary for the group
@@ -3095,6 +3253,7 @@ async function renderCompactGroupCard(group) {
             <div class="compact-card-body">
                 <div class="compact-card-title-row">
                     <h4 class="compact-card-name" title="${escapeHtml(groupName)}">${escapeHtml(groupName)}</h4>
+                    <button class="compact-card-split-btn" data-group-id="${groupId}" title="Split group apart">✂</button>
                 </div>
                 ${groupStatusHTML}
                 <div class="compact-card-pills">${memberPills}${morePill}</div>
@@ -3225,9 +3384,49 @@ async function renderAllItems() {
         }
     }
 
+    // Track sections for divider insertion
+    let lastSection = null;
+    const activeLockedItems = combinedList.filter(item => item.itemStatus === 'active' && item.type === 'locked');
+    const activeIdeaItems = combinedList.filter(item => item.itemStatus === 'active' && item.type === 'favorites');
+    const archivedVisibleItems = combinedList.filter(item => item.itemStatus === 'archived');
+    const completedVisibleItems = combinedList.filter(item => item.itemStatus === 'completed');
+
     for (let i = 0; i < combinedList.length; i++) {
         const item = combinedList[i];
         const itemGroup = itemToGroupMap.get(item.recordId);
+
+        // Insert section dividers between confirmed/idea/archived/completed
+        let currentSection;
+        if (item.itemStatus === 'archived') currentSection = 'archived';
+        else if (item.itemStatus === 'completed') currentSection = 'completed';
+        else if (item.type === 'locked') currentSection = 'confirmed';
+        else currentSection = 'ideas';
+
+        if (currentSection !== lastSection) {
+            // Only show section dividers when there are multiple sections
+            const hasMixedSections = (activeLockedItems.length > 0 && activeIdeaItems.length > 0)
+                || archivedVisibleItems.length > 0 || completedVisibleItems.length > 0;
+
+            if (hasMixedSections) {
+                const sectionLabels = {
+                    confirmed: { label: 'Confirmed', count: activeLockedItems.length },
+                    ideas: { label: 'Ideas', count: activeIdeaItems.length },
+                    archived: { label: 'Archived', count: archivedVisibleItems.length },
+                    completed: { label: 'Completed', count: completedVisibleItems.length }
+                };
+                const sec = sectionLabels[currentSection];
+                if (sec && sec.count > 0) {
+                    itemsHTML.push(`
+                        <div class="board-section-divider" role="separator">
+                            <span class="board-section-divider-line"></span>
+                            <span class="board-section-divider-label">${sec.label}<span class="board-section-divider-count">(${sec.count})</span></span>
+                            <span class="board-section-divider-line"></span>
+                        </div>
+                    `);
+                }
+            }
+            lastSection = currentSection;
+        }
 
         if (itemGroup && itemGroup.id && !renderedGroupIds.has(itemGroup.id)) {
             renderedGroupIds.add(itemGroup.id);
@@ -3280,6 +3479,9 @@ async function renderAllItems() {
     initializeItemDragDrop();
     initializeRadialMenu();
     attachRadialMenuListeners();
+
+    // Update plan summary dashboard with latest metrics
+    updatePlanSummaryDashboard();
 }
 
 // Initialize click handlers for compact cards in board view
@@ -3290,8 +3492,8 @@ function initializeCompactCardClicks() {
     const itemCards = itineraryItemsListEl.querySelectorAll('.compact-card[data-record-id]');
     itemCards.forEach(card => {
         card.addEventListener('click', (e) => {
-            // Don't trigger on status badge or emoji indicator clicks
-            if (e.target.closest('.compact-card-status') || e.target.closest('.compact-card-emoji')) return;
+            // Don't trigger on status badge, emoji indicator, or split button clicks
+            if (e.target.closest('.compact-card-status') || e.target.closest('.compact-card-emoji') || e.target.closest('.compact-card-split-btn')) return;
             const recordId = card.dataset.recordId;
             const record = getRecordById(recordId);
             if (record) {
@@ -3314,6 +3516,8 @@ function initializeCompactCardClicks() {
     const groupCards = itineraryItemsListEl.querySelectorAll('.compact-card-group[data-group-id]');
     groupCards.forEach(card => {
         card.addEventListener('click', (e) => {
+            // Don't open modal when clicking the split button
+            if (e.target.closest('.compact-card-split-btn')) return;
             const groupId = card.dataset.groupId;
             if (groupId) {
                 openGroupDetailModal(groupId);
@@ -3326,6 +3530,32 @@ function initializeCompactCardClicks() {
                 if (groupId) {
                     openGroupDetailModal(groupId);
                 }
+            }
+        });
+    });
+
+    // Split buttons on group cards - dissolve the group
+    const groupSplitBtns = itineraryItemsListEl.querySelectorAll('.compact-card-group .compact-card-split-btn[data-group-id]');
+    groupSplitBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            const groupId = btn.dataset.groupId;
+            if (groupId) {
+                dissolveGroup(groupId);
+            }
+        });
+    });
+
+    // Split buttons on hybrid compact cards - uncombine all sources
+    const hybridSplitBtns = itineraryItemsListEl.querySelectorAll('.compact-card-split-hybrid[data-target-id]');
+    hybridSplitBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            const targetId = btn.dataset.targetId;
+            if (targetId) {
+                uncombineAll(targetId);
             }
         });
     });
@@ -4731,6 +4961,17 @@ function checkMergeTargetHover(clientX, clientY) {
             return;
         }
 
+        // Don't show merge when dragging an item onto its own group
+        if (itemRecordId && itemRecordId.startsWith('group-') && currentDraggedRecordId) {
+            const hoveredGroup = state.session.relatedGroups?.find(g => g.id === itemRecordId);
+            if (hoveredGroup) {
+                const groupItems = hoveredGroup.items || [];
+                if (groupItems.includes(currentDraggedRecordId)) {
+                    return;
+                }
+            }
+        }
+
         const rect = item.getBoundingClientRect();
         const isInBounds = isPointInRect(clientX, clientY, rect);
 
@@ -4919,8 +5160,23 @@ function showMergeIndicator(clientX, clientY, zone = 'hybrid') {
 function updateMergeIndicatorContent(zone) {
     if (!dragMergeIndicator) return;
     const isHybrid = zone === 'hybrid';
-    const icon = isHybrid ? '✨' : '📂';
-    const label = isHybrid ? 'Merge as Hybrid' : 'Add as Option';
+
+    // Check if hovering over a group card for contextual label
+    const isTargetGroup = mergeHoverItemId && mergeHoverItemId.startsWith('group-');
+    const isDraggedGroup = currentDraggedRecordId && currentDraggedRecordId.startsWith('group-');
+    const isDraggedInGroup = currentDraggedRecordId && getItemGroup(currentDraggedRecordId);
+
+    let icon, label;
+    if (isHybrid) {
+        icon = '✨';
+        label = 'Merge as Hybrid';
+    } else if (isTargetGroup || isDraggedGroup || isDraggedInGroup) {
+        icon = '📂';
+        label = 'Merge Groups';
+    } else {
+        icon = '📂';
+        label = 'Add as Option';
+    }
     dragMergeIndicator.innerHTML = `<span style="font-size: 18px;">${icon}</span><span>${label}</span>`;
 
     // Update colors when zone changes
@@ -5165,6 +5421,7 @@ async function archiveItem(recordId) {
     await renderAllItems();
     generateItemsSummary();
     updatePresentationHeaderTotal();
+    updatePlanSummaryDashboard();
 
     // Show toast notification
     showToast(`"${itemName}" archived`, 'info');
@@ -5195,6 +5452,7 @@ async function completeItem(recordId) {
     await renderAllItems();
     generateItemsSummary();
     updatePresentationHeaderTotal();
+    updatePlanSummaryDashboard();
 
     // Show toast notification
     showToast(`"${itemName}" marked complete`, 'success');
@@ -5733,8 +5991,15 @@ async function openCustomCommentDialog(recordId) {
 function enterMergeMode(sourceRecordId) {
     if (!sourceRecordId || isMergeModeActive) return;
 
-    const sourceRecord = getRecordById(sourceRecordId);
-    const sourceName = sourceRecord?.fields?.Name || 'Item';
+    // Determine display name - could be a group or individual item
+    let sourceName = 'Item';
+    if (sourceRecordId.startsWith('group-')) {
+        const group = state.session.relatedGroups?.find(g => g.id === sourceRecordId);
+        sourceName = group?.name || 'Group';
+    } else {
+        const sourceRecord = getRecordById(sourceRecordId);
+        sourceName = sourceRecord?.fields?.Name || 'Item';
+    }
 
     isMergeModeActive = true;
     mergeModeSourceRecordId = sourceRecordId;
@@ -5770,8 +6035,9 @@ function enterMergeMode(sourceRecordId) {
         const section = sourceSection.closest('.itinerary-item-section');
         if (section) section.classList.add('merge-mode-source');
     }
-    // Board view: mark source card
-    const sourceCard = document.querySelector(`.compact-card[data-record-id="${sourceRecordId}"]`);
+    // Board view: mark source card (either by record ID or group ID)
+    const sourceCard = document.querySelector(`.compact-card[data-record-id="${sourceRecordId}"]`) ||
+                       document.querySelector(`.compact-card-group[data-group-id="${sourceRecordId}"]`);
     if (sourceCard) {
         sourceCard.classList.add('merge-mode-source-card');
     }
@@ -5801,7 +6067,7 @@ function enterMergeMode(sourceRecordId) {
                 const article = clickedSection.querySelector('.itinerary-item');
                 targetRecordId = article?.dataset.recordId;
             } else if (clickedCard && !clickedCard.classList.contains('merge-mode-source-card')) {
-                targetRecordId = clickedCard.dataset.recordId;
+                targetRecordId = clickedCard.dataset.recordId || clickedCard.dataset.groupId;
             }
 
             if (targetRecordId && targetRecordId !== mergeModeSourceRecordId) {
@@ -5865,32 +6131,78 @@ let pendingMergeEstimation = null;
 
 // Execute merge directly based on the drop zone (no dialog)
 // zone: 'hybrid' = merge as hybrid, 'options' = add as option
-async function executeMergeByZone(sourceRecordId, targetRecordId, zone) {
-    if (!sourceRecordId || !targetRecordId) return;
+// sourceId/targetId can be either record IDs or group IDs (prefixed with 'group-')
+async function executeMergeByZone(sourceId, targetId, zone) {
+    if (!sourceId || !targetId) return;
 
-    const sourceRecord = getRecordById(sourceRecordId);
-    const targetRecord = getRecordById(targetRecordId);
-    const sourceName = sourceRecord?.fields?.Name || 'Item';
-    const targetName = targetRecord?.fields?.Name || 'Item';
+    // Resolve group IDs: if target is a group card, get all its member record IDs
+    const isTargetGroup = targetId.startsWith('group-');
+    const isSourceGroup = sourceId.startsWith('group-');
+
+    // Collect all record IDs involved from source side
+    let sourceRecordIds = [];
+    if (isSourceGroup) {
+        const sourceGroup = state.session.relatedGroups?.find(g => g.id === sourceId);
+        sourceRecordIds = sourceGroup ? [...(sourceGroup.items || [])] : [];
+    } else {
+        sourceRecordIds = [sourceId];
+        // Also include group members if source is part of a group
+        const sourceGroup = getItemGroup(sourceId);
+        if (sourceGroup) {
+            sourceRecordIds = [...(sourceGroup.items || [])];
+        }
+    }
+
+    // Collect all record IDs involved from target side
+    let targetRecordIds = [];
+    if (isTargetGroup) {
+        const targetGroup = state.session.relatedGroups?.find(g => g.id === targetId);
+        targetRecordIds = targetGroup ? [...(targetGroup.items || [])] : [];
+    } else {
+        targetRecordIds = [targetId];
+        // Also include group members if target is part of a group
+        const targetGroup = getItemGroup(targetId);
+        if (targetGroup) {
+            targetRecordIds = [...(targetGroup.items || [])];
+        }
+    }
+
+    if (sourceRecordIds.length === 0 || targetRecordIds.length === 0) return;
+
+    // Use first record from each side for legacy 2-item operations
+    const primarySourceId = sourceRecordIds[0];
+    const primaryTargetId = targetRecordIds[0];
+    const sourceRecord = getRecordById(primarySourceId);
+    const targetRecord = getRecordById(primaryTargetId);
 
     if (zone === 'hybrid') {
-        // Merge as hybrid - execute immediately, fetch AI estimation in background
+        // Merge as hybrid - combine all items into the primary target
+        const allRecordIds = [...new Set([...sourceRecordIds, ...targetRecordIds])];
 
-        // Execute combine immediately without estimation
-        await combineItemsIntoOne(sourceRecordId, targetRecordId, null);
+        // Combine each item (except the target) into the primary target
+        for (const id of allRecordIds) {
+            if (id !== primaryTargetId) {
+                await combineItemsIntoOne(id, primaryTargetId, null);
+            }
+        }
 
-        // Fetch AI estimation in background and update the hybrid data
-        fetchEstimation(
-            { name: sourceName, description: sourceRecord?.fields?.Description || '', category: sourceRecord?.fields?.Category || '', price: sourceRecord?.fields?.Price || '' },
-            { name: targetName, description: targetRecord?.fields?.Description || '', category: targetRecord?.fields?.Category || '', price: targetRecord?.fields?.Price || '' },
-            'hybrid'
-        ).then(result => {
+        // Build items array for all involved items for AI estimation
+        const allItems = allRecordIds.map(id => {
+            const rec = getRecordById(id);
+            return {
+                name: rec?.fields?.Name || 'Item',
+                description: rec?.fields?.Description || '',
+                category: rec?.fields?.Category || '',
+                price: rec?.fields?.Price || ''
+            };
+        });
+
+        fetchEstimationMulti(allItems, 'hybrid').then(result => {
             if (result?.estimation && state.session.combinedItems) {
-                // Find the actual target (may have been redirected during combine)
-                let actualTarget = targetRecordId;
+                let actualTarget = primaryTargetId;
                 for (const [target, data] of state.session.combinedItems.entries()) {
                     const sources = data instanceof Set ? data : (data.sources || new Set());
-                    if (sources.has(targetRecordId)) {
+                    if (sources.has(primaryTargetId)) {
                         actualTarget = target;
                         break;
                     }
@@ -5908,22 +6220,31 @@ async function executeMergeByZone(sourceRecordId, targetRecordId, zone) {
         });
 
     } else {
-        // Add as option - execute immediately, fetch AI estimation in background
+        // Add as option - merge all items from both sides into one options group
 
-        // Execute group creation immediately without estimation
-        await createRelatedCategory(sourceRecordId, targetRecordId, null);
+        // Collect all unique record IDs that should end up in the group
+        const allRecordIds = [...new Set([...sourceRecordIds, ...targetRecordIds])];
 
-        // Fetch AI estimation in background and update the group
-        fetchEstimation(
-            { name: sourceName, description: sourceRecord?.fields?.Description || '', category: sourceRecord?.fields?.Category || '', price: sourceRecord?.fields?.Price || '' },
-            { name: targetName, description: targetRecord?.fields?.Description || '', category: targetRecord?.fields?.Category || '', price: targetRecord?.fields?.Price || '' },
-            'options'
-        ).then(result => {
+        // Execute group creation: pass all record IDs
+        await createRelatedCategoryMulti(allRecordIds, null);
+
+        // Fetch AI estimation in background for all items in the new group
+        const allItems = allRecordIds.map(id => {
+            const rec = getRecordById(id);
+            return {
+                name: rec?.fields?.Name || 'Item',
+                description: rec?.fields?.Description || '',
+                category: rec?.fields?.Category || '',
+                price: rec?.fields?.Price || ''
+            };
+        });
+
+        fetchEstimationMulti(allItems, 'options').then(result => {
             if (result?.estimation && state.session.relatedGroups) {
-                // Find the group that contains both items
+                // Find the group that contains all the items
                 const group = state.session.relatedGroups.find(g => {
                     const items = Array.isArray(g) ? g : (g.items || []);
-                    return items.includes(sourceRecordId) && items.includes(targetRecordId);
+                    return allRecordIds.every(id => items.includes(id));
                 });
                 if (group && !Array.isArray(group)) {
                     if (result.estimation.categoryName) group.name = result.estimation.categoryName;
@@ -5939,23 +6260,57 @@ async function executeMergeByZone(sourceRecordId, targetRecordId, zone) {
     }
 }
 
-// Open merge dialog for two items
+// Open merge dialog for two items (or groups of items)
 async function openMergeDialog(sourceRecordId, targetRecordId) {
     if (!sourceRecordId || !targetRecordId) return;
 
-    const sourceRecord = getRecordById(sourceRecordId);
-    const targetRecord = getRecordById(targetRecordId);
-    const sourceName = sourceRecord?.fields?.Name || 'Source item';
-    const targetName = targetRecord?.fields?.Name || 'Target item';
+    // Resolve all involved record IDs (expand groups)
+    const isSourceGroup = sourceRecordId.startsWith('group-');
+    const isTargetGroup = targetRecordId.startsWith('group-');
+
+    let sourceRecordIds = [];
+    if (isSourceGroup) {
+        const sg = state.session.relatedGroups?.find(g => g.id === sourceRecordId);
+        sourceRecordIds = sg ? [...(sg.items || [])] : [];
+    } else {
+        sourceRecordIds = [sourceRecordId];
+        const sg = getItemGroup(sourceRecordId);
+        if (sg) sourceRecordIds = [...(sg.items || [])];
+    }
+
+    let targetRecordIds = [];
+    if (isTargetGroup) {
+        const tg = state.session.relatedGroups?.find(g => g.id === targetRecordId);
+        targetRecordIds = tg ? [...(tg.items || [])] : [];
+    } else {
+        targetRecordIds = [targetRecordId];
+        const tg = getItemGroup(targetRecordId);
+        if (tg) targetRecordIds = [...(tg.items || [])];
+    }
+
+    const allRecordIds = [...new Set([...sourceRecordIds, ...targetRecordIds])];
 
     // Store pending merge info
     pendingMergeSource = sourceRecordId;
     pendingMergeTarget = targetRecordId;
     pendingMergeEstimation = null;
 
-    // Update dialog content with item names
-    if (mergeDialogSourceName) mergeDialogSourceName.textContent = sourceName;
-    if (mergeDialogTargetName) mergeDialogTargetName.textContent = targetName;
+    // Build item names display for the dialog preview
+    const mergeItemsPreview = document.querySelector('.merge-dialog-items');
+    if (mergeItemsPreview) {
+        const itemPillsHTML = allRecordIds.map(id => {
+            const rec = getRecordById(id);
+            const name = rec?.fields?.Name || 'Item';
+            return `<div class="merge-item-preview"><span class="merge-item-name">${name}</span></div>`;
+        }).join('<span class="merge-plus-icon">+</span>');
+        mergeItemsPreview.innerHTML = itemPillsHTML;
+    }
+
+    // Update dialog title to reflect count
+    const dialogTitle = document.querySelector('.merge-dialog-title');
+    if (dialogTitle) {
+        dialogTitle.textContent = allRecordIds.length > 2 ? `Combine ${allRecordIds.length} Items` : 'Combine Items';
+    }
 
     // Reset tabs to default (Options tab active)
     const optionsTab = document.getElementById('merge-tab-options');
@@ -5967,6 +6322,20 @@ async function openMergeDialog(sourceRecordId, targetRecordId) {
     if (hybridTab) hybridTab.classList.remove('active');
     if (optionsContent) optionsContent.classList.add('active');
     if (hybridContent) hybridContent.classList.remove('active');
+
+    // Update the options tab description to reflect item count
+    const optionsDesc = optionsContent?.querySelector('.merge-tab-description');
+    if (optionsDesc) {
+        optionsDesc.textContent = allRecordIds.length > 2
+            ? `Keep all ${allRecordIds.length} items as alternative choices under a shared category`
+            : 'Keep both items as alternative choices under a shared category';
+    }
+    const hybridDesc = hybridContent?.querySelector('.merge-tab-description');
+    if (hybridDesc) {
+        hybridDesc.textContent = allRecordIds.length > 2
+            ? `Blend all ${allRecordIds.length} items into a single, new hybrid idea`
+            : 'Blend both items into a single, new hybrid idea';
+    }
 
     // Reset both estimation panels to loading state
     ['options', 'hybrid'].forEach(type => {
@@ -5985,10 +6354,19 @@ async function openMergeDialog(sourceRecordId, targetRecordId) {
         dialog.style.display = 'flex';
     }
 
-    log('Presentation', `Merge dialog opened for ${sourceRecordId} and ${targetRecordId}`);
+    log('Presentation', `Merge dialog opened for ${allRecordIds.length} items`);
 
-    // Fetch AI estimation in background
-    fetchMergeEstimation(sourceRecord, targetRecord);
+    // Fetch AI estimation in background using all items
+    const allItems = allRecordIds.map(id => {
+        const rec = getRecordById(id);
+        return {
+            name: rec?.fields?.Name || 'Item',
+            description: rec?.fields?.Description || '',
+            category: rec?.fields?.Category || '',
+            price: rec?.fields?.Price || ''
+        };
+    });
+    fetchMergeEstimationMulti(allItems);
 }
 
 // Fetch AI estimation for merge - updates both tab panels
@@ -6097,7 +6475,95 @@ async function fetchMergeEstimation(sourceRecord, targetRecord) {
     }
 }
 
-// Helper to fetch a single estimation
+// Fetch AI estimation for merge using multiple items - updates both tab panels
+async function fetchMergeEstimationMulti(items) {
+    try {
+        // Fetch both estimations in parallel
+        const [optionsResult, hybridResult] = await Promise.all([
+            fetchEstimationMulti(items, 'options'),
+            fetchEstimationMulti(items, 'hybrid')
+        ]);
+
+        // Store estimation for use when confirming merge
+        pendingMergeEstimation = {
+            options: optionsResult?.estimation || null,
+            hybrid: hybridResult?.estimation || null
+        };
+
+        // Update Options tab panel
+        const optionsPanel = document.getElementById('merge-estimation-options');
+        if (optionsPanel) {
+            const loading = optionsPanel.querySelector('.merge-estimation-loading');
+            const result = optionsPanel.querySelector('.merge-estimation-result');
+            if (loading) loading.style.display = 'none';
+            if (result) result.style.display = 'flex';
+
+            if (optionsResult?.estimation) {
+                const categoryEl = document.getElementById('estimation-category');
+                const descEl = document.getElementById('estimation-description');
+                if (categoryEl) categoryEl.textContent = optionsResult.estimation.categoryName || 'Options';
+                if (descEl) descEl.textContent = optionsResult.estimation.categoryDescription || '';
+
+                const confidenceField = document.getElementById('estimation-options-confidence-field');
+                const confidenceFill = document.getElementById('estimation-options-confidence');
+                if (confidenceField && optionsResult.estimation.confidence) {
+                    confidenceField.style.display = 'flex';
+                    const pct = Math.round(optionsResult.estimation.confidence * 100);
+                    if (confidenceFill) {
+                        confidenceFill.style.width = pct + '%';
+                        confidenceFill.style.background = pct >= 70 ? '#4CAF50' : pct >= 40 ? '#FF9800' : '#f44336';
+                    }
+                }
+            }
+        }
+
+        // Update Hybrid tab panel
+        const hybridPanel = document.getElementById('merge-estimation-hybrid');
+        if (hybridPanel) {
+            const loading = hybridPanel.querySelector('.merge-estimation-loading');
+            const result = hybridPanel.querySelector('.merge-estimation-result');
+            if (loading) loading.style.display = 'none';
+            if (result) result.style.display = 'flex';
+
+            if (hybridResult?.estimation) {
+                const nameEl = document.getElementById('estimation-hybrid-name');
+                const descEl = document.getElementById('estimation-hybrid-description');
+                if (nameEl) nameEl.textContent = hybridResult.estimation.hybridName || 'Combined Idea';
+                if (descEl) descEl.textContent = hybridResult.estimation.hybridDescription || '';
+
+                const reasoningField = document.getElementById('estimation-hybrid-reasoning-field');
+                const reasoningEl = document.getElementById('estimation-hybrid-reasoning');
+                if (reasoningField && hybridResult.estimation.reasoning) {
+                    reasoningField.style.display = 'flex';
+                    if (reasoningEl) reasoningEl.textContent = hybridResult.estimation.reasoning;
+                }
+
+                const confidenceField = document.getElementById('estimation-hybrid-confidence-field');
+                const confidenceFill = document.getElementById('estimation-hybrid-confidence');
+                if (confidenceField && hybridResult.estimation.confidence) {
+                    confidenceField.style.display = 'flex';
+                    const pct = Math.round(hybridResult.estimation.confidence * 100);
+                    if (confidenceFill) {
+                        confidenceFill.style.width = pct + '%';
+                        confidenceFill.style.background = pct >= 70 ? '#4CAF50' : pct >= 40 ? '#FF9800' : '#f44336';
+                    }
+                }
+            }
+        }
+
+    } catch (error) {
+        console.error('[Presentation] Error fetching multi-item merge estimation:', error);
+        ['options', 'hybrid'].forEach(type => {
+            const panel = document.getElementById(`merge-estimation-${type}`);
+            if (panel) {
+                const loading = panel.querySelector('.merge-estimation-loading');
+                if (loading) loading.style.display = 'none';
+            }
+        });
+    }
+}
+
+// Helper to fetch a single estimation (legacy 2-item format, kept for backwards compat)
 async function fetchEstimation(item1, item2, mergeType) {
     try {
         const response = await fetch('/.netlify/functions/estimate-merge', {
@@ -6110,6 +6576,23 @@ async function fetchEstimation(item1, item2, mergeType) {
         return await response.json();
     } catch (error) {
         console.warn(`[Presentation] Estimation fetch failed for ${mergeType}:`, error.message);
+        return null;
+    }
+}
+
+// Helper to fetch estimation for multiple items (2+)
+async function fetchEstimationMulti(items, mergeType) {
+    try {
+        const response = await fetch('/.netlify/functions/estimate-merge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items, mergeType })
+        });
+
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (error) {
+        console.warn(`[Presentation] Multi-item estimation fetch failed for ${mergeType}:`, error.message);
         return null;
     }
 }
@@ -6136,7 +6619,20 @@ async function handleMergeCombine() {
     const hybridEstimation = pendingMergeEstimation?.hybrid || null;
     closeMergeDialog();
 
-    await combineItemsIntoOne(sourceId, targetId, hybridEstimation);
+    // Route through group-aware executeMergeByZone for multi-item support
+    // For simple 2-item case with no groups, this still works correctly
+    const isSourceGroup = sourceId.startsWith('group-');
+    const isTargetGroup = targetId.startsWith('group-');
+    const sourceGroup = !isSourceGroup ? getItemGroup(sourceId) : null;
+    const targetGroup = !isTargetGroup ? getItemGroup(targetId) : null;
+
+    if (isSourceGroup || isTargetGroup || sourceGroup || targetGroup) {
+        // Multi-item case - use executeMergeByZone which handles groups
+        await executeMergeByZone(sourceId, targetId, 'hybrid');
+    } else {
+        // Simple 2-item case with estimation
+        await combineItemsIntoOne(sourceId, targetId, hybridEstimation);
+    }
 }
 
 // Handle merge option: Group as options/category (As Options)
@@ -6151,7 +6647,38 @@ async function handleMergeGroup() {
     const optionsEstimation = pendingMergeEstimation?.options || null;
     closeMergeDialog();
 
-    await createRelatedCategory(sourceId, targetId, optionsEstimation);
+    // Route through group-aware path for multi-item support
+    const isSourceGroup = sourceId.startsWith('group-');
+    const isTargetGroup = targetId.startsWith('group-');
+    const sourceGroup = !isSourceGroup ? getItemGroup(sourceId) : null;
+    const targetGroup = !isTargetGroup ? getItemGroup(targetId) : null;
+
+    if (isSourceGroup || isTargetGroup || sourceGroup || targetGroup) {
+        // Multi-item case - resolve all items and create merged group
+        let sourceRecordIds = [];
+        if (isSourceGroup) {
+            const sg = state.session.relatedGroups?.find(g => g.id === sourceId);
+            sourceRecordIds = sg ? [...(sg.items || [])] : [];
+        } else {
+            sourceRecordIds = [sourceId];
+            if (sourceGroup) sourceRecordIds = [...(sourceGroup.items || [])];
+        }
+
+        let targetRecordIds = [];
+        if (isTargetGroup) {
+            const tg = state.session.relatedGroups?.find(g => g.id === targetId);
+            targetRecordIds = tg ? [...(tg.items || [])] : [];
+        } else {
+            targetRecordIds = [targetId];
+            if (targetGroup) targetRecordIds = [...(targetGroup.items || [])];
+        }
+
+        const allRecordIds = [...new Set([...sourceRecordIds, ...targetRecordIds])];
+        await createRelatedCategoryMulti(allRecordIds, optionsEstimation);
+    } else {
+        // Simple 2-item case with estimation
+        await createRelatedCategory(sourceId, targetId, optionsEstimation);
+    }
 }
 
 // Combine two items into a single cohesive idea (As Hybrid)
@@ -6408,6 +6935,80 @@ async function createRelatedCategory(recordId1, recordId2, optionsEstimation = n
     triggerSave();
 
     log('Presentation', `Created/updated option group for ${recordId1} and ${recordId2}`);
+}
+
+// Create a related category from multiple items (Group as Options - multi-item version)
+// Merges all provided record IDs into a single options group, consolidating any existing groups
+async function createRelatedCategoryMulti(recordIds, optionsEstimation = null) {
+    if (!recordIds || recordIds.length < 2) return;
+
+    // Initialize relatedGroups if not exists
+    if (!state.session.relatedGroups) {
+        state.session.relatedGroups = [];
+    }
+
+    const estimatedName = optionsEstimation?.categoryName;
+    const estimatedDescription = optionsEstimation?.categoryDescription;
+
+    // Find all existing groups that contain any of the provided items
+    const existingGroups = new Set();
+    for (const id of recordIds) {
+        const group = state.session.relatedGroups.find(g => {
+            const items = Array.isArray(g) ? g : (g.items || []);
+            return items.includes(id);
+        });
+        if (group) existingGroups.add(group);
+    }
+
+    // Collect all unique item IDs from existing groups + provided IDs
+    const allItemIds = new Set(recordIds);
+    for (const group of existingGroups) {
+        const items = Array.isArray(group) ? group : (group.items || []);
+        items.forEach(id => allItemIds.add(id));
+    }
+
+    const mergedItems = [...allItemIds];
+
+    // Check if all items are already in the same single group
+    if (existingGroups.size === 1) {
+        const onlyGroup = [...existingGroups][0];
+        const groupItems = Array.isArray(onlyGroup) ? onlyGroup : (onlyGroup.items || []);
+        if (mergedItems.length === groupItems.length && mergedItems.every(id => groupItems.includes(id))) {
+            showToast('Items are already grouped together', 'info');
+            return;
+        }
+    }
+
+    // Remove all existing groups that are being merged
+    if (existingGroups.size > 0) {
+        state.session.relatedGroups = state.session.relatedGroups.filter(g => !existingGroups.has(g));
+    }
+
+    // Create the new merged group
+    const newGroup = {
+        id: `group-${Date.now()}`,
+        name: estimatedName || generateGroupName(mergedItems),
+        description: estimatedDescription || '',
+        items: mergedItems
+    };
+    state.session.relatedGroups.push(newGroup);
+
+    const itemNames = mergedItems.slice(0, 3).map(id => {
+        const rec = getRecordById(id);
+        return rec?.fields?.Name || 'Item';
+    });
+    const suffix = mergedItems.length > 3 ? ` +${mergedItems.length - 3} more` : '';
+    showToast(`Created "${newGroup.name}" with ${mergedItems.length} options`, 'success');
+
+    // Re-render items
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Created/updated option group with ${mergedItems.length} items`);
 }
 
 // Generate a name for a group based on its items
@@ -7562,9 +8163,9 @@ async function loadTaskDetailComments(overlay, componentType, elementId) {
             const timestamp = new Date(comment.createdTime || fields.Timestamp || Date.now());
             const timeAgo = getTimeAgo(timestamp);
 
-            // Strip out [PLAN_COMMENT:xxx] prefix from display content
+            // Strip out [PLAN_COMMENT:xxx] or [PLAN_COMMENT:item:componentId] prefix from display content
             let displayContent = fields.Content || '';
-            displayContent = displayContent.replace(/^\[PLAN_COMMENT:\w+\]\s*/i, '');
+            displayContent = displayContent.replace(/^\[PLAN_COMMENT:[^\]]+\]\s*/i, '');
 
             // Strip out embedded [ATTACHMENTS:...] from display content
             let attachments = [];
@@ -8418,8 +9019,13 @@ async function initializePresentationChat() {
         updatePresentationPresenceUI(members);
     });
 
-    presentationChatChannel.bind('pusher:member_added', () => {
+    presentationChatChannel.bind('pusher:member_added', (member) => {
         updatePresentationPresenceUI(presentationChatChannel.members);
+        // Show toast when someone joins
+        handleToastPusherEvent('member-joined', {
+            name: member?.info?.name || 'Someone',
+            userId: member?.id
+        });
     });
 
     presentationChatChannel.bind('pusher:member_removed', () => {
@@ -8440,6 +9046,14 @@ async function initializePresentationChat() {
             refreshForumData();
             // Update notification counts
             onNewItemReceived('message', { timestamp: data.timestamp });
+            // Show toast notification
+            const isIdea = (data.content || '').startsWith('[IDEA]');
+            handleToastPusherEvent('new-message', {
+                sender: data.senderName,
+                message: isIdea ? data.content.replace(/^\[IDEA\]\s*/, '') : data.content,
+                senderId: data.senderId,
+                isIdea: isIdea
+            });
         }
     });
 
@@ -8848,6 +9462,84 @@ function generateHeaderSummary() {
     if (headerSummaryEl) {
         headerSummaryEl.innerHTML = summary;
     }
+}
+
+/**
+ * Update the Plan Summary Dashboard with key metrics
+ * Provides a quick-glance overview: Items, Budget, Team, Status
+ */
+function updatePlanSummaryDashboard() {
+    const dashboard = document.getElementById('plan-summary-dashboard');
+    if (!dashboard) return;
+
+    // --- Items count ---
+    const favoritesCount = state.cart.items.size;
+    const lockedCount = state.cart.lockedItems.size;
+    const totalItems = favoritesCount + lockedCount;
+
+    const itemsMetric = document.querySelector('#plan-metric-items .plan-metric-value');
+    if (itemsMetric) {
+        itemsMetric.textContent = totalItems;
+    }
+
+    // --- Budget ---
+    let subtotal = 0;
+    state.cart.lockedItems.forEach((itemInfo, recordId) => {
+        const record = getRecordById(recordId);
+        if (!record) return;
+        const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
+            ? itemInfo.selections
+            : itemInfo.selectedOptionIndex;
+        let unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
+        if (isNaN(unitPrice)) return;
+        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
+        subtotal += unitPrice * effectiveQuantity;
+    });
+    // Also add idea items for a total picture
+    state.cart.items.forEach((itemInfo, recordId) => {
+        const record = getRecordById(recordId);
+        if (!record) return;
+        const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
+            ? itemInfo.selections
+            : itemInfo.selectedOptionIndex;
+        let unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
+        if (isNaN(unitPrice)) return;
+        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
+        subtotal += unitPrice * effectiveQuantity;
+    });
+
+    const budgetMetric = document.querySelector('#plan-metric-budget .plan-metric-value');
+    if (budgetMetric) {
+        if (subtotal > 0) {
+            budgetMetric.textContent = subtotal >= 1000 ? `$${(subtotal / 1000).toFixed(1)}k` : `$${Math.round(subtotal)}`;
+        } else {
+            budgetMetric.textContent = '--';
+        }
+    }
+
+    // --- Team ---
+    const teamCount = state.session.userProfiles?.size || 0;
+    const teamMetric = document.querySelector('#plan-metric-team .plan-metric-value');
+    if (teamMetric) {
+        teamMetric.textContent = teamCount || 1; // At least the current user
+    }
+
+    // --- Status ---
+    const statusMetric = document.querySelector('#plan-metric-status .plan-metric-value');
+    if (statusMetric) {
+        if (totalItems === 0) {
+            statusMetric.textContent = 'Draft';
+        } else if (lockedCount === totalItems) {
+            statusMetric.textContent = 'Ready';
+        } else if (lockedCount > 0) {
+            statusMetric.textContent = 'In Progress';
+        } else {
+            statusMetric.textContent = 'Planning';
+        }
+    }
+
+    // Hide dashboard if no items and no team (very early state)
+    dashboard.style.display = (totalItems === 0 && teamCount <= 1) ? 'none' : '';
 }
 
 // Generate summary for the items section
@@ -11048,10 +11740,11 @@ async function loadAllCommentCounts() {
                 componentId = itemLinks[0]; // Get the first linked item ID
             }
 
-            // Check for manual items via content prefix [PLAN_COMMENT:item:componentId]
+            // Check for custom items via content prefix [PLAN_COMMENT:item:componentId]
+            // Matches all custom ID formats: manual-presentation-*, manual-add-*, ai-child-*, ai-presentation-*, solution-*
             if (!componentId) {
                 const content = comment.fields?.Content || '';
-                const manualItemMatch = content.match(/^\[PLAN_COMMENT:item:(manual-presentation-\d+)\]/);
+                const manualItemMatch = content.match(/^\[PLAN_COMMENT:item:([^\]]+)\]/);
                 if (manualItemMatch) {
                     componentId = manualItemMatch[1];
                 }
@@ -11151,6 +11844,15 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Register sync callback to handle updates from other views
     registerSyncCallback('presentation', handlePlanSyncUpdate);
 
+    // Initialize toast notification system
+    initializeToastNotifications({ getCurrentUser });
+
+    // Initialize and show the Unified Chat Panel
+    setUCPGetCurrentUser(getCurrentUser);
+    setUCPSendMessage(sendChatMessage);
+    initializeUnifiedChatPanel();
+    showUnifiedChatPanel();
+
     // Fetch tasks for this project if not already loaded (critical for comment-task linking)
     // This ensures comment-created tasks are visible when page is refreshed or link is shared
     const projectId = state.session.id;
@@ -11211,6 +11913,9 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Initialize accordions and generate summaries
     initializeAccordions();
 
+    // Update the plan summary dashboard
+    updatePlanSummaryDashboard();
+
     // Show modal
     modal.classList.add('active');
     modal.style.display = 'flex';
@@ -11218,6 +11923,20 @@ export async function showPresentationView(listType, startRecordId = null) {
     document.body.classList.add('presentation-active');
     document.documentElement.classList.add('presentation-active');
     if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] Modal shown. Classes:', modal.className, 'Display:', modal.style.display);
+
+    // Debug: Log z-index layering info for presentation view components
+    const wtfPanel = document.getElementById('wtf-plans-panel');
+    const wtfOverlay = document.getElementById('wtf-plans-panel-overlay');
+    console.log('[PRES-MENU DEBUG] Presentation view activated - layering state:', {
+        presentationModalZIndex: getComputedStyle(modal).zIndex,
+        presentationModalDisplay: getComputedStyle(modal).display,
+        wtfPanelComputedDisplay: wtfPanel ? getComputedStyle(wtfPanel).display : 'N/A',
+        wtfPanelComputedZIndex: wtfPanel ? getComputedStyle(wtfPanel).zIndex : 'N/A',
+        wtfOverlayComputedDisplay: wtfOverlay ? getComputedStyle(wtfOverlay).display : 'N/A',
+        wtfOverlayComputedZIndex: wtfOverlay ? getComputedStyle(wtfOverlay).zIndex : 'N/A',
+        bodyClasses: document.body.className,
+        hamburgerBtnExists: !!document.getElementById('presentation-back-btn'),
+    });
     // Remove early-loading optimization class now that presentation is properly initialized
     document.body.classList.remove('presentation-loading');
     document.documentElement.classList.remove('presentation-loading');
@@ -11260,6 +11979,9 @@ export function hidePresentationView() {
 
     // Unregister sync callback when closing presentation view
     unregisterSyncCallback('presentation');
+
+    // Hide the Unified Chat Panel
+    hideUnifiedChatPanel();
 
     // Stop the background animation
     stopPresentationBackgroundAnimation();
@@ -11314,6 +12036,7 @@ export function hidePresentationView() {
     document.body.classList.remove('presentation-active');
     document.documentElement.classList.remove('presentation-active');
     document.removeEventListener('keydown', handleKeyDown);
+    console.log('[PRES-MENU DEBUG] Presentation view deactivated, presentation-active class removed');
 
     // If catalog rendering was skipped when entering presentation view,
     // trigger it now via the global applyFiltersAndSort function
@@ -11351,14 +12074,43 @@ export function setupPresentationEventListeners() {
         hidePresentationView();
     });
 
-    // Presentation header hamburger button (opens WTF Plans panel)
+    // Presentation header hamburger button (opens WTF Plans panel as overlay)
     if (presentationBackBtn) {
         presentationBackBtn.addEventListener('click', () => {
-            updateUrl({ view: null });
-            hidePresentationView();
-            // Open WTF Plans panel after closing presentation view
+            console.log('[PRES-MENU DEBUG] Hamburger button clicked in presentation view');
+            const panel = document.getElementById('wtf-plans-panel');
+            const overlay = document.getElementById('wtf-plans-panel-overlay');
+            const presModal = document.getElementById('presentation-modal-overlay');
+            console.log('[PRES-MENU DEBUG] Before showWtfPlansPanel:', {
+                panelExists: !!panel,
+                panelDisplay: panel?.style.display,
+                panelComputedDisplay: panel ? getComputedStyle(panel).display : 'N/A',
+                panelComputedZIndex: panel ? getComputedStyle(panel).zIndex : 'N/A',
+                panelClassList: panel?.classList.toString(),
+                overlayExists: !!overlay,
+                overlayClassList: overlay?.classList.toString(),
+                presModalZIndex: presModal ? getComputedStyle(presModal).zIndex : 'N/A',
+                bodyHasPresentationActive: document.body.classList.contains('presentation-active'),
+            });
+            // Open WTF Plans panel directly on top of the presentation view
+            // so users can quickly switch between plans without leaving the view
             showWtfPlansPanel();
+            // Log state after showWtfPlansPanel completes (async, so use microtask)
+            setTimeout(() => {
+                console.log('[PRES-MENU DEBUG] After showWtfPlansPanel:', {
+                    panelDisplay: panel?.style.display,
+                    panelComputedDisplay: panel ? getComputedStyle(panel).display : 'N/A',
+                    panelComputedZIndex: panel ? getComputedStyle(panel).zIndex : 'N/A',
+                    panelClassList: panel?.classList.toString(),
+                    panelTransform: panel ? getComputedStyle(panel).transform : 'N/A',
+                    overlayComputedDisplay: overlay ? getComputedStyle(overlay).display : 'N/A',
+                    overlayClassList: overlay?.classList.toString(),
+                    panelBoundingRect: panel?.getBoundingClientRect(),
+                });
+            }, 50);
         });
+    } else {
+        console.warn('[PRES-MENU DEBUG] presentationBackBtn NOT found in DOM during event listener setup');
     }
 
     // Note: presentationHeaderShareBtn removed - share functionality now in collaborators add/share button
@@ -11490,22 +12242,28 @@ export function setupPresentationEventListeners() {
 
     // Note: shareBtn removed - share functionality now in collaborators add/share button
 
-    // Collaborators add/share button - copies shareable link
+    // Collaborators add/share button - opens invite modal for authenticated users, copies link for guests
     if (collaboratorsAddShareBtn) {
         collaboratorsAddShareBtn.addEventListener('click', () => {
-            const baseURL = window.location.origin + window.location.pathname;
-            const sessionID = state.session.id;
-            const shareURL = `${baseURL}?session=${sessionID}&view=present`;
+            if (state.session.user.isAuthenticated) {
+                // Open invite modal for authenticated users
+                showInviteModal();
+            } else {
+                // Fallback to copy link for unauthenticated users
+                const baseURL = window.location.origin + window.location.pathname;
+                const sessionID = state.session.id;
+                const shareURL = `${baseURL}?session=${sessionID}&view=present`;
 
-            navigator.clipboard.writeText(shareURL).then(() => {
-                const originalHTML = collaboratorsAddShareBtn.innerHTML;
-                collaboratorsAddShareBtn.innerHTML = '<span class="add-share-icon">✓</span><span class="add-share-text">Copied!</span>';
-                collaboratorsAddShareBtn.title = 'Link Copied!';
-                setTimeout(() => {
-                    collaboratorsAddShareBtn.innerHTML = originalHTML;
-                    collaboratorsAddShareBtn.title = 'Add people or share this plan';
-                }, 1500);
-            });
+                navigator.clipboard.writeText(shareURL).then(() => {
+                    const originalHTML = collaboratorsAddShareBtn.innerHTML;
+                    collaboratorsAddShareBtn.innerHTML = '<span class="add-share-icon">✓</span><span class="add-share-text">Copied!</span>';
+                    collaboratorsAddShareBtn.title = 'Link Copied!';
+                    setTimeout(() => {
+                        collaboratorsAddShareBtn.innerHTML = originalHTML;
+                        collaboratorsAddShareBtn.title = 'Add people or share this plan';
+                    }, 1500);
+                });
+            }
         });
     }
 

@@ -9,6 +9,8 @@ import { updateUrl } from './utils.js';
 import { getDebugLogs, isDebugPanelInitialized } from './utils/debug-panel.js';
 import { refreshForumData, setGetCurrentUser, onNewItemReceived, updateNotificationBadges, initializeNotificationTracking } from './components/forumPanel.js';
 import * as unifiedStream from './components/unifiedStream.js';
+import { initializeToastNotifications, handlePusherEvent as handleToastPusherEvent } from './components/toastNotifications.js';
+import { refreshUnifiedChatPanel, onUCPNewItem, updateUCPOnlineCount } from './components/unifiedChatPanel.js';
 
 let currentUser = null;
 let pusher = null;
@@ -225,16 +227,34 @@ function initializeComponentSelector() {
             selector.remove(1);
         }
 
-        // Add plan items as options
-        const planItems = state.records?.all || [];
-        planItems.forEach(item => {
-            if (item.fields?.Name) {
-                const option = document.createElement('option');
-                option.value = item.id;
-                option.textContent = item.fields.Name;
-                selector.appendChild(option);
-            }
-        });
+        // Use plan items (locked items in the event plan) instead of full catalog
+        // This ensures the "Attach to" dropdown only shows items relevant to the current plan
+        const lockedItemIds = Array.from(state.cart.lockedItems.keys());
+        log('Chat', `[DEBUG] Populating component selector - lockedItems count: ${lockedItemIds.length}, records.all count: ${state.records?.all?.length || 0}`);
+
+        if (lockedItemIds.length > 0) {
+            // Show plan items first
+            lockedItemIds.forEach(recordId => {
+                const record = state.records?.all?.find(r => r.id === recordId);
+                if (record?.fields?.Name) {
+                    const option = document.createElement('option');
+                    option.value = record.id;
+                    option.textContent = record.fields.Name;
+                    selector.appendChild(option);
+                }
+            });
+        } else {
+            // Fallback: if no plan items exist yet, show all catalog items
+            const allItems = state.records?.all || [];
+            allItems.forEach(item => {
+                if (item.fields?.Name) {
+                    const option = document.createElement('option');
+                    option.value = item.id;
+                    option.textContent = item.fields.Name;
+                    selector.appendChild(option);
+                }
+            });
+        }
     };
 
     // Populate both selectors
@@ -247,20 +267,21 @@ function initializeComponentSelector() {
         // Sync both selectors
         if (chatSelector) chatSelector.value = selectedComponent || '';
         if (forumSelector) forumSelector.value = selectedComponent || '';
-        log('Chat', `Component affiliation set to: ${selectedComponent || 'Plan-wide'}`);
+        log('Chat', `[DEBUG] Component affiliation set to: ${selectedComponent || 'Plan-wide'}`);
     };
 
     if (chatSelector) chatSelector.addEventListener('change', handleSelectorChange);
     if (forumSelector) forumSelector.addEventListener('change', handleSelectorChange);
 
-    // Show selector when there are items
+    // Show selector when there are plan items
     const chatSelectorContainer = document.getElementById('stream-component-selector');
-    const allPlanItems = state.records?.all || [];
-    if (chatSelectorContainer && allPlanItems.length > 0) {
+    const lockedCount = state.cart.lockedItems.size;
+    const allCount = state.records?.all?.length || 0;
+    if (chatSelectorContainer && (lockedCount > 0 || allCount > 0)) {
         chatSelectorContainer.style.display = 'flex';
     }
 
-    log('Chat', 'Component selector initialized');
+    log('Chat', `Component selector initialized with ${lockedCount > 0 ? lockedCount + ' plan items' : allCount + ' catalog items (fallback)'}`);
 }
 
 /**
@@ -954,6 +975,8 @@ function updatePresenceUI(members) {
     const count = members.count;
     if (presenceCounter) presenceCounter.innerText = count;
     if (whosHereCount) whosHereCount.innerText = count;
+    // Update unified chat panel online count
+    updateUCPOnlineCount(count);
     if (whosHereList) {
         whosHereList.innerHTML = '';
         members.each((member) => {
@@ -1593,6 +1616,11 @@ function bindPresenceEvents() {
     });
     sessionChatChannel.bind('pusher:member_added', (member) => {
         updatePresenceUI(sessionChatChannel.members);
+        // Show toast when someone joins
+        handleToastPusherEvent('member-joined', {
+            name: member?.info?.name || 'Someone',
+            userId: member?.id
+        });
     });
     sessionChatChannel.bind('pusher:member_removed', (member) => {
         updatePresenceUI(sessionChatChannel.members);
@@ -1634,6 +1662,9 @@ function displayDebugMessage(message) {
 export async function initializeSessionChat() {
     // Reset session history items for new session
     sessionHistoryItems = [];
+
+    // Initialize toast notification system
+    initializeToastNotifications({ getCurrentUser: () => currentUser });
 
     // Show loading state in the message input while waiting for Pusher
     const messageInput = document.getElementById('message-input');
@@ -1756,6 +1787,7 @@ export async function initializeSessionChat() {
 
                     // Get component name if this is a component comment (has Item Link)
                     let componentInfo = null;
+                    let displayContent = Content;
                     if (itemLink && itemLink.length > 0) {
                         const componentId = itemLink[0];
                         const componentRecord = state.records.all.find(r => r.id === componentId);
@@ -1765,12 +1797,26 @@ export async function initializeSessionChat() {
                         };
                     }
 
+                    // Also check for [PLAN_COMMENT:item:ID] prefix (for custom/non-rec item IDs)
+                    if (!componentInfo && Content) {
+                        const planCommentMatch = Content.match(/^\[PLAN_COMMENT:item:([^\]]+)\]\s*/);
+                        if (planCommentMatch) {
+                            const customItemId = planCommentMatch[1];
+                            const componentRecord = state.records.all.find(r => r.id === customItemId);
+                            componentInfo = {
+                                id: customItemId,
+                                name: componentRecord?.fields?.Name || 'Unknown Item'
+                            };
+                            displayContent = Content.replace(/^\[PLAN_COMMENT:item:[^\]]+\]\s*/, '');
+                        }
+                    }
+
                     sessionHistoryItems.push({
                         type: 'chat',
                         timestamp: recordTimestamp,
                         data: {
                             sender: SenderName,
-                            message: Content,
+                            message: displayContent,
                             isSent,
                             timestamp: recordTimestamp,
                             senderId: SenderID,
@@ -1823,12 +1869,29 @@ export async function initializeSessionChat() {
             requestNotificationPermissionIfNeeded();
             // Add to session history items
             const timestamp = data.timestamp || new Date().toISOString();
+
+            // Parse [PLAN_COMMENT:item:ID] prefix from real-time messages
+            let realtimeContent = data.content;
+            let realtimeComponentInfo = data.componentInfo || null;
+            if (!realtimeComponentInfo && realtimeContent) {
+                const planCommentMatch = realtimeContent.match(/^\[PLAN_COMMENT:item:([^\]]+)\]\s*/);
+                if (planCommentMatch) {
+                    const customItemId = planCommentMatch[1];
+                    const componentRecord = state.records.all.find(r => r.id === customItemId);
+                    realtimeComponentInfo = {
+                        id: customItemId,
+                        name: componentRecord?.fields?.Name || 'Unknown Item'
+                    };
+                    realtimeContent = realtimeContent.replace(/^\[PLAN_COMMENT:item:[^\]]+\]\s*/, '');
+                }
+            }
+
             const messageData = {
                 type: 'chat',
                 timestamp: timestamp,
                 data: {
                     sender: data.senderName,
-                    message: data.content,
+                    message: realtimeContent,
                     isSent: false,
                     timestamp: timestamp,
                     senderId: data.senderId,
@@ -1837,7 +1900,7 @@ export async function initializeSessionChat() {
                     isEdited: false,
                     isDeleted: false,
                     replyCount: 0,
-                    componentInfo: data.componentInfo || null // Include component affiliation
+                    componentInfo: realtimeComponentInfo
                 }
             };
             sessionHistoryItems.push(messageData);
@@ -1850,9 +1913,19 @@ export async function initializeSessionChat() {
             }
             // Refresh forum panel if open
             refreshForumData();
+            // Refresh unified chat panel
+            refreshUnifiedChatPanel();
             // Update notification counts for new message
             onNewItemReceived('message', { timestamp, sessionHistoryItems });
-            showNewMessageNotification(data.senderName, data.content);
+            showNewMessageNotification(data.senderName, realtimeContent);
+            // Show toast notification
+            const isIdea = (realtimeContent || '').startsWith('[IDEA]');
+            handleToastPusherEvent('new-message', {
+                sender: data.senderName,
+                message: isIdea ? realtimeContent.replace(/^\[IDEA\]\s*/, '') : realtimeContent,
+                senderId: data.senderId,
+                isIdea: isIdea
+            });
             if (!isTabActive) {
                 document.title = 'New Message! - ' + originalTitle;
             }
@@ -1868,6 +1941,8 @@ export async function initializeSessionChat() {
             }
             // Refresh forum panel if open to show updated reactions
             refreshForumData();
+            // Refresh unified chat panel for reaction updates
+            refreshUnifiedChatPanel();
             // Update notification counts for new reaction
             onNewItemReceived('reaction', { timestamp: new Date().toISOString(), sessionHistoryItems });
         }
@@ -1891,6 +1966,8 @@ export async function initializeSessionChat() {
             }
             // Refresh forum panel if open to show edited message
             refreshForumData();
+            // Refresh unified chat panel
+            refreshUnifiedChatPanel();
         }
     });
 
@@ -1904,6 +1981,8 @@ export async function initializeSessionChat() {
             }
             // Refresh forum panel if open to show deleted message
             refreshForumData();
+            // Refresh unified chat panel
+            refreshUnifiedChatPanel();
         }
     });
 
@@ -1929,6 +2008,8 @@ export async function initializeSessionChat() {
             }
             // Refresh forum panel if open to show new replies
             refreshForumData();
+            // Refresh unified chat panel
+            refreshUnifiedChatPanel();
             // Update notification counts for new reply
             onNewItemReceived('reply', { timestamp: new Date().toISOString(), sessionHistoryItems });
         }
@@ -1982,6 +2063,8 @@ export async function initializeSessionChat() {
 
             // Refresh forum panel if open to show new component comments
             refreshForumData();
+            // Refresh unified chat panel
+            refreshUnifiedChatPanel();
             // Update notification counts for new component comment
             onNewItemReceived('comment', { timestamp, sessionHistoryItems });
 

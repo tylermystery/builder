@@ -2741,26 +2741,43 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem 1.25rem;
+    padding: 0.65rem 1.25rem;
     gap: 20px;
 }
 
 #presentation-header-left {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 10px;
     flex-shrink: 0;
 }
 
+/* Override header-icon-btn for presentation view glass style */
+.presentation-header .header-icon-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.9);
+    width: 34px;
+    height: 34px;
+    backdrop-filter: blur(4px);
+}
+
+.presentation-header .header-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
 .presentation-logo-container {
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: #f8f9fa;
+    background-color: rgba(248, 249, 250, 0.9);
+    flex-shrink: 0;
 }
 
 .presentation-logo-container img {
@@ -2770,15 +2787,15 @@
 }
 
 .presentation-shop-title {
-    font-size: 1.2em;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.95);
+    font-size: 0.95em;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.75);
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     margin: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 200px;
+    max-width: 180px;
 }
 
 #presentation-header-center {
@@ -2790,10 +2807,11 @@
 }
 
 .presentation-event-label {
-    font-size: 1em;
-    color: rgba(255, 255, 255, 0.85);
+    font-size: 1.1em;
+    color: rgba(255, 255, 255, 0.95);
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    font-weight: 500;
+    font-weight: 600;
+    letter-spacing: 0.2px;
 }
 
 .presentation-header-title-row {
@@ -3077,26 +3095,27 @@
 
 /* Presentation header total cost display - now a button */
 .presentation-header-total {
-    font-size: 1.1em;
+    font-size: 1em;
     font-weight: 600;
-    color: #28a745;
-    background: rgba(40, 167, 69, 0.1);
-    padding: 4px 12px;
+    color: rgba(255, 255, 255, 0.95);
+    background: rgba(40, 167, 69, 0.25);
+    padding: 5px 14px;
     border-radius: 20px;
     white-space: nowrap;
-    border: none;
+    border: 1px solid rgba(40, 167, 69, 0.3);
     cursor: pointer;
     transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+    backdrop-filter: blur(4px);
 }
 
 .presentation-header-total:hover {
-    background: rgba(40, 167, 69, 0.2);
-    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+    background: rgba(40, 167, 69, 0.4);
+    box-shadow: 0 2px 10px rgba(40, 167, 69, 0.3);
 }
 
 .presentation-header-total:active {
     transform: scale(0.97);
-    background: rgba(40, 167, 69, 0.25);
+    background: rgba(40, 167, 69, 0.45);
 }
 
 .presentation-header-total:empty {
@@ -3142,6 +3161,8 @@ body.presentation-active .modal-overlay.active {
 
 /* Hide all main page elements when presentation view is active */
 /* This prevents the catalog from being visible or scrollable behind the presentation */
+/* NOTE: #wtf-plans-panel and #wtf-plans-panel-overlay are intentionally NOT hidden here */
+/* because they need to overlay on top of the presentation view for quick plan switching */
 body.presentation-active #main-header,
 body.presentation-active #left-sidebar,
 body.presentation-active #right-sidebar,
@@ -3151,9 +3172,7 @@ body.presentation-active #marquee-banner-container,
 body.presentation-active #loading-message,
 body.presentation-active #mobile-summary-bar,
 body.presentation-active footer,
-body.presentation-active #chat-widget,
-body.presentation-active #wtf-plans-panel,
-body.presentation-active #wtf-plans-panel-overlay {
+body.presentation-active #chat-widget {
     display: none !important;
 }
 
@@ -3266,6 +3285,19 @@ html.presentation-active {
     text-align: center;
     background: transparent;
     border-bottom: none;
+    padding: 15px 20px;
+}
+
+/* Add-item section - compact inline toolbar, no glass card treatment */
+.itinerary-add-section.itinerary-section {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    padding: 8px 0;
+    margin-bottom: 10px;
+    border-radius: 0;
 }
 
 .itinerary-event-title {
@@ -3296,9 +3328,9 @@ html.presentation-active {
 }
 
 .itinerary-collaborators {
-    margin-top: 25px;
-    padding-top: 20px;
-    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
 }
 
 .itinerary-collaborators h3 {
@@ -5735,33 +5767,28 @@ hr.total-divider {
    MODAL DISCUSSION BUTTON (replaces inline comments)
    ============================================ */
 
-.modal-comments-section {
-    margin: 8px 0;
-    padding: 0;
-}
-
 .modal-open-discussion-btn {
-    display: inline-flex;
+    display: none;
     align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08));
+    gap: 5px;
+    padding: 4px 10px;
+    background: rgba(102, 126, 234, 0.08);
     border: 1.5px solid rgba(102, 126, 234, 0.2);
-    border-radius: 10px;
+    border-radius: 8px;
     color: #495057;
-    font-size: 0.88em;
+    font-size: 0.78em;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
-    width: 100%;
-    justify-content: center;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .modal-open-discussion-btn:hover {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.14), rgba(118, 75, 162, 0.14));
+    background: rgba(102, 126, 234, 0.14);
     border-color: rgba(102, 126, 234, 0.35);
     color: #667eea;
-    transform: translateY(-1px);
+    transform: scale(1.05);
     box-shadow: 0 2px 8px rgba(102, 126, 234, 0.12);
 }
 
@@ -5785,12 +5812,12 @@ hr.total-divider {
     justify-content: center;
     background: linear-gradient(135deg, #667eea, #764ba2);
     color: #fff;
-    font-size: 0.7em;
+    font-size: 0.65em;
     font-weight: 700;
-    min-width: 18px;
-    height: 18px;
-    border-radius: 9px;
-    padding: 0 5px;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    padding: 0 4px;
 }
 
 /* ============================================
@@ -5859,8 +5886,8 @@ hr.total-divider {
     }
 
     .modal-open-discussion-btn {
-        font-size: 0.82em;
-        padding: 7px 12px;
+        font-size: 0.72em;
+        padding: 3px 8px;
     }
 }
 
@@ -7869,6 +7896,37 @@ hr.total-divider {
 
 .task-add-btn:active {
     transform: scale(0.98);
+}
+
+/* Task manager header actions row */
+.task-manager-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Archive completed tasks button */
+.task-archive-completed-btn {
+    padding: 6px 12px;
+    background: rgba(108, 117, 125, 0.1);
+    color: #6c757d;
+    border: 1px solid rgba(108, 117, 125, 0.2);
+    border-radius: 6px;
+    font-size: 0.8em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+    white-space: nowrap;
+}
+
+.task-archive-completed-btn:hover {
+    background: rgba(220, 53, 69, 0.1);
+    color: #dc3545;
+    border-color: rgba(220, 53, 69, 0.25);
+}
+
+.task-archive-completed-btn:active {
+    transform: scale(0.97);
 }
 
 /* Task List Container */
@@ -13325,25 +13383,27 @@ hr.total-divider {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: 8px;
     margin-bottom: 20px;
     padding: 14px;
     background: rgba(0, 0, 0, 0.03);
     border-radius: 12px;
+    flex-wrap: wrap;
 }
 
 .merge-item-preview {
-    flex: 1;
+    flex: 0 1 auto;
     background: #fff;
     border: 2px solid rgba(76, 175, 80, 0.3);
     border-radius: 10px;
-    padding: 12px;
+    padding: 8px 12px;
     text-align: center;
-    max-width: 160px;
+    max-width: 140px;
+    min-width: 60px;
 }
 
 .merge-item-name {
-    font-size: 0.9em;
+    font-size: 0.85em;
     font-weight: 600;
     color: #333;
     display: block;
@@ -13353,7 +13413,7 @@ hr.total-divider {
 }
 
 .merge-plus-icon {
-    font-size: 1.5em;
+    font-size: 1.2em;
     font-weight: bold;
     color: #4CAF50;
     flex-shrink: 0;
@@ -13973,9 +14033,18 @@ hr.total-divider {
     grid-template-columns: 1fr 1fr;
 }
 
-.group-modal-image-grid.multi {
+.group-modal-image-grid.three {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: 1fr 1fr;
+}
+
+.group-modal-image-grid.three .group-modal-image-cell:first-child {
+    grid-column: 1 / -1;
+}
+
+.group-modal-image-grid.multi {
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto;
 }
 
 .group-modal-image-cell {
@@ -14514,6 +14583,41 @@ hr.total-divider {
     margin: 0;
     flex: 1;
     min-width: 0;
+}
+
+/* Split button on compact cards (group and hybrid) */
+.compact-card-split-btn {
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.8em;
+    padding: 2px 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.compact-card-split-btn:hover {
+    background: rgba(244, 67, 54, 0.25);
+    border-color: rgba(244, 67, 54, 0.5);
+    color: #ff8a80;
+    transform: scale(1.1);
+}
+
+.compact-card-split-btn:active {
+    transform: scale(0.95);
+}
+
+/* Split button in provenance line for hybrids */
+.compact-card-split-hybrid {
+    margin-left: auto;
+    font-size: 0.85em;
+    padding: 1px 5px;
 }
 
 /* Provenance line */

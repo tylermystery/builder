@@ -30,7 +30,7 @@ export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, c
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };
 export { updateFooter, initializeFooter } from './components/footer.js';
 // Phase 3a: Task Manager exports
-export { initTaskManager, getCurrentProjectId, getCurrentTasks } from './components/taskManager.js';
+export { initTaskManager, getCurrentProjectId, getCurrentTasks, showTaskModal } from './components/taskManager.js';
 
 console.log('[MODULE DEBUG] ui.js re-exports defined successfully.', performance.now().toFixed(2) + 'ms');
 

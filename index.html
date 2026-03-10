@@ -2157,6 +2157,412 @@ body:not(.presentation-active) .forum-panel-trigger-btn {
     /* Show in both modes for now */
 }
 
+/* Idea Card Styles */
+.forum-idea-card {
+    background: linear-gradient(135deg, #fffbf0 0%, #fff9e6 100%);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    border: 1px solid #f0e6c8;
+    border-left: 3px solid #f0ad4e;
+    transition: box-shadow 0.2s;
+}
+
+.forum-idea-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.forum-idea-card.own-idea {
+    border-left-color: #667eea;
+}
+
+.forum-idea-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.forum-idea-icon {
+    font-size: 1.2em;
+}
+
+.forum-idea-content {
+    color: #333;
+    font-size: 0.95em;
+    line-height: 1.5;
+    word-wrap: break-word;
+    margin-bottom: 10px;
+}
+
+.forum-idea-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.forum-idea-upvote {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    background: #f0f0f0;
+    border: 1px solid #dee2e6;
+    border-radius: 16px;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.forum-idea-upvote:hover {
+    background: #e7f3ff;
+    border-color: #667eea;
+}
+
+.forum-idea-upvote.upvoted {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-color: transparent;
+}
+
+.forum-idea-upvote .upvote-icon {
+    font-size: 1em;
+}
+
+.forum-idea-upvote .upvote-count {
+    font-weight: 600;
+    min-width: 8px;
+}
+
+/* ===== Toast Notification Styles ===== */
+.collab-toast-container {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 360px;
+    pointer-events: none;
+}
+
+.collab-toast {
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    padding: 12px 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    pointer-events: auto;
+    transform: translateX(120%);
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    border-left: 3px solid #667eea;
+    cursor: pointer;
+}
+
+.collab-toast.visible {
+    transform: translateX(0);
+}
+
+.collab-toast.removing {
+    transform: translateX(120%);
+    opacity: 0;
+}
+
+.collab-toast-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.85em;
+    flex-shrink: 0;
+}
+
+.collab-toast-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.collab-toast-sender {
+    font-weight: 600;
+    font-size: 0.85em;
+    color: #333;
+}
+
+.collab-toast-message {
+    color: #555;
+    font-size: 0.8em;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.collab-toast-time {
+    color: #999;
+    font-size: 0.7em;
+    margin-top: 2px;
+}
+
+.collab-toast-dismiss {
+    background: none;
+    border: none;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    font-size: 1.1em;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.collab-toast-dismiss:hover {
+    color: #333;
+}
+
+.collab-toast-more {
+    background: rgba(102, 126, 234, 0.1);
+    color: #667eea;
+    font-size: 0.8em;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 8px;
+    text-align: center;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+/* Toast types */
+.collab-toast[data-type="idea"] {
+    border-left-color: #f0ad4e;
+}
+
+.collab-toast[data-type="join"] {
+    border-left-color: #6f42c1;
+}
+
+.collab-toast[data-type="rsvp"] {
+    border-left-color: #17a2b8;
+}
+
+/* ===== Invite Modal Styles ===== */
+.invite-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 3000;
+    justify-content: center;
+    align-items: center;
+}
+
+.invite-modal-overlay.active {
+    display: flex;
+}
+
+.invite-modal {
+    background: white;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 460px;
+    padding: 24px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.2);
+}
+
+.invite-modal h3 {
+    margin: 0 0 16px 0;
+    font-size: 1.15em;
+    color: #333;
+}
+
+.invite-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.invite-form input[type="email"] {
+    padding: 10px 14px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 0.9em;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.invite-form input[type="email"]:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.invite-role-select {
+    padding: 8px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 0.9em;
+}
+
+.invite-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.invite-send-btn {
+    flex: 1;
+    padding: 10px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.invite-send-btn:hover {
+    transform: scale(1.02);
+}
+
+.invite-send-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.invite-copy-link-btn {
+    padding: 10px 16px;
+    background: #f0f0f0;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: background 0.2s;
+}
+
+.invite-copy-link-btn:hover {
+    background: #e0e0e0;
+}
+
+.invite-cancel-btn {
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    font-size: 0.85em;
+    padding: 8px 0;
+}
+
+.invite-status {
+    font-size: 0.85em;
+    padding: 8px 0;
+    text-align: center;
+}
+
+.invite-status.success {
+    color: #28a745;
+}
+
+.invite-status.error {
+    color: #dc3545;
+}
+
+.invite-pending-list {
+    margin-top: 12px;
+    border-top: 1px solid #dee2e6;
+    padding-top: 12px;
+}
+
+.invite-pending-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    font-size: 0.85em;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.invite-pending-email {
+    color: #333;
+}
+
+.invite-pending-status {
+    font-size: 0.75em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #fff3cd;
+    color: #856404;
+}
+
+.invite-pending-status.accepted {
+    background: #d4edda;
+    color: #155724;
+}
+
+/* Sign-in required overlay for collab actions */
+.collab-signin-required {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border-radius: 12px;
+    z-index: 5;
+}
+
+.collab-signin-required p {
+    font-size: 0.9em;
+    color: #555;
+    margin: 0;
+}
+
+.collab-signin-btn {
+    padding: 8px 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.85em;
+}
+
+@media (max-width: 768px) {
+    .collab-toast-container {
+        top: auto;
+        bottom: 16px;
+        right: 8px;
+        left: 8px;
+        max-width: none;
+    }
+
+    .invite-modal {
+        width: 95%;
+        max-width: none;
+        margin: 16px;
+    }
+}
+
 /* ============================================
    End Forum Panel Styles
    ============================================ */
@@ -2199,10 +2605,16 @@ body.presentation-active #marquee-banner-container,
 body.presentation-active #loading-message,
 body.presentation-active #mobile-summary-bar,
 body.presentation-active footer,
-body.presentation-active #chat-widget,
-body.presentation-active #wtf-plans-panel,
-body.presentation-active #wtf-plans-panel-overlay {
+body.presentation-active #chat-widget {
     display: none !important;
+}
+
+/* WTF Plans panel works WITHIN the presentation view for quick plan switching */
+body.presentation-active #wtf-plans-panel {
+    z-index: 2100; /* Above the presentation view (z-index: 1000) */
+}
+body.presentation-active #wtf-plans-panel-overlay {
+    z-index: 2099;
 }
 
 /* Prevent body/html scrolling when presentation view is active */
@@ -2555,6 +2967,1071 @@ select:focus-visible,
     outline: 2px solid #007bff;
     outline-offset: 2px;
 }
+
+/* ========================================
+   UNIFIED CHAT PANEL - Persistent Side Panel
+   ======================================== */
+
+/* Presentation view layout: content + side panel */
+.presentation-fullpage.active.ucp-open {
+    flex-direction: row;
+}
+
+.presentation-fullpage.active.ucp-open .presentation-content {
+    flex: 1;
+    min-width: 0;
+    width: auto;
+}
+
+/* Hide floating chat button when unified panel is open (panel replaces it) */
+.presentation-fullpage.active.ucp-open #presentation-floating-chat-btn {
+    display: none !important;
+}
+
+/* Hide regular chat widget when unified panel is active in presentation view */
+body.presentation-active.ucp-panel-active #chat-widget-container {
+    display: none !important;
+}
+
+/* Main panel container */
+.unified-chat-panel {
+    display: none;
+    flex-direction: column;
+    width: 360px;
+    min-width: 320px;
+    max-width: 420px;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-left: 1px solid rgba(0, 0, 0, 0.08);
+    z-index: 10;
+    position: relative;
+    transition: width 0.3s ease, min-width 0.3s ease, opacity 0.3s ease;
+    box-shadow: -2px 0 16px rgba(0, 0, 0, 0.06);
+}
+
+.presentation-fullpage.active.ucp-open .unified-chat-panel {
+    display: flex;
+}
+
+/* Collapsed state */
+.unified-chat-panel.collapsed {
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.unified-chat-panel.collapsed .ucp-header-left .ucp-title,
+.unified-chat-panel.collapsed .ucp-online-badge,
+.unified-chat-panel.collapsed .ucp-filters,
+.unified-chat-panel.collapsed .ucp-content,
+.unified-chat-panel.collapsed .ucp-input-area {
+    display: none;
+}
+
+.unified-chat-panel.collapsed .ucp-header {
+    flex-direction: column;
+    padding: 12px 6px;
+    gap: 8px;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-start;
+    background: linear-gradient(180deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.05) 100%);
+}
+
+.unified-chat-panel.collapsed .ucp-header-right {
+    flex-direction: column;
+    gap: 6px;
+}
+
+.unified-chat-panel.collapsed .ucp-toggle-icon {
+    transform: rotate(180deg);
+}
+
+/* Vertical "Chat" label when collapsed */
+.unified-chat-panel.collapsed .ucp-header::after {
+    content: 'C H A T';
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    font-size: 0.65em;
+    font-weight: 600;
+    letter-spacing: 3px;
+    color: rgba(102, 126, 234, 0.5);
+    margin-top: 12px;
+}
+
+/* Panel Header */
+.ucp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+    flex-shrink: 0;
+}
+
+.ucp-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ucp-title {
+    margin: 0;
+    font-size: 1em;
+    font-weight: 600;
+    color: #333;
+}
+
+.ucp-online-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    font-size: 0.75em;
+    font-weight: 600;
+    color: white;
+    background: #28a745;
+    border-radius: 11px;
+}
+
+.ucp-toggle-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    color: #666;
+    font-size: 1.3em;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.ucp-toggle-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: #333;
+}
+
+.ucp-toggle-icon {
+    transition: transform 0.3s ease;
+    display: inline-block;
+}
+
+/* Chat menu button (kebab / three dots) */
+.ucp-menu-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    color: #666;
+    font-size: 1.3em;
+    transition: background-color 0.2s, color 0.2s;
+    line-height: 1;
+}
+
+.ucp-menu-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: #333;
+}
+
+.ucp-header-right {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    position: relative;
+}
+
+/* Chat dropdown menu */
+.ucp-chat-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 1px 4px rgba(0, 0, 0, 0.08);
+    z-index: 100;
+    min-width: 200px;
+    overflow: hidden;
+    animation: ucp-menu-slide-in 0.15s ease-out;
+}
+
+@keyframes ucp-menu-slide-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.ucp-chat-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 11px 16px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.85em;
+    color: #333;
+    transition: background 0.15s;
+    text-align: left;
+}
+
+.ucp-chat-menu-item:hover:not(.disabled) {
+    background: #f5f5f5;
+}
+
+.ucp-chat-menu-item.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.ucp-chat-menu-icon {
+    font-size: 1.1em;
+    flex-shrink: 0;
+}
+
+.ucp-chat-menu-count {
+    margin-left: auto;
+    font-size: 0.8em;
+    color: #999;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 1px 7px;
+    border-radius: 10px;
+}
+
+/* Collapsed state hides menu button too */
+.unified-chat-panel.collapsed .ucp-menu-btn {
+    display: none;
+}
+
+/* Filter tabs */
+.ucp-filters {
+    display: flex;
+    gap: 4px;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    background: rgba(249, 249, 249, 0.8);
+    flex-shrink: 0;
+    overflow-x: auto;
+}
+
+.ucp-filter-btn {
+    padding: 5px 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 16px;
+    background: white;
+    cursor: pointer;
+    font-size: 0.78em;
+    color: #555;
+    transition: all 0.2s;
+    white-space: nowrap;
+    position: relative;
+}
+
+.ucp-filter-btn:hover {
+    background: #f0f0f0;
+    border-color: #ccc;
+}
+
+.ucp-filter-btn.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-color: transparent;
+}
+
+.ucp-filter-btn .ucp-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    margin-left: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: white;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
+    border-radius: 8px;
+}
+
+.ucp-filter-btn.active .ucp-badge {
+    background: rgba(255, 255, 255, 0.35);
+}
+
+/* Content area */
+.ucp-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px 10px;
+    scroll-behavior: smooth;
+    background: #f5f5f7;
+}
+
+.ucp-content::-webkit-scrollbar {
+    width: 5px;
+}
+
+.ucp-content::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 3px;
+}
+
+/* Timeline messages - single cohesive thread */
+.ucp-date-divider {
+    text-align: center;
+    margin: 16px 0 8px;
+    position: relative;
+}
+
+.ucp-date-divider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: #e0e0e0;
+}
+
+.ucp-date-divider span {
+    position: relative;
+    background: #f5f5f7;
+    padding: 0 10px;
+    font-size: 0.72em;
+    color: #888;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ucp-msg {
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    border-radius: 8px;
+    transition: background 0.15s;
+    position: relative;
+}
+
+.ucp-msg:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.ucp-msg:hover .ucp-actions {
+    opacity: 1;
+}
+
+.ucp-msg-comment {
+    border-left: 3px solid #667eea;
+    margin-left: 4px;
+    padding-left: 10px;
+    background: rgba(102, 126, 234, 0.03);
+}
+
+.ucp-msg-idea {
+    border-left: 3px solid #f0ad4e;
+    margin-left: 4px;
+    padding-left: 10px;
+    background: rgba(240, 173, 78, 0.03);
+}
+
+.ucp-msg-context {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 8px;
+    margin-bottom: 3px;
+    border-radius: 10px;
+    font-size: 0.7em;
+    font-weight: 500;
+    background: linear-gradient(135deg, #e8edff, #f0e8ff);
+    color: #5a5aab;
+}
+
+.ucp-msg-context-idea {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.ucp-context-icon {
+    font-size: 0.9em;
+}
+
+.ucp-context-name {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ucp-msg-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 2px;
+}
+
+.ucp-msg-sender {
+    font-weight: 600;
+    font-size: 0.82em;
+    color: #333;
+}
+
+.ucp-msg-time {
+    font-size: 0.68em;
+    color: #999;
+}
+
+.ucp-msg-body {
+    font-size: 0.88em;
+    color: #444;
+    line-height: 1.5;
+    word-wrap: break-word;
+}
+
+.ucp-msg-body a {
+    color: #667eea;
+    text-decoration: none;
+}
+
+.ucp-msg-body a:hover {
+    text-decoration: underline;
+}
+
+.ucp-deleted-text {
+    color: #999;
+    font-size: 0.85em;
+}
+
+.ucp-edited-tag {
+    color: #999;
+    font-size: 0.72em;
+    font-style: italic;
+}
+
+/* Edit inline */
+.ucp-edit-input {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid #667eea;
+    border-radius: 6px;
+    font-size: 0.88em;
+    outline: none;
+    background: white;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.15);
+}
+
+.ucp-edit-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.ucp-edit-save {
+    padding: 3px 12px;
+    border: none;
+    border-radius: 4px;
+    background: #667eea;
+    color: white;
+    font-size: 0.78em;
+    cursor: pointer;
+}
+
+.ucp-edit-save:hover {
+    background: #5a6fd6;
+}
+
+.ucp-edit-cancel {
+    padding: 3px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    color: #666;
+    font-size: 0.78em;
+    cursor: pointer;
+}
+
+.ucp-edit-cancel:hover {
+    background: #f5f5f5;
+}
+
+/* Reactions row */
+.ucp-reactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.ucp-reaction {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 7px;
+    background: #f5f5f5;
+    border: 1px solid #eee;
+    border-radius: 12px;
+    font-size: 0.78em;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+}
+
+.ucp-reaction:hover {
+    background: #e8edff;
+    border-color: #c7d2fe;
+}
+
+.ucp-reaction.reacted {
+    background: #e8edff;
+    border-color: #667eea;
+    color: #667eea;
+}
+
+.ucp-reaction-count {
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+/* Action row (Reply, React, Edit, Task) - shown on hover */
+.ucp-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-top: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.ucp-reply-actions {
+    margin-top: 2px;
+}
+
+.ucp-action-btn {
+    background: none;
+    border: none;
+    font-size: 0.76em;
+    color: #888;
+    cursor: pointer;
+    padding: 3px 8px;
+    border-radius: 6px;
+    transition: background 0.15s, color 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ucp-action-btn:hover {
+    background: rgba(0, 0, 0, 0.04);
+    color: #333;
+}
+
+.ucp-action-btn.ucp-task-btn:hover {
+    background: rgba(40, 167, 69, 0.08);
+    color: #28a745;
+}
+
+.ucp-action-btn.ucp-task-btn.task-created {
+    color: #28a745;
+    font-weight: 500;
+}
+
+/* Emoji picker popup */
+.ucp-emoji-picker {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 6px 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    z-index: 20;
+    gap: 2px;
+    flex-wrap: wrap;
+    max-width: 220px;
+}
+
+.ucp-emoji-picker.open {
+    display: flex;
+}
+
+.ucp-emoji-pick {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1.1em;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.ucp-emoji-pick:hover {
+    background: #f0f0f0;
+    transform: scale(1.15);
+}
+
+/* Sub-thread (replies to messages) */
+.ucp-subthread {
+    margin-top: 4px;
+    margin-left: 16px;
+    border-left: 2px solid #e0e0e0;
+    padding-left: 10px;
+}
+
+.ucp-subthread-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    color: #667eea;
+    font-size: 0.78em;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    background: none;
+    transition: color 0.2s;
+}
+
+.ucp-subthread-toggle:hover {
+    color: #764ba2;
+}
+
+.ucp-subthread-arrow {
+    font-size: 0.9em;
+}
+
+.ucp-subthread-replies {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.ucp-subthread-replies.expanded {
+    max-height: 5000px;
+}
+
+.ucp-reply {
+    padding: 6px 8px;
+    margin: 2px 0;
+    border-radius: 6px;
+    font-size: 0.85em;
+    transition: background 0.15s;
+}
+
+.ucp-reply:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.ucp-reply:hover .ucp-reply-actions {
+    opacity: 1;
+}
+
+.ucp-reply-header {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 1px;
+}
+
+.ucp-reply-sender {
+    font-weight: 600;
+    font-size: 0.82em;
+    color: #333;
+}
+
+.ucp-reply-time {
+    font-size: 0.68em;
+    color: #999;
+}
+
+.ucp-reply-body {
+    color: #444;
+    line-height: 1.4;
+}
+
+/* Input area */
+.ucp-input-area {
+    padding: 10px 12px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    background: rgba(249, 249, 249, 0.9);
+    flex-shrink: 0;
+}
+
+.ucp-reply-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08));
+    border-left: 3px solid #667eea;
+    border-radius: 4px;
+    font-size: 0.82em;
+    color: #555;
+}
+
+.ucp-reply-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.ucp-reply-cancel {
+    background: none;
+    border: none;
+    font-size: 1.2em;
+    color: #999;
+    cursor: pointer;
+    padding: 0 4px;
+    margin-left: 6px;
+}
+
+.ucp-reply-cancel:hover {
+    color: #333;
+}
+
+.ucp-attach-bar {
+    margin-bottom: 8px;
+}
+
+.ucp-attach-select {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 0.8em;
+    color: #555;
+    background: white;
+    cursor: pointer;
+    outline: none;
+}
+
+.ucp-attach-select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.12);
+}
+
+.ucp-message-form {
+    display: flex;
+    gap: 6px;
+}
+
+.ucp-message-input {
+    flex: 1;
+    padding: 9px 14px;
+    border: 1px solid #e0e0e0;
+    border-radius: 20px;
+    font-size: 0.88em;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background: white;
+}
+
+.ucp-message-input:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
+}
+
+.ucp-send-btn {
+    width: 38px;
+    height: 38px;
+    border: none;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1em;
+    transition: transform 0.15s, box-shadow 0.15s;
+    flex-shrink: 0;
+}
+
+.ucp-send-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+.ucp-send-btn:active {
+    transform: scale(0.95);
+}
+
+/* Empty and loading states */
+.ucp-loading,
+.ucp-empty {
+    text-align: center;
+    padding: 32px 16px;
+    color: #999;
+    font-size: 0.9em;
+}
+
+.ucp-loading::before {
+    content: '';
+    display: block;
+    width: 28px;
+    height: 28px;
+    margin: 0 auto 12px;
+    border: 3px solid #e0e0e0;
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: ucp-spin 0.8s linear infinite;
+}
+
+@keyframes ucp-spin {
+    to { transform: rotate(360deg); }
+}
+
+.ucp-empty-icon {
+    font-size: 2em;
+    display: block;
+    margin-bottom: 8px;
+}
+
+/* Collapsed panel tab */
+.ucp-collapsed-tab {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    writing-mode: vertical-rl;
+    padding: 12px 6px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border-radius: 8px 0 0 8px;
+    cursor: pointer;
+    font-size: 0.8em;
+    font-weight: 500;
+    letter-spacing: 1px;
+    box-shadow: -2px 0 8px rgba(0,0,0,0.1);
+    z-index: 11;
+}
+
+/* Mobile tab button shown when panel is off-screen */
+.presentation-fullpage .ucp-mobile-toggle {
+    display: none;
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+    cursor: pointer;
+    z-index: 1010;
+    font-size: 1.4em;
+    transition: transform 0.2s;
+}
+
+.presentation-fullpage .ucp-mobile-toggle:hover {
+    transform: scale(1.08);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .unified-chat-panel {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 100%;
+        max-width: 100%;
+        min-width: 100%;
+        height: 100vh;
+        z-index: 2000;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+    }
+
+    .presentation-fullpage.active.ucp-open .unified-chat-panel {
+        transform: translateX(0);
+    }
+
+    .presentation-fullpage.active.ucp-open .presentation-content {
+        /* Don't shrink content on mobile; panel overlays */
+    }
+
+    .presentation-fullpage .ucp-mobile-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .presentation-fullpage.active.ucp-open .ucp-mobile-toggle {
+        display: none;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+    .unified-chat-panel {
+        width: 300px;
+        min-width: 280px;
+    }
+}
+
+/* ==========================================
+   Plan Summary Dashboard - Blueprint/Pitch-Deck Quick Overview
+   ========================================== */
+.plan-summary-dashboard {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 6px 24px;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px) saturate(1.4);
+    -webkit-backdrop-filter: blur(12px) saturate(1.4);
+    border-radius: 0;
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: none;
+}
+
+.plan-summary-metrics {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    flex-wrap: wrap;
+}
+
+.plan-summary-metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4px 18px;
+    min-width: 65px;
+}
+
+.plan-metric-value {
+    font-size: 1.1em;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    line-height: 1.2;
+}
+
+.plan-metric-label {
+    font-size: 0.62em;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-top: 1px;
+}
+
+.plan-summary-divider {
+    width: 1px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.15);
+    flex-shrink: 0;
+}
+
+/* Blueprint-style subtle grid on the items area */
+.itinerary-items-list.board-view {
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    border-radius: 12px;
+    padding: 12px;
+}
+
+/* Price badge on compact cards */
+.compact-card-price {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    padding: 3px 9px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.65);
+    color: white;
+    font-size: 0.78em;
+    font-weight: 600;
+    z-index: 2;
+    backdrop-filter: blur(4px);
+    letter-spacing: 0.2px;
+}
+
+.compact-card-price.price-free {
+    background: rgba(40, 167, 69, 0.7);
+}
+
+/* Section divider labels in board view */
+.board-section-divider {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 0;
+    margin: 4px 0;
+}
+
+.board-section-divider-line {
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.board-section-divider-label {
+    font-size: 0.72em;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    white-space: nowrap;
+}
+
+.board-section-divider-count {
+    font-size: 0.68em;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.4);
+    margin-left: 4px;
+}
+
+@media (max-width: 600px) {
+    .plan-summary-dashboard {
+        padding: 4px 12px;
+    }
+
+    .plan-summary-metric {
+        padding: 2px 10px;
+        min-width: 55px;
+    }
+
+    .plan-metric-value {
+        font-size: 1em;
+    }
+
+    .plan-metric-label {
+        font-size: 0.58em;
+    }
+
+    .plan-summary-divider {
+        height: 20px;
+    }
+}
     </style>
 
     <!-- Early presentation mode detection - runs before DOM loads to prevent catalog flash -->
@@ -2808,10 +4285,10 @@ select:focus-visible,
     </div>
     <div id="wtf-plans-panel-overlay" class="wtf-plans-panel-overlay"></div>
 
-    <!-- Forum Panel (Slide-out from Right) - Threaded discussions, comments, and plan history -->
+    <!-- Activity Panel (Slide-out from Right) - Unified hub for chat, comments, ideas, and plan history -->
     <div id="forum-panel" class="forum-panel stream-view-expanded" style="display: none;">
         <div class="forum-panel-header">
-            <h3>Forum</h3>
+            <h3>Activity</h3>
             <div class="forum-header-controls">
                 <!-- Stream Toggle Controls in Forum Header -->
                 <button id="forum-toggle-reactions" class="stream-toggle-btn active" title="Show/Hide Reactions" aria-pressed="true">
@@ -2825,8 +4302,9 @@ select:focus-visible,
         </div>
         <div class="forum-panel-filters">
             <button class="forum-filter-btn active" data-filter="all">All</button>
-            <button class="forum-filter-btn" data-filter="threads">Threads</button>
+            <button class="forum-filter-btn" data-filter="threads">Chat</button>
             <button class="forum-filter-btn" data-filter="comments">Comments</button>
+            <button class="forum-filter-btn" data-filter="ideas">Ideas</button>
             <button class="forum-filter-btn" data-filter="history">History</button>
         </div>
         <div id="forum-item-filter-indicator" class="forum-item-filter-indicator" style="display: none;">
@@ -2850,11 +4328,34 @@ select:focus-visible,
             </div>
             <form id="forum-message-form" class="forum-message-form">
                 <input type="text" id="forum-message-input" placeholder="Type a message..." autocomplete="off">
-                <button type="submit" title="Send message">Send</button>
+                <button type="submit" id="forum-message-submit" title="Send message">Send</button>
             </form>
         </div>
     </div>
     <div id="forum-panel-overlay" class="forum-panel-overlay"></div>
+
+    <!-- Invite Modal - Email invite system for collaborators -->
+    <div id="invite-modal-overlay" class="invite-modal-overlay">
+        <div class="invite-modal">
+            <h3>Invite Collaborator</h3>
+            <form id="invite-form" class="invite-form">
+                <input type="email" id="invite-email-input" placeholder="Enter email address" required autocomplete="email">
+                <select id="invite-role-select" class="invite-role-select">
+                    <option value="Editor">Editor (can add items, comment, react)</option>
+                    <option value="Viewer">Viewer (can view, comment, react)</option>
+                </select>
+                <div class="invite-actions">
+                    <button type="submit" id="invite-send-btn" class="invite-send-btn">Send Invite</button>
+                    <button type="button" id="invite-copy-link-btn" class="invite-copy-link-btn">Copy Link</button>
+                </div>
+                <div id="invite-status" class="invite-status" style="display: none;"></div>
+            </form>
+            <button id="invite-cancel-btn" class="invite-cancel-btn">Close</button>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="collab-toast-container" class="collab-toast-container"></div>
 
     <header id="main-header">
         <div class="header-content">
@@ -3222,6 +4723,12 @@ select:focus-visible,
             <button class="modal-reactions-expand-btn" id="modal-reactions-expand-btn" title="Browse all emojis">
                 <span class="expand-btn-icon">+</span> More
             </button>
+            <!-- Discussion button - opens conversation panel for this item -->
+            <button id="modal-open-discussion-btn" class="modal-open-discussion-btn" type="button" style="display: none;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                <span class="discussion-btn-label">Discussion</span>
+                <span class="modal-comments-count" id="modal-comments-count"></span>
+            </button>
             <div class="modal-reactions-picker" id="modal-reactions-picker" style="display: none;">
                 <!-- Tiered emoji picker populated by JS - scrollable -->
             </div>
@@ -3339,15 +4846,6 @@ select:focus-visible,
                 </div>
 
                 <div id="modal-calendar-container" style="margin-bottom: 20px;"></div>
-
-                <!-- Discussion button - opens forum panel filtered to this item's comments -->
-                <div id="modal-comments-section" class="modal-comments-section" style="display: none;">
-                    <button id="modal-open-discussion-btn" class="modal-open-discussion-btn" type="button">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                        <span class="discussion-btn-label">Discussion</span>
-                        <span class="modal-comments-count" id="modal-comments-count"></span>
-                    </button>
-                </div>
 
                 <div id="modal-notes-container">
                     <textarea id="modal-item-note" placeholder="Add notes about customization, timing, or special requests..." autocomplete="off"></textarea>
@@ -3539,9 +5037,9 @@ select:focus-visible,
                     <button id="stream-view-toggle" class="stream-toggle-btn" title="Expand View">
                         <span>⛶</span>
                     </button>
-                    <button id="forum-panel-trigger" class="forum-panel-trigger-btn" title="Open Forum Panel for threaded discussion" aria-expanded="false">
-                        <span class="forum-icon">📋</span>
-                        <span class="forum-label">Forum</span>
+                    <button id="forum-panel-trigger" class="forum-panel-trigger-btn" title="Open Activity Panel for discussions, ideas and updates" aria-expanded="false">
+                        <span class="forum-icon">💬</span>
+                        <span class="forum-label">Activity</span>
                     </button>
                 </div>
             </div>
@@ -3583,7 +5081,7 @@ select:focus-visible,
                 <!-- Left: Hamburger Menu and Logo -->
                 <div id="presentation-header-left">
                     <button id="presentation-back-btn" class="header-icon-btn" title="WTF Plans" aria-label="Open WTF Plans menu">
-                        <span class="hamburger-icon">☰</span>
+                        <span class="hamburger-icon">&#9776;</span>
                     </button>
                     <div id="presentation-logo-container" class="presentation-logo-container"></div>
                     <h1 id="presentation-shop-title" class="presentation-shop-title"></h1>
@@ -3602,6 +5100,30 @@ select:focus-visible,
                 <!-- Right: Total Cost only (Add button moved to items, Share merged with people) -->
                 <div id="presentation-header-right">
                     <button id="presentation-header-total" class="presentation-header-total" title="View checkout" aria-label="View checkout summary"></button>
+                </div>
+            </div>
+            <!-- Plan Summary Metrics Strip - compact sub-header -->
+            <div id="plan-summary-dashboard" class="plan-summary-dashboard">
+                <div class="plan-summary-metrics">
+                    <div class="plan-summary-metric" id="plan-metric-items" title="Plan items">
+                        <span class="plan-metric-value">0</span>
+                        <span class="plan-metric-label">Items</span>
+                    </div>
+                    <div class="plan-summary-divider"></div>
+                    <div class="plan-summary-metric" id="plan-metric-budget" title="Estimated budget">
+                        <span class="plan-metric-value">$0</span>
+                        <span class="plan-metric-label">Budget</span>
+                    </div>
+                    <div class="plan-summary-divider"></div>
+                    <div class="plan-summary-metric" id="plan-metric-team" title="Team members">
+                        <span class="plan-metric-value">0</span>
+                        <span class="plan-metric-label">Team</span>
+                    </div>
+                    <div class="plan-summary-divider"></div>
+                    <div class="plan-summary-metric" id="plan-metric-status" title="Overall status">
+                        <span class="plan-metric-value">--</span>
+                        <span class="plan-metric-label">Status</span>
+                    </div>
                 </div>
             </div>
         </header>
@@ -3738,6 +5260,50 @@ select:focus-visible,
 
             </div>
         </div>
+
+        <!-- Unified Chat Side Panel - Persistent in Presentation View -->
+        <div id="unified-chat-panel" class="unified-chat-panel">
+            <div class="ucp-header">
+                <div class="ucp-header-left">
+                    <h3 class="ucp-title">Conversations</h3>
+                    <span id="ucp-online-count" class="ucp-online-badge" title="People online">0</span>
+                </div>
+                <div class="ucp-header-right">
+                    <button id="ucp-menu-btn" class="ucp-menu-btn" title="Chat options" aria-label="Chat options">
+                        <span class="ucp-menu-icon">&#x22EE;</span>
+                    </button>
+                    <button id="ucp-toggle-btn" class="ucp-toggle-btn" title="Collapse panel" aria-label="Toggle chat panel">
+                        <span class="ucp-toggle-icon">›</span>
+                    </button>
+                </div>
+            </div>
+            <div class="ucp-filters">
+                <button class="ucp-filter-btn active" data-filter="all">All</button>
+                <button class="ucp-filter-btn" data-filter="comments">Comments</button>
+                <button class="ucp-filter-btn" data-filter="ideas">Ideas</button>
+            </div>
+            <div id="ucp-content" class="ucp-content">
+                <div class="ucp-loading">Loading conversations...</div>
+            </div>
+            <div id="ucp-input-area" class="ucp-input-area">
+                <div id="ucp-reply-indicator" class="ucp-reply-indicator" style="display: none;">
+                    <span class="ucp-reply-text"></span>
+                    <button class="ucp-reply-cancel" type="button">&times;</button>
+                </div>
+                <div id="ucp-attach-bar" class="ucp-attach-bar">
+                    <select id="ucp-attach-select" class="ucp-attach-select" title="Attach to plan item">
+                        <option value="">Plan-wide chat</option>
+                    </select>
+                </div>
+                <form id="ucp-message-form" class="ucp-message-form">
+                    <input type="text" id="ucp-message-input" class="ucp-message-input" placeholder="Message the team..." autocomplete="off">
+                    <button type="submit" class="ucp-send-btn" title="Send">
+                        <span>&#10148;</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
         <!-- Drag-and-Drop Zones for Presentation View (Enhanced) -->
         <!-- Left side: Actions (Goals at top, Archive/Delete at bottom) -->
         <!-- Right side: Reactions and Comments -->
@@ -3946,6 +5512,9 @@ select:focus-visible,
             <span class="chat-icon">💬</span>
             <span class="chat-badge" style="display: none;"></span>
         </button>
+
+        <!-- Mobile toggle for Unified Chat Panel -->
+        <button id="ucp-mobile-toggle" class="ucp-mobile-toggle" title="Open conversations">💬</button>
     </div>
 
     <div id="user-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
@@ -4054,7 +5623,15 @@ select:focus-visible,
                         <div class="form-row">
                             <label for="profile-notifications">Email Notifications</label>
                             <select id="profile-notifications">
-                                <option value="Real-Time">On</option>
+                                <option value="Real-Time">Real-Time</option>
+                                <option value="Digest">Daily Digest</option>
+                                <option value="None">Off</option>
+                            </select>
+                        </div>
+                        <div class="form-row" style="display: none;">
+                            <label for="profile-sms-notifications">SMS Notifications</label>
+                            <select id="profile-sms-notifications">
+                                <option value="Real-Time">Real-Time</option>
                                 <option value="None">Off</option>
                             </select>
                         </div>

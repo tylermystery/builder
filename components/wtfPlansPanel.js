@@ -224,16 +224,50 @@ export async function showWtfPlansPanel(options = {}) {
     const { skipPushState = false, filter = null } = options;
     const panel = document.getElementById('wtf-plans-panel');
     const overlay = document.getElementById('wtf-plans-panel-overlay');
+    const isPresentationActive = document.body.classList.contains('presentation-active');
+
+    console.log('[PRES-MENU DEBUG] showWtfPlansPanel called:', {
+        panelExists: !!panel,
+        overlayExists: !!overlay,
+        isPresentationActive,
+        panelCurrentDisplay: panel?.style.display,
+        panelComputedDisplay: panel ? getComputedStyle(panel).display : 'N/A',
+        panelComputedZIndex: panel ? getComputedStyle(panel).zIndex : 'N/A',
+        options
+    });
 
     if (panel) {
         panel.style.display = 'flex';
         // Trigger reflow for animation
         panel.offsetHeight;
         panel.classList.add('open');
+
+        // Debug: check if display was actually applied (CSS !important can override inline styles)
+        const computedDisplay = getComputedStyle(panel).display;
+        const computedZIndex = getComputedStyle(panel).zIndex;
+        const computedTransform = getComputedStyle(panel).transform;
+        console.log('[PRES-MENU DEBUG] Panel after style.display=flex:', {
+            inlineDisplay: panel.style.display,
+            computedDisplay,
+            computedZIndex,
+            computedTransform,
+            hasOpenClass: panel.classList.contains('open'),
+            boundingRect: panel.getBoundingClientRect(),
+            displayOverridden: computedDisplay === 'none',
+        });
+        if (computedDisplay === 'none') {
+            console.error('[PRES-MENU DEBUG] CRITICAL: Panel display is "none" after setting inline style! A CSS rule with !important is overriding the panel visibility. Check for "body.presentation-active #wtf-plans-panel { display: none !important }" in stylesheets.');
+        }
+    } else {
+        console.error('[PRES-MENU DEBUG] #wtf-plans-panel element NOT FOUND in DOM');
     }
 
     if (overlay) {
         overlay.classList.add('visible');
+        console.log('[PRES-MENU DEBUG] Overlay after adding visible class:', {
+            computedDisplay: getComputedStyle(overlay).display,
+            computedZIndex: getComputedStyle(overlay).zIndex,
+        });
     }
 
     // Add wtfPlans=open to URL for browser history support (unless restoring from popstate)
@@ -272,6 +306,12 @@ export function hideWtfPlansPanel(options = {}) {
     const { skipPushState = false } = options;
     const panel = document.getElementById('wtf-plans-panel');
     const overlay = document.getElementById('wtf-plans-panel-overlay');
+
+    console.log('[PRES-MENU DEBUG] hideWtfPlansPanel called:', {
+        panelExists: !!panel,
+        panelHasOpenClass: panel?.classList.contains('open'),
+        isPresentationActive: document.body.classList.contains('presentation-active'),
+    });
 
     if (panel) {
         panel.classList.remove('open');
@@ -881,6 +921,12 @@ function createWtfPlanItem(item) {
  */
 function handleWtfPlanItemClick(item) {
     log('WtfPlansPanel', `Clicked ${item.type}: ${item.name} (${item.id})`);
+
+    // If clicking the current session, just close the panel - no need to reload
+    if (item.isCurrentSession) {
+        hideWtfPlansPanel();
+        return;
+    }
 
     // Close the panel (skipPushState since we'll handle navigation ourselves)
     hideWtfPlansPanel({ skipPushState: true });

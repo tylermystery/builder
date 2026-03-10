@@ -9,75 +9,60 @@ const { GEMINI_API_KEY } = process.env;
 
 /**
  * Estimate merge result using AI
- * @param {Object} item1 - First item data
- * @param {Object} item2 - Second item data
+ * @param {Object[]} items - Array of item data objects (supports 2+)
  * @param {string} mergeType - Type of merge: 'options' or 'hybrid'
  * @returns {Promise<Object>} - Estimated merge result
  */
-async function estimateMergeWithAI(item1, item2, mergeType) {
-    console.log(`[Debug] estimateMergeWithAI: Estimating ${mergeType} merge for "${item1.name}" + "${item2.name}"`);
+async function estimateMergeWithAI(items, mergeType) {
+    const itemNames = items.map(i => `"${i.name}"`).join(' + ');
+    console.log(`[Debug] estimateMergeWithAI: Estimating ${mergeType} merge for ${itemNames}`);
 
     if (!GEMINI_API_KEY) {
         console.error("[Debug] CRITICAL: GEMINI_API_KEY is missing!");
         throw new Error("Server configuration error: Missing Gemini API Key.");
     }
 
+    // Build item descriptions for the prompt
+    const itemDescriptions = items.map((item, idx) => `Item ${idx + 1}:
+- Name: ${item.name}
+- Description: ${item.description || 'No description'}
+- Category: ${item.category || 'Uncategorized'}
+${item.price ? '- Price: $' + item.price : ''}`).join('\n\n');
+
     let prompt;
 
     if (mergeType === 'options') {
-        // Estimate parent category and description for grouping items as alternatives
         prompt = `You are an expert event planner helping to organize items for an event planning app.
 
-Two items are being grouped together as alternative options. Analyze them and determine:
-1. A parent category name that would encompass both items
+${items.length} items are being grouped together as alternative options. Analyze them and determine:
+1. A parent category name that would encompass all items
 2. A brief description of what this options category represents
 
-Item 1:
-- Name: ${item1.name}
-- Description: ${item1.description || 'No description'}
-- Category: ${item1.category || 'Uncategorized'}
-${item1.price ? '- Price: $' + item1.price : ''}
+${itemDescriptions}
 
-Item 2:
-- Name: ${item2.name}
-- Description: ${item2.description || 'No description'}
-- Category: ${item2.category || 'Uncategorized'}
-${item2.price ? '- Price: $' + item2.price : ''}
-
-Think about what these items have in common and what category they would both fit under.
+Think about what these items have in common and what category they would all fit under.
 
 Respond with a JSON object (and nothing else) with this exact structure:
 {
-  "categoryName": "A concise category name (2-4 words) that encompasses both items",
+  "categoryName": "A concise category name (2-4 words) that encompasses all items",
   "categoryDescription": "A brief description (1-2 sentences) of what this category represents and why these items are alternatives",
   "confidence": 0.85
 }
 
 IMPORTANT: The category name should be short and descriptive. The confidence score (0.0-1.0) indicates how well these items fit together as alternatives.`;
     } else if (mergeType === 'hybrid') {
-        // Estimate a blended/hybrid combination of the two items
         prompt = `You are a creative event planner helping to combine ideas in an event planning app.
 
-Two items are being merged into a single hybrid idea. Analyze them and create a blended combination that captures the best of both:
+${items.length} items are being merged into a single hybrid idea. Analyze them and create a blended combination that captures the best of all:
 
-Item 1:
-- Name: ${item1.name}
-- Description: ${item1.description || 'No description'}
-- Category: ${item1.category || 'Uncategorized'}
-${item1.price ? '- Price: $' + item1.price : ''}
-
-Item 2:
-- Name: ${item2.name}
-- Description: ${item2.description || 'No description'}
-- Category: ${item2.category || 'Uncategorized'}
-${item2.price ? '- Price: $' + item2.price : ''}
+${itemDescriptions}
 
 Think creatively about how these items could be combined or merged into a single cohesive idea. Find the "merriment" - the joy, fun, or essence - that combining them would create.
 
 Respond with a JSON object (and nothing else) with this exact structure:
 {
   "hybridName": "A creative name for the combined idea (2-5 words)",
-  "hybridDescription": "A description (2-3 sentences) of what this hybrid idea represents and how it combines elements from both original items",
+  "hybridDescription": "A description (2-3 sentences) of what this hybrid idea represents and how it combines elements from all original items",
   "reasoning": "Brief explanation of why this combination works well",
   "confidence": 0.85
 }
@@ -164,13 +149,19 @@ exports.handler = async (event) => {
 
     try {
         const body = JSON.parse(event.body);
-        const { item1, item2, mergeType } = body;
+        const { item1, item2, items: itemsArray, mergeType } = body;
 
-        if (!item1 || !item2) {
+        // Support both new `items` array and legacy `item1`/`item2` format
+        let items;
+        if (itemsArray && Array.isArray(itemsArray) && itemsArray.length >= 2) {
+            items = itemsArray;
+        } else if (item1 && item2) {
+            items = [item1, item2];
+        } else {
             return {
                 statusCode: 400,
                 headers: { 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({ error: 'Missing item1 or item2 data' })
+                body: JSON.stringify({ error: 'Missing items data. Provide either "items" array (2+) or "item1" and "item2"' })
             };
         }
 
@@ -182,12 +173,11 @@ exports.handler = async (event) => {
             };
         }
 
-        console.log(`[estimate-merge] Processing ${mergeType} estimation for items:`, {
-            item1: item1.name,
-            item2: item2.name
-        });
+        console.log(`[estimate-merge] Processing ${mergeType} estimation for ${items.length} items:`,
+            items.map(i => i.name)
+        );
 
-        const result = await estimateMergeWithAI(item1, item2, mergeType);
+        const result = await estimateMergeWithAI(items, mergeType);
 
         return {
             statusCode: 200,

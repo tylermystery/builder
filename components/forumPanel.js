@@ -33,8 +33,9 @@ function getCurrentUser() {
 // Forum filter types
 export const FORUM_FILTER_TYPES = {
     ALL: 'all',
-    THREADS: 'threads',    // Only messages with replies
+    THREADS: 'threads',    // Only messages with replies (Chat tab)
     COMMENTS: 'comments',  // Component comments
+    IDEAS: 'ideas',        // Ideas - free-form suggestions from collaborators
     HISTORY: 'history'     // Plan events
 };
 
@@ -46,7 +47,11 @@ const EVENT_TYPE_DISPLAY = {
     'task_added': { icon: '✅', label: 'Task Added', color: '#17a2b8' },
     'item_added': { icon: '📦', label: 'Item Added', color: '#ffc107' },
     'collaborator_joined': { icon: '👋', label: 'Collaborator Joined', color: '#6f42c1' },
-    'reaction_added': { icon: '😊', label: 'Reaction', color: '#ff6b6b' }
+    'reaction_added': { icon: '😊', label: 'Reaction', color: '#ff6b6b' },
+    'idea_posted': { icon: '💡', label: 'New Idea', color: '#f0ad4e' },
+    'idea_promoted': { icon: '🚀', label: 'Idea Promoted', color: '#28a745' },
+    'rsvp_response': { icon: '📬', label: 'RSVP Response', color: '#17a2b8' },
+    'task_completed': { icon: '🏁', label: 'Task Completed', color: '#28a745' }
 };
 
 // Quick emoji reactions
@@ -166,9 +171,11 @@ function getItemsForFilter(filterType) {
                 ...forumPlanEvents.map(e => ({ ...e, itemType: 'event' }))
             ];
         case FORUM_FILTER_TYPES.THREADS:
-            return forumMessages.filter(m => m.replyCount > 0);
+            return forumMessages.filter(m => !m.isIdea);
         case FORUM_FILTER_TYPES.COMMENTS:
             return forumMessages.filter(m => m.componentId);
+        case FORUM_FILTER_TYPES.IDEAS:
+            return forumMessages.filter(m => m.isIdea);
         case FORUM_FILTER_TYPES.HISTORY:
             return forumPlanEvents;
         default:
@@ -363,6 +370,7 @@ export function initializeNotificationTracking() {
             [FORUM_FILTER_TYPES.ALL]: now,
             [FORUM_FILTER_TYPES.THREADS]: now,
             [FORUM_FILTER_TYPES.COMMENTS]: now,
+            [FORUM_FILTER_TYPES.IDEAS]: now,
             [FORUM_FILTER_TYPES.HISTORY]: now
         };
         try {
@@ -732,17 +740,39 @@ function createMessageObject(record) {
     // Use createdTime from record level, fall back to fields.Timestamp, then current time
     const timestamp = record.createdTime || fields.Timestamp || new Date().toISOString();
 
+    // Detect idea messages by MessageType field or content prefix
+    const isIdea = fields.MessageType === 'idea' || (fields.Content || '').startsWith('[IDEA]');
+    let content = isIdea && (fields.Content || '').startsWith('[IDEA]')
+        ? (fields.Content || '').replace(/^\[IDEA\]\s*/, '')
+        : (fields.Content || '');
+
+    // Extract component link from Item Link field (for Airtable rec* IDs)
+    const itemLinkField = fields['Item Link'];
+    let componentId = itemLinkField ? (Array.isArray(itemLinkField) ? itemLinkField[0] : itemLinkField) : null;
+
+    // Also check for [PLAN_COMMENT:item:ID] prefix in content (for custom/non-rec item IDs)
+    if (!componentId) {
+        const planCommentMatch = content.match(/^\[PLAN_COMMENT:item:([^\]]+)\]\s*/);
+        if (planCommentMatch) {
+            componentId = planCommentMatch[1];
+            content = content.replace(/^\[PLAN_COMMENT:item:[^\]]+\]\s*/, '');
+        }
+    }
+
+    log('ForumPanel', `[DEBUG] createMessageObject - record.id: ${record.id}, Item Link field: ${JSON.stringify(itemLinkField)}, resolved componentId: ${componentId}, content preview: "${(fields.Content || '').substring(0, 40)}"`);
+
     return {
         id: record.id,
         senderId: fields.SenderID,
         senderName: fields.SenderName || 'Anonymous',
-        content: fields.Content || '',
+        content: content,
         timestamp: timestamp,
         parentMessageId: fields.ParentMessageID,
         reactions: parseReactions(fields.Reactions),
         isEdited: fields.IsEdited || false,
         isDeleted: fields.IsDeleted || false,
-        componentId: fields['Item Link'] ? fields['Item Link'][0] : null,
+        isIdea: isIdea,
+        componentId: componentId,
         isSent: fields.SenderID === currentUser?.id,
         replies: [],
         replyCount: 0
@@ -839,9 +869,9 @@ function renderForumContent() {
             break;
 
         case FORUM_FILTER_TYPES.THREADS:
-            // Only messages with replies
+            // All chat messages (non-ideas)
             itemsToRender = forumMessages
-                .filter(m => m.replyCount > 0)
+                .filter(m => !m.isIdea)
                 .map(m => ({ ...m, itemType: 'message' }));
             break;
 
@@ -850,6 +880,13 @@ function renderForumContent() {
             itemsToRender = forumMessages
                 .filter(m => m.componentId)
                 .map(m => ({ ...m, itemType: 'message' }));
+            break;
+
+        case FORUM_FILTER_TYPES.IDEAS:
+            // Only idea messages
+            itemsToRender = forumMessages
+                .filter(m => m.isIdea)
+                .map(m => ({ ...m, itemType: 'idea' }));
             break;
 
         case FORUM_FILTER_TYPES.HISTORY:
@@ -861,12 +898,15 @@ function renderForumContent() {
     // Apply item-specific filter if active
     if (currentItemFilter) {
         itemsToRender = itemsToRender.filter(item => {
-            if (item.itemType === 'message') {
+            if (item.itemType === 'message' || item.itemType === 'idea') {
                 return item.componentId === currentItemFilter;
             }
             return false; // Hide events when filtering by item
         });
     }
+
+    // Update input placeholder based on current filter
+    updateInputPlaceholder();
 
     if (itemsToRender.length === 0) {
         showEmptyState(currentItemFilter ? 'No comments yet for this item. Start the discussion!' : getEmptyMessage());
@@ -874,7 +914,9 @@ function renderForumContent() {
     }
 
     itemsToRender.forEach(item => {
-        if (item.itemType === 'message') {
+        if (item.itemType === 'idea') {
+            container.appendChild(createIdeaElement(item));
+        } else if (item.itemType === 'message') {
             container.appendChild(createThreadElement(item));
         } else if (item.itemType === 'event') {
             container.appendChild(createEventElement(item));
@@ -888,13 +930,15 @@ function renderForumContent() {
 function getEmptyMessage() {
     switch (currentFilter) {
         case FORUM_FILTER_TYPES.THREADS:
-            return 'No threaded discussions yet';
+            return 'No chat messages yet. Start a conversation!';
         case FORUM_FILTER_TYPES.COMMENTS:
             return 'No component comments yet';
+        case FORUM_FILTER_TYPES.IDEAS:
+            return 'No ideas yet. Share a suggestion for this plan!';
         case FORUM_FILTER_TYPES.HISTORY:
             return 'No plan history yet';
         default:
-            return 'No discussions yet. Start a conversation!';
+            return 'No activity yet. Start a conversation!';
     }
 }
 
@@ -914,10 +958,19 @@ function createThreadElement(message) {
     // Thread header with sender info
     const header = document.createElement('div');
     header.className = 'forum-thread-header';
+
+    // Resolve component name for the badge
+    let componentBadgeHtml = '';
+    if (message.componentId) {
+        const record = getRecordById(message.componentId);
+        const itemName = record?.fields?.Name || 'Item';
+        componentBadgeHtml = `<span class="forum-component-badge" title="${escapeHtml(itemName)}">📎 ${escapeHtml(itemName)}</span>`;
+    }
+
     header.innerHTML = `
         <span class="forum-sender-name">${escapeHtml(message.senderName)}</span>
         <span class="forum-timestamp">${formatTimestamp(message.timestamp)}</span>
-        ${message.componentId ? '<span class="forum-component-badge">📎 Component</span>' : ''}
+        ${componentBadgeHtml}
     `;
     threadWrapper.appendChild(header);
 
@@ -1220,6 +1273,21 @@ async function handleForumMessageSubmit(e) {
     const currentUser = getCurrentUser();
     if (!currentUser) {
         log('ForumPanel', 'No current user, cannot send message');
+        // Show sign-in prompt for unauthenticated users
+        const signInPrompt = document.createElement('div');
+        signInPrompt.className = 'forum-signin-prompt';
+        signInPrompt.textContent = 'Sign in to participate in the discussion';
+        signInPrompt.style.cssText = 'padding: 8px 12px; background: #fff3cd; color: #856404; border-radius: 6px; margin: 8px; font-size: 0.85em; text-align: center; cursor: pointer;';
+        signInPrompt.addEventListener('click', () => {
+            document.dispatchEvent(new CustomEvent('requestSignIn'));
+            signInPrompt.remove();
+        });
+        const formContainer = document.getElementById('forum-input-container');
+        if (formContainer) {
+            const existing = formContainer.querySelector('.forum-signin-prompt');
+            if (existing) existing.remove();
+            formContainer.prepend(signInPrompt);
+        }
         return;
     }
 
@@ -1250,10 +1318,22 @@ async function handleForumMessageSubmit(e) {
                 cancelForumReply();
                 await refreshForumData();
             }
+        } else if (currentFilter === FORUM_FILTER_TYPES.IDEAS) {
+            // Post as an idea - prefix with [IDEA] marker for identification
+            const ideaContent = `[IDEA] ${message}`;
+            log('ForumPanel', 'Posting new idea');
+            const messageId = await api.postChatMessage(sessionId, currentUser.id, currentUser.name, ideaContent, null);
+
+            if (messageId) {
+                log('ForumPanel', `Idea posted with ID: ${messageId}`);
+                await refreshForumData();
+            }
         } else {
-            // Post as a new message - use item filter as component link if active
-            const itemId = currentItemFilter || null;
-            log('ForumPanel', `Posting new forum message${itemId ? ` linked to item ${itemId}` : ''}`);
+            // Post as a new message - use component selector dropdown, falling back to item filter
+            const componentSelect = document.getElementById('forum-component-select');
+            const selectedComponentId = componentSelect?.value || null;
+            const itemId = selectedComponentId || currentItemFilter || null;
+            log('ForumPanel', `[DEBUG] Posting new forum message - componentSelect value: "${componentSelect?.value}", currentItemFilter: "${currentItemFilter}", resolved itemId: "${itemId}"`);
             const messageId = await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message, itemId);
 
             if (messageId) {
@@ -1288,6 +1368,134 @@ export function startForumReply(messageId, senderName, messagePreview) {
     }
 
     log('ForumPanel', `Started reply to message ${messageId}`);
+}
+
+/**
+ * Update the input placeholder based on the current filter tab
+ */
+function updateInputPlaceholder() {
+    const input = document.getElementById('forum-message-input');
+    const submitBtn = document.getElementById('forum-message-submit');
+    if (!input) return;
+
+    if (currentFilter === FORUM_FILTER_TYPES.IDEAS) {
+        input.placeholder = 'Share an idea or suggestion...';
+        if (submitBtn) submitBtn.textContent = 'Post Idea';
+    } else {
+        input.placeholder = replyingToMessage ? `Reply to ${replyingToMessage.sender}...` : 'Type a message...';
+        if (submitBtn) submitBtn.textContent = 'Send';
+    }
+}
+
+/**
+ * Create an idea card element with upvote support
+ */
+function createIdeaElement(idea) {
+    const currentUser = getCurrentUser();
+    const isSent = idea.senderId === currentUser?.id;
+
+    const ideaWrapper = document.createElement('div');
+    ideaWrapper.className = `forum-idea-card ${isSent ? 'own-idea' : ''}`;
+    ideaWrapper.dataset.messageId = idea.id;
+
+    // Calculate upvote count from thumbs-up reactions
+    const reactions = idea.reactions || {};
+    const upvoteEmojis = ['👍', 'thumbs-up'];
+    let upvoteCount = 0;
+    let hasUpvoted = false;
+    upvoteEmojis.forEach(emoji => {
+        const users = reactions[emoji] || [];
+        upvoteCount += users.length;
+        if (users.includes(currentUser?.id)) hasUpvoted = true;
+    });
+
+    // Idea header
+    const header = document.createElement('div');
+    header.className = 'forum-idea-header';
+    header.innerHTML = `
+        <span class="forum-idea-icon">💡</span>
+        <span class="forum-sender-name">${escapeHtml(idea.senderName)}</span>
+        <span class="forum-timestamp">${formatTimestamp(idea.timestamp)}</span>
+    `;
+    ideaWrapper.appendChild(header);
+
+    // Idea content
+    const content = document.createElement('div');
+    content.className = 'forum-idea-content';
+    if (idea.isDeleted) {
+        content.innerHTML = '<em class="deleted-message">This idea was removed</em>';
+    } else {
+        content.innerHTML = formatMessageContent(idea.content);
+    }
+    ideaWrapper.appendChild(content);
+
+    // Idea actions (upvote + reply + promote)
+    if (!idea.isDeleted) {
+        const actionsContainer = document.createElement('div');
+        actionsContainer.className = 'forum-idea-actions';
+
+        // Upvote button
+        const upvoteBtn = document.createElement('button');
+        upvoteBtn.className = `forum-idea-upvote ${hasUpvoted ? 'upvoted' : ''}`;
+        upvoteBtn.innerHTML = `<span class="upvote-icon">👍</span> <span class="upvote-count">${upvoteCount || ''}</span>`;
+        upvoteBtn.title = hasUpvoted ? 'Remove upvote' : 'Upvote this idea';
+        upvoteBtn.addEventListener('click', async () => {
+            try {
+                const result = await api.toggleMessageReaction(idea.id, currentUser?.id, '👍', !hasUpvoted);
+                if (result !== null) {
+                    await refreshForumDataLocal();
+                }
+            } catch (err) {
+                log('ForumPanel', `Error toggling upvote: ${err.message}`);
+            }
+        });
+        actionsContainer.appendChild(upvoteBtn);
+
+        // Reply button
+        const replyBtn = document.createElement('button');
+        replyBtn.className = 'forum-action-btn';
+        replyBtn.innerHTML = '↩ Reply';
+        replyBtn.addEventListener('click', () => {
+            startForumReply(idea.id, idea.senderName, idea.content);
+        });
+        actionsContainer.appendChild(replyBtn);
+
+        ideaWrapper.appendChild(actionsContainer);
+    }
+
+    // Thread replies for ideas
+    if (idea.replyCount > 0) {
+        const isExpanded = !collapsedThreads.has(idea.id);
+        const threadIndicator = document.createElement('button');
+        threadIndicator.className = `forum-thread-indicator ${isExpanded ? 'expanded' : ''}`;
+        threadIndicator.innerHTML = `
+            <span class="thread-arrow">${isExpanded ? '▼' : '▶'}</span>
+            <span class="thread-count">${idea.replyCount} ${idea.replyCount === 1 ? 'reply' : 'replies'}</span>
+        `;
+        threadIndicator.addEventListener('click', () => {
+            toggleThreadExpansion(idea.id, ideaWrapper);
+        });
+        ideaWrapper.appendChild(threadIndicator);
+
+        const repliesContainer = document.createElement('div');
+        repliesContainer.className = `forum-replies-container ${isExpanded ? 'expanded' : ''}`;
+        repliesContainer.id = `replies-${idea.id}`;
+        if (isExpanded && idea.replies.length > 0) {
+            idea.replies.forEach(reply => {
+                repliesContainer.appendChild(createReplyElement(reply));
+            });
+        }
+        ideaWrapper.appendChild(repliesContainer);
+    }
+
+    return ideaWrapper;
+}
+
+/**
+ * Internal refresh that reloads forum data
+ */
+async function refreshForumDataLocal() {
+    await loadForumData();
 }
 
 /**
