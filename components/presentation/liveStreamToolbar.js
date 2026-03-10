@@ -30,6 +30,9 @@ let liveVideoStrip = null;
 let liveLocalVideoEl = null;
 let liveRemoteVideosEl = null;
 let liveVideoStripToggle = null;
+let liveStripViewerBar = null;
+let liveStripStatusText = null;
+let liveStripViewerCountNum = null;
 let presentationLiveBadge = null;
 let hostReactionOverlay = null;
 
@@ -57,6 +60,9 @@ export function init(deps) {
     liveLocalVideoEl = deps.elements.liveLocalVideoEl;
     liveRemoteVideosEl = deps.elements.liveRemoteVideosEl;
     liveVideoStripToggle = deps.elements.liveVideoStripToggle;
+    liveStripViewerBar = deps.elements.liveStripViewerBar;
+    liveStripStatusText = deps.elements.liveStripStatusText;
+    liveStripViewerCountNum = deps.elements.liveStripViewerCountNum;
     presentationLiveBadge = deps.elements.presentationLiveBadge;
     hostReactionOverlay = deps.elements.hostReactionOverlay;
 
@@ -83,6 +89,9 @@ export function cleanup() {
     liveLocalVideoEl = null;
     liveRemoteVideosEl = null;
     liveVideoStripToggle = null;
+    liveStripViewerBar = null;
+    liveStripStatusText = null;
+    liveStripViewerCountNum = null;
     presentationLiveBadge = null;
     hostReactionOverlay = null;
 
@@ -225,7 +234,25 @@ export function updateLiveStreamToolbarUI() {
 
     // Show/hide video strip
     if (liveVideoStrip) {
-        liveVideoStrip.style.display = isLive ? '' : 'none';
+        const joinedFromViewer = state.stream.joinedFromViewer;
+        if (isLive || joinedFromViewer) {
+            liveVideoStrip.style.display = '';
+            // Toggle viewer-mode class for styling
+            if (joinedFromViewer && !isHost) {
+                liveVideoStrip.classList.add('viewer-mode');
+                if (liveStripViewerBar) liveStripViewerBar.style.display = '';
+            } else {
+                liveVideoStrip.classList.remove('viewer-mode');
+                if (liveStripViewerBar) liveStripViewerBar.style.display = 'none';
+            }
+        } else {
+            liveVideoStrip.style.display = 'none';
+        }
+    }
+
+    // Update viewer bar count
+    if (liveStripViewerCountNum) {
+        liveStripViewerCountNum.textContent = state.stream.viewerCount || 0;
     }
 }
 
@@ -495,6 +522,10 @@ function handleRemoteUserLeft(uid, totalRemote) {
 function handleViewerCountChanged(count) {
     if (liveViewerCountEl) {
         liveViewerCountEl.textContent = count;
+    }
+    // Also update the viewer bar count in the stream strip
+    if (liveStripViewerCountNum) {
+        liveStripViewerCountNum.textContent = count;
     }
 }
 

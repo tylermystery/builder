@@ -124,6 +124,7 @@ export let state = {
         localVideoEnabled: true,   // Local camera state
         shareableLink: null,       // Shareable URL for the stream
         focusItemId: null,         // v3.8 Phase 3: Currently focused plan item during stream
+        joinedFromViewer: false,   // Whether the user navigated here from the viewer page via "Join Collab"
     },
     // v3.8: Top-level plan reference
     topLevelPlan: {

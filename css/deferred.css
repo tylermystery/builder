@@ -3438,6 +3438,77 @@
     transition: transform 0.3s ease;
 }
 
+/* ─── Viewer Mode: Stream Strip Info Bar ─────────────────────────────────── */
+
+.live-strip-viewer-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px;
+    background: rgba(0, 0, 0, 0.45);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.8em;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.live-strip-badge {
+    display: inline-block;
+    background: #dc3545;
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.75em;
+    letter-spacing: 0.08em;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    animation: live-pulse 2s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.live-strip-status-text {
+    flex: 1;
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.9em;
+}
+
+.live-strip-viewer-count {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.9em;
+}
+
+.live-strip-viewer-icon {
+    font-size: 1.1em;
+}
+
+/* Viewer mode: hide local video, expand remote video area */
+.live-video-strip.viewer-mode .live-video-local {
+    display: none;
+}
+
+.live-video-strip.viewer-mode .live-remote-videos {
+    flex: 1;
+}
+
+.live-video-strip.viewer-mode .live-video-strip-inner {
+    min-height: 140px;
+}
+
+/* Collapsed state for viewer mode — show thin bar with LIVE badge only */
+.live-video-strip.collapsed .live-strip-viewer-bar {
+    border-bottom: none;
+}
+
+.live-video-strip.collapsed .live-video-strip-inner {
+    display: none;
+}
+
 /* ─── v3.8 Phase 2: Presentation LIVE Badge ──────────────────────────────────── */
 
 .presentation-live-badge {

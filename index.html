@@ -5789,6 +5789,15 @@ body.ucp-panel-open .unified-chat-panel {
 
         <!-- Live Video Preview Strip (v3.8) - shown below header when stream is active -->
         <div id="live-video-strip" class="live-video-strip" style="display: none;">
+            <!-- Viewer mode info bar: LIVE badge, status text, viewer count -->
+            <div id="live-strip-viewer-bar" class="live-strip-viewer-bar" style="display: none;">
+                <span class="live-strip-badge">LIVE</span>
+                <span id="live-strip-status-text" class="live-strip-status-text">Watching stream</span>
+                <span class="live-strip-viewer-count">
+                    <span class="live-strip-viewer-icon">&#x1F441;</span>
+                    <span id="live-strip-viewer-count-num">0</span>
+                </span>
+            </div>
             <div class="live-video-strip-inner">
                 <!-- Local video (host's camera) -->
                 <div id="live-local-video" class="live-video-cell live-video-local">

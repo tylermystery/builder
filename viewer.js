@@ -72,7 +72,7 @@ async function init() {
         if (planNameEl) planNameEl.textContent = streamInfo.planName || 'Live Stream';
         if (headerRight) headerRight.style.display = '';
         if (collabLink) {
-            collabLink.href = `/?session=${encodeURIComponent(sessionId)}&view=present`;
+            collabLink.href = `/?session=${encodeURIComponent(sessionId)}&view=present&stream=live`;
         }
 
         // 3. Load Agora SDK and join as viewer

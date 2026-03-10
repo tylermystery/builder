@@ -508,6 +508,23 @@ function syncUiWithUrl() {
         console.log('[SYNC-URL DEBUG] handleModalOrViewFromUrl called. view:', view, 'openItemId:', openItemId);
         if (view === 'present') {
             console.log('[SYNC-URL DEBUG] Opening presentation view...');
+
+            // Detect if user came from viewer page via "Join Collab" link
+            const streamParam = params.get('stream');
+            if (streamParam === 'live') {
+                console.log('[SYNC-URL DEBUG] User joined from viewer page — setting joinedFromViewer flag');
+                setState({
+                    stream: {
+                        ...state.stream,
+                        joinedFromViewer: true
+                    }
+                });
+                // Remove stream=live from URL to prevent re-triggering on refresh
+                const cleanUrl = new URL(window.location);
+                cleanUrl.searchParams.delete('stream');
+                history.replaceState({}, '', cleanUrl.toString());
+            }
+
             ui.showPresentationView('ideas');
         } else if (view === 'itinerary') {
             ui.showItineraryModal();

@@ -53,6 +53,9 @@ let liveVideoStrip = null;
 let liveLocalVideoEl = null;
 let liveRemoteVideosEl = null;
 let liveVideoStripToggle = null;
+let liveStripViewerBar = null;
+let liveStripStatusText = null;
+let liveStripViewerCountNum = null;
 let presentationLiveBadge = null;
 let hostReactionOverlay = null;
 
@@ -126,6 +129,9 @@ export function getLiveStreamElements() {
         liveLocalVideoEl,
         liveRemoteVideosEl,
         liveVideoStripToggle,
+        liveStripViewerBar,
+        liveStripStatusText,
+        liveStripViewerCountNum,
         presentationLiveBadge,
         hostReactionOverlay,
     };
@@ -273,6 +279,9 @@ export function cacheDOMElements() {
     liveLocalVideoEl = document.getElementById('live-local-video');
     liveRemoteVideosEl = document.getElementById('live-remote-videos');
     liveVideoStripToggle = document.getElementById('live-video-strip-toggle');
+    liveStripViewerBar = document.getElementById('live-strip-viewer-bar');
+    liveStripStatusText = document.getElementById('live-strip-status-text');
+    liveStripViewerCountNum = document.getElementById('live-strip-viewer-count-num');
     presentationLiveBadge = document.getElementById('presentation-live-badge');
     hostReactionOverlay = document.getElementById('host-reaction-overlay');
 
