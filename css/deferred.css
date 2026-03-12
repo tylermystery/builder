@@ -3509,6 +3509,16 @@
     display: none;
 }
 
+/* v3.8 Phase 3: Stream loading state — pulsing status text while connecting */
+.live-video-strip.stream-loading .live-strip-status-text {
+    animation: streamLoadingPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes streamLoadingPulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
 /* ─── v3.8 Phase 2: Presentation LIVE Badge ──────────────────────────────────── */
 
 .presentation-live-badge {
