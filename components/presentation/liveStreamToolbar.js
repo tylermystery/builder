@@ -30,11 +30,18 @@ let liveVideoStrip = null;
 let liveLocalVideoEl = null;
 let liveRemoteVideosEl = null;
 let liveVideoStripToggle = null;
+let liveStripViewerBar = null;
+let liveStripStatusText = null;
+let liveStripViewerCountNum = null;
 let presentationLiveBadge = null;
 let hostReactionOverlay = null;
 
 // Dependencies injected via init()
 let _getChannel = null;
+
+// v3.8 Phase 3: Dedup flag to prevent showViewerStreamEnded from running multiple times
+// (both Agora user-left and Pusher client-stream-ended can trigger it concurrently)
+let _viewerStreamEndedShown = false;
 
 /**
  * Initialize the live stream toolbar module.
@@ -57,6 +64,9 @@ export function init(deps) {
     liveLocalVideoEl = deps.elements.liveLocalVideoEl;
     liveRemoteVideosEl = deps.elements.liveRemoteVideosEl;
     liveVideoStripToggle = deps.elements.liveVideoStripToggle;
+    liveStripViewerBar = deps.elements.liveStripViewerBar;
+    liveStripStatusText = deps.elements.liveStripStatusText;
+    liveStripViewerCountNum = deps.elements.liveStripViewerCountNum;
     presentationLiveBadge = deps.elements.presentationLiveBadge;
     hostReactionOverlay = deps.elements.hostReactionOverlay;
 
@@ -83,6 +93,9 @@ export function cleanup() {
     liveLocalVideoEl = null;
     liveRemoteVideosEl = null;
     liveVideoStripToggle = null;
+    liveStripViewerBar = null;
+    liveStripStatusText = null;
+    liveStripViewerCountNum = null;
     presentationLiveBadge = null;
     hostReactionOverlay = null;
 
@@ -170,10 +183,12 @@ export function updateLiveStreamToolbarUI() {
 
     const isLive = state.stream.isActive;
     const isHost = state.stream.isHost;
+    const joinedFromViewer = state.stream.joinedFromViewer;
 
     // Toggle between Go Live button and stream controls
+    // Hide Go Live when stream is live OR when user is a viewer from the stream
     if (liveGoLiveBtn) {
-        liveGoLiveBtn.style.display = isLive ? 'none' : '';
+        liveGoLiveBtn.style.display = (isLive || (joinedFromViewer && !isHost)) ? 'none' : '';
     }
     if (liveStreamControls) {
         liveStreamControls.style.display = isLive ? '' : 'none';
@@ -225,7 +240,25 @@ export function updateLiveStreamToolbarUI() {
 
     // Show/hide video strip
     if (liveVideoStrip) {
-        liveVideoStrip.style.display = isLive ? '' : 'none';
+        const joinedFromViewer = state.stream.joinedFromViewer;
+        if (isLive || joinedFromViewer) {
+            liveVideoStrip.style.display = '';
+            // Toggle viewer-mode class for styling
+            if (joinedFromViewer && !isHost) {
+                liveVideoStrip.classList.add('viewer-mode');
+                if (liveStripViewerBar) liveStripViewerBar.style.display = '';
+            } else {
+                liveVideoStrip.classList.remove('viewer-mode');
+                if (liveStripViewerBar) liveStripViewerBar.style.display = 'none';
+            }
+        } else {
+            liveVideoStrip.style.display = 'none';
+        }
+    }
+
+    // Update viewer bar count
+    if (liveStripViewerCountNum) {
+        liveStripViewerCountNum.textContent = state.stream.viewerCount || 0;
     }
 }
 
@@ -423,6 +456,16 @@ function handleStreamStarted(channelName, uid) {
 
 function handleStreamEnded() {
     log('Presentation', 'Stream ended');
+
+    // Check if this was a viewer from the stream BEFORE UI update resets display
+    const wasViewerFromStream = state.stream.joinedFromViewer;
+
+    // If viewer's stream-ended UI was already handled, skip duplicate processing
+    if (wasViewerFromStream && _viewerStreamEndedShown) {
+        log('Presentation', 'Viewer stream ended already handled — skipping duplicate');
+        return;
+    }
+
     updateLiveStreamToolbarUI();
     updatePresentationLiveBadge();
     updateFocusBarUI(); // v3.8 Phase 3: Hide focus bar
@@ -446,21 +489,26 @@ function handleStreamEnded() {
         liveRemoteVideosEl.innerHTML = '';
     }
 
-    // Broadcast stream ended via Pusher
-    const presentationChatChannel = _getChannel();
-    if (presentationChatChannel) {
-        presentationChatChannel.trigger('client-stream-ended', {
-            hostUserId: state.session.user?.id,
-        });
-    }
+    if (wasViewerFromStream) {
+        // v3.8 Phase 3: Viewer-specific — show "Stream ended" in strip, then auto-hide
+        showViewerStreamEnded();
+    } else {
+        // Host-specific — broadcast via Pusher and clear Airtable metadata
+        const presentationChatChannel = _getChannel();
+        if (presentationChatChannel) {
+            presentationChatChannel.trigger('client-stream-ended', {
+                hostUserId: state.session.user?.id,
+            });
+        }
 
-    // v3.8 Phase 2: Clear stream metadata in Airtable (non-blocking)
-    if (state.session.id) {
-        api.clearStreamMetadata(state.session.id)
-            .catch(err => console.warn('[Presentation] Stream metadata clear failed:', err.message));
-    }
+        // v3.8 Phase 2: Clear stream metadata in Airtable (non-blocking)
+        if (state.session.id) {
+            api.clearStreamMetadata(state.session.id)
+                .catch(err => console.warn('[Presentation] Stream metadata clear failed:', err.message));
+        }
 
-    showToast('Stream ended');
+        showToast('Stream ended');
+    }
 }
 
 function handleRemoteUserJoined(uid, mediaType, totalRemote) {
@@ -490,11 +538,22 @@ function handleRemoteUserLeft(uid, totalRemote) {
     }
 
     updateLiveStreamToolbarUI();
+
+    // v3.8 Phase 3: If viewer from stream and no more remote users, stream likely ended
+    // Guard on isActive to prevent double-triggering if Pusher event already ended the stream
+    if (state.stream.joinedFromViewer && !state.stream.isHost && totalRemote === 0 && state.stream.isActive) {
+        log('Presentation', 'All remote users left — stream likely ended for viewer');
+        liveStream.endStream();
+    }
 }
 
 function handleViewerCountChanged(count) {
     if (liveViewerCountEl) {
         liveViewerCountEl.textContent = count;
+    }
+    // Also update the viewer bar count in the stream strip
+    if (liveStripViewerCountNum) {
+        liveStripViewerCountNum.textContent = count;
     }
 }
 
@@ -504,9 +563,78 @@ function handleStreamError(errorType, message) {
 }
 
 /**
+ * v3.8 Phase 3: Auto-join the Agora stream as a viewer when arriving from the viewer page.
+ * Fetches stream info to confirm the stream is still active, then joins as audience.
+ * Manages the strip status text through the loading → watching → ended lifecycle.
+ */
+export async function autoJoinViewerStream() {
+    if (!state.stream.joinedFromViewer || state.stream.isHost) return;
+
+    // Reset dedup flag for this stream session
+    _viewerStreamEndedShown = false;
+
+    // Show loading state in strip
+    if (liveStripStatusText) liveStripStatusText.textContent = 'Joining stream...';
+    if (liveVideoStrip) liveVideoStrip.classList.add('stream-loading');
+
+    try {
+        // Fetch stream info to get channel name and confirm stream is still active
+        const response = await fetch(`/api/get-stream-info?sessionId=${encodeURIComponent(state.session.id)}`);
+        if (!response.ok) throw new Error('Failed to check stream status');
+        const streamInfo = await response.json();
+
+        if (!streamInfo.streamActive || !streamInfo.channelName) {
+            showViewerStreamEnded();
+            return;
+        }
+
+        // Join as audience via Agora
+        const success = await liveStream.joinAsViewer({ channelName: streamInfo.channelName });
+
+        if (liveVideoStrip) liveVideoStrip.classList.remove('stream-loading');
+
+        if (success) {
+            if (liveStripStatusText) liveStripStatusText.textContent = 'Watching stream';
+            log('Presentation', `Auto-joined stream as viewer (channel: ${streamInfo.channelName})`);
+        } else {
+            showViewerStreamEnded();
+        }
+    } catch (error) {
+        console.error('[Presentation] Auto-join stream error:', error);
+        if (liveVideoStrip) liveVideoStrip.classList.remove('stream-loading');
+        showViewerStreamEnded();
+    }
+}
+
+/**
+ * v3.8 Phase 3: Show "Stream ended" state in the viewer strip and auto-hide after a delay.
+ */
+function showViewerStreamEnded() {
+    if (_viewerStreamEndedShown) return;
+    _viewerStreamEndedShown = true;
+
+    if (liveStripStatusText) liveStripStatusText.textContent = 'Stream ended';
+    if (liveVideoStrip) liveVideoStrip.classList.remove('stream-loading');
+
+    // Clear any video content
+    if (liveRemoteVideosEl) liveRemoteVideosEl.innerHTML = '';
+
+    // Auto-hide the strip after 3 seconds and reset viewer flag
+    setTimeout(() => {
+        if (liveVideoStrip) liveVideoStrip.style.display = 'none';
+        if (liveVideoStrip) liveVideoStrip.classList.remove('viewer-mode');
+        setState({ stream: { ...state.stream, joinedFromViewer: false } });
+        updateLiveStreamToolbarUI();
+    }, 3000);
+}
+
+/**
  * Cleanup live stream resources when leaving presentation view.
  */
 export function cleanupLiveStreamToolbar() {
+    // Reset dedup flag
+    _viewerStreamEndedShown = false;
+
     if (liveGoLiveBtn) {
         liveGoLiveBtn.removeEventListener('click', handleGoLiveClick);
     }

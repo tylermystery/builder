@@ -538,6 +538,14 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Initialize live stream toolbar
     liveStreamToolbar.initializeLiveStreamToolbar();
 
+    // If user joined from the viewer page, show stream strip in viewer mode and auto-join
+    if (state.stream.joinedFromViewer) {
+        log('Presentation', 'User joined from viewer page — showing stream strip in viewer mode');
+        liveStreamToolbar.updateLiveStreamToolbarUI();
+        // v3.8 Phase 3: Auto-join the Agora stream as audience (non-blocking)
+        liveStreamToolbar.autoJoinViewerStream();
+    }
+
     log('Presentation', 'Itinerary view rendered successfully');
 }
 
@@ -553,6 +561,11 @@ export function hidePresentationView() {
 
     // Clean up live stream toolbar
     liveStreamToolbar.cleanupLiveStreamToolbar();
+
+    // Reset joinedFromViewer flag
+    if (state.stream.joinedFromViewer) {
+        setState({ stream: { ...state.stream, joinedFromViewer: false } });
+    }
 
     // Hide the Unified Chat Panel
     hideUnifiedChatPanel();
