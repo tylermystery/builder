@@ -24,9 +24,9 @@ export const LIVE_STREAM_CONFIG = {
 export const RYRY_CONFIG = {
     wakeWord: 'ryry',
     commands: {
-        LOG_TASK: { keywords: ['log task'], description: 'Create a new task in the current plan' },
-        SET_PRIORITY: { keywords: ['set priority'], description: 'Set priority on the most recent task' },
-        PROJECT_UPDATE: { keywords: ['project update'], description: 'Post a project update to the plan chat' },
+        LOG_TASK: { keywords: ['log task', 'add task', 'create task', 'new task'], description: 'Create a new task in the current plan' },
+        SET_PRIORITY: { keywords: ['set priority', 'priority', 'mark priority', 'change priority'], description: 'Set priority on the most recent task' },
+        PROJECT_UPDATE: { keywords: ['project update', 'post update', 'send update', 'status update'], description: 'Post a project update to the plan chat' },
     },
     confirmationTimeoutMs: 5000,  // 5 second undo window for voice commands
 };

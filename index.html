@@ -3703,6 +3703,315 @@ body.ucp-panel-open .unified-chat-panel {
     color: #155724;
 }
 
+/* ===== v3.8 Phase 3: Focus Item Bar ===== */
+.ucp-focus-bar {
+    padding: 6px 10px;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08));
+    border-bottom: 1px solid rgba(102, 126, 234, 0.15);
+    flex-shrink: 0;
+}
+
+.ucp-focus-bar-inner {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ucp-focus-icon {
+    font-size: 0.9em;
+}
+
+.ucp-focus-label {
+    font-size: 0.78em;
+    font-weight: 600;
+    color: #5a5aab;
+    white-space: nowrap;
+}
+
+.ucp-focus-select {
+    flex: 1;
+    font-size: 0.78em;
+    padding: 3px 6px;
+    border: 1px solid rgba(102, 126, 234, 0.25);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.8);
+    color: #333;
+    cursor: pointer;
+    min-width: 0;
+}
+
+.ucp-focus-select:focus {
+    outline: none;
+    border-color: rgba(102, 126, 234, 0.5);
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.ucp-focus-clear {
+    background: none;
+    border: none;
+    font-size: 1.1em;
+    color: #999;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    border-radius: 50%;
+    transition: background 0.15s, color 0.15s;
+}
+
+.ucp-focus-clear:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: #666;
+}
+
+/* Focus active state indicator */
+.ucp-focus-bar.has-focus {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.12));
+    border-bottom-color: rgba(102, 126, 234, 0.3);
+}
+
+.ucp-focus-bar.has-focus .ucp-focus-label {
+    color: #4a3a8a;
+}
+
+/* v3.8 Phase 3: Pin action button */
+.ucp-action-btn.ucp-pin-btn {
+    color: #888;
+}
+
+.ucp-action-btn.ucp-pin-btn:hover {
+    background: rgba(102, 126, 234, 0.08);
+    color: #5a5aab;
+}
+
+.ucp-action-btn.ucp-pin-btn.pinned {
+    color: #5a5aab;
+    font-weight: 500;
+}
+
+/* Pin item picker (compact inline dropdown) */
+.ucp-pin-picker {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    min-width: 200px;
+    max-width: 280px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 100;
+    padding: 4px 0;
+}
+
+.ucp-pin-picker.open {
+    display: block;
+}
+
+.ucp-pin-picker-item {
+    display: block;
+    width: 100%;
+    padding: 6px 12px;
+    border: none;
+    background: none;
+    text-align: left;
+    font-size: 0.8em;
+    color: #444;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.12s;
+}
+
+.ucp-pin-picker-item:hover {
+    background: rgba(102, 126, 234, 0.08);
+    color: #333;
+}
+
+.ucp-pin-picker-item.unpin {
+    color: #dc3545;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    margin-top: 2px;
+    padding-top: 8px;
+}
+
+/* Auto-tagged indicator for messages sent while focus item active */
+.ucp-msg-context.ucp-msg-context-focus {
+    background: linear-gradient(135deg, #e8edff, #ede8ff);
+    border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+/* ===== v3.8 Phase 4: Voice Commands & Captions ===== */
+
+/* Transcription toggle button active state */
+.live-toolbar-btn.live-control-btn.transcription-active {
+    background: rgba(76, 175, 80, 0.2);
+    border-color: rgba(76, 175, 80, 0.4);
+    color: #2e7d32;
+}
+
+.live-toolbar-btn.live-control-btn.transcription-active .live-btn-icon {
+    animation: ryry-pulse 2s ease-in-out infinite;
+}
+
+@keyframes ryry-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Captions bar - below video strip */
+.live-captions-bar {
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    padding: 6px 14px;
+    font-size: 0.82em;
+    line-height: 1.4;
+    backdrop-filter: blur(4px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.live-captions-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.live-captions-status {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    font-size: 0.88em;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.live-captions-status.wake-active {
+    color: #4caf50;
+    font-weight: 600;
+}
+
+.ryry-icon {
+    font-size: 1.1em;
+}
+
+.live-captions-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: rgba(255, 255, 255, 0.85);
+    font-style: italic;
+}
+
+.live-captions-text.final {
+    color: #fff;
+    font-style: normal;
+}
+
+/* Voice command confirmation toast */
+.voice-command-toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    min-width: 320px;
+    max-width: 480px;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(76, 175, 80, 0.1);
+    overflow: hidden;
+    animation: voiceCmdSlideUp 0.3s ease-out;
+}
+
+@keyframes voiceCmdSlideUp {
+    from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+.voice-command-toast-inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+}
+
+.voice-command-toast-icon {
+    font-size: 1.6em;
+    flex-shrink: 0;
+}
+
+.voice-command-toast-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.voice-command-toast-title {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #4caf50;
+    margin-bottom: 2px;
+}
+
+.voice-command-toast-desc {
+    font-size: 0.78em;
+    color: rgba(255, 255, 255, 0.7);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.voice-command-toast-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.voice-command-toast-countdown {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75em;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.voice-command-undo-btn {
+    padding: 4px 12px;
+    font-size: 0.78em;
+    font-weight: 600;
+    color: #ff7043;
+    background: rgba(255, 112, 67, 0.12);
+    border: 1px solid rgba(255, 112, 67, 0.3);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.voice-command-undo-btn:hover {
+    background: rgba(255, 112, 67, 0.25);
+    border-color: rgba(255, 112, 67, 0.5);
+}
+
+.voice-command-toast-progress {
+    height: 3px;
+    background: #4caf50;
+    transition: width linear;
+    width: 100%;
+}
+
 /* ===== Tasks Tab Styles ===== */
 .ucp-tasks-summary {
     padding: 10px 14px;
@@ -5458,6 +5767,12 @@ body.ucp-panel-open .unified-chat-panel {
                             <button id="live-toggle-video" class="live-toolbar-btn live-control-btn" title="Toggle camera" aria-label="Toggle camera">
                                 <span class="live-btn-icon" id="live-video-icon">&#x1F4F7;</span>
                             </button>
+                            <button id="live-toggle-transcription" class="live-toolbar-btn live-control-btn" title="Toggle Ryry voice commands" aria-label="Toggle voice commands" style="display: none;">
+                                <span class="live-btn-icon" id="live-transcription-icon">&#x1F399;</span>
+                            </button>
+                            <button id="live-copy-link" class="live-toolbar-btn live-control-btn" title="Copy stream link" aria-label="Copy shareable stream link" style="display: none;">
+                                <span class="live-btn-icon" id="live-copy-link-icon">&#x1F517;</span>
+                            </button>
                             <button id="live-end-stream" class="live-toolbar-btn live-end-btn" title="End stream" aria-label="End stream">
                                 <span class="live-btn-icon">&#x23F9;</span>
                             </button>
@@ -5488,6 +5803,36 @@ body.ucp-panel-open .unified-chat-panel {
             <button id="live-video-strip-toggle" class="live-video-strip-toggle" title="Collapse video" aria-label="Toggle video strip">
                 <span class="live-strip-toggle-icon">&#x25B2;</span>
             </button>
+        </div>
+
+        <!-- v3.8 Phase 4: Live Captions & Ryry Status Bar -->
+        <div id="live-captions-bar" class="live-captions-bar" style="display: none;">
+            <div class="live-captions-inner">
+                <span id="live-captions-status" class="live-captions-status">
+                    <span class="ryry-icon">&#x1F399;</span>
+                    <span id="live-captions-status-text">Ryry listening...</span>
+                </span>
+                <span id="live-captions-text" class="live-captions-text"></span>
+            </div>
+        </div>
+
+        <!-- v3.8 Phase 6: Floating reaction overlay (visible during active stream) -->
+        <div id="host-reaction-overlay" class="host-reaction-overlay" style="display: none;"></div>
+
+        <!-- v3.8 Phase 4: Voice Command Confirmation Toast (with undo) -->
+        <div id="voice-command-toast" class="voice-command-toast" style="display: none;">
+            <div class="voice-command-toast-inner">
+                <span class="voice-command-toast-icon">&#x1F399;</span>
+                <div class="voice-command-toast-content">
+                    <div id="voice-command-toast-title" class="voice-command-toast-title">Ryry heard a command</div>
+                    <div id="voice-command-toast-desc" class="voice-command-toast-desc"></div>
+                </div>
+                <div class="voice-command-toast-actions">
+                    <div id="voice-command-toast-countdown" class="voice-command-toast-countdown">5</div>
+                    <button id="voice-command-undo-btn" class="voice-command-undo-btn">Undo</button>
+                </div>
+            </div>
+            <div id="voice-command-toast-progress" class="voice-command-toast-progress"></div>
         </div>
 
         <!-- Search Modal for Presentation View -->
@@ -5892,6 +6237,17 @@ body.ucp-panel-open .unified-chat-panel {
                 <input type="checkbox" id="ucp-hide-completed-cb">
                 <span class="ucp-hide-completed-label">Hide done</span>
             </label>
+        </div>
+        <!-- v3.8 Phase 3: Focus item bar (shown during active stream) -->
+        <div id="ucp-focus-bar" class="ucp-focus-bar" style="display: none;">
+            <div class="ucp-focus-bar-inner">
+                <span class="ucp-focus-icon">&#x1F3AF;</span>
+                <span class="ucp-focus-label">Focus:</span>
+                <select id="ucp-focus-select" class="ucp-focus-select" title="Set focus item for stream">
+                    <option value="">No focus item</option>
+                </select>
+                <button id="ucp-focus-clear" class="ucp-focus-clear" title="Clear focus" style="display: none;">&times;</button>
+            </div>
         </div>
         <div id="ucp-content" class="ucp-content">
             <div class="ucp-loading">Loading conversations...</div>

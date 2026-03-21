@@ -1068,6 +1068,17 @@ export async function saveSessionToAirtable() {
         activeVariationIndices: getActiveVariationIndices()
     };
 
+    // v3.8: Preserve _streamMeta during session saves so viewer page stream detection works.
+    // Without this, session saves overwrite the field and destroy stream metadata.
+    if (state.stream?.isActive && state.stream?.channelName) {
+        sessionData._streamMeta = {
+            active: true,
+            hostUserId: state.stream.hostUserId || state.session.user?.id || null,
+            startedAt: state.stream.startedAtIso || new Date(state.stream.startedAt || Date.now()).toISOString(),
+            channelName: state.stream.channelName,
+        };
+    }
+
     // DEBUG: Log what's being saved for archived/completed items
     console.log('[SESSION-SAVE DEBUG] Saving archivedItems:', sessionData.archivedItems);
     console.log('[SESSION-SAVE DEBUG] Saving completedItems:', sessionData.completedItems);

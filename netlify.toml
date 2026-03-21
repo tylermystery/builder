@@ -198,3 +198,22 @@
   to = "/index.html"
   status = 200
 
+# v3.8 Phase 5: Stream viewer API
+[[redirects]]
+  from = "/api/get-stream-info"
+  to = "/.netlify/functions/get-stream-info"
+  status = 200
+
+# v3.8 Phase 6: Viewer chat, reactions, and state relay
+[[redirects]]
+  from = "/api/viewer-chat"
+  to = "/.netlify/functions/viewer-chat"
+  status = 200
+
+# v3.8 Phase 5: Shareable stream viewer links
+# Routes /watch/{sessionId} to the standalone viewer page
+[[redirects]]
+  from = "/watch/*"
+  to = "/viewer.html"
+  status = 200
+

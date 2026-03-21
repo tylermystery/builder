@@ -123,6 +123,7 @@ export let state = {
         localAudioEnabled: true,   // Local microphone state
         localVideoEnabled: true,   // Local camera state
         shareableLink: null,       // Shareable URL for the stream
+        focusItemId: null,         // v3.8 Phase 3: Currently focused plan item during stream
     },
     // v3.8: Top-level plan reference
     topLevelPlan: {
