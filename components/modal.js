@@ -13,6 +13,9 @@ import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { triggerSave } from '../events.js';
 import { showForumPanel } from './forumPanel.js';
 import { openUCPForItem } from './unifiedChatPanel.js';
+import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
+import { showGoodnessReport, updateModalVitalityBadge } from '../vitality/vitalityUI.js';
+import { openActionMenu } from './actionMenu.js';
 
 console.log('[MODULE DEBUG] modal.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -1384,25 +1387,36 @@ async function updateCheckoutDisplay() {
     if (finalBaseAmount !== currentBaseAmount) {
         log('Modal', `Price changed from ${currentBaseAmount} to ${finalBaseAmount}. Rebuilding PaymentElement.`);
         currentBaseAmount = finalBaseAmount; // Update module-level var
-        
+
         if (processingFeeEl) processingFeeEl.textContent = 'Calculating...';
         if (finalChargeEl) finalChargeEl.textContent = 'Calculating...';
 
         try {
             // 1. Call create-payment-intent with the *current* payment type
+            console.log('[ACH DEBUG] updateCheckoutDisplay: Creating PaymentIntent.', {
+                amount: Math.round(currentBaseAmount * 100),
+                paymentMethodType: currentPaymentType
+            });
             const intentResponse = await fetch('/api/create-payment-intent', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    amount: Math.round(currentBaseAmount * 100), 
+                body: JSON.stringify({
+                    amount: Math.round(currentBaseAmount * 100),
                     paymentMethodType: currentPaymentType // Use the stored payment type
                 }),
             });
             if (!intentResponse.ok) throw new Error('Could not update payment intent.');
-            
+
             const intentData = await intentResponse.json();
             const newClientSecret = intentData.clientSecret;
             const newProcessingFee = intentData.processingFeeInCents / 100;
+
+            console.log('[ACH DEBUG] updateCheckoutDisplay: PaymentIntent created.', {
+                hasClientSecret: !!newClientSecret,
+                clientSecretSuffix: newClientSecret ? '...' + newClientSecret.slice(-8) : 'null',
+                processingFee: newProcessingFee,
+                paymentType: currentPaymentType
+            });
 
             // 2. Update UI with new fees
             currentProcessingFee = newProcessingFee;
@@ -1413,18 +1427,18 @@ async function updateCheckoutDisplay() {
             if (paymentElement) {
                 paymentElement.unmount();
             }
-            
+
             currentClientSecret = newClientSecret; // Update the secret
             elements = stripe.elements({ clientSecret: currentClientSecret });
             paymentElement = elements.create('payment');
             paymentElement.mount('#payment-element');
-            
-            // 4. --- THIS IS THE FIX ---\
-            // Add listener to update payment type AND fetch new fee
+
+            // 4. Add listener to update payment type AND fetch new fee
             paymentElement.on('change', debounce(handlePaymentTypeChange, 300));
+            console.log('[ACH DEBUG] updateCheckoutDisplay: PaymentElement mounted with change listener.');
 
         } catch (error) {
-            console.error('Failed to update payment intent/element:', error);
+            console.error('[ACH DEBUG] Failed to update payment intent/element:', error);
             if (processingFeeEl) processingFeeEl.textContent = 'Error';
             if (finalChargeEl) finalChargeEl.textContent = 'Error';
         }
@@ -1441,17 +1455,36 @@ async function updateCheckoutDisplay() {
 
 /**
  * Handles changes in the PaymentElement (e.g., switching from Card to ACH).
- * This function ONLY fetches the new fee and updates the UI, it does not
- * rebuild the PaymentElement.
+ * This function fetches the new fee, updates the UI, and rebuilds the
+ * PaymentElement with a new PaymentIntent so the clientSecret matches the
+ * correct amount (including the recalculated fee for the new payment type).
  */
+// Guard flag to suppress change events fired by freshly mounted PaymentElements
+let suppressPaymentTypeChange = false;
+
 async function handlePaymentTypeChange(event) {
-    if (!event.value.type || event.value.type === currentPaymentType) {
-        // No change, or event is incomplete
+    console.log('[ACH DEBUG] handlePaymentTypeChange fired:', {
+        eventValue: event?.value,
+        eventType: event?.value?.type,
+        currentPaymentType,
+        currentBaseAmount,
+        suppressPaymentTypeChange,
+        currentClientSecret: currentClientSecret ? '...' + currentClientSecret.slice(-8) : 'null'
+    });
+
+    if (suppressPaymentTypeChange) {
+        console.log('[ACH DEBUG] Suppressed (post-rebuild guard). Ignoring.');
         return;
     }
-    
+
+    if (!event.value.type || event.value.type === currentPaymentType) {
+        console.log('[ACH DEBUG] Payment type unchanged or incomplete, skipping.');
+        return;
+    }
+
+    const previousType = currentPaymentType;
     currentPaymentType = event.value.type;
-    log('Modal', `Payment type changed to: ${currentPaymentType}. Fetching new fee.`);
+    log('Modal', `Payment type changed from ${previousType} to: ${currentPaymentType}. Fetching new fee and rebuilding.`);
 
     const processingFeeEl = document.getElementById('processing-fee-price');
     const finalChargeEl = document.getElementById('final-charge-price');
@@ -1460,29 +1493,74 @@ async function handlePaymentTypeChange(event) {
     if (finalChargeEl) finalChargeEl.textContent = 'Calculating...';
 
     try {
-        // 1. Call create-payment-intent to get the new fee
+        // 1. Create a new PaymentIntent with the correct fee for the new payment type
+        console.log('[ACH DEBUG] Creating new PaymentIntent for type:', currentPaymentType, 'amount:', Math.round(currentBaseAmount * 100), 'cents');
         const intentResponse = await fetch('/api/create-payment-intent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                amount: Math.round(currentBaseAmount * 100), 
+            body: JSON.stringify({
+                amount: Math.round(currentBaseAmount * 100),
                 paymentMethodType: currentPaymentType
             }),
         });
-        if (!intentResponse.ok) throw new Error('Could not fetch new processing fee.');
-        
+        if (!intentResponse.ok) {
+            const errBody = await intentResponse.text();
+            console.error('[ACH DEBUG] PaymentIntent creation failed:', intentResponse.status, errBody);
+            throw new Error('Could not fetch new processing fee.');
+        }
+
         const intentData = await intentResponse.json();
         const newProcessingFee = intentData.processingFeeInCents / 100;
+        const newClientSecret = intentData.clientSecret;
+
+        console.log('[ACH DEBUG] New PaymentIntent received:', {
+            newProcessingFee,
+            hasClientSecret: !!newClientSecret,
+            clientSecretSuffix: newClientSecret ? '...' + newClientSecret.slice(-8) : 'null',
+            oldClientSecretSuffix: currentClientSecret ? '...' + currentClientSecret.slice(-8) : 'null'
+        });
 
         // 2. Update UI with new fees
         currentProcessingFee = newProcessingFee;
         if (processingFeeEl) processingFeeEl.textContent = `$${newProcessingFee.toFixed(2)}`;
         if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount + newProcessingFee).toFixed(2)}`;
-        
-        log('Modal', `New fee is ${newProcessingFee.toFixed(2)}`);
+
+        // 3. Rebuild Stripe Elements with the new clientSecret so confirmPayment uses the correct intent
+        if (newClientSecret && newClientSecret !== currentClientSecret) {
+            console.log('[ACH DEBUG] Rebuilding Stripe Elements with new clientSecret.');
+            if (paymentElement) {
+                paymentElement.unmount();
+            }
+            currentClientSecret = newClientSecret;
+            elements = stripe.elements({ clientSecret: currentClientSecret });
+            paymentElement = elements.create('payment', {
+                defaultValues: {
+                    billingDetails: {}
+                }
+            });
+            paymentElement.mount('#payment-element');
+
+            // Suppress change events from the fresh mount for 1 second.
+            // When a PaymentElement mounts, it fires a change event with its default type (card),
+            // which would bounce the user back from their ACH selection.
+            suppressPaymentTypeChange = true;
+            console.log('[ACH DEBUG] Post-rebuild suppression enabled.');
+            setTimeout(() => {
+                suppressPaymentTypeChange = false;
+                console.log('[ACH DEBUG] Post-rebuild suppression lifted.');
+            }, 1000);
+
+            // Re-attach the change listener on the new element
+            paymentElement.on('change', debounce(handlePaymentTypeChange, 300));
+            console.log('[ACH DEBUG] Stripe Elements rebuilt and mounted with new secret.');
+        } else {
+            console.log('[ACH DEBUG] clientSecret unchanged, no element rebuild needed.');
+        }
+
+        log('Modal', `New fee is ${newProcessingFee.toFixed(2)} for ${currentPaymentType}`);
 
     } catch (error) {
-        console.error('Failed to update fee on type change:', error);
+        console.error('[ACH DEBUG] Failed to update fee on type change:', error);
         if (processingFeeEl) processingFeeEl.textContent = 'Error';
         if (finalChargeEl) finalChargeEl.textContent = 'Error';
     }
@@ -1683,6 +1761,9 @@ function handleModalReactionSelect(recordId, emoji) {
 
     // Trigger save to persist
     triggerSave();
+
+    // Recalculate vitality (sentiment changed, so goodness scores need updating)
+    requestVitalityRecalc();
 
     log('Modal', `Reaction ${emoji} set for item ${recordId} by ${currentUser.id}`);
 }
@@ -4255,6 +4336,36 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             priceText += ' (Est.)';
         }
         modalItemPrice.innerHTML = priceText + pricingTypeHTML;
+    }
+
+    // Inject vitality/goodness badge next to the price
+    if (modalItemPrice) {
+        // Remove any previous badge
+        const existingBadge = document.getElementById('modal-vitality-badge');
+        if (existingBadge) existingBadge.remove();
+
+        const vitalityScores = state.vitality?.itemScores?.get(record.id);
+        const goodnessEmoji = vitalityScores?.goodnessEmoji || vitalityScores?.netEmoji || '';
+        const goodnessLabel = vitalityScores?.goodnessLabel || vitalityScores?.netLabel || 'Neutral';
+        if (goodnessEmoji) {
+            const badge = document.createElement('span');
+            badge.id = 'modal-vitality-badge';
+            badge.className = 'modal-vitality-badge';
+            badge.textContent = goodnessEmoji;
+            badge.title = `Goodness: ${goodnessLabel} (click for actions)`;
+            badge.addEventListener('click', (e) => {
+                console.log('[Modal DEBUG] modal-vitality-badge CLICKED for record:', record.id);
+                const rect = badge.getBoundingClientRect();
+                console.log('[Modal DEBUG]   badge rect:', JSON.stringify({ left: rect.left, top: rect.top, width: rect.width, height: rect.height }));
+                console.log('[Modal DEBUG]   → calling openActionMenu');
+                openActionMenu(record.id, {
+                    x: rect.left + rect.width / 2,
+                    y: rect.top + rect.height / 2
+                });
+            });
+            // Insert badge right after the price element
+            modalItemPrice.parentNode.insertBefore(badge, modalItemPrice.nextSibling);
+        }
     }
 
     let currentPhotoIndex = startPhotoIndex;
@@ -7909,6 +8020,8 @@ export function hideCheckoutModal() {
         currentChipInAmount = 0;
         currentCheckoutScope = null;
         currentCheckoutItemQty = 0;
+        currentPaymentType = 'card'; // Reset to default
+        suppressPaymentTypeChange = false; // Clear any pending suppression
         // Reset quantity toggle and crowdfund progress
         const qtyToggle = document.getElementById('checkout-item-quantity-toggle');
         if (qtyToggle) qtyToggle.style.display = 'none';
@@ -7933,6 +8046,10 @@ export function hideCheckoutModal() {
 
 export function getStripeContext() {
     return { stripe, elements };
+}
+
+export function getCurrentPaymentType() {
+    return currentPaymentType;
 }
 
 export function getCheckoutChipInContext() {

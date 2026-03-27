@@ -544,7 +544,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             <div class="card-footer">
                 ${headcountSelectorHTML}
                 <div class="price-wrapper">
-                    <div class="price package-dynamic-price">${priceHTML}</div>
+                    <div class="valuation-meta"><div class="price package-dynamic-price">${priceHTML}</div>${(() => { const pkgVitality = state.vitality?.itemScores?.get(record.id); const pkgEmoji = pkgVitality?.goodnessEmoji || pkgVitality?.netEmoji; return pkgEmoji ? `<span class="valuation-vitality-emoji" title="Goodness: ${pkgVitality?.goodnessLabel || pkgVitality?.netLabel || 'Neutral'} (click for details)">${pkgEmoji}</span>` : ''; })()}</div>
                     <div class="package-savings-wrapper">${savingsHTML}</div>
                 </div>
                 ${tiersHTML}
@@ -661,6 +661,12 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         }
     }
 
+    // Look up vitality/goodness emoji for this item from state
+    const itemVitalityScores = state.vitality?.itemScores?.get(record.id);
+    const vitalityEmoji = itemVitalityScores?.goodnessEmoji || itemVitalityScores?.netEmoji || '';
+    const goodnessLabel = itemVitalityScores?.goodnessLabel || itemVitalityScores?.netLabel || 'Neutral';
+    const vitalityBadgeHTML = vitalityEmoji ? `<span class="valuation-vitality-emoji" title="Goodness: ${goodnessLabel} (click for details)">${vitalityEmoji}</span>` : '';
+
     eventCard.innerHTML = `
         <div class="event-card-image-container lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
             <button class="heart-icon" data-record-id="${record.id}" aria-label="Like this item" tabindex="0"></button>
@@ -675,7 +681,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             <p class="description">${fields.Description || ''}</p>
         </div>
         <div class="card-footer">
-            <div class="price-wrapper"><div class="price">${priceHTML}</div></div>
+            <div class="price-wrapper"><div class="valuation-meta"><div class="price">${priceHTML}</div>${vitalityBadgeHTML}</div></div>
             <div class="actions-wrapper">${quantitySelectorHTML}${addToPlanBtnHTML}</div>
         </div>
     `;

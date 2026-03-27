@@ -4,8 +4,7 @@
 # Dependencies
 node_modules/
 
-# Generated project source exports (build artifacts)
-project_source.json
+# Generated project source text exports (build artifacts)
 project_source*.txt
 project_source - *.txt
 

@@ -3,7 +3,7 @@
 // Computes time-integral vitality scores for plan items and detects synergies.
 
 import { state, getRecordById, setState } from '../state.js';
-import { CONSTANTS } from '../config.js';
+import { CONSTANTS, REACTION_SCORES } from '../config.js';
 import {
     VITALITY_PROFILES,
     DEFAULT_PROFILE,
@@ -258,8 +258,34 @@ function getAllPlanItems() {
 }
 
 /**
+ * Compute the sentiment score for a single item from reactions.
+ * Returns a value normalized to -1..+1.
+ * Uses REACTION_SCORES config for per-emoji weights.
+ * The raw score range for a single reaction is roughly -5..+5,
+ * so we normalize by dividing by 5.
+ * When multiple reactions exist, we use the average reaction score.
+ * @param {string} recordId - Record ID
+ * @returns {{ raw: number, normalized: number, count: number }}
+ */
+export function getItemSentiment(recordId) {
+    const reactions = state.session.reactions?.get(recordId);
+    if (!reactions || !(reactions instanceof Map) || reactions.size === 0) {
+        return { raw: 0, normalized: 0, count: 0 };
+    }
+    let total = 0;
+    reactions.forEach((emoji) => {
+        total += (REACTION_SCORES[emoji] || 0);
+    });
+    const avg = total / reactions.size;
+    // Normalize: reaction scores range roughly -5..+5, map to -1..+1
+    const normalized = Math.max(-1, Math.min(1, avg / 5));
+    return { raw: total, normalized, count: reactions.size };
+}
+
+/**
  * Main recalculation function. Recomputes vitality scores for all plan items
- * (both Ideas and Locked/Confirmed), detects synergies, and updates state.vitality.
+ * (both Ideas and Locked/Confirmed), detects synergies, blends in community
+ * sentiment to produce a unified "goodness" score, and updates state.vitality.
  *
  * Called via requestAnimationFrame to avoid blocking the UI.
  */
@@ -322,6 +348,19 @@ export function recalculateVitality() {
         // Get fidelity multiplier
         scores.fidelity = getFidelityMultiplier(record, recordId);
 
+        // Blend sentiment into a unified "goodness" score
+        // Formula: 70% vitality net + 30% community sentiment (normalized to -1..+1)
+        // When no reactions exist, sentiment is 0 so goodness gracefully equals vitality
+        const sentiment = getItemSentiment(recordId);
+        scores.sentiment = sentiment;
+        scores.goodnessScore = (0.7 * scores.net) + (0.3 * sentiment.normalized);
+        scores.goodnessScore = Math.max(-1, Math.min(1, scores.goodnessScore));
+
+        // Compute goodness emoji from the blended score
+        const goodnessEmojiResult = getNetEmoji(scores.goodnessScore);
+        scores.goodnessEmoji = goodnessEmojiResult.emoji;
+        scores.goodnessLabel = goodnessEmojiResult.label;
+
         itemScores.set(recordId, scores);
 
         totalNet += scores.net;
@@ -336,7 +375,16 @@ export function recalculateVitality() {
     const planNet = totalCount > 0 ? totalNet / totalCount : 0;
     const planNetClamped = Math.max(-1, Math.min(1, planNet));
     const planEmojiResult = getNetEmoji(planNetClamped);
+
+    // Plan-level goodness (average of per-item goodnessScores)
+    let planGoodnessTotal = 0;
+    itemScores.forEach(scores => { planGoodnessTotal += scores.goodnessScore; });
+    const planGoodness = totalCount > 0 ? planGoodnessTotal / totalCount : 0;
+    const planGoodnessClamped = Math.max(-1, Math.min(1, planGoodness));
+    const planGoodnessEmojiResult = getNetEmoji(planGoodnessClamped);
+
     console.log('[Vitality DEBUG] Plan-level results: totalCount=', totalCount, 'planNet=', planNetClamped.toFixed(4), 'emoji=', planEmojiResult.emoji, 'label=', planEmojiResult.label);
+    console.log('[Vitality DEBUG] Plan goodness:', planGoodnessClamped.toFixed(4), 'emoji:', planGoodnessEmojiResult.emoji);
     console.log('[Vitality DEBUG] itemScores Map size:', itemScores.size, 'entries:', [...itemScores.keys()]);
 
     // Determine dominant realm
@@ -365,6 +413,8 @@ export function recalculateVitality() {
             itemScores,
             planNet: planNetClamped,
             planNetEmoji: planEmojiResult.emoji,
+            planGoodness: planGoodnessClamped,
+            planGoodnessEmoji: planGoodnessEmojiResult.emoji,
             synergies,
             dominantRealm
         }
@@ -377,6 +427,9 @@ export function recalculateVitality() {
             planNet: planNetClamped,
             planNetEmoji: planEmojiResult.emoji,
             planNetLabel: planEmojiResult.label,
+            planGoodness: planGoodnessClamped,
+            planGoodnessEmoji: planGoodnessEmojiResult.emoji,
+            planGoodnessLabel: planGoodnessEmojiResult.label,
             itemScores,
             synergies,
             dominantRealm

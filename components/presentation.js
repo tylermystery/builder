@@ -23,6 +23,7 @@ import { initializeToastNotifications, handlePusherEvent as handleToastPusherEve
 import { initializeUnifiedChatPanel, showUnifiedChatPanel, hideUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage } from './unifiedChatPanel.js';
 import { initVitalityUI, cleanupVitalityUI, refreshFlowLines } from '../vitality/vitalityUI.js';
 import { requestVitalityRecalc, recalculateVitality } from '../vitality/vitalityEngine.js';
+import { openActionMenu, closeActionMenu, isActionMenuOpen, registerActionHandler } from './actionMenu.js';
 
 console.log('[MODULE DEBUG] presentation.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -1758,6 +1759,87 @@ function createSentimentPopupHTML() {
         }).join('');
     }
 
+    // --- Value vs. Vitality: "Bang for the Goodness" ranking ---
+    let valueVitalityHTML = '';
+    {
+        // Build ranking of items by Goodness per Dollar (vitality net / price)
+        const vitalityItems = combinedList.map(item => {
+            const record = getRecordById(item.recordId);
+            if (!record) return null;
+            const name = record.fields.Name || 'Unknown Item';
+            const cartInfo = state.cart.lockedItems.get(item.recordId) || state.cart.items.get(item.recordId);
+            const priceParam = (cartInfo?.selections && Object.keys(cartInfo.selections).length > 0)
+                ? cartInfo.selections
+                : cartInfo?.selectedOptionIndex;
+            const price = cartInfo ? (cartInfo.overridePrice ?? getRecordPrice(record, priceParam)) : getRecordPrice(record);
+            const vitalityScores = state.vitality?.itemScores?.get(item.recordId);
+            const goodnessScore = vitalityScores?.goodnessScore ?? vitalityScores?.net ?? 0;
+            const goodnessEmoji = vitalityScores?.goodnessEmoji || vitalityScores?.netEmoji || '⚖️';
+
+            // Calculate Goodness per Dollar ratio
+            // Free items with positive goodness get a special high ranking
+            let goodnessPerDollar = 0;
+            if (!isNaN(price) && price > 0 && goodnessScore !== 0) {
+                goodnessPerDollar = goodnessScore / price;
+            } else if ((!price || price === 0) && goodnessScore > 0) {
+                goodnessPerDollar = Infinity; // Free + good = best value
+            }
+
+            return {
+                recordId: item.recordId,
+                name,
+                price: !isNaN(price) ? price : 0,
+                netVitality: goodnessScore,
+                netEmoji: goodnessEmoji,
+                goodnessPerDollar
+            };
+        }).filter(item => item && (item.netVitality !== 0 || item.price > 0));
+
+        if (vitalityItems.length > 0) {
+            // Sort by Goodness per Dollar descending (best value first)
+            const sorted = [...vitalityItems].sort((a, b) => {
+                if (a.goodnessPerDollar === Infinity && b.goodnessPerDollar === Infinity) return b.netVitality - a.netVitality;
+                if (a.goodnessPerDollar === Infinity) return -1;
+                if (b.goodnessPerDollar === Infinity) return 1;
+                return b.goodnessPerDollar - a.goodnessPerDollar;
+            });
+
+            valueVitalityHTML = sorted.map((item, index) => {
+                const rank = index + 1;
+                let medalHTML = '';
+                if (rank === 1) medalHTML = '<span class="rank-medal">🏆</span>';
+                else if (rank === 2) medalHTML = '<span class="rank-medal">🥈</span>';
+                else if (rank === 3) medalHTML = '<span class="rank-medal">🥉</span>';
+
+                const priceText = item.price === 0 ? 'Free' : `$${item.price % 1 === 0 ? item.price.toFixed(0) : item.price.toFixed(2)}`;
+                const ratioText = item.goodnessPerDollar === Infinity
+                    ? 'Free + Good'
+                    : item.goodnessPerDollar > 0
+                        ? `${(item.goodnessPerDollar * 100).toFixed(1)}¢/pt`
+                        : item.netVitality < 0 ? 'Drain' : '--';
+
+                const valueClass = item.netVitality > 0 ? 'positive' : item.netVitality < 0 ? 'negative' : 'neutral';
+
+                return `
+                    <div class="sentiment-ranking-item value-vitality-item ${valueClass}" data-record-id="${item.recordId}">
+                        <div class="ranking-position">
+                            ${medalHTML}
+                            <span class="ranking-number">#${rank}</span>
+                        </div>
+                        <div class="ranking-info">
+                            <div class="ranking-name">${item.name}</div>
+                            <div class="ranking-reactions"><span class="vv-price">${priceText}</span> <span class="vv-emoji">${item.netEmoji}</span></div>
+                        </div>
+                        <div class="ranking-score">
+                            <span class="score-value ${valueClass}">${ratioText}</span>
+                            <span class="score-label">value</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
     // Empty state
     if (totalReactions === 0) {
         return `
@@ -1875,6 +1957,17 @@ function createSentimentPopupHTML() {
                         ${rankingHTML}
                     </div>
                 </div>
+
+                <!-- Value vs. Vitality: Bang for the Goodness -->
+                ${valueVitalityHTML ? `
+                <div class="sentiment-ranking-section value-vitality-section">
+                    <h3 class="section-title">Value vs. Vitality</h3>
+                    <p class="section-hint">Items ranked by "Goodness per Dollar" — high-impact, low-cost virtuous choices</p>
+                    <div class="sentiment-ranking-list value-vitality-list">
+                        ${valueVitalityHTML}
+                    </div>
+                </div>
+                ` : ''}
 
                 <!-- Analysis Info -->
                 <div class="sentiment-info">
@@ -2141,6 +2234,27 @@ function showSentimentPopup() {
                 });
             }
             console.log('[SentimentPopup DEBUG] Ranking section styles applied');
+        }
+
+        // Value vs. Vitality section
+        const vvSection = modalElement.querySelector('.value-vitality-section');
+        if (vvSection) {
+            vvSection.style.cssText = 'margin-bottom: 24px;';
+            const vvList = vvSection.querySelector('.value-vitality-list');
+            if (vvList) {
+                vvList.style.cssText = 'max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;';
+                vvList.querySelectorAll('.value-vitality-item').forEach(item => {
+                    let borderColor = '#667eea';
+                    if (item.classList.contains('positive')) borderColor = '#28a745';
+                    else if (item.classList.contains('negative')) borderColor = '#dc3545';
+                    item.style.cssText = `display: flex; align-items: center; gap: 12px; padding: 12px; background: white; border-radius: 10px; border: 1px solid #eee; border-left: 3px solid ${borderColor}; cursor: pointer; transition: all 0.2s ease;`;
+                    const vvPrice = item.querySelector('.vv-price');
+                    if (vvPrice) vvPrice.style.cssText = 'font-size: 0.85em; color: #666; font-weight: 500;';
+                    const vvEmoji = item.querySelector('.vv-emoji');
+                    if (vvEmoji) vvEmoji.style.cssText = 'font-size: 1.1em;';
+                });
+            }
+            console.log('[SentimentPopup DEBUG] Value vs. Vitality section styles applied');
         }
 
         // Info section
@@ -3122,13 +3236,19 @@ async function renderCompactCard(item) {
         }
     }
 
+    // --- Vitality/Goodness emoji for compact card ---
+    const compactVitalityScores = state.vitality?.itemScores?.get(recordId);
+    const compactVitalityEmoji = compactVitalityScores?.goodnessEmoji || compactVitalityScores?.netEmoji || '';
+    const compactGoodnessLabel = compactVitalityScores?.goodnessLabel || compactVitalityScores?.netLabel || 'Neutral';
+    const compactVitalityHTML = compactVitalityEmoji ? `<span class="compact-card-vitality" title="Goodness: ${compactGoodnessLabel} (click for details)">${compactVitalityEmoji}</span>` : '';
+
     return `
         <div class="compact-card ${lifecycleClass} ${confidenceClass} ${noPhotoClass}" data-record-id="${recordId}" data-item-type="${type}" data-item-status="${itemStatus}" role="article" tabindex="0" aria-label="${escapeHtml(name)}${showStatus ? ', ' + taskConfig.label : ''}">
             <div class="compact-card-photo" style="${photoStyle}">
                 ${statusOverlayHTML}
                 ${emojiOverlayHTML}
                 ${lifecycleBadgeHTML}
-                ${priceBadgeHTML}
+                <span class="compact-card-valuation">${priceBadgeHTML}${compactVitalityHTML}</span>
             </div>
             <div class="compact-card-body">
                 <div class="compact-card-title-row">
@@ -3549,6 +3669,12 @@ async function renderAllItems() {
     initializeRadialMenu();
     attachRadialMenuListeners();
 
+    // Register the unified action menu handler so badge clicks and the action menu
+    // can trigger the same actions as the drag buckets
+    console.log('[Presentation DEBUG] About to call registerActionHandler with handleActionMenuAction');
+    registerActionHandler(handleActionMenuAction);
+    console.log('[Presentation DEBUG] ✅ registerActionHandler() completed');
+
     // Update plan summary dashboard with latest metrics
     updatePlanSummaryDashboard();
 
@@ -3570,8 +3696,12 @@ function initializeCompactCardClicks() {
     const itemCards = itineraryItemsListEl.querySelectorAll('.compact-card[data-record-id]');
     itemCards.forEach(card => {
         card.addEventListener('click', (e) => {
-            // Don't trigger on status badge, emoji indicator, or split button clicks
-            if (e.target.closest('.compact-card-status') || e.target.closest('.compact-card-emoji') || e.target.closest('.compact-card-split-btn')) return;
+            // Don't trigger on status badge, emoji indicator, vitality badge, or split button clicks
+            const isExcluded = e.target.closest('.compact-card-status') || e.target.closest('.compact-card-emoji') || e.target.closest('.compact-card-split-btn') || e.target.closest('.compact-card-vitality') || e.target.closest('.valuation-vitality-emoji') || e.target.closest('.vitality-score-badge');
+            if (isExcluded) {
+                console.log('[Presentation DEBUG] Compact card click EXCLUDED (vitality/status/emoji element):', e.target.className);
+                return;
+            }
             const recordId = card.dataset.recordId;
             const record = getRecordById(recordId);
             if (record) {
@@ -3801,19 +3931,21 @@ async function initializeItemDragDrop() {
             dragClass: 'sortable-drag',
             // In board view, drag compact cards directly; in list view, drag item sections
             draggable: isBoardView ? '.compact-card' : '.itinerary-item-section',
-            delay: 300, // Increased delay - radial menu should activate first for quick swipes
+            delay: 300, // Increased delay - action menu activates on long-press drag
             delayOnTouchOnly: true,
             touchStartThreshold: 20, // Require more movement before starting SortableJS drag
 
             onStart: function(evt) {
 
-                // If radial menu is already active, cancel the SortableJS drag
-                if (radialMenuActive) {
+                // If the action menu is already open, cancel the SortableJS drag
+                if (isActionMenuOpen()) {
+                    console.log('[Drag DEBUG] onStart: action menu is open, cancelling drag');
                     evt.preventDefault && evt.preventDefault();
                     return false;
                 }
 
                 isDragging = true;
+                console.log('[Drag DEBUG] onStart: drag started, isDragging=true');
                 // Add sorting class to board for CSS pointer-events optimization
                 if (isBoardView) itineraryItemsListEl.classList.add('is-sorting');
                 // Reset debug counters
@@ -3831,13 +3963,18 @@ async function initializeItemDragDrop() {
                     const article = evt.item.querySelector('.itinerary-item');
                     currentDraggedRecordId = article?.dataset.recordId;
                 }
+                console.log('[Drag DEBUG] onStart: recordId:', currentDraggedRecordId);
 
-                // For SortableJS drag (long press/hold), show the radial menu at the item position
-                // instead of the old linear buckets
+                // For SortableJS drag (long press/hold), open the unified action menu at the item position
                 const itemRect = evt.item.getBoundingClientRect();
                 const centerX = itemRect.left + itemRect.width / 2;
                 const centerY = itemRect.top + itemRect.height / 2;
-                showRadialMenu(centerX, centerY, evt.item);
+                console.log('[Drag DEBUG] onStart: opening ActionMenu at centerX:', centerX, 'centerY:', centerY, 'for recordId:', currentDraggedRecordId);
+                openActionMenu(currentDraggedRecordId, {
+                    x: centerX,
+                    y: centerY,
+                    onAction: handleActionMenuAction
+                });
 
                 // Add document-level listeners to track drag position
                 document.addEventListener('mousemove', handleDragMove);
@@ -3845,16 +3982,12 @@ async function initializeItemDragDrop() {
             },
 
             onMove: function(evt) {
-                // During SortableJS move, update radial menu hover state
-                if (radialMenuActive) {
-                    const clientX = evt.originalEvent?.touches ? evt.originalEvent.touches[0].clientX : evt.originalEvent?.clientX;
-                    const clientY = evt.originalEvent?.touches ? evt.originalEvent.touches[0].clientY : evt.originalEvent?.clientY;
-                    if (clientX !== undefined && clientY !== undefined) {
-                        checkRadialBucketHover(clientX, clientY);
-                        updateRadialDirectionIndicator(clientX, clientY);
-                        // Also check for merge targets when radial menu is active
-                        checkMergeTargetHover(clientX, clientY);
-                    }
+                // During SortableJS move, check for merge targets
+                // (the action menu handles its own interaction - no drag-bucket hover needed)
+                const clientX = evt.originalEvent?.touches ? evt.originalEvent.touches[0].clientX : evt.originalEvent?.clientX;
+                const clientY = evt.originalEvent?.touches ? evt.originalEvent.touches[0].clientY : evt.originalEvent?.clientY;
+                if (clientX !== undefined && clientY !== undefined) {
+                    checkMergeTargetHover(clientX, clientY);
                 }
             },
 
@@ -3865,6 +3998,7 @@ async function initializeItemDragDrop() {
                     const capturedMergeZone = potentialMergeZone;
 
                     isDragging = false;
+                    console.log('[Drag DEBUG] onEnd: drag ended, isDragging=false');
                     // Remove sorting class from board
                     if (isBoardView) itineraryItemsListEl.classList.remove('is-sorting');
                     clearTimeout(dragDelayTimer);
@@ -3877,34 +4011,20 @@ async function initializeItemDragDrop() {
                     document.removeEventListener('mousemove', handleDragMove);
                     document.removeEventListener('touchmove', handleDragMove);
 
-                    // Check if dropped on a radial bucket
-                    if (radialMenuActive) {
-                        // Get coordinates from event
-                        let clientX, clientY;
-                        if (evt.originalEvent?.changedTouches && evt.originalEvent.changedTouches.length > 0) {
-                            clientX = evt.originalEvent.changedTouches[0].clientX;
-                            clientY = evt.originalEvent.changedTouches[0].clientY;
-                        } else if (evt.originalEvent) {
-                            clientX = evt.originalEvent.clientX;
-                            clientY = evt.originalEvent.clientY;
-                        }
-
-                        if (clientX !== undefined && clientY !== undefined) {
-                            const droppedOnBucket = handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId, capturedMergeZone);
-                            if (droppedOnBucket) {
-                                return; // Item was moved to bucket or merged, don't update order
-                            }
-                        }
-                        hideRadialMenu();
-                    } else {
-                        // Legacy bucket drop check - pass captured merge target ID and zone
-                        const droppedOnBucket = checkBucketDrop(evt.originalEvent, evt.item, capturedMergeTargetId, capturedMergeZone);
-                        if (droppedOnBucket) {
-                            hideDragBuckets();
-                            return; // Item was moved to bucket, don't update order
-                        }
-                        hideDragBuckets();
+                    // Close the action menu if it's open (user dropped without selecting an action)
+                    if (isActionMenuOpen()) {
+                        console.log('[Drag DEBUG] onEnd: closing action menu (drag ended without action selection)');
+                        closeActionMenu();
                     }
+
+                    // Legacy bucket drop check - pass captured merge target ID and zone
+                    const droppedOnBucket = checkBucketDrop(evt.originalEvent, evt.item, capturedMergeTargetId, capturedMergeZone);
+                    if (droppedOnBucket) {
+                        console.log('[Drag DEBUG] onEnd: item dropped on bucket');
+                        hideDragBuckets();
+                        return; // Item was moved to bucket, don't update order
+                    }
+                    hideDragBuckets();
 
                     // Update the order in state
                     updateItemOrder();
@@ -3917,7 +4037,7 @@ async function initializeItemDragDrop() {
                     // Clean up anyway
                     isDragging = false;
                     if (isBoardView) itineraryItemsListEl.classList.remove('is-sorting');
-                    hideRadialMenu();
+                    if (isActionMenuOpen()) closeActionMenu();
                     hideDragBuckets();
                 }
             }
@@ -4227,9 +4347,10 @@ function positionRadialBuckets() {
     });
 }
 
-// Show radial menu at a specific point
+// Show radial menu at a specific point (DEPRECATED - migrated to unified Action Menu)
 function showRadialMenu(x, y, itemElement) {
-    console.log('[Radial Menu] showRadialMenu called at:', x, y);
+    console.log('[Radial Menu] showRadialMenu called but DEPRECATED - use openActionMenu() instead');
+    return; // No-op: old radial menu replaced by unified Action Menu
 
     if (!dragBucketsEl || !radialMenuContainer) {
         console.error('[Radial Menu] Missing required elements');
@@ -4397,10 +4518,10 @@ function showRadialMenu(x, y, itemElement) {
     console.log('[Radial Menu] Shown at', constrainedX, constrainedY, 'for item:', currentDraggedRecordId);
 }
 
-// Hide radial menu
+// Hide radial menu (DEPRECATED - migrated to unified Action Menu)
 function hideRadialMenu() {
-    console.log('[Radial Menu] Hiding');
-
+    console.log('[Radial Menu] hideRadialMenu called but DEPRECATED - use closeActionMenu() instead');
+    // Still clean up radial state in case it was somehow left active
     if (!radialMenuContainer) {
         return;
     }
@@ -4519,6 +4640,50 @@ function checkRadialBucketHover(clientX, clientY) {
     return hoveredBucket;
 }
 
+/**
+ * Handle action menu selections from the unified Action Menu component.
+ * Maps action IDs to the same functions used by drag bucket drops.
+ * @param {string} actionId - The action ID (e.g. 'goal', 'archive', 'delete')
+ * @param {string} recordId - The item record ID
+ */
+function handleActionMenuAction(actionId, recordId) {
+    if (!recordId) {
+        console.log('[ActionMenu Handler DEBUG] handleActionMenuAction called with no recordId, returning');
+        return;
+    }
+    console.log('[ActionMenu Handler DEBUG] Action:', actionId, 'for item:', recordId);
+    console.log('[ActionMenu Handler DEBUG] Available actions: goal, ideas, lock, merge, archive, delete, quick-comment, completed');
+
+    switch (actionId) {
+        case 'goal':
+            setItemAsGoal(recordId);
+            break;
+        case 'ideas':
+            moveToIdeas(recordId);
+            break;
+        case 'lock':
+            lockItem(recordId);
+            break;
+        case 'merge':
+            enterMergeMode(recordId);
+            break;
+        case 'archive':
+            archiveItem(recordId);
+            break;
+        case 'delete':
+            deleteItem(recordId);
+            break;
+        case 'quick-comment':
+            openCustomCommentDialog(recordId);
+            break;
+        case 'completed':
+            completeItem(recordId);
+            break;
+        default:
+            console.log('[ActionMenu Handler] Unknown action:', actionId);
+    }
+}
+
 // Handle radial bucket selection (on release)
 // capturedMergeTargetId can be either a string (recordId) or an object with recordId property
 function handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId = null, capturedMergeZone = null) {
@@ -4621,7 +4786,7 @@ function handleItemPointerDown(event, itemElement) {
     initialTouchPoint = { x: clientX, y: clientY };
     directionDetected = false;
 
-    console.log('[Radial Menu] Pointer down at', clientX, clientY);
+    console.log('[ActionMenu Swipe DEBUG] Pointer down at', clientX, clientY);
 
     // Set up move and end handlers
     if (event.touches) {
@@ -4648,10 +4813,9 @@ function handleItemPointerMove(event, itemElement) {
     const clientX = event.touches ? event.touches[0].clientX : event.clientX;
     const clientY = event.touches ? event.touches[0].clientY : event.clientY;
 
-    // If radial menu is already active, update hover state and direction indicator
-    if (radialMenuActive) {
-        checkRadialBucketHover(clientX, clientY);
-        updateRadialDirectionIndicator(clientX, clientY);
+    // If the action menu is already open, no further swipe detection needed
+    if (isActionMenuOpen()) {
+        console.log('[ActionMenu Swipe DEBUG] Pointer move ignored - action menu already open');
         return;
     }
 
@@ -4664,26 +4828,40 @@ function handleItemPointerMove(event, itemElement) {
         directionDetected = true;
 
         if (deltaX > deltaY) {
-            // Horizontal movement - show radial menu
-            console.log('[Radial Menu] Horizontal swipe detected - showing radial menu');
+            // Horizontal movement - open the unified action menu
+            console.log('[ActionMenu Swipe DEBUG] Horizontal swipe detected - opening action menu');
 
             // Prevent default to stop scrolling
             if (event.cancelable) {
                 event.preventDefault();
             }
 
-            // Show radial menu at the initial touch point
-            showRadialMenu(initialTouchPoint.x, initialTouchPoint.y, itemElement);
+            // Determine the record ID from the swiped element
+            let swipedRecordId = null;
+            if (itemElement) {
+                if (itemElement.classList.contains('compact-card')) {
+                    swipedRecordId = itemElement.dataset.recordId || itemElement.dataset.groupId || null;
+                } else {
+                    const article = itemElement.querySelector('.itinerary-item');
+                    swipedRecordId = article?.dataset.recordId;
+                }
+            }
+
+            if (swipedRecordId) {
+                console.log('[ActionMenu Swipe DEBUG] Swipe → opening Action Menu for recordId:', swipedRecordId, 'at:', initialTouchPoint.x, initialTouchPoint.y);
+                openActionMenu(swipedRecordId, {
+                    x: initialTouchPoint.x,
+                    y: initialTouchPoint.y,
+                    onAction: handleActionMenuAction
+                });
+            }
+
+            cleanupRadialEventListeners();
         } else {
             // Vertical movement - allow scrolling, cleanup handlers
-            console.log('[Radial Menu] Vertical swipe detected - allowing scroll');
+            console.log('[ActionMenu Swipe DEBUG] Vertical swipe detected - allowing scroll');
             cleanupRadialEventListeners();
         }
-    }
-
-    // If radial menu is active and we detected horizontal, prevent scroll
-    if (radialMenuActive && event.cancelable) {
-        event.preventDefault();
     }
 }
 
@@ -4691,15 +4869,10 @@ function handleItemPointerUp(event) {
     const clientX = event.changedTouches ? event.changedTouches[0].clientX : event.clientX;
     const clientY = event.changedTouches ? event.changedTouches[0].clientY : event.clientY;
 
-    console.log('[Radial Menu] Pointer up at', clientX, clientY);
+    console.log('[ActionMenu Swipe DEBUG] Pointer up at', clientX, clientY);
 
-    if (radialMenuActive) {
-        // Capture merge state before it gets cleared
-        const capturedMergeTargetId = potentialMergeTarget ? potentialMergeTarget.recordId : null;
-        const capturedMergeZone = potentialMergeZone;
-        // Check if dropped on a bucket
-        handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId, capturedMergeZone);
-    }
+    // The action menu handles its own click-based interactions,
+    // so no bucket-drop logic is needed here anymore.
 
     cleanupRadialEventListeners();
 }
@@ -4727,13 +4900,20 @@ function cleanupRadialEventListeners() {
     directionDetected = false;
 }
 
-// Attach radial menu event listeners to itinerary items
+// Attach swipe/pointer event listeners for action menu activation on itinerary items
 let radialListenersAttached = false;
 function attachRadialMenuListeners() {
-    if (!itineraryItemsListEl) return;
+    if (!itineraryItemsListEl) {
+        console.log('[ActionMenu Swipe DEBUG] attachRadialMenuListeners: no itineraryItemsListEl, skipping');
+        return;
+    }
     // Guard: only attach once since we use event delegation on a persistent element
-    if (radialListenersAttached) return;
+    if (radialListenersAttached) {
+        console.log('[ActionMenu Swipe DEBUG] attachRadialMenuListeners: already attached, skipping');
+        return;
+    }
     radialListenersAttached = true;
+    console.log('[ActionMenu Swipe DEBUG] attachRadialMenuListeners: attaching touch/mouse listeners for swipe-to-action-menu');
 
     // Use event delegation on the items list
     itineraryItemsListEl.addEventListener('touchstart', handleRadialTouchStart, { passive: true });
@@ -4744,6 +4924,7 @@ function handleRadialTouchStart(event) {
     // Board view: target compact cards; List view: target item sections
     const targetEl = event.target.closest('.compact-card') || event.target.closest('.itinerary-item-section');
     if (targetEl) {
+        console.log('[ActionMenu Swipe DEBUG] Touch start on card/section, delegating to handleItemPointerDown');
         handleItemPointerDown(event, targetEl);
     }
 }
@@ -4755,12 +4936,13 @@ function handleRadialMouseDown(event) {
     // Board view: target compact cards; List view: target item sections
     const targetEl = event.target.closest('.compact-card') || event.target.closest('.itinerary-item-section');
     if (targetEl) {
+        console.log('[ActionMenu Swipe DEBUG] Mouse down on card/section, delegating to handleItemPointerDown');
         handleItemPointerDown(event, targetEl);
     }
 }
 
 // =============================================================================
-// END RADIAL MENU FUNCTIONS
+// END RADIAL MENU FUNCTIONS (DEPRECATED — migrated to unified Action Menu)
 // =============================================================================
 
 // Clear reaction option hover states
@@ -6020,6 +6202,9 @@ async function addReactionToItem(recordId, emoji) {
 
     // Save session
     triggerSave();
+
+    // Recalculate vitality (sentiment changed, so goodness scores need updating)
+    requestVitalityRecalc();
 
     log('Presentation', `Reaction ${emoji} added to item ${recordId}`);
 }
@@ -10011,6 +10196,13 @@ function updatePlanSummaryDashboard() {
         }
     }
 
+    // --- Plan Health (Vitality + Sentiment Goodness) ---
+    const healthMetric = document.querySelector('#plan-metric-health .plan-metric-value');
+    if (healthMetric) {
+        const planEmoji = state.vitality?.planGoodnessEmoji || state.vitality?.planNetEmoji || '⚖️';
+        healthMetric.textContent = planEmoji;
+    }
+
     // Hide dashboard if no items and no team (very early state)
     dashboard.style.display = (totalItems === 0 && teamCount <= 1) ? 'none' : '';
 }
@@ -12499,13 +12691,17 @@ export function hidePresentationView() {
         dragBucketsEl.style.visibility = 'hidden';
     }
 
-    // Hide radial menu and clean up
+    // Close action menu and clean up old radial state
+    if (isActionMenuOpen()) {
+        console.log('[PRES-MENU DEBUG] Closing action menu on presentation deactivation');
+        closeActionMenu();
+    }
     if (radialMenuContainer) {
         radialMenuContainer.classList.remove('radial-active');
         radialMenuActive = false;
         cleanupRadialEventListeners();
     }
-    // Remove delegated radial listeners so they can be re-attached on next open
+    // Remove delegated swipe listeners so they can be re-attached on next open
     if (itineraryItemsListEl && radialListenersAttached) {
         itineraryItemsListEl.removeEventListener('touchstart', handleRadialTouchStart);
         itineraryItemsListEl.removeEventListener('mousedown', handleRadialMouseDown);

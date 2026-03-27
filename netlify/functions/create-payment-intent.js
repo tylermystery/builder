@@ -104,12 +104,16 @@ exports.handler = async (event) => {
     const processingFeeInCents = calculateProcessingFee(baseAmountInCents, paymentMethodType);
     const finalAmountInCents = baseAmountInCents + processingFeeInCents;
 
+    console.log(`[create-payment-intent] Creating PaymentIntent: base=${baseAmountInCents}c + fee=${processingFeeInCents}c = total=${finalAmountInCents}c, type=${paymentMethodType}`);
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount: finalAmountInCents, // Charge the full amount including the fee
       currency: 'usd',
       // Allow Stripe to determine the best method types based on the user's element display
       automatic_payment_methods: { enabled: true },
     });
+
+    console.log(`[create-payment-intent] PaymentIntent created: id=${paymentIntent.id}, status=${paymentIntent.status}, amount=${paymentIntent.amount}c`);
 
     return {
       statusCode: 200,

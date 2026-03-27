@@ -4,8 +4,13 @@
 // custom properties, pulse animations, synergy flow lines, and the Net Emoji morph.
 
 import { state, getRecordById } from '../state.js';
-import { REALM_META, TIME_SCOPES } from './vitalityProfiles.js';
-import { setTimeScope, getFidelityMultiplier } from './vitalityEngine.js';
+import { REALM_META, TIME_SCOPES, NET_EMOJI_SCALE } from './vitalityProfiles.js';
+import { setTimeScope, getFidelityMultiplier, getNetEmoji, getItemSentiment } from './vitalityEngine.js';
+import { getRecordPrice } from '../utils.js';
+import { getModalZIndex, REACTION_SCORES } from '../config.js';
+import { openActionMenu } from '../components/actionMenu.js';
+
+console.log('[VitalityUI DEBUG] ✅ vitalityUI.js MODULE LOADED, openActionMenu imported:', typeof openActionMenu);
 
 // Track previous Net Emoji for morph transition
 let previousPlanEmoji = '⚖️';
@@ -34,10 +39,18 @@ export function initVitalityUI() {
                 synergiesCount: e.detail.synergies?.length,
                 dominantRealm: e.detail.dominantRealm
             });
-            const { planNet, planNetEmoji, planNetLabel, itemScores, synergies, dominantRealm } = e.detail;
+            const { planNet, planNetEmoji, planNetLabel, planGoodnessEmoji, planGoodnessLabel, itemScores, synergies, dominantRealm } = e.detail;
             applyCardPulses(itemScores, synergies, dominantRealm);
-            updateNetEmojiMorph(planNetEmoji, planNetLabel);
+            // Use the goodness emoji (vitality + sentiment blend) for the header display
+            updateNetEmojiMorph(planGoodnessEmoji || planNetEmoji, planGoodnessLabel || planNetLabel);
             drawSynergyFlowLines(synergies);
+
+            // Update the modal badge if a detail modal is open
+            const modalOverlay = document.getElementById('detail-modal-overlay');
+            if (modalOverlay && modalOverlay.style.display !== 'none') {
+                const modalRecordId = modalOverlay.dataset.recordId;
+                if (modalRecordId) updateModalVitalityBadge(modalRecordId);
+            }
         });
         vitalityListenerRegistered = true;
         console.log('[VitalityUI DEBUG] vitalityRecalculated event listener REGISTERED');
@@ -205,34 +218,126 @@ function applyCardPulses(itemScores, synergies, dominantRealm) {
 }
 
 /**
- * Add or update a small vitality badge on a card showing the item's net emoji.
+ * Open the action menu from a vitality badge click.
+ * Uses the click coordinates to position the menu near the badge.
+ */
+function openActionMenuFromBadge(e, recordId) {
+    console.log('[VitalityUI DEBUG] openActionMenuFromBadge() CALLED');
+    console.log('[VitalityUI DEBUG]   recordId:', recordId);
+    console.log('[VitalityUI DEBUG]   event type:', e.type, 'target:', e.target?.className, 'currentTarget:', e.currentTarget?.className);
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    console.log('[VitalityUI DEBUG]   badge rect:', JSON.stringify({ left: rect.left, top: rect.top, width: rect.width, height: rect.height }));
+    console.log('[VitalityUI DEBUG]   → calling openActionMenu at x:', rect.left + rect.width / 2, 'y:', rect.top + rect.height / 2);
+    openActionMenu(recordId, {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+    });
+}
+
+/**
+ * Add or update a small vitality badge on a card showing the item's goodness emoji.
+ * Uses the blended goodnessEmoji (vitality + sentiment) when available.
+ * Targets the price/valuation container so the emoji sits adjacent to the price.
+ * Falls back to photo area for cards without a price container.
+ * Badges are clickable — clicking opens the unified Action Menu.
  */
 function updateCardVitalityBadge(card, scores) {
+    const emoji = scores.goodnessEmoji || scores.netEmoji || '⚖️';
+    const recordId = card.dataset.recordId || card.dataset.id;
+    console.log('[VitalityUI DEBUG] updateCardVitalityBadge() - recordId:', recordId, 'emoji:', emoji, 'cardClass:', card.className.substring(0, 60));
+
+    // --- Interactive cards (card.js): update the .valuation-vitality-emoji inside .valuation-meta ---
+    const valuationEmoji = card.querySelector('.valuation-vitality-emoji');
+    if (valuationEmoji) {
+        console.log('[VitalityUI DEBUG]   Found .valuation-vitality-emoji, updating + binding click');
+        valuationEmoji.textContent = emoji;
+        valuationEmoji.style.cursor = 'pointer';
+        valuationEmoji.title = `Goodness: ${scores.goodnessLabel || scores.netLabel || 'Neutral'} (click for actions)`;
+        if (!valuationEmoji._goodnessClickBound) {
+            valuationEmoji.addEventListener('click', (e) => openActionMenuFromBadge(e, recordId));
+            valuationEmoji._goodnessClickBound = true;
+            console.log('[VitalityUI DEBUG]   ✅ Click handler BOUND to .valuation-vitality-emoji for', recordId);
+        } else {
+            console.log('[VitalityUI DEBUG]   Click handler already bound to .valuation-vitality-emoji');
+        }
+        return;
+    }
+
+    // --- Compact cards (presentation.js): update .compact-card-vitality inside .compact-card-valuation ---
+    const compactVitality = card.querySelector('.compact-card-vitality');
+    if (compactVitality) {
+        console.log('[VitalityUI DEBUG]   Found .compact-card-vitality, updating + binding click');
+        compactVitality.textContent = emoji;
+        compactVitality.style.cursor = 'pointer';
+        compactVitality.title = `Goodness: ${scores.goodnessLabel || scores.netLabel || 'Neutral'} (click for actions)`;
+        if (!compactVitality._goodnessClickBound) {
+            compactVitality.addEventListener('click', (e) => openActionMenuFromBadge(e, recordId));
+            compactVitality._goodnessClickBound = true;
+            console.log('[VitalityUI DEBUG]   ✅ Click handler BOUND to .compact-card-vitality for', recordId);
+        } else {
+            console.log('[VitalityUI DEBUG]   Click handler already bound to .compact-card-vitality');
+        }
+        return;
+    }
+
+    // --- Fallback: inject into .valuation-meta or .price-wrapper if the spans weren't pre-rendered ---
+    const valuationMeta = card.querySelector('.valuation-meta');
+    if (valuationMeta && !valuationMeta.querySelector('.valuation-vitality-emoji')) {
+        console.log('[VitalityUI DEBUG]   Fallback: injecting .valuation-vitality-emoji into .valuation-meta for', recordId);
+        const span = document.createElement('span');
+        span.className = 'valuation-vitality-emoji';
+        span.title = `Goodness: ${scores.goodnessLabel || 'Neutral'} (click for actions)`;
+        span.textContent = emoji;
+        span.style.cursor = 'pointer';
+        span.addEventListener('click', (e) => openActionMenuFromBadge(e, recordId));
+        span._goodnessClickBound = true;
+        valuationMeta.appendChild(span);
+        return;
+    }
+
+    // --- Compact card fallback: inject into .compact-card-valuation ---
+    const compactValuation = card.querySelector('.compact-card-valuation');
+    if (compactValuation && !compactValuation.querySelector('.compact-card-vitality')) {
+        console.log('[VitalityUI DEBUG]   Fallback: injecting .compact-card-vitality into .compact-card-valuation for', recordId);
+        const span = document.createElement('span');
+        span.className = 'compact-card-vitality';
+        span.title = `Goodness: ${scores.goodnessLabel || 'Neutral'} (click for actions)`;
+        span.textContent = emoji;
+        span.style.cursor = 'pointer';
+        span.addEventListener('click', (e) => openActionMenuFromBadge(e, recordId));
+        span._goodnessClickBound = true;
+        compactValuation.appendChild(span);
+        return;
+    }
+
+    // --- Last resort: original photo-area badge for cards without price containers ---
     let badge = card.querySelector('.vitality-score-badge');
+    console.log('[VitalityUI DEBUG]   Last resort path - existing .vitality-score-badge:', badge ? 'FOUND' : 'NOT FOUND');
     if (!badge) {
+        console.log('[VitalityUI DEBUG]   Creating new .vitality-score-badge for', recordId);
         badge = document.createElement('div');
         badge.className = 'vitality-score-badge';
+        badge.style.cursor = 'pointer';
+        badge.addEventListener('click', (e) => openActionMenuFromBadge(e, recordId));
 
         const emojiSpan = document.createElement('span');
         emojiSpan.className = 'vitality-emoji';
         badge.appendChild(emojiSpan);
 
-        // Find the photo area or card body to append to
         const photoArea = card.querySelector('.compact-card-photo, .presentation-result-card-image-container');
         if (photoArea) {
             photoArea.style.position = 'relative';
             photoArea.appendChild(badge);
-            console.log('[VitalityUI DEBUG] Badge CREATED in photoArea for card:', card.dataset.recordId);
         } else {
             card.style.position = 'relative';
             card.appendChild(badge);
-            console.log('[VitalityUI DEBUG] Badge CREATED on card (no photo area) for:', card.dataset.recordId);
         }
     }
 
     const emojiSpan = badge.querySelector('.vitality-emoji');
     if (emojiSpan) {
-        emojiSpan.textContent = scores.netEmoji || '⚖️';
+        emojiSpan.textContent = emoji;
     }
 }
 
@@ -360,6 +465,199 @@ function drawSynergyFlowLines(synergies) {
     svg.setAttribute('viewBox', `0 0 ${gridRect.width} ${gridRect.height}`);
     svg.setAttribute('width', gridRect.width);
     svg.setAttribute('height', gridRect.height);
+}
+
+/**
+ * Show a Goodness Report popup for a specific item.
+ * Displays the formula breakdown: vitality (70%) + sentiment (30%) = goodness score.
+ * Shows the 4-realm bar chart, community sentiment reaction pills, and rank among plan items.
+ */
+export function showGoodnessReport(recordId) {
+    if (!recordId) return;
+
+    // Close any existing report popup
+    closeGoodnessReport();
+
+    const record = getRecordById(recordId);
+    if (!record) return;
+
+    const name = record.fields?.Name || 'Item';
+    const scores = state.vitality?.itemScores?.get(recordId);
+    if (!scores) return;
+
+    const sentiment = scores.sentiment || { raw: 0, normalized: 0, count: 0 };
+
+    // Get price for the value section
+    const cartInfo = state.cart.lockedItems.get(recordId) || state.cart.items.get(recordId);
+    const priceParam = (cartInfo?.selections && Object.keys(cartInfo.selections).length > 0)
+        ? cartInfo.selections : cartInfo?.selectedOptionIndex;
+    const price = cartInfo ? (cartInfo.overridePrice ?? getRecordPrice(record, priceParam)) : getRecordPrice(record);
+    const priceText = (!isNaN(price) && price > 0) ? `$${price.toFixed(2)}` : 'Free';
+
+    // Calculate goodness per dollar
+    let valueText = '--';
+    if (!isNaN(price) && price > 0 && scores.goodnessScore > 0) {
+        valueText = `${(scores.goodnessScore / price * 100).toFixed(1)}¢/pt`;
+    } else if ((!price || price === 0) && scores.goodnessScore > 0) {
+        valueText = 'Free + Good';
+    } else if (scores.goodnessScore < 0) {
+        valueText = 'Drain';
+    }
+
+    // Realm bars
+    const realms = ['cosmological', 'planetary', 'collective', 'internal'];
+    const realmBarsHTML = realms.map(realm => {
+        const val = scores[realm] || 0;
+        const meta = REALM_META[realm];
+        const pct = Math.abs(val) * 100;
+        const isNeg = val < 0;
+        return `
+            <div class="goodness-realm-row">
+                <span class="goodness-realm-label">${meta.emoji} ${meta.label}</span>
+                <div class="goodness-realm-bar-track">
+                    <div class="goodness-realm-bar-fill ${isNeg ? 'negative' : 'positive'}" style="width: ${pct}%; background: ${isNeg ? '#ef4444' : meta.color};"></div>
+                </div>
+                <span class="goodness-realm-value" style="color: ${isNeg ? '#ef4444' : meta.color}">${val >= 0 ? '+' : ''}${val.toFixed(2)}</span>
+            </div>
+        `;
+    }).join('');
+
+    // Sentiment reactions display
+    const reactions = state.session.reactions?.get(recordId);
+    let reactionPillsHTML = '<span class="goodness-no-reactions">No reactions yet</span>';
+    if (reactions && reactions instanceof Map && reactions.size > 0) {
+        const emojiCounts = {};
+        reactions.forEach((emoji) => { emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1; });
+        reactionPillsHTML = Object.entries(emojiCounts)
+            .map(([emoji, count]) => {
+                const score = REACTION_SCORES[emoji] || 0;
+                const scoreClass = score > 0 ? 'positive' : score < 0 ? 'negative' : 'neutral';
+                return `<span class="goodness-reaction-pill ${scoreClass}">${emoji}${count > 1 ? `<sup>${count}</sup>` : ''} <small>${score >= 0 ? '+' : ''}${score.toFixed(1)}</small></span>`;
+            }).join('');
+    }
+
+    // Rank among plan items
+    let rankHTML = '';
+    if (state.vitality?.itemScores?.size > 1) {
+        const sorted = [...state.vitality.itemScores.entries()]
+            .sort((a, b) => b[1].goodnessScore - a[1].goodnessScore);
+        const rank = sorted.findIndex(([id]) => id === recordId) + 1;
+        const total = sorted.length;
+        rankHTML = `<div class="goodness-rank">#${rank} of ${total} items in plan</div>`;
+    }
+
+    const popupHTML = `
+        <div class="goodness-report-modal">
+            <div class="goodness-report-header">
+                <div>
+                    <h3 class="goodness-report-title">Goodness Report</h3>
+                    <div class="goodness-report-item-name">${name}</div>
+                </div>
+                <button class="goodness-report-close">&times;</button>
+            </div>
+
+            <div class="goodness-report-body">
+                <div class="goodness-score-hero">
+                    <span class="goodness-hero-emoji">${scores.goodnessEmoji || scores.netEmoji}</span>
+                    <div class="goodness-hero-details">
+                        <div class="goodness-hero-label">${scores.goodnessLabel || scores.netLabel || 'Neutral'}</div>
+                        <div class="goodness-hero-score">${scores.goodnessScore >= 0 ? '+' : ''}${scores.goodnessScore.toFixed(3)}</div>
+                    </div>
+                </div>
+
+                <div class="goodness-formula">
+                    <div class="goodness-formula-row">
+                        <span class="goodness-formula-component vitality-component">
+                            <span class="formula-pct">70%</span>
+                            <span class="formula-label">Vitality</span>
+                            <span class="formula-emoji">${scores.netEmoji}</span>
+                            <span class="formula-value">${scores.net >= 0 ? '+' : ''}${scores.net.toFixed(3)}</span>
+                        </span>
+                        <span class="goodness-formula-plus">+</span>
+                        <span class="goodness-formula-component sentiment-component">
+                            <span class="formula-pct">30%</span>
+                            <span class="formula-label">Sentiment</span>
+                            <span class="formula-value">${sentiment.normalized >= 0 ? '+' : ''}${sentiment.normalized.toFixed(3)}</span>
+                            <span class="formula-count">${sentiment.count} reaction${sentiment.count !== 1 ? 's' : ''}</span>
+                        </span>
+                        <span class="goodness-formula-equals">=</span>
+                        <span class="goodness-formula-result">
+                            <span class="formula-emoji">${scores.goodnessEmoji || scores.netEmoji}</span>
+                            <span class="formula-value">${scores.goodnessScore >= 0 ? '+' : ''}${scores.goodnessScore.toFixed(3)}</span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="goodness-section">
+                    <div class="goodness-section-title">Four Realms</div>
+                    ${realmBarsHTML}
+                </div>
+
+                <div class="goodness-section">
+                    <div class="goodness-section-title">Community Sentiment</div>
+                    <div class="goodness-reactions-list">${reactionPillsHTML}</div>
+                </div>
+
+                <div class="goodness-section goodness-value-section">
+                    <div class="goodness-section-title">Value</div>
+                    <div class="goodness-value-row">
+                        <span>${priceText}</span>
+                        <span>${scores.goodnessEmoji || scores.netEmoji} ${scores.goodnessLabel || ''}</span>
+                        <span class="goodness-value-ratio">${valueText}</span>
+                    </div>
+                </div>
+
+                ${rankHTML}
+            </div>
+        </div>
+    `;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'goodness-report-overlay';
+    overlay.id = 'goodness-report-overlay';
+
+    let zIndex = 100000;
+    try { zIndex = getModalZIndex('picker'); } catch(e) { /* use default */ }
+
+    overlay.style.zIndex = zIndex;
+    overlay.innerHTML = popupHTML;
+    document.body.appendChild(overlay);
+
+    // Close handlers
+    const closeBtn = overlay.querySelector('.goodness-report-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeGoodnessReport);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeGoodnessReport();
+    });
+    document.addEventListener('keydown', goodnessEscHandler);
+}
+
+function goodnessEscHandler(e) {
+    if (e.key === 'Escape') closeGoodnessReport();
+}
+
+function closeGoodnessReport() {
+    const existing = document.getElementById('goodness-report-overlay');
+    if (existing) existing.remove();
+    document.removeEventListener('keydown', goodnessEscHandler);
+}
+
+/**
+ * Update the vitality/goodness badge inside the detail modal's price area.
+ * Called after vitality recalculates while the modal is open.
+ * @param {string} recordId - The record currently displayed in the modal
+ */
+export function updateModalVitalityBadge(recordId) {
+    if (!recordId) return;
+    const scores = state.vitality?.itemScores?.get(recordId);
+    const emoji = scores?.goodnessEmoji || scores?.netEmoji || '⚖️';
+    const label = scores?.goodnessLabel || scores?.netLabel || 'Neutral';
+
+    const badge = document.getElementById('modal-vitality-badge');
+    if (badge) {
+        badge.textContent = emoji;
+        badge.title = `Goodness: ${label} (click for details)`;
+    }
 }
 
 /**

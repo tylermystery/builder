@@ -15740,3 +15740,370 @@ hr.total-divider {
     font-size: 1.2em;
     color: #aaa;
 }
+
+/* ==========================================================================
+   UNIFIED ACTION MENU - Radial emoji reactions + collaborator actions
+   ========================================================================== */
+
+/* Overlay backdrop */
+.action-menu-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.2s ease-out;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    z-index: 100000;
+}
+.action-menu-overlay.action-menu-visible {
+    opacity: 1;
+}
+.action-menu-overlay.action-menu-closing {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Root container — positioned at the center point */
+.action-menu-root {
+    position: fixed;
+    width: 0;
+    height: 0;
+    transform-origin: center center;
+}
+
+/* ── Center hub ── */
+.action-menu-center {
+    position: absolute;
+    width: 64px;
+    height: 64px;
+    left: -32px;
+    top: -32px;
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 3px rgba(255, 255, 255, 0.15);
+    cursor: default;
+    transition: transform 0.2s ease;
+}
+.action-menu-center:hover {
+    transform: scale(1.05);
+}
+
+.action-menu-center-emoji {
+    font-size: 1.4em;
+    line-height: 1;
+    transition: all 0.2s ease;
+}
+.action-menu-center-emoji.previewing {
+    transform: scale(1.15);
+    filter: drop-shadow(0 0 8px rgba(255, 200, 0, 0.5));
+}
+
+.action-menu-center-score {
+    font-size: 0.55em;
+    color: #94a3b8;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.2s ease;
+}
+.action-menu-center-score.previewing {
+    color: #fbbf24;
+}
+
+.action-menu-center-label {
+    font-size: 0.4em;
+    color: #64748b;
+    text-align: center;
+    max-width: 56px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: color 0.2s ease;
+}
+.action-menu-center-label.previewing {
+    color: #f59e0b;
+}
+
+/* ── Inner ring: emoji buttons ── */
+.action-menu-emoji-ring {
+    position: absolute;
+    width: 0;
+    height: 0;
+    left: 0;
+    top: 0;
+}
+
+.action-menu-emoji-btn {
+    position: absolute;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    gap: 1px;
+    opacity: 0;
+    transform: scale(0.3);
+    transition: opacity 0.2s ease-out, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    border: 1.5px solid rgba(255, 255, 255, 0.2);
+}
+.action-menu-visible .action-menu-emoji-btn {
+    opacity: 1;
+    transform: scale(1);
+}
+.action-menu-emoji-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.2) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    z-index: 5;
+    border-color: rgba(255, 255, 255, 0.4);
+}
+.action-menu-emoji-btn.selected {
+    background: rgba(59, 130, 246, 0.35);
+    border-color: rgba(59, 130, 246, 0.7);
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
+}
+
+.action-menu-emoji-char {
+    font-size: 1em;
+    line-height: 1;
+    pointer-events: none;
+}
+
+.action-menu-emoji-score {
+    font-size: 0.45em;
+    color: #cbd5e1;
+    font-weight: 600;
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Outer ring: collaborator actions ── */
+.action-menu-action-ring {
+    position: absolute;
+    width: 0;
+    height: 0;
+    left: 0;
+    top: 0;
+}
+
+.action-menu-action-btn {
+    position: absolute;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    gap: 2px;
+    opacity: 0;
+    transform: scale(0.3);
+    transition: opacity 0.2s ease-out, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.action-menu-visible .action-menu-action-btn {
+    opacity: 0.95;
+    transform: scale(1);
+}
+.action-menu-action-btn:hover {
+    transform: scale(1.18) !important;
+    opacity: 1 !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    z-index: 5;
+    border-color: rgba(255, 255, 255, 0.7);
+}
+.action-menu-action-btn:active {
+    transform: scale(0.95) !important;
+}
+
+.action-menu-action-icon {
+    font-size: 1.1em;
+    line-height: 1;
+    pointer-events: none;
+}
+
+.action-menu-action-label {
+    font-size: 0.45em;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    pointer-events: none;
+}
+
+/* ── Tier label ── */
+.action-menu-tier-label {
+    position: absolute;
+    top: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(30, 41, 59, 0.9);
+    color: #e2e8f0;
+    font-size: 0.6em;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 12px;
+    white-space: nowrap;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 5;
+}
+.action-menu-tier-label.tier-changed {
+    animation: tierBounce 0.3s ease;
+}
+@keyframes tierBounce {
+    0% { transform: translateX(-50%) scale(1); }
+    50% { transform: translateX(-50%) scale(1.15); }
+    100% { transform: translateX(-50%) scale(1); }
+}
+
+/* ── Vitality summary panel ── */
+.action-menu-vitality-summary {
+    position: absolute;
+    bottom: -50px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.92);
+    border-radius: 10px;
+    padding: 8px 12px;
+    min-width: 180px;
+    max-width: 230px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 5;
+}
+
+.action-menu-summary-title {
+    font-size: 0.6em;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+    font-weight: 700;
+}
+
+.action-menu-realm-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 3px;
+}
+
+.action-menu-realm-icon {
+    font-size: 0.75em;
+    width: 18px;
+    text-align: center;
+}
+
+.action-menu-realm-bar-track {
+    flex: 1;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.action-menu-realm-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.4s ease;
+}
+
+.action-menu-realm-val {
+    font-size: 0.55em;
+    font-weight: 600;
+    width: 38px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.action-menu-summary-sentiment {
+    font-size: 0.55em;
+    color: #64748b;
+    margin-top: 4px;
+    text-align: center;
+}
+
+.action-menu-summary-formula {
+    font-size: 0.5em;
+    color: #94a3b8;
+    margin-top: 4px;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.action-menu-summary-goodness {
+    font-size: 1.4em;
+    transition: transform 0.2s ease;
+}
+.action-menu-summary-goodness.previewing {
+    transform: scale(1.2);
+    filter: drop-shadow(0 0 6px rgba(255, 200, 0, 0.5));
+}
+
+/* ── Mobile adjustments ── */
+@media (max-width: 768px) {
+    .action-menu-center {
+        width: 54px;
+        height: 54px;
+        left: -27px;
+        top: -27px;
+    }
+    .action-menu-center-emoji {
+        font-size: 1.2em;
+    }
+    .action-menu-center-score {
+        font-size: 0.45em;
+    }
+    .action-menu-center-label {
+        font-size: 0.35em;
+        max-width: 46px;
+    }
+    .action-menu-emoji-char {
+        font-size: 0.85em;
+    }
+    .action-menu-emoji-score {
+        font-size: 0.4em;
+    }
+    .action-menu-action-icon {
+        font-size: 0.95em;
+    }
+    .action-menu-action-label {
+        font-size: 0.38em;
+    }
+    .action-menu-tier-label {
+        font-size: 0.55em;
+        top: 34px;
+    }
+    .action-menu-vitality-summary {
+        min-width: 150px;
+        max-width: 200px;
+        padding: 6px 8px;
+        bottom: -44px;
+    }
+}
+
+/* ==========================================================================
+   END UNIFIED ACTION MENU
+   ========================================================================== */
