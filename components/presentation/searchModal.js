@@ -317,7 +317,11 @@ async function performPresentationSearch(searchTerm) {
     `;
     presentationSearchResults.appendChild(aiLoadingSection);
 
-    // Fetch AI results
+    // Show manual add option immediately — don't wait for AI results
+    const manualAddSection = createPresentationManualAddOption(searchTerm);
+    presentationSearchResults.appendChild(manualAddSection);
+
+    // Fetch AI results asynchronously — insert results before manual add section when ready
     try {
         const response = await fetch('/.netlify/functions/process-weblink', {
             method: 'POST',
@@ -497,7 +501,7 @@ async function performPresentationSearch(searchTerm) {
             aiRecords.push(record);
         }
 
-        // Display AI results
+        // Display AI results — insert before the manual add section
         if (aiRecords.length > 0) {
             const aiSection = await createPresentationResultSection(
                 'AI Discoveries',
@@ -505,16 +509,11 @@ async function performPresentationSearch(searchTerm) {
                 aiRecords,
                 true
             );
-            presentationSearchResults.appendChild(aiSection);
+            presentationSearchResults.insertBefore(aiSection, manualAddSection);
         }
 
-        // Always add manual add option after AI results
-        const manualAddSection = createPresentationManualAddOption(searchTerm);
-        presentationSearchResults.appendChild(manualAddSection);
-
-        // Show no results message if nothing found (but keep manual add option)
+        // Show no results message if nothing found (insert before manual add section)
         if (catalogMatches.length === 0 && aiRecords.length === 0) {
-            // Insert no results message before the manual add section
             const noResultsDiv = document.createElement('div');
             noResultsDiv.className = 'presentation-no-results';
             noResultsDiv.innerHTML = `
@@ -534,11 +533,7 @@ async function performPresentationSearch(searchTerm) {
         log('Presentation', `AI search error: ${error.message}`);
         aiLoadingSection.remove();
 
-        // Add manual add option even on error
-        const manualAddSection = createPresentationManualAddOption(searchTerm);
-        presentationSearchResults.appendChild(manualAddSection);
-
-        // Show error state if no catalog matches either (but keep manual add option)
+        // Show error state if no catalog matches either (insert before manual add section)
         if (catalogMatches.length === 0) {
             const errorDiv = document.createElement('div');
             errorDiv.className = 'presentation-no-results';

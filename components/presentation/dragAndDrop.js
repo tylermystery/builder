@@ -132,7 +132,11 @@ export function cleanup() {
         dragMergeIndicator.style.visibility = 'hidden';
     }
 
-    deps = {};
+    // Note: Do NOT reset deps here. The presentation view may be hidden and
+    // re-shown without re-calling init() (e.g., syncUiWithUrl closes all overlays
+    // before re-opening the target view). Wiping deps causes initializeItemDragDrop
+    // and attachRadialMenuListeners to fail on re-show because deps.getItineraryItemsListEl
+    // becomes undefined. deps are only set via init() when ensureDOMElements() runs fresh.
 }
 
 /**
@@ -190,8 +194,9 @@ async function loadSortableJS() {
 // ─── Initialize drag-and-drop for plan items ────────────────────────────────
 
 export async function initializeItemDragDrop() {
-    const itineraryItemsListEl = deps.getItineraryItemsListEl();
+    const itineraryItemsListEl = deps.getItineraryItemsListEl ? deps.getItineraryItemsListEl() : null;
     if (!itineraryItemsListEl) {
+        console.warn('[DragDrop] initializeItemDragDrop: itineraryItemsListEl not available, aborting');
         return;
     }
 
@@ -564,7 +569,10 @@ export function hideDragBuckets() {
 // Initialize radial menu with cloned bucket elements
 export function initializeRadialMenu() {
     if (!radialMenuContainer || !dragBucketsEl) {
-        console.error('[Radial Menu] Missing radialMenuContainer or dragBucketsEl');
+        console.error('[Radial Menu] Missing radialMenuContainer or dragBucketsEl', {
+            radialMenuContainer: !!radialMenuContainer,
+            dragBucketsEl: !!dragBucketsEl,
+        });
         return;
     }
 
@@ -1066,7 +1074,9 @@ function handleRadialBucketDrop(clientX, clientY, capturedMergeTargetId = null, 
 
 function handleItemPointerDown(event, itemElement) {
     // Only handle if presentation is active
-    if (!document.body.classList.contains('presentation-active')) return;
+    if (!document.body.classList.contains('presentation-active')) {
+        return;
+    }
 
     // Get initial touch/click coordinates
     const clientX = event.touches ? event.touches[0].clientX : event.clientX;
@@ -1074,8 +1084,6 @@ function handleItemPointerDown(event, itemElement) {
 
     initialTouchPoint = { x: clientX, y: clientY };
     directionDetected = false;
-
-    console.log('[ActionMenu Swipe DEBUG] Pointer down at', clientX, clientY);
 
     // Set up move and end handlers
     if (event.touches) {
@@ -1104,7 +1112,6 @@ function handleItemPointerMove(event, itemElement) {
 
     // If the action menu is already open, no further swipe detection needed
     if (deps.isActionMenuOpen()) {
-        console.log('[ActionMenu Swipe DEBUG] Pointer move ignored - action menu already open');
         return;
     }
 
@@ -1118,7 +1125,6 @@ function handleItemPointerMove(event, itemElement) {
 
         if (deltaX > deltaY) {
             // Horizontal movement - open the unified action menu
-            console.log('[ActionMenu Swipe DEBUG] Horizontal swipe detected - opening action menu');
 
             // Prevent default to stop scrolling
             if (event.cancelable) {
@@ -1137,7 +1143,6 @@ function handleItemPointerMove(event, itemElement) {
             }
 
             if (swipedRecordId) {
-                console.log('[ActionMenu Swipe DEBUG] Swipe → opening Action Menu for recordId:', swipedRecordId, 'at:', initialTouchPoint.x, initialTouchPoint.y);
                 deps.openActionMenu(swipedRecordId, {
                     x: initialTouchPoint.x,
                     y: initialTouchPoint.y,
@@ -1148,18 +1153,12 @@ function handleItemPointerMove(event, itemElement) {
             cleanupRadialEventListeners();
         } else {
             // Vertical movement - allow scrolling, cleanup handlers
-            console.log('[ActionMenu Swipe DEBUG] Vertical swipe detected - allowing scroll');
             cleanupRadialEventListeners();
         }
     }
 }
 
 function handleItemPointerUp(event) {
-    const clientX = event.changedTouches ? event.changedTouches[0].clientX : event.clientX;
-    const clientY = event.changedTouches ? event.changedTouches[0].clientY : event.clientY;
-
-    console.log('[ActionMenu Swipe DEBUG] Pointer up at', clientX, clientY);
-
     // The action menu handles its own click-based interactions,
     // so no bucket-drop logic is needed here anymore.
 
@@ -1191,18 +1190,15 @@ function cleanupRadialEventListeners() {
 
 // Attach swipe/pointer event listeners for action menu activation on itinerary items
 export function attachRadialMenuListeners() {
-    const itineraryItemsListEl = deps.getItineraryItemsListEl();
+    const itineraryItemsListEl = deps.getItineraryItemsListEl ? deps.getItineraryItemsListEl() : null;
     if (!itineraryItemsListEl) {
-        console.log('[ActionMenu Swipe DEBUG] attachRadialMenuListeners: no itineraryItemsListEl, skipping');
         return;
     }
     // Guard: only attach once since we use event delegation on a persistent element
     if (radialListenersAttached) {
-        console.log('[ActionMenu Swipe DEBUG] attachRadialMenuListeners: already attached, skipping');
         return;
     }
     radialListenersAttached = true;
-    console.log('[ActionMenu Swipe DEBUG] attachRadialMenuListeners: attaching touch/mouse listeners for swipe-to-action-menu');
 
     // Use event delegation on the items list
     itineraryItemsListEl.addEventListener('touchstart', handleRadialTouchStart, { passive: true });
@@ -1213,7 +1209,6 @@ export function handleRadialTouchStart(event) {
     // Board view: target compact cards; List view: target item sections
     const targetEl = event.target.closest('.compact-card') || event.target.closest('.itinerary-item-section');
     if (targetEl) {
-        console.log('[ActionMenu Swipe DEBUG] Touch start on card/section, delegating to handleItemPointerDown');
         handleItemPointerDown(event, targetEl);
     }
 }
@@ -1225,7 +1220,6 @@ export function handleRadialMouseDown(event) {
     // Board view: target compact cards; List view: target item sections
     const targetEl = event.target.closest('.compact-card') || event.target.closest('.itinerary-item-section');
     if (targetEl) {
-        console.log('[ActionMenu Swipe DEBUG] Mouse down on card/section, delegating to handleItemPointerDown');
         handleItemPointerDown(event, targetEl);
     }
 }

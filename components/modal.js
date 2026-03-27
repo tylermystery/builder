@@ -4326,15 +4326,9 @@ function applyTagChipStyle(chip, isSelected) {
 let isModalRendering = false;
 
 export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = null) {
-    console.log('[MODAL DEBUG] ========== showDetailModal called ==========');
-    console.log('[MODAL DEBUG] record:', record?.id, record?.fields?.Name);
-    console.log('[MODAL DEBUG] modalOverlay element:', !!modalOverlay);
-    console.log('[MODAL DEBUG] isModalRendering:', isModalRendering);
-
     // Prevent concurrent modal renders that could cause duplicate content
     if (isModalRendering) {
         log('Modal', 'Modal is already rendering, skipping duplicate call');
-        console.log('[MODAL DEBUG] BLOCKED: Modal is already rendering, skipping.');
         return;
     }
     isModalRendering = true;
@@ -4344,30 +4338,6 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     // DEBUG: Comprehensive entry point logging for direct modal URL debugging
     const deferredCssLink = document.querySelector('link[href*="deferred.css"]');
     const deferredCssLoaded = deferredCssLink && deferredCssLink.rel === 'stylesheet';
-    const isDirectUrlAccess = !document.referrer || document.referrer === '' ||
-                              (new URL(document.referrer).pathname !== window.location.pathname);
-
-    console.log('[MODAL-DEBUG] showDetailModal entry:', {
-        recordId: record.id,
-        recordName: record.fields?.Name,
-        timestamp: performance.now().toFixed(2) + 'ms',
-        isDirectUrlAccess,
-        documentReferrer: document.referrer || 'none',
-        // CSS Loading State
-        deferredCssRel: deferredCssLink ? deferredCssLink.rel : 'not found',
-        deferredCssLoaded,
-        totalStylesheets: document.styleSheets.length,
-        // DOM State
-        documentReadyState: document.readyState,
-        modalOverlayExists: !!document.getElementById('detail-modal-overlay'),
-        modalOverlayDisplay: modalOverlay ? window.getComputedStyle(modalOverlay).display : 'N/A',
-        bodyClasses: document.body.className
-    });
-
-    // If CSS not loaded yet, add a note (main.js now handles waiting for CSS on direct URL access)
-    if (!deferredCssLoaded) {
-        console.log('[MODAL-DEBUG] Note: Deferred CSS not yet loaded. main.js should have waited for it on direct URL access.');
-    }
 
     const detailSpecs = [
         { fieldName: 'Duration', label: 'Duration' },
@@ -4619,25 +4589,37 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         // Mark as in-progress to prevent duplicate attempts
         window._aiImageGenerationInProgress.add(record.id);
 
-        try {
-            const requestPayload = {
-                name: record.fields?.Name || 'Unnamed Item',
-                description: record.fields?.Description || '',
-                category: record.fields?.Category || '',
-                serviceType: record.fields?.ServiceType || record.fields?.['Service Type'] || '',
-                tags: record.fields?.['Media Tags'] || '',
-                itemId: record.id,
-                sessionId: state.session?.id || 'unsaved'
-            };
+        // Fire AI image generation in the background — don't block modal rendering.
+        // A loading indicator is shown on the image area; when the AI image arrives,
+        // the modal's main image, thumbnails, cache, and indicators are updated live.
+        const aiGenRecordId = record.id;
+        const aiGenRequestPayload = {
+            name: record.fields?.Name || 'Unnamed Item',
+            description: record.fields?.Description || '',
+            category: record.fields?.Category || '',
+            serviceType: record.fields?.ServiceType || record.fields?.['Service Type'] || '',
+            tags: record.fields?.['Media Tags'] || '',
+            itemId: record.id,
+            sessionId: state.session?.id || 'unsaved'
+        };
 
-            console.log('[AI IMAGE AUTO-GEN] Request payload:', JSON.stringify(requestPayload));
+        console.log('[AI IMAGE AUTO-GEN] Request payload:', JSON.stringify(aiGenRequestPayload));
 
-            const aiImageResponse = await fetch('/.netlify/functions/generate-ai-image', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestPayload)
-            });
+        // Show loading indicator on the image area
+        const aiImageLoadingIndicator = document.createElement('div');
+        aiImageLoadingIndicator.className = 'modal-ai-image-loading';
+        aiImageLoadingIndicator.innerHTML = `
+            <div class="modal-ai-image-spinner"></div>
+            <span class="modal-ai-image-loading-text">Generating AI image...</span>
+        `;
+        // Append to modalMainImage (will overlay on top of placeholder)
+        modalMainImage.appendChild(aiImageLoadingIndicator);
 
+        fetch('/.netlify/functions/generate-ai-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(aiGenRequestPayload)
+        }).then(async (aiImageResponse) => {
             console.log('[AI IMAGE AUTO-GEN] Response status:', aiImageResponse.status);
 
             if (aiImageResponse.ok) {
@@ -4645,10 +4627,6 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                 console.log('[AI IMAGE AUTO-GEN] Response JSON:', JSON.stringify(aiImageResult));
 
                 if (aiImageResult.success && aiImageResult.imageUrl) {
-                    // Update imageUrls with the AI-generated image
-                    imageUrls = [aiImageResult.imageUrl];
-                    imageSource = 'ai_generated';
-
                     // Store the AI image in the record so it persists
                     const aiGeneratedImage = {
                         url: aiImageResult.imageUrl,
@@ -4657,7 +4635,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     };
 
                     // Update record in state
-                    const recordIndex = state.records.all.findIndex(r => r.id === record.id);
+                    const recordIndex = state.records.all.findIndex(r => r.id === aiGenRecordId);
                     if (recordIndex !== -1) {
                         state.records.all[recordIndex].fields._customImages = [aiGeneratedImage];
                         state.records.all[recordIndex].fields._hasAIGeneratedImage = true;
@@ -4672,26 +4650,74 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
                     console.log('[AI IMAGE AUTO-GEN] SUCCESS - AI image stored:', aiImageResult.imageUrl);
                     log('Modal', `AI image auto-generated for ${record.fields?.Name}: ${aiImageResult.imageUrl}`);
+
+                    // Update the modal live if it's still showing this record
+                    const currentModalOverlay = document.getElementById('detail-modal-overlay');
+                    if (currentModalOverlay && currentModalOverlay.dataset.recordId === aiGenRecordId && currentModalOverlay.classList.contains('active')) {
+                        const liveMainImage = document.getElementById('modal-main-image');
+                        if (liveMainImage) {
+                            // Remove loading indicator
+                            const loadingEl = liveMainImage.querySelector('.modal-ai-image-loading');
+                            if (loadingEl) loadingEl.remove();
+
+                            // Update main image
+                            const optimizedUrl = aiImageResult.imageUrl.includes('cloudinary')
+                                ? applyCloudinaryTransform(aiImageResult.imageUrl, 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+                                : aiImageResult.imageUrl;
+                            liveMainImage.style.backgroundImage = `url('${optimizedUrl}')`;
+
+                            // Update AI indicator
+                            const existingIndicator = liveMainImage.querySelector('.ai-image-source-modal');
+                            if (existingIndicator) {
+                                existingIndicator.textContent = 'AI Generated';
+                                existingIndicator.className = 'ai-image-source-modal approximation';
+                                existingIndicator.title = 'This image was AI-generated based on item details. Upload your own photos to replace it.';
+                            }
+
+                            // Update first thumbnail if it exists
+                            const liveThumbnailStrip = document.getElementById('modal-thumbnail-strip');
+                            if (liveThumbnailStrip) {
+                                const firstThumb = liveThumbnailStrip.querySelector('.thumbnail-img');
+                                if (firstThumb) {
+                                    const optimizedThumb = aiImageResult.imageUrl.includes('cloudinary')
+                                        ? applyCloudinaryTransform(aiImageResult.imageUrl, 'w_150,h_150,c_fill,f_auto,q_auto')
+                                        : aiImageResult.imageUrl;
+                                    firstThumb.style.backgroundImage = `url('${optimizedThumb}')`;
+                                }
+                            }
+                        }
+
+                        // Update image cache
+                        if (typeof window.itemImagesCache !== 'undefined') {
+                            window.itemImagesCache.set(aiGenRecordId, { images: [aiImageResult.imageUrl], currentIndex: 0 });
+                        }
+                    } else {
+                        // Modal closed or showing different record — remove loading indicator if still in DOM
+                        const staleLoading = document.querySelector('.modal-ai-image-loading');
+                        if (staleLoading) staleLoading.remove();
+                    }
                 } else {
                     console.log('[AI IMAGE AUTO-GEN] Response OK but missing success or imageUrl:', aiImageResult);
-                    // Mark as attempted even if no image returned (to prevent retry loops)
-                    window._aiImageGenerationAttempted.add(record.id);
+                    window._aiImageGenerationAttempted.add(aiGenRecordId);
+                    // Remove loading indicator
+                    const loadingEl = document.querySelector('.modal-ai-image-loading');
+                    if (loadingEl) loadingEl.remove();
                 }
             } else {
                 const errorText = await aiImageResponse.text();
                 console.warn('[AI IMAGE AUTO-GEN] FAILED:', errorText);
-                // Mark as attempted to prevent retry on failure
-                window._aiImageGenerationAttempted.add(record.id);
+                window._aiImageGenerationAttempted.add(aiGenRecordId);
+                const loadingEl = document.querySelector('.modal-ai-image-loading');
+                if (loadingEl) loadingEl.remove();
             }
-        } catch (aiError) {
+        }).catch((aiError) => {
             console.warn('[AI IMAGE AUTO-GEN] EXCEPTION:', aiError.message);
-            console.warn('[AI IMAGE AUTO-GEN] Stack:', aiError.stack);
-            // Mark as attempted to prevent retry on exception
-            window._aiImageGenerationAttempted.add(record.id);
-        } finally {
-            // Always remove from in-progress when done
-            window._aiImageGenerationInProgress.delete(record.id);
-        }
+            window._aiImageGenerationAttempted.add(aiGenRecordId);
+            const loadingEl = document.querySelector('.modal-ai-image-loading');
+            if (loadingEl) loadingEl.remove();
+        }).finally(() => {
+            window._aiImageGenerationInProgress.delete(aiGenRecordId);
+        });
     }
 
     // Merge comment-uploaded images from presentation view's itemImagesCache
@@ -7936,23 +7962,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     const isPresentationActive = document.body.classList.contains('presentation-active');
     const modalZIndex = getModalZIndex('detail');
 
-    // DEBUG: Log modal overlay state before activation
-    console.log('[Modal DEBUG] Before activation:', {
-        overlayId: modalOverlay.id,
-        overlayClasses: modalOverlay.className,
-        computedDisplay: window.getComputedStyle(modalOverlay).display,
-        computedOpacity: window.getComputedStyle(modalOverlay).opacity,
-        computedBgColor: window.getComputedStyle(modalOverlay).backgroundColor,
-        computedPosition: window.getComputedStyle(modalOverlay).position,
-        computedZIndex: window.getComputedStyle(modalOverlay).zIndex,
-        deferredCssLoaded: !!document.querySelector('link[href*="deferred.css"][rel="stylesheet"]'),
-        criticalCssExists: !!document.querySelector('style'),
-        isPresentationActive,
-        calculatedZIndex: modalZIndex
-    });
-
     modalOverlay.classList.add('active');
-    console.log('[MODAL DEBUG] Detail modal overlay activated (classList.add active)');
 
     // CRITICAL FIX: Apply essential overlay styles inline to ensure they work
     // even if CSS hasn't fully loaded (direct URL access scenario)
@@ -8111,67 +8121,6 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             } else {
                 console.log('[Modal DEBUG] ✓ Modal is correctly above presentation view');
             }
-        }
-    });
-
-    // DEBUG: Log final modal rendering completion state
-    console.log('[MODAL-DEBUG] showDetailModal complete:', {
-        recordId: record.id,
-        timestamp: performance.now().toFixed(2) + 'ms',
-        deferredCssLoadedNow: !!document.querySelector('link[href*="deferred.css"][rel="stylesheet"]'),
-        modalOverlayActive: modalOverlay.classList.contains('active'),
-        modalContentVisible: !!modalOverlay.querySelector('.modal-content'),
-        // Check background page elements to see if they have proper styling
-        pageElementStyles: {
-            eventPlanPanel: (() => {
-                const el = document.getElementById('event-plan-panel');
-                if (!el) return 'not found';
-                const styles = window.getComputedStyle(el);
-                return {
-                    backgroundColor: styles.backgroundColor,
-                    backdropFilter: styles.backdropFilter || styles.webkitBackdropFilter || 'none',
-                    display: styles.display,
-                    position: styles.position,
-                    visibility: styles.visibility,
-                    // Expected from deferred.css: rgba(255, 255, 255, 0.7)
-                    hasExpectedBg: styles.backgroundColor.includes('rgba(255, 255, 255') || styles.backgroundColor.includes('255, 255, 255')
-                };
-            })(),
-            filterControls: (() => {
-                const el = document.getElementById('filter-controls');
-                if (!el) return 'not found';
-                const styles = window.getComputedStyle(el);
-                return {
-                    backgroundColor: styles.backgroundColor,
-                    backdropFilter: styles.backdropFilter || styles.webkitBackdropFilter || 'none',
-                    display: styles.display,
-                    // Expected from deferred.css: rgba(255, 255, 255, 0.7)
-                    hasExpectedBg: styles.backgroundColor.includes('rgba(255, 255, 255') || styles.backgroundColor.includes('255, 255, 255')
-                };
-            })(),
-            sidebarContainer: (() => {
-                const el = document.getElementById('sidebar-container');
-                if (!el) return 'not found';
-                const styles = window.getComputedStyle(el);
-                return {
-                    display: styles.display,
-                    width: styles.width,
-                    visibility: styles.visibility
-                };
-            })(),
-            header: (() => {
-                const el = document.querySelector('header, .header, #header');
-                if (!el) return 'not found';
-                const styles = window.getComputedStyle(el);
-                return {
-                    backgroundColor: styles.backgroundColor,
-                    position: styles.position
-                };
-            })(),
-            catalogBgColor: (() => {
-                const el = document.querySelector('#catalog-container, .catalog-container');
-                return el ? window.getComputedStyle(el).backgroundColor : 'not found';
-            })()
         }
     });
 
@@ -8510,7 +8459,6 @@ export async function showGroupDetailModal(group, allRecords) {
 }
 
 export function hideDetailModal() {
-    console.log('[MODAL DEBUG] hideDetailModal called. modalOverlay:', !!modalOverlay, 'isActive:', modalOverlay?.classList?.contains('active'));
     // Reset the rendering guard when modal is closed
     isModalRendering = false;
 
