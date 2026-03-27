@@ -461,6 +461,18 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
         const aiData = await response.json();
         log('Events', 'AI Search Response:', aiData);
 
+        // === IMAGE DEBUG: Log raw AI response image data ===
+        console.log('[IMAGE DEBUG] ========== AI PARSE IMAGE DATA ==========');
+        console.log('[IMAGE DEBUG] Full AI Response:', JSON.stringify(aiData, null, 2));
+        if (aiData.itemType === 'Grouping' && aiData.children) {
+            aiData.children.forEach((child, idx) => {
+                console.log(`[IMAGE DEBUG] Child ${idx} "${child.Name}" - ImageKeywords:`, child.ImageKeywords);
+            });
+        } else if (aiData.Name) {
+            console.log(`[IMAGE DEBUG] Single item "${aiData.Name}" - ImageKeywords:`, aiData.ImageKeywords);
+        }
+        console.log('[IMAGE DEBUG] =========================================');
+
         // Remove loading indicator
         loadingSection.remove();
 
@@ -543,9 +555,21 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
                         'Media Tags': child.ImageKeywords || null,
                         'Curated Images': null, Subcategories: null, 'iCal URL': null,
                         'Lead Time (days)': null, RSVPs: null, Date: null,
-                        'Chat Enabled': false, Duration: null, Capacity: null
-                    }
+                        'Chat Enabled': false, Duration: null, Capacity: null,
+                        // Store Website separately for image scraping
+                        '_aiWebsite': child.Website || null
+                    },
+                    isAI: true
                 };
+
+                // === IMAGE DEBUG: Log created AI child record image fields ===
+                console.log(`[IMAGE DEBUG] Created AI child record "${childId}":`, {
+                    name: child.Name,
+                    imageKeywordsFromAI: child.ImageKeywords,
+                    mediaTagsFieldValue: childRecord.fields['Media Tags'],
+                    curatedImagesFieldValue: childRecord.fields['Curated Images']
+                });
+
                 aiRecords.push(childRecord);
                 state.records.all.push(childRecord);
             });
@@ -617,9 +641,21 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
                     'Media Tags': aiData.ImageKeywords || null,
                     'Curated Images': null, Subcategories: null,
                     'iCal URL': null, 'Lead Time (days)': null, RSVPs: null, Date: null,
-                    'Chat Enabled': false, Duration: null, Capacity: null
-                }
+                    'Chat Enabled': false, Duration: null, Capacity: null,
+                    // Store Website separately for image scraping
+                    '_aiWebsite': aiData.Website || null
+                },
+                isAI: true
             };
+
+            // === IMAGE DEBUG: Log created AI single-item record image fields ===
+            console.log(`[IMAGE DEBUG] Created AI single-item record "${customId}":`, {
+                name: aiData.Name,
+                imageKeywordsFromAI: aiData.ImageKeywords,
+                mediaTagsFieldValue: liveRecord.fields['Media Tags'],
+                curatedImagesFieldValue: liveRecord.fields['Curated Images']
+            });
+
             aiRecords.push(liveRecord);
             state.records.all.push(liveRecord);
         }

@@ -1057,8 +1057,17 @@ function getImageRequestKey(tags) {
 }
 
 export async function fetchImagesByTags(tags, retries = 2) {
+    // === IMAGE DEBUG: Log entry to fetchImagesByTags ===
+    console.log('[IMAGE DEBUG] fetchImagesByTags CALLED with:', {
+        tags: tags,
+        tagsType: typeof tags,
+        isArray: Array.isArray(tags),
+        retriesRemaining: retries
+    });
+
     if (!tags || (Array.isArray(tags) && tags.length === 0) || (typeof tags === 'string' && !tags.trim())) {
         log('API', 'fetchImagesByTags: No valid tags provided.');
+        console.log('[IMAGE DEBUG] fetchImagesByTags: No valid tags - returning empty array');
         return [];
     }
 
@@ -1082,13 +1091,31 @@ export async function fetchImagesByTags(tags, retries = 2) {
             if (Array.isArray(tags)) {
                 const validTags = tags.map(t => String(t).trim()).filter(Boolean);
                 if (validTags.length === 0) return [];
-                payload = { expression: validTags.map(tag => `tags:\\\"${tag}\\\"`).join(' AND ') };
+                // Cloudinary Search API uses tags:"value" syntax
+                payload = { expression: validTags.map(tag => `tags:"${tag}"`).join(' AND ') };
                 log('API', `Fetching images by expression: ${payload.expression}`);
             } else {
                 const tagName = String(tags).trim();
                 if (!tagName) return [];
-                payload = { tag: tagName };
-                log('API', `Fetching images by single tag: ${tagName}`);
+
+                // Check if the tag string contains spaces (multiple keywords from AI)
+                // If so, split and search using OR expression to find images matching ANY keyword
+                const tagParts = tagName.split(/\s+/).filter(Boolean);
+                if (tagParts.length > 1) {
+                    // Multiple space-separated keywords - use OR expression for broader matching
+                    // Cloudinary Search API uses tags:"value" syntax (with colon, not equals)
+                    payload = { expression: tagParts.map(tag => `tags:"${tag}"`).join(' OR ') };
+                    log('API', `Fetching images by multi-keyword expression: ${payload.expression}`);
+                    console.log('[IMAGE DEBUG] Multi-keyword search - splitting tags:', {
+                        original: tagName,
+                        splitTags: tagParts,
+                        expression: payload.expression
+                    });
+                } else {
+                    // Single keyword - use direct tag lookup
+                    payload = { tag: tagName };
+                    log('API', `Fetching images by single tag: ${tagName}`);
+                }
             }
 
             const response = await fetch('/.netlify/functions/cloudinary', {
@@ -1112,8 +1139,16 @@ export async function fetchImagesByTags(tags, retries = 2) {
             }
 
             const data = await response.json();
+            // === IMAGE DEBUG: Log Cloudinary response ===
+            console.log('[IMAGE DEBUG] Cloudinary response data:', {
+                hasResources: !!data.resources,
+                resourceCount: data.resources ? data.resources.length : 0,
+                fullResponse: JSON.stringify(data).substring(0, 500) + '...'
+            });
+
             if (!data.resources || data.resources.length === 0) {
                  log('API', 'No Cloudinary resources found for the given tags/expression.');
+                 console.log('[IMAGE DEBUG] No Cloudinary resources found - returning empty array');
                 return [];
             }
 
@@ -1213,62 +1248,244 @@ export async function fetchCuratedImagesByRecord(record) {
 }
 
 // In: api.js
-// REPLACE the entire fetchImagesForRecord function (around line 638)
+// Enhanced fetchImagesForRecord with multi-tier fallback for AI items
+
+// Track image loading status for real-time UI updates
+export const imageLoadingStatus = new Map();
+
+/**
+ * Updates the image loading status for a record and dispatches a custom event
+ * This allows the UI to show real-time progress
+ */
+function updateImageStatus(recordId, status, message) {
+    const statusData = { status, message, timestamp: Date.now() };
+    imageLoadingStatus.set(recordId, statusData);
+
+    // Dispatch custom event that UI can listen for
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('imageLoadingStatus', {
+            detail: { recordId, ...statusData }
+        }));
+    }
+
+    console.log(`[IMAGE STATUS] ${recordId}: ${status} - ${message}`);
+}
+
+/**
+ * Attempts to fetch an image by scraping a website for og:image/meta images
+ * @param {string} websiteUrl - The URL to scrape
+ * @param {string} businessName - The business name for fallback searches
+ * @param {string} imageKeywords - Keywords to search for images
+ * @returns {Promise<{success: boolean, imageUrl: string|null, source: string|null}>}
+ */
+async function fetchWebsiteImage(websiteUrl, businessName, imageKeywords) {
+    if (!websiteUrl) {
+        return { success: false, imageUrl: null, source: null };
+    }
+
+    try {
+        const response = await fetch('/.netlify/functions/fetch-website-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ websiteUrl, businessName, imageKeywords })
+        });
+
+        if (!response.ok) {
+            console.log('[IMAGE DEBUG] fetch-website-image returned error:', response.status);
+            return { success: false, imageUrl: null, source: null };
+        }
+
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.log('[IMAGE DEBUG] fetchWebsiteImage error:', error.message);
+        return { success: false, imageUrl: null, source: null };
+    }
+}
+
+/**
+ * Generates a deterministic placeholder URL based on the item name
+ * Uses Cloudinary's text overlay on a colored background
+ */
+function getDeterministicPlaceholder(record) {
+    const name = record.fields?.Name || 'Unknown Item';
+    const keywords = record.fields?.[CONSTANTS.FIELD_NAMES.MEDIA_TAGS] || '';
+
+    // Generate a color based on the name (for visual variety)
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+        hash = ((hash << 5) - hash) + name.charCodeAt(i);
+        hash = hash & hash;
+    }
+
+    // Muted color palette for professional look
+    const colors = ['2C3E50', '34495E', '7F8C8D', '95A5A6', '1ABC9C', '16A085', '2980B9', '8E44AD'];
+    const bgColor = colors[Math.abs(hash) % colors.length];
+
+    // Shortened name for overlay (first 20 chars)
+    const shortName = name.length > 20 ? name.substring(0, 20) + '...' : name;
+    const encodedName = encodeURIComponent(shortName);
+
+    // Cloudinary placeholder with item name overlay
+    const placeholderPublicID = 'ww71meppejsewxsxr4x7';
+    return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/w_600,h_520,c_fill,b_rgb:${bgColor}/l_text:Arial_36_bold:${encodedName},co_rgb:FFFFFF,g_center/${placeholderPublicID}.jpg`;
+}
 
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
-    if (!record || !record.id) return { imageUrls: [] };
+    // === IMAGE DEBUG: Log entry to fetchImagesForRecord ===
+    const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.isAI === true;
+    console.log('[IMAGE DEBUG] fetchImagesForRecord CALLED for:', {
+        recordId: record?.id,
+        recordName: record?.fields?.Name,
+        mediaTags: record?.fields?.['Media Tags'],
+        mediaTagsType: typeof record?.fields?.['Media Tags'],
+        curatedImages: record?.fields?.['Curated Images'],
+        aiWebsite: record?.fields?.['_aiWebsite'],
+        isAIRecord: isAIRecord
+    });
+
+    if (!record || !record.id) return { imageUrls: [], status: 'error' };
 
     const cacheKey = record.id;
     if (imageCache.has(cacheKey)) {
-        return { imageUrls: imageCache.get(cacheKey) };
+        return { imageUrls: imageCache.get(cacheKey), status: 'cached' };
     }
-
-    // --- NEW: DYNAMIC FALLBACK LOGIC (as you suggested) ---
-    // This function will now be called if all image fetches fail.
-    // It overlays the failing tag name onto a placeholder image for easy debugging.
-    const getDynamicFallbackUrl = (record) => {
-        const mediaTag = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS] || "NO_TAG_DEFINED";
-        
-        // URL-encode the text to be overlaid. \n becomes a new line.
-        const encodedTag = encodeURIComponent(`Failed Media Tag:\n${mediaTag}`);
-        
-        // A generic grey placeholder public ID
-        const placeholderPublicID = 'ww71meppejsewxsxr4x7'; // Replaced 'v1/samples/solid_color'
-        
-        // Cloudinary URL with text overlay:
-        // w_600,h_520,c_fill: Base canvas
-        // co_rgb:FFFFFF,b_rgb:00000080: Overlay text (white, 80% black background)
-        // l_text:Arial_32_bold:...,g_center: Place text in the center
-        return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/w_600,h_520,c_fill,g_auto,co_rgb:808080/l_text:Arial_32_bold:${encodedTag},co_rgb:FFFFFF,b_rgb:00000080,g_center/${placeholderPublicID}.jpg`;
-    };
-    // --- END DYNAMIC FALLBACK LOGIC ---
 
     let imageUrls = [];
+    let imageSource = null;
 
-    // --- THIS IS THE FIX ---
-    // We REMOVED the faulty 'isGrouping' check that was here.
-    // Now, we *always* try to find images for *every* item, letting the
-    // 'createInteractiveCard' function decide later if it wants a collage or a single image.
-    
-    // Step 1: Try to get 'Curated Images' (the new AI-linked field)
-    // Per your request, this is NOT the primary method, but we leave the logic in place.
-    imageUrls = await fetchCuratedImagesByRecord(record);
-    
-    // Step 2: If no curated images, fall back to 'Media Tags' (the old way)
-    if (!imageUrls || imageUrls.length === 0) {
-         log('API', `No curated images found for ${record.id}, falling back to Media Tags.`);
-         imageUrls = await fetchImagesByTags(record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
-    }
-    // --- END FIX ---
+    // ============================================================
+    // STEP 1: For AI-sourced items, try website scraping first
+    // ============================================================
+    if (isAIRecord) {
+        const websiteUrl = record.fields?.['_aiWebsite'];
+        const businessName = record.fields?.Name;
+        const imageKeywords = record.fields?.[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
 
-    // Step 3: If *still* no images, use the new dynamic fallback
-    if (!imageUrls || imageUrls.length === 0) {
-        log('API', `No images found for ${record.id} after all checks, using DYNAMIC fallback.`);
-        imageUrls = [getDynamicFallbackUrl(record)];
+        if (websiteUrl) {
+            updateImageStatus(record.id, 'trying_website', `Checking ${new URL(websiteUrl).hostname}...`);
+
+            console.log('[IMAGE DEBUG] AI Record - trying website scrape:', {
+                recordId: record.id,
+                websiteUrl,
+                businessName
+            });
+
+            const websiteResult = await fetchWebsiteImage(websiteUrl, businessName, imageKeywords);
+
+            if (websiteResult.success && websiteResult.imageUrl) {
+                imageUrls = [websiteResult.imageUrl];
+                imageSource = websiteResult.source || 'website';
+                updateImageStatus(record.id, 'found_website', `Found image from ${websiteResult.source}`);
+
+                console.log('[IMAGE DEBUG] AI Record - website scrape SUCCESS:', {
+                    recordId: record.id,
+                    imageUrl: websiteResult.imageUrl,
+                    source: websiteResult.source
+                });
+            } else {
+                console.log('[IMAGE DEBUG] AI Record - website scrape FAILED:', {
+                    recordId: record.id,
+                    attempts: websiteResult.attempts
+                });
+                updateImageStatus(record.id, 'website_failed', 'No website image found, trying other sources...');
+            }
+        } else {
+            updateImageStatus(record.id, 'no_website', 'No website URL available, trying catalog...');
+        }
     }
+
+    // ============================================================
+    // STEP 2: Try Curated Images (linked from Airtable)
+    // ============================================================
+    if (!imageUrls || imageUrls.length === 0) {
+        if (isAIRecord) {
+            updateImageStatus(record.id, 'trying_curated', 'Checking curated images...');
+        }
+
+        imageUrls = await fetchCuratedImagesByRecord(record);
+        console.log('[IMAGE DEBUG] Step 2 - Curated Images result:', {
+            recordId: record.id,
+            curatedImagesCount: imageUrls?.length || 0,
+            curatedImagesUrls: imageUrls
+        });
+
+        if (imageUrls && imageUrls.length > 0) {
+            imageSource = 'curated';
+            if (isAIRecord) {
+                updateImageStatus(record.id, 'found_curated', 'Using curated image');
+            }
+        }
+    }
+
+    // ============================================================
+    // STEP 3: Try Media Tags (Cloudinary search)
+    // ============================================================
+    if (!imageUrls || imageUrls.length === 0) {
+        log('API', `No curated images found for ${record.id}, falling back to Media Tags.`);
+        const mediaTagsValue = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
+
+        if (isAIRecord && mediaTagsValue) {
+            updateImageStatus(record.id, 'trying_tags', `Searching for "${mediaTagsValue}"...`);
+        }
+
+        console.log('[IMAGE DEBUG] Step 3 - About to call fetchImagesByTags with Media Tags:', {
+            recordId: record.id,
+            mediaTagsValue: mediaTagsValue,
+            mediaTagsType: typeof mediaTagsValue,
+            FIELD_NAME_USED: CONSTANTS.FIELD_NAMES.MEDIA_TAGS
+        });
+
+        imageUrls = await fetchImagesByTags(mediaTagsValue);
+
+        console.log('[IMAGE DEBUG] Step 3 - fetchImagesByTags result:', {
+            recordId: record.id,
+            resultCount: imageUrls?.length || 0,
+            resultUrls: imageUrls
+        });
+
+        if (imageUrls && imageUrls.length > 0) {
+            imageSource = 'media_tags';
+            if (isAIRecord) {
+                updateImageStatus(record.id, 'found_tags', `Found ${imageUrls.length} matching image(s)`);
+            }
+        }
+    }
+
+    // ============================================================
+    // STEP 4: Use deterministic placeholder as final fallback
+    // ============================================================
+    if (!imageUrls || imageUrls.length === 0) {
+        log('API', `No images found for ${record.id} after all checks, using placeholder.`);
+
+        if (isAIRecord) {
+            updateImageStatus(record.id, 'using_placeholder', 'Using placeholder image');
+        }
+
+        imageUrls = [getDeterministicPlaceholder(record)];
+        imageSource = 'placeholder';
+
+        console.log('[IMAGE DEBUG] Step 4 - Using deterministic placeholder:', {
+            recordId: record.id,
+            placeholderUrl: imageUrls[0]
+        });
+    }
+
+    console.log('[IMAGE DEBUG] fetchImagesForRecord COMPLETE:', {
+        recordId: record.id,
+        finalImageCount: imageUrls.length,
+        imageSource: imageSource,
+        finalImageUrls: imageUrls
+    });
 
     imageCache.set(cacheKey, imageUrls);
-    return { imageUrls };
+
+    // Final status update
+    if (isAIRecord) {
+        updateImageStatus(record.id, 'complete', `Image loaded from ${imageSource}`);
+    }
+
+    return { imageUrls, status: imageSource };
 }
 
 export async function fetchChatMessages(sessionId) {

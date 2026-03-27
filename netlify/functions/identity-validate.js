@@ -9,22 +9,33 @@
 
 // Helper function to return a successful response
 const successResponse = (userData = {}) => {
-    console.log('[identity-validate] Returning success response');
+    console.log('[identity-validate] successResponse called');
+    console.log('[identity-validate] Input user data keys:', userData ? Object.keys(userData) : 'null');
     console.log('[identity-validate] Response user email:', userData?.email);
-    return {
+
+    const response = {
         statusCode: 200,
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify(userData)
     };
+
+    console.log('[identity-validate] Final response statusCode:', response.statusCode);
+    console.log('[identity-validate] Final response body length:', response.body.length);
+
+    return response;
 };
 
 exports.handler = async (event, context) => {
     try {
         console.log('[identity-validate] ========== VALIDATE WEBHOOK HANDLER START ==========');
+        console.log('[identity-validate] Timestamp:', new Date().toISOString());
         console.log('[identity-validate] Event method:', event.httpMethod);
         console.log('[identity-validate] Event body present:', !!event.body);
+        console.log('[identity-validate] Event body length:', event.body ? event.body.length : 0);
+        console.log('[identity-validate] Event headers:', JSON.stringify(event.headers || {}));
+        console.log('[identity-validate] Context keys:', context ? Object.keys(context) : 'null');
 
         if (!event.body) {
             console.log('[identity-validate] No body provided, allowing signup to proceed');
@@ -36,8 +47,10 @@ exports.handler = async (event, context) => {
             payload = JSON.parse(event.body);
             console.log('[identity-validate] Parsed payload keys:', Object.keys(payload));
             console.log('[identity-validate] Event type:', payload.event);
+            console.log('[identity-validate] Full payload:', JSON.stringify(payload, null, 2));
         } catch (parseError) {
             console.error('[identity-validate] ERROR: Failed to parse event body:', parseError.message);
+            console.error('[identity-validate] Raw event body (first 500 chars):', event.body.substring(0, 500));
             // Return success to allow signup to proceed
             return successResponse({});
         }
@@ -46,7 +59,6 @@ exports.handler = async (event, context) => {
 
         if (!userData) {
             console.log('[identity-validate] No user data in payload, allowing signup');
-            console.log('[identity-validate] Full payload:', JSON.stringify(payload, null, 2));
             return successResponse({});
         }
 
@@ -54,7 +66,9 @@ exports.handler = async (event, context) => {
         console.log('[identity-validate] - Email:', userData.email);
         console.log('[identity-validate] - ID:', userData.id);
         console.log('[identity-validate] - Provider:', userData.app_metadata?.provider);
-        console.log('[identity-validate] - Keys:', Object.keys(userData));
+        console.log('[identity-validate] - app_metadata:', JSON.stringify(userData.app_metadata || {}));
+        console.log('[identity-validate] - user_metadata:', JSON.stringify(userData.user_metadata || {}));
+        console.log('[identity-validate] - All keys:', Object.keys(userData));
 
         // For validate, we just need to return the user object to allow signup to proceed
         // We can optionally add app_metadata or user_metadata here
@@ -70,14 +84,20 @@ exports.handler = async (event, context) => {
             }
         };
 
+        console.log('[identity-validate] Response user object constructed');
+        console.log('[identity-validate] Response user keys:', Object.keys(responseUser));
+        console.log('[identity-validate] Response user app_metadata:', JSON.stringify(responseUser.app_metadata));
+
         console.log('[identity-validate] ========== VALIDATE WEBHOOK HANDLER SUCCESS ==========');
-        return {
+        const finalResponse = {
             statusCode: 200,
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(responseUser)
         };
+        console.log('[identity-validate] Final response body length:', finalResponse.body.length);
+        return finalResponse;
 
     } catch (outerError) {
         console.error('[identity-validate] ========== CRITICAL ERROR ==========');
