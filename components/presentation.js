@@ -3,7 +3,7 @@ import * as api from '../api.js';
 import { CONSTANTS, EMOJI_REACTIONS } from '../config.js';
 import { updateUrl, getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
-import { getCurrentUser } from '../chat.js';
+import { getCurrentUser, sendMessage as sendChatMessage } from '../chat.js';
 import { triggerSave } from '../events.js';
 import { showDetailModal } from './modal.js';
 
@@ -17,6 +17,21 @@ let shareBtn = null;
 let collaboratorsListEl = null;
 let itineraryItemsListEl = null;
 let chatMessagesEl = null;
+
+// Presentation header elements
+let presentationBackBtn = null;
+let presentationLogoContainer = null;
+let presentationShopTitle = null;
+let presentationEventLabel = null;
+let presentationHeaderShareBtn = null;
+
+// Embedded chat DOM elements
+let presentationChatContainer = null;
+let presentationMessageForm = null;
+let presentationMessageInput = null;
+let presentationUserNameInput = null;
+let presentationWhosHereCount = null;
+let presentationWhosHereList = null;
 
 // Accordion summary elements
 let headerSummaryEl = null;
@@ -33,7 +48,12 @@ const accordionState = {
     chat: true
 };
 
+// Pusher instance for presentation chat
+let presentationPusher = null;
+let presentationChatChannel = null;
+
 function ensureDOMElements() {
+    console.log('[Accordion DEBUG] ensureDOMElements called, modal already set:', !!modal);
     if (modal) return true; // Already initialized
 
     modal = document.getElementById('presentation-modal-overlay');
@@ -46,10 +66,33 @@ function ensureDOMElements() {
     itineraryItemsListEl = document.getElementById('itinerary-items-list');
     chatMessagesEl = document.getElementById('itinerary-chat-messages');
 
+    // Presentation header elements
+    presentationBackBtn = document.getElementById('presentation-back-btn');
+    presentationLogoContainer = document.getElementById('presentation-logo-container');
+    presentationShopTitle = document.getElementById('presentation-shop-title');
+    presentationEventLabel = document.getElementById('presentation-event-label');
+    presentationHeaderShareBtn = document.getElementById('presentation-header-share-btn');
+
+    // Embedded chat elements
+    presentationChatContainer = document.getElementById('presentation-chat-container');
+    presentationMessageForm = document.getElementById('presentation-message-form');
+    presentationMessageInput = document.getElementById('presentation-message-input');
+    presentationUserNameInput = document.getElementById('presentation-chat-user-name');
+    presentationWhosHereCount = document.getElementById('presentation-whos-here-count');
+    presentationWhosHereList = document.getElementById('presentation-whos-here-list');
+
     // Accordion summary elements
     headerSummaryEl = document.getElementById('header-summary');
     itemsSummaryEl = document.getElementById('items-summary');
     chatSummaryEl = document.getElementById('chat-summary');
+
+    console.log('[Accordion DEBUG] DOM elements after init:', {
+        modal: !!modal,
+        closeBtn: !!closeBtn,
+        headerSummaryEl: !!headerSummaryEl,
+        itemsSummaryEl: !!itemsSummaryEl,
+        chatSummaryEl: !!chatSummaryEl
+    });
 
     if (!modal) {
         console.error('[Presentation] Modal element #presentation-modal-overlay not found in DOM');
@@ -78,6 +121,29 @@ function renderEventHeader() {
         });
     } else {
         summaryEventDateEl.textContent = '';
+    }
+}
+
+function renderPresentationHeader() {
+    // Copy the shop logo from the main header
+    const mainLogoContainer = document.getElementById('shop-logo-container');
+    if (mainLogoContainer && presentationLogoContainer) {
+        const mainLogo = mainLogoContainer.querySelector('img');
+        if (mainLogo) {
+            presentationLogoContainer.innerHTML = `<img src="${mainLogo.src}" alt="${mainLogo.alt || 'Logo'}">`;
+        }
+    }
+
+    // Copy the shop title from the main header
+    const mainShopTitle = document.getElementById('main-shop-title');
+    if (mainShopTitle && presentationShopTitle) {
+        presentationShopTitle.textContent = mainShopTitle.textContent;
+    }
+
+    // Set the event label in the center of the header
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Event Plan';
+    if (presentationEventLabel) {
+        presentationEventLabel.textContent = eventName;
     }
 }
 
@@ -238,28 +304,240 @@ async function renderAllItems() {
     });
 }
 
-function renderChatMessages() {
-    // Get chat messages from state or session history
-    const messagesList = document.getElementById('messages-list');
-    if (!messagesList) {
-        chatMessagesEl.innerHTML = '<p class="chat-empty">Chat messages will appear here.</p>';
-        return;
+function addPresentationMessageToUI(sender, message, isSent, timestamp, senderId) {
+    if (!chatMessagesEl) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = `message-wrapper ${isSent ? 'sent' : 'received'}`;
+
+    const messageElement = document.createElement('div');
+    const isFlagged = state.session.flaggedUsers.has(senderId);
+    const isBanned = state.session.bannedUsers.has(senderId);
+    const displayMessage = (isFlagged || isBanned) ? '[CENSORED BY MODERATOR]' : message;
+
+    messageElement.className = 'chat-message';
+    if (isBanned) messageElement.classList.add('banned');
+    if (isFlagged) messageElement.classList.add('flagged');
+
+    const senderElement = document.createElement('div');
+    senderElement.className = 'message-author';
+    senderElement.innerText = isSent ? 'You' : sender;
+    messageElement.appendChild(senderElement);
+
+    const contentElement = document.createElement('div');
+    contentElement.className = 'message-content';
+    contentElement.textContent = displayMessage;
+    messageElement.appendChild(contentElement);
+
+    const timestampElement = document.createElement('div');
+    timestampElement.className = 'timestamp';
+    const date = timestamp ? new Date(timestamp) : new Date();
+    timestampElement.innerText = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+    wrapper.appendChild(messageElement);
+    wrapper.appendChild(timestampElement);
+    chatMessagesEl.appendChild(wrapper);
+    wrapper.scrollIntoView({ behavior: 'smooth' });
+}
+
+function updatePresentationPresenceUI(members) {
+    const count = members.count;
+    if (presentationWhosHereCount) presentationWhosHereCount.innerText = count;
+
+    if (presentationWhosHereList) {
+        presentationWhosHereList.innerHTML = '';
+        members.each((member) => {
+            const currentUser = getCurrentUser();
+            const profileId = state.session.user.isAuthenticated ? state.session.user.id : member.id;
+            const profileName = state.session.user.isAuthenticated ? state.session.user.name : member.info.name;
+
+            if (!state.session.userProfiles.has(profileId)) {
+                state.session.userProfiles.set(profileId, profileName);
+                triggerSave();
+            }
+
+            const userElement = document.createElement('div');
+            userElement.className = 'presentation-presence-item';
+            const displayName = member.id === currentUser.id ? currentUser.name : member.info.name;
+            userElement.innerHTML = `<span class="presence-dot"></span>${displayName}${member.id === currentUser.id ? ' (You)' : ''}`;
+            presentationWhosHereList.appendChild(userElement);
+        });
+    }
+}
+
+async function initializePresentationChat() {
+    const currentUser = getCurrentUser();
+    const sessionId = state.session.id || 'default-session';
+
+    // Set up user name input
+    if (presentationUserNameInput) {
+        presentationUserNameInput.value = currentUser.name;
+        presentationUserNameInput.addEventListener('change', (e) => {
+            const newName = e.target.value.trim();
+            if (newName && newName !== currentUser.name) {
+                currentUser.name = newName;
+                localStorage.setItem('chatUserName', newName);
+                state.session.userProfiles.set(currentUser.id, newName);
+                log('Presentation', `User name changed to: ${newName}`);
+                if (presentationChatChannel && presentationChatChannel.members) {
+                    updatePresentationPresenceUI(presentationChatChannel.members);
+                }
+                triggerSave();
+            } else {
+                e.target.value = currentUser.name;
+            }
+        });
     }
 
-    // Clone the chat messages to display in the itinerary view
-    const messages = messagesList.querySelectorAll('.message-wrapper, .event-history-wrapper');
-
-    if (messages.length === 0) {
-        chatMessagesEl.innerHTML = '<p class="chat-empty">No messages yet. Start the conversation!</p>';
-        return;
-    }
-
-    // Copy messages to the itinerary chat section
+    // Load existing chat messages
     chatMessagesEl.innerHTML = '';
-    messages.forEach(msg => {
-        const clone = msg.cloneNode(true);
-        chatMessagesEl.appendChild(clone);
+    try {
+        const records = await api.fetchChatMessages(sessionId);
+        if (records.length > 0) {
+            records.forEach(record => {
+                const { SenderID, SenderName, Content, Timestamp, EventType } = record.fields;
+                // Only render chat messages, not system events
+                if (SenderID !== 'system' && !EventType) {
+                    const isSent = SenderID === currentUser.id;
+                    addPresentationMessageToUI(SenderName, Content, isSent, Timestamp, SenderID);
+                }
+            });
+        } else {
+            chatMessagesEl.innerHTML = '<p class="chat-empty">No messages yet. Start the conversation!</p>';
+        }
+    } catch (err) {
+        log('Presentation', `Failed to load chat messages: ${err.message}`);
+        chatMessagesEl.innerHTML = '<p class="chat-empty">Unable to load messages.</p>';
+    }
+
+    // Wait for Pusher library to be loaded
+    if (typeof window.waitForPusher === 'function') {
+        try {
+            await window.waitForPusher();
+        } catch (err) {
+            if (presentationMessageInput) {
+                presentationMessageInput.placeholder = 'Chat unavailable - please refresh';
+                presentationMessageInput.disabled = true;
+            }
+            return;
+        }
+    } else if (typeof Pusher === 'undefined') {
+        if (presentationMessageInput) {
+            presentationMessageInput.placeholder = 'Chat unavailable - please refresh';
+            presentationMessageInput.disabled = true;
+        }
+        return;
+    }
+
+    // Disconnect existing connection if any
+    if (presentationPusher) {
+        presentationPusher.disconnect();
+    }
+
+    // Initialize Pusher for real-time chat
+    presentationPusher = new Pusher('236f480714e5001590b5', {
+        cluster: 'us3',
+        authEndpoint: '/api/pusher-auth',
+        auth: {
+            params: {
+                user_id: currentUser.id,
+                user_name: currentUser.name
+            }
+        }
     });
+
+    const channelName = `presence-session-${sessionId}`;
+    presentationChatChannel = presentationPusher.subscribe(channelName);
+
+    // Bind presence events
+    presentationChatChannel.bind('pusher:subscription_succeeded', (members) => {
+        if (presentationMessageInput) {
+            presentationMessageInput.disabled = false;
+            presentationMessageInput.placeholder = 'Type a message...';
+        }
+        updatePresentationPresenceUI(members);
+    });
+
+    presentationChatChannel.bind('pusher:member_added', () => {
+        updatePresentationPresenceUI(presentationChatChannel.members);
+    });
+
+    presentationChatChannel.bind('pusher:member_removed', () => {
+        updatePresentationPresenceUI(presentationChatChannel.members);
+    });
+
+    // Bind to receive new messages
+    presentationChatChannel.bind('client-new-message', (data) => {
+        if (data.senderId !== currentUser.id) {
+            // Remove empty state message if present
+            const emptyMsg = chatMessagesEl.querySelector('.chat-empty');
+            if (emptyMsg) emptyMsg.remove();
+
+            addPresentationMessageToUI(data.senderName, data.content, false, data.timestamp, data.senderId);
+        }
+    });
+
+    // Set up message form submission
+    if (presentationMessageForm) {
+        const newForm = presentationMessageForm.cloneNode(true);
+        presentationMessageForm.parentNode.replaceChild(newForm, presentationMessageForm);
+        presentationMessageForm = newForm;
+
+        const newInput = document.getElementById('presentation-message-input');
+        presentationMessageInput = newInput;
+
+        newForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = presentationMessageInput.value.trim();
+            if (!message) return;
+
+            // Remove empty state message if present
+            const emptyMsg = chatMessagesEl.querySelector('.chat-empty');
+            if (emptyMsg) emptyMsg.remove();
+
+            const timestamp = new Date().toISOString();
+
+            // Add message to UI immediately
+            addPresentationMessageToUI(currentUser.name, message, true, timestamp, currentUser.id);
+
+            // Clear input
+            presentationMessageInput.value = '';
+
+            // Send via API and broadcast
+            try {
+                await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
+                presentationChatChannel.trigger('client-new-message', {
+                    content: message,
+                    senderId: currentUser.id,
+                    senderName: currentUser.name,
+                    timestamp: timestamp
+                });
+            } catch (err) {
+                log('Presentation', `Failed to send message: ${err.message}`);
+            }
+        });
+    }
+
+    log('Presentation', 'Embedded chat initialized successfully');
+}
+
+function cleanupPresentationChat() {
+    // Disconnect Pusher when leaving presentation view
+    if (presentationChatChannel) {
+        presentationChatChannel.unbind_all();
+    }
+    if (presentationPusher) {
+        presentationPusher.disconnect();
+        presentationPusher = null;
+        presentationChatChannel = null;
+    }
+}
+
+function renderChatMessages() {
+    // Legacy function - now handled by initializePresentationChat
+    // Kept for compatibility but no longer clones messages
+    if (!chatMessagesEl) return;
+    chatMessagesEl.innerHTML = '<p class="chat-empty">Loading chat...</p>';
 }
 
 // Generate summary for the event header section
@@ -331,15 +609,15 @@ function generateItemsSummary() {
 
 // Generate summary for the chat section
 function generateChatSummary() {
-    const messagesList = document.getElementById('messages-list');
-    if (!messagesList) {
+    // Use the embedded presentation chat messages, not the sidebar chat
+    if (!chatMessagesEl) {
         if (chatSummaryEl) {
             chatSummaryEl.textContent = 'No discussion yet';
         }
         return;
     }
 
-    const messages = messagesList.querySelectorAll('.message-wrapper');
+    const messages = chatMessagesEl.querySelectorAll('.message-wrapper');
     const messageCount = messages.length;
 
     if (messageCount === 0) {
@@ -382,28 +660,48 @@ function generateChatSummary() {
 
 // Toggle accordion section
 function toggleAccordion(section) {
+    console.log('[Accordion DEBUG] toggleAccordion called with section:', section);
+    console.log('[Accordion DEBUG] modal element:', modal);
+
     const sectionEl = modal.querySelector(`.itinerary-accordion[data-section="${section}"]`);
-    if (!sectionEl) return;
+    console.log('[Accordion DEBUG] Found section element:', sectionEl);
+
+    if (!sectionEl) {
+        console.warn('[Accordion DEBUG] Section element not found for:', section);
+        return;
+    }
 
     accordionState[section] = !accordionState[section];
+    console.log('[Accordion DEBUG] New state for', section, ':', accordionState[section]);
 
     if (accordionState[section]) {
         sectionEl.classList.add('expanded');
+        console.log('[Accordion DEBUG] Added expanded class to', section);
     } else {
         sectionEl.classList.remove('expanded');
+        console.log('[Accordion DEBUG] Removed expanded class from', section);
     }
+
+    console.log('[Accordion DEBUG] Section classList after toggle:', sectionEl.classList.toString());
 
     log('Presentation', `Accordion ${section} ${accordionState[section] ? 'expanded' : 'collapsed'}`);
 }
 
 // Initialize accordion states and update UI
 function initializeAccordions() {
+    console.log('[Accordion DEBUG] initializeAccordions called');
+    console.log('[Accordion DEBUG] modal element:', modal);
+
     // Set all sections to expanded state initially
     Object.keys(accordionState).forEach(section => {
         accordionState[section] = true;
         const sectionEl = modal.querySelector(`.itinerary-accordion[data-section="${section}"]`);
+        console.log(`[Accordion DEBUG] Initializing section "${section}":`, sectionEl);
         if (sectionEl) {
             sectionEl.classList.add('expanded');
+            console.log(`[Accordion DEBUG] Section "${section}" classList after init:`, sectionEl.classList.toString());
+        } else {
+            console.warn(`[Accordion DEBUG] Section element not found for "${section}" during init`);
         }
     });
 
@@ -411,6 +709,8 @@ function initializeAccordions() {
     generateHeaderSummary();
     generateItemsSummary();
     generateChatSummary();
+
+    console.log('[Accordion DEBUG] initializeAccordions completed');
 }
 
 function handleThumbnailClick(e) {
@@ -502,11 +802,14 @@ function handleKeyDown(e) {
 
 export async function showPresentationView(listType, startRecordId = null) {
     log('Presentation', `Showing itinerary presentation`);
+    console.log('[Accordion DEBUG] showPresentationView called');
 
     if (!ensureDOMElements()) {
         console.error('[Presentation] Cannot show presentation view - DOM elements not available');
+        console.error('[Accordion DEBUG] ensureDOMElements failed');
         return;
     }
+    console.log('[Accordion DEBUG] ensureDOMElements succeeded');
 
     // Check if there are any items
     const hasItems = state.cart.items.size > 0 || state.cart.lockedItems.size > 0;
@@ -518,13 +821,16 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Clear image cache for fresh load
     itemImagesCache.clear();
 
+    // Render presentation header (copies logo and title from main header)
+    renderPresentationHeader();
+
     // Render all sections
     renderEventHeader();
     renderCollaborators();
     await renderAllItems();
-    renderChatMessages();
+    renderChatMessages(); // Sets loading state
 
-    // Initialize accordions and generate summaries
+    // Initialize accordions and generate summaries (chat summary will be updated after chat loads)
     initializeAccordions();
 
     // Show modal
@@ -532,6 +838,12 @@ export async function showPresentationView(listType, startRecordId = null) {
     modal.style.display = 'flex';
     document.body.classList.add('modal-open');
     document.addEventListener('keydown', handleKeyDown);
+
+    // Initialize the embedded chat (loads messages and sets up real-time connection)
+    await initializePresentationChat();
+
+    // Update chat summary after messages are loaded
+    generateChatSummary();
 
     // Scroll to specific item if provided
     if (startRecordId) {
@@ -548,6 +860,10 @@ export async function showPresentationView(listType, startRecordId = null) {
 
 export function hidePresentationView() {
     if (!modal) return;
+
+    // Clean up the presentation chat connection
+    cleanupPresentationChat();
+
     modal.classList.remove('active');
     modal.style.display = 'none';
     document.body.classList.remove('modal-open');
@@ -555,31 +871,91 @@ export function hidePresentationView() {
 }
 
 export function setupPresentationEventListeners() {
+    console.log('[Accordion DEBUG] setupPresentationEventListeners called');
     if (!ensureDOMElements()) {
         console.error('[Presentation] Cannot setup event listeners - DOM elements not available');
+        console.error('[Accordion DEBUG] ensureDOMElements failed in setupPresentationEventListeners');
         return;
     }
+    console.log('[Accordion DEBUG] ensureDOMElements succeeded in setupPresentationEventListeners');
 
     closeBtn.addEventListener('click', () => {
         updateUrl({ view: null });
         hidePresentationView();
     });
 
+    // Presentation header back button
+    if (presentationBackBtn) {
+        presentationBackBtn.addEventListener('click', () => {
+            updateUrl({ view: null });
+            hidePresentationView();
+        });
+    }
+
+    // Presentation header share button
+    if (presentationHeaderShareBtn) {
+        presentationHeaderShareBtn.addEventListener('click', () => {
+            const baseURL = window.location.origin + window.location.pathname;
+            const sessionID = state.session.id;
+            const shareURL = `${baseURL}?session=${sessionID}&view=present`;
+
+            navigator.clipboard.writeText(shareURL).then(() => {
+                const originalHTML = presentationHeaderShareBtn.innerHTML;
+                presentationHeaderShareBtn.innerHTML = '<span class="share-icon">✓</span>';
+                presentationHeaderShareBtn.title = 'Link Copied!';
+                setTimeout(() => {
+                    presentationHeaderShareBtn.innerHTML = originalHTML;
+                    presentationHeaderShareBtn.title = 'Share this plan';
+                }, 1500);
+            });
+        });
+    }
+
     // Handle accordion header clicks
     const scrollContainer = modal.querySelector('.presentation-itinerary-scroll');
+    console.log('[Accordion DEBUG] setupPresentationEventListeners - scrollContainer:', scrollContainer);
+
     if (scrollContainer) {
+        // Debug: Log all accordion headers found
+        const accordionHeaders = scrollContainer.querySelectorAll('.itinerary-accordion-header');
+        console.log('[Accordion DEBUG] Found accordion headers:', accordionHeaders.length);
+        accordionHeaders.forEach((header, index) => {
+            console.log(`[Accordion DEBUG] Header ${index}:`, header, 'data-section:', header.dataset.section);
+        });
+
         scrollContainer.addEventListener('click', (e) => {
+            console.log('[Accordion DEBUG] Click event on scrollContainer');
+            console.log('[Accordion DEBUG] Click target:', e.target);
+            console.log('[Accordion DEBUG] Target tagName:', e.target.tagName);
+            console.log('[Accordion DEBUG] Target classList:', e.target.classList.toString());
+
             const accordionHeader = e.target.closest('.itinerary-accordion-header');
-            if (!accordionHeader) return;
+            console.log('[Accordion DEBUG] Closest .itinerary-accordion-header:', accordionHeader);
+
+            if (!accordionHeader) {
+                console.log('[Accordion DEBUG] No accordion header found - ignoring click');
+                return;
+            }
 
             // Don't trigger accordion on interactive elements inside
-            if (e.target.closest('button') || e.target.closest('a')) return;
+            if (e.target.closest('button') || e.target.closest('a')) {
+                console.log('[Accordion DEBUG] Clicked on button/link inside header - ignoring');
+                return;
+            }
 
             const section = accordionHeader.dataset.section;
+            console.log('[Accordion DEBUG] Section from data-section attribute:', section);
+
             if (section) {
+                console.log('[Accordion DEBUG] Calling toggleAccordion for section:', section);
                 toggleAccordion(section);
+            } else {
+                console.warn('[Accordion DEBUG] No section data attribute found on header');
             }
         });
+        console.log('[Accordion DEBUG] Click listener added to scrollContainer');
+    } else {
+        console.error('[Accordion DEBUG] scrollContainer not found!');
     }
 
     // Handle thumbnail clicks for image carousel

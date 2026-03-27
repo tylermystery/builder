@@ -70,17 +70,21 @@ function syncUiWithUrl() {
         }
     }
 
-    // Re-apply filters based on the URL
-    if (typeof applyFiltersAndSort === 'function') {
-        applyFiltersAndSort(imageCache);
-    } else {
-         console.error("applyFiltersAndSort is not defined or imported correctly.");
+    // Skip catalog rendering when in presentation view to expedite loading
+    // The presentation view is a standalone page that doesn't need the catalog background
+    if (view !== 'present') {
+        // Re-apply filters based on the URL
+        if (typeof applyFiltersAndSort === 'function') {
+            applyFiltersAndSort(imageCache);
+        } else {
+             console.error("applyFiltersAndSort is not defined or imported correctly.");
+        }
     }
 
     // --- Handle opening modals/views based on URL ---
     setTimeout(() => {
         if (view === 'present') {
-            ui.showPresentationView('ideas'); 
+            ui.showPresentationView('ideas');
         } else if (view === 'itinerary') {
             ui.showItineraryModal();
         } else if (openItemId) {
