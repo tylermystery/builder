@@ -6979,10 +6979,21 @@ body:not(.presentation-active) .drag-merge-indicator {
 }
 
 /* Board view support for merge mode */
-.merge-mode-active .compact-card:not(.merge-mode-source-card) {
+.merge-mode-active .compact-card:not(.merge-mode-selected-card) {
     position: relative;
     z-index: 9050;
     cursor: pointer;
+    animation: merge-target-pulse 2s ease-in-out infinite;
+    border: 2px solid rgba(0, 150, 136, 0.7);
+    border-radius: 12px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.merge-mode-active .compact-card:not(.merge-mode-selected-card):hover {
+    transform: scale(1.02);
+    border-color: rgba(0, 150, 136, 1);
+    box-shadow: 0 0 24px rgba(0, 150, 136, 0.5), 0 0 48px rgba(0, 150, 136, 0.2);
+    animation: none;
 }
 
 /* =====================================================
@@ -10460,57 +10471,6 @@ hr.total-divider {
     color: #ffc107;
     margin-left: 5px;
     font-size: 1.1em;
-}
-
-/* --- Variations Tool Styles --- */
-.variations-tool-container {
-    margin-top: 15px;
-    padding: 15px;
-    background: #fff;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-}
-
-.variations-tool-header {
-    user-select: none;
-}
-
-.variations-tool-header:hover {
-    opacity: 0.8;
-}
-
-.variations-toggle-btn:hover {
-    color: #0056b3 !important;
-}
-
-.variations-editor {
-    transition: border-color 0.2s ease;
-}
-
-.variations-editor:focus {
-    border-color: #007bff !important;
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.15);
-}
-
-.variations-preview-btn:hover {
-    background: #5a6268 !important;
-}
-
-.variations-save-btn:hover {
-    background: #0056b3 !important;
-}
-
-.variations-save-btn:disabled {
-    background: #ccc !important;
-    cursor: not-allowed;
-}
-
-.variations-help-text code {
-    background: #e9ecef;
-    padding: 1px 4px;
-    border-radius: 3px;
-    font-size: 0.9em;
 }
 
 /* --- 9. SLIDER STYLES (Kept for now) --- */

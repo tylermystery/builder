@@ -7,7 +7,6 @@ import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS } from '../config.js';
 import { getCurrentUser } from '../chat.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
-import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
@@ -340,6 +339,9 @@ let currentPaymentType = 'card'; // <-- ADD THIS LINE
 let currentProcessingFee = 0; // To store the current fee
 
 let currentShopSettings = {};
+let currentChipInAmount = 0; // Chip-in community contribution amount
+let currentCheckoutScope = null; // { mode: 'plan' | 'item', itemId, itemName, quantity, price, record, highlightChipIn }
+let currentCheckoutItemQty = 0; // Tracks quantity in chip-in checkout (0 = donation only)
 const modalOverlay = document.getElementById('detail-modal-overlay');
 console.log('[MODAL DEBUG] modalOverlay initialized at module load:', !!modalOverlay);
 
@@ -741,6 +743,363 @@ export function hasQuickPayOptions() {
 }
 
 /**
+ * Renders P2P payment option buttons into the checkout modal's P2P section.
+ * Called during showCheckoutModal initialization.
+ * @param {Object} paymentOptions - Parsed App_Pay_JSON object from store
+ * @param {number} amount - Total amount to display
+ * @param {string} itemName - Description/name for the payment
+ */
+function renderCheckoutP2POptions(paymentOptions, amount, itemName) {
+    const p2pContainer = document.getElementById('checkout-p2p-options');
+    if (!p2pContainer) return;
+
+    p2pContainer.innerHTML = '';
+
+    if (!paymentOptions || Object.keys(paymentOptions).length === 0) {
+        return;
+    }
+
+    for (const [key, handle] of Object.entries(paymentOptions)) {
+        const appConfig = PAYMENT_APPS[key.toLowerCase()];
+        if (!appConfig || !handle) continue;
+
+        const url = appConfig.getUrl(handle, amount, itemName);
+        const displayHandle = appConfig.getDisplayHandle(handle);
+
+        const optionElement = document.createElement(url ? 'a' : 'div');
+        optionElement.className = 'quick-pay-option-btn';
+        optionElement.dataset.appKey = key.toLowerCase();
+        optionElement.dataset.handle = handle;
+        optionElement.dataset.amount = amount.toFixed(2);
+
+        if (url) {
+            optionElement.href = url;
+            optionElement.target = '_blank';
+            optionElement.rel = 'noopener noreferrer';
+        }
+
+        optionElement.innerHTML = `
+            <div class="quick-pay-icon ${appConfig.cssClass}">${appConfig.icon}</div>
+            <div class="quick-pay-option-info">
+                <span class="quick-pay-option-name">${appConfig.name}</span>
+                <span class="quick-pay-option-handle">${displayHandle}</span>
+            </div>
+            <span class="quick-pay-arrow">${url ? '→' : ''}</span>
+        `;
+
+        // For Zelle (no URL), add copy functionality
+        if (!url) {
+            optionElement.style.cursor = 'pointer';
+            optionElement.title = 'Click to copy payment details';
+            optionElement.addEventListener('click', () => {
+                const currentAmount = parseFloat(optionElement.dataset.amount) || amount;
+                const copyText = appConfig.getCopyText ? appConfig.getCopyText(handle, currentAmount, itemName) : handle;
+                navigator.clipboard.writeText(copyText).then(() => {
+                    const originalArrow = optionElement.querySelector('.quick-pay-arrow');
+                    originalArrow.textContent = 'Copied!';
+                    setTimeout(() => { originalArrow.textContent = ''; }, 2000);
+                }).catch(err => console.error('Failed to copy:', err));
+            });
+        }
+
+        p2pContainer.appendChild(optionElement);
+    }
+}
+
+/**
+ * Updates P2P payment links in the checkout modal with a new amount.
+ * Called whenever the total changes (tip, chip-in, etc.)
+ * @param {number} amount - New total amount
+ */
+function updateP2PPaymentLinks(amount) {
+    const p2pContainer = document.getElementById('checkout-p2p-options');
+    if (!p2pContainer) return;
+
+    const paymentBtns = p2pContainer.querySelectorAll('.quick-pay-option-btn');
+    paymentBtns.forEach(btn => {
+        const appKey = btn.dataset.appKey;
+        const handle = btn.dataset.handle;
+        if (!appKey || !handle) return;
+
+        const appConfig = PAYMENT_APPS[appKey];
+        if (!appConfig) return;
+
+        const itemName = currentCheckoutScope?.itemName || 'Plan Checkout';
+        const url = appConfig.getUrl(handle, amount, itemName);
+        if (url) {
+            btn.href = url;
+        }
+        btn.dataset.amount = amount.toFixed(2);
+    });
+
+    // Update the amount display
+    const p2pAmountEl = document.getElementById('checkout-p2p-amount');
+    if (p2pAmountEl) {
+        p2pAmountEl.textContent = `$${amount.toFixed(2)}`;
+    }
+}
+
+/**
+ * Sets up the Chip In section in the checkout modal.
+ * Initializes option buttons, preset amounts, and custom input handlers.
+ * @param {number} cartSubtotal - The cart subtotal to use for "Match My Cart"
+ */
+function setupCheckoutChipIn(cartSubtotal) {
+    const chipInSection = document.getElementById('checkout-chip-in-section');
+    if (!chipInSection) return;
+
+    // Reset state
+    currentChipInAmount = 0;
+
+    // Show the section
+    chipInSection.style.display = 'block';
+
+    // Set the match amount display
+    const matchAmountEl = document.getElementById('chip-in-match-amount');
+    if (matchAmountEl) {
+        matchAmountEl.textContent = `+$${cartSubtotal.toFixed(2)}`;
+    }
+
+    // Get UI elements
+    const optionBtns = chipInSection.querySelectorAll('.checkout-chip-in-option-btn');
+    const customInputContainer = document.getElementById('checkout-chip-in-custom-input');
+    const customAmountInput = document.getElementById('checkout-chip-in-amount');
+    const chipInSummary = document.getElementById('checkout-chip-in-summary');
+    const chipInTotalEl = document.getElementById('checkout-chip-in-total');
+    const presetBtns = chipInSection.querySelectorAll('.chip-in-preset-btn');
+
+    // Helper to update chip-in amount and refresh checkout display
+    const setChipInAmount = (amount) => {
+        currentChipInAmount = amount;
+        if (chipInSummary) {
+            chipInSummary.style.display = amount > 0 ? 'flex' : 'none';
+        }
+        if (chipInTotalEl) {
+            chipInTotalEl.textContent = `$${amount.toFixed(2)}`;
+        }
+        updateCheckoutDisplay();
+    };
+
+    // Option button handlers (Match / Chip In / Skip)
+    optionBtns.forEach(btn => {
+        // Clone to remove old listeners
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+
+        newBtn.addEventListener('click', () => {
+            // Update active states
+            chipInSection.querySelectorAll('.checkout-chip-in-option-btn').forEach(b => b.classList.remove('active'));
+            newBtn.classList.add('active');
+
+            const chipInType = newBtn.dataset.chipIn;
+
+            if (chipInType === 'match') {
+                // Match full cart
+                if (customInputContainer) customInputContainer.style.display = 'none';
+                setChipInAmount(cartSubtotal);
+            } else if (chipInType === 'custom') {
+                // Show custom input
+                if (customInputContainer) customInputContainer.style.display = 'block';
+                const currentCustom = parseFloat(customAmountInput?.value) || 0;
+                setChipInAmount(currentCustom);
+            } else {
+                // Skip
+                if (customInputContainer) customInputContainer.style.display = 'none';
+                setChipInAmount(0);
+            }
+        });
+    });
+
+    // Preset amount buttons
+    presetBtns.forEach(btn => {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+
+        newBtn.addEventListener('click', () => {
+            chipInSection.querySelectorAll('.chip-in-preset-btn').forEach(b => b.classList.remove('active'));
+            newBtn.classList.add('active');
+
+            const presetAmount = parseFloat(newBtn.dataset.amount);
+            if (customAmountInput) customAmountInput.value = presetAmount.toFixed(2);
+            setChipInAmount(presetAmount);
+        });
+    });
+
+    // Custom amount input handler
+    if (customAmountInput) {
+        const newInput = customAmountInput.cloneNode(true);
+        customAmountInput.parentNode.replaceChild(newInput, customAmountInput);
+
+        newInput.addEventListener('input', debounce(() => {
+            // Clear preset button active states when typing custom amount
+            chipInSection.querySelectorAll('.chip-in-preset-btn').forEach(b => b.classList.remove('active'));
+            const customAmount = parseFloat(newInput.value) || 0;
+            setChipInAmount(customAmount);
+        }, 300));
+    }
+
+    // Ensure default state: Skip is active, custom input hidden, amount = 0
+    if (customInputContainer) customInputContainer.style.display = 'none';
+    if (chipInSummary) chipInSummary.style.display = 'none';
+}
+
+/**
+ * Updates the checkout item quantity display when +/- buttons are clicked.
+ * Recalculates item total, updates the cart summary and the full total, then
+ * refreshes the checkout display (fees, payment intent, etc.).
+ * @param {Object} scope - The checkout scope (item mode)
+ */
+function updateCheckoutItemQtyDisplay(scope) {
+    const qty = currentCheckoutItemQty;
+    const price = scope.price || 0;
+    const itemTotal = price * qty;
+    const itemName = scope.itemName || 'Item';
+
+    // Update qty value display
+    const qtyValueEl = document.getElementById('checkout-item-qty');
+    if (qtyValueEl) qtyValueEl.textContent = qty;
+
+    // Update hint text
+    const qtyHint = document.getElementById('checkout-qty-hint');
+    if (qtyHint) {
+        qtyHint.textContent = qty === 0
+            ? 'Quantity 0 = donation only. Increase to also buy.'
+            : `Quantity ${qty} — item will be purchased + donation.`;
+    }
+
+    // Update the cart summary line item
+    const scopeItem = document.getElementById('checkout-scope-item');
+    if (scopeItem) {
+        if (qty === 0) {
+            scopeItem.innerHTML = `
+                <div class="summary-item-details">
+                    <span class="summary-item-name">${itemName}</span>
+                    <small class="summary-item-donation-note">Chip in to crowdfund this item</small>
+                </div>
+                <span class="summary-item-price">—</span>
+            `;
+        } else {
+            scopeItem.innerHTML = `
+                <div class="summary-item-details">
+                    <span class="summary-item-name">${itemName} (x${qty})</span>
+                </div>
+                <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
+            `;
+        }
+    }
+
+    // Update full total
+    const fullTotalEl = document.getElementById('full-total-price');
+    if (fullTotalEl) {
+        fullTotalEl.textContent = `$${itemTotal.toFixed(2)}`;
+        fullTotalEl.dataset.total = itemTotal;
+    }
+
+    // Update the "Match My Cart" amount in chip-in section
+    const matchAmountEl = document.getElementById('chip-in-match-amount');
+    if (matchAmountEl) {
+        matchAmountEl.textContent = `+$${itemTotal.toFixed(2)}`;
+    }
+
+    // Refresh the checkout display (recalculates fees, updates payment intent)
+    updateCheckoutDisplay();
+}
+
+/**
+ * Loads and displays crowdfunding progress from Airtable for the given item.
+ * Falls back to localStorage data if the Airtable fetch fails.
+ * @param {string} itemRecordId - The item's Airtable record ID
+ * @param {number} goalAmount - The fundraising goal (item price)
+ */
+async function loadCrowdfundProgress(itemRecordId, goalAmount) {
+    const progressContainer = document.getElementById('checkout-crowdfund-progress');
+    if (!progressContainer) return;
+
+    // Try Airtable first
+    let raised = 0;
+    let contributors = 0;
+
+    try {
+        const fundRecord = await api.fetchCommunityFund(itemRecordId);
+        if (fundRecord) {
+            raised = fundRecord.fields.Total_Raised || 0;
+            contributors = fundRecord.fields.Contributor_Count || 0;
+        }
+    } catch (e) {
+        console.warn('[ChipIn] Failed to load from Airtable, falling back to localStorage', e);
+    }
+
+    // Fallback: merge localStorage data if Airtable had nothing
+    if (raised === 0) {
+        try {
+            const stored = localStorage.getItem(`donation_fund_${itemRecordId}`);
+            if (stored) {
+                const localData = JSON.parse(stored);
+                raised = localData.raised || 0;
+                contributors = localData.contributors || 0;
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    // Only show progress if there is any
+    if (raised > 0 || goalAmount > 0) {
+        progressContainer.style.display = 'block';
+        const effectiveGoal = goalAmount > 0 ? goalAmount : 5;
+        const percent = Math.min(100, (raised / effectiveGoal) * 100);
+
+        const barFill = document.getElementById('crowdfund-bar-fill');
+        const raisedEl = document.getElementById('crowdfund-raised');
+        const goalEl = document.getElementById('crowdfund-goal');
+        const contribEl = document.getElementById('crowdfund-contributors');
+
+        if (barFill) {
+            requestAnimationFrame(() => { barFill.style.width = `${percent}%`; });
+        }
+        if (raisedEl) raisedEl.textContent = `$${raised.toFixed(2)}`;
+        if (goalEl) goalEl.textContent = `$${effectiveGoal.toFixed(2)}`;
+        if (contribEl) {
+            contribEl.textContent = contributors > 0
+                ? ` · ${contributors} ${contributors === 1 ? 'contributor' : 'contributors'}`
+                : '';
+        }
+    } else {
+        progressContainer.style.display = 'none';
+    }
+}
+
+/**
+ * Sets up the payment method toggle (Stripe vs P2P) in the checkout modal.
+ */
+function setupPaymentMethodToggle() {
+    const toggleContainer = document.getElementById('checkout-payment-method-toggle');
+    const paymentForm = document.getElementById('payment-form');
+    const p2pSection = document.getElementById('checkout-p2p-section');
+
+    if (!toggleContainer) return;
+
+    const tabs = toggleContainer.querySelectorAll('.payment-method-tab');
+
+    tabs.forEach(tab => {
+        const newTab = tab.cloneNode(true);
+        tab.parentNode.replaceChild(newTab, tab);
+
+        newTab.addEventListener('click', () => {
+            toggleContainer.querySelectorAll('.payment-method-tab').forEach(t => t.classList.remove('active'));
+            newTab.classList.add('active');
+
+            const method = newTab.dataset.method;
+            if (method === 'stripe') {
+                if (paymentForm) paymentForm.style.display = 'block';
+                if (p2pSection) p2pSection.style.display = 'none';
+            } else if (method === 'p2p') {
+                if (paymentForm) paymentForm.style.display = 'none';
+                if (p2pSection) p2pSection.style.display = 'block';
+            }
+        });
+    });
+}
+
+/**
  * Sets up the donation meter for an item, showing community fund progress
  * and allowing users to chip in toward making the item free for someone in need.
  * Donation state is stored per-item in localStorage.
@@ -897,15 +1256,18 @@ function handleOverlayClick(event) {
 
 async function updateCheckoutDisplay() {
     const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
-    const amountReceived = state.session.user.amountReceived || 0;
+
+    // In single-item mode, don't apply payment history deductions or deposit logic
+    const isItemMode = currentCheckoutScope && currentCheckoutScope.mode === 'item';
+    const amountReceived = isItemMode ? 0 : (state.session.user.amountReceived || 0);
     const totalDue = finalTotal - amountReceived;
     const isFullyPaid = totalDue <= 0.009; // Check for paid status
-    
+
     const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
     let baseAmountToCharge = totalDue; // This is the amount *before* processing fees
-    
-    const isInitialDeposit = amountReceived === 0 && (currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
-    
+
+    const isInitialDeposit = !isItemMode && amountReceived === 0 && (currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
+
     const tipRow = document.querySelector('.tip-row');
     if (tipRow) {
         if (isInitialDeposit && totalDue > baseAmountToCharge * 1.05) {
@@ -915,7 +1277,19 @@ async function updateCheckoutDisplay() {
         }
     }
 
-    if (amountReceived === 0) {
+    if (isItemMode) {
+        // Single-item mode: charge full amount, no deposit logic
+        baseAmountToCharge = finalTotal;
+        // Adjust label based on whether this is donation-only or purchase + donation
+        const isDonationOnly = currentCheckoutItemQty === 0 && currentCheckoutScope && currentCheckoutScope.highlightChipIn;
+        if (isDonationOnly && currentChipInAmount > 0) {
+            document.getElementById('deposit-label').textContent = 'Donation Amount:';
+        } else if (isDonationOnly) {
+            document.getElementById('deposit-label').textContent = 'Amount Due:';
+        } else {
+            document.getElementById('deposit-label').textContent = 'Amount Due:';
+        }
+    } else if (amountReceived === 0) {
         if (currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full') {
             baseAmountToCharge = finalTotal;
             document.getElementById('deposit-label').textContent = 'Full Amount Due:';
@@ -927,9 +1301,17 @@ async function updateCheckoutDisplay() {
         document.getElementById('deposit-label').textContent = 'Remaining Balance Due:';
     }
     const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
-    
-    let finalBaseAmount = baseAmountToCharge + tipAmount;
+
+    let finalBaseAmount = baseAmountToCharge + tipAmount + currentChipInAmount;
     document.getElementById('deposit-price').textContent = `$${finalBaseAmount.toFixed(2)}`;
+
+    // Update P2P amount display if visible
+    const p2pAmountEl = document.getElementById('checkout-p2p-amount');
+    if (p2pAmountEl) {
+        p2pAmountEl.textContent = `$${finalBaseAmount.toFixed(2)}`;
+    }
+    // Update P2P payment links with new amount
+    updateP2PPaymentLinks(finalBaseAmount);
     
     // Get fee/total elements
     const processingFeeEl = document.getElementById('processing-fee-price');
@@ -939,10 +1321,10 @@ async function updateCheckoutDisplay() {
     // --- NEW LOGIC FOR "RECEIPT" MODE ---
     if (isFullyPaid && finalBaseAmount <= 0) {
         log('Modal', 'Receipt mode: Plan is fully paid.');
-        
+
         // Hide all payment form elements
         if (paymentForm) paymentForm.style.display = 'none';
-        
+
         // Also hide the tip row
         if (tipRow) tipRow.style.display = 'none';
 
@@ -950,8 +1332,45 @@ async function updateCheckoutDisplay() {
     }
     // --- END NEW LOGIC ---
 
+    // --- DONATION-ONLY MODE: Hide payment until chip-in selected ---
+    const isDonationOnlyPending = isItemMode && currentCheckoutItemQty === 0 && currentChipInAmount <= 0 && finalBaseAmount <= 0;
+    if (isDonationOnlyPending) {
+        log('Modal', 'Donation-only mode: waiting for chip-in selection.');
+        if (paymentForm) paymentForm.style.display = 'none';
+        const paymentMethodToggle = document.getElementById('checkout-payment-method-toggle');
+        if (paymentMethodToggle) paymentMethodToggle.style.display = 'none';
+        const p2pSection = document.getElementById('checkout-p2p-section');
+        if (p2pSection) p2pSection.style.display = 'none';
+        // Update submit button text
+        const submitBtn = document.getElementById('payment-submit-btn');
+        if (submitBtn) {
+            const btnText = submitBtn.querySelector('.button-text');
+            if (btnText) btnText.textContent = 'Pay Now';
+        }
+        return;
+    }
+    // --- END DONATION-ONLY MODE ---
+
     // If we're here, we need to pay. Show the form.
-    if (paymentForm) paymentForm.style.display = 'block'; 
+    if (paymentForm) paymentForm.style.display = 'block';
+
+    // Re-show payment method toggle if P2P options exist (may have been hidden in donation-only pending state)
+    if (isItemMode && currentCheckoutScope && currentCheckoutScope.highlightChipIn) {
+        const paymentMethodToggle = document.getElementById('checkout-payment-method-toggle');
+        const storePaymentOptions = getStorePaymentOptions();
+        const hasP2POptions = storePaymentOptions && Object.keys(storePaymentOptions).length > 0;
+        if (paymentMethodToggle && hasP2POptions) {
+            paymentMethodToggle.style.display = 'block';
+        }
+        // Update pay button text for donation context
+        const submitBtn = document.getElementById('payment-submit-btn');
+        if (submitBtn) {
+            const btnText = submitBtn.querySelector('.button-text');
+            if (btnText) {
+                btnText.textContent = currentCheckoutItemQty === 0 ? 'Donate Now' : 'Pay Now';
+            }
+        }
+    }
 
     // --- MINIMUM CHARGE FIX ---
     // Stripe's minimum charge is $0.50 (50 cents)
@@ -1419,7 +1838,6 @@ function resetModalState() {
         modalOptionsContainer: document.getElementById('modal-options-container'),
         modalQuantitySelector: document.getElementById('modal-quantity-selector'),
         modalItemNote: document.getElementById('modal-item-note'),
-        modalCalendarContainer: document.getElementById('modal-calendar-container'),
         modalBreadcrumbs: document.getElementById('modal-breadcrumbs'),
         modalAdditionalDetails: document.getElementById('modal-additional-details')
     };
@@ -2749,7 +3167,6 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     const modalQuantitySelector = document.getElementById('modal-quantity-selector');
     const modalNotesContainer = document.getElementById('modal-notes-container');
     const modalItemNote = document.getElementById('modal-item-note');
-    const modalCalendarContainer = document.getElementById('modal-calendar-container');
     const modalActionsContainer = document.getElementById('modal-actions-container');
     const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
     const modalAdditionalDetails = document.getElementById('modal-additional-details');
@@ -2848,7 +3265,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             rapidPayBtn._updateText = updateRapidPayLabel;
         }
 
-        // Rapid Pay click - opens quick pay modal
+        // Rapid Pay click - opens unified checkout modal scoped to this item
         if (rapidPayBtn) {
             // Remove old listeners by cloning
             const newRapidPayBtn = rapidPayBtn.cloneNode(true);
@@ -2867,27 +3284,46 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                 const price = getRecordPrice(record, selectedOptionIndex);
                 const amount = price * quantity;
                 const itemName = record.fields.Name || 'Item';
-                showQuickPayModal(paymentOptions, amount, itemName, quantity);
+                const shopSettings = getShopSettings();
+                showCheckoutModal(shopSettings, {
+                    mode: 'item',
+                    itemId: record.id,
+                    itemName: itemName,
+                    quantity: quantity,
+                    price: price,
+                    record: record,
+                    highlightChipIn: false
+                });
             });
         }
 
-        // Chip In click - toggles donation meter
+        // Chip In click - opens unified checkout modal scoped to this item with chip-in highlighted
         if (chipInBtn) {
             const newChipInBtn = chipInBtn.cloneNode(true);
             chipInBtn.parentNode.replaceChild(newChipInBtn, chipInBtn);
 
             newChipInBtn.addEventListener('click', () => {
-                if (donationMeter) {
-                    const isVisible = donationMeter.style.display !== 'none';
-                    if (isVisible) {
-                        donationMeter.style.display = 'none';
-                        newChipInBtn.classList.remove('active');
-                    } else {
-                        donationMeter.style.display = 'block';
-                        newChipInBtn.classList.add('active');
-                        setupDonationMeter(record, paymentOptions, itemState);
-                    }
+                const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
+                const quantity = quantityInput ? parseInt(quantityInput.value, 10) || 1 : 1;
+                const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
+                let selectedOptionIndex = itemState.selectedOptionIndex || 0;
+                if (optionRadios.length > 0) {
+                    const selectedValue = optionRadios[0].value;
+                    selectedOptionIndex = parseInt(selectedValue, 10) || 0;
                 }
+                const price = getRecordPrice(record, selectedOptionIndex);
+                const itemName = record.fields.Name || 'Item';
+                const shopSettings = getShopSettings();
+                showCheckoutModal(shopSettings, {
+                    mode: 'item',
+                    itemId: record.id,
+                    itemName: itemName,
+                    quantity: 0, // Default to 0 = donation only (crowdfunding mode)
+                    maxQuantity: quantity, // Pass the current quantity as reference for the toggle max
+                    price: price,
+                    record: record,
+                    highlightChipIn: true
+                });
             });
         }
     } else {
@@ -3723,164 +4159,6 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                 ${rankingsHtmlParts.join('')}
             `;
             fragment.appendChild(rankingContainer);
-        }
-
-        // Add Variations Parsing Tool for authorized users (publish permission)
-        // Now available for all item types: real catalog items, AI-parsed items, and custom items
-        const userHasPublishPermission = api.userHasPublishPermission();
-        const isRealRecord = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-') && !record.id.startsWith('ai-presentation-');
-
-        if (userHasPublishPermission) {
-            const variationsToolContainer = document.createElement('div');
-            variationsToolContainer.className = 'variations-tool-container detail-item';
-            variationsToolContainer.style.gridColumn = '1 / -1';
-
-            const currentOptionsString = record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] || '';
-            const parsedGroups = parseOptions(currentOptionsString);
-            const hasExistingOptions = parsedGroups.length > 0 && parsedGroups.some(g => g.options.length > 0);
-
-            variationsToolContainer.innerHTML = `
-                <div class="variations-tool-header" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                    <span class="detail-label" style="margin-bottom: 0;">Variations & Options</span>
-                    <button class="variations-toggle-btn" style="background: none; border: none; cursor: pointer; font-size: 1.2em; color: #007bff;">
-                        ${hasExistingOptions ? '▼' : '+ Add'}
-                    </button>
-                </div>
-                <div class="variations-tool-content" style="display: none; margin-top: 10px;">
-                    <div class="variations-help-text" style="font-size: 0.85em; color: #666; margin-bottom: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px;">
-                        <strong>Format:</strong> Use <code>[Group Name]</code> for groups, then add options below.<br>
-                        <strong>Modifiers:</strong> <code>[price: +10]</code> <code>[price: 25]</code> (override) <code>[img: tag]</code> <code>[desc: text]</code> <code>[time: +30]</code>
-                    </div>
-                    <textarea class="variations-editor" placeholder="[Size] (required)
-Small [price: -5]
-Medium
-Large [price: +5]
-
-[Add-ons]
-Extra cheese [price: +2]
-Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; font-family: monospace; font-size: 0.9em; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;">${currentOptionsString}</textarea>
-                    <div class="variations-preview" style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px; display: none;">
-                        <strong style="font-size: 0.85em; color: #333;">Preview:</strong>
-                        <div class="variations-preview-content" style="margin-top: 8px;"></div>
-                    </div>
-                    <div class="variations-actions" style="margin-top: 10px; display: flex; gap: 10px;">
-                        <button class="variations-preview-btn" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Preview</button>
-                        <button class="variations-save-btn" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save Variations</button>
-                        <span class="variations-status" style="align-self: center; font-size: 0.85em; color: #666;"></span>
-                    </div>
-                </div>
-            `;
-
-            // Toggle show/hide variations tool
-            const header = variationsToolContainer.querySelector('.variations-tool-header');
-            const content = variationsToolContainer.querySelector('.variations-tool-content');
-            const toggleBtn = variationsToolContainer.querySelector('.variations-toggle-btn');
-
-            header.addEventListener('click', () => {
-                const isVisible = content.style.display !== 'none';
-                content.style.display = isVisible ? 'none' : 'block';
-                toggleBtn.textContent = isVisible ? (hasExistingOptions ? '▼' : '+ Add') : '▲';
-            });
-
-            // Preview functionality
-            const textarea = variationsToolContainer.querySelector('.variations-editor');
-            const previewContainer = variationsToolContainer.querySelector('.variations-preview');
-            const previewContent = variationsToolContainer.querySelector('.variations-preview-content');
-            const previewBtn = variationsToolContainer.querySelector('.variations-preview-btn');
-            const saveBtn = variationsToolContainer.querySelector('.variations-save-btn');
-            const statusSpan = variationsToolContainer.querySelector('.variations-status');
-
-            previewBtn.addEventListener('click', () => {
-                const optionsText = textarea.value;
-                const groups = parseOptions(optionsText);
-
-                if (groups.length === 0 || !groups.some(g => g.options.length > 0)) {
-                    previewContent.innerHTML = '<em style="color: #666;">No valid options found. Add options using the format above.</em>';
-                } else {
-                    let previewHtml = '';
-                    groups.forEach(group => {
-                        if (group.options.length > 0) {
-                            previewHtml += `<div style="margin-bottom: 10px;">
-                                <strong style="color: #333;">${group.name}</strong>${group.modifier ? ` <span style="color: #666; font-size: 0.85em;">(${group.modifier})</span>` : ''}
-                                <ul style="margin: 5px 0 0 15px; padding: 0;">`;
-                            group.options.forEach(opt => {
-                                let priceText = '';
-                                if (opt.priceOverride !== null) {
-                                    priceText = ` <span style="color: #28a745;">$${opt.priceOverride.toFixed(2)}</span>`;
-                                } else if (opt.priceModifier !== null) {
-                                    priceText = ` <span style="color: ${opt.priceModifier >= 0 ? '#28a745' : '#dc3545'}">${opt.priceModifier >= 0 ? '+' : ''}$${opt.priceModifier.toFixed(2)}</span>`;
-                                }
-                                let extras = [];
-                                if (opt.imageTag) extras.push(`img: ${opt.imageTag}`);
-                                if (opt.descriptionAppend) extras.push(`desc: "${opt.descriptionAppend.substring(0, 20)}${opt.descriptionAppend.length > 20 ? '...' : ''}"`);
-                                if (opt.durationChange !== null) extras.push(`time: ${opt.durationChange >= 0 ? '+' : ''}${opt.durationChange}min`);
-                                const extrasText = extras.length > 0 ? ` <span style="color: #888; font-size: 0.85em;">[${extras.join(', ')}]</span>` : '';
-                                previewHtml += `<li style="margin: 3px 0;">${opt.name}${priceText}${extrasText}</li>`;
-                            });
-                            previewHtml += '</ul></div>';
-                        }
-                    });
-                    previewContent.innerHTML = previewHtml;
-                }
-                previewContainer.style.display = 'block';
-            });
-
-            // Save functionality
-            saveBtn.addEventListener('click', async () => {
-                const optionsText = textarea.value;
-                statusSpan.textContent = 'Saving...';
-                statusSpan.style.color = '#666';
-                saveBtn.disabled = true;
-
-                try {
-                    let saveSuccess = false;
-
-                    // For AI-parsed and custom items, save locally only (no API call)
-                    if (!isRealRecord) {
-                        // Store options directly on the record object
-                        record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
-                        saveSuccess = true;
-                        statusSpan.textContent = 'Saved locally!';
-                        statusSpan.style.color = '#28a745';
-                    } else {
-                        // For real catalog items, persist to Airtable
-                        const result = await api.updateItemOptions(record.id, optionsText);
-                        if (result) {
-                            saveSuccess = true;
-                            statusSpan.textContent = 'Saved successfully!';
-                            statusSpan.style.color = '#28a745';
-
-                            // Update the record's options field locally
-                            record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
-                        } else {
-                            throw new Error('Failed to save');
-                        }
-                    }
-
-                    if (saveSuccess) {
-                        // Refresh the options display in the modal
-                        const newGroups = parseOptions(optionsText);
-                        const hasNewOptions = newGroups.length > 0 && newGroups.some(g => g.options.length > 0);
-                        toggleBtn.textContent = hasNewOptions ? '▲' : '+ Add';
-
-                        // Trigger re-render of the options buttons
-                        setTimeout(() => {
-                            showDetailModal(record);
-                        }, 1000);
-                    }
-                } catch (error) {
-                    statusSpan.textContent = 'Error saving. Please try again.';
-                    statusSpan.style.color = '#dc3545';
-                    console.error('Error saving variations:', error);
-                } finally {
-                    saveBtn.disabled = false;
-                    setTimeout(() => {
-                        statusSpan.textContent = '';
-                    }, 3000);
-                }
-            });
-
-            fragment.appendChild(variationsToolContainer);
         }
 
         modalAdditionalDetails.appendChild(fragment);
@@ -6573,103 +6851,6 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     }
     // --- END THE FIX ---\
 
-    modalCalendarContainer.innerHTML = '';
-    const iCalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
-
-    // Hide availability calendar for events - not needed for published event viewing
-    if (iCalUrl && !isEvent) {
-        try {
-            modalCalendarContainer.style.display = 'block';
-            log('Modal', `iCal URL found for ${record.id}, initializing calendar.`);
-
-            // Lazy load Flatpickr if needed
-            if (!window.flatpickr) {
-                log('Modal', 'Loading Flatpickr dynamically...');
-                await loadFlatpickr();
-            }
-
-            if (!window.flatpickr) {
-                throw new Error('Flatpickr not available after loading');
-            }
-            
-            if (typeof window.flatpickr !== 'function') {
-                throw new Error(`Flatpickr is not a function, got type: ${typeof window.flatpickr}`);
-            }
-
-            const busyTimes = await api.fetchCalendarForRecord(record);
-            const calendarInstance = window.flatpickr(modalCalendarContainer, {
-                inline: true,
-                showMonths: 1,
-                disable: [(date) => {
-                    const status = getDayStatus(date, busyTimes, record);
-                    return status.status === AVAILABILITY_STATUS.NONE;
-                }],
-                onDayCreate: function (dObj, dStr, fp, dayElem) {
-                    const day = dayElem.dateObj;
-                    const status = getDayStatus(day, busyTimes, record);
-                    let className = '';
-                    let tooltip = status.reason;
-                    if (status.status === AVAILABILITY_STATUS.FULL) {
-                        className = 'available-full';
-                    } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
-                        className = 'available-partial';
-                        tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
-                    } else {
-                        className = 'unavailable';
-                    }
-                    dayElem.classList.add(className);
-                    dayElem.setAttribute('data-tippy-content', tooltip);
-                },
-                onReady: function () {
-                    if (window.tippy) {
-                        tippy('.flatpickr-day', {
-                            content: reference => reference.getAttribute('data-tippy-content'),
-                            placement: 'top',
-                            theme: 'light',
-                            allowHTML: true,
-                        });
-                    }
-                },
-                onChange: (selectedDates) => {
-                    if (selectedDates.length > 0 && selectedDates[0]) {
-                        const eventDateInput = document.getElementById('event-date-picker');
-                        if (eventDateInput && eventDateInput._flatpickr) {
-                            try {
-                                eventDateInput._flatpickr.setDate(selectedDates[0], true);
-                            } catch (error) {
-                                log('Modal', `Error syncing event date picker: ${error.message}`);
-                            }
-                        }
-                    }
-                }
-            });
-            
-            const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-            if (eventDate) {
-                try {
-                    const dateObj = new Date(eventDate);
-                    if (!isNaN(dateObj.getTime())) {
-                        calendarInstance.setDate(dateObj, true);
-                    } else {
-                        log('Modal', `Invalid event date: ${eventDate}`);
-                    }
-                } catch (error) {
-                    log('Modal', `Error setting calendar date: ${error.message}`);
-                }
-            }
-            
-            log('Modal', 'Calendar initialized successfully');
-        } catch (error) {
-            log('Modal', `Error initializing calendar: ${error.message}`);
-            console.error('Calendar initialization error:', error);
-            modalCalendarContainer.style.display = 'none';
-            modalCalendarContainer.innerHTML = '<p style="color: #dc3545; padding: 10px; text-align: center;">Unable to load calendar. Please try refreshing the page.</p>';
-        }
-    } else {
-        modalCalendarContainer.style.display = 'none';
-        log('Modal', `No iCal URL for ${record.id}, hiding calendar.`);
-    }
-
     ui.updateCardIcon(record.id);
 
     // Get the appropriate z-index based on presentation state
@@ -6953,7 +7134,6 @@ export async function showGroupDetailModal(group, allRecords) {
     const modalOptionsContainer = document.getElementById('modal-options-container');
     const modalQuantitySelector = document.getElementById('modal-quantity-selector');
     const modalNotesContainer = document.getElementById('modal-notes-container');
-    const modalCalendarContainer = document.getElementById('modal-calendar-container');
     const modalActionsContainer = document.getElementById('modal-actions-container');
     const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
     const modalAdditionalDetails = document.getElementById('modal-additional-details');
@@ -6973,7 +7153,6 @@ export async function showGroupDetailModal(group, allRecords) {
     if (donationMeterGroup) donationMeterGroup.style.display = 'none';
     if (modalQuantitySelector) modalQuantitySelector.innerHTML = '';
     if (modalNotesContainer) modalNotesContainer.style.display = 'none';
-    if (modalCalendarContainer) modalCalendarContainer.innerHTML = '';
     if (modalActionsContainer) modalActionsContainer.style.display = 'none';
     if (modalAdditionalDetails) modalAdditionalDetails.innerHTML = '';
     if (modalHeaderActions) modalHeaderActions.innerHTML = '';
@@ -7318,9 +7497,11 @@ export function hideDetailModal() {
     }
 }
 
-export async function showCheckoutModal(shopSettings) {
+export async function showCheckoutModal(shopSettings, scope = null) {
     currentShopSettings = shopSettings;
-    log('Modal', 'Showing checkout modal.');
+    currentCheckoutScope = scope; // { mode: 'item', itemId, itemName, quantity, price, record, highlightChipIn } or null (plan mode)
+    currentChipInAmount = 0; // Reset chip-in on each open
+    log('Modal', `Showing checkout modal. Scope: ${scope ? scope.mode : 'plan'}`);
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     const fullTotalEl = document.getElementById('full-total-price');
     const checkoutCloseBtn = document.getElementById('checkout-close-btn');
@@ -7329,13 +7510,27 @@ export async function showCheckoutModal(shopSettings) {
     const paymentChoiceContainer = document.getElementById('payment-choice-container');
     const termsContainer = document.querySelector('.terms-and-conditions');
 
+    // Update modal title based on scope
+    const checkoutTitle = document.getElementById('checkout-modal-title');
+    if (checkoutTitle) {
+        if (scope && scope.highlightChipIn) {
+            checkoutTitle.textContent = 'Chip In';
+        } else if (scope && scope.mode === 'item') {
+            checkoutTitle.textContent = 'Checkout';
+        } else {
+            checkoutTitle.textContent = 'Checkout Summary';
+        }
+    }
+
     // Get new fee/total elements
     const processingFeeEl = document.getElementById('processing-fee-price');
     const finalChargeEl = document.getElementById('final-charge-price');
 
     const totalLabel = document.getElementById('checkout-total-label');
     if (totalLabel) {
-        if (state.session.user.amountReceived > 0) {
+        if (scope && scope.highlightChipIn && (scope.quantity === 0 || !scope.quantity)) {
+            totalLabel.textContent = 'Item Price:';
+        } else if (state.session.user.amountReceived > 0) {
             totalLabel.textContent = 'Total Final Cost:';
         } else {
             totalLabel.textContent = 'Total Estimated Cost:';
@@ -7362,6 +7557,80 @@ export async function showCheckoutModal(shopSettings) {
     tipAmountInput.value = '';
     let finalTotal = 0; // This is the plan subtotal
     const summaryList = document.createElement('ul');
+
+    if (scope && scope.mode === 'item') {
+        // Single-item mode: show only the specified item
+        const initialQty = scope.quantity || 0;
+        currentCheckoutItemQty = initialQty;
+        const itemTotal = (scope.price || 0) * initialQty;
+        finalTotal = itemTotal;
+
+        const listItem = document.createElement('li');
+        listItem.id = 'checkout-scope-item';
+        if (initialQty === 0) {
+            // Donation-only mode: show item name without price (no purchase)
+            listItem.innerHTML = `
+                <div class="summary-item-details">
+                    <span class="summary-item-name">${scope.itemName || 'Item'}</span>
+                    <small class="summary-item-donation-note">Chip in to crowdfund this item</small>
+                </div>
+                <span class="summary-item-price">—</span>
+            `;
+        } else {
+            listItem.innerHTML = `
+                <div class="summary-item-details">
+                    <span class="summary-item-name">${scope.itemName || 'Item'} (x${initialQty})</span>
+                </div>
+                <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
+            `;
+        }
+        summaryList.appendChild(listItem);
+
+        // Show/setup quantity toggle for chip-in mode (when highlightChipIn is true)
+        const qtyToggle = document.getElementById('checkout-item-quantity-toggle');
+        if (qtyToggle && scope.highlightChipIn) {
+            qtyToggle.style.display = 'block';
+            const qtyValueEl = document.getElementById('checkout-item-qty');
+            const qtyHint = document.getElementById('checkout-qty-hint');
+            if (qtyValueEl) qtyValueEl.textContent = initialQty;
+            if (qtyHint) {
+                qtyHint.textContent = initialQty === 0
+                    ? 'Quantity 0 = donation only. Increase to also buy.'
+                    : `Quantity ${initialQty} — item will be purchased + donation.`;
+            }
+
+            // Wire up +/- buttons
+            const minusBtn = qtyToggle.querySelector('.checkout-qty-minus');
+            const plusBtn = qtyToggle.querySelector('.checkout-qty-plus');
+
+            // Clone to remove old listeners
+            if (minusBtn) {
+                const newMinus = minusBtn.cloneNode(true);
+                minusBtn.parentNode.replaceChild(newMinus, minusBtn);
+                newMinus.addEventListener('click', () => {
+                    if (currentCheckoutItemQty > 0) {
+                        currentCheckoutItemQty--;
+                        updateCheckoutItemQtyDisplay(scope);
+                    }
+                });
+            }
+            if (plusBtn) {
+                const newPlus = plusBtn.cloneNode(true);
+                plusBtn.parentNode.replaceChild(newPlus, plusBtn);
+                newPlus.addEventListener('click', () => {
+                    currentCheckoutItemQty++;
+                    updateCheckoutItemQtyDisplay(scope);
+                });
+            }
+        } else if (qtyToggle) {
+            qtyToggle.style.display = 'none';
+        }
+    } else {
+    // Plan mode (original behavior): show all locked items
+    // Hide quantity toggle in plan mode
+    const qtyToggle = document.getElementById('checkout-item-quantity-toggle');
+    if (qtyToggle) qtyToggle.style.display = 'none';
+    currentCheckoutItemQty = 0;
 
     // Check if UMW is in plan
     let isUmwInPlan = false;
@@ -7417,15 +7686,23 @@ export async function showCheckoutModal(shopSettings) {
         `;
         summaryList.appendChild(listItem);
     }
+    } // end plan mode
     summaryDetailsEl.appendChild(summaryList);
 
-    fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
-    fullTotalEl.dataset.total = finalTotal;
+    // Show the per-unit price as reference in chip-in mode with qty=0
+    if (scope && scope.highlightChipIn && currentCheckoutItemQty === 0 && scope.price > 0) {
+        fullTotalEl.textContent = `$${scope.price.toFixed(2)}`;
+        fullTotalEl.dataset.total = 0; // actual charge total is 0 (donation only)
+    } else {
+        fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
+        fullTotalEl.dataset.total = finalTotal;
+    }
     
     const paymentHistory = state.session.user.paymentHistory || [];
     const amountReceived = state.session.user.amountReceived || 0;
-    
-    if (paymentHistory.length > 0) {
+
+    // In single-item mode, skip payment history display
+    if (paymentHistory.length > 0 && !(scope && scope.mode === 'item')) {
         const paymentsReceivedSection = document.createElement('div');
         paymentsReceivedSection.className = 'checkout-payments-received';
         paymentsReceivedSection.style.cssText = 'margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px;';
@@ -7469,7 +7746,7 @@ export async function showCheckoutModal(shopSettings) {
         }
     }
 
-    if (currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
+    if (!(scope && scope.mode === 'item') && currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
         paymentChoiceContainer.style.display = 'block';
         // --- THIS IS CHANGED: Add async/await ---\
         document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
@@ -7481,6 +7758,48 @@ export async function showCheckoutModal(shopSettings) {
 
     if (termsContainer && currentShopSettings.terms) {
         termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\\n/g, '<br>')}</p>`;
+    }
+
+    // --- UNIFIED CHECKOUT: Setup Chip In Section ---
+    setupCheckoutChipIn(finalTotal);
+    // If scope says to highlight chip-in, pre-expand it
+    if (scope && scope.highlightChipIn) {
+        const chipInSection = document.getElementById('checkout-chip-in-section');
+        if (chipInSection) {
+            const customBtn = chipInSection.querySelector('[data-chip-in="custom"]');
+            const skipBtn = chipInSection.querySelector('[data-chip-in="skip"]');
+            if (customBtn && skipBtn) {
+                skipBtn.classList.remove('active');
+                customBtn.classList.add('active');
+                customBtn.click();
+            }
+        }
+        // Load crowdfunding progress from Airtable for this item
+        if (scope.itemId && scope.price) {
+            loadCrowdfundProgress(scope.itemId, scope.price);
+        }
+    }
+
+    // --- UNIFIED CHECKOUT: Setup P2P Payment Options ---
+    const storePaymentOptions = getStorePaymentOptions();
+    const hasP2POptions = storePaymentOptions && Object.keys(storePaymentOptions).length > 0;
+    const paymentMethodToggle = document.getElementById('checkout-payment-method-toggle');
+    const p2pSection = document.getElementById('checkout-p2p-section');
+
+    if (hasP2POptions) {
+        // Render P2P buttons
+        const p2pItemName = scope && scope.mode === 'item' ? (scope.itemName || 'Item') : 'Plan Checkout';
+        renderCheckoutP2POptions(storePaymentOptions, finalTotal, p2pItemName);
+        // Show the payment method toggle
+        if (paymentMethodToggle) paymentMethodToggle.style.display = 'block';
+        // Ensure P2P section starts hidden (Stripe is default)
+        if (p2pSection) p2pSection.style.display = 'none';
+        // Setup toggle handlers
+        setupPaymentMethodToggle();
+    } else {
+        // No P2P options - hide toggle and P2P section
+        if (paymentMethodToggle) paymentMethodToggle.style.display = 'none';
+        if (p2pSection) p2pSection.style.display = 'none';
     }
 
     // Initialize Stripe on demand (lazy load)
@@ -7587,6 +7906,14 @@ export function hideCheckoutModal() {
         currentClientSecret = null;
         currentBaseAmount = 0;
         currentProcessingFee = 0;
+        currentChipInAmount = 0;
+        currentCheckoutScope = null;
+        currentCheckoutItemQty = 0;
+        // Reset quantity toggle and crowdfund progress
+        const qtyToggle = document.getElementById('checkout-item-quantity-toggle');
+        if (qtyToggle) qtyToggle.style.display = 'none';
+        const crowdfundProgress = document.getElementById('checkout-crowdfund-progress');
+        if (crowdfundProgress) crowdfundProgress.style.display = 'none';
         // --- END ADD ---\
 
         checkoutModalOverlay.classList.remove('active');
@@ -7606,4 +7933,12 @@ export function hideCheckoutModal() {
 
 export function getStripeContext() {
     return { stripe, elements };
+}
+
+export function getCheckoutChipInContext() {
+    return {
+        chipInAmount: currentChipInAmount,
+        scope: currentCheckoutScope,
+        itemQty: currentCheckoutItemQty
+    };
 }

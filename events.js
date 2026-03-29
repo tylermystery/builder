@@ -281,7 +281,37 @@ async function handlePaymentFormSubmit(event) {
         if (paymentIntent.status === 'succeeded') {
             log('Events', 'Payment succeeded.');
             const amountPaid = paymentIntent.amount / 100;
-            
+
+            // --- Track Community Fund chip-in to Airtable ---
+            const chipInCtx = ui.getCheckoutChipInContext();
+            if (chipInCtx.chipInAmount > 0 && chipInCtx.scope) {
+                const storeId = state.shop?.id || state.session?.storeId || '';
+                const goalAmount = chipInCtx.scope.price || 0;
+                api.upsertCommunityFund(
+                    chipInCtx.scope.itemId,
+                    chipInCtx.scope.itemName || 'Item',
+                    chipInCtx.chipInAmount,
+                    goalAmount,
+                    storeId
+                ).then(result => {
+                    log('Events', `Community fund tracked: $${chipInCtx.chipInAmount.toFixed(2)}`);
+                }).catch(err => {
+                    console.warn('[Events] Failed to track community fund:', err);
+                });
+
+                // Also update localStorage for offline/fallback tracking
+                try {
+                    const donationKey = `donation_fund_${chipInCtx.scope.itemId}`;
+                    let localData = { raised: 0, contributors: 0 };
+                    const stored = localStorage.getItem(donationKey);
+                    if (stored) localData = JSON.parse(stored);
+                    localData.raised = (localData.raised || 0) + chipInCtx.chipInAmount;
+                    localData.contributors = (localData.contributors || 0) + 1;
+                    localStorage.setItem(donationKey, JSON.stringify(localData));
+                } catch (e) { /* storage full, ignore */ }
+            }
+            // --- End Community Fund tracking ---
+
             const newPayment = {
                 amount: amountPaid,
                 date: new Date().toISOString(),
@@ -2690,13 +2720,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             if (!record) return;
             
             ui.showDetailModal(record);
-            
-            setTimeout(() => {
-                const modalCalendar = document.getElementById('modal-calendar-container');
-                if (modalCalendar && modalCalendar.style.display !== 'none') {
-                    modalCalendar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }
-            }, 300);
         } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn, .availability-btn')) {
             const recordId = card.dataset.recordId;
             console.log('[EVENTS DEBUG] Card clicked (detail modal trigger), recordId:', recordId);
