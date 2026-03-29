@@ -4,13 +4,15 @@ console.log('[MODULE DEBUG] modal.js module starting to load...', performance.no
 import { state, getRecordById } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
-import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex } from '../config.js';
+import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS } from '../config.js';
+import { getCurrentUser } from '../chat.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { triggerSave } from '../events.js';
+import { showForumPanel } from './forumPanel.js';
 
 console.log('[MODULE DEBUG] modal.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -1078,6 +1080,330 @@ function getBreadcrumbs(record) {
     return breadcrumbs;
 }
 
+// ============================================
+// MODAL REACTIONS & COMMENTS SYSTEM
+// ============================================
+
+// Cache for modal comments to avoid refetching on every open
+let modalCommentsCache = new Map(); // recordId -> { messages: [], timestamp }
+let modalReplyingTo = null; // { messageId, senderName }
+
+/**
+ * Initialize the reactions section in the detail modal.
+ * Shows the quick bar, populates the tiered picker, and renders existing reactions.
+ * Only activates when there's an active session context (plan mode).
+ * @param {string} recordId - The item record ID
+ */
+function initModalReactions(recordId) {
+    const section = document.getElementById('modal-reactions-section');
+    if (!section) return;
+
+    // Only show reactions if we have a session (plan context)
+    const hasSession = state.session.id && state.session.id.startsWith('rec');
+    const isPresentationActive = document.body.classList.contains('presentation-active');
+
+    if (!hasSession && !isPresentationActive) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = 'flex';
+
+    const quickBar = document.getElementById('modal-reactions-quick-bar');
+    const expandBtn = document.getElementById('modal-reactions-expand-btn');
+    const picker = document.getElementById('modal-reactions-picker');
+    const summary = document.getElementById('modal-reactions-summary');
+    const scoreBadge = document.getElementById('modal-reactions-score-badge');
+
+    if (!quickBar || !expandBtn || !picker) return;
+
+    // Get current user and existing reactions
+    let currentUser;
+    try {
+        currentUser = getCurrentUser();
+    } catch (e) {
+        currentUser = { id: 'anonymous', name: 'Anonymous' };
+    }
+
+    const allReactions = state.session.reactions.get(recordId);
+    const currentUserReaction = (allReactions instanceof Map) ? allReactions.get(currentUser.id) : null;
+
+    // Render quick reaction bar (first tier emojis)
+    const quickEmojis = EMOJI_REACTIONS;
+    quickBar.innerHTML = quickEmojis.map(emoji => {
+        const score = REACTION_SCORES[emoji] || 0;
+        const scoreLabel = score > 0 ? `+${score.toFixed(1)}` : score.toFixed(1);
+        const isSelected = currentUserReaction === emoji;
+        return `<button class="modal-reaction-btn ${isSelected ? 'selected' : ''}"
+                    data-emoji="${emoji}" data-record-id="${recordId}"
+                    title="${emoji} ${scoreLabel} ranking impact">
+                    ${emoji}
+                </button>`;
+    }).join('');
+
+    // Render expand button handler
+    expandBtn.onclick = () => {
+        const isOpen = picker.style.display !== 'none';
+        picker.style.display = isOpen ? 'none' : '';
+        expandBtn.querySelector('.expand-btn-icon').textContent = isOpen ? '+' : '−';
+        expandBtn.childNodes[1].textContent = isOpen ? ' More Reactions' : ' Less';
+        if (!isOpen) {
+            renderTieredEmojiPicker(recordId, picker, currentUserReaction);
+        }
+    };
+
+    // Attach click handler for quick bar
+    quickBar.onclick = (e) => {
+        const btn = e.target.closest('.modal-reaction-btn');
+        if (!btn) return;
+        e.stopPropagation();
+        handleModalReactionSelect(btn.dataset.recordId, btn.dataset.emoji);
+    };
+
+    // Render reaction summary
+    renderModalReactionsSummary(recordId, summary, scoreBadge);
+}
+
+/**
+ * Render the tiered emoji picker - scrollable, starts standard, becomes obscure.
+ * Each tier has a label and score impact tooltip on hover.
+ */
+function renderTieredEmojiPicker(recordId, container, currentUserReaction) {
+    let currentUser;
+    try {
+        currentUser = getCurrentUser();
+    } catch (e) {
+        currentUser = { id: 'anonymous', name: 'Anonymous' };
+    }
+
+    const allReactions = state.session.reactions.get(recordId);
+    const userReaction = currentUserReaction || ((allReactions instanceof Map) ? allReactions.get(currentUser.id) : null);
+
+    let html = '<div class="modal-emoji-tiers-scroll">';
+
+    EMOJI_TIERS.forEach((tier, tierIndex) => {
+        html += `<div class="modal-emoji-tier" data-tier="${tierIndex}">
+            <div class="modal-emoji-tier-header">
+                <span class="tier-label">${tier.label}</span>
+                <span class="tier-description">${tier.description}</span>
+            </div>
+            <div class="modal-emoji-tier-grid">`;
+
+        tier.emojis.forEach(emoji => {
+            const score = REACTION_SCORES[emoji] || 0;
+            const scoreLabel = score > 0 ? `+${score.toFixed(1)}` : score.toFixed(1);
+            const impact = score >= 3 ? 'high-positive' :
+                           score >= 1 ? 'positive' :
+                           score >= -0.5 ? 'neutral' :
+                           score >= -2 ? 'negative' : 'high-negative';
+            const isSelected = userReaction === emoji;
+            html += `<button class="modal-reaction-btn modal-tier-emoji ${isSelected ? 'selected' : ''}"
+                        data-emoji="${emoji}" data-record-id="${recordId}"
+                        data-impact="${impact}"
+                        title="${emoji} ${scoreLabel} ranking impact">
+                        <span class="tier-emoji-char">${emoji}</span>
+                        <span class="tier-emoji-score ${impact}">${scoreLabel}</span>
+                    </button>`;
+        });
+
+        html += '</div></div>';
+    });
+
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Attach click handler
+    container.onclick = (e) => {
+        const btn = e.target.closest('.modal-reaction-btn');
+        if (!btn) return;
+        e.stopPropagation();
+        handleModalReactionSelect(btn.dataset.recordId, btn.dataset.emoji);
+    };
+}
+
+/**
+ * Handle selecting a reaction emoji in the modal.
+ * Toggles if same emoji, replaces if different.
+ */
+function handleModalReactionSelect(recordId, emoji) {
+    let currentUser;
+    try {
+        currentUser = getCurrentUser();
+    } catch (e) {
+        currentUser = { id: 'anonymous', name: 'Anonymous' };
+    }
+
+    if (!state.session.reactions.has(recordId)) {
+        state.session.reactions.set(recordId, new Map());
+    }
+
+    const itemReactions = state.session.reactions.get(recordId);
+
+    // Toggle: if same emoji clicked, remove reaction; otherwise set new one
+    if (itemReactions.get(currentUser.id) === emoji) {
+        itemReactions.delete(currentUser.id);
+    } else {
+        itemReactions.set(currentUser.id, emoji);
+    }
+
+    // Re-render the modal reactions UI
+    initModalReactions(recordId);
+
+    // Also update presentation view if it's active
+    const presentationReactionContainer = document.querySelector(`.itinerary-item-reactions[data-record-id="${recordId}"]`);
+    if (presentationReactionContainer && typeof window.renderPresentationReactions === 'function') {
+        window.renderPresentationReactions(recordId, presentationReactionContainer);
+    }
+
+    // Update emoji indicator on presentation card
+    const emojiIndicator = document.querySelector(`.item-emoji-indicator[data-record-id="${recordId}"]`);
+    if (emojiIndicator && typeof window.updatePresentationEmojiIndicator === 'function') {
+        window.updatePresentationEmojiIndicator(recordId);
+    }
+
+    // Trigger save to persist
+    triggerSave();
+
+    log('Modal', `Reaction ${emoji} set for item ${recordId} by ${currentUser.id}`);
+}
+
+/**
+ * Render the reaction summary showing who reacted and the overall score
+ */
+function renderModalReactionsSummary(recordId, summaryEl, scoreBadgeEl) {
+    const allReactions = state.session.reactions.get(recordId);
+
+    if (!allReactions || !(allReactions instanceof Map) || allReactions.size === 0) {
+        if (summaryEl) summaryEl.innerHTML = '<span class="modal-reactions-empty">No reactions yet — be the first!</span>';
+        if (scoreBadgeEl) {
+            scoreBadgeEl.textContent = '';
+            scoreBadgeEl.style.display = 'none';
+        }
+        return;
+    }
+
+    // Calculate total score
+    let totalScore = 0;
+    const reactionCounts = {};
+    allReactions.forEach((emoji, userId) => {
+        totalScore += (REACTION_SCORES[emoji] || 0);
+        reactionCounts[emoji] = (reactionCounts[emoji] || 0) + 1;
+    });
+
+    // Score badge
+    if (scoreBadgeEl) {
+        const scoreText = totalScore > 0 ? `+${totalScore.toFixed(1)}` : totalScore.toFixed(1);
+        const scoreClass = totalScore > 2 ? 'score-positive' : totalScore < -1 ? 'score-negative' : 'score-neutral';
+        scoreBadgeEl.textContent = `${scoreText} impact`;
+        scoreBadgeEl.className = `modal-reactions-score-badge ${scoreClass}`;
+        scoreBadgeEl.style.display = 'inline-block';
+        scoreBadgeEl.title = `Combined ranking impact from ${allReactions.size} reaction${allReactions.size !== 1 ? 's' : ''}`;
+    }
+
+    // Summary - top emojis with counts
+    if (summaryEl) {
+        const sorted = Object.entries(reactionCounts).sort((a, b) => b[1] - a[1]);
+        const pills = sorted.map(([emoji, count]) => {
+            const score = REACTION_SCORES[emoji] || 0;
+            const scoreLabel = score > 0 ? `+${score.toFixed(1)}` : score.toFixed(1);
+            return `<span class="modal-reaction-pill" title="${count} reaction${count !== 1 ? 's' : ''} (${scoreLabel} each)">
+                        ${emoji}<span class="pill-count">${count}</span>
+                    </span>`;
+        }).join('');
+
+        // Show who reacted
+        const userNames = [];
+        allReactions.forEach((emoji, userId) => {
+            const name = state.session.userProfiles?.get(userId) || 'Someone';
+            userNames.push(`${name} ${emoji}`);
+        });
+        const whoText = userNames.length <= 3
+            ? userNames.join(', ')
+            : `${userNames.slice(0, 2).join(', ')} & ${userNames.length - 2} more`;
+
+        summaryEl.innerHTML = `
+            <div class="modal-reactions-pills">${pills}</div>
+            <div class="modal-reactions-who">${whoText}</div>
+        `;
+    }
+}
+
+// ============================================
+// MODAL COMMENTS SYSTEM
+// ============================================
+
+/**
+ * Initialize the comments section in the detail modal.
+ * Shows a Discussion button that opens the forum panel filtered to this item.
+ * @param {string} recordId - The item record ID
+ */
+async function initModalComments(recordId) {
+    const section = document.getElementById('modal-comments-section');
+    if (!section) return;
+
+    // Only show discussion button if we have a session (plan context)
+    const hasSession = state.session.id && state.session.id.startsWith('rec');
+    const isPresentationActive = document.body.classList.contains('presentation-active');
+
+    if (!hasSession && !isPresentationActive) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = '';
+
+    const discussionBtn = document.getElementById('modal-open-discussion-btn');
+    const countEl = document.getElementById('modal-comments-count');
+
+    if (!discussionBtn) return;
+
+    // Load comment count for this item (non-blocking)
+    loadModalCommentCount(recordId, countEl);
+
+    // Attach click handler to open forum panel filtered to this item
+    discussionBtn.onclick = () => {
+        showForumPanel({ filter: 'comments', componentId: recordId });
+    };
+}
+
+/**
+ * Load comment count for an item to display on the Discussion button badge.
+ */
+async function loadModalCommentCount(recordId, countEl) {
+    if (!countEl) return;
+
+    try {
+        // Check cache (valid for 30 seconds)
+        const cached = modalCommentsCache.get(recordId);
+        let messages;
+        if (cached && (Date.now() - cached.timestamp) < 30000) {
+            messages = cached.messages;
+        } else {
+            const allMessages = await api.fetchChatMessages(state.session.id);
+            messages = allMessages.filter(msg => {
+                const itemLink = msg.fields?.['Item Link'];
+                return itemLink && (Array.isArray(itemLink) ? itemLink.includes(recordId) : itemLink === recordId);
+            });
+            modalCommentsCache.set(recordId, { messages, timestamp: Date.now() });
+        }
+
+        const total = messages.length;
+        countEl.textContent = total > 0 ? `${total}` : '';
+        countEl.style.display = total > 0 ? 'inline-flex' : 'none';
+    } catch (err) {
+        log('Modal', `Error loading comment count: ${err.message}`);
+    }
+}
+
+/**
+ * Simple HTML escaper for content
+ */
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 function resetModalState() {
     console.log('[MODAL DEBUG] resetModalState called.');
     const elements = {
@@ -1124,6 +1450,32 @@ function resetModalState() {
     if (chipInBtn) chipInBtn.classList.remove('active');
     const priceActions = document.getElementById('modal-price-actions');
     if (priceActions) priceActions.classList.add('hidden');
+
+    // Reset reactions & comments sections
+    const reactionsSection = document.getElementById('modal-reactions-section');
+    if (reactionsSection) {
+        reactionsSection.style.display = 'none';
+        const quickBar = document.getElementById('modal-reactions-quick-bar');
+        if (quickBar) quickBar.innerHTML = '';
+        const picker = document.getElementById('modal-reactions-picker');
+        if (picker) { picker.innerHTML = ''; picker.style.display = 'none'; }
+        const summary = document.getElementById('modal-reactions-summary');
+        if (summary) summary.innerHTML = '';
+        const scoreBadge = document.getElementById('modal-reactions-score-badge');
+        if (scoreBadge) { scoreBadge.textContent = ''; scoreBadge.style.display = 'none'; }
+        const expandBtn = document.getElementById('modal-reactions-expand-btn');
+        if (expandBtn) {
+            const icon = expandBtn.querySelector('.expand-btn-icon');
+            if (icon) icon.textContent = '+';
+        }
+    }
+    const commentsSection = document.getElementById('modal-comments-section');
+    if (commentsSection) {
+        commentsSection.style.display = 'none';
+        const commentsCount = document.getElementById('modal-comments-count');
+        if (commentsCount) { commentsCount.textContent = ''; commentsCount.style.display = 'none'; }
+    }
+    modalReplyingTo = null;
 
     log('Modal', 'Reset modal state.');
 }
@@ -1477,14 +1829,17 @@ function enableItemEditMode(record, nameEl, descEl) {
             console.log('[AI IMAGE DEBUG] photosContainerEl._pendingPhotos:', photosContainerEl?._pendingPhotos?.length || 0);
 
             if (allPhotos.length === 0) {
-                console.log('[AI IMAGE DEBUG] No photos detected - checking if manual item');
-                // Check if this is a manual item that could benefit from AI image
+                console.log('[AI IMAGE DEBUG] No photos detected - checking if manual or solution item');
+                // Check if this is a manual or solution item that could benefit from AI image
                 const isManualItem = record.isManual === true ||
                                      record.id?.startsWith('manual-add-') ||
                                      record.id?.startsWith('manual-presentation-') ||
                                      record.id?.startsWith('ai-search-') ||
                                      record.id?.startsWith('ai-child-') ||
                                      record.id?.startsWith('ai-presentation-');
+                const isSolutionItem = record.isSolution === true ||
+                                       record.id?.startsWith('solution-');
+                const isAIImageEligible = isManualItem || isSolutionItem;
 
                 console.log('[AI IMAGE DEBUG] isManualItem check:', {
                     'record.isManual': record.isManual,
@@ -1493,11 +1848,15 @@ function enableItemEditMode(record, nameEl, descEl) {
                     'starts with ai-search-': record.id?.startsWith('ai-search-'),
                     'starts with ai-child-': record.id?.startsWith('ai-child-'),
                     'starts with ai-presentation-': record.id?.startsWith('ai-presentation-'),
-                    'final isManualItem': isManualItem
+                    'record.isSolution': record.isSolution,
+                    'starts with solution-': record.id?.startsWith('solution-'),
+                    'final isManualItem': isManualItem,
+                    'final isSolutionItem': isSolutionItem,
+                    'final isAIImageEligible': isAIImageEligible
                 });
 
-                if (isManualItem) {
-                    log('Modal', `No photos provided for manual item "${newName}" - generating AI image approximation...`);
+                if (isAIImageEligible) {
+                    log('Modal', `No photos provided for ${isSolutionItem ? 'solution' : 'manual'} item "${newName}" - generating AI image approximation...`);
                     console.log('[AI IMAGE DEBUG] TRIGGERING AI image generation for:', newName);
                     saveBtn.textContent = 'Generating AI image...';
 
@@ -1553,7 +1912,7 @@ function enableItemEditMode(record, nameEl, descEl) {
 
                     saveBtn.textContent = 'Saving...';
                 } else {
-                    console.log('[AI IMAGE DEBUG] NOT a manual item - skipping AI image generation');
+                    console.log('[AI IMAGE DEBUG] NOT a manual or solution item - skipping AI image generation');
                 }
             } else {
                 console.log('[AI IMAGE DEBUG] Photos already exist - skipping initial AI image generation');
@@ -1667,6 +2026,20 @@ function enableItemEditMode(record, nameEl, descEl) {
                 }
             }
 
+            // Also update the solution records registry if this is a solution item
+            if (window._solutionRecords && window._solutionRecords.has(record.id)) {
+                const solutionRec = window._solutionRecords.get(record.id);
+                solutionRec.fields.Name = newName;
+                solutionRec.fields.Description = newDesc;
+                solutionRec.fields.Price = newPrice;
+                if (allPhotos.length > 0) {
+                    solutionRec.fields._customImages = allPhotos;
+                    if (aiGeneratedImage) {
+                        solutionRec.fields._hasAIGeneratedImage = true;
+                    }
+                }
+            }
+
             // Also update the record reference passed to the modal
             record.fields.Name = newName;
             record.fields.Description = newDesc;
@@ -1675,6 +2048,29 @@ function enableItemEditMode(record, nameEl, descEl) {
                 record.fields._customImages = allPhotos;
                 if (aiGeneratedImage) {
                     record.fields._hasAIGeneratedImage = true;
+                }
+            }
+
+            // Update solutionData on the record if this is a solution item
+            if (record.isSolution && record.solutionData) {
+                record.solutionData.name = newName;
+                record.solutionData.description = newDesc;
+                if (newPrice > 0) {
+                    record.solutionData.estimatedPrice = `$${newPrice.toFixed(2)}`;
+                }
+                // Also update the parent concept's _generatedSolutions array if available
+                if (record.parentConceptRecord && record.parentConceptRecord._generatedSolutions) {
+                    const solutionIndex = record.parentConceptRecord._generatedSolutions.findIndex(
+                        s => s.name === originalName || s.id === record.solutionData.id
+                    );
+                    if (solutionIndex !== -1) {
+                        record.parentConceptRecord._generatedSolutions[solutionIndex].name = newName;
+                        record.parentConceptRecord._generatedSolutions[solutionIndex].description = newDesc;
+                        if (newPrice > 0) {
+                            record.parentConceptRecord._generatedSolutions[solutionIndex].estimatedPrice = `$${newPrice.toFixed(2)}`;
+                        }
+                        log('Modal', `Updated parent concept's solution data at index ${solutionIndex}`);
+                    }
                 }
             }
 
@@ -4752,13 +5148,15 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         log('Modal', `Showing Categorize button for item: ${record.id}`);
     }
 
-    // Add Edit Item button for manual/custom items and AI discovery items
+    // Add Edit Item button for manual/custom items, AI discovery items, and AI-generated solutions
     const isEditableItem = record.isManual === true ||
                          record.id?.startsWith('manual-add-') ||
                          record.id?.startsWith('manual-presentation-') ||
                          record.id?.startsWith('ai-search-') ||
                          record.id?.startsWith('ai-child-') ||
-                         record.id?.startsWith('ai-presentation-');
+                         record.id?.startsWith('ai-presentation-') ||
+                         record.isSolution === true ||
+                         record.id?.startsWith('solution-');
 
     if (isEditableItem) {
         const editItemBtn = document.createElement('button');
@@ -5262,7 +5660,8 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                         Category: record.fields.Category || 'Solution'
                     },
                     isSolution: true,
-                    parentConceptRecord: record, // Store reference to parent concept
+                    parentConceptId: record.id, // Store ID for serialization
+                    parentConceptRecord: record, // Store reference to parent concept (in-memory only)
                     solutionData: solution,
                     searchTerms: solution.searchTerms || []
                 };
@@ -6513,6 +6912,13 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         }
     });
 
+    // Initialize reactions & comments sections for this item
+    const modalRecordId = modalOverlay.dataset.recordId;
+    if (modalRecordId) {
+        initModalReactions(modalRecordId);
+        initModalComments(modalRecordId);
+    }
+
     // Reset the rendering guard after modal is fully displayed
     isModalRendering = false;
 }
@@ -6708,13 +7114,21 @@ export async function showGroupDetailModal(group, allRecords) {
                     if (items.length < 2) {
                         state.session.relatedGroups = state.session.relatedGroups.filter(g => g.id !== groupId);
                         hideDetailModal();
+                        if (typeof ui !== 'undefined' && ui.showToast) {
+                            ui.showToast(`"${removedName}" removed, group dissolved`, 'success');
+                        }
                         window.dispatchEvent(new CustomEvent('groupDissolved', { detail: { groupId } }));
                     } else {
                         if (!Array.isArray(grp)) {
                             grp.items = items;
                         }
-                        // Re-render the modal with updated group
-                        hideDetailModal();
+                        if (typeof ui !== 'undefined' && ui.showToast) {
+                            ui.showToast(`"${removedName}" removed from group`, 'success');
+                        }
+                        // Reset rendering guard so modal can re-render
+                        isModalRendering = false;
+                        // Re-render the group modal with updated items instead of closing
+                        showGroupDetailModal(grp, allRecords);
                         window.dispatchEvent(new CustomEvent('groupItemRemoved', { detail: { groupId, recordId } }));
                     }
                 }

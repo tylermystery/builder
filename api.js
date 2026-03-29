@@ -1,6 +1,6 @@
 // FILE: api.js (REPLACE ENTIRE FILE)
 
-import { state, invalidateRecordsIndex } from './state.js';
+import { state, invalidateRecordsIndex, getRecordById } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
@@ -786,8 +786,7 @@ export async function saveSessionToAirtable() {
                     isAI: itemId.startsWith('ai-'),
                     isManual: itemId.startsWith('manual-') || customRecord.isManual === true,
                     isSolution: itemId.startsWith('solution-') || customRecord.isSolution === true,
-                    parentConceptId: customRecord.parentConceptId,
-                    parentConceptRecord: customRecord.parentConceptRecord,
+                    parentConceptId: customRecord.parentConceptId || customRecord.parentConceptRecord?.id,
                     solutionData: customRecord.solutionData,
                     // Preserve research data for solution items that have been "dug"
                     _researchData: customRecord._researchData,
@@ -853,9 +852,28 @@ export async function saveSessionToAirtable() {
 
     const storesValue = state.ui.activeShopId ? [state.ui.activeShopId] : null;
 
+    // Safely serialize session data, handling potential circular references
+    let serializedSessionData;
+    try {
+        serializedSessionData = JSON.stringify(sessionData, null, 2);
+    } catch (stringifyError) {
+        console.error('[SESSION-SAVE] JSON.stringify failed, attempting safe serialization:', stringifyError.message);
+        // Use a replacer to break circular references
+        const seen = new WeakSet();
+        serializedSessionData = JSON.stringify(sessionData, (key, value) => {
+            // Skip parentConceptRecord to avoid circular references
+            if (key === 'parentConceptRecord') return undefined;
+            if (typeof value === 'object' && value !== null) {
+                if (seen.has(value)) return undefined;
+                seen.add(value);
+            }
+            return value;
+        }, 2);
+    }
+
     const fields = {
         "Name": sessionName,
-        "Items with Variations": JSON.stringify(sessionData, null, 2),
+        "Items with Variations": serializedSessionData,
         "Collaborators": validCollaboratorIds,
         "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
@@ -5165,7 +5183,7 @@ export async function digSolutionDetails(solutionRecord) {
         description: solutionRecord.fields.Description || solutionRecord.solutionData?.description || '',
         price: solutionRecord.fields.Price || null,
         category: solutionRecord.fields.Category || '',
-        parentConcept: solutionRecord.parentConceptRecord?.fields?.Name || ''
+        parentConcept: solutionRecord.parentConceptRecord?.fields?.Name || (solutionRecord.parentConceptId ? getRecordById(solutionRecord.parentConceptId)?.fields?.Name : '') || ''
     };
 
     log('API', `Digging for details on solution: ${solutionData.name}`);

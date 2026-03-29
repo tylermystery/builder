@@ -2829,6 +2829,10 @@ select:focus-visible,
             <button class="forum-filter-btn" data-filter="comments">Comments</button>
             <button class="forum-filter-btn" data-filter="history">History</button>
         </div>
+        <div id="forum-item-filter-indicator" class="forum-item-filter-indicator" style="display: none;">
+            <span class="item-filter-text"></span>
+            <button class="item-filter-clear-btn" id="forum-item-filter-clear" title="Show all discussions">&times; Show All</button>
+        </div>
         <div id="forum-content-container" class="forum-content-container">
             <div class="forum-loading">Loading discussions...</div>
         </div>
@@ -3209,6 +3213,22 @@ select:focus-visible,
     </div>
 
     <div id="detail-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-item-name">
+        <!-- Reactions bar floating above the modal -->
+        <div id="modal-reactions-section" class="modal-reactions-section" style="display: none;">
+            <div class="modal-reactions-quick-bar" id="modal-reactions-quick-bar">
+                <!-- Quick reaction buttons populated by JS -->
+            </div>
+            <span class="modal-reactions-score-badge" id="modal-reactions-score-badge" title="Overall ranking impact from all reactions"></span>
+            <button class="modal-reactions-expand-btn" id="modal-reactions-expand-btn" title="Browse all emojis">
+                <span class="expand-btn-icon">+</span> More
+            </button>
+            <div class="modal-reactions-picker" id="modal-reactions-picker" style="display: none;">
+                <!-- Tiered emoji picker populated by JS - scrollable -->
+            </div>
+            <div class="modal-reactions-summary" id="modal-reactions-summary">
+                <!-- Who reacted summary -->
+            </div>
+        </div>
         <div class="modal-content">
             <button id="modal-close-btn" class="modal-close-btn" title="Close" aria-label="Close item details modal">×</button>
             <div class="modal-main-column">
@@ -3318,7 +3338,18 @@ select:focus-visible,
                     </div>
                 </div>
 
-                <div id="modal-calendar-container" style="margin-bottom: 20px;"></div> <div id="modal-notes-container">
+                <div id="modal-calendar-container" style="margin-bottom: 20px;"></div>
+
+                <!-- Discussion button - opens forum panel filtered to this item's comments -->
+                <div id="modal-comments-section" class="modal-comments-section" style="display: none;">
+                    <button id="modal-open-discussion-btn" class="modal-open-discussion-btn" type="button">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                        <span class="discussion-btn-label">Discussion</span>
+                        <span class="modal-comments-count" id="modal-comments-count"></span>
+                    </button>
+                </div>
+
+                <div id="modal-notes-container">
                     <textarea id="modal-item-note" placeholder="Add notes about customization, timing, or special requests..." autocomplete="off"></textarea>
                 </div>
 

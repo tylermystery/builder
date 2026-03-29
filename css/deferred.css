@@ -1698,12 +1698,17 @@
     align-items: center;
     pointer-events: none;
 }
+
+/* Detail modal needs column layout for reactions bar above content */
+#detail-modal-overlay {
+    flex-direction: column;
+}
 .modal-overlay.active {
     display: flex;
     opacity: 1;
     pointer-events: auto;
 }
-.modal-content, .checkout-modal-content, .itinerary-content, .presentation-content, .quick-pay-modal-content, .quick-plan-modal-content {
+.modal-content, .checkout-modal-content, .itinerary-content, .presentation-content, .quick-pay-modal-content, .quick-plan-modal-content, .modal-reactions-section {
     pointer-events: auto;
 }
 .modal-content {
@@ -1712,8 +1717,8 @@
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
     width: 90%;
     max-width: 1100px;
-    height: 90vh;
-    max-height: 700px;
+    height: 85vh;
+    max-height: 680px;
     display: flex;
     overflow: hidden;
     position: relative;
@@ -5224,7 +5229,7 @@ hr.total-divider {
 @media (max-width: 768px) {
     .modal-content {
         flex-direction: column;
-        height: 95vh;
+        height: 88vh;
         width: 95vw;
         max-height: none;
     }
@@ -5451,6 +5456,412 @@ hr.total-divider {
 
 #marquee-banner-container:hover #marquee-text {
     animation-play-state: paused;
+}
+
+/* ============================================
+   MODAL REACTIONS BAR (above modal)
+   ============================================ */
+
+/* Reactions bar floats above the modal content box */
+.modal-reactions-section {
+    display: none;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 24px;
+    padding: 6px 12px;
+    margin-bottom: 8px;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.2);
+    max-width: 90%;
+    width: auto;
+    flex-wrap: wrap;
+    justify-content: center;
+    position: relative;
+    z-index: 1001;
+}
+
+.modal-reactions-score-badge {
+    font-size: 0.72em;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    display: none;
+    white-space: nowrap;
+}
+
+.modal-reactions-score-badge.score-positive {
+    background: linear-gradient(135deg, #d4edda, #c3e6cb);
+    color: #155724;
+}
+
+.modal-reactions-score-badge.score-negative {
+    background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+    color: #721c24;
+}
+
+.modal-reactions-score-badge.score-neutral {
+    background: linear-gradient(135deg, #e2e3e5, #d6d8db);
+    color: #383d41;
+}
+
+/* Quick reaction bar */
+.modal-reactions-quick-bar {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 3px;
+}
+
+.modal-reaction-btn {
+    background: transparent;
+    border: 1.5px solid transparent;
+    border-radius: 8px;
+    padding: 3px 6px;
+    cursor: pointer;
+    font-size: 1.2em;
+    line-height: 1;
+    transition: all 0.15s ease;
+    position: relative;
+}
+
+.modal-reaction-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+    transform: scale(1.2);
+}
+
+.modal-reaction-btn.selected {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-color: #667eea;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    border-radius: 8px;
+}
+
+/* Expand button - compact for top bar */
+.modal-reactions-expand-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    background: none;
+    border: 1px dashed #ced4da;
+    border-radius: 12px;
+    padding: 3px 8px;
+    color: #6c757d;
+    font-size: 0.72em;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.modal-reactions-expand-btn:hover {
+    border-color: #667eea;
+    color: #667eea;
+    background: rgba(102, 126, 234, 0.06);
+}
+
+.expand-btn-icon {
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+/* Tiered emoji picker - positioned as dropdown from the bar */
+.modal-reactions-picker {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    max-height: 320px;
+    max-width: 400px;
+    width: 90vw;
+    overflow-y: auto;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 10px;
+    margin-top: 6px;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    scroll-behavior: smooth;
+    z-index: 1002;
+}
+
+.modal-reactions-picker::-webkit-scrollbar {
+    width: 6px;
+}
+
+.modal-reactions-picker::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.modal-reactions-picker::-webkit-scrollbar-thumb {
+    background: #ced4da;
+    border-radius: 3px;
+}
+
+.modal-emoji-tiers-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.modal-emoji-tier {
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.modal-emoji-tier:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.modal-emoji-tier-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.modal-emoji-tier-header .tier-label {
+    font-size: 0.78em;
+    font-weight: 700;
+    color: #495057;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.modal-emoji-tier-header .tier-description {
+    font-size: 0.7em;
+    color: #868e96;
+    font-style: italic;
+}
+
+.modal-emoji-tier-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.modal-tier-emoji {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4px 6px 2px;
+    min-width: 38px;
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.modal-tier-emoji:hover {
+    background: #f0f0f0;
+    transform: scale(1.12);
+}
+
+.modal-tier-emoji.selected {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-color: #667eea;
+}
+
+.tier-emoji-char {
+    font-size: 1.15em;
+    line-height: 1.2;
+}
+
+.tier-emoji-score {
+    font-size: 0.55em;
+    font-weight: 600;
+    line-height: 1;
+    margin-top: 1px;
+    opacity: 0.7;
+}
+
+.tier-emoji-score.high-positive { color: #155724; }
+.tier-emoji-score.positive { color: #28a745; }
+.tier-emoji-score.neutral { color: #868e96; }
+.tier-emoji-score.negative { color: #dc3545; }
+.tier-emoji-score.high-negative { color: #721c24; }
+
+.modal-tier-emoji.selected .tier-emoji-score {
+    color: rgba(255,255,255,0.85);
+}
+
+/* Reaction summary - inline in the bar */
+.modal-reactions-summary {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.modal-reactions-empty {
+    font-size: 0.72em;
+    color: #adb5bd;
+    font-style: italic;
+}
+
+.modal-reactions-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+
+.modal-reaction-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 10px;
+    padding: 1px 6px;
+    font-size: 0.78em;
+}
+
+.modal-reaction-pill .pill-count {
+    font-size: 0.8em;
+    font-weight: 600;
+    color: #495057;
+    min-width: 12px;
+    text-align: center;
+}
+
+.modal-reactions-who {
+    font-size: 0.68em;
+    color: #868e96;
+    white-space: nowrap;
+}
+
+/* ============================================
+   MODAL DISCUSSION BUTTON (replaces inline comments)
+   ============================================ */
+
+.modal-comments-section {
+    margin: 8px 0;
+    padding: 0;
+}
+
+.modal-open-discussion-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08));
+    border: 1.5px solid rgba(102, 126, 234, 0.2);
+    border-radius: 10px;
+    color: #495057;
+    font-size: 0.88em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 100%;
+    justify-content: center;
+}
+
+.modal-open-discussion-btn:hover {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.14), rgba(118, 75, 162, 0.14));
+    border-color: rgba(102, 126, 234, 0.35);
+    color: #667eea;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.12);
+}
+
+.modal-open-discussion-btn svg {
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
+.modal-open-discussion-btn:hover svg {
+    opacity: 1;
+    stroke: #667eea;
+}
+
+.discussion-btn-label {
+    flex: 0 0 auto;
+}
+
+.modal-comments-count {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+    font-size: 0.7em;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    padding: 0 5px;
+}
+
+/* ============================================
+   FORUM ITEM FILTER INDICATOR
+   ============================================ */
+
+.forum-item-filter-indicator {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.06));
+    border-bottom: 1px solid rgba(102, 126, 234, 0.15);
+    font-size: 0.8em;
+}
+
+.forum-item-filter-indicator .item-filter-text {
+    color: #495057;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+
+.forum-item-filter-indicator .item-filter-clear-btn {
+    background: none;
+    border: 1px solid rgba(102, 126, 234, 0.25);
+    border-radius: 6px;
+    color: #667eea;
+    font-size: 0.85em;
+    cursor: pointer;
+    padding: 2px 8px;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+
+.forum-item-filter-indicator .item-filter-clear-btn:hover {
+    background: rgba(102, 126, 234, 0.1);
+    border-color: #667eea;
+}
+
+/* Mobile adjustments for reactions/comments */
+@media (max-width: 768px) {
+    .modal-reactions-section {
+        max-width: 95%;
+        padding: 5px 8px;
+        gap: 4px;
+    }
+
+    .modal-reactions-picker {
+        max-height: 240px;
+        width: 95vw;
+    }
+
+    .modal-reaction-btn {
+        padding: 2px 4px;
+        font-size: 1.1em;
+    }
+
+    .modal-tier-emoji {
+        min-width: 34px;
+        padding: 3px 4px 2px;
+    }
+
+    .modal-open-discussion-btn {
+        font-size: 0.82em;
+        padding: 7px 12px;
+    }
 }
 
 #modal-additional-details {
@@ -13721,6 +14132,13 @@ hr.total-divider {
 .group-option-card-remove:hover {
     background: rgba(198, 40, 40, 0.18);
     border-color: rgba(198, 40, 40, 0.3);
+}
+
+/* Always show remove button on touch devices */
+@media (hover: none) {
+    .group-option-card-remove {
+        opacity: 1;
+    }
 }
 
 /* Dissolve button inside group modal */

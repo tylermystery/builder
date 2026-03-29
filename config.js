@@ -80,8 +80,66 @@ export const REACTION_SCORES = {
     '🌅': 2.48, '🌈': 2.53, '☀️': 2.36, '🌙': 1.38, '🦋': 1.43, '🐬': 1.46, '🦜': 1.41,
     // Activities (neutral-positive)
     '⚽': 1.42, '🏀': 1.38, '🎾': 1.36, '🏈': 1.44, '🎮': 1.47, '🎨': 1.52, '🎸': 1.48, '🎻': 1.43,
-    '🎹': 1.46, '📸': 1.51, '🎥': 1.44, '🎬': 1.49, '🏊': 1.38, '🚴': 1.41, '🧘': 1.53, '🏋️': 1.46
+    '🎹': 1.46, '📸': 1.51, '🎥': 1.44, '🎬': 1.49, '🏊': 1.38, '🚴': 1.41, '🧘': 1.53, '🏋️': 1.46,
+    // Tier 3: Uncommon (modal picker - deeper scroll)
+    '🦄': 3.89, '🪄': 2.67, '🫧': 1.54, '🪩': 2.73, '🧿': 0.12, '🎐': 1.29, '🪬': 0.09,
+    '🫀': -0.87, '🧠': 1.62, '🦷': -0.42, '🦴': -0.91, '👁️': 0.14, '🫂': 2.16, '🤌': 1.73,
+    '🤙': 1.68, '🦾': 2.41, '🧶': 1.17, '🪡': 0.83, '🧊': -0.67, '🫗': 0.21,
+    // Tier 4: Rare / Atypical (modal picker - even deeper)
+    '🪸': 1.37, '🪻': 1.82, '🪷': 2.08, '🫎': 0.76, '🦣': 0.43, '🦤': -1.56, '🪿': 0.91,
+    '🪺': 1.14, '🫏': 0.62, '🦫': 0.88, '🦭': 1.23, '🪼': 0.47, '🦩': 1.58, '🦚': 1.94,
+    '🪶': 1.11, '🪵': 0.68, '🪨': -0.34, '🪐': 1.76, '🧪': 0.52, '🧬': 0.71,
+    // Tier 5: Obscure / Cryptic (modal picker - deepest scroll)
+    '🏺': 0.33, '⚗️': 0.47, '🔮': 1.83, '📿': 0.28, '🪘': 0.94,
+    '🪗': 0.86, '🪕': 1.02, '🪈': 0.79, '🪆': 0.56, '🪅': 1.67,
+    '🪤': -2.88, '🪃': 1.32, '🪙': 1.78, '⚱️': -1.44
 };
+
+// Tiered emoji picker for the detail modal - begins standard, scrolls to obscure
+// Each tier has a label, description, and the emojis get progressively more unusual
+export const EMOJI_TIERS = [
+    {
+        label: 'Quick Reactions',
+        description: 'The essentials - high impact on ranking',
+        emojis: ['🚀', '🔥', '🤩', '❤️', '👍', '🎉', '💯', '🤔', '👎', '🤢']
+    },
+    {
+        label: 'Positive Vibes',
+        description: 'Show your enthusiasm - moderate positive impact',
+        emojis: ['😍', '🥰', '😊', '🤗', '👏', '🙌', '💪', '✨', '🌟', '💖', '🏆', '🥳', '💃', '🕺', '🍾', '🥂']
+    },
+    {
+        label: 'Mixed Feelings',
+        description: 'Neutral to slightly negative - minimal ranking effect',
+        emojis: ['🙂', '😐', '🤷', '💭', '👀', '📊', '⚖️', '🎲', '🃏', '😶', '📝', '🔍', '⏳', '📈']
+    },
+    {
+        label: 'Not Feeling It',
+        description: 'Negative signals - will lower ranking',
+        emojis: ['😕', '😟', '😢', '😞', '💔', '😩', '🤦', '🙅', '❌', '⛔', '🚫', '⚠️', '😤', '😠', '💢', '🗑️']
+    },
+    {
+        label: 'Themed',
+        description: 'Category vibes - slight positive ranking nudge',
+        emojis: ['🍕', '🍔', '🌮', '🍣', '☕', '🍷', '🌸', '🌊', '🏔️', '🌅', '🌈', '⚽', '🎮', '🎨', '🎸', '📸']
+    },
+    {
+        label: 'Uncommon Picks',
+        description: 'Stand out from the crowd - varied ranking effects',
+        emojis: ['🦄', '🪄', '🪩', '🧠', '🤌', '🤙', '🦾', '🫂', '🧶', '🧊', '🫗', '👁️', '🫀', '🦷', '🦴', '🪡']
+    },
+    {
+        label: 'Rare Finds',
+        description: 'Deep cuts - subtle ranking influence',
+        emojis: ['🪸', '🪻', '🪷', '🦣', '🦤', '🪿', '🦫', '🦭', '🪼', '🦩', '🦚', '🪶', '🪐', '🧪', '🧬', '🪺']
+    },
+    {
+        label: 'Cryptic & Obscure',
+        description: 'The rarest reactions - mysterious ranking effects',
+        emojis: ['🏺', '⚗️', '🔮', '📿', '🪘', '🪗', '🪕', '🪈', '🪆', '🪅', '🪤', '🪃', '🪙', '⚱️', '🧿', '🎐']
+    }
+];
+
 export const CONSTANTS = {
     CLOUDINARY_CLOUD_NAME: 'daedqizre',
     FIELD_NAMES: {
