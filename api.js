@@ -3257,3 +3257,298 @@ export function isViewer(role) {
     return role === PERMISSION_ROLES.VIEWER;
 }
 
+// ==============================================
+// SESSION MANAGEMENT (Archive, Delete, List)
+// ==============================================
+
+/**
+ * Fetches all sessions for the current user
+ * @param {string} userId - The user ID
+ * @param {string} storeId - Optional store ID to filter by
+ * @returns {Promise<Array>} Array of session records
+ */
+export async function fetchUserSessions(userId, storeId = null) {
+    if (!userId) {
+        log('API', 'Cannot fetch user sessions - no user ID provided');
+        return [];
+    }
+
+    // Build formula to get sessions where user is a collaborator
+    let formula = `FIND("${userId}", ARRAYJOIN({Collaborators}, ","))`;
+
+    // Optionally filter by store
+    if (storeId) {
+        formula = `AND(${formula}, FIND("${storeId}", ARRAYJOIN({Stores}, ",")))`;
+    }
+
+    // Exclude archived sessions by default (if Archived field exists)
+    formula = `AND(${formula}, OR({Archived} = FALSE(), {Archived} = BLANK()))`;
+
+    const encodedFormula = encodeURIComponent(formula);
+
+    // Fields to fetch for display
+    const fieldsQuery = [
+        'Name',
+        'Date',
+        'Goals',
+        'Items with Variations',
+        'Stores',
+        'Collaborators',
+        'Archived',
+        'LinkedItem',
+        'LinkedPackage'
+    ].map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error fetching user sessions:', errorText);
+            throw new Error('Failed to fetch user sessions');
+        }
+
+        const data = await response.json();
+
+        // Sort by creation time, newest first
+        data.records.sort((a, b) => new Date(b.createdTime) - new Date(a.createdTime));
+
+        log('API', `Fetched ${data.records.length} sessions for user ${userId}`);
+        return data.records;
+    } catch (error) {
+        console.error('Error fetching user sessions:', error);
+        return [];
+    }
+}
+
+/**
+ * Archives a session (soft delete)
+ * @param {string} sessionId - The session ID to archive
+ * @returns {Promise<boolean>} True if successful
+ */
+export async function archiveSession(sessionId) {
+    if (!sessionId) {
+        log('API', 'Cannot archive session - no session ID provided');
+        return false;
+    }
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+
+    try {
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fields: { Archived: true }
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error archiving session:', errorText);
+            throw new Error('Failed to archive session');
+        }
+
+        log('API', `Successfully archived session ${sessionId}`);
+        return true;
+    } catch (error) {
+        console.error('Error archiving session:', error);
+        return false;
+    }
+}
+
+/**
+ * Archives multiple sessions (bulk soft delete)
+ * @param {Array<string>} sessionIds - Array of session IDs to archive
+ * @returns {Promise<{success: number, failed: number}>} Count of successful and failed operations
+ */
+export async function archiveSessionsBulk(sessionIds) {
+    if (!sessionIds || sessionIds.length === 0) {
+        return { success: 0, failed: 0 };
+    }
+
+    let success = 0;
+    let failed = 0;
+
+    // Airtable allows batching up to 10 records per request
+    const batchSize = 10;
+
+    for (let i = 0; i < sessionIds.length; i += batchSize) {
+        const batch = sessionIds.slice(i, i + batchSize);
+        const records = batch.map(id => ({
+            id,
+            fields: { Archived: true }
+        }));
+
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}`;
+
+        try {
+            const response = await fetch(url, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ records })
+            });
+
+            if (response.ok) {
+                success += batch.length;
+            } else {
+                const errorText = await response.text();
+                console.error('Airtable Error archiving sessions batch:', errorText);
+                failed += batch.length;
+            }
+        } catch (error) {
+            console.error('Error archiving sessions batch:', error);
+            failed += batch.length;
+        }
+    }
+
+    log('API', `Bulk archive complete: ${success} succeeded, ${failed} failed`);
+    return { success, failed };
+}
+
+/**
+ * Permanently deletes a session
+ * @param {string} sessionId - The session ID to delete
+ * @returns {Promise<boolean>} True if successful
+ */
+export async function deleteSession(sessionId) {
+    if (!sessionId) {
+        log('API', 'Cannot delete session - no session ID provided');
+        return false;
+    }
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+
+    try {
+        const response = await fetch(url, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`
+            }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error deleting session:', errorText);
+            throw new Error('Failed to delete session');
+        }
+
+        log('API', `Successfully deleted session ${sessionId}`);
+        return true;
+    } catch (error) {
+        console.error('Error deleting session:', error);
+        return false;
+    }
+}
+
+/**
+ * Permanently deletes multiple sessions (bulk delete)
+ * @param {Array<string>} sessionIds - Array of session IDs to delete
+ * @returns {Promise<{success: number, failed: number}>} Count of successful and failed operations
+ */
+export async function deleteSessionsBulk(sessionIds) {
+    if (!sessionIds || sessionIds.length === 0) {
+        return { success: 0, failed: 0 };
+    }
+
+    let success = 0;
+    let failed = 0;
+
+    // Airtable allows deleting up to 10 records per request
+    const batchSize = 10;
+
+    for (let i = 0; i < sessionIds.length; i += batchSize) {
+        const batch = sessionIds.slice(i, i + batchSize);
+        const recordsQuery = batch.map(id => `records[]=${id}`).join('&');
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?${recordsQuery}`;
+
+        try {
+            const response = await fetch(url, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`
+                }
+            });
+
+            if (response.ok) {
+                success += batch.length;
+            } else {
+                const errorText = await response.text();
+                console.error('Airtable Error deleting sessions batch:', errorText);
+                failed += batch.length;
+            }
+        } catch (error) {
+            console.error('Error deleting sessions batch:', error);
+            failed += batch.length;
+        }
+    }
+
+    log('API', `Bulk delete complete: ${success} succeeded, ${failed} failed`);
+    return { success, failed };
+}
+
+/**
+ * Creates a new empty session and returns its ID
+ * @param {string} storeId - The store ID to associate the session with
+ * @param {string} userId - The user ID creating the session
+ * @param {string} name - Optional name for the new session
+ * @returns {Promise<string|null>} The new session ID or null if failed
+ */
+export async function createNewSession(storeId, userId, name = 'New Plan') {
+    const sessionData = {
+        ideasItems: {},
+        lockedInItems: {},
+        itemReactions: {},
+        userProfiles: userId ? { [userId]: 'Planner' } : {},
+        eventDetails: {
+            eventName: name
+        },
+        itemPositions: {}
+    };
+
+    const sessionFields = {
+        Name: name,
+        'Items with Variations': JSON.stringify(sessionData, null, 2),
+        Collaborators: userId ? [userId] : [],
+        Stores: storeId ? [storeId] : null
+    };
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}`;
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ records: [{ fields: sessionFields }] })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error creating new session:', errorText);
+            throw new Error('Failed to create new session');
+        }
+
+        const result = await response.json();
+        const newSessionId = result.records[0].id;
+
+        log('API', `Created new session ${newSessionId}`);
+        return newSessionId;
+    } catch (error) {
+        console.error('Error creating new session:', error);
+        return null;
+    }
+}
+

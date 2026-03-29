@@ -3559,6 +3559,84 @@ hr.total-divider {
     color: white;
 }
 
+/* === PACKAGE MODAL STYLES === */
+.package-modal-contents {
+    margin-bottom: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.package-contents-header {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 10px 0;
+    padding-bottom: 5px;
+    border-bottom: 2px solid #667eea;
+}
+
+.package-addons-header {
+    border-bottom-color: #28a745;
+    margin-top: 15px;
+}
+
+.package-included-list,
+.package-addon-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.package-included-list .package-item,
+.package-addon-list .package-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #e0e4f0;
+    font-size: 0.9em;
+}
+
+.package-addon-item {
+    background: rgba(40, 167, 69, 0.05) !important;
+    border: 1px dashed #28a745 !important;
+}
+
+.package-item-name {
+    color: #333;
+}
+
+.package-item-qty {
+    font-weight: 500;
+    color: #667eea;
+    font-size: 0.85em;
+}
+
+.package-discount-badge {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+    border-radius: 20px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+.package-modal-savings {
+    color: #28a745;
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.modal-package-headcount {
+    margin-top: 10px;
+}
+
 /* === END PACKAGE CARD STYLES === */
 
 /* --- GROUPING CAROUSEL SECTION STYLES --- */
@@ -4012,6 +4090,15 @@ hr.total-divider {
     color: #6c757d;
     font-style: italic;
     margin-left: 5px;
+}
+
+/* Package discount indicator in event plan panel */
+.package-discount-indicator {
+    font-size: 0.85em;
+    color: #28a745;
+    font-weight: 600;
+    margin-left: 4px;
+    cursor: help;
 }
 
 .price-editor {
@@ -5708,4 +5795,394 @@ hr.total-divider {
         flex-direction: column;
         align-items: flex-start;
     }
+}
+
+/* ==============================================
+   PLAN MENU DROPDOWN (Event Plan Hamburger Menu)
+   ============================================== */
+
+/* Event plan header row layout */
+.event-plan-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.event-plan-header-row .event-name-group {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Container positioning for the plan menu in event panel header */
+#share-menu-container {
+    position: relative;
+    flex-shrink: 0;
+}
+
+/* Plan menu dropdown extends hamburger dropdown */
+#share-menu-dropdown.plan-menu-dropdown {
+    position: absolute;
+    top: 100%;
+    /* Default: position dropdown to extend leftward from the button's right edge */
+    left: auto;
+    right: 0;
+    margin-top: 8px;
+    max-height: 80vh;
+    overflow-y: auto;
+    min-width: 220px;
+    max-width: 280px;
+    box-sizing: border-box;
+}
+
+/* On viewports where the right sidebar is constrained, ensure dropdown stays visible */
+@media (max-width: 1400px) {
+    #share-menu-dropdown.plan-menu-dropdown {
+        min-width: 200px;
+        max-width: min(280px, calc(100vw - 20px));
+    }
+}
+
+/* Section labels for organizing menu items */
+.plan-menu-section-label {
+    padding: 10px 18px 6px;
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Danger styling for destructive actions */
+.plan-menu-danger {
+    color: #dc3545 !important;
+}
+
+.plan-menu-danger:hover {
+    background-color: #fff5f5 !important;
+}
+
+.plan-menu-danger .menu-item-icon {
+    color: #dc3545;
+}
+
+/* Mobile: Ensure plan menu dropdown fits within viewport */
+@media (max-width: 480px) {
+    #share-menu-dropdown.plan-menu-dropdown {
+        min-width: 200px;
+        max-width: calc(100vw - 40px);
+    }
+}
+
+/* Sessions List Modal */
+.sessions-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.sessions-modal {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.sessions-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.sessions-modal-header h3 {
+    margin: 0;
+    font-size: 1.2em;
+    color: #333;
+}
+
+.sessions-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.sessions-modal-close:hover {
+    background-color: #f8f9fa;
+    color: #333;
+}
+
+.sessions-modal-body {
+    padding: 12px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.sessions-modal-actions {
+    display: flex;
+    gap: 8px;
+    padding: 12px 20px;
+    border-top: 1px solid #e9ecef;
+    justify-content: flex-end;
+}
+
+/* Session list items */
+.sessions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.session-list-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: white;
+}
+
+.session-list-item:hover {
+    background-color: #f8f9fa;
+    border-color: #007bff;
+}
+
+.session-list-item.selected {
+    background-color: #e7f3ff;
+    border-color: #007bff;
+}
+
+.session-list-item.current-session {
+    border-color: #28a745;
+    background-color: #f0fff4;
+}
+
+.session-list-checkbox {
+    margin-right: 12px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.session-list-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.session-list-name {
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.session-list-meta {
+    font-size: 0.85em;
+    color: #6c757d;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.session-list-meta span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.session-list-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.session-action-btn {
+    background: none;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: all 0.2s;
+    color: #495057;
+}
+
+.session-action-btn:hover {
+    background-color: #f8f9fa;
+    border-color: #adb5bd;
+}
+
+.session-action-btn.btn-danger {
+    color: #dc3545;
+    border-color: #dc3545;
+}
+
+.session-action-btn.btn-danger:hover {
+    background-color: #fff5f5;
+}
+
+.session-action-btn.btn-primary {
+    color: white;
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.session-action-btn.btn-primary:hover {
+    background-color: #0056b3;
+}
+
+/* Bulk actions bar */
+.bulk-actions-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+
+.bulk-select-all {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 0.9em;
+    color: #495057;
+}
+
+.bulk-select-all input {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.bulk-actions-buttons {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.sessions-empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6c757d;
+}
+
+.sessions-empty-state p {
+    margin: 0;
+    font-size: 0.95em;
+}
+
+/* Confirmation dialog */
+.confirm-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10001;
+}
+
+.confirm-dialog {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.confirm-dialog h4 {
+    margin: 0 0 12px 0;
+    color: #333;
+}
+
+.confirm-dialog p {
+    margin: 0 0 20px 0;
+    color: #6c757d;
+    line-height: 1.5;
+}
+
+.confirm-dialog-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.confirm-dialog .btn-cancel {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    color: #495057;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95em;
+    transition: all 0.2s;
+}
+
+.confirm-dialog .btn-cancel:hover {
+    background-color: #e9ecef;
+}
+
+.confirm-dialog .btn-confirm {
+    background-color: #dc3545;
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95em;
+    transition: all 0.2s;
+}
+
+.confirm-dialog .btn-confirm:hover {
+    background-color: #bb2d3b;
+}
+
+.confirm-dialog .btn-confirm.btn-primary {
+    background-color: #007bff;
+}
+
+.confirm-dialog .btn-confirm.btn-primary:hover {
+    background-color: #0056b3;
 }

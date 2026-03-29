@@ -132,6 +132,20 @@ async function createLockedInItemElement(record, itemInfo) {
         : itemInfo.selectedOptionIndex;
 
     let price = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
+    const originalPrice = price; // Store original price for discount display
+
+    // Apply package discount if this item came from a package
+    let packageDiscount = 0;
+    let packageName = null;
+    if (itemInfo.packageId && state.session.activePackages) {
+        const packageInfo = state.session.activePackages.get(itemInfo.packageId);
+        if (packageInfo && packageInfo.discount > 0) {
+            packageDiscount = packageInfo.discount;
+            packageName = packageInfo.name;
+            price = price * (1 - packageDiscount / 100);
+        }
+    }
+
     const total = (price || 0) * (itemInfo.quantity || 1);
     let priceDisplay = `$${(price || 0).toFixed(2)}`;
 
@@ -140,8 +154,11 @@ async function createLockedInItemElement(record, itemInfo) {
     }
 
     if (itemInfo.overridePrice != null) {
-        let originalPrice = getRecordPrice(record, priceParam);
-        priceDisplay = `$${price.toFixed(2)} <em class="price-original">(was $${originalPrice.toFixed(2)})</em>`;
+        let prevOriginalPrice = getRecordPrice(record, priceParam);
+        priceDisplay = `$${price.toFixed(2)} <em class="price-original">(was $${prevOriginalPrice.toFixed(2)})</em>`;
+    } else if (packageDiscount > 0) {
+        // Show package discount savings
+        priceDisplay = `$${price.toFixed(2)} <span class="package-discount-indicator" data-tippy-content="${packageDiscount}% package discount from ${packageName}">(${packageDiscount}% off)</span>`;
     }
 
     // Calculate effective minimum and add warning if applicable
@@ -199,6 +216,17 @@ async function createLockedInItemElement(record, itemInfo) {
     if (benefitSpan && window.tippy) {
         tippy(benefitSpan, {
             content: benefitSpan.dataset.tippyContent,
+            allowHTML: true,
+            placement: 'top',
+            arrow: true
+        });
+    }
+
+    // Initialize Tippy tooltip for the package discount indicator if present
+    const packageDiscountSpan = itemElement.querySelector('.package-discount-indicator');
+    if (packageDiscountSpan && window.tippy) {
+        tippy(packageDiscountSpan, {
+            content: packageDiscountSpan.dataset.tippyContent,
             allowHTML: true,
             placement: 'top',
             arrow: true
@@ -265,6 +293,42 @@ let pendingEventPlanUpdate = false;
 let shareMenuInitialized = false;
 
 /**
+ * Positions a dropdown menu to ensure it stays within the viewport
+ * @param {HTMLElement} dropdown - The dropdown element to position
+ * @param {HTMLElement} button - The button that triggered the dropdown
+ */
+function positionDropdownWithinViewport(dropdown, button) {
+    // Reset any inline positioning first
+    dropdown.style.left = '';
+    dropdown.style.right = '';
+    dropdown.style.transform = '';
+
+    // Get button and dropdown dimensions
+    const buttonRect = button.getBoundingClientRect();
+    const dropdownRect = dropdown.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+
+    // Calculate if dropdown overflows to the right
+    const dropdownRightEdge = buttonRect.right;
+    const dropdownLeftEdge = dropdownRightEdge - dropdownRect.width;
+
+    // If dropdown would overflow left side of viewport, constrain it
+    if (dropdownLeftEdge < 10) {
+        // Position from left edge with some padding
+        dropdown.style.left = '10px';
+        dropdown.style.right = 'auto';
+        dropdown.style.position = 'fixed';
+        dropdown.style.top = (buttonRect.bottom + 8) + 'px';
+    } else {
+        // Default: align dropdown's right edge with button's right edge
+        dropdown.style.right = '0';
+        dropdown.style.left = 'auto';
+        dropdown.style.position = 'absolute';
+        dropdown.style.top = '';
+    }
+}
+
+/**
  * Initializes the Share menu button event listeners (called once)
  */
 export function initializeShareMenu() {
@@ -286,13 +350,24 @@ export function initializeShareMenu() {
     shareMenuBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const isVisible = shareMenuDropdown.style.display === 'block';
-        shareMenuDropdown.style.display = isVisible ? 'none' : 'block';
+        if (isVisible) {
+            shareMenuDropdown.style.display = 'none';
+        } else {
+            shareMenuDropdown.style.display = 'block';
+            // Ensure dropdown doesn't overflow the viewport
+            positionDropdownWithinViewport(shareMenuDropdown, shareMenuBtn);
+        }
     });
 
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
         if (!shareMenuBtn.contains(e.target) && !shareMenuDropdown.contains(e.target)) {
             shareMenuDropdown.style.display = 'none';
+            // Reset inline positioning styles when closed
+            shareMenuDropdown.style.position = '';
+            shareMenuDropdown.style.top = '';
+            shareMenuDropdown.style.left = '';
+            shareMenuDropdown.style.right = '';
         }
     });
 
@@ -301,7 +376,7 @@ export function initializeShareMenu() {
         shareCopyLinkBtn.addEventListener('click', () => {
             navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalHTML = shareCopyLinkBtn.innerHTML;
-                shareCopyLinkBtn.innerHTML = '<span class="share-item-icon">&#10003;</span> Copied!';
+                shareCopyLinkBtn.innerHTML = '<span class="menu-item-icon">&#10003;</span> Copied!';
                 setTimeout(() => {
                     shareCopyLinkBtn.innerHTML = originalHTML;
                 }, 1500);
@@ -360,6 +435,53 @@ export function initializeShareMenu() {
         shareUpdatePackageBtn.addEventListener('click', async () => {
             shareMenuDropdown.style.display = 'none';
             await handlePublishPackage();
+        });
+    }
+
+    // --- NEW SESSION MANAGEMENT BUTTONS ---
+
+    // Save & New handler
+    const planSaveNewBtn = document.getElementById('plan-save-new-btn');
+    if (planSaveNewBtn) {
+        planSaveNewBtn.addEventListener('click', async () => {
+            shareMenuDropdown.style.display = 'none';
+            await handleSaveAndNew();
+        });
+    }
+
+    // Delete & New handler
+    const planDeleteNewBtn = document.getElementById('plan-delete-new-btn');
+    if (planDeleteNewBtn) {
+        planDeleteNewBtn.addEventListener('click', async () => {
+            shareMenuDropdown.style.display = 'none';
+            await handleDeleteAndNew();
+        });
+    }
+
+    // See Sessions handler
+    const planSeeSessionsBtn = document.getElementById('plan-see-sessions-btn');
+    if (planSeeSessionsBtn) {
+        planSeeSessionsBtn.addEventListener('click', async () => {
+            shareMenuDropdown.style.display = 'none';
+            await showSessionsModal();
+        });
+    }
+
+    // Archive Plan handler
+    const planArchiveBtn = document.getElementById('plan-archive-btn');
+    if (planArchiveBtn) {
+        planArchiveBtn.addEventListener('click', async () => {
+            shareMenuDropdown.style.display = 'none';
+            await handleArchivePlan();
+        });
+    }
+
+    // Delete Plan handler
+    const planDeleteBtn = document.getElementById('plan-delete-btn');
+    if (planDeleteBtn) {
+        planDeleteBtn.addEventListener('click', async () => {
+            shareMenuDropdown.style.display = 'none';
+            await handleDeletePlan();
         });
     }
 
@@ -645,7 +767,8 @@ async function updateShareMenuState() {
     const shareUpdatePublishedBtn = document.getElementById('share-update-published-btn');
     const sharePublishPackageBtn = document.getElementById('share-publish-package-btn');
     const shareUpdatePackageBtn = document.getElementById('share-update-package-btn');
-    const shareDivider = shareMenuDropdown?.querySelector('.share-dropdown-divider');
+    const publishDivider = shareMenuDropdown?.querySelector('.publish-divider');
+    const publishSectionLabel = shareMenuDropdown?.querySelector('.publish-section-label');
 
     if (!shareMenuBtn) return;
 
@@ -677,12 +800,14 @@ async function updateShareMenuState() {
         if (shareUpdatePublishedBtn) shareUpdatePublishedBtn.style.display = 'none';
         if (sharePublishPackageBtn) sharePublishPackageBtn.style.display = 'none';
         if (shareUpdatePackageBtn) shareUpdatePackageBtn.style.display = 'none';
-        if (shareDivider) shareDivider.style.display = 'none';
+        if (publishDivider) publishDivider.style.display = 'none';
+        if (publishSectionLabel) publishSectionLabel.style.display = 'none';
         return;
     }
 
-    // Show the divider since we have publish permissions
-    if (shareDivider) shareDivider.style.display = 'block';
+    // Show the publish divider and label since we have publish permissions
+    if (publishDivider) publishDivider.style.display = 'block';
+    if (publishSectionLabel) publishSectionLabel.style.display = 'block';
 
     try {
         const session = await api.fetchSessionById(state.session.id);
@@ -1015,6 +1140,523 @@ async function handlePublishPackage() {
             updatePackageBtn.disabled = false;
             updatePackageBtn.textContent = '📦 Update Package';
         }
+    }
+}
+
+// ==============================================
+// SESSION MANAGEMENT HANDLERS
+// ==============================================
+
+/**
+ * Handles Save & New action - saves current session and creates a new one
+ */
+async function handleSaveAndNew() {
+    log('Sidebar', 'Save & New clicked');
+
+    if (!state.session.user.isAuthenticated) {
+        alert('Please sign in to manage sessions.');
+        return;
+    }
+
+    try {
+        // First, save the current session
+        await api.saveSessionToAirtable();
+        log('Sidebar', 'Current session saved');
+
+        // Create a new session
+        const newSessionId = await api.createNewSession(
+            state.ui.activeShopId,
+            state.session.user.id,
+            'New Plan'
+        );
+
+        if (newSessionId) {
+            // Navigate to the new session
+            const newUrl = `${window.location.pathname}?session=${newSessionId}${state.ui.activeShopId ? `&shopId=${state.ui.activeShopId}` : ''}`;
+            window.location.href = newUrl;
+        } else {
+            throw new Error('Failed to create new session');
+        }
+    } catch (error) {
+        console.error('Error in Save & New:', error);
+        alert('Failed to create new session. Please try again.');
+    }
+}
+
+/**
+ * Handles Delete & New action - deletes current session and creates a new one
+ */
+async function handleDeleteAndNew() {
+    log('Sidebar', 'Delete & New clicked');
+
+    if (!state.session.user.isAuthenticated) {
+        alert('Please sign in to manage sessions.');
+        return;
+    }
+
+    if (!state.session.id) {
+        // No current session, just create a new one
+        await handleSaveAndNew();
+        return;
+    }
+
+    // Show confirmation dialog
+    const confirmed = await showConfirmDialog(
+        'Delete & Start New?',
+        'This will permanently delete the current plan and start a new one. This action cannot be undone.',
+        'Delete & Start New',
+        true
+    );
+
+    if (!confirmed) return;
+
+    try {
+        const currentSessionId = state.session.id;
+
+        // Delete the current session
+        const deleted = await api.deleteSession(currentSessionId);
+
+        if (!deleted) {
+            throw new Error('Failed to delete session');
+        }
+
+        log('Sidebar', `Session ${currentSessionId} deleted`);
+
+        // Create a new session
+        const newSessionId = await api.createNewSession(
+            state.ui.activeShopId,
+            state.session.user.id,
+            'New Plan'
+        );
+
+        if (newSessionId) {
+            // Navigate to the new session
+            const newUrl = `${window.location.pathname}?session=${newSessionId}${state.ui.activeShopId ? `&shopId=${state.ui.activeShopId}` : ''}`;
+            window.location.href = newUrl;
+        } else {
+            // If creating new session fails, go to store root
+            const newUrl = `${window.location.pathname}${state.ui.activeShopId ? `?shopId=${state.ui.activeShopId}` : ''}`;
+            window.location.href = newUrl;
+        }
+    } catch (error) {
+        console.error('Error in Delete & New:', error);
+        alert('Failed to delete session. Please try again.');
+    }
+}
+
+/**
+ * Handles Archive Plan action
+ */
+async function handleArchivePlan() {
+    log('Sidebar', 'Archive Plan clicked');
+
+    if (!state.session.user.isAuthenticated) {
+        alert('Please sign in to archive sessions.');
+        return;
+    }
+
+    if (!state.session.id) {
+        alert('No active session to archive.');
+        return;
+    }
+
+    const confirmed = await showConfirmDialog(
+        'Archive Plan?',
+        'This plan will be archived and hidden from your sessions list. You can still recover it later.',
+        'Archive',
+        false
+    );
+
+    if (!confirmed) return;
+
+    try {
+        const archived = await api.archiveSession(state.session.id);
+
+        if (archived) {
+            alert('Plan archived successfully.');
+            // Navigate to a new session or store root
+            const newUrl = `${window.location.pathname}${state.ui.activeShopId ? `?shopId=${state.ui.activeShopId}` : ''}`;
+            window.location.href = newUrl;
+        } else {
+            throw new Error('Failed to archive session');
+        }
+    } catch (error) {
+        console.error('Error archiving plan:', error);
+        alert('Failed to archive plan. Please try again.');
+    }
+}
+
+/**
+ * Handles Delete Plan action
+ */
+async function handleDeletePlan() {
+    log('Sidebar', 'Delete Plan clicked');
+
+    if (!state.session.user.isAuthenticated) {
+        alert('Please sign in to delete sessions.');
+        return;
+    }
+
+    if (!state.session.id) {
+        alert('No active session to delete.');
+        return;
+    }
+
+    const confirmed = await showConfirmDialog(
+        'Permanently Delete Plan?',
+        'This will permanently delete this plan and all its contents. This action cannot be undone.',
+        'Delete Permanently',
+        true
+    );
+
+    if (!confirmed) return;
+
+    try {
+        const deleted = await api.deleteSession(state.session.id);
+
+        if (deleted) {
+            alert('Plan deleted successfully.');
+            // Navigate to store root
+            const newUrl = `${window.location.pathname}${state.ui.activeShopId ? `?shopId=${state.ui.activeShopId}` : ''}`;
+            window.location.href = newUrl;
+        } else {
+            throw new Error('Failed to delete session');
+        }
+    } catch (error) {
+        console.error('Error deleting plan:', error);
+        alert('Failed to delete plan. Please try again.');
+    }
+}
+
+/**
+ * Shows a confirmation dialog and returns a promise that resolves to true/false
+ */
+function showConfirmDialog(title, message, confirmText, isDanger = false) {
+    return new Promise((resolve) => {
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'confirm-dialog-overlay';
+
+        // Create dialog
+        const dialog = document.createElement('div');
+        dialog.className = 'confirm-dialog';
+        dialog.innerHTML = `
+            <h4>${title}</h4>
+            <p>${message}</p>
+            <div class="confirm-dialog-actions">
+                <button class="btn-cancel">Cancel</button>
+                <button class="btn-confirm ${isDanger ? '' : 'btn-primary'}">${confirmText}</button>
+            </div>
+        `;
+
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+
+        // Handle clicks
+        const cancelBtn = dialog.querySelector('.btn-cancel');
+        const confirmBtn = dialog.querySelector('.btn-confirm');
+
+        const cleanup = () => {
+            overlay.remove();
+        };
+
+        cancelBtn.addEventListener('click', () => {
+            cleanup();
+            resolve(false);
+        });
+
+        confirmBtn.addEventListener('click', () => {
+            cleanup();
+            resolve(true);
+        });
+
+        // Close on overlay click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                cleanup();
+                resolve(false);
+            }
+        });
+
+        // Close on Escape
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                document.removeEventListener('keydown', handleEscape);
+                cleanup();
+                resolve(false);
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+    });
+}
+
+/**
+ * Shows the sessions modal with list of user's sessions
+ */
+async function showSessionsModal() {
+    log('Sidebar', 'See Sessions clicked');
+
+    if (!state.session.user.isAuthenticated) {
+        alert('Please sign in to view your sessions.');
+        return;
+    }
+
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'sessions-modal-overlay';
+    overlay.innerHTML = `
+        <div class="sessions-modal">
+            <div class="sessions-modal-header">
+                <h3>My Sessions</h3>
+                <button class="sessions-modal-close">&times;</button>
+            </div>
+            <div class="sessions-modal-body">
+                <div class="bulk-actions-bar" style="display: none;">
+                    <label class="bulk-select-all">
+                        <input type="checkbox" id="sessions-select-all">
+                        <span>Select All</span>
+                    </label>
+                    <div class="bulk-actions-buttons">
+                        <button class="session-action-btn" id="bulk-archive-btn">Archive Selected</button>
+                        <button class="session-action-btn btn-danger" id="bulk-delete-btn">Delete Selected</button>
+                    </div>
+                </div>
+                <div class="sessions-list" id="sessions-list">
+                    <p style="text-align: center; color: #6c757d;">Loading sessions...</p>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Close handlers
+    const closeModal = () => {
+        overlay.remove();
+    };
+
+    const closeBtn = overlay.querySelector('.sessions-modal-close');
+    closeBtn.addEventListener('click', closeModal);
+
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal();
+    });
+
+    document.addEventListener('keydown', function handleEscape(e) {
+        if (e.key === 'Escape') {
+            document.removeEventListener('keydown', handleEscape);
+            closeModal();
+        }
+    });
+
+    // Load sessions
+    try {
+        const sessions = await api.fetchUserSessions(state.session.user.id, state.ui.activeShopId);
+        const sessionsList = overlay.querySelector('#sessions-list');
+        const bulkActionsBar = overlay.querySelector('.bulk-actions-bar');
+        const selectAllCheckbox = overlay.querySelector('#sessions-select-all');
+        const bulkArchiveBtn = overlay.querySelector('#bulk-archive-btn');
+        const bulkDeleteBtn = overlay.querySelector('#bulk-delete-btn');
+
+        if (sessions.length === 0) {
+            sessionsList.innerHTML = `
+                <div class="sessions-empty-state">
+                    <p>No sessions found. Start planning to create your first session!</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Show bulk actions bar
+        bulkActionsBar.style.display = 'flex';
+
+        // Render sessions
+        sessionsList.innerHTML = sessions.map(session => {
+            const isCurrentSession = session.id === state.session.id;
+            const sessionData = session.fields['Items with Variations'];
+            let itemCount = 0;
+
+            if (sessionData) {
+                try {
+                    const parsed = JSON.parse(sessionData);
+                    itemCount = Object.keys(parsed.lockedInItems || {}).length +
+                                Object.keys(parsed.ideasItems || {}).length;
+                } catch (e) {
+                    // Ignore parse errors
+                }
+            }
+
+            const dateStr = session.fields.Date
+                ? new Date(session.fields.Date).toLocaleDateString()
+                : 'No date';
+
+            return `
+                <div class="session-list-item ${isCurrentSession ? 'current-session' : ''}" data-session-id="${session.id}">
+                    <input type="checkbox" class="session-list-checkbox" ${isCurrentSession ? 'disabled' : ''}>
+                    <div class="session-list-info">
+                        <div class="session-list-name">${session.fields.Name || 'Untitled Session'}${isCurrentSession ? ' (Current)' : ''}</div>
+                        <div class="session-list-meta">
+                            <span>📅 ${dateStr}</span>
+                            <span>📦 ${itemCount} items</span>
+                        </div>
+                    </div>
+                    <div class="session-list-actions">
+                        ${!isCurrentSession ? `
+                            <button class="session-action-btn btn-primary session-open-btn" data-session-id="${session.id}">Open</button>
+                            <button class="session-action-btn btn-danger session-delete-btn" data-session-id="${session.id}">Delete</button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Handle individual session actions
+        sessionsList.addEventListener('click', async (e) => {
+            const openBtn = e.target.closest('.session-open-btn');
+            const deleteBtn = e.target.closest('.session-delete-btn');
+
+            if (openBtn) {
+                const sessionId = openBtn.dataset.sessionId;
+                const newUrl = `${window.location.pathname}?session=${sessionId}${state.ui.activeShopId ? `&shopId=${state.ui.activeShopId}` : ''}`;
+                window.location.href = newUrl;
+            }
+
+            if (deleteBtn) {
+                const sessionId = deleteBtn.dataset.sessionId;
+                const confirmed = await showConfirmDialog(
+                    'Delete Session?',
+                    'This will permanently delete this session. This action cannot be undone.',
+                    'Delete',
+                    true
+                );
+
+                if (confirmed) {
+                    const deleted = await api.deleteSession(sessionId);
+                    if (deleted) {
+                        // Remove from list
+                        const item = sessionsList.querySelector(`[data-session-id="${sessionId}"]`);
+                        if (item) item.remove();
+
+                        // Check if list is now empty
+                        if (sessionsList.querySelectorAll('.session-list-item').length === 0) {
+                            sessionsList.innerHTML = `
+                                <div class="sessions-empty-state">
+                                    <p>No sessions found. Start planning to create your first session!</p>
+                                </div>
+                            `;
+                            bulkActionsBar.style.display = 'none';
+                        }
+                    }
+                }
+            }
+        });
+
+        // Handle select all
+        selectAllCheckbox.addEventListener('change', () => {
+            const checkboxes = sessionsList.querySelectorAll('.session-list-checkbox:not(:disabled)');
+            checkboxes.forEach(cb => {
+                cb.checked = selectAllCheckbox.checked;
+                cb.closest('.session-list-item').classList.toggle('selected', selectAllCheckbox.checked);
+            });
+        });
+
+        // Handle individual checkbox changes
+        sessionsList.addEventListener('change', (e) => {
+            if (e.target.classList.contains('session-list-checkbox')) {
+                e.target.closest('.session-list-item').classList.toggle('selected', e.target.checked);
+
+                // Update select all state
+                const checkboxes = sessionsList.querySelectorAll('.session-list-checkbox:not(:disabled)');
+                const checkedCount = sessionsList.querySelectorAll('.session-list-checkbox:checked').length;
+                selectAllCheckbox.checked = checkedCount === checkboxes.length && checkboxes.length > 0;
+                selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+            }
+        });
+
+        // Bulk archive
+        bulkArchiveBtn.addEventListener('click', async () => {
+            const selectedIds = Array.from(sessionsList.querySelectorAll('.session-list-checkbox:checked'))
+                .map(cb => cb.closest('.session-list-item').dataset.sessionId);
+
+            if (selectedIds.length === 0) {
+                alert('No sessions selected.');
+                return;
+            }
+
+            const confirmed = await showConfirmDialog(
+                `Archive ${selectedIds.length} Session(s)?`,
+                'Selected sessions will be archived and hidden from your sessions list.',
+                'Archive',
+                false
+            );
+
+            if (confirmed) {
+                const result = await api.archiveSessionsBulk(selectedIds);
+                alert(`Archived ${result.success} session(s).${result.failed > 0 ? ` ${result.failed} failed.` : ''}`);
+
+                // Refresh the list
+                selectedIds.forEach(id => {
+                    const item = sessionsList.querySelector(`[data-session-id="${id}"]`);
+                    if (item) item.remove();
+                });
+
+                if (sessionsList.querySelectorAll('.session-list-item').length === 0) {
+                    sessionsList.innerHTML = `
+                        <div class="sessions-empty-state">
+                            <p>No sessions found. Start planning to create your first session!</p>
+                        </div>
+                    `;
+                    bulkActionsBar.style.display = 'none';
+                }
+            }
+        });
+
+        // Bulk delete
+        bulkDeleteBtn.addEventListener('click', async () => {
+            const selectedIds = Array.from(sessionsList.querySelectorAll('.session-list-checkbox:checked'))
+                .map(cb => cb.closest('.session-list-item').dataset.sessionId);
+
+            if (selectedIds.length === 0) {
+                alert('No sessions selected.');
+                return;
+            }
+
+            const confirmed = await showConfirmDialog(
+                `Permanently Delete ${selectedIds.length} Session(s)?`,
+                'This will permanently delete the selected sessions. This action cannot be undone.',
+                'Delete All',
+                true
+            );
+
+            if (confirmed) {
+                const result = await api.deleteSessionsBulk(selectedIds);
+                alert(`Deleted ${result.success} session(s).${result.failed > 0 ? ` ${result.failed} failed.` : ''}`);
+
+                // Refresh the list
+                selectedIds.forEach(id => {
+                    const item = sessionsList.querySelector(`[data-session-id="${id}"]`);
+                    if (item) item.remove();
+                });
+
+                if (sessionsList.querySelectorAll('.session-list-item').length === 0) {
+                    sessionsList.innerHTML = `
+                        <div class="sessions-empty-state">
+                            <p>No sessions found. Start planning to create your first session!</p>
+                        </div>
+                    `;
+                    bulkActionsBar.style.display = 'none';
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Error loading sessions:', error);
+        const sessionsList = overlay.querySelector('#sessions-list');
+        sessionsList.innerHTML = `
+            <div class="sessions-empty-state">
+                <p>Failed to load sessions. Please try again.</p>
+            </div>
+        `;
     }
 }
 
@@ -1420,14 +2062,22 @@ export function updateTotalCost() {
             ? itemInfo.selections
             : itemInfo.selectedOptionIndex;
 
-        const unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
+        let unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
         if (isNaN(unitPrice)) return;
+
+        // Apply package discount if this item came from a package
+        if (itemInfo.packageId && state.session.activePackages) {
+            const packageInfo = state.session.activePackages.get(itemInfo.packageId);
+            if (packageInfo && packageInfo.discount > 0) {
+                unitPrice = unitPrice * (1 - packageInfo.discount / 100);
+            }
+        }
 
         // Custom items don't have a min headcount, so default to 1
         const minHeadcount = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         // Use itemInfo.quantity for all items
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
-        
+
         subtotal += unitPrice * effectiveQuantity;
     });
     
