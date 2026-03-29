@@ -137,5 +137,16 @@
         </main>
     </div>
     <script type="module" src="/dist/store-dashboard.bundle.js"></script>
+
+    <!-- Debug Panel for mobile-friendly debugging -->
+    <script type="module">
+    import { initDebugPanel, debugLog } from '/utils/debug-panel.js';
+
+    // Initialize the debug panel
+    initDebugPanel('Store Dashboard Debug Log');
+
+    // Make debugLog available globally for use in other scripts
+    window.debugLog = debugLog;
+    </script>
 </body>
 </html>

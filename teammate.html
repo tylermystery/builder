@@ -30,5 +30,16 @@
         </footer>
     </div>
     <script type="module" src="/dist/teammate.bundle.js"></script>
+
+    <!-- Debug Panel for mobile-friendly debugging -->
+    <script type="module">
+    import { initDebugPanel, debugLog } from '/utils/debug-panel.js';
+
+    // Initialize the debug panel
+    initDebugPanel('Teammate Debug Log');
+
+    // Make debugLog available globally for use in other scripts
+    window.debugLog = debugLog;
+    </script>
 </body>
 </html>

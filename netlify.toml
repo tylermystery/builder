@@ -284,3 +284,9 @@
   to = "/.netlify/functions/enrich-quick-plan"
   status = 200
 
+# Get Project (for polling enrichment status)
+[[redirects]]
+  from = "/api/get-project"
+  to = "/.netlify/functions/get-project"
+  status = 200
+

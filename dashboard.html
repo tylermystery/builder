@@ -18,5 +18,16 @@
         <p>This is your personal dashboard. From here, you can access the company's internal tools.</p>
         <a href="/crm.html" class="crm-link">Go to CRM Dashboard</a>
     </div>
+
+    <!-- Debug Panel for mobile-friendly debugging -->
+    <script type="module">
+    import { initDebugPanel, debugLog } from '/utils/debug-panel.js';
+
+    // Initialize the debug panel
+    initDebugPanel('Dashboard Debug Log');
+
+    // Make debugLog available globally for use in other scripts
+    window.debugLog = debugLog;
+    </script>
 </body>
 </html>

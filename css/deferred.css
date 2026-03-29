@@ -1485,7 +1485,7 @@
     opacity: 1;
     pointer-events: auto;
 }
-.modal-content, .checkout-modal-content, .itinerary-content, .presentation-content, .quick-pay-modal-content {
+.modal-content, .checkout-modal-content, .itinerary-content, .presentation-content, .quick-pay-modal-content, .quick-plan-modal-content {
     pointer-events: auto;
 }
 .modal-content {
@@ -4584,6 +4584,115 @@ hr.total-divider {
     font-size: 0.75em;
     color: #28a745;
     font-weight: 500;
+}
+
+/* =========================
+   Quick Plan Modal Styles
+   ========================= */
+.quick-plan-modal-content {
+    background: #fff;
+    border-radius: 12px;
+    padding: 30px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.quick-plan-modal-content h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #333;
+    font-size: 1.4em;
+}
+
+.quick-plan-description {
+    color: #6c757d;
+    font-size: 0.95em;
+    margin-bottom: 20px;
+}
+
+.quick-plan-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+#quick-plan-idea-input {
+    width: 100%;
+    padding: 16px;
+    font-size: 1em;
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    resize: vertical;
+    min-height: 100px;
+    font-family: inherit;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+#quick-plan-idea-input:focus {
+    outline: none;
+    border-color: #28a745;
+    box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1);
+}
+
+#quick-plan-idea-input::placeholder {
+    color: #adb5bd;
+}
+
+#quick-plan-submit-btn {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 14px 20px;
+    font-size: 1.1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+#quick-plan-submit-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #218838, #1aa179);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+#quick-plan-submit-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+#quick-plan-submit-btn:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    transform: none;
+}
+
+#quick-plan-submit-btn .spinner {
+    display: none;
+}
+
+#quick-plan-submit-btn.loading .button-text {
+    display: none;
+}
+
+#quick-plan-submit-btn.loading .spinner {
+    display: inline;
+}
+
+.quick-plan-error {
+    padding: 12px 16px;
+    background: #f8d7da;
+    color: #721c24;
+    border-radius: 8px;
+    font-size: 0.9em;
+    margin-top: 10px;
 }
 
 /* ============================================================================

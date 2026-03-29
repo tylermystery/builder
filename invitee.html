@@ -681,5 +681,16 @@
         }, 2000);
     });
     </script>
+
+    <!-- Debug Panel for mobile-friendly debugging -->
+    <script type="module">
+    import { initDebugPanel, debugLog } from '/utils/debug-panel.js';
+
+    // Initialize the debug panel
+    initDebugPanel('Invitee Debug Log');
+
+    // Make debugLog available globally for use in other scripts
+    window.debugLog = debugLog;
+    </script>
 </body>
 </html>

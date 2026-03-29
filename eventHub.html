@@ -9,5 +9,16 @@
     <div id="event-content"></div>
     <div id="event-chat"></div>
     <script type="module" src="/dist/eventHub.bundle.js"></script>
+
+    <!-- Debug Panel for mobile-friendly debugging -->
+    <script type="module">
+    import { initDebugPanel, debugLog } from '/utils/debug-panel.js';
+
+    // Initialize the debug panel
+    initDebugPanel('Event Hub Debug Log');
+
+    // Make debugLog available globally for use in other scripts
+    window.debugLog = debugLog;
+    </script>
 </body>
 </html>

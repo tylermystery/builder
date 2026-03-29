@@ -27,21 +27,27 @@ function postPlanEvent(sessionId, eventType, eventData) {
     : '/.netlify/functions/post-plan-event';
 
   console.log(`${DEBUG_PREFIX} Posting ${eventType} event for ${sessionId}...`);
+  debugLog('Posting plan event', { sessionId, eventType, eventUrl, eventDataKeys: Object.keys(eventData || {}) });
 
   fetch(eventUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sessionId, eventType, eventData })
   })
-    .then(response => {
+    .then(async response => {
       if (response.ok) {
-        console.log(`${DEBUG_PREFIX} ✅ ${eventType} event posted successfully`);
+        const result = await response.json();
+        console.log(`${DEBUG_PREFIX} ✅ ${eventType} event posted successfully, recordId: ${result.recordId}`);
+        debugLog('Plan event posted successfully', { sessionId, eventType, recordId: result.recordId });
       } else {
-        console.error(`${DEBUG_PREFIX} ⚠️ ${eventType} event posting returned ${response.status}`);
+        const errorText = await response.text();
+        console.error(`${DEBUG_PREFIX} ⚠️ ${eventType} event posting returned ${response.status}: ${errorText}`);
+        debugLog('Plan event posting failed', { sessionId, eventType, status: response.status, error: errorText });
       }
     })
     .catch(error => {
       console.error(`${DEBUG_PREFIX} ⚠️ ${eventType} event posting failed: ${error.message}`);
+      debugLog('Plan event posting error', { sessionId, eventType, error: error.message });
     });
 }
 
@@ -92,10 +98,14 @@ function cleanAndParseGeminiJson(text) {
  */
 async function analyzeWithGemini(ideaText) {
   console.log(`${DEBUG_PREFIX} Starting AI analysis (${ideaText.length} chars)`);
+  debugLog('AI analysis starting', { ideaLength: ideaText.length, ideaPreview: ideaText.substring(0, 150) });
 
   if (!GEMINI_API_KEY) {
+    debugLog('AI analysis aborted - missing API key', null);
     throw new Error('Missing GEMINI_API_KEY environment variable');
   }
+
+  debugLog('Gemini API key present', { keyLength: GEMINI_API_KEY.length });
 
   const systemPrompt = `
 You are an expert event and project planner assistant. Your task is to analyze a user's plan idea and extract structured information.
@@ -186,26 +196,51 @@ Generate your analysis now.
   const modelId = 'gemini-2.0-flash';
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
 
+  debugLog('Calling Gemini API', { model: modelId, promptLength: systemPrompt.length });
+
   const response = await fetch(apiUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
 
+  debugLog('Gemini API response received', { status: response.status, ok: response.ok });
+
   if (!response.ok) {
     const errorBody = await response.text();
     console.error(`${DEBUG_PREFIX} Gemini API error: ${response.status}`);
+    debugLog('Gemini API error', { status: response.status, error: errorBody });
     throw new Error(`Gemini API call failed with status ${response.status}`);
   }
 
   const result = await response.json();
+
+  debugLog('Gemini raw result structure', {
+    hasCandidates: !!result.candidates,
+    candidateCount: result.candidates?.length,
+    hasContent: !!result.candidates?.[0]?.content,
+    hasParts: !!result.candidates?.[0]?.content?.parts
+  });
+
   const jsonText = result.candidates[0].content.parts[0].text;
 
   console.log(`${DEBUG_PREFIX} AI response received (${jsonText.length} chars)`);
+  debugLog('AI response text', { length: jsonText.length, preview: jsonText.substring(0, 200) });
 
   const parsed = cleanAndParseGeminiJson(jsonText);
 
   console.log(`${DEBUG_PREFIX} ✅ AI analysis complete: name="${parsed.plan_name}", type="${parsed.plan_type}", items=${parsed.items_components?.length || 0}, steps=${parsed.next_steps?.length || 0}`);
+  debugLog('AI analysis parsed successfully', {
+    planName: parsed.plan_name,
+    planType: parsed.plan_type,
+    eventDate: parsed.event_date,
+    goals: parsed.goals ? parsed.goals.substring(0, 100) : null,
+    guestCount: parsed.guest_count,
+    location: parsed.location,
+    itemsCount: parsed.items_components?.length || 0,
+    nextStepsCount: parsed.next_steps?.length || 0,
+    reasoning: parsed.reasoning ? parsed.reasoning.substring(0, 100) : null
+  });
 
   return parsed;
 }
@@ -247,6 +282,7 @@ function parseAndFormatDate(dateStr) {
  */
 async function updateProjectWithExtractedFields(projectId, analysis) {
   console.log(`${DEBUG_PREFIX} Updating project ${projectId} with extracted fields...`);
+  debugLog('Starting project update', { projectId, analysisKeys: Object.keys(analysis) });
 
   // Build the fields object with all extracted data
   const updateFields = {};
@@ -254,43 +290,54 @@ async function updateProjectWithExtractedFields(projectId, analysis) {
   // Plan Type (always update if present)
   if (analysis.plan_type) {
     updateFields['Plan_Type'] = analysis.plan_type;
+    debugLog('Adding Plan_Type field', { value: analysis.plan_type });
   }
 
   // Plan Name - only update if AI extracted a better name
   if (analysis.plan_name) {
     updateFields['Name'] = analysis.plan_name.substring(0, 100); // Max 100 chars
+    debugLog('Adding Name field', { value: updateFields['Name'] });
   }
 
   // Event Date - parse and format
   const formattedDate = parseAndFormatDate(analysis.event_date);
   if (formattedDate) {
     updateFields['Date'] = formattedDate;
+    debugLog('Adding Date field', { original: analysis.event_date, formatted: formattedDate });
+  } else if (analysis.event_date) {
+    debugLog('Date not formatted (unparseable)', { original: analysis.event_date });
   }
 
   // Goals - extracted themes, objectives, desired outcomes
   if (analysis.goals) {
     updateFields['Goals'] = analysis.goals;
+    debugLog('Adding Goals field', { length: analysis.goals.length });
   }
 
   // Guest Count
   if (analysis.guest_count && typeof analysis.guest_count === 'number') {
     updateFields['Guest Count'] = analysis.guest_count;
+    debugLog('Adding Guest Count field', { value: analysis.guest_count });
   }
 
   // Location
   if (analysis.location) {
     updateFields['Location'] = analysis.location;
+    debugLog('Adding Location field', { value: analysis.location });
   }
 
   // If no fields to update, skip the API call
   if (Object.keys(updateFields).length === 0) {
     console.log(`${DEBUG_PREFIX} No fields to update, skipping`);
+    debugLog('No fields to update - skipping Airtable call', null);
     return null;
   }
 
   console.log(`${DEBUG_PREFIX} Fields to update: ${Object.keys(updateFields).join(', ')}`);
+  debugLog('Prepared update fields', { fieldCount: Object.keys(updateFields).length, fields: updateFields });
 
   const url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(SESSIONS_TABLE)}/${projectId}`;
+  debugLog('Calling Airtable PATCH', { projectId, fieldCount: Object.keys(updateFields).length });
 
   const response = await fetch(url, {
     method: 'PATCH',
@@ -301,15 +348,23 @@ async function updateProjectWithExtractedFields(projectId, analysis) {
     body: JSON.stringify({ fields: updateFields })
   });
 
+  debugLog('Airtable PATCH response', { status: response.status, ok: response.ok });
+
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`${DEBUG_PREFIX} Failed to update project fields: ${response.status}`);
+    debugLog('Airtable PATCH failed', { status: response.status, error: errorText });
     // Don't throw - this is a non-critical update
     return null;
   }
 
   const record = await response.json();
   console.log(`${DEBUG_PREFIX} ✅ Project fields updated: ${Object.keys(updateFields).join(', ')}`);
+  debugLog('Project updated successfully', {
+    recordId: record.id,
+    updatedFields: Object.keys(updateFields),
+    recordFields: Object.keys(record.fields || {})
+  });
   return record;
 }
 
@@ -369,10 +424,16 @@ async function createLinkedTasks(projectId, nextSteps) {
  */
 function logExtractedItems(projectId, items) {
   if (!items || items.length === 0) {
+    debugLog('No items to log', { projectId });
     return;
   }
 
   console.log(`${DEBUG_PREFIX} Extracted ${items.length} items/components: ${items.map(i => i.name).join(', ')}`);
+  debugLog('Extracted items/components', {
+    projectId,
+    count: items.length,
+    items: items.map(i => ({ name: i.name, category: i.category }))
+  });
 
   // Future: Create linked item records in a PlanItems table
   // For now, these can be used by the frontend to suggest catalog items
@@ -383,9 +444,11 @@ function logExtractedItems(projectId, items) {
  */
 exports.handler = async (event) => {
   console.log(`${DEBUG_PREFIX} ========== FUNCTION START ==========`);
+  debugLog('Handler invoked', { httpMethod: event.httpMethod, hasBody: !!event.body });
 
   // Only allow POST requests
   if (event.httpMethod !== 'POST') {
+    debugLog('Rejected: not a POST request', { method: event.httpMethod });
     return {
       statusCode: 405,
       headers: { 'Content-Type': 'application/json' },
@@ -396,6 +459,7 @@ exports.handler = async (event) => {
   // Validate environment variables
   if (!AIRTABLE_PAT || !BASE_ID) {
     console.error(`${DEBUG_PREFIX} ERROR: Missing AIRTABLE_PAT or BASE_ID`);
+    debugLog('Config error', { hasAirtablePat: !!AIRTABLE_PAT, hasBaseId: !!BASE_ID });
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -403,9 +467,12 @@ exports.handler = async (event) => {
     };
   }
 
+  debugLog('Environment validated', { hasAirtablePat: true, hasBaseId: true, hasGeminiKey: !!GEMINI_API_KEY });
+
   // GEMINI_API_KEY is optional - if missing, we skip AI enrichment
   if (!GEMINI_API_KEY) {
     console.log(`${DEBUG_PREFIX} GEMINI_API_KEY not configured - skipping AI enrichment`);
+    debugLog('AI enrichment skipped - no API key', null);
     console.log(`${DEBUG_PREFIX} ========== FUNCTION END (no API key) ==========`);
     return {
       statusCode: 200,
@@ -421,9 +488,11 @@ exports.handler = async (event) => {
   try {
     // Parse incoming request
     const { projectId, ideaText } = JSON.parse(event.body || '{}');
+    debugLog('Request body parsed', { hasProjectId: !!projectId, hasIdeaText: !!ideaText, ideaLength: ideaText?.length });
 
     if (!projectId || !ideaText) {
       console.error(`${DEBUG_PREFIX} Missing projectId or ideaText`);
+      debugLog('Validation failed', { projectId: projectId || 'missing', ideaText: ideaText ? 'present' : 'missing' });
       return {
         statusCode: 400,
         headers: { 'Content-Type': 'application/json' },
@@ -432,27 +501,37 @@ exports.handler = async (event) => {
     }
 
     console.log(`${DEBUG_PREFIX} Enriching project ${projectId}: "${ideaText.substring(0, 50)}..."`);
+    debugLog('Starting enrichment process', { projectId, ideaLength: ideaText.length, ideaPreview: ideaText.substring(0, 100) });
 
     // Step 1: Call AI to analyze the idea and extract structured data
+    debugLog('Step 1: Calling AI for analysis', { projectId });
     const analysis = await analyzeWithGemini(ideaText);
+    debugLog('Step 1 complete: AI analysis received', { projectId, hasAnalysis: !!analysis });
 
     // Step 2: Update project with all extracted fields
-    await updateProjectWithExtractedFields(projectId, analysis);
+    debugLog('Step 2: Updating project with extracted fields', { projectId });
+    const updatedRecord = await updateProjectWithExtractedFields(projectId, analysis);
+    debugLog('Step 2 complete: Project update result', { projectId, updated: !!updatedRecord });
 
     // Step 3: Create linked tasks from next_steps
+    debugLog('Step 3: Creating linked tasks', { projectId, nextStepsCount: analysis.next_steps?.length || 0 });
     let createdTasks = [];
     if (analysis.next_steps && analysis.next_steps.length > 0) {
       createdTasks = await createLinkedTasks(projectId, analysis.next_steps);
     }
+    debugLog('Step 3 complete: Tasks created', { projectId, tasksCreated: createdTasks.length });
 
     // Step 4: Log extracted items for future use
+    debugLog('Step 4: Logging extracted items', { projectId, itemsCount: analysis.items_components?.length || 0 });
     if (analysis.items_components && analysis.items_components.length > 0) {
       logExtractedItems(projectId, analysis.items_components);
     }
+    debugLog('Step 4 complete', { projectId });
 
     console.log(`${DEBUG_PREFIX} ✅ Enrichment complete: name="${analysis.plan_name}", type="${analysis.plan_type}", tasks=${createdTasks.length}`);
 
     // Post the AI interpretation event to show in chat history
+    debugLog('Posting ai_interpretation event', { projectId });
     postPlanEvent(projectId, 'ai_interpretation', {
       planName: analysis.plan_name,
       planType: analysis.plan_type,
@@ -466,6 +545,13 @@ exports.handler = async (event) => {
     });
 
     console.log(`${DEBUG_PREFIX} ========== FUNCTION END (success) ==========`);
+    debugLog('Function completed successfully', {
+      projectId,
+      enriched: true,
+      planName: analysis.plan_name,
+      planType: analysis.plan_type,
+      tasksCreated: createdTasks.length
+    });
 
     return {
       statusCode: 200,
@@ -487,6 +573,7 @@ exports.handler = async (event) => {
 
   } catch (error) {
     console.error(`${DEBUG_PREFIX} FUNCTION FAILED:`, error.message);
+    debugLog('Function error', { error: error.message, stack: error.stack });
     console.log(`${DEBUG_PREFIX} ========== FUNCTION END (error) ==========`);
 
     // Return success even on error - enrichment is optional

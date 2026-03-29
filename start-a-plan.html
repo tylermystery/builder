@@ -282,6 +282,24 @@
             50% { opacity: 0.5; }
         }
 
+        /* Persisted logs from previous pages */
+        .debug-entry-persisted {
+            opacity: 0.7;
+            border-left: 2px solid #888;
+        }
+
+        .debug-separator {
+            text-align: center;
+            margin: 12px 0;
+            color: #888;
+            font-size: 10px;
+        }
+
+        .debug-separator span {
+            background: rgba(0, 0, 0, 0.9);
+            padding: 0 12px;
+        }
+
         @media (max-width: 640px) {
             .container {
                 padding: 32px 24px;
@@ -354,9 +372,100 @@
             const clearDebugLog = document.getElementById('clearDebugLog');
             const closeDebugPanel = document.getElementById('closeDebugPanel');
 
-            // Debug state
+            // Debug state - Use same storage key as the shared debug-panel module
+            const STORAGE_KEY = 'wtfun_debug_logs';
+            const MAX_PERSISTED_LOGS = 500;
             let debugLogs = [];
             let enrichmentPollInterval = null;
+
+            /**
+             * Load persisted debug logs from sessionStorage
+             */
+            function loadPersistedLogs() {
+                try {
+                    const stored = sessionStorage.getItem(STORAGE_KEY);
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        if (Array.isArray(parsed)) {
+                            return parsed;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[Debug Panel] Failed to load persisted logs:', e);
+                }
+                return [];
+            }
+
+            /**
+             * Save debug logs to sessionStorage
+             */
+            function persistLogs() {
+                try {
+                    const logsToStore = debugLogs.slice(-MAX_PERSISTED_LOGS);
+                    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(logsToStore));
+                } catch (e) {
+                    console.warn('[Debug Panel] Failed to persist logs:', e);
+                }
+            }
+
+            /**
+             * Escape HTML for safe display
+             */
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            /**
+             * Render a single log entry to the panel
+             */
+            function renderLogEntry(entry, isPersisted = false) {
+                const entryEl = document.createElement('div');
+                entryEl.className = 'debug-entry' + (isPersisted ? ' debug-entry-persisted' : '');
+
+                let dataClass = '';
+                if (entry.type === 'error') dataClass = 'debug-error';
+                else if (entry.type === 'success') dataClass = 'debug-success';
+
+                let html = `<div class="debug-timestamp">${entry.timestamp}</div>`;
+                html += `<div class="debug-action ${dataClass}">[${entry.type.toUpperCase()}] ${escapeHtml(entry.action)}</div>`;
+
+                if (entry.data !== null && entry.data !== undefined) {
+                    const dataStr = typeof entry.data === 'object' ? JSON.stringify(entry.data, null, 2) : String(entry.data);
+                    html += `<div class="debug-data">${escapeHtml(dataStr)}</div>`;
+                }
+
+                entryEl.innerHTML = html;
+                debugLogContent.appendChild(entryEl);
+            }
+
+            /**
+             * Render all persisted logs from sessionStorage
+             */
+            function renderPersistedLogs() {
+                if (debugLogs.length === 0) return;
+
+                // Add a separator to show these are from previous pages
+                const separator = document.createElement('div');
+                separator.className = 'debug-separator';
+                separator.innerHTML = `<span>--- Logs from previous pages (${debugLogs.length} entries) ---</span>`;
+                debugLogContent.appendChild(separator);
+
+                // Render each persisted log
+                for (const entry of debugLogs) {
+                    renderLogEntry(entry, true);
+                }
+
+                // Add another separator
+                const endSeparator = document.createElement('div');
+                endSeparator.className = 'debug-separator';
+                endSeparator.innerHTML = '<span>--- Current page logs below ---</span>';
+                debugLogContent.appendChild(endSeparator);
+
+                // Scroll to bottom
+                debugPanel.scrollTop = debugPanel.scrollHeight;
+            }
 
             /**
              * Add a debug log entry to the panel
@@ -369,41 +478,23 @@
                 const entry = { timestamp, action, data, type };
                 debugLogs.push(entry);
 
+                // Persist to sessionStorage so logs survive page navigation
+                persistLogs();
+
                 // Add visual indicator if panel is closed
                 if (!debugPanel.classList.contains('visible')) {
                     debugToggle.classList.add('has-logs');
                 }
 
                 // Render the entry
-                const entryEl = document.createElement('div');
-                entryEl.className = 'debug-entry';
-
-                let dataClass = '';
-                if (type === 'error') dataClass = 'debug-error';
-                else if (type === 'success') dataClass = 'debug-success';
-
-                let html = `<div class="debug-timestamp">${timestamp}</div>`;
-                html += `<div class="debug-action ${dataClass}">[${type.toUpperCase()}] ${action}</div>`;
-
-                if (data !== null) {
-                    const dataStr = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
-                    html += `<div class="debug-data">${escapeHtml(dataStr)}</div>`;
-                }
-
-                entryEl.innerHTML = html;
-                debugLogContent.appendChild(entryEl);
+                renderLogEntry(entry, false);
 
                 // Auto-scroll to bottom
                 debugPanel.scrollTop = debugPanel.scrollHeight;
-            }
 
-            /**
-             * Escape HTML for safe display
-             */
-            function escapeHtml(text) {
-                const div = document.createElement('div');
-                div.textContent = text;
-                return div.innerHTML;
+                // Also log to console
+                const consoleMethod = type === 'error' ? 'error' : type === 'success' ? 'info' : 'log';
+                console[consoleMethod](`[Debug] ${action}`, data || '');
             }
 
             /**
@@ -422,6 +513,12 @@
             function clearDebugLogs() {
                 debugLogs = [];
                 debugLogContent.innerHTML = '';
+                // Also clear sessionStorage
+                try {
+                    sessionStorage.removeItem(STORAGE_KEY);
+                } catch (e) {
+                    console.warn('[Debug Panel] Failed to clear persisted logs:', e);
+                }
                 debugLog('Debug log cleared', null, 'info');
             }
 
@@ -430,8 +527,15 @@
             closeDebugPanel.addEventListener('click', () => debugPanel.classList.remove('visible'));
             clearDebugLog.addEventListener('click', clearDebugLogs);
 
+            // Load persisted logs and render them
+            debugLogs = loadPersistedLogs();
+            if (debugLogs.length > 0) {
+                renderPersistedLogs();
+                debugToggle.classList.add('has-logs');
+            }
+
             // Initialize debug log
-            debugLog('Page loaded', { userAgent: navigator.userAgent, timestamp: Date.now() }, 'info');
+            debugLog('Page loaded', { page: '/start-a-plan.html', persistedLogCount: debugLogs.length - 1, timestamp: Date.now() }, 'info');
 
             function showError(message) {
                 errorMessage.textContent = message;
