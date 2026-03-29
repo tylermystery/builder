@@ -74,7 +74,9 @@ exports.handler = async (event) => {
 
     if (hasSearchTerms || hasProfile || hasPrice) {
       // Fetch existing AI_Profile to merge data
-      const fetchUrl = `https://api.airtable.com/v0/${BASE_ID}/${CATALOG_TABLE}/${recordId}?fields[]=AI_Profile`;
+      // Note: The fields[] parameter is NOT supported on single record GET requests (only on List Records)
+      // Single record endpoint returns all fields automatically - we just use the AI_Profile field from the response
+      const fetchUrl = `https://api.airtable.com/v0/${BASE_ID}/${CATALOG_TABLE}/${recordId}`;
       const fetchResponse = await fetch(fetchUrl, {
         headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` }
       });
