@@ -3195,6 +3195,15 @@ html.presentation-active {
     box-shadow: none;
 }
 
+/* In fullpage mode, remove narrow max-width so sections fill the content area alongside the board grid */
+.presentation-fullpage .itinerary-section {
+    max-width: 100%;
+}
+
+.presentation-fullpage .itinerary-items-list {
+    max-width: 100%;
+}
+
 .presentation-content {
     background: transparent;
     border-radius: 8px;

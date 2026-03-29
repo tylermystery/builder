@@ -21,6 +21,8 @@ import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { refreshForumData, onNewItemReceived } from './forumPanel.js';
 import { initializeToastNotifications, handlePusherEvent as handleToastPusherEvent } from './toastNotifications.js';
 import { initializeUnifiedChatPanel, showUnifiedChatPanel, hideUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage } from './unifiedChatPanel.js';
+import { initVitalityUI, cleanupVitalityUI, refreshFlowLines } from '../vitality/vitalityUI.js';
+import { requestVitalityRecalc, recalculateVitality } from '../vitality/vitalityEngine.js';
 
 console.log('[MODULE DEBUG] presentation.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -230,6 +232,8 @@ let mergeModeOverlay = null;
 let mergeModeBanner = null;
 let potentialMergeTarget = null;
 let potentialMergeZone = null; // 'hybrid' (dropped on name/header) or 'options' (dropped on content/details)
+let mergeSelectedItems = []; // Multi-select: array of selected record/group IDs
+let mergeSelectFab = null; // Floating action button for multi-select merge
 const DRAG_DELAY_MS = 300; // Delay before drag buckets appear (ms)
 
 // Merge dwell-time tracking - hover over an item for a moment to trigger merge
@@ -475,6 +479,7 @@ function ensureDOMElements() {
     // Merge mode elements (overlay + banner for merge target selection)
     mergeModeOverlay = document.getElementById('merge-mode-overlay');
     mergeModeBanner = document.getElementById('merge-mode-banner');
+    mergeSelectFab = document.getElementById('merge-select-fab');
 
     // Merge options dialog
     mergeOptionsDialog = document.getElementById('merge-options-dialog');
@@ -2834,11 +2839,48 @@ function getCompactCardSourceType(recordId, record) {
  */
 async function renderCompactCard(item) {
     const { recordId, type, itemStatus = 'active' } = item;
-    const record = getRecordById(recordId);
-    if (!record) return '';
+    let record = getRecordById(recordId);
+    console.log(`[CARD DEBUG] renderCompactCard called for: ${recordId} (type=${type}, status=${itemStatus})`);
+    console.log(`[CARD DEBUG]   record found: ${!!record}`, record ? `name="${record.fields?.Name}"` : 'NULL');
+    if (!record) {
+        // Attempt to recover custom items from solution records registry or cart info
+        const solutionRec = window._solutionRecords?.get(recordId);
+        const cartInfo = state.cart.lockedItems.get(recordId) || state.cart.items.get(recordId);
+        if (solutionRec) {
+            record = solutionRec;
+            console.log(`[CARD DEBUG]   Recovered from _solutionRecords: name="${record.fields?.Name}"`);
+        } else if (cartInfo && cartInfo._recordSnapshot) {
+            record = cartInfo._recordSnapshot;
+            console.log(`[CARD DEBUG]   Recovered from cart _recordSnapshot: name="${record.fields?.Name}"`);
+        } else if (cartInfo) {
+            // Build a minimal record from cart info for items that truly have no record
+            record = {
+                id: recordId,
+                fields: {
+                    Name: cartInfo.name || cartInfo.itemName || 'Custom Item',
+                    Description: cartInfo.description || '',
+                    _customImages: cartInfo._customImages || [],
+                    _hasAIGeneratedImage: cartInfo._hasAIGeneratedImage || false,
+                },
+                isManual: recordId.startsWith('manual-'),
+                isSolution: recordId.startsWith('solution-'),
+            };
+            console.log(`[CARD DEBUG]   Built minimal record from cart info: name="${record.fields.Name}"`);
+        }
+        if (!record) {
+            console.warn(`[CARD DEBUG]   ⚠️ SKIPPING ${recordId} - getRecordById returned null and no recovery possible!`);
+            console.log(`[CARD DEBUG]   state.records.all has ${state.records.all.length} records`);
+            console.log(`[CARD DEBUG]   Checking if record exists in state.records.all:`, state.records.all.some(r => r.id === recordId));
+            return '';
+        }
+    }
 
     // Skip combined source items
-    if (isItemCombinedSource(recordId)) return '';
+    const isCombinedSrc = isItemCombinedSource(recordId);
+    if (isCombinedSrc) {
+        console.log(`[CARD DEBUG]   ⚠️ SKIPPING ${recordId} - is a combined source item`);
+        return '';
+    }
 
     const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
 
@@ -3276,6 +3318,13 @@ function scheduleRenderAllItems() {
 }
 
 async function renderAllItems() {
+    console.log('[ITEMS DEBUG] ========== renderAllItems CALLED ==========');
+    console.log('[ITEMS DEBUG] state.cart.lockedItems.size:', state.cart.lockedItems.size);
+    console.log('[ITEMS DEBUG] state.cart.items.size:', state.cart.items.size);
+    console.log('[ITEMS DEBUG] lockedItem IDs:', Array.from(state.cart.lockedItems.keys()));
+    console.log('[ITEMS DEBUG] ideaItem IDs:', Array.from(state.cart.items.keys()));
+    console.log('[ITEMS DEBUG] itineraryItemsListEl exists:', !!itineraryItemsListEl);
+    console.log('[ITEMS DEBUG] itineraryItemsListEl tag:', itineraryItemsListEl?.tagName, 'id:', itineraryItemsListEl?.id);
     if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] renderAllItems called.', {
         lockedItemCount: state.cart.lockedItems.size,
         ideaItemCount: state.cart.items.size,
@@ -3285,6 +3334,11 @@ async function renderAllItems() {
     const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
     const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
     let combinedList = [...locked, ...favorites]; // Confirmed items first, then ideas
+
+    // Debug: Log combinedItems map that might be filtering items out
+    console.log('[ITEMS DEBUG] state.session.combinedItems:', state.session.combinedItems ?
+        { size: state.session.combinedItems.size, entries: Array.from(state.session.combinedItems.entries()).map(([t, e]) => ({ target: t, sources: Array.from(getSourcesFromEntry(e)) })) }
+        : 'null/undefined');
 
     // Get archived and completed items sets
     const archivedItems = state.session.archivedItems || new Set();
@@ -3325,6 +3379,11 @@ async function renderAllItems() {
 
     // Update toggle buttons visibility
     updateStatusToggles(archivedCount, completedCount);
+
+    console.log('[ITEMS DEBUG] combinedList after filtering:', combinedList.length, 'items');
+    combinedList.forEach((item, i) => {
+        console.log(`[ITEMS DEBUG]   [${i}] id=${item.recordId} type=${item.type} status=${item.itemStatus}`);
+    });
 
     if (combinedList.length === 0) {
         // Show enhanced empty state when no items exist
@@ -3432,16 +3491,20 @@ async function renderAllItems() {
             renderedGroupIds.add(itemGroup.id);
             try {
                 const html = await renderCompactGroupCard(itemGroup);
+                console.log(`[ITEMS DEBUG] Group card for ${itemGroup.id}: html=${html ? 'OK (' + html.length + ' chars)' : 'EMPTY'}`);
                 if (html) itemsHTML.push(html);
             } catch (groupErr) {
                 console.warn('[Presentation] Failed to render group card for', itemGroup.id, groupErr);
             }
         } else if (itemGroup && itemGroup.id && renderedGroupIds.has(itemGroup.id)) {
+            console.log(`[ITEMS DEBUG] Skipping ${item.recordId} - group ${itemGroup.id} already rendered`);
             continue; // Already rendered this group
         } else {
             try {
                 const html = await renderCompactCard(item);
+                console.log(`[ITEMS DEBUG] Card for ${item.recordId}: html=${html ? 'OK (' + html.length + ' chars)' : 'EMPTY'}`);
                 if (html) itemsHTML.push(html);
+                else console.warn(`[ITEMS DEBUG] ⚠️ renderCompactCard returned empty for ${item.recordId}`);
             } catch (cardErr) {
                 console.warn('[Presentation] Failed to render compact card for', item.recordId, cardErr);
             }
@@ -3461,6 +3524,12 @@ async function renderAllItems() {
     }
 
     itineraryItemsListEl.innerHTML = itemsHTML.join('');
+
+    // Quick render verification
+    if (PRES_DEBUG) {
+        const cards = itineraryItemsListEl.querySelectorAll('.compact-card');
+        console.log('[RENDER DEBUG] renderAllItems: itemsHTML entries:', itemsHTML.length, 'DOM cards:', cards.length);
+    }
 
     // After entrance animations complete, remove will-change to free GPU memory
     setTimeout(() => {
@@ -3482,6 +3551,15 @@ async function renderAllItems() {
 
     // Update plan summary dashboard with latest metrics
     updatePlanSummaryDashboard();
+
+    // Re-apply vitality badges and pulse animations to newly rendered cards.
+    // Use setTimeout(0) instead of requestAnimationFrame to avoid the rAF firing
+    // during async card rendering (before innerHTML is set). setTimeout(0) ensures
+    // the recalc runs after the current call stack completes and DOM is settled.
+    setTimeout(() => {
+        console.log('[Vitality DEBUG] renderAllItems post-render recalc firing via setTimeout');
+        recalculateVitality();
+    }, 0);
 }
 
 // Initialize click handlers for compact cards in board view
@@ -3830,6 +3908,9 @@ async function initializeItemDragDrop() {
 
                     // Update the order in state
                     updateItemOrder();
+
+                    // Refresh vitality flow lines after reorder
+                    refreshFlowLines();
 
                 } catch (error) {
                     console.error('[Presentation] Exception in drag onEnd:', error);
@@ -6004,7 +6085,10 @@ function enterMergeMode(sourceRecordId) {
     isMergeModeActive = true;
     mergeModeSourceRecordId = sourceRecordId;
 
-    log('Presentation', `Entering merge mode for: ${sourceName} (${sourceRecordId})`);
+    // Initialize multi-select with the source item pre-selected
+    mergeSelectedItems = [sourceRecordId];
+
+    log('Presentation', `Entering multi-select merge mode for: ${sourceName} (${sourceRecordId})`);
 
     // Show overlay
     if (mergeModeOverlay) {
@@ -6014,9 +6098,11 @@ function enterMergeMode(sourceRecordId) {
         });
     }
 
-    // Show banner with source item name
+    // Show banner - update text for multi-select mode
+    const bannerLabel = document.getElementById('merge-mode-banner-label');
+    if (bannerLabel) bannerLabel.textContent = 'Tap items to select for merge';
     const sourceNameEl = document.getElementById('merge-mode-source-name');
-    if (sourceNameEl) sourceNameEl.textContent = `"${sourceName}"`;
+    if (sourceNameEl) sourceNameEl.textContent = `(${sourceName} selected)`;
     if (mergeModeBanner) {
         requestAnimationFrame(() => {
             mergeModeBanner.classList.add('active');
@@ -6029,18 +6115,9 @@ function enterMergeMode(sourceRecordId) {
         itineraryList.classList.add('merge-mode-active');
     }
 
-    // Mark the source item so it's visually dimmed
-    const sourceSection = document.querySelector(`.itinerary-item-section .itinerary-item[data-record-id="${sourceRecordId}"]`);
-    if (sourceSection) {
-        const section = sourceSection.closest('.itinerary-item-section');
-        if (section) section.classList.add('merge-mode-source');
-    }
-    // Board view: mark source card (either by record ID or group ID)
-    const sourceCard = document.querySelector(`.compact-card[data-record-id="${sourceRecordId}"]`) ||
-                       document.querySelector(`.compact-card-group[data-group-id="${sourceRecordId}"]`);
-    if (sourceCard) {
-        sourceCard.classList.add('merge-mode-source-card');
-    }
+    // Mark the source item as selected (not dimmed - it's part of the selection)
+    addMergeSelectCheckmarks();
+    markItemAsSelected(sourceRecordId, true);
 
     // Set up click handler on overlay to cancel
     if (mergeModeOverlay) {
@@ -6053,7 +6130,16 @@ function enterMergeMode(sourceRecordId) {
         cancelBtn.onclick = exitMergeMode;
     }
 
-    // Set up click handlers on target items
+    // Set up FAB click handler
+    if (mergeSelectFab) {
+        mergeSelectFab.onclick = () => {
+            if (mergeSelectedItems.length >= 2) {
+                openMergeDialogMulti(mergeSelectedItems);
+            }
+        };
+    }
+
+    // Set up click handlers for multi-select on target items
     if (itineraryList) {
         itineraryList._mergeModeClickHandler = (e) => {
             if (!isMergeModeActive) return;
@@ -6063,26 +6149,24 @@ function enterMergeMode(sourceRecordId) {
             const clickedCard = e.target.closest('.compact-card');
             let targetRecordId = null;
 
-            if (clickedSection && !clickedSection.classList.contains('merge-mode-source')) {
+            if (clickedSection) {
                 const article = clickedSection.querySelector('.itinerary-item');
                 targetRecordId = article?.dataset.recordId;
-            } else if (clickedCard && !clickedCard.classList.contains('merge-mode-source-card')) {
+            } else if (clickedCard) {
                 targetRecordId = clickedCard.dataset.recordId || clickedCard.dataset.groupId;
             }
 
-            if (targetRecordId && targetRecordId !== mergeModeSourceRecordId) {
+            if (targetRecordId) {
                 e.preventDefault();
                 e.stopPropagation();
-                const savedSource = mergeModeSourceRecordId;
-                exitMergeMode();
-                // Open the merge dialog to let user choose hybrid vs options
-                openMergeDialog(savedSource, targetRecordId);
+                toggleMergeSelection(targetRecordId);
             }
         };
         itineraryList.addEventListener('click', itineraryList._mergeModeClickHandler, true);
     }
 
-    showToast(`Select an item to merge with "${sourceName}"`, 'info');
+    updateMergeSelectFab();
+    showToast(`Select items to merge (${sourceName} already selected)`, 'info');
 }
 
 function exitMergeMode() {
@@ -6090,6 +6174,7 @@ function exitMergeMode() {
 
     isMergeModeActive = false;
     mergeModeSourceRecordId = null;
+    mergeSelectedItems = [];
 
     log('Presentation', 'Exiting merge mode');
 
@@ -6107,6 +6192,15 @@ function exitMergeMode() {
         mergeModeBanner.classList.remove('active');
     }
 
+    // Hide FAB
+    if (mergeSelectFab) {
+        mergeSelectFab.classList.remove('active');
+        setTimeout(() => {
+            if (mergeSelectFab) mergeSelectFab.style.display = 'none';
+        }, 300);
+        mergeSelectFab.onclick = null;
+    }
+
     // Remove merge-mode-active from items list
     const itineraryList = document.getElementById('itinerary-items-list');
     if (itineraryList) {
@@ -6118,16 +6212,272 @@ function exitMergeMode() {
         }
     }
 
-    // Remove source markers
-    const sourceMarkers = document.querySelectorAll('.merge-mode-source, .merge-mode-source-card');
-    sourceMarkers.forEach(el => {
-        el.classList.remove('merge-mode-source');
-        el.classList.remove('merge-mode-source-card');
+    // Remove all selection markers and checkmarks
+    const selectedMarkers = document.querySelectorAll('.merge-mode-selected, .merge-mode-selected-card, .merge-mode-source, .merge-mode-source-card');
+    selectedMarkers.forEach(el => {
+        el.classList.remove('merge-mode-selected', 'merge-mode-selected-card', 'merge-mode-source', 'merge-mode-source-card');
     });
+
+    // Remove all checkmark indicators
+    const checkmarks = document.querySelectorAll('.merge-select-check');
+    checkmarks.forEach(el => el.remove());
+}
+
+// =============================================================================
+// MULTI-SELECT MERGE HELPERS
+// =============================================================================
+
+// Toggle an item's selection state in multi-select merge mode
+function toggleMergeSelection(recordId) {
+    if (!isMergeModeActive || !recordId) return;
+
+    const index = mergeSelectedItems.indexOf(recordId);
+    if (index >= 0) {
+        // Deselect - but don't allow deselecting if it would leave < 1 item
+        if (mergeSelectedItems.length <= 1) return;
+        mergeSelectedItems.splice(index, 1);
+        markItemAsSelected(recordId, false);
+    } else {
+        // Select
+        mergeSelectedItems.push(recordId);
+        markItemAsSelected(recordId, true);
+    }
+
+    updateMergeSelectFab();
+    updateMergeModeBannerCount();
+}
+
+// Mark/unmark an item visually as selected
+function markItemAsSelected(recordId, selected) {
+    // List view: find the itinerary-item-section containing this record
+    const article = document.querySelector(`.itinerary-item[data-record-id="${recordId}"]`);
+    if (article) {
+        const section = article.closest('.itinerary-item-section');
+        if (section) {
+            if (selected) {
+                section.classList.add('merge-mode-selected');
+            } else {
+                section.classList.remove('merge-mode-selected');
+            }
+            // Update checkmark visual
+            const check = section.querySelector('.merge-select-check');
+            // Checkmark appearance is handled by CSS based on .merge-mode-selected class
+        }
+    }
+
+    // Board view: find compact card
+    const card = document.querySelector(`.compact-card[data-record-id="${recordId}"]`) ||
+                 document.querySelector(`.compact-card-group[data-group-id="${recordId}"]`);
+    if (card) {
+        if (selected) {
+            card.classList.add('merge-mode-selected-card');
+        } else {
+            card.classList.remove('merge-mode-selected-card');
+        }
+    }
+}
+
+// Add selection checkmark indicators to all items (called when entering merge mode)
+function addMergeSelectCheckmarks() {
+    // List view items
+    const itemSections = document.querySelectorAll('.itinerary-item-section');
+    itemSections.forEach(section => {
+        if (!section.querySelector('.merge-select-check')) {
+            const itemEl = section.querySelector('.itinerary-item');
+            if (itemEl) {
+                // Make section position relative so checkmark is positioned within
+                section.style.position = 'relative';
+                const check = document.createElement('div');
+                check.className = 'merge-select-check';
+                section.appendChild(check);
+            }
+        }
+    });
+
+    // Board view compact cards
+    const cards = document.querySelectorAll('.compact-card');
+    cards.forEach(card => {
+        if (!card.querySelector('.merge-select-check')) {
+            card.style.position = 'relative';
+            const check = document.createElement('div');
+            check.className = 'merge-select-check';
+            card.appendChild(check);
+        }
+    });
+}
+
+// Update the floating action button state and count
+function updateMergeSelectFab() {
+    if (!mergeSelectFab) return;
+
+    const count = mergeSelectedItems.length;
+    const countEl = document.getElementById('merge-select-fab-count');
+    if (countEl) countEl.textContent = count;
+
+    // Update FAB text
+    const textEl = mergeSelectFab.querySelector('.merge-select-fab-text');
+    if (textEl) {
+        textEl.innerHTML = `Merge <span id="merge-select-fab-count">${count}</span> items`;
+    }
+
+    if (count >= 2) {
+        mergeSelectFab.style.display = 'block';
+        requestAnimationFrame(() => {
+            mergeSelectFab.classList.add('active');
+        });
+    } else {
+        mergeSelectFab.classList.remove('active');
+        setTimeout(() => {
+            if (mergeSelectFab && mergeSelectedItems.length < 2) {
+                mergeSelectFab.style.display = 'none';
+            }
+        }, 300);
+    }
+}
+
+// Update the banner text to show selection count
+function updateMergeModeBannerCount() {
+    const bannerLabel = document.getElementById('merge-mode-banner-label');
+    const sourceNameEl = document.getElementById('merge-mode-source-name');
+    if (!bannerLabel) return;
+
+    const count = mergeSelectedItems.length;
+    if (count === 0) {
+        bannerLabel.textContent = 'Tap items to select for merge';
+        if (sourceNameEl) sourceNameEl.textContent = '';
+    } else if (count === 1) {
+        bannerLabel.textContent = 'Tap items to select for merge';
+        const name = getItemDisplayName(mergeSelectedItems[0]);
+        if (sourceNameEl) sourceNameEl.textContent = `(${name} selected)`;
+    } else {
+        bannerLabel.textContent = `${count} items selected`;
+        if (sourceNameEl) sourceNameEl.textContent = '- tap more or merge';
+    }
+}
+
+// Get a display name for a record or group ID
+function getItemDisplayName(recordId) {
+    if (!recordId) return 'Item';
+    if (recordId.startsWith('group-')) {
+        const group = state.session.relatedGroups?.find(g => g.id === recordId);
+        return group?.name || 'Group';
+    }
+    const record = getRecordById(recordId);
+    return record?.fields?.Name || 'Item';
+}
+
+// Open merge dialog for multiple selected items (N items, N >= 2)
+function openMergeDialogMulti(selectedIds) {
+    if (!selectedIds || selectedIds.length < 2) return;
+
+    // Save the selected items and exit merge mode UI (but don't clear the dialog state)
+    const itemsToMerge = [...selectedIds];
+    exitMergeMode();
+
+    // Resolve all record IDs (expand any groups)
+    let allRecordIds = [];
+    for (const id of itemsToMerge) {
+        if (id.startsWith('group-')) {
+            const group = state.session.relatedGroups?.find(g => g.id === id);
+            if (group?.items) allRecordIds.push(...group.items);
+        } else {
+            allRecordIds.push(id);
+            // If this item is already in a group, expand the whole group
+            const itemGroup = getItemGroup(id);
+            if (itemGroup) {
+                allRecordIds.push(...(itemGroup.items || []).filter(i => i !== id));
+            }
+        }
+    }
+    allRecordIds = [...new Set(allRecordIds)];
+
+    if (allRecordIds.length < 2) return;
+
+    // Use first two as source/target for the dialog's pending merge state
+    // (The actual merge will use all items)
+    pendingMergeSource = itemsToMerge[0];
+    pendingMergeTarget = itemsToMerge.length === 2 ? itemsToMerge[1] : itemsToMerge[1];
+    // Store ALL selected IDs for multi-item merge
+    pendingMergeAllItems = itemsToMerge;
+    pendingMergeEstimation = null;
+
+    // Build item names display for the dialog preview
+    const mergeItemsPreview = document.querySelector('.merge-dialog-items');
+    if (mergeItemsPreview) {
+        const itemPillsHTML = allRecordIds.map(id => {
+            const rec = getRecordById(id);
+            const name = rec?.fields?.Name || 'Item';
+            return `<div class="merge-item-preview"><span class="merge-item-name">${name}</span></div>`;
+        }).join('<span class="merge-plus-icon">+</span>');
+        mergeItemsPreview.innerHTML = itemPillsHTML;
+    }
+
+    // Update dialog title to reflect count
+    const dialogTitle = document.querySelector('.merge-dialog-title');
+    if (dialogTitle) {
+        dialogTitle.textContent = allRecordIds.length > 2 ? `Combine ${allRecordIds.length} Items` : 'Combine Items';
+    }
+
+    // Reset tabs to default (Options tab active)
+    const optionsTab = document.getElementById('merge-tab-options');
+    const hybridTab = document.getElementById('merge-tab-hybrid');
+    const optionsContent = document.getElementById('merge-tab-content-options');
+    const hybridContent = document.getElementById('merge-tab-content-hybrid');
+
+    if (optionsTab) optionsTab.classList.add('active');
+    if (hybridTab) hybridTab.classList.remove('active');
+    if (optionsContent) optionsContent.classList.add('active');
+    if (hybridContent) hybridContent.classList.remove('active');
+
+    // Update tab descriptions for item count
+    const optionsDesc = optionsContent?.querySelector('.merge-tab-description');
+    if (optionsDesc) {
+        optionsDesc.textContent = allRecordIds.length > 2
+            ? `Keep all ${allRecordIds.length} items as alternative choices under a shared category`
+            : 'Keep both items as alternative choices under a shared category';
+    }
+    const hybridDesc = hybridContent?.querySelector('.merge-tab-description');
+    if (hybridDesc) {
+        hybridDesc.textContent = allRecordIds.length > 2
+            ? `Blend all ${allRecordIds.length} items into a single, new hybrid idea`
+            : 'Blend both items into a single, new hybrid idea';
+    }
+
+    // Reset both estimation panels to loading state
+    ['options', 'hybrid'].forEach(type => {
+        const panel = document.getElementById(`merge-estimation-${type}`);
+        if (panel) {
+            const loading = panel.querySelector('.merge-estimation-loading');
+            const result = panel.querySelector('.merge-estimation-result');
+            if (loading) loading.style.display = 'flex';
+            if (result) result.style.display = 'none';
+        }
+    });
+
+    // Show the dialog
+    const dialog = mergeOptionsDialog || document.getElementById('merge-options-dialog');
+    if (dialog) {
+        dialog.style.display = 'flex';
+    }
+
+    log('Presentation', `Multi-select merge dialog opened for ${allRecordIds.length} items`);
+
+    // Fetch AI estimation in background using all items
+    const allItems = allRecordIds.map(id => {
+        const rec = getRecordById(id);
+        return {
+            name: rec?.fields?.Name || 'Item',
+            description: rec?.fields?.Description || '',
+            category: rec?.fields?.Category || '',
+            price: rec?.fields?.Price || ''
+        };
+    });
+    fetchMergeEstimationMulti(allItems);
 }
 
 // Store for pending merge estimations
 let pendingMergeEstimation = null;
+let pendingMergeAllItems = null; // Array of all selected item IDs for multi-select merge
 
 // Execute merge directly based on the drop zone (no dialog)
 // zone: 'hybrid' = merge as hybrid, 'options' = add as option
@@ -6605,6 +6955,7 @@ function closeMergeDialog() {
     pendingMergeSource = null;
     pendingMergeTarget = null;
     pendingMergeEstimation = null;
+    pendingMergeAllItems = null;
 }
 
 // Handle merge option: Combine into single idea (As Hybrid)
@@ -6617,20 +6968,80 @@ async function handleMergeCombine() {
     const sourceId = pendingMergeSource;
     const targetId = pendingMergeTarget;
     const hybridEstimation = pendingMergeEstimation?.hybrid || null;
+    const allSelectedIds = pendingMergeAllItems ? [...pendingMergeAllItems] : null;
     closeMergeDialog();
 
-    // Route through group-aware executeMergeByZone for multi-item support
-    // For simple 2-item case with no groups, this still works correctly
+    // Multi-select merge path: 3+ distinct items selected
+    if (allSelectedIds && allSelectedIds.length > 2) {
+        // Resolve all record IDs from the selected items (expand groups)
+        let allRecordIds = [];
+        for (const id of allSelectedIds) {
+            if (id.startsWith('group-')) {
+                const group = state.session.relatedGroups?.find(g => g.id === id);
+                if (group?.items) allRecordIds.push(...group.items);
+            } else {
+                allRecordIds.push(id);
+                const itemGroup = getItemGroup(id);
+                if (itemGroup) {
+                    allRecordIds.push(...(itemGroup.items || []).filter(i => i !== id));
+                }
+            }
+        }
+        allRecordIds = [...new Set(allRecordIds)];
+
+        if (allRecordIds.length >= 2) {
+            const primaryTargetId = allRecordIds[0];
+            // Combine each item into the primary target
+            for (const id of allRecordIds) {
+                if (id !== primaryTargetId) {
+                    await combineItemsIntoOne(id, primaryTargetId, null);
+                }
+            }
+
+            // Fetch AI estimation in background
+            const allItems = allRecordIds.map(id => {
+                const rec = getRecordById(id);
+                return {
+                    name: rec?.fields?.Name || 'Item',
+                    description: rec?.fields?.Description || '',
+                    category: rec?.fields?.Category || '',
+                    price: rec?.fields?.Price || ''
+                };
+            });
+            fetchEstimationMulti(allItems, 'hybrid').then(result => {
+                if (result?.estimation && state.session.combinedItems) {
+                    let actualTarget = primaryTargetId;
+                    for (const [target, data] of state.session.combinedItems.entries()) {
+                        const sources = data instanceof Set ? data : (data.sources || new Set());
+                        if (sources.has(primaryTargetId)) {
+                            actualTarget = target;
+                            break;
+                        }
+                    }
+                    const entry = state.session.combinedItems.get(actualTarget);
+                    if (entry && !(entry instanceof Set)) {
+                        entry.hybridData = result.estimation;
+                        scheduleRenderAllItems();
+                        triggerSave();
+                        log('Presentation', `Updated multi-select hybrid "${actualTarget}" with AI estimation`);
+                    }
+                }
+            }).catch(err => {
+                console.warn('[Presentation] Background multi-select hybrid estimation failed:', err.message);
+            });
+        }
+        return;
+    }
+
+    // Standard 2-item or group-based merge path
     const isSourceGroup = sourceId.startsWith('group-');
     const isTargetGroup = targetId.startsWith('group-');
     const sourceGroup = !isSourceGroup ? getItemGroup(sourceId) : null;
     const targetGroup = !isTargetGroup ? getItemGroup(targetId) : null;
 
     if (isSourceGroup || isTargetGroup || sourceGroup || targetGroup) {
-        // Multi-item case - use executeMergeByZone which handles groups
         await executeMergeByZone(sourceId, targetId, 'hybrid');
     } else {
-        // Simple 2-item case with estimation
         await combineItemsIntoOne(sourceId, targetId, hybridEstimation);
     }
 }
@@ -6645,16 +7056,68 @@ async function handleMergeGroup() {
     const sourceId = pendingMergeSource;
     const targetId = pendingMergeTarget;
     const optionsEstimation = pendingMergeEstimation?.options || null;
+    const allSelectedIds = pendingMergeAllItems ? [...pendingMergeAllItems] : null;
     closeMergeDialog();
 
-    // Route through group-aware path for multi-item support
+    // Multi-select merge path: 3+ distinct items selected
+    if (allSelectedIds && allSelectedIds.length > 2) {
+        // Resolve all record IDs from the selected items (expand groups)
+        let allRecordIds = [];
+        for (const id of allSelectedIds) {
+            if (id.startsWith('group-')) {
+                const group = state.session.relatedGroups?.find(g => g.id === id);
+                if (group?.items) allRecordIds.push(...group.items);
+            } else {
+                allRecordIds.push(id);
+                const itemGroup = getItemGroup(id);
+                if (itemGroup) {
+                    allRecordIds.push(...(itemGroup.items || []).filter(i => i !== id));
+                }
+            }
+        }
+        allRecordIds = [...new Set(allRecordIds)];
+
+        if (allRecordIds.length >= 2) {
+            await createRelatedCategoryMulti(allRecordIds, optionsEstimation);
+
+            // Fetch AI estimation in background
+            const allItems = allRecordIds.map(id => {
+                const rec = getRecordById(id);
+                return {
+                    name: rec?.fields?.Name || 'Item',
+                    description: rec?.fields?.Description || '',
+                    category: rec?.fields?.Category || '',
+                    price: rec?.fields?.Price || ''
+                };
+            });
+            fetchEstimationMulti(allItems, 'options').then(result => {
+                if (result?.estimation && state.session.relatedGroups) {
+                    const group = state.session.relatedGroups.find(g => {
+                        const items = Array.isArray(g) ? g : (g.items || []);
+                        return allRecordIds.every(id => items.includes(id));
+                    });
+                    if (group && !Array.isArray(group)) {
+                        if (result.estimation.categoryName) group.name = result.estimation.categoryName;
+                        if (result.estimation.categoryDescription) group.description = result.estimation.categoryDescription;
+                        scheduleRenderAllItems();
+                        triggerSave();
+                        log('Presentation', `Updated multi-select options group with AI estimation`);
+                    }
+                }
+            }).catch(err => {
+                console.warn('[Presentation] Background multi-select options estimation failed:', err.message);
+            });
+        }
+        return;
+    }
+
+    // Standard 2-item or group-based merge path
     const isSourceGroup = sourceId.startsWith('group-');
     const isTargetGroup = targetId.startsWith('group-');
     const sourceGroup = !isSourceGroup ? getItemGroup(sourceId) : null;
     const targetGroup = !isTargetGroup ? getItemGroup(targetId) : null;
 
     if (isSourceGroup || isTargetGroup || sourceGroup || targetGroup) {
-        // Multi-item case - resolve all items and create merged group
         let sourceRecordIds = [];
         if (isSourceGroup) {
             const sg = state.session.relatedGroups?.find(g => g.id === sourceId);
@@ -6676,7 +7139,6 @@ async function handleMergeGroup() {
         const allRecordIds = [...new Set([...sourceRecordIds, ...targetRecordIds])];
         await createRelatedCategoryMulti(allRecordIds, optionsEstimation);
     } else {
-        // Simple 2-item case with estimation
         await createRelatedCategory(sourceId, targetId, optionsEstimation);
     }
 }
@@ -11853,6 +12315,10 @@ export async function showPresentationView(listType, startRecordId = null) {
     initializeUnifiedChatPanel();
     showUnifiedChatPanel();
 
+    // Initialize the Universal Vitality UI system (pulse/aura, Net Emoji, flow lines)
+    // NOTE: Only register event listeners here. Actual recalc happens AFTER cards are rendered.
+    initVitalityUI();
+
     // Fetch tasks for this project if not already loaded (critical for comment-task linking)
     // This ensures comment-created tasks are visible when page is refreshed or link is shared
     const projectId = state.session.id;
@@ -11906,6 +12372,10 @@ export async function showPresentationView(listType, startRecordId = null) {
     await renderRsvpSection(); // Render RSVP buttons and list for events
     await renderAllItems();
 
+    // Vitality recalculation is now handled inside renderAllItems() itself
+    // via a setTimeout(0) call that fires after innerHTML is set, ensuring
+    // cards are in the DOM when applyCardPulses() queries for them.
+
     // Render goal chips in header and set up regenerate button
     renderGoalChips();
     initializePlanFocusHandlers();
@@ -11916,30 +12386,40 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Update the plan summary dashboard
     updatePlanSummaryDashboard();
 
-    // Show modal
+    // Show modal - let CSS handle display via .active class
+    // CSS: .presentation-fullpage.active { display: flex }
+    // CSS: .presentation-fullpage.active.ucp-open { display: grid } (for side panel layout)
+    // IMPORTANT: Do NOT set modal.style.display here - inline styles override CSS class rules
+    // and prevent the grid layout from activating when ucp-open is present
+
+    // Remove early-loading optimization class BEFORE adding .active
+    // The loading CSS has `display: flex !important` which would override the grid layout
+    document.body.classList.remove('presentation-loading');
+    document.documentElement.classList.remove('presentation-loading');
+
     modal.classList.add('active');
-    modal.style.display = 'flex';
+    modal.style.display = ''; // Clear any leftover inline display style
     document.body.classList.add('modal-open');
     document.body.classList.add('presentation-active');
     document.documentElement.classList.add('presentation-active');
-    if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] Modal shown. Classes:', modal.className, 'Display:', modal.style.display);
+    if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] Modal shown. Classes:', modal.className, 'Computed display:', getComputedStyle(modal).display);
 
-    // Debug: Log z-index layering info for presentation view components
-    const wtfPanel = document.getElementById('wtf-plans-panel');
-    const wtfOverlay = document.getElementById('wtf-plans-panel-overlay');
-    console.log('[PRES-MENU DEBUG] Presentation view activated - layering state:', {
-        presentationModalZIndex: getComputedStyle(modal).zIndex,
-        presentationModalDisplay: getComputedStyle(modal).display,
-        wtfPanelComputedDisplay: wtfPanel ? getComputedStyle(wtfPanel).display : 'N/A',
-        wtfPanelComputedZIndex: wtfPanel ? getComputedStyle(wtfPanel).zIndex : 'N/A',
-        wtfOverlayComputedDisplay: wtfOverlay ? getComputedStyle(wtfOverlay).display : 'N/A',
-        wtfOverlayComputedZIndex: wtfOverlay ? getComputedStyle(wtfOverlay).zIndex : 'N/A',
-        bodyClasses: document.body.className,
-        hamburgerBtnExists: !!document.getElementById('presentation-back-btn'),
+    // === LAYOUT DEBUG: Verify layout is correct after modal activation ===
+    requestAnimationFrame(() => {
+        const contentEl = modal.querySelector('.presentation-content');
+        const ucpPanel = document.getElementById('unified-chat-panel');
+        const modalComputed = getComputedStyle(modal);
+        if (PRES_DEBUG) {
+            console.log('[LAYOUT DEBUG] Post-activation:', {
+                display: modalComputed.display,
+                gridCols: modalComputed.gridTemplateColumns,
+                contentHeight: contentEl ? contentEl.offsetHeight : 'N/A',
+                ucpWidth: ucpPanel ? ucpPanel.offsetWidth : 'N/A',
+                classes: modal.className
+            });
+        }
     });
-    // Remove early-loading optimization class now that presentation is properly initialized
-    document.body.classList.remove('presentation-loading');
-    document.documentElement.classList.remove('presentation-loading');
+
     document.addEventListener('keydown', handleKeyDown);
 
     // Show drag buckets (grayed out initially, colorize on drag)
@@ -11979,6 +12459,9 @@ export function hidePresentationView() {
 
     // Unregister sync callback when closing presentation view
     unregisterSyncCallback('presentation');
+
+    // Clean up Vitality UI (flow lines, etc.)
+    cleanupVitalityUI();
 
     // Hide the Unified Chat Panel
     hideUnifiedChatPanel();
@@ -12031,7 +12514,7 @@ export function hidePresentationView() {
     }
 
     modal.classList.remove('active');
-    modal.style.display = 'none';
+    modal.style.display = ''; // Clear any inline display style; CSS handles hiding via .active removal
     document.body.classList.remove('modal-open');
     document.body.classList.remove('presentation-active');
     document.documentElement.classList.remove('presentation-active');
@@ -12061,6 +12544,12 @@ export function setupPresentationEventListeners() {
     // Listen for user login/logout events to update the account button and collaborators
     document.addEventListener('userLoggedIn', handlePresentationUserLogin);
     document.addEventListener('userLoggedOut', updatePresentationAccountButton);
+
+    // Listen for navigateToCatalog event (from WTF Plans panel "Browse Catalog" button)
+    document.addEventListener('navigateToCatalog', () => {
+        log('Presentation', 'navigateToCatalog event received — closing presentation view');
+        hidePresentationView();
+    });
 
     // Handle window resize for background canvas
     window.addEventListener('resize', () => {

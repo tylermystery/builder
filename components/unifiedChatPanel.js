@@ -67,6 +67,7 @@ export async function showUnifiedChatPanel() {
     if (overlay) {
         overlay.classList.add('ucp-open');
     }
+    const ucpPanel = document.getElementById('unified-chat-panel');
     document.body.classList.add('ucp-panel-active');
     panelOpen = true;
     shouldScrollToBottom = true;

@@ -6267,23 +6267,24 @@ body.presentation-active #chat-widget {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 7px 16px;
-    background: rgba(255, 255, 255, 0.15);
-    border: 1px dashed rgba(255, 255, 255, 0.35);
+    padding: 10px 20px;
+    background: rgba(255, 255, 255, 0.25);
+    border: 2px dashed rgba(255, 255, 255, 0.6);
     border-radius: 20px;
-    font-size: 0.9em;
-    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.95em;
+    color: rgba(255, 255, 255, 0.95);
     cursor: pointer;
     transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
     white-space: nowrap;
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 
 .presentation-add-item-btn:hover {
-    background: rgba(255, 255, 255, 0.25);
-    border-color: rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.35);
+    border-color: rgba(255, 255, 255, 0.8);
     transform: translateY(-1px);
-    color: rgba(255, 255, 255, 0.95);
+    color: #fff;
 }
 
 .presentation-add-item-btn .add-icon {
@@ -6982,6 +6983,141 @@ body:not(.presentation-active) .drag-merge-indicator {
     position: relative;
     z-index: 9050;
     cursor: pointer;
+}
+
+/* =====================================================
+   MULTI-SELECT MERGE MODE
+   ===================================================== */
+
+/* Selected item checkmark indicator */
+.merge-select-check {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #00968880, #00796b80);
+    border: 2px solid rgba(0, 150, 136, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    transition: all 0.2s ease;
+    pointer-events: none;
+}
+
+.merge-select-check::after {
+    content: '';
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: transparent;
+    transition: background 0.2s ease;
+}
+
+/* When the item is selected, fill in the check */
+.merge-mode-selected .merge-select-check {
+    background: linear-gradient(135deg, #009688, #00796b);
+    border-color: #4dd0c1;
+    box-shadow: 0 2px 8px rgba(0, 150, 136, 0.5);
+}
+
+.merge-mode-selected .merge-select-check::after {
+    content: '\2713';
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    background: transparent;
+    width: auto;
+    height: auto;
+    border-radius: 0;
+}
+
+/* Selected item visual state */
+.merge-mode-active .itinerary-item-section.merge-mode-selected .itinerary-item,
+.merge-mode-active .itinerary-item-section.merge-mode-selected .compact-card {
+    border: 2px solid rgba(0, 150, 136, 1) !important;
+    box-shadow: 0 0 16px rgba(0, 150, 136, 0.4), 0 0 32px rgba(0, 150, 136, 0.15) !important;
+    animation: none !important;
+    background: rgba(0, 150, 136, 0.08);
+}
+
+/* Board view: selected card */
+.merge-mode-active .compact-card.merge-mode-selected-card {
+    border: 2px solid rgba(0, 150, 136, 1) !important;
+    box-shadow: 0 0 16px rgba(0, 150, 136, 0.4) !important;
+    animation: none !important;
+    position: relative;
+}
+
+.merge-mode-selected-card .merge-select-check {
+    background: linear-gradient(135deg, #009688, #00796b);
+    border-color: #4dd0c1;
+    box-shadow: 0 2px 8px rgba(0, 150, 136, 0.5);
+}
+
+.merge-mode-selected-card .merge-select-check::after {
+    content: '\2713';
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    background: transparent;
+    width: auto;
+    height: auto;
+    border-radius: 0;
+}
+
+/* Floating Action Button for multi-select merge */
+.merge-select-fab {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    z-index: 9200;
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+}
+
+.merge-select-fab.active {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
+}
+
+.merge-select-fab-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 28px;
+    background: linear-gradient(135deg, #009688, #00796b);
+    color: white;
+    border-radius: 30px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 6px 24px rgba(0, 150, 136, 0.5), 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.merge-select-fab-content:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 32px rgba(0, 150, 136, 0.6), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.merge-select-fab-content:active {
+    transform: scale(0.98);
+}
+
+.merge-select-fab-icon {
+    font-size: 20px;
+}
+
+.merge-select-fab-text {
+    letter-spacing: 0.3px;
 }
 
 /* =====================================================
@@ -13755,4 +13891,284 @@ hr.total-divider {
 
 /* ============================================
    END IMAGE FALLBACK STYLES
+   ============================================ */
+
+/* =============================================================================
+   UNIVERSAL VITALITY - PULSE & AURA SYSTEM
+   Realm-specific animations on item cards, driven by CSS Custom Properties.
+   --vitality-intensity: 0.0-1.0 (from fidelity multiplier / confidence tier)
+   --vitality-delay: animation-delay in seconds (for synergy synchronization)
+   --vitality-realm: dominant realm for coloring
+   ============================================================================= */
+
+/* --- CSS Custom Property Defaults --- */
+.vitality-pulse-card {
+    --vitality-intensity: 0.5;
+    --vitality-delay: 0s;
+    --vitality-hue: 142;        /* default green (planetary) */
+    --vitality-sat: 70%;
+    --vitality-light: 50%;
+}
+
+/* --- Keyframe Animations per Realm --- */
+
+/* Planetary (🌍): Green / Heartbeat pulse */
+@keyframes vitality-heartbeat {
+    0%, 100% {
+        box-shadow: 0 0 0 0 hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), 0);
+    }
+    15% {
+        box-shadow: 0 0 0 calc(4px * var(--vitality-intensity)) hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), calc(0.5 * var(--vitality-intensity)));
+    }
+    30% {
+        box-shadow: 0 0 0 0 hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), 0);
+    }
+    45% {
+        box-shadow: 0 0 0 calc(6px * var(--vitality-intensity)) hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), calc(0.35 * var(--vitality-intensity)));
+    }
+    60% {
+        box-shadow: 0 0 0 0 hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), 0);
+    }
+}
+
+/* Collective (👥): Gold / Radiating ripple */
+@keyframes vitality-ripple {
+    0% {
+        box-shadow: 0 0 0 0 hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), calc(0.4 * var(--vitality-intensity)));
+    }
+    100% {
+        box-shadow: 0 0 0 calc(12px * var(--vitality-intensity)) hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), 0);
+    }
+}
+
+/* Cosmological (🌌): Blue / Shimmering vibration */
+@keyframes vitality-shimmer {
+    0%, 100% {
+        box-shadow:
+            0 0 calc(2px * var(--vitality-intensity)) hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), calc(0.2 * var(--vitality-intensity))),
+            0 0 calc(6px * var(--vitality-intensity)) hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), calc(0.1 * var(--vitality-intensity)));
+    }
+    25% {
+        box-shadow:
+            0 0 calc(4px * var(--vitality-intensity)) hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), calc(0.35 * var(--vitality-intensity))),
+            0 0 calc(10px * var(--vitality-intensity)) hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), calc(0.15 * var(--vitality-intensity)));
+    }
+    50% {
+        box-shadow:
+            0 0 calc(3px * var(--vitality-intensity)) hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), calc(0.25 * var(--vitality-intensity))),
+            0 0 calc(8px * var(--vitality-intensity)) hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), calc(0.12 * var(--vitality-intensity)));
+    }
+    75% {
+        box-shadow:
+            0 0 calc(5px * var(--vitality-intensity)) hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), calc(0.3 * var(--vitality-intensity))),
+            0 0 calc(12px * var(--vitality-intensity)) hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), calc(0.08 * var(--vitality-intensity)));
+    }
+}
+
+/* Internal (🍄): Pink / Soft glow pulse */
+@keyframes vitality-glow {
+    0%, 100% {
+        box-shadow: 0 0 calc(3px * var(--vitality-intensity)) hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), calc(0.15 * var(--vitality-intensity)));
+    }
+    50% {
+        box-shadow: 0 0 calc(8px * var(--vitality-intensity)) hsla(var(--vitality-hue), var(--vitality-sat), var(--vitality-light), calc(0.4 * var(--vitality-intensity)));
+    }
+}
+
+/* Extractive (negative vitality): Red / Warning throb */
+@keyframes vitality-drain {
+    0%, 100% {
+        box-shadow: 0 0 0 0 hsla(0, 70%, 55%, 0);
+    }
+    50% {
+        box-shadow: 0 0 0 calc(3px * var(--vitality-intensity)) hsla(0, 70%, 55%, calc(0.3 * var(--vitality-intensity)));
+    }
+}
+
+/* --- Realm Animation Classes --- */
+.vitality-pulse-card.vitality-realm-planetary {
+    --vitality-hue: 142;
+    --vitality-sat: 70%;
+    --vitality-light: 45%;
+    animation: vitality-heartbeat 1.8s ease-in-out infinite;
+    animation-delay: var(--vitality-delay);
+}
+
+.vitality-pulse-card.vitality-realm-collective {
+    --vitality-hue: 42;
+    --vitality-sat: 90%;
+    --vitality-light: 50%;
+    animation: vitality-ripple 2.2s ease-out infinite;
+    animation-delay: var(--vitality-delay);
+}
+
+.vitality-pulse-card.vitality-realm-cosmological {
+    --vitality-hue: 230;
+    --vitality-sat: 75%;
+    --vitality-light: 55%;
+    animation: vitality-shimmer 3s ease-in-out infinite;
+    animation-delay: var(--vitality-delay);
+}
+
+.vitality-pulse-card.vitality-realm-internal {
+    --vitality-hue: 330;
+    --vitality-sat: 70%;
+    --vitality-light: 55%;
+    animation: vitality-glow 2.5s ease-in-out infinite;
+    animation-delay: var(--vitality-delay);
+}
+
+.vitality-pulse-card.vitality-drain {
+    animation: vitality-drain 1.5s ease-in-out infinite;
+    animation-delay: var(--vitality-delay);
+}
+
+/* --- Reduced Motion --- */
+@media (prefers-reduced-motion: reduce) {
+    .vitality-pulse-card {
+        animation: none !important;
+    }
+}
+
+/* --- Net Emoji Morph Container (Header) --- */
+.net-emoji-morph-container {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    overflow: hidden;
+}
+
+.net-emoji-morph-container .net-emoji-layer {
+    position: absolute;
+    font-size: 2em;
+    line-height: 1;
+    transition: opacity 0.35s ease-in-out, transform 0.35s ease-in-out;
+    will-change: opacity, transform;
+}
+
+.net-emoji-morph-container .net-emoji-layer.emoji-entering {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+}
+
+.net-emoji-morph-container .net-emoji-layer.emoji-exiting {
+    opacity: 0;
+    transform: scale(0.7) rotate(-15deg);
+}
+
+.net-emoji-morph-container .net-emoji-layer.emoji-hidden {
+    opacity: 0;
+    transform: scale(0.7) rotate(15deg);
+}
+
+/* --- Vitality Score Badge (on cards) --- */
+.vitality-score-badge {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    color: #fff;
+    font-size: 0.7em;
+    z-index: 2;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.vitality-score-badge .vitality-emoji {
+    font-size: 1.2em;
+    line-height: 1;
+}
+
+.vitality-score-badge .vitality-label {
+    font-size: 0.85em;
+    opacity: 0.9;
+    white-space: nowrap;
+}
+
+/* --- SVG Synergy Flow Lines Overlay --- */
+.vitality-flow-lines-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+    overflow: visible;
+}
+
+.vitality-flow-line {
+    fill: none;
+    stroke: rgba(245, 158, 11, 0.4);
+    stroke-width: 2;
+    stroke-dasharray: 8 4;
+    stroke-linecap: round;
+    animation: vitality-flow-dash 1.5s linear infinite;
+}
+
+@keyframes vitality-flow-dash {
+    to {
+        stroke-dashoffset: -24;
+    }
+}
+
+/* --- Vitality Header Section --- */
+.vitality-header-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 12px;
+}
+
+.vitality-header-label {
+    font-size: 0.7em;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* --- Time Scope Selector --- */
+.vitality-time-scope-selector {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.7em;
+    cursor: pointer;
+    transition: background 0.2s;
+    user-select: none;
+}
+
+.vitality-time-scope-selector:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.vitality-time-scope-selector select {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-size: inherit;
+    cursor: pointer;
+    outline: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    padding-right: 12px;
+}
+
+/* ============================================
+   END UNIVERSAL VITALITY STYLES
    ============================================ */
