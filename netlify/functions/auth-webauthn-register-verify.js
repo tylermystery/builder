@@ -58,8 +58,9 @@ exports.handler = async (event) => {
         const challengeRecord = challengeData.records[0];
         const expectedChallenge = challengeRecord.fields.Challenge;
 
-        // Check if challenge is expired
-        if (new Date() > new Date(challengeRecord.fields.ExpiresAt)) {
+        // Check if challenge is expired (ExpiresAt is stored as Unix timestamp in seconds)
+        const currentTimestamp = Math.floor(Date.now() / 1000);
+        if (currentTimestamp > challengeRecord.fields.ExpiresAt) {
             // Clean up expired challenge
             await fetch(`https://api.airtable.com/v0/${BASE_ID}/WebAuthnChallenges/${challengeRecord.id}`, {
                 method: 'DELETE',
@@ -109,27 +110,57 @@ exports.handler = async (event) => {
 
         // Store the credential in Airtable
         const createPasskeyUrl = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(PASSKEYS_TABLE)}`;
+
+        // Build the passkey record - note: CreatedAt uses Unix timestamp for Airtable Number field compatibility
+        const passkeyRecord = {
+            records: [{
+                fields: {
+                    UserId: userId,
+                    CredentialId: rawId,
+                    PublicKey: credentialResponse.attestationObject,
+                    Counter: 0,
+                    Transports: JSON.stringify(credential.transports || ['internal']),
+                    CreatedAt: Math.floor(Date.now() / 1000), // Unix timestamp in seconds
+                    DeviceName: credential.deviceName || 'Unknown Device'
+                }
+            }]
+        };
+
+        console.log('[webauthn-register-verify] Storing passkey with fields:', {
+            UserId: userId,
+            CredentialIdLength: rawId?.length,
+            PublicKeyLength: credentialResponse.attestationObject?.length,
+            Counter: 0,
+            Transports: JSON.stringify(credential.transports || ['internal']),
+            CreatedAt: passkeyRecord.records[0].fields.CreatedAt,
+            CreatedAtType: typeof passkeyRecord.records[0].fields.CreatedAt,
+            DeviceName: credential.deviceName || 'Unknown Device'
+        });
+
         const passkeyRes = await fetch(createPasskeyUrl, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                records: [{
-                    fields: {
-                        UserId: userId,
-                        CredentialId: rawId,
-                        PublicKey: credentialResponse.attestationObject,
-                        Counter: 0,
-                        Transports: JSON.stringify(credential.transports || ['internal']),
-                        CreatedAt: new Date().toISOString(),
-                        DeviceName: credential.deviceName || 'Unknown Device'
-                    }
-                }]
-            })
+            body: JSON.stringify(passkeyRecord)
         });
 
         if (!passkeyRes.ok) {
-            const errorData = await passkeyRes.json();
-            console.error('[webauthn-register-verify] Failed to store passkey:', errorData);
+            const errorText = await passkeyRes.text();
+            console.error('[webauthn-register-verify] Airtable error status:', passkeyRes.status);
+            console.error('[webauthn-register-verify] Airtable error response:', errorText);
+
+            // Try to parse as JSON for detailed error info
+            try {
+                const errorJson = JSON.parse(errorText);
+                console.error('[webauthn-register-verify] Airtable error details:', JSON.stringify(errorJson, null, 2));
+
+                // Check for specific field errors
+                if (errorJson.error?.message) {
+                    throw new Error(`Failed to store passkey: ${errorJson.error.message}`);
+                }
+            } catch (parseErr) {
+                // If not JSON, just use the text
+            }
+
             throw new Error('Failed to store passkey');
         }
 
