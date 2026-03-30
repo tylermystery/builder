@@ -28,6 +28,7 @@ export let state = {
         all: [],
         filtered: [],
         archive: [], // Ghost items (archived/deleted items referenced in session history)
+        _byId: null, // Lazy-built Map<id, record> index for O(1) lookups
     },
     cart: {
         items: new Map(),       // \"Ideas\" (formerly Favorites), populated by \"Save for Later\"
@@ -97,6 +98,31 @@ export let state = {
     },
 };
 
+/**
+ * Get a record by ID using a lazily-built index for O(1) lookups.
+ * Falls back to linear search if the index is stale.
+ * @param {string} id - The record ID
+ * @returns {Object|undefined} The record, or undefined if not found
+ */
+export function getRecordById(id) {
+    if (!id) return undefined;
+    // Build index lazily on first access or when invalidated
+    if (!state.records._byId) {
+        state.records._byId = new Map();
+        for (const r of state.records.all) {
+            if (r && r.id) state.records._byId.set(r.id, r);
+        }
+    }
+    return state.records._byId.get(id);
+}
+
+/**
+ * Invalidate the records-by-id index. Call this whenever state.records.all changes.
+ */
+export function invalidateRecordsIndex() {
+    state.records._byId = null;
+}
+
 export function setState(newState) {
     // Defensive check: ensure newState is a valid object
     if (!newState || typeof newState !== 'object') {
@@ -121,7 +147,8 @@ export function setState(newState) {
     if (newState.records) {
         updatedState.records = {
             ...state.records,
-            ...newState.records
+            ...newState.records,
+            _byId: null // Invalidate index when records change
         };
     }
 

@@ -1,6 +1,7 @@
 // REPLACE THE ENTIRE CONTENTS of events.js
+console.log('[MODULE DEBUG] events.js module starting to load...', performance.now().toFixed(2) + 'ms');
 
-import { state, setState } from './state.js';
+import { state, setState, invalidateRecordsIndex } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
@@ -19,6 +20,8 @@ import { initializeProjectSelector, wasLongPress, resetLongPress } from './compo
 import { broadcastItemAdded, broadcastItemRemoved } from './utils/realtimeUpdates.js';
 import { showWtfPlansPanel, initializeWtfPlansPanel } from './components/wtfPlansPanel.js';
 import { syncPlanState, initializePlanStateSync } from './utils/planStateSync.js';
+
+console.log('[MODULE DEBUG] events.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
 let mainDatePicker = null;
 let saveTimeout = null;
@@ -97,13 +100,18 @@ function loadMoreRecords(imageCache) {
     if (state.ui.isLoadingMore) return;
     const start = state.ui.recordsCurrentlyDisplayed;
     const end = start + RECORDS_PER_LOAD;
-    const recordsToLoad = state.records.filtered.slice(start, end);
+    let recordsToLoad = state.records.filtered.slice(start, end);
+    // Skip any Grouping records in load-more batches — they are rendered as carousels in the initial render
+    recordsToLoad = recordsToLoad.filter(r => r.fields['Item Type'] !== 'Grouping');
     if (recordsToLoad.length > 0) {
         state.ui.isLoadingMore = true;
         ui.renderRecords(recordsToLoad, imageCache, true).then(() => {
-            state.ui.recordsCurrentlyDisplayed += recordsToLoad.length;
+            state.ui.recordsCurrentlyDisplayed = end;
             state.ui.isLoadingMore = false;
         });
+    } else {
+        // If only groupings were in this batch, advance the counter and try next batch
+        state.ui.recordsCurrentlyDisplayed = end;
     }
 }
 
@@ -161,15 +169,33 @@ export async function updateAllCardAvailabilityIcons() {
 
     const cards = document.querySelectorAll('.event-card');
 
+    // Build a Map for O(1) record lookups instead of O(n) .find() per card
+    const recordMap = new Map(state.records.all.map(r => [r.id, r]));
+
+    // Collect all card data for parallel processing
+    const cardDataList = [];
     for (const card of cards) {
         const recordId = card.dataset.recordId;
-        const record = state.records.all.find(r => r.id === recordId);
+        const record = recordMap.get(recordId);
         if (!record) continue;
-
-        const busyTimes = await api.fetchCalendarForRecord(record);
-        const rangeStatus = getRangeStatus(startDate, requestedEnd, record, busyTimes);
         const icon = card.querySelector('.availability-btn');
         if (icon) {
+            cardDataList.push({ record, icon });
+        }
+    }
+
+    // Fetch all calendars in parallel (batched) instead of one-at-a-time
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < cardDataList.length; i += BATCH_SIZE) {
+        const batch = cardDataList.slice(i, i + BATCH_SIZE);
+        const busyTimesResults = await Promise.all(
+            batch.map(({ record }) => api.fetchCalendarForRecord(record))
+        );
+
+        busyTimesResults.forEach((busyTimes, idx) => {
+            const { record, icon } = batch[idx];
+            const rangeStatus = getRangeStatus(startDate, requestedEnd, record, busyTimes);
+
             if (icon._tippy) icon._tippy.destroy();
             let statusIcon;
             switch (rangeStatus.status) {
@@ -178,13 +204,13 @@ export async function updateAllCardAvailabilityIcons() {
                 case AVAILABILITY_STATUS.NONE: statusIcon = '❌'; break;
                 default: statusIcon = '📅';
             }
-            
+
             const dateRangeString = `${startDate.toLocaleDateString()} - ${requestedEnd.toLocaleDateString()}`;
             const tooltipContent = `<div style="text-align: left;"><strong>${dateRangeString}</strong><hr style="margin: 2px 0 5px;"><span>${statusIcon} ${record.fields.Name}: ${rangeStatus.reason}</span></div>`;
             tippy(icon, { content: tooltipContent, allowHTML: true, placement: 'top', arrow: true });
             icon.title = rangeStatus.reason;
             icon.textContent = statusIcon;
-        }
+        });
     }
 }
 
@@ -575,6 +601,7 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
 
                 aiRecords.push(childRecord);
                 state.records.all.push(childRecord);
+                invalidateRecordsIndex();
             });
         } else if (aiData.Name) {
             // Handle SPECIFIC type - single AI result
@@ -663,6 +690,7 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
 
             aiRecords.push(liveRecord);
             state.records.all.push(liveRecord);
+            invalidateRecordsIndex();
         }
 
         // Display AI results in their own carousel
@@ -847,7 +875,7 @@ function createManualAddOption(searchTerm) {
 
         // Add to records
         state.records.all.push(manualRecord);
-
+        invalidateRecordsIndex();
         // Add to plan
         state.cart.lockedItems.set(manualId, {
             quantity: 1,
@@ -943,6 +971,12 @@ function clearRefinementChips() {
 
 
 export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
+    console.log('[EVENTS DEBUG] initializeEventListeners called.', {
+        hasImageCache: !!imageCache,
+        hasFlatpickr: !!flatpickr,
+        hasShopSettings: !!shopSettings,
+        shopType: shopSettings?.shopType
+    });
     const mainContent = document.querySelector('.main-content');
     const searchBarContainer = document.getElementById('search-bar-container');
     const leftSidebar = document.getElementById('left-sidebar');
@@ -1721,7 +1755,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     });
 
     document.body.addEventListener('click', async (e) => {
-        if (state.ui.isInitializing) return;
+        if (state.ui.isInitializing) {
+            console.log('[EVENTS DEBUG] Body click ignored - still initializing');
+            return;
+        }
 
         const card = e.target.closest('.event-card');
         const heartIcon = e.target.closest('.heart-icon');
@@ -2617,6 +2654,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             }, 300);
         } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn, .availability-btn')) {
             const recordId = card.dataset.recordId;
+            console.log('[EVENTS DEBUG] Card clicked (detail modal trigger), recordId:', recordId);
 
             // First try to find in state.records.all
             let record = state.records.all.find(r => r.id === recordId);
@@ -2627,8 +2665,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             }
 
             if (!record) {
+                console.warn('[EVENTS DEBUG] Card clicked but record NOT FOUND. recordId:', recordId, 'state.records.all.length:', state.records.all.length);
                 return;
             }
+
+            console.log('[EVENTS DEBUG] Record found:', { id: record.id, name: record.fields?.Name, itemType: record.fields?.['Item Type'] });
 
             if (record.id.startsWith('ai-search-')) {
                 return;
@@ -2671,10 +2712,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             } else {
                 // Small progress for viewing item details
                 updateProgress(0.00001);
+                console.log('[EVENTS DEBUG] Opening detail modal for:', record.fields?.Name, record.id);
                 ui.showDetailModal(record);
             }
         } else if (lockedItemCard && !e.target.closest('.demote-locked-item-btn, .edit-btn, .dig-solution-btn')) {
             const recordId = lockedItemCard.dataset.recordId;
+            console.log('[EVENTS DEBUG] Locked item card clicked, recordId:', recordId);
             let record = state.records.all.find(r => r.id === recordId);
             // Check solution records registry for AI-generated solution items
             if (!record && recordId && recordId.startsWith('solution-') && window._solutionRecords) {

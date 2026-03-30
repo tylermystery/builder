@@ -2,7 +2,7 @@
 // Centralized plan state synchronization module
 // Handles cross-view UI synchronization for event plan data
 
-import { state } from '../state.js';
+import { state, getRecordById } from '../state.js';
 import { log } from './debug.js';
 import { CONSTANTS } from '../config.js';
 import { getRecordPrice } from '../utils.js';
@@ -21,8 +21,8 @@ const syncCallbacks = {
     wtfPlansPanel: null
 };
 
-// Debug mode flag for comprehensive logging
-let debugMode = true;
+// Debug mode flag for comprehensive logging - defaults to OFF for performance
+let debugMode = false;
 
 /**
  * Enable or disable debug mode for sync operations
@@ -87,7 +87,7 @@ export function getPlanSummary() {
     let subtotal = 0;
 
     state.cart.lockedItems.forEach((itemInfo, recordId) => {
-        const record = state.records.all.find(r => r.id === recordId);
+        const record = getRecordById(recordId);
         if (!record) return;
 
         // Get price - use getRecordPrice with selections/selectedOptionIndex to handle option price modifiers

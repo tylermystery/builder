@@ -1,6 +1,7 @@
 // REPLACE THE ENTIRE CONTENTS of components/modal.js
+console.log('[MODULE DEBUG] modal.js module starting to load...', performance.now().toFixed(2) + 'ms');
 
-import { state } from '../state.js';
+import { state, getRecordById } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex } from '../config.js';
@@ -10,6 +11,8 @@ import { log } from '../utils/debug.js';
 import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { triggerSave } from '../events.js';
+
+console.log('[MODULE DEBUG] modal.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
 /**
  * Helper to create or update a meta tag
@@ -335,6 +338,7 @@ let currentProcessingFee = 0; // To store the current fee
 
 let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
+console.log('[MODAL DEBUG] modalOverlay initialized at module load:', !!modalOverlay);
 
 /**
  * Get shop settings from the current active shop
@@ -733,6 +737,144 @@ export function hasQuickPayOptions() {
     return options && Object.keys(options).length > 0;
 }
 
+/**
+ * Sets up the donation meter for an item, showing community fund progress
+ * and allowing users to chip in toward making the item free for someone in need.
+ * Donation state is stored per-item in localStorage.
+ * @param {Object} record - The item record
+ * @param {Object} paymentOptions - Store payment options
+ * @param {Object} itemState - Current item state (quantity, options, etc.)
+ */
+function setupDonationMeter(record, paymentOptions, itemState) {
+    const donationMeter = document.getElementById('modal-donation-meter');
+    if (!donationMeter) return;
+
+    const price = getRecordPrice(record, itemState.selectedOptionIndex);
+    // Goal is the item price (to fund one free giveaway), minimum $5 for free items
+    const goalAmount = price > 0 ? price : 5;
+
+    // Load donation progress from localStorage (per-item tracking)
+    const donationKey = `donation_fund_${record.id}`;
+    let donationData = { raised: 0, contributors: 0 };
+    try {
+        const stored = localStorage.getItem(donationKey);
+        if (stored) donationData = JSON.parse(stored);
+    } catch (e) { /* ignore parse errors */ }
+
+    const raised = donationData.raised || 0;
+    const contributors = donationData.contributors || 0;
+    const percent = Math.min(100, (raised / goalAmount) * 100);
+
+    // Update meter display
+    const statsEl = donationMeter.querySelector('.donation-meter-stats');
+    const barFill = donationMeter.querySelector('.donation-meter-bar-fill');
+    const descEl = donationMeter.querySelector('.donation-meter-description');
+
+    if (statsEl) {
+        statsEl.textContent = `$${raised.toFixed(2)} / $${goalAmount.toFixed(2)}`;
+    }
+    if (barFill) {
+        // Small delay so animation plays visibly
+        requestAnimationFrame(() => {
+            barFill.style.width = `${percent}%`;
+        });
+    }
+
+    if (descEl) {
+        if (percent >= 100) {
+            descEl.textContent = 'Goal reached! This item can be given to someone in need.';
+        } else {
+            const remaining = (goalAmount - raised).toFixed(2);
+            descEl.textContent = `$${remaining} more to fund a free giveaway for someone in need. ${contributors > 0 ? `${contributors} ${contributors === 1 ? 'person has' : 'people have'} chipped in.` : 'Be the first to chip in!'}`;
+        }
+    }
+
+    // Setup preset buttons
+    const presetBtns = donationMeter.querySelectorAll('.donation-preset-btn');
+    const customInput = donationMeter.querySelector('.donation-custom-input');
+    const amountInput = donationMeter.querySelector('.donation-amount-input');
+
+    presetBtns.forEach(btn => {
+        // Clone to remove old listeners
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+
+        newBtn.addEventListener('click', () => {
+            donationMeter.querySelectorAll('.donation-preset-btn').forEach(b => b.classList.remove('active'));
+            newBtn.classList.add('active');
+
+            const presetAmount = newBtn.dataset.amount;
+            if (presetAmount === 'custom') {
+                customInput.style.display = 'flex';
+                amountInput.focus();
+            } else {
+                customInput.style.display = 'none';
+                amountInput.value = parseFloat(presetAmount).toFixed(2);
+            }
+        });
+    });
+
+    // Setup donate/submit button
+    const submitBtn = donationMeter.querySelector('.donation-submit-btn');
+    if (submitBtn) {
+        const newSubmitBtn = submitBtn.cloneNode(true);
+        submitBtn.parentNode.replaceChild(newSubmitBtn, submitBtn);
+
+        newSubmitBtn.addEventListener('click', () => {
+            // Determine donation amount
+            const activePreset = donationMeter.querySelector('.donation-preset-btn.active');
+            let donationAmount = 0;
+
+            if (activePreset && activePreset.dataset.amount !== 'custom') {
+                donationAmount = parseFloat(activePreset.dataset.amount) || 0;
+            } else {
+                donationAmount = parseFloat(amountInput.value) || 0;
+            }
+
+            if (donationAmount <= 0) {
+                // Shake the input to indicate an amount is needed
+                const inputEl = customInput.style.display !== 'none' ? customInput : donationMeter.querySelector('.donation-amount-presets');
+                inputEl.style.animation = 'none';
+                requestAnimationFrame(() => {
+                    inputEl.style.animation = 'donationMeterSlideIn 0.3s ease-out';
+                });
+                return;
+            }
+
+            // Open quick pay modal with the donation amount
+            const itemName = `Donation: ${record.fields.Name || 'Item'} (Community Fund)`;
+            showQuickPayModal(paymentOptions, donationAmount, itemName, 1);
+
+            // Update local donation tracking (optimistic - user is going to pay)
+            donationData.raised = (donationData.raised || 0) + donationAmount;
+            donationData.contributors = (donationData.contributors || 0) + 1;
+            try {
+                localStorage.setItem(donationKey, JSON.stringify(donationData));
+            } catch (e) { /* storage full, ignore */ }
+
+            // Refresh the meter display
+            const newPercent = Math.min(100, (donationData.raised / goalAmount) * 100);
+            if (statsEl) {
+                statsEl.textContent = `$${donationData.raised.toFixed(2)} / $${goalAmount.toFixed(2)}`;
+            }
+            if (barFill) {
+                barFill.style.width = `${newPercent}%`;
+            }
+            if (descEl) {
+                if (newPercent >= 100) {
+                    descEl.textContent = 'Goal reached! This item can be given to someone in need.';
+                } else {
+                    const remaining = (goalAmount - donationData.raised).toFixed(2);
+                    descEl.textContent = `$${remaining} more to fund a free giveaway for someone in need. ${donationData.contributors} ${donationData.contributors === 1 ? 'person has' : 'people have'} chipped in.`;
+                }
+            }
+        });
+    }
+
+    // Initialize - show custom input by default since "Custom" is active initially
+    if (customInput) customInput.style.display = 'flex';
+}
+
 function closeDetailModal() {
     updateUrl({ openItem: null });
     hideDetailModal();
@@ -937,6 +1079,7 @@ function getBreadcrumbs(record) {
 }
 
 function resetModalState() {
+    console.log('[MODAL DEBUG] resetModalState called.');
     const elements = {
         modalHeaderActions: document.getElementById('modal-header-actions'),
         modalItemName: document.getElementById('modal-item-name'),
@@ -954,7 +1097,14 @@ function resetModalState() {
     for (const key in elements) {
         if (elements[key]) {
             if (key === 'modalItemNote') elements[key].value = '';
-            else if (key === 'modalMainImage') elements[key].style.backgroundImage = '';
+            else if (key === 'modalMainImage') {
+                elements[key].style.backgroundImage = '';
+                // Remove any package collage overlays or component name overlays
+                const collageOverlay = elements[key].querySelector('.package-collage-overlay');
+                if (collageOverlay) collageOverlay.remove();
+                const nameOverlay = elements[key].querySelector('.package-component-name-overlay');
+                if (nameOverlay) nameOverlay.remove();
+            }
             else elements[key].innerHTML = '';
         }
     }
@@ -966,6 +1116,14 @@ function resetModalState() {
     // Also remove edit mode UI elements
     const editModeElements = document.querySelectorAll('.item-edit-container, .item-edit-save-container');
     editModeElements.forEach(el => el.remove());
+
+    // Reset donation meter and price action buttons
+    const donationMeter = document.getElementById('modal-donation-meter');
+    if (donationMeter) donationMeter.style.display = 'none';
+    const chipInBtn = document.getElementById('modal-chip-in-btn');
+    if (chipInBtn) chipInBtn.classList.remove('active');
+    const priceActions = document.getElementById('modal-price-actions');
+    if (priceActions) priceActions.classList.add('hidden');
 
     log('Modal', 'Reset modal state.');
 }
@@ -1325,6 +1483,7 @@ function enableItemEditMode(record, nameEl, descEl) {
                                      record.id?.startsWith('manual-add-') ||
                                      record.id?.startsWith('manual-presentation-') ||
                                      record.id?.startsWith('ai-search-') ||
+                                     record.id?.startsWith('ai-child-') ||
                                      record.id?.startsWith('ai-presentation-');
 
                 console.log('[AI IMAGE DEBUG] isManualItem check:', {
@@ -1332,6 +1491,7 @@ function enableItemEditMode(record, nameEl, descEl) {
                     'starts with manual-add-': record.id?.startsWith('manual-add-'),
                     'starts with manual-presentation-': record.id?.startsWith('manual-presentation-'),
                     'starts with ai-search-': record.id?.startsWith('ai-search-'),
+                    'starts with ai-child-': record.id?.startsWith('ai-child-'),
                     'starts with ai-presentation-': record.id?.startsWith('ai-presentation-'),
                     'final isManualItem': isManualItem
                 });
@@ -2046,7 +2206,7 @@ async function initializePlanCarousel(componentRecords) {
         // Update item details
         const quantity = history?.quantity || 1;
         const note = history?.note || '';
-        const isGhost = !state.records.all.find(r => r.id === record.id);
+        const isGhost = !getRecordById(record.id);
 
         let detailsHTML = '';
         if (quantity > 1) {
@@ -2128,10 +2288,16 @@ async function initializePlanCarousel(componentRecords) {
 // Guard to prevent concurrent modal rendering
 let isModalRendering = false;
 
-export async function showDetailModal(record, startPhotoIndex = 0) {
+export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = null) {
+    console.log('[MODAL DEBUG] ========== showDetailModal called ==========');
+    console.log('[MODAL DEBUG] record:', record?.id, record?.fields?.Name);
+    console.log('[MODAL DEBUG] modalOverlay element:', !!modalOverlay);
+    console.log('[MODAL DEBUG] isModalRendering:', isModalRendering);
+
     // Prevent concurrent modal renders that could cause duplicate content
     if (isModalRendering) {
         log('Modal', 'Modal is already rendering, skipping duplicate call');
+        console.log('[MODAL DEBUG] BLOCKED: Modal is already rendering, skipping.');
         return;
     }
     isModalRendering = true;
@@ -2249,28 +2415,29 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         }
     }
 
-    // Add Quick Pay button if store has payment options (but not for packages, which use dynamic pricing)
-    const existingQuickPayBtn = document.getElementById('modal-quick-pay-btn');
-    if (existingQuickPayBtn) {
-        existingQuickPayBtn.remove();
-    }
+    // Setup Price Action Row buttons (Rapid Pay + Chip In) next to price
+    const rapidPayBtn = document.getElementById('modal-rapid-pay-btn');
+    const chipInBtn = document.getElementById('modal-chip-in-btn');
+    const priceActionsContainer = document.getElementById('modal-price-actions');
+    const donationMeter = document.getElementById('modal-donation-meter');
 
     const paymentOptions = getStorePaymentOptions();
-    if (paymentOptions && Object.keys(paymentOptions).length > 0 && !isPackageItem) {
-        const quickPayBtn = document.createElement('button');
-        quickPayBtn.id = 'modal-quick-pay-btn';
-        quickPayBtn.className = 'quick-pay-btn';
+    const hasPaymentOptions = paymentOptions && Object.keys(paymentOptions).length > 0;
 
-        // Calculate initial amount for button text
+    if (hasPaymentOptions && !isPackageItem) {
+        // Show price action buttons
+        if (priceActionsContainer) priceActionsContainer.classList.remove('hidden');
+
+        // Calculate initial amount for rapid pay
         const initialPrice = getRecordPrice(record, itemState.selectedOptionIndex);
         const initialQuantity = itemState.quantity || 1;
         const initialAmount = initialPrice * initialQuantity;
 
-        // Update button text with amount
-        const updateQuickPayButtonText = () => {
+        // Update Rapid Pay button label dynamically
+        const updateRapidPayLabel = () => {
+            if (!rapidPayBtn) return;
             const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
             const currentQuantity = quantityInput ? parseInt(quantityInput.value, 10) || 1 : 1;
-            // Get current selected option index from the modal's option selector
             const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
             let selectedOptionIndex = itemState.selectedOptionIndex || 0;
             if (optionRadios.length > 0) {
@@ -2279,46 +2446,63 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             }
             const currentPrice = getRecordPrice(record, selectedOptionIndex);
             const currentAmount = currentPrice * currentQuantity;
-            if (currentAmount > 0) {
-                quickPayBtn.innerHTML = `<span>Quick Pay $${currentAmount.toFixed(2)}</span>`;
-            } else {
-                // Free event - show "Donations Welcome"
-                quickPayBtn.innerHTML = '<span>Donations Welcome</span>';
+            const labelEl = rapidPayBtn.querySelector('.price-action-label');
+            if (labelEl) {
+                labelEl.textContent = currentAmount > 0 ? `Rapid Pay` : 'Rapid Pay';
             }
         };
 
-        // Set initial button text
-        if (initialAmount > 0) {
-            quickPayBtn.innerHTML = `<span>Quick Pay $${initialAmount.toFixed(2)}</span>`;
-        } else {
-            // Free event - show "Donations Welcome"
-            quickPayBtn.innerHTML = '<span>Donations Welcome</span>';
+        // Store update function for quantity/option change handlers
+        if (rapidPayBtn) {
+            rapidPayBtn._updateText = updateRapidPayLabel;
         }
 
-        quickPayBtn.addEventListener('click', () => {
-            // Get current quantity from the quantity input
-            const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
-            const quantity = quantityInput ? parseInt(quantityInput.value, 10) || 1 : 1;
-            // Get current selected option index
-            const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
-            let selectedOptionIndex = itemState.selectedOptionIndex || 0;
-            if (optionRadios.length > 0) {
-                const selectedValue = optionRadios[0].value;
-                selectedOptionIndex = parseInt(selectedValue, 10) || 0;
-            }
-            const price = getRecordPrice(record, selectedOptionIndex);
-            const amount = price * quantity;
-            const itemName = record.fields.Name || 'Item';
-            showQuickPayModal(paymentOptions, amount, itemName, quantity);
-        });
+        // Rapid Pay click - opens quick pay modal
+        if (rapidPayBtn) {
+            // Remove old listeners by cloning
+            const newRapidPayBtn = rapidPayBtn.cloneNode(true);
+            rapidPayBtn.parentNode.replaceChild(newRapidPayBtn, rapidPayBtn);
+            newRapidPayBtn._updateText = updateRapidPayLabel;
 
-        // Store reference to update function for quantity/option change handlers
-        quickPayBtn._updateText = updateQuickPayButtonText;
-
-        // Insert after Add to Plan button
-        if (addToPlanBtn && addToPlanBtn.parentNode) {
-            addToPlanBtn.parentNode.insertBefore(quickPayBtn, addToPlanBtn.nextSibling);
+            newRapidPayBtn.addEventListener('click', () => {
+                const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
+                const quantity = quantityInput ? parseInt(quantityInput.value, 10) || 1 : 1;
+                const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
+                let selectedOptionIndex = itemState.selectedOptionIndex || 0;
+                if (optionRadios.length > 0) {
+                    const selectedValue = optionRadios[0].value;
+                    selectedOptionIndex = parseInt(selectedValue, 10) || 0;
+                }
+                const price = getRecordPrice(record, selectedOptionIndex);
+                const amount = price * quantity;
+                const itemName = record.fields.Name || 'Item';
+                showQuickPayModal(paymentOptions, amount, itemName, quantity);
+            });
         }
+
+        // Chip In click - toggles donation meter
+        if (chipInBtn) {
+            const newChipInBtn = chipInBtn.cloneNode(true);
+            chipInBtn.parentNode.replaceChild(newChipInBtn, chipInBtn);
+
+            newChipInBtn.addEventListener('click', () => {
+                if (donationMeter) {
+                    const isVisible = donationMeter.style.display !== 'none';
+                    if (isVisible) {
+                        donationMeter.style.display = 'none';
+                        newChipInBtn.classList.remove('active');
+                    } else {
+                        donationMeter.style.display = 'block';
+                        newChipInBtn.classList.add('active');
+                        setupDonationMeter(record, paymentOptions, itemState);
+                    }
+                }
+            });
+        }
+    } else {
+        // No payment options or is a package - hide action buttons
+        if (priceActionsContainer) priceActionsContainer.classList.add('hidden');
+        if (donationMeter) donationMeter.style.display = 'none';
     }
 
     // Fetch images for all items (including AI-sourced items)
@@ -2358,7 +2542,11 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                                     record.id?.startsWith('manual-add-') ||
                                     record.id?.startsWith('manual-presentation-') ||
                                     record.id?.startsWith('solution-');
-    const hasOnlyPlaceholder = imageSource === 'placeholder' || imageSource === 'using_placeholder';
+    const isAIDiscoveryForAutoGen = record.id?.startsWith('ai-search-') ||
+                                     record.id?.startsWith('ai-child-') ||
+                                     record.id?.startsWith('ai-presentation-');
+    const needsAutoGen = isManualItemForAutoGen || isAIDiscoveryForAutoGen;
+    const hasOnlyPlaceholder = imageSource === 'placeholder' || imageSource === 'using_placeholder' || imageSource === 'ai_approximation';
     const hasNoCustomImages = !record.fields?._customImages || record.fields._customImages.length === 0;
     const alreadyAttempted = window._aiImageGenerationAttempted.has(record.id);
     const inProgress = window._aiImageGenerationInProgress.has(record.id);
@@ -2366,6 +2554,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     console.log('[AI IMAGE AUTO-GEN] Checking if auto-generation needed:', {
         recordId: record.id,
         isManualItemForAutoGen,
+        isAIDiscoveryForAutoGen,
+        needsAutoGen,
         hasOnlyPlaceholder,
         hasNoCustomImages,
         alreadyAttempted,
@@ -2374,7 +2564,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         _customImages: record.fields?._customImages
     });
 
-    if (isManualItemForAutoGen && hasOnlyPlaceholder && hasNoCustomImages && !alreadyAttempted && !inProgress) {
+    if (needsAutoGen && hasOnlyPlaceholder && hasNoCustomImages && !alreadyAttempted && !inProgress) {
         console.log('[AI IMAGE AUTO-GEN] TRIGGERING auto AI image generation for:', record.fields?.Name);
 
         // Mark as in-progress to prevent duplicate attempts
@@ -2495,8 +2685,49 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         }
     }
 
-    modalItemName.textContent = record.fields.Name || 'Untitled';
-    modalItemDescription.textContent = record.fields.Description || '';
+    // Check if this item is a hybrid merge target — use AI-generated name and description
+    let displayName = record.fields.Name || 'Untitled';
+    let displayDescription = record.fields.Description || '';
+    const combinedEntry = state.session?.combinedItems?.get(record.id);
+    if (combinedEntry && !(combinedEntry instanceof Set) && combinedEntry.hybridData) {
+        if (combinedEntry.hybridData.hybridName) {
+            displayName = combinedEntry.hybridData.hybridName;
+        }
+        if (combinedEntry.hybridData.hybridDescription) {
+            displayDescription = combinedEntry.hybridData.hybridDescription;
+        }
+    }
+
+    modalItemName.textContent = displayName;
+    modalItemDescription.textContent = displayDescription;
+
+    // Show "Combined from" indicator for hybrid merged items
+    const existingMergeInfo = document.querySelector('.modal-merge-info');
+    if (existingMergeInfo) existingMergeInfo.remove();
+
+    if (combinedEntry && !(combinedEntry instanceof Set) && combinedEntry.sources) {
+        const sourceIds = combinedEntry.sources instanceof Set
+            ? Array.from(combinedEntry.sources)
+            : (Array.isArray(combinedEntry.sources) ? combinedEntry.sources : []);
+
+        if (sourceIds.length > 0) {
+            const sourceNames = sourceIds.map(sourceId => {
+                const sourceRecord = state.records?.all?.find(r => r.id === sourceId);
+                return sourceRecord?.fields?.Name || 'Item';
+            });
+            // Include the target item's original name
+            const targetOriginalName = record.fields.Name || 'Item';
+            const allNames = [targetOriginalName, ...sourceNames];
+
+            const mergeInfoEl = document.createElement('div');
+            mergeInfoEl.className = 'modal-merge-info';
+            mergeInfoEl.innerHTML = `
+                <span class="merge-info-icon">✨</span>
+                <span class="merge-info-text">Combined from: ${allNames.join(' + ')}</span>
+            `;
+            modalItemDescription.parentNode.insertBefore(mergeInfoEl, modalItemDescription.nextSibling);
+        }
+    }
 
     // Display AI confidence badge for AI-parsed items
     const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.id?.startsWith('ai-presentation-') || record?.isAI === true;
@@ -2808,10 +3039,13 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const ideaComponentIds = ideasHistory.map(item => item.id).filter(id => id);
 
         // Fetch any missing component items (ghost items) that aren't in state.records.all
+        // Use Sets for O(1) lookups instead of O(n) .some() calls
         const allComponentIds = [...lockedComponentIds, ...ideaComponentIds];
+        const recordIdSet = new Set(state.records.all.map(r => r.id));
+        const archiveIdSet = state.records.archive ? new Set(state.records.archive.map(r => r.id)) : null;
         const missingItemIds = allComponentIds.filter(id =>
-            !state.records.all.some(r => r.id === id) &&
-            (!state.records.archive || !state.records.archive.some(r => r.id === id)) &&
+            !recordIdSet.has(id) &&
+            (!archiveIdSet || !archiveIdSet.has(id)) &&
             id.startsWith('rec') // Only fetch real Airtable IDs, not custom items
         );
 
@@ -2832,38 +3066,40 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
         if (lockedComponentIds.length > 0 || ideaComponentIds.length > 0) {
             // Collect all component records for the carousel
+            // Build Maps for O(1) lookups instead of repeated O(n) .find() calls
+            const recordMap = new Map(state.records.all.map(r => [r.id, r]));
+            const archiveMap = state.records.archive ? new Map(state.records.archive.map(r => [r.id, r])) : null;
+            const lockedHistoryMap = new Map(lockedInHistory.map(item => [item.id, item]));
+            const ideasHistoryMap = new Map(ideasHistory.map(item => [item.id, item]));
+
             const allComponentRecords = [];
             const componentHistoryMap = new Map();
 
             // Process locked items
             for (const componentId of lockedComponentIds) {
-                let componentRecord = state.records.all.find(r => r.id === componentId);
-                if (!componentRecord && state.records.archive) {
-                    componentRecord = state.records.archive.find(r => r.id === componentId);
-                }
+                const componentRecord = recordMap.get(componentId) || (archiveMap && archiveMap.get(componentId));
                 if (componentRecord) {
+                    const history = lockedHistoryMap.get(componentId);
                     allComponentRecords.push({
                         record: componentRecord,
                         type: 'locked',
-                        history: lockedInHistory.find(item => item.id === componentId)
+                        history
                     });
-                    componentHistoryMap.set(componentId, lockedInHistory.find(item => item.id === componentId));
+                    componentHistoryMap.set(componentId, history);
                 }
             }
 
             // Process idea items
             for (const ideaId of ideaComponentIds) {
-                let ideaRecord = state.records.all.find(r => r.id === ideaId);
-                if (!ideaRecord && state.records.archive) {
-                    ideaRecord = state.records.archive.find(r => r.id === ideaId);
-                }
+                const ideaRecord = recordMap.get(ideaId) || (archiveMap && archiveMap.get(ideaId));
                 if (ideaRecord) {
+                    const history = ideasHistoryMap.get(ideaId);
                     allComponentRecords.push({
                         record: ideaRecord,
                         type: 'idea',
-                        history: ideasHistory.find(item => item.id === ideaId)
+                        history
                     });
-                    componentHistoryMap.set(ideaId, ideasHistory.find(item => item.id === ideaId));
+                    componentHistoryMap.set(ideaId, history);
                 }
             }
 
@@ -3502,8 +3738,16 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             const optimizedClickImage = imageUrls[index].includes('cloudinary')
                 ? applyCloudinaryTransform(imageUrls[index], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
                 : imageUrls[index];
+            // Remove any package collage overlay when switching to a regular thumbnail
+            const existingCollage = modalMainImage.querySelector('.package-collage-overlay');
+            if (existingCollage) existingCollage.remove();
+            const existingNameOverlay = modalMainImage.querySelector('.package-component-name-overlay');
+            if (existingNameOverlay) existingNameOverlay.style.display = 'none';
+            // Restore AI image indicator if present
+            const aiIndicator = modalMainImage.querySelector('.ai-image-source-modal');
+            if (aiIndicator) aiIndicator.style.display = '';
             modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
-            modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
+            modalThumbnailStrip.querySelectorAll('.active').forEach(t => t.classList.remove('active'));
             thumb.classList.add('active');
             // Update "Set as Cover" button visibility
             updateSetCoverButton(index);
@@ -3513,6 +3757,177 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
     // Initialize the "Set as Cover" button state
     updateSetCoverButton(currentPhotoIndex);
+
+    // ============================================================
+    // PACKAGE COMPONENT COLLAGES: For packages, fetch images for each
+    // included component and add collage thumbnails to the media carousel
+    // ============================================================
+    if (isPackage && packageContents) {
+        const includedItems = packageContents.includedItems || [];
+        const addOnItems = packageContents.addOnItems || [];
+        const allPackageItems = [...includedItems, ...addOnItems];
+
+        if (allPackageItems.length > 0) {
+            // Add a separator label before component collages
+            const separator = document.createElement('div');
+            separator.className = 'thumbnail-separator';
+            separator.textContent = 'Included Items';
+            modalThumbnailStrip.appendChild(separator);
+
+            // Track all component collage data for main image display
+            const componentCollages = [];
+
+            // Fetch images for each component in parallel
+            const componentImagePromises = allPackageItems.map(async (itemRef) => {
+                const itemId = itemRef.id || itemRef;
+                const itemRecord = getRecordById(itemId);
+                if (!itemRecord) return null;
+
+                let componentImageUrls = [];
+                try {
+                    const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(itemRecord, state.records.all, new Map());
+                    componentImageUrls = fetchedUrls || [];
+                } catch (e) {
+                    console.warn('Failed to fetch images for package component:', itemId, e);
+                }
+                if (componentImageUrls.length === 0) {
+                    componentImageUrls = [ui.getPlaceholderImage([])];
+                }
+
+                return {
+                    record: itemRecord,
+                    imageUrls: componentImageUrls,
+                    isAddOn: addOnItems.some(a => (a.id || a) === itemId)
+                };
+            });
+
+            const componentResults = await Promise.all(componentImagePromises);
+
+            for (const compData of componentResults) {
+                if (!compData) continue;
+
+                const { record: compRecord, imageUrls: compImages, isAddOn } = compData;
+                const collageIndex = componentCollages.length;
+
+                componentCollages.push({
+                    record: compRecord,
+                    imageUrls: compImages,
+                    isAddOn
+                });
+
+                // Create a collage thumbnail for this component
+                const thumb = document.createElement('div');
+                thumb.className = 'thumbnail-img thumbnail-collage' + (isAddOn ? ' thumbnail-addon' : '');
+                thumb.title = compRecord.fields.Name || 'Component';
+
+                // Build collage preview inside thumbnail
+                if (compImages.length === 1) {
+                    const optimizedUrl = compImages[0].includes('cloudinary')
+                        ? applyCloudinaryTransform(compImages[0], 'w_150,h_150,c_fill,f_auto,q_auto')
+                        : compImages[0];
+                    thumb.style.backgroundImage = `url('${optimizedUrl}')`;
+                } else {
+                    // Multi-image collage thumbnail
+                    thumb.style.backgroundImage = 'none';
+                    const miniCollage = document.createElement('div');
+                    miniCollage.className = 'thumbnail-mini-collage';
+                    const collageClass = compImages.length === 2 ? 'two-images' : compImages.length === 3 ? 'three-images' : '';
+                    miniCollage.classList.add(collageClass || 'four-images');
+
+                    compImages.slice(0, 4).forEach((url) => {
+                        const img = document.createElement('img');
+                        img.className = 'mini-collage-img';
+                        img.src = url.includes('cloudinary')
+                            ? applyCloudinaryTransform(url, 'w_80,h_80,c_fill,f_auto,q_auto')
+                            : url;
+                        img.loading = 'lazy';
+                        miniCollage.appendChild(img);
+                    });
+                    thumb.appendChild(miniCollage);
+                }
+
+                // Add component name label
+                const label = document.createElement('span');
+                label.className = 'thumbnail-collage-label';
+                label.textContent = compRecord.fields.Name || '';
+                thumb.appendChild(label);
+
+                // Click handler: show component collage in main image area
+                thumb.addEventListener('click', () => {
+                    // Remove active state from all thumbnails
+                    modalThumbnailStrip.querySelectorAll('.active').forEach(t => t.classList.remove('active'));
+                    thumb.classList.add('active');
+
+                    // Build collage display in the main image area
+                    const collageData = componentCollages[collageIndex];
+                    const mainImages = collageData.imageUrls;
+
+                    // Clear any existing collage overlay
+                    const existingCollage = modalMainImage.querySelector('.package-collage-overlay');
+                    if (existingCollage) existingCollage.remove();
+
+                    // Hide AI image indicator when showing component images
+                    const aiIndicator = modalMainImage.querySelector('.ai-image-source-modal');
+                    if (aiIndicator) aiIndicator.style.display = 'none';
+
+                    if (mainImages.length === 1) {
+                        // Single image: just set as background
+                        const optimizedUrl = mainImages[0].includes('cloudinary')
+                            ? applyCloudinaryTransform(mainImages[0], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+                            : mainImages[0];
+                        modalMainImage.style.backgroundImage = `url('${optimizedUrl}')`;
+                    } else {
+                        // Multiple images: show collage grid overlay
+                        modalMainImage.style.backgroundImage = 'none';
+                        const collageOverlay = document.createElement('div');
+                        collageOverlay.className = 'package-collage-overlay';
+                        const gridClass = mainImages.length === 2 ? 'two-images' : mainImages.length === 3 ? 'three-images' : '';
+                        collageOverlay.classList.add(gridClass || 'four-plus-images');
+
+                        mainImages.slice(0, 4).forEach((url) => {
+                            const img = document.createElement('img');
+                            img.className = 'package-collage-img';
+                            img.src = url.includes('cloudinary')
+                                ? applyCloudinaryTransform(url, 'w_600,h_500,c_fill,f_auto,q_auto')
+                                : url;
+                            collageOverlay.appendChild(img);
+                        });
+
+                        // If more than 4 images, show count badge
+                        if (mainImages.length > 4) {
+                            const badge = document.createElement('span');
+                            badge.className = 'package-collage-count';
+                            badge.textContent = `+${mainImages.length - 4}`;
+                            collageOverlay.appendChild(badge);
+                        }
+
+                        modalMainImage.appendChild(collageOverlay);
+                    }
+
+                    // Show component name overlay on main image
+                    let nameOverlay = modalMainImage.querySelector('.package-component-name-overlay');
+                    if (!nameOverlay) {
+                        nameOverlay = document.createElement('div');
+                        nameOverlay.className = 'package-component-name-overlay';
+                        modalMainImage.appendChild(nameOverlay);
+                    }
+                    nameOverlay.textContent = collageData.record.fields.Name || '';
+                    nameOverlay.style.display = 'block';
+                });
+
+                modalThumbnailStrip.appendChild(thumb);
+            }
+
+            // Auto-select the first component collage if the package itself only has a placeholder
+            if (componentCollages.length > 0 && (imageSource === 'placeholder' || imageSource === 'using_placeholder' || imageSource === 'ai_approximation')) {
+                // Click the first component collage thumbnail to show it
+                const firstCollageThumb = modalThumbnailStrip.querySelector('.thumbnail-collage');
+                if (firstCollageThumb) {
+                    firstCollageThumb.click();
+                }
+            }
+        }
+    }
 
     // Setup "Search More Photos" button for AI-sourced items
     const searchPhotosContainer = document.getElementById('modal-search-photos-container');
@@ -3804,8 +4219,28 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     modalHeaderActions.innerHTML = '';
     const breadcrumbs = getBreadcrumbs(record);
 
-    // For solution items, add a back navigation to parent concept
-    if (record.isSolution && record.parentConceptRecord) {
+    // If opened from a group detail modal, show breadcrumb back to group
+    if (fromGroup && fromGroup.id) {
+        const groupName = fromGroup.name || 'Options';
+        modalBreadcrumbs.innerHTML = `
+            <a class="group-back-link" data-group-id="${fromGroup.id}" title="Back to ${groupName}">
+                ← ${groupName}
+            </a>
+            <span class="breadcrumb-separator">›</span>
+            <span class="breadcrumb-current">${record.fields.Name}</span>
+        `;
+
+        // Add click handler for back navigation to group
+        const groupBackLink = modalBreadcrumbs.querySelector('.group-back-link');
+        if (groupBackLink) {
+            groupBackLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                log('Modal', `Navigating back to options group: ${groupName}`);
+                showGroupDetailModal(fromGroup, state.records.all);
+            });
+        }
+    } else if (record.isSolution && record.parentConceptRecord) {
         // Solution items get special breadcrumb with back arrow to parent concept
         const parentConcept = record.parentConceptRecord;
         modalBreadcrumbs.innerHTML = `
@@ -4226,7 +4661,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
             // Also check state.records.all for catalog items
             if (!itemRecord.fields && state.records.all) {
-                const stateRecord = state.records.all.find(r => r.id === record.id);
+                const stateRecord = getRecordById(record.id);
                 if (stateRecord) {
                     itemRecord = stateRecord;
                 }
@@ -4301,11 +4736,12 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         log('Modal', `Showing Categorize button for item: ${record.id}`);
     }
 
-    // Add Edit Item button for manual/custom items (items added via manual add feature)
+    // Add Edit Item button for manual/custom items and AI discovery items
     const isManualItem = record.isManual === true ||
                          record.id?.startsWith('manual-add-') ||
                          record.id?.startsWith('manual-presentation-') ||
                          record.id?.startsWith('ai-search-') ||
+                         record.id?.startsWith('ai-child-') ||
                          record.id?.startsWith('ai-presentation-');
 
     if (isManualItem) {
@@ -4613,10 +5049,10 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                         // Update UI reactively
                         updateOptionsUI();
 
-                        // Update Quick Pay button text when option changes
-                        const quickPayBtn = document.getElementById('modal-quick-pay-btn');
-                        if (quickPayBtn && quickPayBtn._updateText) {
-                            quickPayBtn._updateText();
+                        // Update Rapid Pay button text when option changes
+                        const rapidPayBtnRef = document.getElementById('modal-rapid-pay-btn');
+                        if (rapidPayBtnRef && rapidPayBtnRef._updateText) {
+                            rapidPayBtnRef._updateText();
                         }
                     });
                 }
@@ -5318,10 +5754,10 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 input.value = currentValue + 1;
                 input.dispatchEvent(new Event('change', { bubbles: true }));
                 updateProTipVisibility();
-                // Update Quick Pay button text
-                const quickPayBtn = document.getElementById('modal-quick-pay-btn');
-                if (quickPayBtn && quickPayBtn._updateText) {
-                    quickPayBtn._updateText();
+                // Update Rapid Pay button text
+                const rapidPayBtnPlus = document.getElementById('modal-rapid-pay-btn');
+                if (rapidPayBtnPlus && rapidPayBtnPlus._updateText) {
+                    rapidPayBtnPlus._updateText();
                 }
             };
             const handleMinus = (e) => {
@@ -5333,10 +5769,10 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                     input.value = currentValue - 1;
                     input.dispatchEvent(new Event('change', { bubbles: true }));
                     updateProTipVisibility();
-                    // Update Quick Pay button text
-                    const quickPayBtn = document.getElementById('modal-quick-pay-btn');
-                    if (quickPayBtn && quickPayBtn._updateText) {
-                        quickPayBtn._updateText();
+                    // Update Rapid Pay button text
+                    const rapidPayBtnMinus = document.getElementById('modal-rapid-pay-btn');
+                    if (rapidPayBtnMinus && rapidPayBtnMinus._updateText) {
+                        rapidPayBtnMinus._updateText();
                     }
                 }
             };
@@ -5367,7 +5803,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
         for (const itemRef of includedItems) {
             const itemId = itemRef.id || itemRef;
-            const itemRecord = state.records.all.find(r => r.id === itemId);
+            const itemRecord = getRecordById(itemId);
             if (itemRecord) {
                 const itemName = itemRecord.fields[CONSTANTS.FIELD_NAMES.NAME] || 'Unknown Item';
                 const itemQty = itemRef.quantity || 1;
@@ -5384,7 +5820,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             packageContentsHTML += '<ul class="package-addon-list">';
             for (const itemRef of addOnItems) {
                 const itemId = itemRef.id || itemRef;
-                const itemRecord = state.records.all.find(r => r.id === itemId);
+                const itemRecord = getRecordById(itemId);
                 if (itemRecord) {
                     const itemName = itemRecord.fields[CONSTANTS.FIELD_NAMES.NAME] || 'Unknown Item';
                     packageContentsHTML += `<li class="package-item package-addon-item">${itemName}</li>`;
@@ -5613,6 +6049,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     });
 
     modalOverlay.classList.add('active');
+    console.log('[MODAL DEBUG] Detail modal overlay activated (classList.add active)');
 
     // CRITICAL FIX: Apply essential overlay styles inline to ensure they work
     // even if CSS hasn't fully loaded (direct URL access scenario)
@@ -5839,8 +6276,309 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     isModalRendering = false;
 }
 
+/**
+ * Show the detail modal for an options group, displaying each item as a selectable option.
+ * @param {Object} group - The group object { id, name, description, items: string[] }
+ * @param {Object[]} allRecords - All records for looking up item details
+ */
+export async function showGroupDetailModal(group, allRecords) {
+    console.log('[MODAL DEBUG] showGroupDetailModal called. group:', group?.name, 'items:', group?.items?.length);
+    if (!group || !group.items || group.items.length === 0) return;
+
+    // Prevent concurrent modal renders
+    if (isModalRendering) {
+        log('Modal', 'Modal is already rendering, skipping duplicate call');
+        return;
+    }
+    isModalRendering = true;
+
+    log('Modal', `Showing group detail modal for: ${group.name}`);
+
+    const modalHeaderActions = document.getElementById('modal-header-actions');
+    const modalItemName = document.getElementById('modal-item-name');
+    const modalItemPrice = document.getElementById('modal-item-price');
+    const modalItemDescription = document.getElementById('modal-item-description');
+    const modalMainImage = document.getElementById('modal-main-image');
+    const modalThumbnailStrip = document.getElementById('modal-thumbnail-strip');
+    const modalOptionsContainer = document.getElementById('modal-options-container');
+    const modalQuantitySelector = document.getElementById('modal-quantity-selector');
+    const modalNotesContainer = document.getElementById('modal-notes-container');
+    const modalCalendarContainer = document.getElementById('modal-calendar-container');
+    const modalActionsContainer = document.getElementById('modal-actions-container');
+    const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
+    const modalAdditionalDetails = document.getElementById('modal-additional-details');
+
+    // Reset modal state first
+    resetModalState();
+
+    // Set the group name and description
+    modalItemName.textContent = group.name || 'Options';
+    modalItemDescription.textContent = group.description || 'Choose from the available options below.';
+
+    // Clear sections not needed for group view
+    if (modalItemPrice) modalItemPrice.innerHTML = '';
+    const priceActionsGroup = document.getElementById('modal-price-actions');
+    if (priceActionsGroup) priceActionsGroup.classList.add('hidden');
+    const donationMeterGroup = document.getElementById('modal-donation-meter');
+    if (donationMeterGroup) donationMeterGroup.style.display = 'none';
+    if (modalQuantitySelector) modalQuantitySelector.innerHTML = '';
+    if (modalNotesContainer) modalNotesContainer.style.display = 'none';
+    if (modalCalendarContainer) modalCalendarContainer.innerHTML = '';
+    if (modalActionsContainer) modalActionsContainer.style.display = 'none';
+    if (modalAdditionalDetails) modalAdditionalDetails.innerHTML = '';
+    if (modalHeaderActions) modalHeaderActions.innerHTML = '';
+
+    // Clear breadcrumbs for group view (this is the top-level group)
+    if (modalBreadcrumbs) {
+        modalBreadcrumbs.innerHTML = `
+            <span class="breadcrumb-current group-breadcrumb-label">📂 Options Group</span>
+        `;
+    }
+
+    // Build a collage/grid of images from the group's items
+    const imageUrls = [];
+    const groupRecords = [];
+    for (const itemId of group.items) {
+        const record = allRecords.find(r => r.id === itemId);
+        if (record) {
+            groupRecords.push(record);
+            // Get images from cache or fetch
+            if (window.itemImagesCache && window.itemImagesCache.has(itemId)) {
+                const cached = window.itemImagesCache.get(itemId);
+                if (cached.images && cached.images.length > 0) {
+                    imageUrls.push(cached.images[cached.currentIndex || 0]);
+                }
+            } else {
+                try {
+                    const { imageUrls: fetched } = await api.fetchImagesForRecord(record, allRecords, new Map());
+                    if (fetched && fetched.length > 0) {
+                        imageUrls.push(fetched[0]);
+                        if (window.itemImagesCache) {
+                            window.itemImagesCache.set(itemId, { images: fetched, currentIndex: 0 });
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Failed to fetch images for group item:', itemId, err);
+                }
+            }
+        }
+    }
+
+    // Show a grid of images in the main image area
+    if (modalMainImage) {
+        if (imageUrls.length > 0) {
+            const gridClass = imageUrls.length === 1 ? 'single' : imageUrls.length === 2 ? 'two' : 'multi';
+            modalMainImage.innerHTML = `
+                <div class="group-modal-image-grid ${gridClass}">
+                    ${imageUrls.slice(0, 4).map(url => `
+                        <div class="group-modal-image-cell" style="background-image: url('${url}');"></div>
+                    `).join('')}
+                </div>
+            `;
+        } else {
+            modalMainImage.innerHTML = `
+                <div class="group-modal-image-placeholder">
+                    <span class="group-modal-image-placeholder-icon">📂</span>
+                    <span>Options Group</span>
+                </div>
+            `;
+        }
+    }
+    if (modalThumbnailStrip) modalThumbnailStrip.innerHTML = '';
+
+    // Build the options list - each item as a clickable option card
+    if (modalOptionsContainer) {
+        const optionCardsHTML = groupRecords.map((record, idx) => {
+            const name = record.fields.Name || 'Untitled';
+            const desc = record.fields.Description || '';
+            const truncDesc = desc.length > 80 ? desc.substring(0, 80) + '...' : desc;
+            const price = record.fields.Price ? `$${parseFloat(record.fields.Price).toFixed(2)}` : '';
+            const imgUrl = imageUrls[idx] || '';
+            const imgStyle = imgUrl ? `background-image: url('${imgUrl}');` : '';
+
+            return `
+                <div class="group-option-card" data-record-id="${record.id}" data-group-id="${group.id}" role="button" tabindex="0">
+                    <div class="group-option-card-image" style="${imgStyle}">
+                        ${!imgUrl ? '<span class="group-option-card-no-img">📷</span>' : ''}
+                    </div>
+                    <div class="group-option-card-info">
+                        <div class="group-option-card-name">${name}</div>
+                        ${truncDesc ? `<div class="group-option-card-desc">${truncDesc}</div>` : ''}
+                        ${price ? `<div class="group-option-card-price">${price}</div>` : ''}
+                    </div>
+                    <button class="group-option-card-remove" data-record-id="${record.id}" data-group-id="${group.id}" title="Remove from group">✕</button>
+                    <div class="group-option-card-arrow">→</div>
+                </div>
+            `;
+        }).join('');
+
+        modalOptionsContainer.innerHTML = `
+            <div class="group-options-container">
+                <div class="group-options-label">${group.items.length} options available</div>
+                ${optionCardsHTML}
+                <button class="group-dissolve-modal-btn" data-group-id="${group.id}">Ungroup All</button>
+            </div>
+        `;
+
+        // Add click handlers for option cards
+        const optionCards = modalOptionsContainer.querySelectorAll('.group-option-card');
+        optionCards.forEach(card => {
+            card.addEventListener('click', (e) => {
+                // Don't navigate if clicking the remove button
+                if (e.target.closest('.group-option-card-remove')) return;
+                e.stopPropagation();
+                const recordId = card.dataset.recordId;
+                const record = allRecords.find(r => r.id === recordId);
+                if (record) {
+                    log('Modal', `Navigating to option item: ${record.fields.Name}`);
+                    // Open item detail with group breadcrumb context
+                    showDetailModal(record, 0, group);
+                }
+            });
+            // Keyboard support
+            card.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    card.click();
+                }
+            });
+        });
+
+        // Add remove-from-group button handlers
+        const removeBtns = modalOptionsContainer.querySelectorAll('.group-option-card-remove');
+        removeBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const recordId = btn.dataset.recordId;
+                const groupId = btn.dataset.groupId;
+                if (recordId && groupId && state.session.relatedGroups) {
+                    const grp = state.session.relatedGroups.find(g => g.id === groupId);
+                    if (!grp) return;
+                    const items = Array.isArray(grp) ? grp : (grp.items || []);
+                    const itemIndex = items.indexOf(recordId);
+                    if (itemIndex === -1) return;
+                    items.splice(itemIndex, 1);
+
+                    const removedRecord = allRecords.find(r => r.id === recordId);
+                    const removedName = removedRecord?.fields?.Name || 'Item';
+
+                    // If fewer than 2 items remain, dissolve the group
+                    if (items.length < 2) {
+                        state.session.relatedGroups = state.session.relatedGroups.filter(g => g.id !== groupId);
+                        hideDetailModal();
+                        window.dispatchEvent(new CustomEvent('groupDissolved', { detail: { groupId } }));
+                    } else {
+                        if (!Array.isArray(grp)) {
+                            grp.items = items;
+                        }
+                        // Re-render the modal with updated group
+                        hideDetailModal();
+                        window.dispatchEvent(new CustomEvent('groupItemRemoved', { detail: { groupId, recordId } }));
+                    }
+                }
+            });
+        });
+
+        // Add dissolve/ungroup button handler
+        const dissolveBtn = modalOptionsContainer.querySelector('.group-dissolve-modal-btn');
+        if (dissolveBtn) {
+            dissolveBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const groupId = dissolveBtn.dataset.groupId;
+                if (groupId && state.session.relatedGroups) {
+                    state.session.relatedGroups = state.session.relatedGroups.filter(g => g.id !== groupId);
+                    hideDetailModal();
+                    // Trigger re-render (the presentation module will handle this via event)
+                    window.dispatchEvent(new CustomEvent('groupDissolved', { detail: { groupId } }));
+                }
+            });
+        }
+    }
+
+    // Show the modal
+    const modalZIndex = getModalZIndex('detail');
+
+    modalOverlay.classList.add('active');
+    modalOverlay.style.cssText = `
+        display: flex;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.6);
+        z-index: ${modalZIndex};
+        justify-content: center;
+        align-items: center;
+        opacity: 1;
+        pointer-events: auto;
+    `;
+
+    const modalContentEl = modalOverlay.querySelector('.modal-content');
+    if (modalContentEl) {
+        const isMobile = window.innerWidth <= 768;
+        if (isMobile) {
+            modalContentEl.style.cssText = `
+                background: #fff;
+                border-radius: 12px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                width: 90%;
+                max-width: 1100px;
+                height: auto;
+                max-height: 95vh;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                position: relative;
+                color: #333;
+                transform: scale(1);
+                opacity: 1;
+                pointer-events: auto;
+            `;
+        } else {
+            modalContentEl.style.cssText = `
+                background: #fff;
+                border-radius: 12px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                width: 90%;
+                max-width: 1100px;
+                height: 90vh;
+                max-height: 700px;
+                display: flex;
+                overflow: hidden;
+                position: relative;
+                color: #333;
+                transform: scale(1);
+                opacity: 1;
+                pointer-events: auto;
+            `;
+        }
+    }
+
+    document.body.classList.add('modal-open');
+
+    // Set up close handlers
+    const closeBtn = document.getElementById('modal-close-btn');
+    if (closeBtn) {
+        closeBtn.onclick = closeDetailModal;
+    }
+    modalOverlay.addEventListener('click', handleOverlayClick);
+    document.addEventListener('keydown', handleEscapeKey);
+
+    // Hide search photos container
+    const searchPhotosContainer = document.getElementById('modal-search-photos-container');
+    if (searchPhotosContainer) searchPhotosContainer.style.display = 'none';
+
+    // Hide set cover photo container
+    const setCoverPhotoContainer = document.getElementById('set-cover-photo-container');
+    if (setCoverPhotoContainer) setCoverPhotoContainer.style.display = 'none';
+
+    isModalRendering = false;
+}
+
 export function hideDetailModal() {
-    console.log('[hideDetailModal] Called.');
+    console.log('[MODAL DEBUG] hideDetailModal called. modalOverlay:', !!modalOverlay, 'isActive:', modalOverlay?.classList?.contains('active'));
     // Reset the rendering guard when modal is closed
     isModalRendering = false;
 
@@ -5965,7 +6703,7 @@ export async function showCheckoutModal(shopSettings) {
     // Check if UMW is in plan
     let isUmwInPlan = false;
     for (const [id] of state.cart.lockedItems) {
-        const lockedRecord = state.records.all.find(r => r.id === id);
+        const lockedRecord = getRecordById(id);
         if (lockedRecord && lockedRecord.fields.Name && lockedRecord.fields.Name.includes("Union Machine Works")) {
             isUmwInPlan = true;
             break;
@@ -5973,7 +6711,7 @@ export async function showCheckoutModal(shopSettings) {
     }
 
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
-        const record = state.records.all.find(r => r.id === recordId);
+        const record = getRecordById(recordId);
         if (!record) continue;
 
         // Use selections if available, otherwise fall back to selectedOptionIndex

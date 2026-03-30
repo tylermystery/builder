@@ -1,4 +1,5 @@
 // FILE: ui.js (REPLACE ENTIRE FILE)
+console.log('[MODULE DEBUG] ui.js module starting to load...', performance.now().toFixed(2) + 'ms');
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { log } from './utils/debug.js';
@@ -12,6 +13,12 @@ import { showPresentationView, hidePresentationView, setupPresentationEventListe
 import { addEnergy, updateProgress } from './components/backgroundEngine.js';
 import { shouldUseNetlifyImageCDN, optimizeImageUrl, applyCloudinaryTransform, hasCloudinaryTransformations } from './utils/imageOptimizer.js';
 
+console.log('[MODULE DEBUG] ui.js imports resolved. Checking key imports...');
+console.log('[MODULE DEBUG] ui.js: createInteractiveCard:', typeof createInteractiveCard);
+console.log('[MODULE DEBUG] ui.js: showPresentationView:', typeof showPresentationView);
+console.log('[MODULE DEBUG] ui.js: hidePresentationView:', typeof hidePresentationView);
+console.log('[MODULE DEBUG] ui.js: showItineraryModal:', typeof showItineraryModal);
+
 
 // Re-export functions from component modules
 export * from './components/card.js';
@@ -24,6 +31,8 @@ export { showPresentationView, hidePresentationView, setupPresentationEventListe
 export { updateFooter, initializeFooter } from './components/footer.js';
 // Phase 3a: Task Manager exports
 export { initTaskManager, getCurrentProjectId, getCurrentTasks } from './components/taskManager.js';
+
+console.log('[MODULE DEBUG] ui.js re-exports defined successfully.', performance.now().toFixed(2) + 'ms');
 
 
 // Optimized lazy loading with Netlify Image CDN, responsive images and modern format support
@@ -178,7 +187,8 @@ function getChildItemsForGrouping(groupingRecord, allRecords) {
     const groupingNameForFilter = groupingRecord.fields.Name.toLowerCase().replace(/\s+/g, ' ');
 
     const results = allRecords.filter(r => {
-        if (r.fields['Item Type'] !== 'Bookable Item' && r.fields['Item Type'] !== 'Event') return false;
+        const itemType = r.fields['Item Type'];
+        if (itemType !== 'Bookable Item' && itemType !== 'Event' && itemType !== 'Package') return false;
         const itemCategories = (r.fields.Categories || '')
             .split(',')
             .map(cat => cat.trim().toLowerCase().replace(/\s+/g, ' '));
@@ -451,6 +461,15 @@ async function createGroupingCarouselSection(groupingRecord, childItems, allReco
 }
 
 export async function renderRecords(recordsToRender, imageCache, append = false) {
+    console.log('[CATALOG DEBUG] renderRecords called.', {
+        recordCount: recordsToRender?.length,
+        append,
+        hasImageCache: !!imageCache,
+        catalogContainerExists: !!document.getElementById('catalog-container'),
+        stateRecordsAll: state.records.all?.length,
+        stateRecordsFiltered: state.records.filtered?.length,
+        activeShopId: state.ui.activeShopId
+    });
     log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
 
     const catalogContainer = document.getElementById('catalog-container');
@@ -458,6 +477,41 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     if (!catalogContainer) {
         console.error("UI ERROR: catalog-container element not found in the DOM!");
         return;
+    }
+
+    // Set up delegated event listeners once for quantity buttons (avoids per-card listeners)
+    if (!catalogContainer._delegatedListenersAttached) {
+        catalogContainer._delegatedListenersAttached = true;
+
+        catalogContainer.addEventListener('click', (e) => {
+            const plusBtn = e.target.closest('.quantity-btn.plus');
+            const minusBtn = e.target.closest('.quantity-btn.minus');
+
+            if (plusBtn) {
+                e.stopPropagation();
+                e.preventDefault();
+                const selector = plusBtn.closest('.quantity-selector');
+                if (!selector) return;
+                const input = selector.querySelector('.quantity-input');
+                if (!input) return;
+                const currentValue = parseInt(input.value, 10) || 1;
+                input.value = currentValue + 1;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            } else if (minusBtn) {
+                e.stopPropagation();
+                e.preventDefault();
+                const selector = minusBtn.closest('.quantity-selector');
+                if (!selector) return;
+                const input = selector.querySelector('.quantity-input');
+                if (!input) return;
+                const currentValue = parseInt(input.value, 10) || 1;
+                const minValue = parseInt(input.min, 10) || 1;
+                if (currentValue > minValue) {
+                    input.value = currentValue - 1;
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+        });
     }
 
     if (!append) {
@@ -512,7 +566,9 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     const params = new URLSearchParams(window.location.search);
     const hasSubcategoryFilter = params.get('subcategory');
     const hasViewFilter = params.get('view');
-    const isFilteredView = hasSubcategoryFilter || hasViewFilter || state.ui.nameFilter;
+    const nameFilterEl = document.getElementById('name-filter');
+    const hasSearchFilter = state.ui.nameFilter || (nameFilterEl && nameFilterEl.value.trim().length > 0);
+    const isFilteredView = hasSubcategoryFilter || hasViewFilter || hasSearchFilter;
 
     // Check if carousel layout is already established in the container
     const existingCarouselSections = catalogContainer.querySelector('.grouping-carousel-section');
@@ -537,44 +593,62 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
 
     // If appending to existing carousel layout, add items to the ungrouped section
     if (layoutMode === 'append-to-ungrouped') {
-        // Find or create the ungrouped items section
-        let ungroupedSection = existingUngroupedSection;
-        if (!ungroupedSection) {
-            ungroupedSection = document.createElement('div');
-            ungroupedSection.className = 'ungrouped-items-section';
-            ungroupedSection.style.display = 'grid';
-            ungroupedSection.style.gridTemplateColumns = 'repeat(auto-fill, minmax(320px, 1fr))';
-            ungroupedSection.style.gap = '25px';
-            ungroupedSection.style.marginTop = '20px';
-            catalogContainer.appendChild(ungroupedSection);
-        }
-
-        const fragment = document.createDocumentFragment();
-        const CHUNK_SIZE = 4;
-
-        for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
-            const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
-            const cardPromises = chunk.map(record => createInteractiveCard(record, state.records.all, imageCache));
-            const cards = await Promise.all(cardPromises);
-
-            cards.forEach(card => {
-                if (card) fragment.appendChild(card);
+        // Build a set of item IDs already shown in carousel sections to avoid duplicates
+        const carouselSections = catalogContainer.querySelectorAll('.grouping-carousel-section');
+        const carouselItemIds = new Set();
+        carouselSections.forEach(section => {
+            section.querySelectorAll('.event-card[data-record-id]').forEach(card => {
+                carouselItemIds.add(card.dataset.recordId);
             });
+        });
 
-            ungroupedSection.appendChild(fragment);
-            fragment.textContent = '';
+        // Filter out items already shown in carousels and any grouping records
+        const itemsToAppend = recordsToRender.filter(r =>
+            r.fields['Item Type'] !== 'Grouping' && !carouselItemIds.has(r.id)
+        );
 
-            addEnergy();
-            updateProgress(0.00005 * chunk.length);
+        if (itemsToAppend.length === 0) {
+            // Nothing to append after filtering
+        } else {
+            // Find or create the ungrouped items section
+            let ungroupedSection = existingUngroupedSection;
+            if (!ungroupedSection) {
+                ungroupedSection = document.createElement('div');
+                ungroupedSection.className = 'ungrouped-items-section';
+                ungroupedSection.style.display = 'grid';
+                ungroupedSection.style.gridTemplateColumns = 'repeat(auto-fill, minmax(320px, 1fr))';
+                ungroupedSection.style.gap = '25px';
+                ungroupedSection.style.marginTop = '20px';
+                catalogContainer.appendChild(ungroupedSection);
+            }
 
-            if (i + CHUNK_SIZE < recordsToRender.length) {
-                await new Promise(resolve => {
-                    if (window.requestIdleCallback) {
-                        requestIdleCallback(resolve, { timeout: 50 });
-                    } else {
-                        setTimeout(resolve, 0);
-                    }
+            const fragment = document.createDocumentFragment();
+            const CHUNK_SIZE = 4;
+
+            for (let i = 0; i < itemsToAppend.length; i += CHUNK_SIZE) {
+                const chunk = itemsToAppend.slice(i, i + CHUNK_SIZE);
+                const cardPromises = chunk.map(record => createInteractiveCard(record, state.records.all, imageCache));
+                const cards = await Promise.all(cardPromises);
+
+                cards.forEach(card => {
+                    if (card) fragment.appendChild(card);
                 });
+
+                ungroupedSection.appendChild(fragment);
+                fragment.textContent = '';
+
+                addEnergy();
+                updateProgress(0.00005 * chunk.length);
+
+                if (i + CHUNK_SIZE < itemsToAppend.length) {
+                    await new Promise(resolve => {
+                        if (window.requestIdleCallback) {
+                            requestIdleCallback(resolve, { timeout: 50 });
+                        } else {
+                            setTimeout(resolve, 0);
+                        }
+                    });
+                }
             }
         }
     } else if (isFilteredView || groupings.length === 0) {

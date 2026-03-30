@@ -1,6 +1,8 @@
 // In: main.js
 // Action: REPLACE THE ENTIRE FILE
 
+console.log('[MODULE DEBUG] main.js module starting to load...', performance.now().toFixed(2) + 'ms');
+
 import { state, setState } from './state.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
@@ -22,7 +24,7 @@ import { initializeWtfPlansPanel, syncWtfPlansPanelWithUrl } from './components/
 import { initializeForumPanel, syncForumPanelWithUrl } from './components/forumPanel.js';
 import { applyCloudinaryTransform } from './utils/imageOptimizer.js';
 
-
+console.log('[MODULE DEBUG] main.js all imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 const imageCache = new Map();
 window.imageCache = imageCache;
 
@@ -77,20 +79,11 @@ function waitForDeferredCss(maxWait = 500) {
         const stylesApplied = checkStylesApplied();
 
         if (isLoaded && rulesAccessible) {
-            console.log('[CSS-WAIT] Deferred CSS already loaded', {
-                relIsStylesheet: isLoaded,
-                rulesAccessible,
-                stylesApplied,
-                timestamp: performance.now().toFixed(2) + 'ms'
-            });
             resolve({ loaded: true, rulesApplied: rulesAccessible, reason: 'already-loaded' });
             return;
         }
 
         const startTime = performance.now();
-        console.log('[CSS-WAIT] Waiting for deferred CSS to load...', {
-            currentState: { isLoaded, rulesAccessible, stylesApplied }
-        });
 
         // Set up MutationObserver to watch for rel attribute change
         const observer = new MutationObserver((mutations) => {
@@ -100,12 +93,6 @@ function waitForDeferredCss(maxWait = 500) {
                         // Wait a tiny bit for browser to parse the CSS
                         setTimeout(() => {
                             const rulesNow = checkCssRulesAccessible();
-                            const stylesNow = checkStylesApplied();
-                            console.log('[CSS-WAIT] Deferred CSS rel changed to stylesheet', {
-                                elapsed: (performance.now() - startTime).toFixed(2) + 'ms',
-                                rulesAccessible: rulesNow,
-                                stylesApplied: stylesNow
-                            });
                             observer.disconnect();
                             resolve({ loaded: true, rulesApplied: rulesNow, reason: 'mutation-observer' });
                         }, 20);
@@ -122,10 +109,6 @@ function waitForDeferredCss(maxWait = 500) {
         // Fallback: poll at short intervals
         const pollInterval = setInterval(() => {
             if (checkCssLoaded() && checkCssRulesAccessible()) {
-                console.log('[CSS-WAIT] Deferred CSS detected via polling', {
-                    elapsed: (performance.now() - startTime).toFixed(2) + 'ms',
-                    stylesApplied: checkStylesApplied()
-                });
                 clearInterval(pollInterval);
                 observer.disconnect();
                 resolve({ loaded: true, rulesApplied: true, reason: 'polling' });
@@ -139,12 +122,7 @@ function waitForDeferredCss(maxWait = 500) {
             const loaded = checkCssLoaded();
             const rulesApplied = checkCssRulesAccessible();
             if (!loaded || !rulesApplied) {
-                console.warn('[CSS-WAIT] Timed out waiting for deferred CSS', {
-                    maxWait: maxWait + 'ms',
-                    loaded,
-                    rulesApplied,
-                    stylesApplied: checkStylesApplied()
-                });
+                console.warn('[CSS-WAIT] Timed out waiting for deferred CSS');
             }
             resolve({ loaded, rulesApplied, reason: 'timeout' });
         }, maxWait);
@@ -153,6 +131,8 @@ function waitForDeferredCss(maxWait = 500) {
 
 function syncUiWithUrl() {
     const params = new URLSearchParams(window.location.search);
+    console.log('[SYNC-URL DEBUG] syncUiWithUrl called. URL params:', Object.fromEntries(params.entries()));
+    console.log('[SYNC-URL DEBUG] state.records.all.length:', state.records.all.length, 'state.cart.lockedItems.size:', state.cart.lockedItems.size);
 
     // Support both query param (?openItem=recXYZ) and pretty URL (/item/slug-recXYZ)
     let openItemId = params.get('openItem');
@@ -204,21 +184,25 @@ function syncUiWithUrl() {
 
     // DEBUG: Log URL sync entry point with CSS state
     const isDirectModalAccess = !!openItemId && !document.querySelector('#detail-modal-overlay.active');
-    if (isDirectModalAccess) {
-        console.log('[DIRECT-MODAL-DEBUG] syncUiWithUrl called for direct modal access:', {
-            openItemId,
-            timestamp: performance.now().toFixed(2) + 'ms',
-            cssState: window.__cssDebug ? window.__cssDebug.logState('syncUiWithUrl entry') : 'cssDebug not available',
-            recordsLoaded: state.records.all.length,
-            storesLoaded: state.stores.all.length,
-            documentReadyState: document.readyState
-        });
-    }
 
     // Close any open overlays first
-    ui.hideDetailModal();
-    ui.hideItineraryModal();
-    ui.hidePresentationView();
+    console.log('[SYNC-URL DEBUG] Closing open overlays (hideDetailModal, hideItineraryModal, hidePresentationView)...');
+    try {
+        ui.hideDetailModal();
+        console.log('[SYNC-URL DEBUG] hideDetailModal completed.');
+    } catch (e) {
+        console.error('[SYNC-URL DEBUG] hideDetailModal FAILED:', e.message, e.stack);
+    }
+    try {
+        ui.hideItineraryModal();
+    } catch (e) {
+        console.error('[SYNC-URL DEBUG] hideItineraryModal FAILED:', e.message, e.stack);
+    }
+    try {
+        ui.hidePresentationView();
+    } catch (e) {
+        console.error('[SYNC-URL DEBUG] hidePresentationView FAILED:', e.message, e.stack);
+    }
 
     // Sync WTF Plans panel state with URL (for browser back/forward navigation)
     syncWtfPlansPanelWithUrl(params);
@@ -261,7 +245,9 @@ function syncUiWithUrl() {
     // --- Handle opening modals/views based on URL ---
     // For direct modal URL access, wait for deferred CSS before showing modal
     const handleModalOrViewFromUrl = async () => {
+        console.log('[SYNC-URL DEBUG] handleModalOrViewFromUrl called. view:', view, 'openItemId:', openItemId);
         if (view === 'present') {
+            console.log('[SYNC-URL DEBUG] Opening presentation view...');
             ui.showPresentationView('ideas');
         } else if (view === 'itinerary') {
             ui.showItineraryModal();
@@ -276,83 +262,19 @@ function syncUiWithUrl() {
         } else if (openItemId) {
             // Wait for deferred CSS before showing modal on direct URL access
             // This prevents styling issues where the page behind the modal looks broken
-            // Increased timeout to 1500ms to handle slower connections
             const cssResult = await waitForDeferredCss(1500);
-
-            // Helper to get computed styles of key page elements
-            const getPageElementStyles = () => {
-                const eventPlanPanel = document.getElementById('event-plan-panel');
-                const filterControls = document.getElementById('filter-controls');
-                const sidebarContainer = document.getElementById('sidebar-container');
-                const catalogContainer = document.getElementById('catalog-container');
-                const header = document.querySelector('header, .header, #header');
-
-                return {
-                    eventPlanPanel: eventPlanPanel ? {
-                        backgroundColor: window.getComputedStyle(eventPlanPanel).backgroundColor,
-                        backdropFilter: window.getComputedStyle(eventPlanPanel).backdropFilter,
-                        display: window.getComputedStyle(eventPlanPanel).display,
-                        visibility: window.getComputedStyle(eventPlanPanel).visibility
-                    } : 'not found',
-                    filterControls: filterControls ? {
-                        backgroundColor: window.getComputedStyle(filterControls).backgroundColor,
-                        backdropFilter: window.getComputedStyle(filterControls).backdropFilter
-                    } : 'not found',
-                    sidebarContainer: sidebarContainer ? {
-                        display: window.getComputedStyle(sidebarContainer).display,
-                        width: window.getComputedStyle(sidebarContainer).width
-                    } : 'not found',
-                    catalogContainer: catalogContainer ? {
-                        display: window.getComputedStyle(catalogContainer).display
-                    } : 'not found',
-                    header: header ? {
-                        backgroundColor: window.getComputedStyle(header).backgroundColor,
-                        position: window.getComputedStyle(header).position
-                    } : 'not found'
-                };
-            };
-
-            // DEBUG: Comprehensive CSS and DOM state check before showing modal
-            const deferredCssLinks = document.querySelectorAll('link[href*="deferred.css"]');
-            const deferredCssLoaded = Array.from(deferredCssLinks).some(link => link.rel === 'stylesheet');
-
-            console.log('[DIRECT-MODAL-DEBUG] About to show modal for:', openItemId, {
-                timestamp: performance.now().toFixed(2) + 'ms',
-                cssWaitResult: cssResult,
-                deferredCssLoaded,
-                deferredCssLinks: Array.from(deferredCssLinks).map(l => ({ href: l.href, rel: l.rel })),
-                documentReadyState: document.readyState,
-                totalStylesheets: document.styleSheets.length,
-                inlineStyles: document.querySelectorAll('style').length,
-                pageElementStyles: getPageElementStyles(),
-                // Log stylesheets with their rule counts
-                stylesheetDetails: Array.from(document.styleSheets).map(s => ({
-                    href: s.href ? s.href.split('/').pop() : 'inline',
-                    disabled: s.disabled,
-                    rulesCount: (() => { try { return s.cssRules ? s.cssRules.length : 'N/A'; } catch(e) { return 'CORS blocked'; }})()
-                }))
-            });
 
             const recordToOpen = state.records.all.find(r => r.id === openItemId);
             if (recordToOpen) {
-                // Log if CSS isn't loaded yet - this is the likely cause of styling issues
                 if (!cssResult.loaded || !cssResult.rulesApplied) {
-                    console.warn('[DIRECT-MODAL-DEBUG] WARNING: Deferred CSS not fully loaded/applied!');
-                    console.warn('[DIRECT-MODAL-DEBUG] cssResult:', cssResult);
-                    console.warn('[DIRECT-MODAL-DEBUG] This will cause styling issues. Current page styles:', getPageElementStyles());
-
                     // Force a layout recalculation by triggering a reflow
-                    // This can help ensure any CSS that has loaded is properly applied
                     document.body.offsetHeight;
-
                     // Give a bit more time for CSS to settle before showing modal
                     await new Promise(resolve => setTimeout(resolve, 100));
-                } else {
-                    console.log('[DIRECT-MODAL-DEBUG] Deferred CSS confirmed loaded, showing modal');
                 }
                 ui.showDetailModal(recordToOpen);
             } else {
-                console.warn(`[DIRECT-MODAL-DEBUG] Record ID ${openItemId} not found in state.records.all. Available records: ${state.records.all.length}`);
+                console.warn(`Record ID ${openItemId} not found in state.records.all (${state.records.all.length} records loaded)`);
             }
         }
     };
@@ -363,28 +285,32 @@ function syncUiWithUrl() {
 
 
 async function initialize() {
+    console.log('[INIT DEBUG] ========== APP INITIALIZATION STARTED ==========');
+    console.log('[INIT DEBUG] URL:', window.location.href);
+    console.log('[INIT DEBUG] Timestamp:', performance.now().toFixed(2) + 'ms');
     log('Main', '1. Initialization started.');
 
-    // DEBUG: Check if this is a direct modal URL access
+    // Early detection of presentation mode for optimized initialization
     const isDirectModalUrl = window.location.pathname.includes('/item/') ||
                              new URLSearchParams(window.location.search).has('openItem');
-    if (isDirectModalUrl) {
-        console.log('[INIT-DEBUG] Direct modal URL detected at initialization:', {
-            pathname: window.location.pathname,
-            search: window.location.search,
-            timestamp: performance.now().toFixed(2) + 'ms',
-            cssState: window.__cssDebug ? window.__cssDebug.logState('initialize() start') : 'cssDebug not available',
-            documentReadyState: document.readyState
-        });
-    }
-
-    // Early detection of presentation mode for optimized initialization
     const urlParamsEarly = new URLSearchParams(window.location.search);
     const isInPresentationMode = urlParamsEarly.get('view') === 'present';
+    console.log('[INIT DEBUG] Mode detection:', { isDirectModalUrl, isInPresentationMode, view: urlParamsEarly.get('view'), session: urlParamsEarly.get('session') });
     if (isInPresentationMode) {
         log('Main', 'Presentation mode detected - optimizing initialization for faster load');
     }
 
+    console.log('[INIT DEBUG] Checking ui module exports...');
+    console.log('[INIT DEBUG] ui.initStateHelpers:', typeof ui.initStateHelpers);
+    console.log('[INIT DEBUG] ui.renderRecords:', typeof ui.renderRecords);
+    console.log('[INIT DEBUG] ui.showDetailModal:', typeof ui.showDetailModal);
+    console.log('[INIT DEBUG] ui.hideDetailModal:', typeof ui.hideDetailModal);
+    console.log('[INIT DEBUG] ui.showPresentationView:', typeof ui.showPresentationView);
+    console.log('[INIT DEBUG] ui.hidePresentationView:', typeof ui.hidePresentationView);
+    console.log('[INIT DEBUG] ui.updateEventPlanSection:', typeof ui.updateEventPlanSection);
+    console.log('[INIT DEBUG] ui.toggleLoading:', typeof ui.toggleLoading);
+    console.log('[INIT DEBUG] ui.showGroupDetailModal:', typeof ui.showGroupDetailModal);
+    console.log('[INIT DEBUG] ui.createInteractiveCard:', typeof ui.createInteractiveCard);
     ui.initStateHelpers({ getItemState: ui.getItemState });
 
      document.addEventListener('userLoggedIn', () => {
@@ -476,25 +402,13 @@ async function initialize() {
 
     ui.toggleLoading(true);
     try {
-        console.log('[MAIN DEBUG] ========== FETCHING INITIAL DATA ==========');
+        console.log('[INIT DEBUG] ========== FETCHING INITIAL DATA ==========');
+        console.log('[INIT DEBUG] Calling api.fetchAllStores and api.fetchAllRecords...');
+        const fetchStart = performance.now();
         const [stores, records] = await Promise.all([api.fetchAllStores(), api.fetchAllRecords()]);
-        console.log('[MAIN DEBUG] Fetched stores:', stores.length);
-        console.log('[MAIN DEBUG] Fetched records:', records.length);
-
-        // Log packages specifically
-        const packages = records.filter(r => r.fields['Item Type'] === 'Package');
-        console.log('[MAIN DEBUG] Packages in fetched records:', packages.length);
-        if (packages.length > 0) {
-            console.log('[MAIN DEBUG] Package details:', packages.map(p => ({
-                id: p.id,
-                name: p.fields.Name,
-                itemType: p.fields['Item Type'],
-                status: p.fields.Status,
-                linkedSession: p.fields.LinkedSession
-            })));
-        } else {
-            console.log('[MAIN DEBUG] NO PACKAGES FOUND in fetched records');
-        }
+        const fetchEnd = performance.now();
+        console.log(`[INIT DEBUG] Data fetched in ${(fetchEnd - fetchStart).toFixed(0)}ms: ${stores.length} stores, ${records.length} records`);
+        log('Main', `Fetched ${stores.length} stores and ${records.length} records.`);
 
         // Prioritize AI-generated Rankings over default profiles
         // Rankings field contains AI profiler determined rankings from Gemini
@@ -527,12 +441,8 @@ async function initialize() {
             stores: { all: stores },
             records: { all: records }
         });
+        console.log('[INIT DEBUG] State updated with stores and records. state.records.all.length:', state.records.all.length, 'state.stores.all.length:', state.stores.all.length);
         log('Main', `Fetched ${stores.length} stores and ${records.length} items. Applied AI-generated Rankings where available.`);
-
-        // Debug: Verify packages are in state
-        const packagesInState = state.records.all.filter(r => r.fields['Item Type'] === 'Package');
-        console.log('[MAIN DEBUG] Packages in state after setState:', packagesInState.length);
-        console.log('[MAIN DEBUG] ========== INITIAL DATA FETCH COMPLETE ==========');
 
     } catch (error) {
         console.error("Failed to load initial store/item data:", error);
@@ -732,7 +642,9 @@ async function initialize() {
             }
         }
         ui.applyCartLabels(shopSettings.cartLabels);
+        console.log('[INIT DEBUG] Calling initializeEventListeners...');
         initializeEventListeners(imageCache, window.flatpickr, shopSettings);
+        console.log('[INIT DEBUG] initializeEventListeners completed.');
 
         // Skip footer update in presentation mode (footer not visible)
         if (!isInPresentationMode) {
@@ -873,30 +785,27 @@ async function initialize() {
             if (menuProjectsBtn) menuProjectsBtn.style.display = 'flex';
         }
 
-        // DEBUG: Log state just before syncUiWithUrl for direct modal URL debugging
-        if (isDirectModalUrl) {
-            console.log('[INIT-DEBUG] About to call syncUiWithUrl:', {
-                timestamp: performance.now().toFixed(2) + 'ms',
-                cssState: window.__cssDebug ? window.__cssDebug.logState('Before syncUiWithUrl') : 'cssDebug not available',
-                recordsLoaded: state.records.all.length,
-                storesLoaded: state.stores.all.length,
-                activeShopId: state.ui.activeShopId,
-                sessionId: state.session.id
-            });
-        }
-
+        console.log('[INIT DEBUG] Calling syncUiWithUrl...');
         syncUiWithUrl();
+        console.log('[INIT DEBUG] syncUiWithUrl completed.');
         window.addEventListener('popstate', syncUiWithUrl);
 
         setState({ ui: { ...state.ui, isInitializing: false }});
+        console.log('[INIT DEBUG] isInitializing set to false.');
 
         // Skip main catalog background in presentation mode (presentation has its own background)
         if (!isInPresentationMode) {
             // Initialize background animation immediately so it loads first
+            console.log('[INIT DEBUG] Initializing background engine...');
             backgroundEngine.initBackgroundEngine();
+            console.log('[INIT DEBUG] Background engine initialized, loading fluid effect...');
             backgroundEngine.loadEffect(fluidEffect, null);
+            console.log('[INIT DEBUG] Fluid effect loaded.');
+        } else {
+            console.log('[INIT DEBUG] Skipping background engine (presentation mode).');
         }
 
+        console.log('[INIT DEBUG] ========== APP INITIALIZATION COMPLETE ==========');
         log('Main', 'Initialization complete.');
 
     } else {

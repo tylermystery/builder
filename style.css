@@ -2317,10 +2317,10 @@ body.presentation-active #wtf-plans-panel-overlay {
 #modal-item-name { 
     margin-top: 0;
 }
-#modal-item-price { 
+#modal-item-price {
     font-size: 1.5em;
-    font-weight: bold; 
-    margin: 10px 0;
+    font-weight: bold;
+    margin: 0;
 }
 #modal-options-container {
     margin: 20px 0;
@@ -6869,7 +6869,7 @@ body:not(.presentation-active) .drag-merge-indicator {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 100001; /* Higher than radial menu (99999) and merge indicator (99998) */
+    z-index: 100001;
     animation: merge-dialog-fade-in 0.2s ease;
     pointer-events: auto;
 }
@@ -6883,11 +6883,13 @@ body:not(.presentation-active) .drag-merge-indicator {
     background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
     border-radius: 20px;
     padding: 28px;
-    max-width: 420px;
-    width: 90%;
+    max-width: 460px;
+    width: 92%;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     position: relative;
     animation: merge-dialog-slide-up 0.3s ease;
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
 @keyframes merge-dialog-slide-up {
@@ -6949,8 +6951,8 @@ body:not(.presentation-active) .drag-merge-indicator {
     align-items: center;
     justify-content: center;
     gap: 12px;
-    margin-bottom: 24px;
-    padding: 16px;
+    margin-bottom: 20px;
+    padding: 14px;
     background: rgba(0, 0, 0, 0.03);
     border-radius: 12px;
 }
@@ -6962,7 +6964,7 @@ body:not(.presentation-active) .drag-merge-indicator {
     border-radius: 10px;
     padding: 12px;
     text-align: center;
-    max-width: 150px;
+    max-width: 160px;
 }
 
 .merge-item-name {
@@ -6982,86 +6984,90 @@ body:not(.presentation-active) .drag-merge-indicator {
     flex-shrink: 0;
 }
 
-.merge-dialog-options {
+/* Merge tabs */
+.merge-tabs {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 16px;
-}
-
-.merge-option-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
     gap: 4px;
-    padding: 16px 20px;
-    border: 2px solid #e9ecef;
-    border-radius: 12px;
-    background: #fff;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    text-align: left;
+    margin-bottom: 0;
+    background: #f1f3f5;
+    border-radius: 12px 12px 0 0;
+    padding: 4px 4px 0;
 }
 
-.merge-option-btn:hover {
-    border-color: #4CAF50;
-    background: rgba(76, 175, 80, 0.05);
-    transform: translateX(4px);
-}
-
-.merge-option-btn:active {
-    transform: translateX(2px);
-}
-
-.merge-option-combine:hover {
-    border-color: #9C27B0;
-    background: rgba(156, 39, 176, 0.05);
-}
-
-.merge-option-group:hover {
-    border-color: #2196F3;
-    background: rgba(33, 150, 243, 0.05);
-}
-
-.merge-option-icon {
-    font-size: 1.4em;
-}
-
-.merge-option-label {
-    font-size: 1em;
-    font-weight: 600;
-    color: #212529;
-}
-
-.merge-option-desc {
-    font-size: 0.8em;
-    color: #6c757d;
-}
-
-.merge-dialog-cancel {
-    width: 100%;
-    padding: 12px;
+.merge-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 16px;
     border: none;
-    border-radius: 8px;
-    background: #f8f9fa;
+    border-radius: 10px 10px 0 0;
+    background: transparent;
     color: #6c757d;
-    font-size: 0.9em;
+    font-size: 0.95em;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
-.merge-dialog-cancel:hover {
-    background: #e9ecef;
+.merge-tab:hover {
     color: #495057;
+    background: rgba(255, 255, 255, 0.5);
 }
 
-/* Merge Estimation Preview */
-.merge-estimation-preview {
+.merge-tab.active {
+    background: #fff;
+    color: #212529;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.merge-tab.active[data-merge-type="options"] {
+    color: #1565c0;
+}
+
+.merge-tab.active[data-merge-type="hybrid"] {
+    color: #7b1fa2;
+}
+
+.merge-tab-icon {
+    font-size: 1.1em;
+}
+
+.merge-tab-label {
+    font-size: 0.9em;
+}
+
+/* Merge tab content */
+.merge-tab-content {
+    display: none;
+    background: #fff;
+    border-radius: 0 0 12px 12px;
+    padding: 20px;
     margin-bottom: 16px;
-    padding: 16px;
+    border: 1px solid #e9ecef;
+    border-top: none;
+}
+
+.merge-tab-content.active {
+    display: block;
+}
+
+.merge-tab-description {
+    font-size: 0.85em;
+    color: #6c757d;
+    margin-bottom: 16px;
+    line-height: 1.4;
+}
+
+/* Merge estimation panel (inside each tab) */
+.merge-estimation-panel {
+    margin-bottom: 16px;
+    padding: 14px;
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border-radius: 12px;
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    min-height: 60px;
 }
 
 .merge-estimation-loading {
@@ -7094,17 +7100,17 @@ body:not(.presentation-active) .drag-merge-indicator {
 .merge-estimation-result {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
 }
 
-.estimation-section {
+.estimation-field {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
 }
 
 .estimation-label {
-    font-size: 0.75em;
+    font-size: 0.72em;
     font-weight: 600;
     color: #6c757d;
     text-transform: uppercase;
@@ -7128,13 +7134,85 @@ body:not(.presentation-active) .drag-merge-indicator {
     line-height: 1.4;
 }
 
-/* Estimation section styles for different merge types */
-.estimation-options .estimation-value {
+/* Estimation values color by type */
+#merge-tab-content-options .estimation-value {
     border-left: 3px solid #2196F3;
 }
 
-.estimation-hybrid .estimation-value {
+#merge-tab-content-hybrid .estimation-value {
     border-left: 3px solid #9C27B0;
+}
+
+/* Confidence bar */
+.estimation-confidence-bar {
+    height: 6px;
+    background: #e9ecef;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.estimation-confidence-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+    background: #4CAF50;
+}
+
+/* Merge confirm buttons */
+.merge-confirm-btn {
+    width: 100%;
+    padding: 14px 20px;
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #212529;
+}
+
+.merge-confirm-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.merge-confirm-options {
+    border-color: #2196F3;
+    color: #1565c0;
+    background: linear-gradient(135deg, #e3f2fd 0%, #fff 100%);
+}
+
+.merge-confirm-options:hover {
+    background: linear-gradient(135deg, #bbdefb 0%, #e3f2fd 100%);
+}
+
+.merge-confirm-hybrid {
+    border-color: #9C27B0;
+    color: #7b1fa2;
+    background: linear-gradient(135deg, #f3e5f5 0%, #fff 100%);
+}
+
+.merge-confirm-hybrid:hover {
+    background: linear-gradient(135deg, #e1bee7 0%, #f3e5f5 100%);
+}
+
+.merge-dialog-cancel {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: #f8f9fa;
+    color: #6c757d;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.merge-dialog-cancel:hover {
+    background: #e9ecef;
+    color: #495057;
 }
 
 /* =====================================================
@@ -7229,6 +7307,89 @@ body:not(.presentation-active) .drag-merge-indicator {
     border-radius: 10px;
 }
 
+/* Options group wrapper (grouped items rendered together) */
+.options-group-wrapper {
+    border: 2px solid #bbdefb;
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #f5f9ff 0%, #eef5ff 100%);
+}
+
+.options-group-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    flex-wrap: wrap;
+}
+
+.options-group-header-icon {
+    font-size: 1.2em;
+}
+
+.options-group-header-title {
+    font-weight: 700;
+    font-size: 0.95em;
+    color: #1565c0;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.options-group-header-desc {
+    font-size: 0.8em;
+    color: #1976d2;
+    opacity: 0.8;
+    width: 100%;
+    order: 10;
+    line-height: 1.3;
+}
+
+.options-group-header-count {
+    font-size: 0.8em;
+    color: #1976d2;
+    background: rgba(255, 255, 255, 0.7);
+    padding: 2px 10px;
+    border-radius: 10px;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.options-group-dissolve-btn {
+    font-size: 0.78em;
+    color: #c62828;
+    background: rgba(198, 40, 40, 0.08);
+    border: 1px solid rgba(198, 40, 40, 0.2);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.options-group-dissolve-btn:hover {
+    background: rgba(198, 40, 40, 0.15);
+    border-color: rgba(198, 40, 40, 0.4);
+}
+
+.options-group-items {
+    padding: 8px;
+}
+
+.options-group-items .itinerary-item-section {
+    margin-left: 0;
+    border-left-color: transparent;
+}
+
+.options-group-items .itinerary-item-section::before {
+    display: none;
+}
+
 /* Combined item visual enhancement */
 .itinerary-item-section.is-combined {
     border-left: 3px solid #9C27B0;
@@ -7284,10 +7445,90 @@ body:not(.presentation-active) .drag-merge-indicator {
     line-height: 1.4;
 }
 
+/* Combined sources header with split action */
+.combined-sources-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.uncombine-all-btn {
+    font-size: 0.78em;
+    color: #dc3545;
+    background: rgba(220, 53, 69, 0.08);
+    border: 1px solid rgba(220, 53, 69, 0.2);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.uncombine-all-btn:hover {
+    background: rgba(220, 53, 69, 0.15);
+    border-color: rgba(220, 53, 69, 0.4);
+}
+
+/* Uncombine individual source button */
+.uncombine-source-btn {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid rgba(156, 39, 176, 0.25);
+    background: rgba(156, 39, 176, 0.06);
+    color: #7b1fa2;
+    font-size: 0.75em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+    line-height: 1;
+}
+
+.uncombine-source-btn:hover {
+    background: rgba(220, 53, 69, 0.15);
+    border-color: rgba(220, 53, 69, 0.4);
+    color: #dc3545;
+}
+
 .combined-source-item {
     font-size: 0.85em;
     color: #666;
     padding: 4px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+/* Leave group button (inside group indicator) */
+.leave-group-btn {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid rgba(21, 101, 192, 0.25);
+    background: rgba(21, 101, 192, 0.06);
+    color: #1565c0;
+    font-size: 0.65em;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+    line-height: 1;
+    margin-left: 2px;
+}
+
+.leave-group-btn:hover {
+    background: rgba(220, 53, 69, 0.15);
+    border-color: rgba(220, 53, 69, 0.4);
+    color: #dc3545;
 }
 
 /* Hybrid indicator styling */

@@ -1,6 +1,6 @@
 // FILE: api.js (REPLACE ENTIRE FILE)
 
-import { state } from './state.js';
+import { state, invalidateRecordsIndex } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
@@ -229,34 +229,11 @@ export async function fetchSessionsWithDatesForStore(storeId) {
         }
 
         const data = await response.json();
-        console.log('[FETCH SESSIONS] ========== QUERY RESULTS ==========');
-        console.log('[FETCH SESSIONS] Number of records returned:', data.records?.length || 0);
 
-        // Log details of each record
         if (data.records && data.records.length > 0) {
-            console.log('[FETCH SESSIONS] ✅ Found', data.records.length, 'matching session(s)!');
-            data.records.forEach((record, index) => {
-                console.log(`[FETCH SESSIONS] --- Session ${index + 1} ---`);
-                console.log(`[FETCH SESSIONS]   ID: ${record.id}`);
-                console.log(`[FETCH SESSIONS]   Name: ${record.fields.Name}`);
-                console.log(`[FETCH SESSIONS]   Date: ${record.fields.Date}`);
-                console.log(`[FETCH SESSIONS]   Stores: ${JSON.stringify(record.fields.Stores)}`);
-                console.log(`[FETCH SESSIONS]   Stores type: ${typeof record.fields.Stores}`);
-                console.log(`[FETCH SESSIONS]   Stores is array? ${Array.isArray(record.fields.Stores)}`);
-            });
-            console.log('[FETCH SESSIONS] ==================================================');
-            console.log('[FETCH SESSIONS] Returning', data.records.length, 'session(s) to calendar');
             return data.records;
         } else {
-            console.log('[FETCH SESSIONS] ⚠️ No sessions matched the query');
-            console.log('[FETCH SESSIONS] This means either:');
-            console.log('[FETCH SESSIONS]   1. No sessions have dates set');
-            console.log('[FETCH SESSIONS]   2. No sessions have the Stores field set to:', storeId);
-            console.log('[FETCH SESSIONS]   3. Sessions exist but the formula didnt match');
-
-            // Fallback: Try to fetch ALL sessions with dates to debug
-            console.log('[FETCH SESSIONS] ========== FALLBACK QUERY ==========');
-            console.log('[FETCH SESSIONS] Attempting to fetch ALL sessions with dates...');
+            // Fallback: Try to fetch ALL sessions with dates and filter manually
             const fallbackFormula = `{Date} != ''`;
             const fallbackEncodedFormula = encodeURIComponent(fallbackFormula);
             const fallbackUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${fallbackEncodedFormula}&${fieldsQuery}`;
@@ -268,60 +245,25 @@ export async function fetchSessionsWithDatesForStore(storeId) {
 
                 if (fallbackResponse.ok) {
                     const fallbackData = await fallbackResponse.json();
-                    console.log('[FETCH SESSIONS] Fallback query found', fallbackData.records?.length || 0, 'sessions with dates');
                     if (fallbackData.records && fallbackData.records.length > 0) {
-                        console.log('[FETCH SESSIONS] --- All Sessions with Dates ---');
-                        fallbackData.records.forEach((record, index) => {
-                            const stores = record.fields.Stores;
-                            const matchesStore = stores ?
-                                (Array.isArray(stores) ? stores.includes(storeId) : stores === storeId)
-                                : false;
-                            console.log(`[FETCH SESSIONS] Session ${index + 1}:`);
-                            console.log(`[FETCH SESSIONS]   ID: ${record.id}`);
-                            console.log(`[FETCH SESSIONS]   Name: ${record.fields.Name}`);
-                            console.log(`[FETCH SESSIONS]   Date: ${record.fields.Date}`);
-                            console.log(`[FETCH SESSIONS]   Stores: ${JSON.stringify(stores)}`);
-                            console.log(`[FETCH SESSIONS]   Stores type: ${typeof stores}`);
-                            console.log(`[FETCH SESSIONS]   Stores is array? ${Array.isArray(stores)}`);
-                            console.log(`[FETCH SESSIONS]   Matches storeId '${storeId}'? ${matchesStore ? '✅ YES' : '❌ NO'}`);
-                            console.log('[FETCH SESSIONS]   ---');
-                        });
-
                         // Filter manually to sessions that match the storeId
                         const matchingSessions = fallbackData.records.filter(record => {
                             const stores = record.fields.Stores;
-                            if (!stores) {
-                                console.log(`[FETCH SESSIONS] Excluding ${record.id}: No Stores field`);
-                                return false;
-                            }
-                            if (Array.isArray(stores)) {
-                                const matches = stores.includes(storeId);
-                                console.log(`[FETCH SESSIONS] ${record.id}: Stores array ${matches ? 'includes' : 'does NOT include'} storeId`);
-                                return matches;
-                            }
-                            const matches = stores === storeId;
-                            console.log(`[FETCH SESSIONS] ${record.id}: Stores string ${matches ? 'matches' : 'does NOT match'} storeId`);
-                            return matches;
+                            if (!stores) return false;
+                            if (Array.isArray(stores)) return stores.includes(storeId);
+                            return stores === storeId;
                         });
-                        console.log('[FETCH SESSIONS] ==================================================');
-                        console.log('[FETCH SESSIONS] Manual filtering found', matchingSessions.length, 'matching session(s)');
-                        console.log('[FETCH SESSIONS] Returning manually filtered results');
                         return matchingSessions;
-                    } else {
-                        console.log('[FETCH SESSIONS] ⚠️ Fallback query found NO sessions with dates at all!');
-                        console.log('[FETCH SESSIONS] This means no sessions in Airtable have the Date field set.');
                     }
                 }
             } catch (fallbackError) {
-                console.error('[FETCH SESSIONS] Fallback query also failed:', fallbackError);
+                console.error('[Calendar API] Fallback query failed:', fallbackError);
             }
         }
 
-        console.log('[FETCH SESSIONS] ==================================================');
-        console.log('[FETCH SESSIONS] Returning empty array');
         return [];
     } catch (error) {
-        console.error("[Calendar API Debug] Error fetching sessions with dates:", error);
+        console.error("[Calendar API] Error fetching sessions with dates:", error);
         return [];
     }
 }
@@ -534,13 +476,17 @@ export async function loadSessionFromAirtable(sessionId) {
                 state.session.archivedItems = new Set(savedState.archivedItems || []);
                 state.session.completedItems = new Set(savedState.completedItems || []);
 
-                // Restore combined items: Object<targetId, Array<sourceIds>> -> Map<targetId, Set<sourceIds>>
+                // Restore combined items: Object<targetId, { sources: Array, hybridData: Object }> -> Map<targetId, { sources: Set, hybridData: Object }>
                 if (savedState.combinedItems && typeof savedState.combinedItems === 'object') {
                     state.session.combinedItems = new Map(
-                        Object.entries(savedState.combinedItems).map(([target, sources]) => [
-                            target,
-                            new Set(Array.isArray(sources) ? sources : [])
-                        ])
+                        Object.entries(savedState.combinedItems).map(([target, entry]) => {
+                            // Handle both old format (plain array) and new format (object with sources + hybridData)
+                            if (Array.isArray(entry)) {
+                                return [target, { sources: new Set(entry), hybridData: null }];
+                            }
+                            const sources = Array.isArray(entry.sources) ? new Set(entry.sources) : new Set();
+                            return [target, { sources, hybridData: entry.hybridData || null }];
+                        })
                     );
                     console.log('[SESSION-LOAD DEBUG] Restored combinedItems:', {
                         size: state.session.combinedItems.size,
@@ -592,6 +538,7 @@ export async function loadSessionFromAirtable(sessionId) {
                                 log('API', `Restored solution record to registry: ${customRecord.id}`);
                             }
                             state.records.all.push(customRecord);
+                            invalidateRecordsIndex();
                         }
                     }
                     log('API', `Restored ${customRecordsToRestore.length} custom items from session data`);
@@ -790,13 +737,17 @@ export async function saveSessionToAirtable() {
         planItemOrder: state.session.planItemOrder || [],
         archivedItems: Array.from(state.session.archivedItems || []),
         completedItems: Array.from(state.session.completedItems || []),
-        // Combined items: Map<targetId, Set<sourceIds>> -> Object<targetId, Array<sourceIds>>
+        // Combined items: Map<targetId, { sources: Set, hybridData: Object }> -> Object<targetId, { sources: Array, hybridData: Object }>
         combinedItems: state.session.combinedItems
             ? Object.fromEntries(
-                Array.from(state.session.combinedItems.entries()).map(([target, sources]) => [
-                    target,
-                    Array.from(sources)
-                ])
+                Array.from(state.session.combinedItems.entries()).map(([target, entry]) => {
+                    // Handle both old Set format and new object format
+                    if (entry instanceof Set) {
+                        return [target, { sources: Array.from(entry), hybridData: null }];
+                    }
+                    const sources = entry.sources instanceof Set ? Array.from(entry.sources) : (Array.isArray(entry.sources) ? entry.sources : []);
+                    return [target, { sources, hybridData: entry.hybridData || null }];
+                })
             )
             : {},
         // Related groups (grouped options)
@@ -1557,7 +1508,7 @@ function getAIApproximatedPlaceholder(record) {
 
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
     // === IMAGE DEBUG: Log entry to fetchImagesForRecord ===
-    const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.isAI === true;
+    const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.id?.startsWith('ai-presentation-') || record?.isAI === true;
     console.log('[IMAGE DEBUG] fetchImagesForRecord CALLED for:', {
         recordId: record?.id,
         recordName: record?.fields?.Name,

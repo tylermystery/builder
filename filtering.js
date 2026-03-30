@@ -7,6 +7,36 @@ import * as api from './api.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions, getTempLikes } from './utils.js';
 import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore } from './availability.js';
 
+// --- Performance: Cached record metadata to avoid re-parsing on every filter pass ---
+const _recordMetaCache = new WeakMap();
+
+/**
+ * Get or compute cached metadata for a record (categories, price, etc.)
+ * Uses WeakMap so entries are garbage collected when records are removed from state.
+ */
+function getRecordMeta(record) {
+    if (_recordMetaCache.has(record)) return _recordMetaCache.get(record);
+
+    const fields = record.fields || {};
+    const categoriesRaw = fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '';
+    const subcategoriesRaw = fields.Subcategories || '';
+    const parentName = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+    const meta = {
+        categoriesLower: categoriesRaw.split(',').map(c => c.trim().toLowerCase().replace(/\s+/g, ' ')).filter(Boolean),
+        subcategoriesLower: subcategoriesRaw.split(',').map(s => s.trim().toLowerCase().replace(/\s+/g, ' ')).filter(Boolean),
+        parentNameLower: parentName,
+        nameLower: (fields[CONSTANTS.FIELD_NAMES.NAME] || '').toLowerCase(),
+        descriptionLower: (fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '').toLowerCase(),
+        price: getGroupPriceRange(record)?.min ?? parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, "")),
+        capacity: parseCapacity(fields['Capacity']),
+        locationLower: (fields['Location'] || '').toLowerCase()
+    };
+
+    _recordMetaCache.set(record, meta);
+    return meta;
+}
+
 
 // --- HELPER FUNCTIONS (Non-Scoring, kept local) ---
 
@@ -58,38 +88,20 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
         // Defensive: ensure record has fields
         if (!record || !record.fields) return false;
 
-        const fields = record.fields;
-        const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase().replace(/\s+/g, ' ');
-        const itemCategories = (fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '')
-            .split(',')
-            .map(cat => cat.trim().toLowerCase().replace(/\s+/g, ' '))
-            .filter(Boolean);
-        const itemSubcategoriesForCategoryCheck = (fields.Subcategories || '')
-            .split(',')
-            .map(sc => sc.trim().toLowerCase().replace(/\s+/g, ' '))
-            .filter(Boolean);
-
-        const matches = itemCategories.includes(selectedCategoryLower) ||
-               parentNameLower === selectedCategoryLower ||
-               itemSubcategoriesForCategoryCheck.includes(selectedCategoryLower);
-
-        return matches;
+        const meta = getRecordMeta(record);
+        return meta.categoriesLower.includes(selectedCategoryLower) ||
+               meta.parentNameLower === selectedCategoryLower ||
+               meta.subcategoriesLower.includes(selectedCategoryLower);
     });
 
     if (activeSubcategories.length > 0) {
         const subcategoryFilteredRecords = categoryFilteredRecords.filter(record => {
             if (!record || !record.fields) return false;
 
-            const fields = record.fields;
-            const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase().replace(/\s+/g, ' ');
-            const itemSubcategories = (fields.Subcategories || '')
-                .split(',')
-                .map(sc => sc.trim().toLowerCase().replace(/\s+/g, ' '))
-                .filter(Boolean);
-
+            const meta = getRecordMeta(record);
             return activeSubcategories.some(activeSubcat =>
-                itemSubcategories.includes(activeSubcat) ||
-                parentNameLower === activeSubcat
+                meta.subcategoriesLower.includes(activeSubcat) ||
+                meta.parentNameLower === activeSubcat
             );
         });
         return subcategoryFilteredRecords;
@@ -140,8 +152,8 @@ function filterByHeadcount(records, headcountFilter, customHeadcount) {
 
     return records.filter(record => {
         if (!record || !record.fields) return false;
-        const capacity = parseCapacity(record.fields['Capacity']);
-        return filterMin <= capacity.max && filterMax >= capacity.min;
+        const meta = getRecordMeta(record);
+        return filterMin <= meta.capacity.max && filterMax >= meta.capacity.min;
     });
 }
 
@@ -204,7 +216,8 @@ function filterByBudget(records, budgetFilter) {
 
     return records.filter(record => {
         if (!record || !record.fields) return false;
-        const price = getGroupPriceRange(record)?.min ?? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+        const meta = getRecordMeta(record);
+        const price = meta.price;
         return !isNaN(price) && price >= range.min && price <= range.max;
     });
 }
@@ -224,10 +237,9 @@ function filterBySearchTerm(records, searchTerm) {
         if (!record || !record.fields) return;
 
         let score = 0;
+        const meta = getRecordMeta(record);
         const fields = record.fields;
 
-        const name = (fields[CONSTANTS.FIELD_NAMES.NAME] || '').toLowerCase();
-        const description = (fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '').toLowerCase();
         const optionNames = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]).map(opt => opt.name).join(' ').toLowerCase();
         const allOtherText = [
             fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '',
@@ -238,9 +250,9 @@ function filterBySearchTerm(records, searchTerm) {
             optionNames
         ].join(' ').toLowerCase();
 
-        if (name.includes(lowerSearchTerm)) {
+        if (meta.nameLower.includes(lowerSearchTerm)) {
             score = 3;
-        } else if (description.includes(lowerSearchTerm)) {
+        } else if (meta.descriptionLower.includes(lowerSearchTerm)) {
             score = 2;
         } else if (allOtherText.includes(lowerSearchTerm)) {
             score = 1;
@@ -286,22 +298,26 @@ function sortRecords(records, sortBy, goalBucket) {
             return 1;
         }
 
-        const aPrice = getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
-        const bPrice = getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
-        const aName = a.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
-        const bName = b.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
+        const aMeta = getRecordMeta(a);
+        const bMeta = getRecordMeta(b);
 
         switch (sortBy) {
-            case 'price-asc': return aPrice - bPrice;
-            case 'price-desc': return bPrice - aPrice;
-            case 'name-asc': return aName.localeCompare(bName);
-            default: return aName.localeCompare(bName); 
+            case 'price-asc': return aMeta.price - bMeta.price;
+            case 'price-desc': return bMeta.price - aMeta.price;
+            case 'name-asc': return aMeta.nameLower.localeCompare(bMeta.nameLower);
+            default: return aMeta.nameLower.localeCompare(bMeta.nameLower);
         }
     });
 }
 
 
 export async function applyFiltersAndSort(imageCache) {
+    console.log('[FILTER DEBUG] applyFiltersAndSort called.', {
+        hasImageCache: !!imageCache,
+        totalRecords: state.records.all?.length,
+        activeShopId: state.ui.activeShopId,
+        url: window.location.search
+    });
     const catalogContainer = document.getElementById('catalog-container');
 
     const params = new URLSearchParams(window.location.search);
@@ -481,17 +497,29 @@ export async function applyFiltersAndSort(imageCache) {
          const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
          const hasStoreCategories = activeShop && activeShop.fields && activeShop.fields.Items && activeShop.fields.Items.length > 0;
 
-         // If on landing page (no category selected) AND store has categories, include the Grouping records
-         if (selectedCategory === 'all' && hasStoreCategories) {
-             const storeItemIds = Array.isArray(activeShop.fields.Items)
-                 ? activeShop.fields.Items
-                 : activeShop.fields.Items.split(',').map(id => id.trim());
+         // If on landing page (no category selected), include Grouping records for carousel display
+         if (selectedCategory === 'all') {
+             let storeCategoryRecords = [];
 
-             // Get the actual category (Grouping) records that the store defines
-             const storeCategoryRecords = storeItemIds
-                 .filter(id => id.startsWith('rec'))
-                 .map(id => state.records.all.find(r => r.id === id))
-                 .filter(r => r && r.fields['Item Type'] === 'Grouping');
+             if (hasStoreCategories) {
+                 const storeItemIds = Array.isArray(activeShop.fields.Items)
+                     ? activeShop.fields.Items
+                     : activeShop.fields.Items.split(',').map(id => id.trim());
+
+                 // Get the actual category (Grouping) records that the store defines
+                 storeCategoryRecords = storeItemIds
+                     .filter(id => id.startsWith('rec'))
+                     .map(id => state.records.all.find(r => r.id === id))
+                     .filter(r => r && r.fields['Item Type'] === 'Grouping');
+             }
+
+             // Also include any Grouping-type records from the base store items
+             // that aren't already in storeCategoryRecords
+             const existingIds = new Set(storeCategoryRecords.map(r => r.id));
+             const additionalGroupings = baseRecordsToFilter.filter(
+                 r => r.fields['Item Type'] === 'Grouping' && !existingIds.has(r.id)
+             );
+             storeCategoryRecords = [...storeCategoryRecords, ...additionalGroupings];
 
              // Get all items that belong to this store (excluding Groupings from base filter)
              const storeItems = baseRecordsToFilter.filter(r => r.fields['Item Type'] !== 'Grouping');
@@ -503,28 +531,106 @@ export async function applyFiltersAndSort(imageCache) {
          }
 
          // Standard filters apply to ALL views except 'My Plan'/'My Likes'
-         recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
-         recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
-         recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
-         recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
+         // On the landing page (no category, no search), preserve Grouping records through filters
+         // so they always appear as carousels. Otherwise, filter them normally.
+         const isLandingPage = selectedCategory === 'all' && !searchTerm;
+         let groupingRecords = [];
+         let filteredItems;
+
+         if (isLandingPage) {
+             groupingRecords = recordsToDisplay.filter(r => r.fields['Item Type'] === 'Grouping');
+             filteredItems = recordsToDisplay.filter(r => r.fields['Item Type'] !== 'Grouping');
+         } else {
+             filteredItems = recordsToDisplay;
+         }
+
+         filteredItems = filterByStatus(filteredItems, statusFilter);
+         filteredItems = filterByHeadcount(filteredItems, headcountFilter, customHeadcount);
+         filteredItems = filterByLocation(filteredItems, locationFilter);
+         filteredItems = filterByBudget(filteredItems, budgetFilter);
 
          if (searchTerm) {
-             recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
+             filteredItems = filterBySearchTerm(filteredItems, searchTerm);
          }
+
+         // Recombine: groupings first (if on landing page), then filtered items
+         recordsToDisplay = [...groupingRecords, ...filteredItems];
     }
 
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy, goalBucket);
 
     state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
+    console.log('[FILTER DEBUG] Filtering complete.', {
+        filteredCount: recordsToDisplay.length,
+        selectedCategory,
+        activeSubcategories,
+        view,
+        searchTerm: searchTerm || '(none)'
+    });
 
     if (catalogContainer) catalogContainer.innerHTML = '';
 
-    const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
+    // Determine if we're on the carousel landing page (no category/subcategory/view filters active)
+    // Search switches to grid mode, but other filters (status, headcount, etc.) keep carousels
+    const isCarouselLandingPage = selectedCategory === 'all' && !params.get('subcategory') && !view && !searchTerm;
+    const groupingsInResults = recordsToDisplay.filter(r => r.fields['Item Type'] === 'Grouping');
+    const nonGroupingsInResults = recordsToDisplay.filter(r => r.fields['Item Type'] !== 'Grouping');
 
-    ui.renderRecords(initialRecords, imageCache, false).then(() => {
-        state.ui.recordsCurrentlyDisplayed = initialRecords.length;
-    });
+    if (isCarouselLandingPage && groupingsInResults.length > 0) {
+        // On the carousel landing page, render ALL groupings upfront (no pagination limit for groupings).
+        // Also discover categories from items that don't have explicit Grouping records and create
+        // virtual grouping records for them so they also appear as carousels.
+        const existingGroupingNames = new Set(
+            groupingsInResults.map(g => g.fields.Name.toLowerCase().replace(/\s+/g, ' '))
+        );
+
+        // Find category names from items that don't have a matching Grouping record
+        const discoveredCategories = new Set();
+        nonGroupingsInResults.forEach(record => {
+            const cats = (record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '')
+                .split(',')
+                .map(c => c.trim())
+                .filter(Boolean);
+            cats.forEach(cat => {
+                const catLower = cat.toLowerCase().replace(/\s+/g, ' ');
+                if (!existingGroupingNames.has(catLower)) {
+                    discoveredCategories.add(cat); // Keep original casing for display
+                }
+            });
+        });
+
+        // Create virtual Grouping records for discovered categories
+        const virtualGroupings = Array.from(discoveredCategories).map(catName => ({
+            id: `virtual-grouping-${catName.toLowerCase().replace(/\s+/g, '-')}`,
+            fields: {
+                Name: catName,
+                'Item Type': 'Grouping',
+                Description: '',
+                Categories: ''
+            },
+            isVirtualGrouping: true
+        }));
+
+        // Combine all groupings (real + virtual), then non-groupings
+        const allGroupings = [...groupingsInResults, ...virtualGroupings];
+        recordsToDisplay = [...allGroupings, ...nonGroupingsInResults];
+        state.records.filtered = recordsToDisplay;
+
+        // Render all groupings plus first batch of ungrouped items
+        const initialNonGroupings = nonGroupingsInResults.slice(0, RECORDS_PER_LOAD);
+        const initialRecords = [...allGroupings, ...initialNonGroupings];
+
+        ui.renderRecords(initialRecords, imageCache, false).then(() => {
+            state.ui.recordsCurrentlyDisplayed = allGroupings.length + initialNonGroupings.length;
+        });
+    } else {
+        const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
+
+        ui.renderRecords(initialRecords, imageCache, false).then(() => {
+            state.ui.recordsCurrentlyDisplayed = initialRecords.length;
+        });
+    }
 
     ui.updateCatalogHeader(); // This function will now build breadcrumbs from the URL
 }

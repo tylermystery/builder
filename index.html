@@ -50,7 +50,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
     <!-- Fonts for confidence-based visual styling (pencil, pen, typed appearance) -->
-    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&family=Dancing+Script:wght@400;500;600&family=Satisfy&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&family=Dancing+Script:wght@400;500;600&family=Satisfy&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&family=Dancing+Script:wght@400;500;600&family=Satisfy&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
 
     <!-- DNS prefetch for domains used conditionally (lazy-loaded) -->
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
@@ -2569,170 +2570,40 @@ select:focus-visible,
     </script>
 
     <!-- Load Deferred CSS Asynchronously -->
-    <link rel="preload" href="/css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet';window.__deferredCssRelChanged=true;console.log('[CSS DEBUG] Deferred CSS loaded and applied as stylesheet at:', performance.now().toFixed(2), 'ms');">
+    <link rel="preload" href="/css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet';window.__deferredCssRelChanged=true;">
     <noscript><link rel="stylesheet" href="/css/deferred.css"></noscript>
     <script>
-    // CSS Loading Debug - tracks CSS loading state for modal URL debugging
+    // Lightweight CSS loading state tracker (used by main.js for direct modal URL access)
     (function() {
-        // Helper to check if deferred.css rules are actually parsed and accessible
         function areDeferredCssRulesParsed() {
             try {
                 var sheets = document.styleSheets;
                 for (var i = 0; i < sheets.length; i++) {
-                    var sheet = sheets[i];
-                    if (sheet.href && sheet.href.includes('deferred.css')) {
-                        // Try to access rules - this throws if CSS isn't fully loaded
-                        var rules = sheet.cssRules || sheet.rules;
+                    if (sheets[i].href && sheets[i].href.includes('deferred.css')) {
+                        var rules = sheets[i].cssRules || sheets[i].rules;
                         return rules && rules.length > 0;
                     }
                 }
-            } catch (e) {
-                // CORS or not-yet-loaded will throw
-                return false;
-            }
+            } catch (e) { return false; }
             return false;
         }
 
-        // Helper to check computed styles on key elements
-        function getKeyElementStyles() {
-            var eventPlanPanel = document.getElementById('event-plan-panel');
-            var filterControls = document.getElementById('filter-controls');
-            var sidebarContainer = document.getElementById('sidebar-container');
-            var catalogContainer = document.getElementById('catalog-container');
-
-            var styles = {};
-
-            if (eventPlanPanel) {
-                var eps = window.getComputedStyle(eventPlanPanel);
-                styles.eventPlanPanel = {
-                    backgroundColor: eps.backgroundColor,
-                    backdropFilter: eps.backdropFilter || eps.webkitBackdropFilter,
-                    display: eps.display
-                };
-            }
-
-            if (filterControls) {
-                var fcs = window.getComputedStyle(filterControls);
-                styles.filterControls = {
-                    backgroundColor: fcs.backgroundColor,
-                    backdropFilter: fcs.backdropFilter || fcs.webkitBackdropFilter,
-                    display: fcs.display
-                };
-            }
-
-            if (sidebarContainer) {
-                var scs = window.getComputedStyle(sidebarContainer);
-                styles.sidebarContainer = {
-                    display: scs.display,
-                    width: scs.width
-                };
-            }
-
-            if (catalogContainer) {
-                var ccs = window.getComputedStyle(catalogContainer);
-                styles.catalogContainer = {
-                    display: ccs.display
-                };
-            }
-
-            return styles;
-        }
-
-        var cssDebug = {
-            deferredCssStartTime: performance.now(),
+        window.__cssDebug = {
             isDirectModalUrl: window.location.pathname.includes('/item/') || new URLSearchParams(window.location.search).has('openItem'),
             cssRulesApplied: false,
             logState: function(label) {
                 var deferredLink = document.querySelector('link[href*="deferred.css"]');
-                var rulesAccessible = areDeferredCssRulesParsed();
-                var keyStyles = getKeyElementStyles();
-                var state = {
+                return {
                     label: label,
-                    timestamp: performance.now().toFixed(2) + 'ms',
-                    isDirectModalUrl: this.isDirectModalUrl,
-                    deferredCssRel: deferredLink ? deferredLink.rel : 'not found',
                     deferredCssRelIsStylesheet: deferredLink && deferredLink.rel === 'stylesheet',
-                    cssRulesAccessible: rulesAccessible,
-                    documentReadyState: document.readyState,
-                    stylesheetCount: document.styleSheets.length,
-                    inlineStyleCount: document.querySelectorAll('style').length,
-                    keyElementStyles: keyStyles
+                    cssRulesAccessible: areDeferredCssRulesParsed()
                 };
-                console.log('[CSS DEBUG]', state);
-                return state;
             },
-            // Returns true when CSS rules are actually parsed and element styles show frosted glass effect
             areCssStylesApplied: function() {
-                var rulesAccessible = areDeferredCssRulesParsed();
-                var keyStyles = getKeyElementStyles();
-
-                // Check if event-plan-panel has the frosted glass background from deferred.css
-                // deferred.css sets: background-color: rgba(255, 255, 255, 0.7)
-                var hasCorrectBg = false;
-                if (keyStyles.eventPlanPanel) {
-                    var bg = keyStyles.eventPlanPanel.backgroundColor;
-                    // Check for rgba(255, 255, 255, 0.7) which is the frosted glass style
-                    hasCorrectBg = bg && (bg.includes('rgba(255') || bg.includes('rgb(255'));
-                }
-
-                this.cssRulesApplied = rulesAccessible && hasCorrectBg;
+                this.cssRulesApplied = areDeferredCssRulesParsed();
                 return this.cssRulesApplied;
             }
         };
-        window.__cssDebug = cssDebug;
-
-        // Log initial state
-        cssDebug.logState('Initial (inline script)');
-
-        // Monitor CSS loading via MutationObserver
-        if (cssDebug.isDirectModalUrl) {
-            console.log('[CSS DEBUG] Direct modal URL detected - enabling enhanced CSS tracking');
-            var observer = new MutationObserver(function(mutations) {
-                mutations.forEach(function(mutation) {
-                    if (mutation.type === 'attributes' && mutation.attributeName === 'rel') {
-                        var target = mutation.target;
-                        if (target.href && target.href.includes('deferred.css')) {
-                            console.log('[CSS DEBUG] Deferred CSS rel attribute changed to:', target.rel);
-                            cssDebug.logState('After deferred CSS rel change');
-
-                            // Check if styles are actually applied after a short delay
-                            setTimeout(function() {
-                                var stylesApplied = cssDebug.areCssStylesApplied();
-                                console.log('[CSS DEBUG] Styles applied check (50ms after rel change):', stylesApplied);
-                                cssDebug.logState('50ms after rel change');
-                            }, 50);
-                        }
-                    }
-                });
-            });
-
-            // Start observing once head is available
-            var startObserving = function() {
-                var links = document.querySelectorAll('link[href*="deferred.css"]');
-                links.forEach(function(link) {
-                    observer.observe(link, { attributes: true });
-                });
-            };
-
-            if (document.head) {
-                startObserving();
-            } else {
-                document.addEventListener('DOMContentLoaded', startObserving);
-            }
-        }
-
-        // Log state at key document lifecycle points
-        document.addEventListener('DOMContentLoaded', function() {
-            cssDebug.logState('DOMContentLoaded');
-        });
-
-        window.addEventListener('load', function() {
-            cssDebug.logState('Window load');
-            // Final check of styles applied
-            setTimeout(function() {
-                cssDebug.logState('Window load + 100ms');
-            }, 100);
-        });
     })();
     </script>
 
@@ -3356,7 +3227,48 @@ select:focus-visible,
 
                 <h2 id="modal-item-name"></h2>
 
-                <p id="modal-item-price" class="price"></p>
+                <div id="modal-price-action-row">
+                    <p id="modal-item-price" class="price"></p>
+                    <div id="modal-price-actions">
+                        <button id="modal-rapid-pay-btn" class="price-action-btn rapid-pay-btn" title="Quick checkout">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                            <span class="price-action-label">Rapid Pay</span>
+                        </button>
+                        <button id="modal-chip-in-btn" class="price-action-btn chip-in-btn" title="Chip in to help make this free for someone in need">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                            <span class="price-action-label">Chip In</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="modal-donation-meter" style="display: none;">
+                    <div class="donation-meter-header">
+                        <span class="donation-meter-title">Community Fund</span>
+                        <span class="donation-meter-stats"></span>
+                    </div>
+                    <div class="donation-meter-bar-container">
+                        <div class="donation-meter-bar-bg">
+                            <div class="donation-meter-bar-fill"></div>
+                        </div>
+                    </div>
+                    <p class="donation-meter-description">Chip in to help make this available for free to those most in need.</p>
+                    <div class="donation-meter-actions">
+                        <div class="donation-amount-presets">
+                            <button class="donation-preset-btn" data-amount="1">$1</button>
+                            <button class="donation-preset-btn" data-amount="5">$5</button>
+                            <button class="donation-preset-btn" data-amount="10">$10</button>
+                            <button class="donation-preset-btn active" data-amount="custom">Custom</button>
+                        </div>
+                        <div class="donation-custom-input">
+                            <span class="donation-currency">$</span>
+                            <input type="number" class="donation-amount-input" placeholder="0.00" min="0.01" step="0.01" value="">
+                        </div>
+                        <button id="modal-donate-submit-btn" class="donation-submit-btn">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                            Donate & Pay It Forward
+                        </button>
+                    </div>
+                </div>
 
                 <p id="modal-item-description"></p>
 
@@ -3852,37 +3764,73 @@ select:focus-visible,
                         <span class="merge-item-name" id="merge-target-name">Target Item</span>
                     </div>
                 </div>
-                <!-- AI Estimation Preview (hidden by default, shown when estimation is fetched) -->
-                <div id="merge-estimation-preview" class="merge-estimation-preview" style="display: none;">
-                    <div class="merge-estimation-loading">
-                        <span class="loading-spinner"></span>
-                        <span class="loading-text">Estimating combination...</span>
-                    </div>
-                    <div class="merge-estimation-result" style="display: none;">
-                        <div class="estimation-section estimation-options" style="display: none;">
-                            <span class="estimation-label">Category:</span>
-                            <span class="estimation-value" id="estimation-category">-</span>
-                            <span class="estimation-label">Description:</span>
-                            <span class="estimation-value estimation-desc" id="estimation-description">-</span>
-                        </div>
-                        <div class="estimation-section estimation-hybrid" style="display: none;">
-                            <span class="estimation-label">Combined Idea:</span>
-                            <span class="estimation-value" id="estimation-hybrid-name">-</span>
-                            <span class="estimation-label">Description:</span>
-                            <span class="estimation-value estimation-desc" id="estimation-hybrid-description">-</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="merge-dialog-options">
-                    <button class="merge-option-btn merge-option-group" id="merge-option-group" title="Group as alternative options with AI-estimated category">
-                        <span class="merge-option-icon">📂</span>
-                        <span class="merge-option-label">As Options</span>
-                        <span class="merge-option-desc">Keep both as alternatives in an estimated category</span>
+                <!-- Tabbed merge type selector -->
+                <div class="merge-tabs">
+                    <button class="merge-tab active" id="merge-tab-options" data-merge-type="options">
+                        <span class="merge-tab-icon">📂</span>
+                        <span class="merge-tab-label">As Options</span>
                     </button>
-                    <button class="merge-option-btn merge-option-combine" id="merge-option-combine" title="Combine into a hybrid idea">
-                        <span class="merge-option-icon">✨</span>
-                        <span class="merge-option-label">As Hybrid</span>
-                        <span class="merge-option-desc">Merge into a single, blended idea</span>
+                    <button class="merge-tab" id="merge-tab-hybrid" data-merge-type="hybrid">
+                        <span class="merge-tab-icon">✨</span>
+                        <span class="merge-tab-label">As Hybrid</span>
+                    </button>
+                </div>
+                <!-- Tab content: Options -->
+                <div class="merge-tab-content active" id="merge-tab-content-options" data-merge-type="options">
+                    <div class="merge-tab-description">Keep both items as alternative choices under a shared category</div>
+                    <div class="merge-estimation-panel" id="merge-estimation-options">
+                        <div class="merge-estimation-loading">
+                            <span class="loading-spinner"></span>
+                            <span class="loading-text">Estimating category...</span>
+                        </div>
+                        <div class="merge-estimation-result" style="display: none;">
+                            <div class="estimation-field">
+                                <span class="estimation-label">Category</span>
+                                <span class="estimation-value" id="estimation-category">-</span>
+                            </div>
+                            <div class="estimation-field">
+                                <span class="estimation-label">Description</span>
+                                <span class="estimation-value estimation-desc" id="estimation-description">-</span>
+                            </div>
+                            <div class="estimation-field estimation-confidence-field" id="estimation-options-confidence-field" style="display:none;">
+                                <span class="estimation-label">Confidence</span>
+                                <div class="estimation-confidence-bar"><div class="estimation-confidence-fill" id="estimation-options-confidence"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="merge-confirm-btn merge-confirm-options" id="merge-option-group">
+                        <span>Group as Options</span>
+                    </button>
+                </div>
+                <!-- Tab content: Hybrid -->
+                <div class="merge-tab-content" id="merge-tab-content-hybrid" data-merge-type="hybrid">
+                    <div class="merge-tab-description">Blend both items into a single, new hybrid idea</div>
+                    <div class="merge-estimation-panel" id="merge-estimation-hybrid">
+                        <div class="merge-estimation-loading">
+                            <span class="loading-spinner"></span>
+                            <span class="loading-text">Generating hybrid idea...</span>
+                        </div>
+                        <div class="merge-estimation-result" style="display: none;">
+                            <div class="estimation-field">
+                                <span class="estimation-label">Hybrid Name</span>
+                                <span class="estimation-value" id="estimation-hybrid-name">-</span>
+                            </div>
+                            <div class="estimation-field">
+                                <span class="estimation-label">Description</span>
+                                <span class="estimation-value estimation-desc" id="estimation-hybrid-description">-</span>
+                            </div>
+                            <div class="estimation-field" id="estimation-hybrid-reasoning-field" style="display:none;">
+                                <span class="estimation-label">Reasoning</span>
+                                <span class="estimation-value estimation-desc" id="estimation-hybrid-reasoning">-</span>
+                            </div>
+                            <div class="estimation-field estimation-confidence-field" id="estimation-hybrid-confidence-field" style="display:none;">
+                                <span class="estimation-label">Confidence</span>
+                                <div class="estimation-confidence-bar"><div class="estimation-confidence-fill" id="estimation-hybrid-confidence"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="merge-confirm-btn merge-confirm-hybrid" id="merge-option-combine">
+                        <span>Merge as Hybrid</span>
                     </button>
                 </div>
                 <button class="merge-dialog-cancel" id="merge-dialog-cancel">Cancel</button>
@@ -4081,6 +4029,18 @@ select:focus-visible,
         </div>
     </div>
 
+
+    <!-- Global error handler to catch module loading failures -->
+    <script>
+    window.addEventListener('error', function(event) {
+        console.error('[GLOBAL ERROR]', event.message, 'at', event.filename, ':', event.lineno, ':', event.colno);
+        console.error('[GLOBAL ERROR] Error object:', event.error);
+    });
+    window.addEventListener('unhandledrejection', function(event) {
+        console.error('[GLOBAL PROMISE REJECTION]', event.reason);
+    });
+    console.log('[GLOBAL DEBUG] Error handlers installed.', performance.now().toFixed(2) + 'ms');
+    </script>
 
     <script type="module" src="/main.js"></script>
     <!-- SortableJS and calendarExport will be loaded on-demand when needed -->

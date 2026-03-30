@@ -1,6 +1,6 @@
 // REPLACE THE ENTIRE CONTENTS of components/sidebar.js
 
-import { state } from '../state.js';
+import { state, getRecordById } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
@@ -237,7 +237,7 @@ async function createLockedInItemElement(record, itemInfo) {
     // Check if UMW is in plan
     let isUmwInPlan = false;
     for (const [id] of state.cart.lockedItems) {
-        const lockedRecord = state.records.all.find(r => r.id === id);
+        const lockedRecord = getRecordById(id);
         if (lockedRecord && lockedRecord.fields.Name && lockedRecord.fields.Name.includes("Union Machine Works")) {
             isUmwInPlan = true;
             break;
@@ -426,7 +426,7 @@ function calculateTotalPlanScore() {
     let totalScore = 0;
     
     for (const recordId of state.cart.lockedItems.keys()) {
-        const record = state.records.all.find(r => r.id === recordId);
+        const record = getRecordById(recordId);
         if (record) {
             const score = calculateRecommendationScore(record, goalBucket);
             totalScore += score;
@@ -923,7 +923,7 @@ async function handleInviteGuest() {
         `;
 
         state.cart.lockedItems.forEach((info, id) => {
-            const record = state.records.all.find(r => r.id === id);
+            const record = getRecordById(id);
             if (record) {
                 summaryHtml += `
                     <tr>
@@ -1048,7 +1048,7 @@ async function updateShareMenuState() {
                 shareUpdatePublishedBtn.style.display = 'flex';
 
                 // Update RSVP stats in dropdown if event is published
-                const linkedItem = state.records.all.find(r => r.id === linkedItemId);
+                const linkedItem = getRecordById(linkedItemId);
                 if (linkedItem) {
                     updateShareMenuRsvpStats(linkedItem);
                 }
@@ -1246,7 +1246,7 @@ async function handlePublishPackage() {
         console.log('[SIDEBAR PACKAGE DEBUG] Calculating price from locked items...');
         console.log('[SIDEBAR PACKAGE DEBUG] state.records.all count:', state.records.all?.length || 0);
         for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
-            const record = state.records.all.find(r => r.id === recordId);
+            const record = getRecordById(recordId);
             if (record) {
                 const rawPrice = record.fields[CONSTANTS.FIELD_NAMES.PRICE];
                 const price = parseFloat(rawPrice || 0);
@@ -1938,7 +1938,7 @@ export async function updateEventPlanSection() {
                 // === DIG INFO DEBUG END ===
 
                 // Find the record in state.records.all or state.records.archive (for ghost items)
-                let record = state.records.all.find(r => r.id === recordId);
+                let record = getRecordById(recordId);
                 // === DIG INFO DEBUG START ===
                 console.log('[DIG-INFO DEBUG] Found in state.records.all:', !!record);
                 // === DIG INFO DEBUG END ===
@@ -2034,7 +2034,7 @@ async function handleInvite() {
         `;
 
         state.cart.lockedItems.forEach((info, id) => {
-            const record = state.records.all.find(r => r.id === id);
+            const record = getRecordById(id);
             if (record) {
                 summaryHtml += `
                     <tr>
@@ -2183,7 +2183,7 @@ export async function updateIdeasCarousel() {
     const imageCache = new Map();
 
     for (const [recordId, itemInfo] of state.cart.items.entries()) {
-        const record = state.records.all.find(r => r.id === recordId);
+        const record = getRecordById(recordId);
         if (record) {
             try {
                 const card = await createFavoriteCardElement(record, itemInfo, imageCache);
@@ -2319,7 +2319,7 @@ export function updateTotalCost() {
 
     let subtotal = 0;
     state.cart.lockedItems.forEach((itemInfo, recordId) => {
-        const record = state.records.all.find(r => r.id === recordId);
+        const record = getRecordById(recordId);
         if (!record) return;
 
         // Use selections for price if available, otherwise fall back to selectedOptionIndex
