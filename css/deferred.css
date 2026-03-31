@@ -1,3 +1,5 @@
+#right-sidebar h3, #left-sidebar h3 {
+    margin-top: 0;
     border-bottom: 1px solid #dee2e6;
     padding-bottom: 10px;
     color: #333;
@@ -1382,6 +1384,22 @@
     transform: translateX(-50%);
     white-space: nowrap;
     z-index: 10;
+}
+/* Modal Share Button */
+.modal-share-btn {
+    background-color: #28a745;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.modal-share-btn:hover:not(:disabled) {
+    background-color: #218838;
+}
+.modal-share-btn .share-icon {
+    font-size: 0.9em;
+}
+.modal-share-btn.share-copied {
+    background-color: #218838;
 }
 .parent-link {
     font-size: 0.8em;
@@ -4360,6 +4378,14 @@ hr.total-divider {
     font-weight: bold;
     color: #343a40;
     line-height: 1.1;
+}
+
+.event-date-display .time {
+    display: block;
+    font-size: 0.75em;
+    font-weight: 500;
+    color: #6c757d;
+    margin-top: 4px;
 }
 
 .event-details {

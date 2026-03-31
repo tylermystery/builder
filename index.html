@@ -22,9 +22,7 @@
     <link rel="modulepreload" href="/main.js" fetchpriority="high">
 
     <!-- Note: Critical CSS is inlined in <style> tags below for fastest render -->
-
-    <!-- Preload deferred CSS with lower priority -->
-    <link rel="preload" href="/css/deferred.css" as="style" fetchpriority="low">
+    <!-- Deferred CSS is loaded asynchronously at the end of <head> via the preload/onload pattern -->
 
     <!-- Flatpickr CSS will be loaded on-demand when date picker is used -->
     
@@ -736,12 +734,48 @@ body.modal-open {
 }
 
 /* CRITICAL: Grouping carousel layout constraints - needed before deferred CSS loads */
+/* Includes visual styles to prevent broken appearance on direct modal URL access */
 .grouping-carousel-section {
     min-width: 0;
     max-width: 100%;
     overflow: hidden;
     width: 100%;
     box-sizing: border-box;
+    /* Visual styles critical for landing page appearance */
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(8px) saturate(1.2);
+    -webkit-backdrop-filter: blur(8px) saturate(1.2);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+    position: relative;
+    align-self: stretch;
+}
+
+/* Carousel header styles - critical for landing page appearance */
+.grouping-carousel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    cursor: pointer;
+}
+
+.grouping-carousel-title {
+    margin: 0;
+    font-size: 1.4em;
+    font-weight: 600;
+    color: #333;
+}
+
+.grouping-carousel-count {
+    font-size: 0.85em;
+    color: #6c757d;
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 4px 10px;
+    border-radius: 12px;
 }
 
 .grouping-carousel-wrapper {
@@ -750,6 +784,10 @@ body.modal-open {
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 8px 0;
+    position: relative;
 }
 
 .grouping-carousel-container {
@@ -1421,6 +1459,94 @@ body.presentation-loading #presentation-modal-overlay {
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+
+/* Critical Mobile Summary Bar Styles - Base styles needed before deferred CSS */
+#mobile-summary-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: #343a40;
+    color: white;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 15px;
+    z-index: 998;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
+    transition: background-color 0.3s ease;
+}
+#mobile-summary-bar.available { background-color: #28a745; }
+#mobile-summary-bar.partial { background-color: #fd7e14; }
+#mobile-summary-bar.unavailable { background-color: #dc3545; }
+
+#mobile-show-filters-btn {
+    display: none;
+}
+
+/* Critical Mobile Sidebar Styles - Must be inline for direct URL access */
+/* These styles are applied by JS on mobile viewports before deferred.css loads */
+@media (max-width: 999px) {
+    #left-sidebar, #right-sidebar {
+        max-width: 100%;
+        transition: max-height 0.4s ease-out, opacity 0.3s ease, margin 0.4s ease, padding 0.4s ease;
+        overflow: hidden;
+        max-height: 2000px;
+        opacity: 1;
+    }
+
+    #left-sidebar.collapsed, #right-sidebar.collapsed {
+        max-height: 0;
+        opacity: 0;
+        margin: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    #mobile-summary-bar {
+        transform: translateY(100%);
+        transition: transform 0.3s ease-in-out;
+    }
+
+    body.mobile-bar-active #mobile-summary-bar {
+        transform: translateY(0);
+    }
+
+    #mobile-summary-bar, #mobile-show-filters-btn {
+        display: flex;
+    }
+
+    #mobile-show-filters-btn {
+        position: sticky;
+        top: 75px;
+        z-index: 999;
+    }
+
+    /* Mobile filter trigger on mobile */
+    #mobile-filter-trigger {
+        display: flex;
+        width: 100%;
+        position: sticky;
+        top: 75px;
+        z-index: 998;
+        background-color: #6c757d;
+        color: white;
+        padding: 15px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+}
+
+/* Desktop: Hide mobile filter trigger */
+@media (min-width: 1000px) {
+    #mobile-filter-trigger {
+        display: none;
+    }
+}
     </style>
 
     <!-- Early presentation mode detection - runs before DOM loads to prevent catalog flash -->
@@ -1436,8 +1562,172 @@ body.presentation-loading #presentation-modal-overlay {
     </script>
 
     <!-- Load Deferred CSS Asynchronously -->
-    <link rel="preload" href="css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <link rel="preload" href="css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet';window.__deferredCssRelChanged=true;console.log('[CSS DEBUG] Deferred CSS loaded and applied as stylesheet at:', performance.now().toFixed(2), 'ms');">
     <noscript><link rel="stylesheet" href="css/deferred.css"></noscript>
+    <script>
+    // CSS Loading Debug - tracks CSS loading state for modal URL debugging
+    (function() {
+        // Helper to check if deferred.css rules are actually parsed and accessible
+        function areDeferredCssRulesParsed() {
+            try {
+                var sheets = document.styleSheets;
+                for (var i = 0; i < sheets.length; i++) {
+                    var sheet = sheets[i];
+                    if (sheet.href && sheet.href.includes('deferred.css')) {
+                        // Try to access rules - this throws if CSS isn't fully loaded
+                        var rules = sheet.cssRules || sheet.rules;
+                        return rules && rules.length > 0;
+                    }
+                }
+            } catch (e) {
+                // CORS or not-yet-loaded will throw
+                return false;
+            }
+            return false;
+        }
+
+        // Helper to check computed styles on key elements
+        function getKeyElementStyles() {
+            var eventPlanPanel = document.getElementById('event-plan-panel');
+            var filterControls = document.getElementById('filter-controls');
+            var sidebarContainer = document.getElementById('sidebar-container');
+            var catalogContainer = document.getElementById('catalog-container');
+
+            var styles = {};
+
+            if (eventPlanPanel) {
+                var eps = window.getComputedStyle(eventPlanPanel);
+                styles.eventPlanPanel = {
+                    backgroundColor: eps.backgroundColor,
+                    backdropFilter: eps.backdropFilter || eps.webkitBackdropFilter,
+                    display: eps.display
+                };
+            }
+
+            if (filterControls) {
+                var fcs = window.getComputedStyle(filterControls);
+                styles.filterControls = {
+                    backgroundColor: fcs.backgroundColor,
+                    backdropFilter: fcs.backdropFilter || fcs.webkitBackdropFilter,
+                    display: fcs.display
+                };
+            }
+
+            if (sidebarContainer) {
+                var scs = window.getComputedStyle(sidebarContainer);
+                styles.sidebarContainer = {
+                    display: scs.display,
+                    width: scs.width
+                };
+            }
+
+            if (catalogContainer) {
+                var ccs = window.getComputedStyle(catalogContainer);
+                styles.catalogContainer = {
+                    display: ccs.display
+                };
+            }
+
+            return styles;
+        }
+
+        var cssDebug = {
+            deferredCssStartTime: performance.now(),
+            isDirectModalUrl: window.location.pathname.includes('/item/') || new URLSearchParams(window.location.search).has('openItem'),
+            cssRulesApplied: false,
+            logState: function(label) {
+                var deferredLink = document.querySelector('link[href*="deferred.css"]');
+                var rulesAccessible = areDeferredCssRulesParsed();
+                var keyStyles = getKeyElementStyles();
+                var state = {
+                    label: label,
+                    timestamp: performance.now().toFixed(2) + 'ms',
+                    isDirectModalUrl: this.isDirectModalUrl,
+                    deferredCssRel: deferredLink ? deferredLink.rel : 'not found',
+                    deferredCssRelIsStylesheet: deferredLink && deferredLink.rel === 'stylesheet',
+                    cssRulesAccessible: rulesAccessible,
+                    documentReadyState: document.readyState,
+                    stylesheetCount: document.styleSheets.length,
+                    inlineStyleCount: document.querySelectorAll('style').length,
+                    keyElementStyles: keyStyles
+                };
+                console.log('[CSS DEBUG]', state);
+                return state;
+            },
+            // Returns true when CSS rules are actually parsed and element styles show frosted glass effect
+            areCssStylesApplied: function() {
+                var rulesAccessible = areDeferredCssRulesParsed();
+                var keyStyles = getKeyElementStyles();
+
+                // Check if event-plan-panel has the frosted glass background from deferred.css
+                // deferred.css sets: background-color: rgba(255, 255, 255, 0.7)
+                var hasCorrectBg = false;
+                if (keyStyles.eventPlanPanel) {
+                    var bg = keyStyles.eventPlanPanel.backgroundColor;
+                    // Check for rgba(255, 255, 255, 0.7) which is the frosted glass style
+                    hasCorrectBg = bg && (bg.includes('rgba(255') || bg.includes('rgb(255'));
+                }
+
+                this.cssRulesApplied = rulesAccessible && hasCorrectBg;
+                return this.cssRulesApplied;
+            }
+        };
+        window.__cssDebug = cssDebug;
+
+        // Log initial state
+        cssDebug.logState('Initial (inline script)');
+
+        // Monitor CSS loading via MutationObserver
+        if (cssDebug.isDirectModalUrl) {
+            console.log('[CSS DEBUG] Direct modal URL detected - enabling enhanced CSS tracking');
+            var observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'rel') {
+                        var target = mutation.target;
+                        if (target.href && target.href.includes('deferred.css')) {
+                            console.log('[CSS DEBUG] Deferred CSS rel attribute changed to:', target.rel);
+                            cssDebug.logState('After deferred CSS rel change');
+
+                            // Check if styles are actually applied after a short delay
+                            setTimeout(function() {
+                                var stylesApplied = cssDebug.areCssStylesApplied();
+                                console.log('[CSS DEBUG] Styles applied check (50ms after rel change):', stylesApplied);
+                                cssDebug.logState('50ms after rel change');
+                            }, 50);
+                        }
+                    }
+                });
+            });
+
+            // Start observing once head is available
+            var startObserving = function() {
+                var links = document.querySelectorAll('link[href*="deferred.css"]');
+                links.forEach(function(link) {
+                    observer.observe(link, { attributes: true });
+                });
+            };
+
+            if (document.head) {
+                startObserving();
+            } else {
+                document.addEventListener('DOMContentLoaded', startObserving);
+            }
+        }
+
+        // Log state at key document lifecycle points
+        document.addEventListener('DOMContentLoaded', function() {
+            cssDebug.logState('DOMContentLoaded');
+        });
+
+        window.addEventListener('load', function() {
+            cssDebug.logState('Window load');
+            // Final check of styles applied
+            setTimeout(function() {
+                cssDebug.logState('Window load + 100ms');
+            }, 100);
+        });
+    })();
+    </script>
 
     <!-- Third-party libraries - load on demand after page interactive -->
     <!-- Tippy.js/Popper for tooltips - loaded late as non-critical -->
@@ -2373,6 +2663,8 @@ body.presentation-loading #presentation-modal-overlay {
                 </details>
                 END DORMANT FEATURE: Phone/SMS -->
 
+                <!-- DORMANT FEATURE: Google SSO - temporarily disabled until fully functional
+                     TODO: Re-enable Google SSO when authentication issues are resolved
                 <div class="sso-divider">
                     <span>OR</span>
                 </div>
@@ -2381,6 +2673,7 @@ body.presentation-loading #presentation-modal-overlay {
                     <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" style="margin-right: 8px;"><path d="M16.51 8.1H9.18V11.16H13.25C13.04 12.56 12.08 13.81 10.63 14.73V16.88H13.01C15.13 15.01 16.51 11.9 16.51 8.1Z" fill="#4285F4"></path><path d="M9.18 17.5C11.59 17.5 13.6 16.7 15.01 15.38L12.63 13.73C11.85 14.28 10.63 14.69 9.18 14.69C6.93 14.69 5.02 13.25 4.3 11.25H1.83V13.38C3.25 15.88 6.09 17.5 9.18 17.5Z" fill="#34A853"></path><path d="M4.3 11.25C4.12 10.75 4.03 10.21 4.03 9.63C4.03 9.05 4.12 8.51 4.3 8.01V5.88H1.83C1.09 7.22 0.63 8.63 0.63 10.13C0.63 11.63 1.09 13.04 1.83 14.38L4.3 11.25Z" fill="#FBBC05"></path><path d="M9.18 4.5C10.51 4.5 11.68 4.97 12.68 5.88L15.08 3.48C13.6 2.09 11.59 1.5 9.18 1.5C6.09 1.5 3.25 3.12 1.83 5.62L4.3 7.75C5.02 5.75 6.93 4.5 9.18 4.5Z" fill="#EA4335"></path></svg>
                     Sign In with Google
                 </button>
+                END DORMANT FEATURE: Google SSO -->
 
                 <!-- Biometric/Passkey Authentication (Hidden by default, shown when available) -->
                 <div id="biometric-auth-section" style="display: none; margin-top: 15px;">

@@ -148,6 +148,33 @@ function resetSeoMetadata() {
 }
 
 /**
+ * Copies a share link to clipboard and provides visual feedback on the button.
+ * @param {string} url - The URL to copy to clipboard.
+ * @param {HTMLButtonElement} buttonEl - The button element to show feedback on.
+ */
+async function copyShareLinkToClipboard(url, buttonEl) {
+    try {
+        await navigator.clipboard.writeText(url);
+        const originalHTML = buttonEl.innerHTML;
+        buttonEl.innerHTML = '<span class="share-icon">&#10003;</span> Copied!';
+        buttonEl.classList.add('share-copied');
+        log('Modal', `Copied share link to clipboard: ${url}`);
+        setTimeout(() => {
+            buttonEl.innerHTML = originalHTML;
+            buttonEl.classList.remove('share-copied');
+        }, 1500);
+    } catch (err) {
+        console.error('Failed to copy share link:', err);
+        // Show error feedback briefly
+        const originalHTML = buttonEl.innerHTML;
+        buttonEl.innerHTML = '<span class="share-icon">&#x26A0;</span> Failed';
+        setTimeout(() => {
+            buttonEl.innerHTML = originalHTML;
+        }, 1500);
+    }
+}
+
+/**
  * Updates the page's title and meta description for SEO purposes.
  * @param {string} title - The new page title.
  * @param {string} description - The new meta description.
@@ -1439,6 +1466,34 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     }
     isModalRendering = true;
 
+    // DEBUG: Comprehensive entry point logging for direct modal URL debugging
+    const deferredCssLink = document.querySelector('link[href*="deferred.css"]');
+    const deferredCssLoaded = deferredCssLink && deferredCssLink.rel === 'stylesheet';
+    const isDirectUrlAccess = !document.referrer || document.referrer === '' ||
+                              (new URL(document.referrer).pathname !== window.location.pathname);
+
+    console.log('[MODAL-DEBUG] showDetailModal entry:', {
+        recordId: record.id,
+        recordName: record.fields?.Name,
+        timestamp: performance.now().toFixed(2) + 'ms',
+        isDirectUrlAccess,
+        documentReferrer: document.referrer || 'none',
+        // CSS Loading State
+        deferredCssRel: deferredCssLink ? deferredCssLink.rel : 'not found',
+        deferredCssLoaded,
+        totalStylesheets: document.styleSheets.length,
+        // DOM State
+        documentReadyState: document.readyState,
+        modalOverlayExists: !!document.getElementById('detail-modal-overlay'),
+        modalOverlayDisplay: modalOverlay ? window.getComputedStyle(modalOverlay).display : 'N/A',
+        bodyClasses: document.body.className
+    });
+
+    // If CSS not loaded yet, add a note (main.js now handles waiting for CSS on direct URL access)
+    if (!deferredCssLoaded) {
+        console.log('[MODAL-DEBUG] Note: Deferred CSS not yet loaded. main.js should have waited for it on direct URL access.');
+    }
+
     const detailSpecs = [
         { fieldName: 'Duration', label: 'Duration' },
         { fieldName: 'Capacity', label: 'Capacity' },
@@ -1672,8 +1727,9 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const isUserRegistered = rsvpYes.includes(userId) || rsvpMaybe.includes(userId) || rsvpNo.includes(userId);
 
         // Only show event-specific sections for individual events, not parent events with child date options
-        // For registered users, skip the RSVP list and duplicate event info sections
-        if (!hasChildEventOptions && !isUserRegistered) {
+        // Show event info for ALL users (both registered and non-registered) - date/time is important info
+        const userIsAuthenticatedForRsvp = state.session.user.isAuthenticated;
+        if (!hasChildEventOptions) {
         const eventDateStr = record.fields.Date;
         const eventTime = record.fields.Time || '';
         const eventLocation = record.fields.Location || '';
@@ -1704,8 +1760,11 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             modalItemDescription.parentElement.insertBefore(eventInfoSection, modalItemDescription);
         }
 
-        // RSVP list section - only shown for non-registered users
-        if (rsvpYes.length > 0 || rsvpMaybe.length > 0 || rsvpNo.length > 0) {
+        // Calendar export buttons removed for published events - not needed for viewing
+        }
+
+        // RSVP list section - only shown for authenticated users (moved outside the isUserRegistered check)
+        if (!hasChildEventOptions && userIsAuthenticatedForRsvp && (rsvpYes.length > 0 || rsvpMaybe.length > 0 || rsvpNo.length > 0)) {
             // Remove any existing RSVP list section before creating new one
             const existingRsvpList = document.querySelector('.rsvp-list-section');
             if (existingRsvpList) existingRsvpList.remove();
@@ -1713,34 +1772,58 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             const rsvpListSection = document.createElement('div');
             rsvpListSection.className = 'rsvp-list-section';
 
+            // Initial HTML with loading placeholders
             let rsvpHTML = '<div class="rsvp-list-header"><strong>RSVPs</strong></div>';
 
             if (rsvpYes.length > 0) {
                 rsvpHTML += `<div class="rsvp-list-group">
                     <div class="rsvp-list-label">Going (${rsvpYes.length})</div>
-                    <div class="rsvp-list-items">Anonymous users</div>
+                    <div class="rsvp-list-items" data-rsvp-type="yes">Loading...</div>
                 </div>`;
             }
 
             if (rsvpMaybe.length > 0) {
                 rsvpHTML += `<div class="rsvp-list-group">
                     <div class="rsvp-list-label">Maybe (${rsvpMaybe.length})</div>
-                    <div class="rsvp-list-items">Anonymous users</div>
+                    <div class="rsvp-list-items" data-rsvp-type="maybe">Loading...</div>
                 </div>`;
             }
 
             if (rsvpNo.length > 0) {
                 rsvpHTML += `<div class="rsvp-list-group">
                     <div class="rsvp-list-label">Can't Go (${rsvpNo.length})</div>
-                    <div class="rsvp-list-items">Anonymous users</div>
+                    <div class="rsvp-list-items" data-rsvp-type="no">Loading...</div>
                 </div>`;
             }
 
             rsvpListSection.innerHTML = rsvpHTML;
             modalItemDescription.parentElement.insertBefore(rsvpListSection, modalItemDescription);
-        }
 
-        // Calendar export buttons removed for published events - not needed for viewing
+            // Fetch user names asynchronously and update the display
+            const allUserIds = [...rsvpYes, ...rsvpMaybe, ...rsvpNo];
+            api.fetchUserNamesByIds(allUserIds).then(userNameMap => {
+                // Helper to format names list
+                const formatNames = (userIds) => {
+                    if (userIds.length === 0) return '';
+                    const names = userIds.map(id => userNameMap.get(id) || 'Guest');
+                    return names.join(', ');
+                };
+
+                // Update each RSVP group with actual names
+                const yesEl = rsvpListSection.querySelector('[data-rsvp-type="yes"]');
+                if (yesEl) yesEl.textContent = formatNames(rsvpYes) || 'Guest';
+
+                const maybeEl = rsvpListSection.querySelector('[data-rsvp-type="maybe"]');
+                if (maybeEl) maybeEl.textContent = formatNames(rsvpMaybe) || 'Guest';
+
+                const noEl = rsvpListSection.querySelector('[data-rsvp-type="no"]');
+                if (noEl) noEl.textContent = formatNames(rsvpNo) || 'Guest';
+            }).catch(err => {
+                console.error('[Modal] Error fetching RSVP user names:', err);
+                // Fallback to generic text on error
+                const items = rsvpListSection.querySelectorAll('.rsvp-list-items');
+                items.forEach(el => el.textContent = 'Guests');
+            });
         }
     }
 
@@ -2469,6 +2552,56 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     heartBtnContainer.dataset.recordId = record.id;
     modalHeaderActions.appendChild(heartBtnContainer);
 
+    // Add share button for sharing item URL (without session)
+    const shareBtn = document.createElement('button');
+    shareBtn.className = 'card-action-btn modal-share-btn';
+    shareBtn.id = 'modal-share-btn';
+    shareBtn.title = 'Share this item';
+    shareBtn.innerHTML = '<span class="share-icon">&#x1F517;</span> Share';
+    shareBtn.dataset.recordId = record.id;
+    shareBtn.dataset.itemName = record.fields.Name || '';
+    modalHeaderActions.appendChild(shareBtn);
+
+    // Share button click handler
+    shareBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+
+        // Generate slug for pretty URL
+        const slug = generateSlug(record.fields.Name, record.id);
+
+        // Build share URL with shopId but WITHOUT session
+        const shareUrl = new URL(`${window.location.origin}/item/${slug}`);
+
+        // Include shopId if available (from current state or URL)
+        const currentShopId = state.activeShop?.id || new URLSearchParams(window.location.search).get('shopId');
+        if (currentShopId) {
+            shareUrl.searchParams.set('shopId', currentShopId);
+        }
+
+        const shareData = {
+            title: record.fields.Name || 'Check out this item',
+            text: record.fields.Description ? record.fields.Description.substring(0, 100) + '...' : 'Check out this item on WTFun!',
+            url: shareUrl.toString()
+        };
+
+        // Try Web Share API first (mobile-friendly)
+        if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+            try {
+                await navigator.share(shareData);
+                log('Modal', `Shared item via Web Share API: ${record.fields.Name}`);
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error('Share failed:', err);
+                    // Fallback to clipboard
+                    await copyShareLinkToClipboard(shareUrl.toString(), shareBtn);
+                }
+            }
+        } else {
+            // Fallback to clipboard copy
+            await copyShareLinkToClipboard(shareUrl.toString(), shareBtn);
+        }
+    });
+
     if (record.fields['Item Type'] === 'Event') {
         const rsvpYes = record.fields.RSVPs || [];
         const rsvpMaybe = record.fields.RSVPMaybe || [];
@@ -2765,10 +2898,10 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     aiOptionsContainer.style.marginTop = hasExistingOptions ? '15px' : '0';
 
     // Button text changes based on whether options exist
-    const buttonText = hasExistingOptions ? '✨ Regenerate Options' : '✨ Add Top Options';
+    const buttonText = hasExistingOptions ? '✨ Re-Estimate Options' : '✨ Estimate Options';
 
     aiOptionsContainer.innerHTML = `
-        <button class="ai-top-options-btn" title="Use AI to generate recommended options/variations">
+        <button class="ai-top-options-btn" title="Use AI to estimate recommended options/variations">
             ${buttonText}
         </button>
         <div class="ai-options-result" style="display: none;">
@@ -2782,7 +2915,6 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 ${userIsAuthenticated && (isRealRecord && userHasPublishPermissionForOptions) ? '<button class="ai-options-save-catalog-btn" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save to Catalog</button>' : ''}
                 <span class="ai-options-status" style="align-self: center; font-size: 0.85em; color: #666;"></span>
             </div>
-            ${!userIsAuthenticated ? '<p class="ai-options-auth-note" style="font-size: 0.8em; color: #888; margin-top: 8px;">Sign in to save options to catalog permanently.</p>' : ''}
         </div>
     `;
 
@@ -2798,19 +2930,19 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     // Generate AI options on click
     aiOptionsBtn.addEventListener('click', async () => {
         aiOptionsBtn.disabled = true;
-        aiOptionsBtn.textContent = '✨ Generating...';
+        aiOptionsBtn.textContent = '✨ Estimating...';
         aiOptionsResult.style.display = 'block';
-        aiOptionsEditor.value = 'Generating AI recommendations...';
+        aiOptionsEditor.value = 'Estimating AI recommendations...';
         aiOptionsStatus.textContent = '';
 
         try {
             const result = await api.generateTopOptions(record);
             if (result.success && result.options) {
                 aiOptionsEditor.value = result.options;
-                aiOptionsStatus.textContent = 'Options generated!';
+                aiOptionsStatus.textContent = 'Options estimated!';
                 aiOptionsStatus.style.color = '#28a745';
             } else {
-                throw new Error(result.error || 'Failed to generate options');
+                throw new Error(result.error || 'Failed to estimate options');
             }
         } catch (error) {
             aiOptionsEditor.value = '';
@@ -2819,7 +2951,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             console.error('AI options generation failed:', error);
         } finally {
             aiOptionsBtn.disabled = false;
-            aiOptionsBtn.textContent = hasExistingOptions ? '✨ Regenerate Options' : '✨ Add Top Options';
+            aiOptionsBtn.textContent = hasExistingOptions ? '✨ Re-Estimate Options' : '✨ Estimate Options';
         }
     });
 
@@ -3498,6 +3630,67 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             } else {
                 console.log('[Modal DEBUG] ✓ Modal is correctly above presentation view');
             }
+        }
+    });
+
+    // DEBUG: Log final modal rendering completion state
+    console.log('[MODAL-DEBUG] showDetailModal complete:', {
+        recordId: record.id,
+        timestamp: performance.now().toFixed(2) + 'ms',
+        deferredCssLoadedNow: !!document.querySelector('link[href*="deferred.css"][rel="stylesheet"]'),
+        modalOverlayActive: modalOverlay.classList.contains('active'),
+        modalContentVisible: !!modalOverlay.querySelector('.modal-content'),
+        // Check background page elements to see if they have proper styling
+        pageElementStyles: {
+            eventPlanPanel: (() => {
+                const el = document.getElementById('event-plan-panel');
+                if (!el) return 'not found';
+                const styles = window.getComputedStyle(el);
+                return {
+                    backgroundColor: styles.backgroundColor,
+                    backdropFilter: styles.backdropFilter || styles.webkitBackdropFilter || 'none',
+                    display: styles.display,
+                    position: styles.position,
+                    visibility: styles.visibility,
+                    // Expected from deferred.css: rgba(255, 255, 255, 0.7)
+                    hasExpectedBg: styles.backgroundColor.includes('rgba(255, 255, 255') || styles.backgroundColor.includes('255, 255, 255')
+                };
+            })(),
+            filterControls: (() => {
+                const el = document.getElementById('filter-controls');
+                if (!el) return 'not found';
+                const styles = window.getComputedStyle(el);
+                return {
+                    backgroundColor: styles.backgroundColor,
+                    backdropFilter: styles.backdropFilter || styles.webkitBackdropFilter || 'none',
+                    display: styles.display,
+                    // Expected from deferred.css: rgba(255, 255, 255, 0.7)
+                    hasExpectedBg: styles.backgroundColor.includes('rgba(255, 255, 255') || styles.backgroundColor.includes('255, 255, 255')
+                };
+            })(),
+            sidebarContainer: (() => {
+                const el = document.getElementById('sidebar-container');
+                if (!el) return 'not found';
+                const styles = window.getComputedStyle(el);
+                return {
+                    display: styles.display,
+                    width: styles.width,
+                    visibility: styles.visibility
+                };
+            })(),
+            header: (() => {
+                const el = document.querySelector('header, .header, #header');
+                if (!el) return 'not found';
+                const styles = window.getComputedStyle(el);
+                return {
+                    backgroundColor: styles.backgroundColor,
+                    position: styles.position
+                };
+            })(),
+            catalogBgColor: (() => {
+                const el = document.querySelector('#catalog-container, .catalog-container');
+                return el ? window.getComputedStyle(el).backgroundColor : 'not found';
+            })()
         }
     });
 

@@ -5,7 +5,7 @@ User-agent: *
 Allow: /
 
 # Sitemap location
-Sitemap: https://whatthefunfinder.netlify.app/sitemap.xml
+Sitemap: https://whatthefun.wtf/sitemap.xml
 
 # Allow Google to crawl all content
 User-agent: Googlebot
