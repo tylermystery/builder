@@ -1801,27 +1801,37 @@ export async function banUser(userId) {
  * @returns {Promise<object|null>} The updated record or null on failure
  */
 export async function updateChatMessage(messageId, newContent, senderId) {
+    console.log('[updateChatMessage DEBUG] ========== updateChatMessage CALLED ==========');
+    console.log('[updateChatMessage DEBUG] messageId:', messageId);
+    console.log('[updateChatMessage DEBUG] newContent:', newContent?.substring(0, 50));
+    console.log('[updateChatMessage DEBUG] senderId:', senderId);
+
     if (!messageId || !messageId.startsWith('rec')) {
         log('API', `updateChatMessage: Invalid messageId provided: "${messageId}"`);
+        console.log('[updateChatMessage DEBUG] ❌ Invalid messageId - aborting');
         return null;
     }
     if (!newContent || !newContent.trim()) {
         log('API', 'updateChatMessage: Attempted to save empty message.');
+        console.log('[updateChatMessage DEBUG] ❌ Empty content - aborting');
         return null;
     }
 
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}/${messageId}`;
+    console.log('[updateChatMessage DEBUG] PATCH URL:', url);
 
+    // Only update the Content field - IsEdited may not exist in all Airtable schemas
+    // The field will still show as edited by comparing Content with original
     const payload = {
         fields: {
-            Content: newContent.trim(),
-            EditedAt: new Date().toISOString(),
-            IsEdited: true
+            Content: newContent.trim()
         }
     };
+    console.log('[updateChatMessage DEBUG] Payload:', JSON.stringify(payload));
 
     try {
         log('API', `Updating message ${messageId}`);
+        console.log('[updateChatMessage DEBUG] Sending PATCH request...');
         const response = await fetch(url, {
             method: 'PATCH',
             headers: {
@@ -1830,17 +1840,21 @@ export async function updateChatMessage(messageId, newContent, senderId) {
             },
             body: JSON.stringify(payload)
         });
+        console.log('[updateChatMessage DEBUG] Response status:', response.status);
 
         if (!response.ok) {
             const errorData = await response.json();
+            console.log('[updateChatMessage DEBUG] ❌ Error response:', JSON.stringify(errorData));
             log('API', `Failed to update message: ${errorData?.error?.message || response.statusText}`);
             return null;
         }
 
         const result = await response.json();
+        console.log('[updateChatMessage DEBUG] ✅ Update successful:', result.id);
         log('API', `Message ${messageId} updated successfully`);
         return result;
     } catch (error) {
+        console.log('[updateChatMessage DEBUG] ❌ Exception:', error.message);
         log('API', `Error updating message: ${error.message}`);
         return null;
     }
@@ -1853,23 +1867,31 @@ export async function updateChatMessage(messageId, newContent, senderId) {
  * @returns {Promise<boolean>} True if successful, false otherwise
  */
 export async function deleteChatMessage(messageId, senderId) {
+    console.log('[deleteChatMessage DEBUG] ========== deleteChatMessage CALLED ==========');
+    console.log('[deleteChatMessage DEBUG] messageId:', messageId);
+    console.log('[deleteChatMessage DEBUG] senderId:', senderId);
+
     if (!messageId || !messageId.startsWith('rec')) {
         log('API', `deleteChatMessage: Invalid messageId provided: "${messageId}"`);
+        console.log('[deleteChatMessage DEBUG] ❌ Invalid messageId - aborting');
         return false;
     }
 
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}/${messageId}`;
+    console.log('[deleteChatMessage DEBUG] DELETE URL:', url);
 
-    // Soft delete - mark message as deleted rather than removing from database
+    // Try soft delete first - mark message as deleted
+    // Note: We only use IsDeleted since DeletedAt may not exist in the schema
     const payload = {
         fields: {
-            IsDeleted: true,
-            DeletedAt: new Date().toISOString()
+            IsDeleted: true
         }
     };
+    console.log('[deleteChatMessage DEBUG] Payload:', JSON.stringify(payload));
 
     try {
         log('API', `Soft-deleting message ${messageId}`);
+        console.log('[deleteChatMessage DEBUG] Sending PATCH request...');
         const response = await fetch(url, {
             method: 'PATCH',
             headers: {
@@ -1878,16 +1900,43 @@ export async function deleteChatMessage(messageId, senderId) {
             },
             body: JSON.stringify(payload)
         });
+        console.log('[deleteChatMessage DEBUG] Response status:', response.status);
 
         if (!response.ok) {
             const errorData = await response.json();
+            console.log('[deleteChatMessage DEBUG] ❌ Error response:', JSON.stringify(errorData));
+
+            // If IsDeleted field doesn't exist, try hard delete
+            if (errorData?.error?.type === 'INVALID_REQUEST_UNKNOWN_FIELD_NAME') {
+                console.log('[deleteChatMessage DEBUG] IsDeleted field not found, attempting hard DELETE...');
+                const deleteResponse = await fetch(url, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`
+                    }
+                });
+                console.log('[deleteChatMessage DEBUG] Hard delete response status:', deleteResponse.status);
+
+                if (deleteResponse.ok) {
+                    console.log('[deleteChatMessage DEBUG] ✅ Hard delete successful');
+                    log('API', `Message ${messageId} hard-deleted successfully`);
+                    return true;
+                } else {
+                    const deleteError = await deleteResponse.json();
+                    console.log('[deleteChatMessage DEBUG] ❌ Hard delete failed:', JSON.stringify(deleteError));
+                    return false;
+                }
+            }
+
             log('API', `Failed to delete message: ${errorData?.error?.message || response.statusText}`);
             return false;
         }
 
+        console.log('[deleteChatMessage DEBUG] ✅ Soft delete successful');
         log('API', `Message ${messageId} deleted successfully`);
         return true;
     } catch (error) {
+        console.log('[deleteChatMessage DEBUG] ❌ Exception:', error.message);
         log('API', `Error deleting message: ${error.message}`);
         return false;
     }
@@ -2080,6 +2129,299 @@ export async function fetchMessageReplies(parentMessageId) {
 }
 
 // --- END ENHANCED CHAT FEATURES ---
+
+
+// --- COMPONENT COMMENTS FEATURE ---
+// Comments linked to specific plan components (items, header, etc.) within a session
+
+/**
+ * Comment types for different plan components
+ */
+export const COMPONENT_TYPES = {
+    ITEM: 'item',           // Comment on a plan item
+    HEADER: 'header',       // Comment on the plan header/details
+    REACTIONS: 'reactions', // Comment on the reactions summary
+    GENERAL: 'general'      // General plan comment
+};
+
+/**
+ * Posts a comment to a specific plan component.
+ * Item comments are identified by having BOTH SessionID AND Item Link fields populated.
+ * Header/general comments use a [PLAN_COMMENT:type] prefix in the Content field.
+ * @param {string} sessionId - The session/plan ID
+ * @param {string} componentType - The type of component (from COMPONENT_TYPES)
+ * @param {string} componentId - The ID of the component (e.g., item recordId)
+ * @param {string} senderId - The user ID posting the comment
+ * @param {string} senderName - Display name of the sender
+ * @param {string} content - The comment content
+ * @returns {Promise<object|null>} The created record or null on failure
+ */
+export async function postComponentComment(sessionId, componentType, componentId, senderId, senderName, content) {
+    console.log('[ComponentComment DEBUG] ========== postComponentComment CALLED ==========');
+    console.log('[ComponentComment DEBUG] Params:', { sessionId, componentType, componentId, senderId, senderName, contentLength: content?.length });
+
+    if (!sessionId || !sessionId.startsWith('rec')) {
+        console.log('[ComponentComment DEBUG] ❌ Invalid sessionId:', sessionId);
+        log('API', `postComponentComment: Invalid sessionId: "${sessionId}"`);
+        return null;
+    }
+    if (!content || !content.trim()) {
+        console.log('[ComponentComment DEBUG] ❌ Empty content provided');
+        log('API', 'postComponentComment: Empty content provided.');
+        return null;
+    }
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}`;
+
+    // Build fields based on component type
+    // Item comments: use SessionID + Item Link (both populated identifies as component comment)
+    // Header/general comments: use SessionID + content prefix [PLAN_COMMENT:type]
+    const fields = {
+        SessionID: [sessionId],
+        SenderID: senderId,
+        SenderName: senderName
+    };
+
+    if (componentType === COMPONENT_TYPES.ITEM && componentId && componentId.startsWith('rec')) {
+        // Item comment: link to both session AND item
+        // Having both SessionID and Item Link distinguishes from regular item chat (which has no SessionID)
+        fields['Item Link'] = [componentId];
+        fields.Content = content.trim();
+        console.log('[ComponentComment DEBUG] Creating item comment with SessionID + Item Link');
+    } else {
+        // Header/general comment: prefix content to identify as plan comment
+        fields.Content = `[PLAN_COMMENT:${componentType}] ${content.trim()}`;
+        console.log('[ComponentComment DEBUG] Creating header/general comment with content prefix');
+    }
+
+    const payload = { records: [{ fields }] };
+    console.log('[ComponentComment DEBUG] Payload fields:', JSON.stringify(fields, null, 2));
+    console.log('[ComponentComment DEBUG] POST URL:', url);
+
+    try {
+        console.log('[ComponentComment DEBUG] Sending POST request...');
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        console.log('[ComponentComment DEBUG] Response status:', response.status, response.statusText);
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.log('[ComponentComment DEBUG] ❌ Error response:', JSON.stringify(errorData, null, 2));
+            log('API', `Failed to post component comment: ${errorData?.error?.message || response.statusText}`);
+            return null;
+        }
+
+        const result = await response.json();
+        const newRecord = result.records[0];
+        console.log('[ComponentComment DEBUG] ✅ Comment saved with ID:', newRecord.id);
+        log('API', `Component comment saved with ID: ${newRecord.id}`);
+
+        // Trigger notifications for component comments
+        if (newRecord.id) {
+            const notificationPromises = [
+                fetch('/api/send-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recordId: newRecord.id })
+                }).catch(err => console.error("SMS notification trigger failed:", err)),
+
+                fetch('/api/send-email-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recordId: newRecord.id })
+                }).catch(err => console.error("Email notification trigger failed:", err))
+            ];
+            await Promise.allSettled(notificationPromises);
+        }
+
+        return newRecord;
+    } catch (error) {
+        console.log('[ComponentComment DEBUG] ❌ Exception:', error.message);
+        log('API', `Error posting component comment: ${error.message}`);
+        return null;
+    }
+}
+
+/**
+ * Fetches comments for a specific plan component.
+ * Item comments are identified by having BOTH SessionID AND Item Link populated.
+ * Header/general comments use Content prefix [PLAN_COMMENT:type].
+ *
+ * NOTE: For item comments, we fetch all comments with Item Link not empty for the session,
+ * then filter client-side by componentId. This is because Airtable's {Item Link} & ""
+ * returns the display name (primary field), not the record ID, making FIND() unreliable.
+ *
+ * @param {string} sessionId - The session/plan ID
+ * @param {string} componentType - The type of component (from COMPONENT_TYPES)
+ * @param {string} componentId - The ID of the component (optional for header/general)
+ * @returns {Promise<Array>} Array of comment records sorted by timestamp
+ */
+export async function fetchComponentComments(sessionId, componentType, componentId = null) {
+    console.log('[ComponentComment DEBUG] ========== fetchComponentComments CALLED ==========');
+    console.log('[ComponentComment DEBUG] Params:', { sessionId, componentType, componentId });
+
+    if (!sessionId || !sessionId.startsWith('rec')) {
+        console.log('[ComponentComment DEBUG] ❌ Invalid sessionId:', sessionId);
+        log('API', `fetchComponentComments: Invalid sessionId: "${sessionId}"`);
+        return [];
+    }
+
+    let formula;
+    let needsClientFilter = false;
+
+    if (componentType === COMPONENT_TYPES.ITEM && componentId && componentId.startsWith('rec')) {
+        // For item comments: fetch all with SessionID AND Item Link not empty
+        // We'll filter by componentId client-side since {Item Link} & "" returns display names, not record IDs
+        formula = `AND(FIND('${sessionId}', {SessionID_Rollup}), {Item Link} != '')`;
+        needsClientFilter = true;
+        console.log('[ComponentComment DEBUG] Fetching item comments with SessionID + Item Link (will filter client-side for componentId)');
+    } else {
+        // For header/general comments: filter by SessionID AND content prefix
+        formula = `AND(FIND('${sessionId}', {SessionID_Rollup}), FIND('[PLAN_COMMENT:${componentType}]', {Content}))`;
+        console.log('[ComponentComment DEBUG] Fetching header/general comments with content prefix');
+    }
+
+    console.log('[ComponentComment DEBUG] Filter formula:', formula);
+
+    const encodedFormula = encodeURIComponent(formula);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
+
+    try {
+        console.log('[ComponentComment DEBUG] Sending GET request...');
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        console.log('[ComponentComment DEBUG] Response status:', response.status, response.statusText);
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.log('[ComponentComment DEBUG] ❌ Error response:', JSON.stringify(errorData, null, 2));
+            log('API', `Failed to fetch component comments for ${componentType}:${componentId}`);
+            return [];
+        }
+
+        const data = await response.json();
+        console.log('[ComponentComment DEBUG] ✅ Fetched records from Airtable:', data.records.length);
+
+        // For item comments, filter client-side by componentId
+        let filteredRecords = data.records;
+        if (needsClientFilter && componentId) {
+            filteredRecords = data.records.filter(record => {
+                const itemLinks = record.fields['Item Link'];
+                // Item Link is an array of record IDs
+                return itemLinks && itemLinks.includes(componentId);
+            });
+            console.log('[ComponentComment DEBUG] ✅ After client-side filter for', componentId, ':', filteredRecords.length, 'records');
+        }
+
+        log('API', `Fetched ${filteredRecords.length} comments for ${componentType}:${componentId || 'all'}`);
+        return filteredRecords;
+    } catch (error) {
+        console.log('[ComponentComment DEBUG] ❌ Exception:', error.message);
+        log('API', `Error fetching component comments: ${error.message}`);
+        return [];
+    }
+}
+
+/**
+ * Fetches all component comments for a session (for batch loading).
+ * Component comments are identified by:
+ * - Item comments: have both SessionID AND Item Link populated
+ * - Header/general comments: have [PLAN_COMMENT:] prefix in Content
+ * @param {string} sessionId - The session/plan ID
+ * @returns {Promise<Array>} Array of all component comment records
+ */
+export async function fetchAllComponentComments(sessionId) {
+    console.log('[ComponentComment DEBUG] ========== fetchAllComponentComments CALLED ==========');
+    console.log('[ComponentComment DEBUG] sessionId:', sessionId);
+
+    if (!sessionId || !sessionId.startsWith('rec')) {
+        console.log('[ComponentComment DEBUG] ❌ Invalid sessionId:', sessionId);
+        log('API', `fetchAllComponentComments: Invalid sessionId: "${sessionId}"`);
+        return [];
+    }
+
+    // Fetch messages that are component comments:
+    // - Have SessionID matching AND have an Item Link (item component comments)
+    // - OR have SessionID AND content starts with [PLAN_COMMENT: (header/general comments)
+    // We use OR to get both types in a single query
+    const formula = `AND(FIND('${sessionId}', {SessionID_Rollup}), OR({Item Link} != '', FIND('[PLAN_COMMENT:', {Content}) > 0))`;
+    console.log('[ComponentComment DEBUG] Filter formula:', formula);
+
+    const encodedFormula = encodeURIComponent(formula);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
+
+    try {
+        console.log('[ComponentComment DEBUG] Sending GET request for all comments...');
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        console.log('[ComponentComment DEBUG] Response status:', response.status, response.statusText);
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.log('[ComponentComment DEBUG] ❌ Error response:', JSON.stringify(errorData, null, 2));
+            log('API', `Failed to fetch all component comments for session ${sessionId}`);
+            return [];
+        }
+
+        const data = await response.json();
+        console.log('[ComponentComment DEBUG] ✅ Total records fetched:', data.records.length);
+        log('API', `Fetched ${data.records.length} total component comments for session ${sessionId}`);
+        return data.records;
+    } catch (error) {
+        console.log('[ComponentComment DEBUG] ❌ Exception:', error.message);
+        log('API', `Error fetching all component comments: ${error.message}`);
+        return [];
+    }
+}
+
+/**
+ * Deletes a component comment (soft delete).
+ * Uses the existing deleteChatMessage function.
+ * @param {string} commentId - The comment record ID
+ * @param {string} userId - The user attempting to delete
+ * @returns {Promise<boolean>} Success status
+ */
+export async function deleteComponentComment(commentId, userId) {
+    return await deleteChatMessage(commentId, userId);
+}
+
+/**
+ * Updates a component comment.
+ * Uses the existing updateChatMessage function.
+ * @param {string} commentId - The comment record ID
+ * @param {string} newContent - The new comment content
+ * @param {string} userId - The user attempting to edit
+ * @returns {Promise<object|null>} Updated record or null
+ */
+export async function updateComponentComment(commentId, newContent, userId) {
+    return await updateChatMessage(commentId, newContent, userId);
+}
+
+/**
+ * Adds a reaction to a component comment.
+ * Uses the existing toggleMessageReaction function.
+ * @param {string} commentId - The comment record ID
+ * @param {string} userId - The user toggling the reaction
+ * @param {string} emoji - The emoji to toggle
+ * @param {boolean} add - Whether to add or remove the reaction
+ * @returns {Promise<object|null>} Updated reactions or null
+ */
+export async function toggleComponentCommentReaction(commentId, userId, emoji, add) {
+    return await toggleMessageReaction(commentId, userId, emoji, add);
+}
+
+// --- END COMPONENT COMMENTS FEATURE ---
 
 
 export async function updateUserFlagStatus(userId, isFlagged) {

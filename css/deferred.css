@@ -2167,6 +2167,37 @@
     display: block;
     margin-bottom: 4px;
 }
+
+/* Component tag for component comments in chat */
+.chat-message .component-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7em;
+    font-weight: 600;
+    margin-bottom: 4px;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.chat-message .component-tag-icon {
+    flex-shrink: 0;
+}
+
+.chat-message .component-tag-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.message-wrapper.component-comment-msg {
+    border-left: 3px solid #6366f1;
+    padding-left: 8px;
+}
 #modal-chat-container {
   margin-top: 20px;
   padding-top: 20px;
