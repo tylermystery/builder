@@ -568,6 +568,13 @@ async function createTaskFromMessage(messageId, content) {
         return;
     }
 
+    const projectId = state.session.id;
+    if (!projectId) {
+        log('Chat', 'Cannot create task: no active project');
+        showToast('No active project', 'error');
+        return;
+    }
+
     try {
         // Find the message in session history
         const message = sessionHistoryItems.find(item =>
@@ -575,25 +582,57 @@ async function createTaskFromMessage(messageId, content) {
         );
 
         const componentId = message?.data?.componentInfo?.id || selectedComponent;
-        const taskName = content.substring(0, 100);
-        const taskDescription = content;
+        const taskName = content.substring(0, 100) + (content.length > 100 ? '...' : '');
+        const taskDescription = `From chat message: ${content}`;
 
         log('Chat', `Creating task from message: ${taskName}`);
 
-        // TODO: Integrate with actual task creation API
-        // For now, show a confirmation
-        showToast(`Task created: "${taskName.substring(0, 30)}${taskName.length > 30 ? '...' : ''}"`);
+        // Get max order for new task positioning
+        const projectTasks = state.tasks.byProject.get(projectId) || [];
+        const maxOrder = projectTasks.reduce((max, t) => Math.max(max, t.fields?.Order || 0), 0);
 
-        // If the presentation module has a task creation function, use it
-        if (typeof window.createTaskFromComment === 'function' && componentId) {
-            const componentRecord = state.records.all.find(r => r.id === componentId);
-            if (componentRecord) {
-                await window.createTaskFromComment(componentRecord, content, messageId);
+        const taskData = {
+            Name: taskName,
+            Description: taskDescription,
+            Status: api.TASK_STATUS.PENDING,
+            Order: maxOrder + 1
+        };
+
+        if (componentId && componentId.startsWith('rec')) {
+            taskData.LinkedItem = componentId;
+        }
+
+        console.log('[Chat-TASK DEBUG] Creating task from message:', { messageId, taskName, projectId });
+
+        const newTask = await api.createTask(projectId, taskData);
+        if (newTask) {
+            // Update local state
+            state.tasks.all.set(newTask.id, newTask);
+            const existingTasks = state.tasks.byProject.get(projectId) || [];
+            state.tasks.byProject.set(projectId, [...existingTasks, newTask]);
+
+            // Save comment-to-task link for persistence
+            if (messageId) {
+                const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
+                linksObj[messageId] = newTask.id;
+                state.eventDetails.combined.set('_commentTaskLinks', linksObj);
+
+                if (!newTask.fields) newTask.fields = {};
+                newTask.fields.SourceCommentId = messageId;
+
+                triggerSave();
+                console.log('[Chat-TASK DEBUG] Comment-task link saved:', { messageId, taskId: newTask.id });
             }
+
+            showToast(`Task created: "${taskName.substring(0, 30)}${taskName.length > 30 ? '...' : ''}"`);
+            log('Chat', `Task created from message: ${newTask.id}`);
+        } else {
+            throw new Error('API returned null');
         }
 
     } catch (error) {
         log('Chat', `Error creating task: ${error.message}`);
+        console.error('[Chat-TASK DEBUG] Error creating task:', error);
         showToast('Failed to create task', 'error');
     }
 }

@@ -3007,106 +3007,67 @@ select:focus-visible,
    UNIFIED CHAT PANEL - Persistent Side Panel
    ======================================== */
 
-/* Presentation view layout: content + side panel */
-.presentation-fullpage.active.ucp-open {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-rows: auto 1fr;
-}
-
-/* Header spans full row when chat panel is open */
-.presentation-fullpage.active.ucp-open .presentation-header {
-    grid-column: 1 / -1;
-}
-
-.presentation-fullpage.active.ucp-open .presentation-content {
-    min-width: 0;
-    min-height: 0;
-    width: auto;
-    height: 100%; /* Fill the grid cell row */
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-/* Hide floating chat button when unified panel is open (panel replaces it) */
-.presentation-fullpage.active.ucp-open #presentation-floating-chat-btn {
+/* Hide floating chat button when unified panel is open */
+body.ucp-panel-open #presentation-floating-chat-btn {
     display: none !important;
 }
 
-/* Hide regular chat widget when unified panel is active in presentation view */
-body.presentation-active.ucp-panel-active #chat-widget-container {
+/* Hide the chat bubble when UCP panel is open (in any view) */
+body.ucp-panel-open #chat-widget-container #chat-toggle-button {
     display: none !important;
 }
 
-/* Main panel container */
+/* Hide regular chat widget popup when unified panel is active */
+body.ucp-panel-open #chat-widget-container #chat-window {
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/* Main panel container - fixed position overlay from right */
 .unified-chat-panel {
     display: none;
     flex-direction: column;
     width: 360px;
     min-width: 320px;
     max-width: 420px;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.95);
+    height: 100vh;
+    height: 100dvh; /* Dynamic viewport height for mobile browser chrome */
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 1100; /* Above presentation overlay (z-index: 1000) and chat widget (1050) */
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.97);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-left: 1px solid rgba(0, 0, 0, 0.08);
-    z-index: 10;
-    position: relative;
-    transition: width 0.3s ease, min-width 0.3s ease, opacity 0.3s ease;
-    box-shadow: -2px 0 16px rgba(0, 0, 0, 0.06);
+    transition: transform 0.3s ease, opacity 0.2s ease;
+    box-shadow: -2px 0 16px rgba(0, 0, 0, 0.1);
+    transform: translateX(100%);
 }
 
-.presentation-fullpage.active.ucp-open .unified-chat-panel {
+/* Show UCP when body has the open class */
+body.ucp-panel-open .unified-chat-panel {
     display: flex;
+    transform: translateX(0);
 }
 
-/* Collapsed state */
-.unified-chat-panel.collapsed {
-    width: 44px;
-    min-width: 44px;
-    max-width: 44px;
-    overflow: hidden;
+/* Close button style */
+.ucp-close-btn {
+    background: none;
+    border: none;
+    font-size: 22px;
+    color: #666;
     cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    line-height: 1;
+    transition: background 0.15s, color 0.15s;
 }
-
-.unified-chat-panel.collapsed .ucp-header-left .ucp-title,
-.unified-chat-panel.collapsed .ucp-online-badge,
-.unified-chat-panel.collapsed .ucp-filters,
-.unified-chat-panel.collapsed .ucp-content,
-.unified-chat-panel.collapsed .ucp-input-area {
-    display: none;
-}
-
-.unified-chat-panel.collapsed .ucp-header {
-    flex-direction: column;
-    padding: 12px 6px;
-    gap: 8px;
-    align-items: center;
-    height: 100%;
-    justify-content: flex-start;
-    background: linear-gradient(180deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.05) 100%);
-}
-
-.unified-chat-panel.collapsed .ucp-header-right {
-    flex-direction: column;
-    gap: 6px;
-}
-
-.unified-chat-panel.collapsed .ucp-toggle-icon {
-    transform: rotate(180deg);
-}
-
-/* Vertical "Chat" label when collapsed */
-.unified-chat-panel.collapsed .ucp-header::after {
-    content: 'C H A T';
-    writing-mode: vertical-lr;
-    text-orientation: mixed;
-    font-size: 0.65em;
-    font-weight: 600;
-    letter-spacing: 3px;
-    color: rgba(102, 126, 234, 0.5);
-    margin-top: 12px;
+.ucp-close-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #333;
 }
 
 /* Panel Header */
@@ -3145,31 +3106,6 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
     color: white;
     background: #28a745;
     border-radius: 11px;
-}
-
-.ucp-toggle-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 6px;
-    color: #666;
-    font-size: 1.3em;
-    transition: background-color 0.2s, color 0.2s;
-}
-
-.ucp-toggle-btn:hover {
-    background: rgba(0, 0, 0, 0.06);
-    color: #333;
-}
-
-.ucp-toggle-icon {
-    transition: transform 0.3s ease;
-    display: inline-block;
 }
 
 /* Chat menu button (kebab / three dots) */
@@ -3258,11 +3194,6 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
     border-radius: 10px;
 }
 
-/* Collapsed state hides menu button too */
-.unified-chat-panel.collapsed .ucp-menu-btn {
-    display: none;
-}
-
 /* Filter tabs */
 .ucp-filters {
     display: flex;
@@ -3317,9 +3248,70 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
     background: rgba(255, 255, 255, 0.35);
 }
 
+/* Hide completed toggle */
+.ucp-hide-completed-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    cursor: pointer;
+    font-size: 0.72em;
+    color: #888;
+    white-space: nowrap;
+    user-select: none;
+    flex-shrink: 0;
+}
+.ucp-hide-completed-toggle input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: #28a745;
+    cursor: pointer;
+    margin: 0;
+}
+.ucp-hide-completed-label {
+    line-height: 1;
+}
+
+/* Completed message styling (greyed out with subtle hide) */
+.ucp-msg.ucp-msg-task-completed {
+    opacity: 0.45;
+    position: relative;
+    max-height: 80px;
+    overflow: hidden;
+    transition: opacity 0.2s, max-height 0.3s;
+}
+.ucp-msg.ucp-msg-task-completed::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 24px;
+    background: linear-gradient(transparent, rgba(249, 249, 249, 0.95));
+    pointer-events: none;
+}
+.ucp-msg.ucp-msg-task-completed:hover {
+    opacity: 0.7;
+    max-height: none;
+}
+.ucp-msg.ucp-msg-task-completed:hover::after {
+    display: none;
+}
+
+/* Fully hidden when toggle is active */
+.ucp-msg.ucp-msg-task-completed.ucp-hide-done {
+    display: none;
+}
+
+/* Tasks tab: hide completed group when toggle is active */
+.ucp-tasks-group.ucp-completed-group-hidden {
+    display: none;
+}
+
 /* Content area */
 .ucp-content {
     flex: 1;
+    min-height: 0; /* Critical: allow flex child to shrink below content size so input area stays visible */
     overflow-y: auto;
     overflow-x: hidden;
     padding: 8px 10px;
@@ -3593,6 +3585,231 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
 .ucp-action-btn.ucp-task-btn.task-created {
     color: #28a745;
     font-weight: 500;
+}
+
+.ucp-action-btn.ucp-task-btn.has-task {
+    color: #28a745;
+    font-weight: 500;
+}
+/* Task button status color coding */
+.ucp-action-btn.ucp-task-btn.task-btn-pending { color: #856404; }
+.ucp-action-btn.ucp-task-btn.task-btn-in_progress { color: #004085; }
+.ucp-action-btn.ucp-task-btn.task-btn-blocked { color: #721c24; }
+.ucp-action-btn.ucp-task-btn.task-btn-completed { color: #155724; }
+
+/* When a message has a linked task, keep the actions row visible so the View Task button is always accessible */
+.ucp-actions.has-linked-task {
+    opacity: 1;
+}
+
+/* Task link badge on messages that have been turned into tasks */
+.ucp-task-link-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    margin: 4px 0 2px 0;
+    background: rgba(40, 167, 69, 0.08);
+    border: 1px solid rgba(40, 167, 69, 0.25);
+    border-radius: 6px;
+    font-size: 0.78em;
+    color: #28a745;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.ucp-task-link-badge:hover {
+    background: rgba(40, 167, 69, 0.15);
+    border-color: rgba(40, 167, 69, 0.4);
+}
+
+.ucp-task-link-icon {
+    font-size: 1em;
+}
+
+.ucp-task-link-name {
+    font-weight: 500;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ucp-task-link-status {
+    font-size: 0.85em;
+    opacity: 0.7;
+    text-transform: capitalize;
+}
+
+/* Task link badge color coding by status */
+.ucp-task-link-badge.task-badge-pending {
+    background: rgba(255, 193, 7, 0.1);
+    border-color: rgba(255, 193, 7, 0.3);
+    color: #856404;
+}
+.ucp-task-link-badge.task-badge-pending:hover {
+    background: rgba(255, 193, 7, 0.18);
+    border-color: rgba(255, 193, 7, 0.45);
+}
+.ucp-task-link-badge.task-badge-in_progress {
+    background: rgba(0, 123, 255, 0.08);
+    border-color: rgba(0, 123, 255, 0.25);
+    color: #004085;
+}
+.ucp-task-link-badge.task-badge-in_progress:hover {
+    background: rgba(0, 123, 255, 0.15);
+    border-color: rgba(0, 123, 255, 0.4);
+}
+.ucp-task-link-badge.task-badge-blocked {
+    background: rgba(220, 53, 69, 0.08);
+    border-color: rgba(220, 53, 69, 0.25);
+    color: #721c24;
+}
+.ucp-task-link-badge.task-badge-blocked:hover {
+    background: rgba(220, 53, 69, 0.15);
+    border-color: rgba(220, 53, 69, 0.4);
+}
+.ucp-task-link-badge.task-badge-completed {
+    background: rgba(40, 167, 69, 0.08);
+    border-color: rgba(40, 167, 69, 0.25);
+    color: #155724;
+}
+.ucp-task-link-badge.task-badge-completed:hover {
+    background: rgba(40, 167, 69, 0.15);
+    border-color: rgba(40, 167, 69, 0.4);
+}
+
+.ucp-task-link-status {
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    opacity: 1;
+}
+.ucp-task-link-badge.task-badge-pending .ucp-task-link-status {
+    background: rgba(255, 193, 7, 0.15);
+    color: #856404;
+}
+.ucp-task-link-badge.task-badge-in_progress .ucp-task-link-status {
+    background: rgba(0, 123, 255, 0.12);
+    color: #004085;
+}
+.ucp-task-link-badge.task-badge-blocked .ucp-task-link-status {
+    background: rgba(220, 53, 69, 0.12);
+    color: #721c24;
+}
+.ucp-task-link-badge.task-badge-completed .ucp-task-link-status {
+    background: rgba(40, 167, 69, 0.12);
+    color: #155724;
+}
+
+/* ===== Tasks Tab Styles ===== */
+.ucp-tasks-summary {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    background: rgba(249, 249, 249, 0.5);
+}
+.ucp-tasks-summary-stats {
+    display: flex;
+    gap: 12px;
+    font-size: 0.82em;
+    color: #666;
+}
+.ucp-tasks-stat strong {
+    font-weight: 600;
+    color: #333;
+}
+.ucp-tasks-stat-active strong { color: #007bff; }
+.ucp-tasks-stat-done strong { color: #28a745; }
+
+.ucp-tasks-group {
+    padding: 6px 0;
+}
+.ucp-tasks-group-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    font-size: 0.78em;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.ucp-tasks-group-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.ucp-tasks-group-count {
+    margin-left: auto;
+    font-size: 0.9em;
+    font-weight: 500;
+    color: #999;
+}
+
+.ucp-task-card {
+    display: flex;
+    align-items: stretch;
+    margin: 2px 10px;
+    border-radius: 8px;
+    background: white;
+    border: 1px solid rgba(0,0,0,0.06);
+    overflow: hidden;
+    transition: background 0.15s, box-shadow 0.15s;
+    cursor: pointer;
+}
+.ucp-task-card:hover {
+    background: rgba(102, 126, 234, 0.04);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    border-color: rgba(102, 126, 234, 0.2);
+}
+.ucp-task-card-completed {
+    opacity: 0.65;
+}
+.ucp-task-card-status-bar {
+    width: 4px;
+    flex-shrink: 0;
+}
+.ucp-task-card-body {
+    flex: 1;
+    padding: 8px 10px;
+    min-width: 0;
+}
+.ucp-task-card-name {
+    display: block;
+    font-size: 0.85em;
+    font-weight: 500;
+    color: #222;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ucp-task-card-name.completed {
+    text-decoration: line-through;
+    color: #888;
+}
+.ucp-task-card-meta {
+    display: flex;
+    gap: 6px;
+    margin-top: 3px;
+    flex-wrap: wrap;
+}
+.ucp-task-card-due {
+    font-size: 0.75em;
+    color: #6c757d;
+}
+.ucp-task-card-due.overdue {
+    color: #dc3545;
+    font-weight: 600;
+}
+.ucp-task-card-assignee {
+    font-size: 0.72em;
+    color: white;
+    background: #007bff;
+    padding: 1px 6px;
+    border-radius: 8px;
 }
 
 /* Emoji picker popup */
@@ -3900,47 +4117,14 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
 /* Mobile responsive */
 @media (max-width: 768px) {
     .unified-chat-panel {
-        position: fixed;
-        top: 0;
-        right: 0;
         width: 100%;
         max-width: 100%;
         min-width: 100%;
-        height: 100vh;
-        z-index: 2000;
-        transform: translateX(100%);
-        transition: transform 0.3s ease;
     }
 
-    .presentation-fullpage.active.ucp-open .unified-chat-panel {
-        transform: translateX(0);
-    }
-
-    /* On mobile, revert to column layout since chat panel overlays */
-    .presentation-fullpage.active.ucp-open {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .presentation-fullpage.active.ucp-open .presentation-header {
-        flex: none;
-    }
-
-    .presentation-fullpage.active.ucp-open .presentation-content {
-        /* Don't shrink content on mobile; panel overlays */
-        flex: 1;
-        min-width: auto;
-        min-height: 0;
-    }
-
+    /* Hide mobile UCP toggle in presentation since the bubble handles it now */
     .presentation-fullpage .ucp-mobile-toggle {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .presentation-fullpage.active.ucp-open .ucp-mobile-toggle {
-        display: none;
+        display: none !important;
     }
 }
 
@@ -5432,49 +5616,6 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
             </div>
         </div>
 
-        <!-- Unified Chat Side Panel - Persistent in Presentation View -->
-        <div id="unified-chat-panel" class="unified-chat-panel">
-            <div class="ucp-header">
-                <div class="ucp-header-left">
-                    <h3 class="ucp-title">Conversations</h3>
-                    <span id="ucp-online-count" class="ucp-online-badge" title="People online">0</span>
-                </div>
-                <div class="ucp-header-right">
-                    <button id="ucp-menu-btn" class="ucp-menu-btn" title="Chat options" aria-label="Chat options">
-                        <span class="ucp-menu-icon">&#x22EE;</span>
-                    </button>
-                    <button id="ucp-toggle-btn" class="ucp-toggle-btn" title="Collapse panel" aria-label="Toggle chat panel">
-                        <span class="ucp-toggle-icon">›</span>
-                    </button>
-                </div>
-            </div>
-            <div class="ucp-filters">
-                <button class="ucp-filter-btn active" data-filter="all">All</button>
-                <button class="ucp-filter-btn" data-filter="comments">Comments</button>
-                <button class="ucp-filter-btn" data-filter="ideas">Ideas</button>
-            </div>
-            <div id="ucp-content" class="ucp-content">
-                <div class="ucp-loading">Loading conversations...</div>
-            </div>
-            <div id="ucp-input-area" class="ucp-input-area">
-                <div id="ucp-reply-indicator" class="ucp-reply-indicator" style="display: none;">
-                    <span class="ucp-reply-text"></span>
-                    <button class="ucp-reply-cancel" type="button">&times;</button>
-                </div>
-                <div id="ucp-attach-bar" class="ucp-attach-bar">
-                    <select id="ucp-attach-select" class="ucp-attach-select" title="Attach to plan item">
-                        <option value="">Plan-wide chat</option>
-                    </select>
-                </div>
-                <form id="ucp-message-form" class="ucp-message-form">
-                    <input type="text" id="ucp-message-input" class="ucp-message-input" placeholder="Message the team..." autocomplete="off">
-                    <button type="submit" class="ucp-send-btn" title="Send">
-                        <span>&#10148;</span>
-                    </button>
-                </form>
-            </div>
-        </div>
-
         <!-- Drag-and-Drop Zones for Presentation View (Enhanced) -->
         <!-- Left side: Actions (Goals at top, Archive/Delete at bottom) -->
         <!-- Right side: Reactions and Comments -->
@@ -5585,112 +5726,164 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
         <!-- Mobile toggle for Unified Chat Panel -->
         <button id="ucp-mobile-toggle" class="ucp-mobile-toggle" title="Open conversations">💬</button>
 
-        <!-- Merge Mode UI - OUTSIDE presentation-drag-buckets but INSIDE presentation-modal-overlay -->
-        <!-- This ensures proper stacking context for z-index layering with plan items -->
-        <div id="merge-mode-overlay" class="merge-mode-overlay" style="display: none;"></div>
-        <div id="merge-mode-banner" class="merge-mode-banner">
-            <div class="merge-mode-banner-text">
-                <span class="merge-mode-banner-icon">🔗</span>
-                <span id="merge-mode-banner-label">Tap items to select for merge</span>
-                <span id="merge-mode-source-name" class="merge-mode-banner-source"></span>
-            </div>
-            <button id="merge-mode-cancel-btn" class="merge-mode-cancel-btn">Cancel</button>
-        </div>
-        <div id="merge-select-fab" class="merge-select-fab" style="display: none;">
-            <div class="merge-select-fab-content">
-                <span class="merge-select-fab-icon">🔗</span>
-                <span class="merge-select-fab-text">Merge <span id="merge-select-fab-count">0</span> items</span>
-            </div>
-        </div>
+    </div>
 
-        <!-- Merge Options Dialog (shown after dropping item on another) -->
-        <div id="merge-options-dialog" class="merge-options-dialog" style="display: none;">
-            <div class="merge-options-dialog-content">
-                <button class="merge-dialog-close" id="merge-dialog-close" title="Cancel">&times;</button>
-                <div class="merge-dialog-header">
-                    <span class="merge-dialog-icon">🔗</span>
-                    <h3 class="merge-dialog-title">Combine Items</h3>
-                </div>
-                <div class="merge-dialog-items">
-                    <div class="merge-item-preview" id="merge-source-preview">
-                        <span class="merge-item-name" id="merge-source-name">Source Item</span>
-                    </div>
-                    <span class="merge-plus-icon">+</span>
-                    <div class="merge-item-preview" id="merge-target-preview">
-                        <span class="merge-item-name" id="merge-target-name">Target Item</span>
-                    </div>
-                </div>
-                <!-- Tabbed merge type selector -->
-                <div class="merge-tabs">
-                    <button class="merge-tab active" id="merge-tab-options" data-merge-type="options">
-                        <span class="merge-tab-icon">📂</span>
-                        <span class="merge-tab-label">As Options</span>
-                    </button>
-                    <button class="merge-tab" id="merge-tab-hybrid" data-merge-type="hybrid">
-                        <span class="merge-tab-icon">✨</span>
-                        <span class="merge-tab-label">As Hybrid</span>
-                    </button>
-                </div>
-                <!-- Tab content: Options -->
-                <div class="merge-tab-content active" id="merge-tab-content-options" data-merge-type="options">
-                    <div class="merge-tab-description">Keep both items as alternative choices under a shared category</div>
-                    <div class="merge-estimation-panel" id="merge-estimation-options">
-                        <div class="merge-estimation-loading">
-                            <span class="loading-spinner"></span>
-                            <span class="loading-text">Estimating category...</span>
-                        </div>
-                        <div class="merge-estimation-result" style="display: none;">
-                            <div class="estimation-field">
-                                <span class="estimation-label">Category</span>
-                                <span class="estimation-value" id="estimation-category">-</span>
-                            </div>
-                            <div class="estimation-field">
-                                <span class="estimation-label">Description</span>
-                                <span class="estimation-value estimation-desc" id="estimation-description">-</span>
-                            </div>
-                            <div class="estimation-field estimation-confidence-field" id="estimation-options-confidence-field" style="display:none;">
-                                <span class="estimation-label">Confidence</span>
-                                <div class="estimation-confidence-bar"><div class="estimation-confidence-fill" id="estimation-options-confidence"></div></div>
-                            </div>
-                        </div>
-                    </div>
-                    <button class="merge-confirm-btn merge-confirm-options" id="merge-option-group">
-                        <span>Group as Options</span>
-                    </button>
-                </div>
-                <!-- Tab content: Hybrid -->
-                <div class="merge-tab-content" id="merge-tab-content-hybrid" data-merge-type="hybrid">
-                    <div class="merge-tab-description">Blend both items into a single, new hybrid idea</div>
-                    <div class="merge-estimation-panel" id="merge-estimation-hybrid">
-                        <div class="merge-estimation-loading">
-                            <span class="loading-spinner"></span>
-                            <span class="loading-text">Generating hybrid idea...</span>
-                        </div>
-                        <div class="merge-estimation-result" style="display: none;">
-                            <div class="estimation-field">
-                                <span class="estimation-label">Hybrid Name</span>
-                                <span class="estimation-value" id="estimation-hybrid-name">-</span>
-                            </div>
-                            <div class="estimation-field">
-                                <span class="estimation-label">Description</span>
-                                <span class="estimation-value estimation-desc" id="estimation-hybrid-description">-</span>
-                            </div>
-                            <div class="estimation-field" id="estimation-hybrid-reasoning-field" style="display:none;">
-                                <span class="estimation-label">Reasoning</span>
-                                <span class="estimation-value estimation-desc" id="estimation-hybrid-reasoning">-</span>
-                            </div>
-                            <div class="estimation-field estimation-confidence-field" id="estimation-hybrid-confidence-field" style="display:none;">
-                                <span class="estimation-label">Confidence</span>
-                                <div class="estimation-confidence-bar"><div class="estimation-confidence-fill" id="estimation-hybrid-confidence"></div></div>
-                            </div>
-                        </div>
-                    </div>
-                    <button class="merge-confirm-btn merge-confirm-hybrid" id="merge-option-combine">
-                        <span>Merge as Hybrid</span>
-                    </button>
-                </div>
-                <button class="merge-dialog-cancel" id="merge-dialog-cancel">Cancel</button>
+    <!-- Merge Mode UI - OUTSIDE presentation-fullpage to avoid flex stacking context issues -->
+    <!-- position:fixed elements must not be inside flex containers to render correctly -->
+    <div id="merge-mode-overlay" class="merge-mode-overlay" style="display: none;"></div>
+    <div id="merge-mode-banner" class="merge-mode-banner">
+        <div class="merge-mode-banner-text">
+            <span class="merge-mode-banner-icon">🔗</span>
+            <span id="merge-mode-banner-label">Tap items to select for merge</span>
+            <span id="merge-mode-source-name" class="merge-mode-banner-source"></span>
+        </div>
+        <button id="merge-mode-cancel-btn" class="merge-mode-cancel-btn">Cancel</button>
+    </div>
+    <div id="merge-select-fab" class="merge-select-fab" style="display: none;">
+        <div class="merge-select-fab-content">
+            <span class="merge-select-fab-icon">🔗</span>
+            <span class="merge-select-fab-text">Merge <span id="merge-select-fab-count">0</span> items</span>
+        </div>
+    </div>
+
+    <!-- Merge Options Dialog (shown after selecting items to merge) -->
+    <div id="merge-options-dialog" class="merge-options-dialog" style="display: none;">
+        <div class="merge-options-dialog-content">
+            <button class="merge-dialog-close" id="merge-dialog-close" title="Cancel">&times;</button>
+            <div class="merge-dialog-header">
+                <span class="merge-dialog-icon">🔗</span>
+                <h3 class="merge-dialog-title">Combine Items</h3>
             </div>
+
+            <!-- Item list showing selected items with remove capability -->
+            <div class="merge-dialog-item-list" id="merge-dialog-item-list">
+                <div class="merge-dialog-item-list-header">
+                    <span class="merge-dialog-item-list-label">Selected Items</span>
+                    <span class="merge-dialog-item-list-count" id="merge-dialog-item-count">0</span>
+                </div>
+                <div class="merge-dialog-item-list-items" id="merge-dialog-item-list-items">
+                    <!-- Dynamically populated item rows -->
+                </div>
+            </div>
+
+            <!-- Tabbed merge type selector -->
+            <div class="merge-tabs">
+                <button class="merge-tab active" id="merge-tab-options" data-merge-type="options">
+                    <span class="merge-tab-icon">📂</span>
+                    <span class="merge-tab-label">As Options</span>
+                </button>
+                <button class="merge-tab" id="merge-tab-hybrid" data-merge-type="hybrid">
+                    <span class="merge-tab-icon">✨</span>
+                    <span class="merge-tab-label">As Hybrid</span>
+                </button>
+            </div>
+            <!-- Tab content: Options -->
+            <div class="merge-tab-content active" id="merge-tab-content-options" data-merge-type="options">
+                <div class="merge-tab-description">Keep both items as alternative choices under a shared category</div>
+                <div class="merge-estimation-panel" id="merge-estimation-options">
+                    <div class="merge-estimation-loading">
+                        <span class="loading-spinner"></span>
+                        <span class="loading-text">Estimating category...</span>
+                    </div>
+                    <div class="merge-estimation-result" style="display: none;">
+                        <div class="estimation-field">
+                            <span class="estimation-label">Category</span>
+                            <span class="estimation-value" id="estimation-category">-</span>
+                        </div>
+                        <div class="estimation-field">
+                            <span class="estimation-label">Description</span>
+                            <span class="estimation-value estimation-desc" id="estimation-description">-</span>
+                        </div>
+                        <div class="estimation-field estimation-confidence-field" id="estimation-options-confidence-field" style="display:none;">
+                            <span class="estimation-label">Confidence</span>
+                            <div class="estimation-confidence-bar"><div class="estimation-confidence-fill" id="estimation-options-confidence"></div></div>
+                        </div>
+                    </div>
+                </div>
+                <button class="merge-confirm-btn merge-confirm-options" id="merge-option-group">
+                    <span>Group as Options</span>
+                </button>
+            </div>
+            <!-- Tab content: Hybrid -->
+            <div class="merge-tab-content" id="merge-tab-content-hybrid" data-merge-type="hybrid">
+                <div class="merge-tab-description">Blend both items into a single, new hybrid idea</div>
+                <div class="merge-estimation-panel" id="merge-estimation-hybrid">
+                    <div class="merge-estimation-loading">
+                        <span class="loading-spinner"></span>
+                        <span class="loading-text">Generating hybrid idea...</span>
+                    </div>
+                    <div class="merge-estimation-result" style="display: none;">
+                        <div class="estimation-field">
+                            <span class="estimation-label">Hybrid Name</span>
+                            <span class="estimation-value" id="estimation-hybrid-name">-</span>
+                        </div>
+                        <div class="estimation-field">
+                            <span class="estimation-label">Description</span>
+                            <span class="estimation-value estimation-desc" id="estimation-hybrid-description">-</span>
+                        </div>
+                        <div class="estimation-field" id="estimation-hybrid-reasoning-field" style="display:none;">
+                            <span class="estimation-label">Reasoning</span>
+                            <span class="estimation-value estimation-desc" id="estimation-hybrid-reasoning">-</span>
+                        </div>
+                        <div class="estimation-field estimation-confidence-field" id="estimation-hybrid-confidence-field" style="display:none;">
+                            <span class="estimation-label">Confidence</span>
+                            <div class="estimation-confidence-bar"><div class="estimation-confidence-fill" id="estimation-hybrid-confidence"></div></div>
+                        </div>
+                    </div>
+                </div>
+                <button class="merge-confirm-btn merge-confirm-hybrid" id="merge-option-combine">
+                    <span>Merge as Hybrid</span>
+                </button>
+            </div>
+            <button class="merge-dialog-cancel" id="merge-dialog-cancel">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Unified Chat Side Panel - Shared across catalog and presentation views -->
+    <div id="unified-chat-panel" class="unified-chat-panel">
+        <div class="ucp-header">
+            <div class="ucp-header-left">
+                <h3 class="ucp-title">Conversations</h3>
+                <span id="ucp-online-count" class="ucp-online-badge" title="People online">0</span>
+            </div>
+            <div class="ucp-header-right">
+                <button id="ucp-menu-btn" class="ucp-menu-btn" title="Chat options" aria-label="Chat options">
+                    <span class="ucp-menu-icon">&#x22EE;</span>
+                </button>
+                <button id="ucp-close-btn" class="ucp-close-btn" title="Close panel" aria-label="Close chat panel">
+                    <span>&times;</span>
+                </button>
+            </div>
+        </div>
+        <div class="ucp-filters">
+            <button class="ucp-filter-btn active" data-filter="all">All</button>
+            <button class="ucp-filter-btn" data-filter="comments">Comments</button>
+            <button class="ucp-filter-btn" data-filter="ideas">Ideas</button>
+            <button class="ucp-filter-btn" data-filter="tasks">Tasks</button>
+            <label class="ucp-hide-completed-toggle" id="ucp-hide-completed-toggle" title="Hide completed items">
+                <input type="checkbox" id="ucp-hide-completed-cb">
+                <span class="ucp-hide-completed-label">Hide done</span>
+            </label>
+        </div>
+        <div id="ucp-content" class="ucp-content">
+            <div class="ucp-loading">Loading conversations...</div>
+        </div>
+        <div id="ucp-input-area" class="ucp-input-area">
+            <div id="ucp-reply-indicator" class="ucp-reply-indicator" style="display: none;">
+                <span class="ucp-reply-text"></span>
+                <button class="ucp-reply-cancel" type="button">&times;</button>
+            </div>
+            <div id="ucp-attach-bar" class="ucp-attach-bar">
+                <select id="ucp-attach-select" class="ucp-attach-select" title="Attach to plan item">
+                    <option value="">Plan-wide chat</option>
+                </select>
+            </div>
+            <form id="ucp-message-form" class="ucp-message-form">
+                <input type="text" id="ucp-message-input" class="ucp-message-input" placeholder="Message the team..." autocomplete="off">
+                <button type="submit" class="ucp-send-btn" title="Send">
+                    <span>&#10148;</span>
+                </button>
+            </form>
         </div>
     </div>
 
@@ -5833,6 +6026,12 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
                             <p style="font-size: 0.85em; color: #6c757d; margin-top: 5px;">Customize the animated background effects</p>
                         </div>
 
+                        <div class="form-row">
+                            <label style="font-weight: 600; margin-bottom: 10px; display: block;">Debug Console</label>
+                            <button id="copy-console-btn" class="primary-action-btn" type="button" style="background-color: #343a40; width: 100%;">📋 Copy Console Log</button>
+                            <p id="copy-console-message" style="font-size: 0.85em; color: #6c757d; margin-top: 5px;">Copy recent console output to clipboard for debugging</p>
+                        </div>
+
                         <button class="primary-action-btn" type="submit" style="margin-top: 15px;">Save Preferences</button>
                         <p id="prefs-message" style="margin-top: 10px; min-height: 1em;"></p>
                         <a href="#" id="owner-dashboard-link" class="primary-action-btn" style="display: none; margin-top: 15px; text-align: center; text-decoration: none; background-color: #555;">Store Dashboard</a>
@@ -5890,6 +6089,33 @@ body.presentation-active.ucp-panel-active #chat-widget-container {
 
     <!-- Global error handler to catch module loading failures -->
     <script>
+    // ── Console Log Buffer for Copy Console feature ──
+    // Captures all console output so it can be copied to clipboard from Account modal
+    (function() {
+        var MAX_BUFFER = 2000;
+        window.__consoleBuffer = [];
+        var methods = ['log', 'warn', 'error', 'info', 'debug'];
+        methods.forEach(function(method) {
+            var original = console[method].bind(console);
+            console[method] = function() {
+                var args = Array.prototype.slice.call(arguments);
+                var line = '[' + method.toUpperCase() + '] ' + args.map(function(a) {
+                    if (a === null) return 'null';
+                    if (a === undefined) return 'undefined';
+                    if (typeof a === 'object') {
+                        try { return JSON.stringify(a); } catch(e) { return String(a); }
+                    }
+                    return String(a);
+                }).join(' ');
+                window.__consoleBuffer.push(line);
+                if (window.__consoleBuffer.length > MAX_BUFFER) {
+                    window.__consoleBuffer.shift();
+                }
+                original.apply(console, arguments);
+            };
+        });
+    })();
+
     window.addEventListener('error', function(event) {
         console.error('[GLOBAL ERROR]', event.message, 'at', event.filename, ':', event.lineno, ':', event.colno);
         console.error('[GLOBAL ERROR] Error object:', event.error);

@@ -9,7 +9,7 @@ import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
 import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice } from './utils.js';
-import { sendMessage, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName, toggleRecentChats, addPlanEventToHistory } from './chat.js';
+import { sendMessage, getCurrentUser, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName, toggleRecentChats, addPlanEventToHistory } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal } from './auth.js';
@@ -20,6 +20,7 @@ import { initializeProjectSelector, wasLongPress, resetLongPress } from './compo
 import { broadcastItemAdded, broadcastItemRemoved } from './utils/realtimeUpdates.js';
 import { showWtfPlansPanel, initializeWtfPlansPanel } from './components/wtfPlansPanel.js';
 import { syncPlanState, initializePlanStateSync } from './utils/planStateSync.js';
+import { initializeUnifiedChatPanel, showUnifiedChatPanel, toggleUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage } from './components/unifiedChatPanel.js';
 
 console.log('[MODULE DEBUG] events.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -3244,49 +3245,32 @@ export function initializeChatEventListeners() {
         });
     }
 
+    // Wire the chat bubble to open/close the Unified Chat Panel
     const chatToggleButton = document.getElementById('chat-toggle-button');
-    const chatWidgetContainer = document.getElementById('chat-widget-container');
-    function toggleChatWindow(forceClose = false) {
-        if (chatWidgetContainer) {
-            if (forceClose) {
-                chatWidgetContainer.classList.remove('chat-open');
-            } else {
-                chatWidgetContainer.classList.toggle('chat-open');
-            }
-        }
-    }
-
     if (chatToggleButton) {
         chatToggleButton.addEventListener('click', (e) => {
             e.stopPropagation();
-            toggleChatWindow();
+            // Initialize UCP on first open (lazy init) and inject dependencies
+            setUCPGetCurrentUser(getCurrentUser);
+            setUCPSendMessage(sendMessage);
+            initializeUnifiedChatPanel();
+            toggleUnifiedChatPanel();
         });
     }
 
-    document.addEventListener('click', (event) => {
-        const remainOpenCheckbox = document.getElementById('chat-remain-open-checkbox');
-        if (chatWidgetContainer && !chatWidgetContainer.contains(event.target) && chatWidgetContainer.classList.contains('chat-open')) {
-            if (!remainOpenCheckbox || !remainOpenCheckbox.checked) {
-                toggleChatWindow(true);
-            }
-        }
-    });
+    // Keep the old chat widget toggle code dormant
+    // (old toggleChatWindow and document click-outside handler are no longer active)
 
     // Initialize recent chats listeners
     initializeRecentChatsListeners();
 }
 
 export function openChatWidget(andKeepOpen = false) {
-    const chatWidgetContainer = document.getElementById('chat-widget-container');
-    if (chatWidgetContainer) {
-        chatWidgetContainer.classList.add('chat-open');
-        if (andKeepOpen) {
-            const remainOpenCheckbox = document.getElementById('chat-remain-open-checkbox');
-            if (remainOpenCheckbox) {
-                remainOpenCheckbox.checked = true;
-            }
-        }
-    }
+    // Now opens the Unified Chat Panel instead of the old chat widget
+    setUCPGetCurrentUser(getCurrentUser);
+    setUCPSendMessage(sendMessage);
+    initializeUnifiedChatPanel();
+    showUnifiedChatPanel();
 }
 
 // And add the handleFilterChipClear function to the end of events.js

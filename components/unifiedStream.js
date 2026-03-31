@@ -11,6 +11,7 @@
 import { state } from '../state.js';
 import { log } from '../utils/debug.js';
 import * as api from '../api.js';
+import { triggerSave } from '../events.js';
 
 // Store reference to getCurrentUser - will be set via setter to avoid circular dependency
 let getCurrentUserFn = null;
@@ -414,6 +415,26 @@ async function createTaskFromMessage(message) {
     const currentUser = getCurrentUser();
     if (!currentUser) {
         log('UnifiedStream', 'Cannot create task: no current user');
+        showToast('Please sign in to create tasks', 'error');
+        return;
+    }
+
+    const projectId = state.session.id;
+    if (!projectId) {
+        log('UnifiedStream', 'Cannot create task: no active project');
+        showToast('No active project', 'error');
+        return;
+    }
+
+    // Check permissions
+    const currentRole = state.permissions?.currentRole;
+    const isLoadingPerms = state.permissions?.isLoading !== false;
+    const canEditByRole = api.canEdit(currentRole);
+    const canEditByOwnership = state.session.isOwned === true;
+    const canUserEdit = (!isLoadingPerms && canEditByRole) || canEditByOwnership;
+
+    if (!canUserEdit) {
+        showToast('You do not have permission to create tasks', 'error');
         return;
     }
 
@@ -421,26 +442,52 @@ async function createTaskFromMessage(message) {
         // Determine component association
         const componentId = message.componentId || selectedComponent;
 
-        // Create task via API
+        // Get max order for new task positioning
+        const projectTasks = state.tasks.byProject.get(projectId) || [];
+        const maxOrder = projectTasks.reduce((max, t) => Math.max(max, t.fields?.Order || 0), 0);
+
+        // Build task data matching the API's expected format
         const taskData = {
-            name: message.content.substring(0, 100),
-            description: message.content,
-            status: 'Not Started',
-            createdBy: currentUser.id,
-            sourceMessageId: message.id
+            Name: message.content.substring(0, 100) + (message.content.length > 100 ? '...' : ''),
+            Description: `From stream message by ${message.senderName || currentUser.name}: ${message.content}`,
+            Status: api.TASK_STATUS.PENDING,
+            Order: maxOrder + 1
         };
 
-        if (componentId) {
-            taskData.componentId = componentId;
+        // Link to plan item if the message is on a valid component
+        if (componentId && componentId.startsWith('rec')) {
+            taskData.LinkedItem = componentId;
         }
 
-        // Call task creation API (assuming it exists)
-        // For now, we'll log the intent
-        log('UnifiedStream', `Creating task from message: ${JSON.stringify(taskData)}`);
+        // Persist to Airtable via API
+        const newTask = await api.createTask(projectId, taskData);
+        if (newTask) {
+            // Update local state so task appears immediately
+            state.tasks.all.set(newTask.id, newTask);
+            const existingTasks = state.tasks.byProject.get(projectId) || [];
+            state.tasks.byProject.set(projectId, [...existingTasks, newTask]);
 
-        // Show confirmation
-        showToast('Task created from message');
+            // Save comment-to-task link for persistence
+            if (message.id) {
+                console.log('[UnifiedStream-TASK DEBUG] Saving comment-task link:', {
+                    messageId: message.id,
+                    taskId: newTask.id
+                });
+                const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
+                linksObj[message.id] = newTask.id;
+                state.eventDetails.combined.set('_commentTaskLinks', linksObj);
 
+                if (!newTask.fields) newTask.fields = {};
+                newTask.fields.SourceCommentId = message.id;
+
+                triggerSave();
+            }
+
+            log('UnifiedStream', `Task created from message: ${newTask.id}`);
+            showToast('Task created from message');
+        } else {
+            throw new Error('API returned null');
+        }
     } catch (error) {
         log('UnifiedStream', `Error creating task: ${error.message}`);
         showToast('Failed to create task', 'error');

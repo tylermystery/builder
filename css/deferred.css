@@ -3222,6 +3222,7 @@ html.presentation-active {
 
 .presentation-itinerary-scroll {
     flex: 1;
+    min-height: 0; /* Critical: allow flex child to shrink below content size for proper scrolling */
     overflow-y: auto;
     overflow-x: hidden;
     padding: 20px;
@@ -8027,14 +8028,43 @@ hr.total-divider {
     color: #155724;
 }
 
+/* Status select wrapper with color indicator */
+.task-status-select-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.task-status-select-wrapper select {
+    flex: 1;
+}
+.task-status-indicator {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 2px solid rgba(0,0,0,0.1);
+    transition: background 0.2s;
+}
+
 .task-due-date {
     font-size: 0.8em;
     color: #6c757d;
 }
 
-.task-assignee {
-    font-size: 0.8em;
-    color: #007bff;
+.task-collaborators {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+
+.task-collaborator-tag {
+    font-size: 0.75em;
+    color: #fff;
+    background-color: #007bff;
+    padding: 1px 6px;
+    border-radius: 10px;
+    white-space: nowrap;
 }
 
 /* Task Card Actions */
@@ -8422,28 +8452,81 @@ hr.total-divider {
     max-width: 180px;
 }
 
-/* Link Item Select in Modal */
-.task-linked-item-select-wrapper {
+/* Collaborator Chip Input in Task Modal */
+.task-collaborators-container {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    background-color: #fff;
+    cursor: text;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    min-height: 42px;
 }
 
-.task-linked-item-select-wrapper select {
-    width: 100%;
+.task-collaborators-container:focus-within {
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
 }
 
-.task-linked-item-search {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
+.task-collaborator-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.task-collaborator-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background-color: #e7f1ff;
+    border: 1px solid #b6d4fe;
+    border-radius: 12px;
+    font-size: 0.85em;
+    color: #0d47a1;
+    white-space: nowrap;
+}
+
+.task-collaborator-remove {
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    font-size: 1.1em;
+    line-height: 1;
+    padding: 0 2px;
+    border-radius: 50%;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.task-collaborator-remove:hover {
+    color: #dc3545;
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+.task-collaborator-input {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    padding: 4px !important;
+    flex: 1;
+    min-width: 120px;
     font-size: 0.9em;
+    background: transparent;
 }
 
-.task-linked-item-search:focus {
-    outline: none;
-    border-color: #3498db;
+/* Linked Plan Item type badge */
+.linked-item-type-badge {
+    font-size: 0.7em;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background-color: #e2e8f0;
+    color: #4a5568;
+    white-space: nowrap;
 }
 
 .task-form-hint {
@@ -13241,6 +13324,279 @@ hr.total-divider {
 }
 
 /* =====================================================
+   MERGE MODE - Item Highlighting for Merge Target Selection
+   ===================================================== */
+
+/* Overlay that appears behind items during merge mode */
+.merge-mode-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 8999;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.merge-mode-overlay.active {
+    opacity: 1;
+}
+
+/* Banner shown at top during merge mode */
+.merge-mode-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 9100;
+    background: linear-gradient(135deg, rgba(0, 150, 136, 0.95), rgba(0, 121, 107, 0.95));
+    color: white;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    transform: translateY(-100%);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.merge-mode-banner.active {
+    transform: translateY(0);
+}
+
+.merge-mode-banner-text {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.merge-mode-banner-icon {
+    font-size: 18px;
+}
+
+.merge-mode-banner-source {
+    font-weight: 600;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.merge-mode-cancel-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: white;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    white-space: nowrap;
+}
+
+.merge-mode-cancel-btn:hover {
+    background: rgba(255, 255, 255, 0.35);
+}
+
+/* Items highlighted as merge targets */
+.merge-mode-active .itinerary-item-section:not(.merge-mode-source) {
+    position: relative;
+    z-index: 9050;
+    cursor: pointer;
+}
+
+.merge-mode-active .itinerary-item-section:not(.merge-mode-source) .itinerary-item,
+.merge-mode-active .itinerary-item-section:not(.merge-mode-source) .compact-card {
+    animation: merge-target-pulse 2s ease-in-out infinite;
+    border: 2px solid rgba(0, 150, 136, 0.7);
+    border-radius: 12px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.merge-mode-active .itinerary-item-section:not(.merge-mode-source) .itinerary-item:hover,
+.merge-mode-active .itinerary-item-section:not(.merge-mode-source) .compact-card:hover {
+    transform: scale(1.02);
+    border-color: rgba(0, 150, 136, 1);
+    box-shadow: 0 0 24px rgba(0, 150, 136, 0.5), 0 0 48px rgba(0, 150, 136, 0.2);
+    animation: none;
+}
+
+/* The source item during merge mode - dimmed and non-interactive */
+.merge-mode-active .itinerary-item-section.merge-mode-source {
+    opacity: 0.35;
+    pointer-events: none;
+    position: relative;
+    z-index: 9050;
+}
+
+@keyframes merge-target-pulse {
+    0%, 100% {
+        box-shadow: 0 0 8px rgba(0, 150, 136, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(0, 150, 136, 0.4), 0 0 40px rgba(0, 150, 136, 0.15);
+    }
+}
+
+/* Board view support for merge mode */
+.merge-mode-active .compact-card:not(.merge-mode-selected-card) {
+    position: relative;
+    z-index: 9050;
+    cursor: pointer;
+    animation: merge-target-pulse 2s ease-in-out infinite;
+    border: 2px solid rgba(0, 150, 136, 0.7);
+    border-radius: 12px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.merge-mode-active .compact-card:not(.merge-mode-selected-card):hover {
+    transform: scale(1.02);
+    border-color: rgba(0, 150, 136, 1);
+    box-shadow: 0 0 24px rgba(0, 150, 136, 0.5), 0 0 48px rgba(0, 150, 136, 0.2);
+    animation: none;
+}
+
+/* =====================================================
+   MULTI-SELECT MERGE MODE
+   ===================================================== */
+
+/* Selected item checkmark indicator */
+.merge-select-check {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #00968880, #00796b80);
+    border: 2px solid rgba(0, 150, 136, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    transition: all 0.2s ease;
+    pointer-events: none;
+}
+
+.merge-select-check::after {
+    content: '';
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: transparent;
+    transition: background 0.2s ease;
+}
+
+/* When the item is selected, fill in the check */
+.merge-mode-selected .merge-select-check {
+    background: linear-gradient(135deg, #009688, #00796b);
+    border-color: #4dd0c1;
+    box-shadow: 0 2px 8px rgba(0, 150, 136, 0.5);
+}
+
+.merge-mode-selected .merge-select-check::after {
+    content: '\2713';
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    background: transparent;
+    width: auto;
+    height: auto;
+    border-radius: 0;
+}
+
+/* Selected item visual state */
+.merge-mode-active .itinerary-item-section.merge-mode-selected .itinerary-item,
+.merge-mode-active .itinerary-item-section.merge-mode-selected .compact-card {
+    border: 2px solid rgba(0, 150, 136, 1) !important;
+    box-shadow: 0 0 16px rgba(0, 150, 136, 0.4), 0 0 32px rgba(0, 150, 136, 0.15) !important;
+    animation: none !important;
+    background: rgba(0, 150, 136, 0.08);
+}
+
+/* Board view: selected card */
+.merge-mode-active .compact-card.merge-mode-selected-card {
+    border: 2px solid rgba(0, 150, 136, 1) !important;
+    box-shadow: 0 0 16px rgba(0, 150, 136, 0.4) !important;
+    animation: none !important;
+    position: relative;
+}
+
+.merge-mode-selected-card .merge-select-check {
+    background: linear-gradient(135deg, #009688, #00796b);
+    border-color: #4dd0c1;
+    box-shadow: 0 2px 8px rgba(0, 150, 136, 0.5);
+}
+
+.merge-mode-selected-card .merge-select-check::after {
+    content: '\2713';
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    background: transparent;
+    width: auto;
+    height: auto;
+    border-radius: 0;
+}
+
+/* Floating Action Button for multi-select merge */
+.merge-select-fab {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    z-index: 9200;
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+}
+
+.merge-select-fab.active {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
+}
+
+.merge-select-fab-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 28px;
+    background: linear-gradient(135deg, #009688, #00796b);
+    color: white;
+    border-radius: 30px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 6px 24px rgba(0, 150, 136, 0.5), 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.merge-select-fab-content:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 32px rgba(0, 150, 136, 0.6), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.merge-select-fab-content:active {
+    transform: scale(0.98);
+}
+
+.merge-select-fab-icon {
+    font-size: 20px;
+}
+
+.merge-select-fab-text {
+    letter-spacing: 0.3px;
+}
+
+/* =====================================================
    MERGE OPTIONS DIALOG
    ===================================================== */
 
@@ -13332,16 +13688,117 @@ hr.total-divider {
     color: #212529;
 }
 
-.merge-dialog-items {
+/* Merge Dialog - Item List */
+.merge-dialog-item-list {
+    margin-bottom: 20px;
+    background: rgba(0, 150, 136, 0.04);
+    border-radius: 12px;
+    border: 1px solid rgba(0, 150, 136, 0.12);
+    overflow: hidden;
+}
+.merge-dialog-item-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: rgba(0, 150, 136, 0.08);
+    border-bottom: 1px solid rgba(0, 150, 136, 0.1);
+}
+.merge-dialog-item-list-label {
+    font-size: 0.8em;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.merge-dialog-item-list-count {
+    font-size: 0.75em;
+    font-weight: 700;
+    color: #fff;
+    background: #009688;
+    border-radius: 10px;
+    padding: 2px 8px;
+    min-width: 20px;
+    text-align: center;
+}
+.merge-dialog-item-list-items {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+.merge-dialog-item-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    transition: background 0.15s ease;
+}
+.merge-dialog-item-row:hover {
+    background: rgba(0, 150, 136, 0.06);
+}
+.merge-dialog-item-row + .merge-dialog-item-row {
+    border-top: 1px solid rgba(0, 0, 0, 0.04);
+}
+.merge-dialog-item-row-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(0, 150, 136, 0.1);
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    margin-bottom: 20px;
-    padding: 14px;
-    background: rgba(0, 0, 0, 0.03);
-    border-radius: 12px;
-    flex-wrap: wrap;
+    font-size: 14px;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+.merge-dialog-item-row-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+}
+.merge-dialog-item-row-info {
+    flex: 1;
+    min-width: 0;
+}
+.merge-dialog-item-row-name {
+    font-size: 0.88em;
+    font-weight: 600;
+    color: #333;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.merge-dialog-item-row-meta {
+    font-size: 0.75em;
+    color: #888;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.merge-dialog-item-row-remove {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #999;
+    font-size: 14px;
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.merge-dialog-item-row-remove:hover {
+    background: rgba(244, 67, 54, 0.1);
+    color: #f44336;
+}
+
+/* Old merge-dialog-items (legacy pill display - hidden in favor of item list) */
+.merge-dialog-items {
+    display: none;
 }
 
 .merge-item-preview {
@@ -15781,10 +16238,10 @@ hr.total-divider {
 /* ── Center hub ── */
 .action-menu-center {
     position: absolute;
-    width: 64px;
-    height: 64px;
-    left: -32px;
-    top: -32px;
+    width: 76px;
+    height: 76px;
+    left: -38px;
+    top: -38px;
     background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
     border-radius: 50%;
     display: flex;
@@ -15792,7 +16249,7 @@ hr.total-divider {
     align-items: center;
     justify-content: center;
     z-index: 10;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 3px rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), 0 0 0 3px rgba(255, 255, 255, 0.2);
     cursor: default;
     transition: transform 0.2s ease;
 }
@@ -15801,7 +16258,7 @@ hr.total-divider {
 }
 
 .action-menu-center-emoji {
-    font-size: 1.4em;
+    font-size: 1.6em;
     line-height: 1;
     transition: all 0.2s ease;
 }
@@ -15811,7 +16268,7 @@ hr.total-divider {
 }
 
 .action-menu-center-score {
-    font-size: 0.55em;
+    font-size: 0.65em;
     color: #94a3b8;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
@@ -15822,10 +16279,10 @@ hr.total-divider {
 }
 
 .action-menu-center-label {
-    font-size: 0.4em;
-    color: #64748b;
+    font-size: 0.5em;
+    color: #94a3b8;
     text-align: center;
-    max-width: 56px;
+    max-width: 66px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -15882,14 +16339,14 @@ hr.total-divider {
 }
 
 .action-menu-emoji-char {
-    font-size: 1em;
+    font-size: 1.2em;
     line-height: 1;
     pointer-events: none;
 }
 
 .action-menu-emoji-score {
-    font-size: 0.45em;
-    color: #cbd5e1;
+    font-size: 0.55em;
+    color: #e2e8f0;
     font-weight: 600;
     pointer-events: none;
     font-variant-numeric: tabular-nums;
@@ -15936,30 +16393,31 @@ hr.total-divider {
 }
 
 .action-menu-action-icon {
-    font-size: 1.1em;
+    font-size: 1.7em;
     line-height: 1;
     pointer-events: none;
 }
 
 .action-menu-action-label {
-    font-size: 0.45em;
-    color: rgba(255, 255, 255, 0.9);
-    font-weight: 600;
+    font-size: 0.7em;
+    color: rgba(255, 255, 255, 0.95);
+    font-weight: 700;
     letter-spacing: 0.3px;
     pointer-events: none;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 /* ── Tier label ── */
 .action-menu-tier-label {
     position: absolute;
-    top: 40px;
+    top: 46px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(30, 41, 59, 0.9);
+    background: rgba(30, 41, 59, 0.92);
     color: #e2e8f0;
-    font-size: 0.6em;
+    font-size: 0.7em;
     font-weight: 600;
-    padding: 3px 10px;
+    padding: 4px 12px;
     border-radius: 12px;
     white-space: nowrap;
     pointer-events: none;
@@ -15978,21 +16436,22 @@ hr.total-divider {
 /* ── Vitality summary panel ── */
 .action-menu-vitality-summary {
     position: absolute;
-    bottom: -50px;
+    bottom: -220px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(15, 23, 42, 0.92);
-    border-radius: 10px;
-    padding: 8px 12px;
-    min-width: 180px;
-    max-width: 230px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    z-index: 5;
+    background: rgba(15, 23, 42, 0.94);
+    border-radius: 12px;
+    padding: 10px 14px;
+    min-width: 200px;
+    max-width: 260px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    z-index: 2;
+    pointer-events: none;
 }
 
 .action-menu-summary-title {
-    font-size: 0.6em;
+    font-size: 0.7em;
     color: #94a3b8;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -16004,20 +16463,20 @@ hr.total-divider {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: 3px;
+    margin-bottom: 4px;
 }
 
 .action-menu-realm-icon {
-    font-size: 0.75em;
-    width: 18px;
+    font-size: 0.85em;
+    width: 20px;
     text-align: center;
 }
 
 .action-menu-realm-bar-track {
     flex: 1;
-    height: 4px;
+    height: 5px;
     background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
+    border-radius: 3px;
     overflow: hidden;
 }
 
@@ -16028,24 +16487,24 @@ hr.total-divider {
 }
 
 .action-menu-realm-val {
-    font-size: 0.55em;
+    font-size: 0.65em;
     font-weight: 600;
-    width: 38px;
+    width: 40px;
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
 
 .action-menu-summary-sentiment {
-    font-size: 0.55em;
-    color: #64748b;
-    margin-top: 4px;
+    font-size: 0.65em;
+    color: #94a3b8;
+    margin-top: 5px;
     text-align: center;
 }
 
 .action-menu-summary-formula {
-    font-size: 0.5em;
+    font-size: 0.6em;
     color: #94a3b8;
-    margin-top: 4px;
+    margin-top: 5px;
     text-align: center;
     display: flex;
     align-items: center;
@@ -16065,42 +16524,42 @@ hr.total-divider {
 /* ── Mobile adjustments ── */
 @media (max-width: 768px) {
     .action-menu-center {
-        width: 54px;
-        height: 54px;
-        left: -27px;
-        top: -27px;
+        width: 64px;
+        height: 64px;
+        left: -32px;
+        top: -32px;
     }
     .action-menu-center-emoji {
-        font-size: 1.2em;
+        font-size: 1.4em;
     }
     .action-menu-center-score {
-        font-size: 0.45em;
+        font-size: 0.55em;
     }
     .action-menu-center-label {
-        font-size: 0.35em;
-        max-width: 46px;
+        font-size: 0.45em;
+        max-width: 56px;
     }
     .action-menu-emoji-char {
-        font-size: 0.85em;
+        font-size: 1.05em;
     }
     .action-menu-emoji-score {
-        font-size: 0.4em;
+        font-size: 0.5em;
     }
     .action-menu-action-icon {
-        font-size: 0.95em;
+        font-size: 1.15em;
     }
     .action-menu-action-label {
-        font-size: 0.38em;
+        font-size: 0.5em;
     }
     .action-menu-tier-label {
-        font-size: 0.55em;
-        top: 34px;
+        font-size: 0.6em;
+        top: 38px;
     }
     .action-menu-vitality-summary {
-        min-width: 150px;
-        max-width: 200px;
-        padding: 6px 8px;
-        bottom: -44px;
+        min-width: 170px;
+        max-width: 220px;
+        padding: 8px 10px;
+        bottom: -48px;
     }
 }
 

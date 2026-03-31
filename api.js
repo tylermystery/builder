@@ -2146,6 +2146,52 @@ export async function updateChatMessage(messageId, newContent, senderId) {
 }
 
 /**
+ * Updates a chat message's Item Link field (for bidirectional task-comment linking)
+ * @param {string} messageId - The Airtable record ID of the message
+ * @param {string|null} itemId - The record ID to link, or null to clear
+ * @returns {Promise<object|null>} The updated record or null on failure
+ */
+export async function updateChatMessageItemLink(messageId, itemId) {
+    if (!messageId || !messageId.startsWith('rec')) {
+        log('API', `updateChatMessageItemLink: Invalid messageId: "${messageId}"`);
+        return null;
+    }
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}/${messageId}`;
+    const fields = {};
+    if (itemId && itemId.startsWith('rec')) {
+        fields['Item Link'] = [itemId];
+    } else {
+        fields['Item Link'] = null;
+    }
+
+    try {
+        log('API', `Updating Item Link for message ${messageId} to ${itemId}`);
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            log('API', `Failed to update message Item Link: ${errorData?.error?.message || response.statusText}`);
+            return null;
+        }
+
+        const result = await response.json();
+        log('API', `Message ${messageId} Item Link updated successfully`);
+        return result;
+    } catch (error) {
+        log('API', `Error updating message Item Link: ${error.message}`);
+        return null;
+    }
+}
+
+/**
  * Deletes a chat message (soft delete by marking as deleted)
  * @param {string} messageId - The Airtable record ID of the message
  * @param {string} senderId - The ID of the user trying to delete (for verification)
@@ -4052,9 +4098,8 @@ export async function fetchTasks(projectId) {
     log('API', `Fetching tasks for project: ${projectId}`);
 
     // Filter tasks by the ProjectId field (linked to Sessions)
-    // IMPORTANT: ARRAYJOIN on a linked record field returns display values (names), not record IDs
-    // We need a ProjectId_Rollup field in Airtable that exposes the record IDs as text
-    // If that field doesn't exist, we'll fall back to client-side filtering
+    // Uses ARRAYJOIN to convert linked record IDs to searchable text for the server-side filter
+    // Falls back to client-side filtering if the server-side filter fails
 
     // Request fields needed for task display
     // Note: Only request fields that exist in the Airtable Tasks table
@@ -4077,12 +4122,13 @@ export async function fetchTasks(projectId) {
 
     console.log('[TASK PERSISTENCE DEBUG] fetchTasks fields requested:', fieldsToFetch);
 
-    // First, try filtering server-side with ProjectId_Rollup (if it exists in Airtable)
-    const formulaWithRollup = `FIND('${projectId}', {ProjectId_Rollup})`;
-    const encodedFormula = encodeURIComponent(formulaWithRollup);
+    // Filter server-side using ARRAYJOIN on the linked ProjectId field
+    // ARRAYJOIN converts linked record IDs to a comma-separated string we can search with FIND
+    const filterFormula = `FIND('${projectId}', ARRAYJOIN({ProjectId}))`;
+    const encodedFormula = encodeURIComponent(filterFormula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}&sort%5B0%5D%5Bfield%5D=Order&sort%5B0%5D%5Bdirection%5D=asc&sort%5B1%5D%5Bfield%5D=DueDate&sort%5B1%5D%5Bdirection%5D=asc`;
 
-    console.log('[TASK PERSISTENCE DEBUG] Filter formula (using ProjectId_Rollup):', formulaWithRollup);
+    console.log('[TASK PERSISTENCE DEBUG] Filter formula:', filterFormula);
     console.log('[TASK PERSISTENCE DEBUG] Looking for tasks linked to project:', projectId);
     console.log('[API DEBUG] fetchTasks URL:', url.substring(0, 150) + '...');
     console.log('[API DEBUG] fetchTasks table name:', TASKS_TABLE_NAME);
@@ -4099,8 +4145,7 @@ export async function fetchTasks(projectId) {
         console.log(`[API DEBUG] fetchTasks fetch completed in ${(fetchEnd - fetchStart).toFixed(2)}ms`);
         console.log('[API DEBUG] fetchTasks response status:', response.status, response.statusText);
 
-        // If the filter failed (likely because ProjectId_Rollup field doesn't exist),
-        // fall back to fetching all tasks and filtering client-side
+        // If the filter failed, fall back to fetching all tasks and filtering client-side
         if (!response.ok) {
             const errorText = await response.text();
             console.log('[TASK PERSISTENCE DEBUG] Server-side filter failed:', errorText);
@@ -4189,16 +4234,10 @@ async function fetchTasksWithClientSideFilter(projectId, fieldsQuery) {
 
         // Log sample of all tasks for debugging if no matches found
         if (filteredTasks.length === 0 && data.records.length > 0) {
-            console.log('[TASK PERSISTENCE DEBUG] No matching tasks found. Sample of all tasks:');
+            console.log('[TASK PERSISTENCE DEBUG] No matching tasks found. Target projectId:', projectId);
+            console.log('[TASK PERSISTENCE DEBUG] Sample of first 5 tasks with their ProjectId values:');
             data.records.slice(0, 5).forEach((task, index) => {
-                console.log(`[TASK PERSISTENCE DEBUG] Task ${index + 1}:`, {
-                    id: task.id,
-                    name: task.fields?.Name,
-                    projectIdRaw: task.fields?.ProjectId,
-                    projectIdStringified: JSON.stringify(task.fields?.ProjectId),
-                    projectIdType: Array.isArray(task.fields?.ProjectId) ? 'array' : typeof task.fields?.ProjectId,
-                    matchesTarget: Array.isArray(task.fields?.ProjectId) && task.fields.ProjectId.includes(projectId)
-                });
+                console.log(`[TASK PERSISTENCE DEBUG] Task ${index + 1}: "${task.fields?.Name}" | ProjectId:`, task.fields?.ProjectId, '| type:', Array.isArray(task.fields?.ProjectId) ? 'array' : typeof task.fields?.ProjectId);
             });
         }
 

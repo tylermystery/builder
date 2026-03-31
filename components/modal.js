@@ -10,6 +10,7 @@ import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveI
 import { log } from '../utils/debug.js';
 import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
+import { resizeImageForUpload } from '../utils/imageResizer.js';
 import { triggerSave } from '../events.js';
 import { showForumPanel } from './forumPanel.js';
 import { openUCPForItem } from './unifiedChatPanel.js';
@@ -2104,10 +2105,17 @@ function enableItemEditMode(record, nameEl, descEl) {
         for (const file of files) {
             if (!file.type.startsWith('image/')) continue;
 
-            // Read file as data URL for preview and storage
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const dataUrl = event.target.result;
+            // Validate file size (max 10MB before resize)
+            if (file.size > 10 * 1024 * 1024) {
+                if (typeof ui !== 'undefined' && ui.showToast) {
+                    ui.showToast('Image must be less than 10MB', 'error');
+                }
+                continue;
+            }
+
+            try {
+                // Resize image if needed (handles large mobile photos)
+                const dataUrl = await resizeImageForUpload(file);
                 pendingPhotos.push({ url: dataUrl, name: file.name });
 
                 // Add preview
@@ -2132,8 +2140,9 @@ function enableItemEditMode(record, nameEl, descEl) {
                 });
 
                 photosPreview.appendChild(previewItem);
-            };
-            reader.readAsDataURL(file);
+            } catch (err) {
+                console.error('[Modal] Error processing image:', err);
+            }
         }
 
         // Clear input to allow re-selecting same files
@@ -3199,6 +3208,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         return;
     }
     isModalRendering = true;
+
+    try {
 
     // DEBUG: Comprehensive entry point logging for direct modal URL debugging
     const deferredCssLink = document.querySelector('link[href*="deferred.css"]');
@@ -7214,8 +7225,12 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         initModalComments(modalRecordId);
     }
 
-    // Reset the rendering guard after modal is fully displayed
-    isModalRendering = false;
+    } catch (error) {
+        console.error('[MODAL DEBUG] Error in showDetailModal:', error);
+    } finally {
+        // Always reset the rendering guard, even if an error occurred
+        isModalRendering = false;
+    }
 }
 
 /**
@@ -7233,6 +7248,8 @@ export async function showGroupDetailModal(group, allRecords) {
         return;
     }
     isModalRendering = true;
+
+    try {
 
     log('Modal', `Showing group detail modal for: ${group.name}`);
 
@@ -7527,7 +7544,12 @@ export async function showGroupDetailModal(group, allRecords) {
     const setCoverPhotoContainer = document.getElementById('set-cover-photo-container');
     if (setCoverPhotoContainer) setCoverPhotoContainer.style.display = 'none';
 
-    isModalRendering = false;
+    } catch (error) {
+        console.error('[MODAL DEBUG] Error in showGroupDetailModal:', error);
+    } finally {
+        // Always reset the rendering guard, even if an error occurred
+        isModalRendering = false;
+    }
 }
 
 export function hideDetailModal() {
