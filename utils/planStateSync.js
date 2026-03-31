@@ -5,6 +5,7 @@
 import { state } from '../state.js';
 import { log } from './debug.js';
 import { CONSTANTS } from '../config.js';
+import { getRecordPrice } from '../utils.js';
 
 // Track pending updates to debounce rapid changes
 let updateDebounceTimer = null;
@@ -89,10 +90,14 @@ export function getPlanSummary() {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
 
-        // Get price - simplified calculation
+        // Get price - use getRecordPrice with selections/selectedOptionIndex to handle option price modifiers
         let unitPrice = itemInfo.overridePrice;
         if (unitPrice == null) {
-            unitPrice = parseFloat(record.fields?.Price) || 0;
+            // Use selections if available, otherwise fall back to selectedOptionIndex
+            const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
+                ? itemInfo.selections
+                : itemInfo.selectedOptionIndex;
+            unitPrice = getRecordPrice(record, priceParam);
         }
 
         // Apply package discount if applicable

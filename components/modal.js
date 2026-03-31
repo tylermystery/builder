@@ -963,7 +963,435 @@ function resetModalState() {
     const dynamicSections = document.querySelectorAll('.event-info-section, .rsvp-list-section, .calendar-export-section, .session-components-section, .edit-plan-section');
     dynamicSections.forEach(section => section.remove());
 
+    // Also remove edit mode UI elements
+    const editModeElements = document.querySelectorAll('.item-edit-container, .item-edit-save-container');
+    editModeElements.forEach(el => el.remove());
+
     log('Modal', 'Reset modal state.');
+}
+
+/**
+ * Enables edit mode for a manually added item in the detail modal.
+ * Converts name and description to editable input fields with a save button.
+ * @param {Object} record - The item record being edited
+ * @param {HTMLElement} nameEl - The modal item name element
+ * @param {HTMLElement} descEl - The modal item description element
+ */
+function enableItemEditMode(record, nameEl, descEl) {
+    log('Modal', `Entering edit mode for item: ${record.id}`);
+
+    // Store original values for cancel functionality
+    const originalName = record.fields.Name || '';
+    const originalDescription = record.fields.Description || '';
+    const originalPrice = record.fields.Price || 0;
+
+    // Replace name element with editable input
+    const nameContainer = document.createElement('div');
+    nameContainer.className = 'item-edit-container item-edit-name-container';
+    nameContainer.innerHTML = `
+        <label class="item-edit-label">Item Name</label>
+        <input type="text" class="item-edit-input item-edit-name-input" value="${originalName.replace(/"/g, '&quot;')}" placeholder="Enter item name..." />
+    `;
+    nameEl.style.display = 'none';
+    nameEl.parentNode.insertBefore(nameContainer, nameEl);
+
+    // Replace description element with editable textarea
+    const descContainer = document.createElement('div');
+    descContainer.className = 'item-edit-container item-edit-desc-container';
+    descContainer.innerHTML = `
+        <label class="item-edit-label">Description</label>
+        <textarea class="item-edit-input item-edit-desc-input" placeholder="Enter item description...">${originalDescription}</textarea>
+    `;
+    descEl.style.display = 'none';
+    descEl.parentNode.insertBefore(descContainer, descEl);
+
+    // Add price editor
+    const priceEl = document.getElementById('modal-item-price');
+    const priceContainer = document.createElement('div');
+    priceContainer.className = 'item-edit-container item-edit-price-container';
+    priceContainer.innerHTML = `
+        <label class="item-edit-label">Price ($)</label>
+        <input type="number" class="item-edit-input item-edit-price-input" value="${originalPrice}" placeholder="0.00" min="0" step="0.01" />
+    `;
+    if (priceEl) {
+        priceEl.style.display = 'none';
+        priceEl.parentNode.insertBefore(priceContainer, priceEl);
+    }
+
+    // Add Photo Upload section
+    const photosContainer = document.createElement('div');
+    photosContainer.className = 'item-edit-container item-edit-photos-container';
+
+    // Get existing custom images for this record (if any)
+    const existingCustomImages = record.fields._customImages || [];
+
+    photosContainer.innerHTML = `
+        <label class="item-edit-label">Photos</label>
+        <div class="item-edit-photos-upload">
+            <input type="file" id="item-edit-photo-input" accept="image/*" multiple class="item-edit-photo-input" />
+            <label for="item-edit-photo-input" class="item-edit-photo-btn">
+                <span class="photo-btn-icon">📷</span>
+                <span class="photo-btn-text">Add Photo(s)</span>
+            </label>
+            <div class="item-edit-photos-preview" id="item-edit-photos-preview">
+                ${existingCustomImages.map((img, idx) => `
+                    <div class="photo-preview-item" data-index="${idx}" data-existing="true">
+                        <img src="${img.url || img}" alt="Photo ${idx + 1}" />
+                        <button type="button" class="photo-remove-btn" data-index="${idx}" title="Remove photo">&times;</button>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+
+    // Insert photos container after price container
+    if (priceEl && priceEl.parentNode) {
+        priceEl.parentNode.insertBefore(photosContainer, priceContainer.nextSibling);
+    } else {
+        descContainer.parentNode.insertBefore(photosContainer, descContainer.nextSibling);
+    }
+
+    // Track pending photos for upload
+    const pendingPhotos = [];
+    const existingPhotosToKeep = [...existingCustomImages];
+
+    // Photo input change handler
+    const photoInput = photosContainer.querySelector('#item-edit-photo-input');
+    const photosPreview = photosContainer.querySelector('#item-edit-photos-preview');
+
+    photoInput.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        for (const file of files) {
+            if (!file.type.startsWith('image/')) continue;
+
+            // Read file as data URL for preview and storage
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const dataUrl = event.target.result;
+                pendingPhotos.push({ url: dataUrl, name: file.name });
+
+                // Add preview
+                const previewItem = document.createElement('div');
+                previewItem.className = 'photo-preview-item';
+                previewItem.dataset.index = existingPhotosToKeep.length + pendingPhotos.length - 1;
+                previewItem.dataset.pending = 'true';
+                previewItem.innerHTML = `
+                    <img src="${dataUrl}" alt="${file.name}" />
+                    <button type="button" class="photo-remove-btn" title="Remove photo">&times;</button>
+                `;
+
+                // Add remove handler for this preview
+                previewItem.querySelector('.photo-remove-btn').addEventListener('click', (evt) => {
+                    evt.preventDefault();
+                    evt.stopPropagation();
+                    const idx = pendingPhotos.findIndex(p => p.url === dataUrl);
+                    if (idx !== -1) {
+                        pendingPhotos.splice(idx, 1);
+                    }
+                    previewItem.remove();
+                });
+
+                photosPreview.appendChild(previewItem);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Clear input to allow re-selecting same files
+        photoInput.value = '';
+    });
+
+    // Add remove handlers for existing photos
+    photosPreview.querySelectorAll('.photo-remove-btn').forEach(btn => {
+        btn.addEventListener('click', (evt) => {
+            evt.preventDefault();
+            evt.stopPropagation();
+            const idx = parseInt(btn.dataset.index, 10);
+            if (!isNaN(idx) && idx < existingPhotosToKeep.length) {
+                existingPhotosToKeep.splice(idx, 1);
+            }
+            btn.closest('.photo-preview-item').remove();
+        });
+    });
+
+    // Store references for save handler
+    photosContainer._pendingPhotos = pendingPhotos;
+    photosContainer._existingPhotosToKeep = existingPhotosToKeep;
+
+    // Add Save button container
+    const saveContainer = document.createElement('div');
+    saveContainer.className = 'item-edit-save-container';
+    saveContainer.innerHTML = `
+        <button class="item-edit-save-btn">💾 Save Changes</button>
+    `;
+
+    // Insert save button before the Add to Plan button
+    const actionsContainer = document.getElementById('modal-actions-container');
+    if (actionsContainer) {
+        actionsContainer.insertBefore(saveContainer, actionsContainer.firstChild);
+    }
+
+    // Save button handler
+    const saveBtn = saveContainer.querySelector('.item-edit-save-btn');
+    saveBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+
+        const newName = nameContainer.querySelector('.item-edit-name-input').value.trim();
+        const newDesc = descContainer.querySelector('.item-edit-desc-input').value.trim();
+        const newPrice = parseFloat(priceContainer.querySelector('.item-edit-price-input').value) || 0;
+
+        if (!newName) {
+            alert('Please enter an item name.');
+            return;
+        }
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        try {
+            // Collect photos to save - combine existing kept photos with newly added ones
+            const photosContainerEl = document.querySelector('.item-edit-photos-container');
+            const allPhotos = [];
+            if (photosContainerEl) {
+                const existingKept = photosContainerEl._existingPhotosToKeep || [];
+                const pending = photosContainerEl._pendingPhotos || [];
+
+                // Process existing photos - migrate base64 to Cloudinary if needed
+                const existingBase64ToMigrate = [];
+                for (const img of existingKept) {
+                    const url = img.url || img;
+                    if (url.startsWith('http')) {
+                        // Already a Cloudinary/HTTP URL, keep as-is
+                        allPhotos.push({ url });
+                    } else if (url.startsWith('data:')) {
+                        // Old base64 format - need to migrate to Cloudinary
+                        existingBase64ToMigrate.push({ url });
+                    }
+                }
+
+                // Combine existing base64 that need migration with new pending photos
+                const allToUpload = [...existingBase64ToMigrate, ...pending];
+
+                // Upload all base64 images to Cloudinary
+                let failedUploadCount = 0;
+                if (allToUpload.length > 0) {
+                    saveBtn.textContent = 'Uploading photos...';
+                    log('Modal', `Uploading ${allToUpload.length} photos to Cloudinary...`);
+
+                    for (const photo of allToUpload) {
+                        const photoUrl = photo.url || photo;
+                        // Check if it's a base64 data URL that needs uploading
+                        if (photoUrl.startsWith('data:')) {
+                            try {
+                                // Debug logging for upload request
+                                console.log('[Modal DEBUG] Preparing Cloudinary upload request');
+                                console.log('[Modal DEBUG] Photo URL length:', photoUrl.length);
+                                console.log('[Modal DEBUG] Photo URL starts with:', photoUrl.substring(0, 50));
+                                console.log('[Modal DEBUG] Session ID:', state.session?.id || 'unsaved');
+                                console.log('[Modal DEBUG] Record ID:', record.id);
+
+                                const requestBody = {
+                                    imageData: photoUrl,
+                                    sessionId: state.session?.id || 'unsaved',
+                                    itemId: record.id
+                                };
+
+                                console.log('[Modal DEBUG] Request body keys:', Object.keys(requestBody));
+                                console.log('[Modal DEBUG] Request body imageData present:', !!requestBody.imageData);
+                                console.log('[Modal DEBUG] Request body JSON length:', JSON.stringify(requestBody).length);
+
+                                const uploadResponse = await fetch('/.netlify/functions/cloudinary-upload', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(requestBody)
+                                });
+
+                                console.log('[Modal DEBUG] Upload response status:', uploadResponse.status);
+                                console.log('[Modal DEBUG] Upload response ok:', uploadResponse.ok);
+
+                                if (uploadResponse.ok) {
+                                    const uploadResult = await uploadResponse.json();
+                                    console.log('[Modal DEBUG] Upload result:', uploadResult);
+                                    if (uploadResult.secure_url) {
+                                        allPhotos.push({ url: uploadResult.secure_url });
+                                        log('Modal', `Uploaded photo to Cloudinary: ${uploadResult.secure_url}`);
+                                    } else {
+                                        console.warn('[Modal] Upload succeeded but no secure_url returned, result:', uploadResult);
+                                        failedUploadCount++;
+                                    }
+                                } else {
+                                    const errorText = await uploadResponse.text();
+                                    console.error('[Modal DEBUG] Upload failed - status:', uploadResponse.status);
+                                    console.error('[Modal DEBUG] Upload failed - response text:', errorText);
+                                    let errorData = {};
+                                    try {
+                                        errorData = JSON.parse(errorText);
+                                    } catch (e) {
+                                        // Netlify returns "Internal Error. ID: xxx" for crashed functions
+                                        if (errorText.startsWith('Internal Error')) {
+                                            errorData = { error: 'Image upload service error. Please try again or use a smaller image.' };
+                                        } else {
+                                            errorData = { rawError: errorText };
+                                        }
+                                    }
+                                    console.error('[Modal] Failed to upload photo to Cloudinary:', errorData);
+                                    // DO NOT fall back to base64 - it will exceed Airtable field size limits
+                                    // Skip this photo and notify user
+                                    console.warn('[Modal] Skipping photo due to upload failure - base64 fallback disabled to prevent Airtable errors');
+                                    failedUploadCount++;
+                                }
+                            } catch (uploadError) {
+                                console.error('[Modal DEBUG] Upload exception:', uploadError);
+                                console.error('[Modal] Error uploading photo:', uploadError);
+                                // DO NOT fall back to base64 - it will exceed Airtable field size limits
+                                console.warn('[Modal] Skipping photo due to upload error - base64 fallback disabled to prevent Airtable errors');
+                                failedUploadCount++;
+                            }
+                        } else if (photoUrl.startsWith('http')) {
+                            // Already a URL, keep it
+                            allPhotos.push({ url: photoUrl });
+                        }
+                    }
+                    saveBtn.textContent = 'Saving...';
+
+                    // Notify user if any uploads failed
+                    if (failedUploadCount > 0) {
+                        const photoText = failedUploadCount === 1 ? 'photo' : 'photos';
+                        alert(`${failedUploadCount} ${photoText} failed to upload. The item will be saved without ${failedUploadCount === 1 ? 'this photo' : 'these photos'}. Please try again.`);
+                    }
+                }
+            }
+
+            // Update the record in state.records.all
+            const recordIndex = state.records.all.findIndex(r => r.id === record.id);
+            if (recordIndex !== -1) {
+                state.records.all[recordIndex].fields.Name = newName;
+                state.records.all[recordIndex].fields.Description = newDesc;
+                state.records.all[recordIndex].fields.Price = newPrice;
+                // Store custom images in a special field
+                if (allPhotos.length > 0) {
+                    state.records.all[recordIndex].fields._customImages = allPhotos;
+                }
+            }
+
+            // Also update the record reference passed to the modal
+            record.fields.Name = newName;
+            record.fields.Description = newDesc;
+            record.fields.Price = newPrice;
+            if (allPhotos.length > 0) {
+                record.fields._customImages = allPhotos;
+            }
+
+            // Trigger save to persist changes
+            if (typeof triggerSave === 'function') {
+                await triggerSave();
+            }
+
+            // Sync plan state across all views
+            if (typeof syncPlanState === 'function') {
+                syncPlanState('modal', 'itemUpdated', { recordId: record.id, itemName: newName });
+            }
+
+            // Update UI to show saved values
+            nameEl.textContent = newName;
+            descEl.textContent = newDesc;
+            if (priceEl) {
+                priceEl.innerHTML = newPrice > 0 ? `$${newPrice.toFixed(2)}` : 'Free';
+            }
+
+            // Update thumbnail strip if photos were added
+            if (allPhotos.length > 0) {
+                const modalThumbnailStrip = document.getElementById('modal-thumbnail-strip');
+                const modalMainImage = document.getElementById('modal-main-image');
+                if (modalThumbnailStrip && modalMainImage) {
+                    // Get existing non-custom images from the strip
+                    const existingThumbs = Array.from(modalThumbnailStrip.querySelectorAll('.thumbnail-img'));
+                    const existingUrls = existingThumbs.map(t => {
+                        const style = t.style.backgroundImage;
+                        return style.replace(/^url\(['"]?/, '').replace(/['"]?\)$/, '');
+                    });
+
+                    // Add new custom images to the thumbnail strip
+                    allPhotos.forEach((photo, idx) => {
+                        const photoUrl = photo.url || photo;
+                        // Skip if already in strip
+                        if (existingUrls.some(url => url.includes(photoUrl.substring(0, 50)))) return;
+
+                        const thumb = document.createElement('div');
+                        thumb.className = 'thumbnail-img custom-photo-thumb';
+                        thumb.style.backgroundImage = `url('${photoUrl}')`;
+                        thumb.title = 'Custom photo';
+                        thumb.addEventListener('click', () => {
+                            modalMainImage.style.backgroundImage = `url('${photoUrl}')`;
+                            modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
+                            thumb.classList.add('active');
+                        });
+                        modalThumbnailStrip.appendChild(thumb);
+                    });
+
+                    // If this is the first photo added, also update main image
+                    if (allPhotos.length > 0 && existingThumbs.length === 0) {
+                        const firstPhotoUrl = allPhotos[0].url || allPhotos[0];
+                        modalMainImage.style.backgroundImage = `url('${firstPhotoUrl}')`;
+                    }
+
+                    log('Modal', `Added ${allPhotos.length} custom photos to thumbnail strip`);
+                }
+            }
+
+            // Exit edit mode
+            disableItemEditMode(record, nameEl, descEl);
+
+            // Reset the edit button state
+            const editBtn = document.getElementById('modal-edit-item-btn');
+            if (editBtn) {
+                editBtn.innerHTML = '✏️ Edit Item';
+                editBtn.classList.remove('editing');
+            }
+
+            // Update presentation view if visible
+            if (typeof renderAllItems === 'function') {
+                await renderAllItems();
+            }
+
+            // Update event plan section
+            if (typeof ui !== 'undefined' && typeof ui.updateEventPlanSection === 'function') {
+                ui.updateEventPlanSection();
+            }
+
+            log('Modal', `Saved changes for item: ${record.id} - "${newName}"`);
+
+        } catch (error) {
+            console.error('Failed to save item changes:', error);
+            saveBtn.disabled = false;
+            saveBtn.textContent = '💾 Save Changes';
+            alert('Failed to save changes. Please try again.');
+        }
+    });
+}
+
+/**
+ * Disables edit mode for a manually added item and restores original display.
+ * @param {Object} record - The item record
+ * @param {HTMLElement} nameEl - The modal item name element
+ * @param {HTMLElement} descEl - The modal item description element
+ */
+function disableItemEditMode(record, nameEl, descEl) {
+    log('Modal', `Exiting edit mode for item: ${record.id}`);
+
+    // Remove edit containers
+    const editContainers = document.querySelectorAll('.item-edit-container, .item-edit-save-container');
+    editContainers.forEach(container => container.remove());
+
+    // Restore original elements
+    nameEl.style.display = '';
+    descEl.style.display = '';
+
+    const priceEl = document.getElementById('modal-item-price');
+    if (priceEl) {
+        priceEl.style.display = '';
+    }
 }
 
 /**
@@ -1659,12 +2087,91 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     } catch (e) {
         console.warn('Failed to fetch images for record:', record.id, e);
     }
+
+    // Merge comment-uploaded images from presentation view's itemImagesCache
+    // These are images uploaded via comments that aren't stored in the record
+    if (typeof window.itemImagesCache !== 'undefined' && window.itemImagesCache.has(record.id)) {
+        const cachedImages = window.itemImagesCache.get(record.id);
+        if (cachedImages && cachedImages.images && Array.isArray(cachedImages.images)) {
+            // Filter out duplicates and add comment images
+            const existingUrls = new Set(imageUrls.map(url => url.toLowerCase()));
+            const commentImages = cachedImages.images.filter(url => !existingUrls.has(url.toLowerCase()));
+            if (commentImages.length > 0) {
+                console.log('[Modal DEBUG] Adding comment-uploaded images:', {
+                    recordId: record.id,
+                    commentImageCount: commentImages.length,
+                    existingImageCount: imageUrls.length
+                });
+                imageUrls = [...imageUrls, ...commentImages];
+            }
+        }
+    }
+
     if (imageUrls.length === 0) {
         imageUrls = [ui.getPlaceholderImage([])];
     }
-    
+
+    // Sync imageUrls back to itemImagesCache so the presentation view stays consistent
+    // This ensures both views have the same images in the same order
+    if (typeof window.itemImagesCache !== 'undefined') {
+        const cachedImages = window.itemImagesCache.get(record.id);
+        if (cachedImages) {
+            // Update the cache with the merged image list
+            cachedImages.images = [...imageUrls];
+        } else {
+            // Initialize the cache if it doesn't exist
+            window.itemImagesCache.set(record.id, { images: [...imageUrls], currentIndex: 0 });
+        }
+    }
+
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
+
+    // Display AI confidence badge for AI-parsed items
+    const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.id?.startsWith('ai-presentation-') || record?.isAI === true;
+    const existingConfidenceBadge = document.querySelector('.ai-confidence-badge');
+    if (existingConfidenceBadge) existingConfidenceBadge.remove();
+
+    if (isAIRecord) {
+        const confidence = record.fields?.['_aiConfidence'];
+        const confidenceBadge = document.createElement('div');
+        confidenceBadge.className = 'ai-confidence-badge';
+
+        if (confidence !== null && confidence !== undefined) {
+            const confidencePercent = Math.round(confidence * 100);
+            let confidenceLevel, confidenceLabel, confidenceTooltip;
+
+            if (confidence >= 0.8) {
+                confidenceLevel = 'high';
+                confidenceLabel = 'Verified';
+                confidenceTooltip = `${confidencePercent}% confident - Well-known business with verified details`;
+            } else if (confidence >= 0.6) {
+                confidenceLevel = 'moderate';
+                confidenceLabel = 'Likely';
+                confidenceTooltip = `${confidencePercent}% confident - Details should be accurate`;
+            } else if (confidence >= 0.4) {
+                confidenceLevel = 'low';
+                confidenceLabel = 'Estimated';
+                confidenceTooltip = `${confidencePercent}% confident - Some details may be estimates`;
+            } else {
+                confidenceLevel = 'very-low';
+                confidenceLabel = 'Draft';
+                confidenceTooltip = `${confidencePercent}% confident - Placeholder info, please verify`;
+            }
+
+            confidenceBadge.className = `ai-confidence-badge confidence-${confidenceLevel}`;
+            confidenceBadge.innerHTML = `<span class="confidence-icon">✨</span> AI ${confidenceLabel} <span class="confidence-score">${confidencePercent}%</span>`;
+            confidenceBadge.title = confidenceTooltip;
+        } else {
+            // No confidence score - show generic AI badge
+            confidenceBadge.className = 'ai-confidence-badge confidence-unknown';
+            confidenceBadge.innerHTML = '<span class="confidence-icon">✨</span> AI Suggested';
+            confidenceBadge.title = 'AI-generated suggestion - verify details before booking';
+        }
+
+        // Insert badge after the item name
+        modalItemName.parentNode.insertBefore(confidenceBadge, modalItemName.nextSibling);
+    }
 
     // --- SEO: Update page title, meta description, schema markup, OG tags, etc. ---
     const itemName = record.fields.Name || 'Untitled';
@@ -2404,6 +2911,104 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     }
 
     let currentPhotoIndex = startPhotoIndex;
+
+    // Get the current cover photo index from the plan item (if it's in the plan)
+    const isInPlan = state.cart.lockedItems.has(record.id);
+    const planItemInfo = isInPlan ? state.cart.lockedItems.get(record.id) : null;
+    const savedCoverIndex = planItemInfo?.selectedImageIndex ?? 0;
+
+    // Setup "Set as Cover" button functionality
+    const setCoverBtn = document.getElementById('set-cover-photo-btn');
+    const setCoverContainer = document.getElementById('set-cover-photo-container');
+
+    // Function to update the cover photo for this plan item
+    const updateCoverPhoto = async (newIndex) => {
+        if (!isInPlan) {
+            log('Modal', 'Cannot set cover - item is not in plan');
+            return;
+        }
+
+        // Update the item info with the new selected image index
+        const itemInfo = state.cart.lockedItems.get(record.id);
+        itemInfo.selectedImageIndex = newIndex;
+        state.cart.lockedItems.set(record.id, itemInfo);
+
+        // Trigger save to persist across views and users
+        if (typeof triggerSave === 'function') {
+            triggerSave();
+        }
+
+        // Update the cover indicator on thumbnails
+        modalThumbnailStrip.querySelectorAll('.thumbnail-img').forEach((t, idx) => {
+            t.classList.toggle('is-cover', idx === newIndex);
+        });
+
+        // Update sidebar to show new cover
+        if (typeof ui !== 'undefined' && typeof ui.updateEventPlanSection === 'function') {
+            ui.updateEventPlanSection();
+        }
+
+        // Update presentation view if visible
+        if (typeof window.itemImagesCache !== 'undefined') {
+            const cached = window.itemImagesCache?.get(record.id);
+            if (cached) {
+                cached.currentIndex = newIndex;
+
+                // Also update the visible carousel in presentation view
+                const carousel = document.querySelector(`.itinerary-media-carousel[data-record-id="${record.id}"]`);
+                if (carousel && cached.images && cached.images[newIndex]) {
+                    // Update main image
+                    const mainImage = carousel.querySelector('.itinerary-main-image');
+                    if (mainImage) {
+                        mainImage.style.backgroundImage = `url('${cached.images[newIndex]}')`;
+                    }
+                    // Update active thumbnail
+                    const thumbnails = carousel.querySelectorAll('.itinerary-thumbnail');
+                    thumbnails.forEach((thumb, idx) => {
+                        thumb.classList.toggle('active', idx === newIndex);
+                    });
+                    log('Modal', `Updated presentation carousel to show image ${newIndex}`);
+                }
+            }
+        }
+
+        log('Modal', `Set cover photo index to ${newIndex} for item ${record.id}`);
+
+        // Show success feedback
+        if (setCoverBtn) {
+            setCoverBtn.textContent = '✓ Cover Set!';
+            setCoverBtn.classList.add('success');
+            setTimeout(() => {
+                setCoverBtn.classList.remove('visible', 'success');
+                setCoverBtn.textContent = '⭐ Set as Cover';
+            }, 1500);
+        }
+    };
+
+    // Show/hide the "Set as Cover" button based on whether item is in plan and photo changed
+    const updateSetCoverButton = (selectedIndex) => {
+        if (!setCoverBtn || !setCoverContainer) return;
+
+        // Only show if item is in plan and current photo is different from cover
+        const currentCover = state.cart.lockedItems.get(record.id)?.selectedImageIndex ?? 0;
+        if (isInPlan && selectedIndex !== currentCover && imageUrls.length > 1) {
+            setCoverBtn.classList.add('visible');
+        } else {
+            setCoverBtn.classList.remove('visible');
+        }
+    };
+
+    // Setup click handler for "Set as Cover" button
+    if (setCoverBtn) {
+        // Clone to remove old handlers
+        const newSetCoverBtn = setCoverBtn.cloneNode(true);
+        setCoverBtn.parentNode.replaceChild(newSetCoverBtn, setCoverBtn);
+
+        newSetCoverBtn.addEventListener('click', () => {
+            updateCoverPhoto(currentPhotoIndex);
+        });
+    }
+
     // Optimize main image with proper size and format
     const optimizedMainImage = imageUrls[currentPhotoIndex].includes('cloudinary')
         ? applyCloudinaryTransform(imageUrls[currentPhotoIndex], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
@@ -2413,6 +3018,10 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     imageUrls.forEach((url, index) => {
         const thumb = document.createElement('div');
         thumb.className = 'thumbnail-img';
+        // Add is-cover class if this is the saved cover photo
+        if (isInPlan && index === savedCoverIndex) {
+            thumb.classList.add('is-cover');
+        }
         // Optimize thumbnails with smaller size
         const optimizedThumb = url.includes('cloudinary')
             ? applyCloudinaryTransform(url, 'w_150,h_150,c_fill,f_auto,q_auto')
@@ -2427,19 +3036,39 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
             modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
             thumb.classList.add('active');
+            // Update "Set as Cover" button visibility
+            updateSetCoverButton(index);
         });
         modalThumbnailStrip.appendChild(thumb);
     });
 
+    // Initialize the "Set as Cover" button state
+    updateSetCoverButton(currentPhotoIndex);
+
     // Setup "Search More Photos" button for AI-sourced items
     const searchPhotosContainer = document.getElementById('modal-search-photos-container');
     const searchPhotosBtn = document.getElementById('modal-search-photos-btn');
-    const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.id?.startsWith('ai-presentation-') || record?.isAI === true;
+    const searchPhotosResults = document.getElementById('search-photos-results');
+    const searchPhotosGrid = document.getElementById('search-photos-grid');
+    const saveSelectedPhotosBtn = document.getElementById('save-selected-photos-btn');
+    const cancelPhotoSelectionBtn = document.getElementById('cancel-photo-selection-btn');
+    // Note: isAIRecord was already declared earlier in this function (line ~2093)
 
     if (searchPhotosContainer && searchPhotosBtn) {
         // Show button for AI records that might benefit from additional photo searches
         if (isAIRecord) {
             searchPhotosContainer.style.display = 'block';
+
+            // Reset the photo selection UI state
+            if (searchPhotosResults) {
+                searchPhotosResults.classList.remove('active');
+            }
+            if (searchPhotosGrid) {
+                searchPhotosGrid.innerHTML = '';
+            }
+
+            // Track selected photos for saving
+            let selectedPhotoUrls = [];
 
             // Remove previous listener if any (to avoid duplicates)
             const newSearchBtn = searchPhotosBtn.cloneNode(true);
@@ -2461,6 +3090,13 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
                     // Build set of existing image URLs to filter duplicates
                     const existingUrls = new Set(imageUrls.map(url => url.toLowerCase()));
+
+                    // Also check existing custom images
+                    const existingCustomImages = record.fields._customImages || [];
+                    existingCustomImages.forEach(img => {
+                        const url = img.url || img;
+                        if (url) existingUrls.add(url.toLowerCase());
+                    });
 
                     let newImageUrls = [];
 
@@ -2489,35 +3125,61 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                     }
 
                     if (newImageUrls.length > 0) {
-                        // Add new images to the array
-                        imageUrls.push(...newImageUrls);
+                        // Show the photo selection UI instead of immediately adding to thumbnail strip
+                        selectedPhotoUrls = []; // Reset selection
+                        searchPhotosGrid.innerHTML = '';
 
-                        // Rebuild thumbnail strip with all images
-                        modalThumbnailStrip.innerHTML = '';
-                        imageUrls.forEach((url, index) => {
-                            const thumb = document.createElement('div');
-                            thumb.className = 'thumbnail-img';
-                            const optimizedThumb = url.includes('cloudinary')
-                                ? applyCloudinaryTransform(url, 'w_150,h_150,c_fill,f_auto,q_auto')
-                                : url;
-                            thumb.style.backgroundImage = `url('${optimizedThumb}')`;
-                            if (index === currentPhotoIndex) thumb.classList.add('active');
-                            thumb.addEventListener('click', () => {
-                                currentPhotoIndex = index;
-                                const optimizedClickImage = url.includes('cloudinary')
-                                    ? applyCloudinaryTransform(url, 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
-                                    : url;
-                                modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
-                                modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
-                                thumb.classList.add('active');
+                        newImageUrls.forEach((url, index) => {
+                            const photoItem = document.createElement('div');
+                            photoItem.className = 'search-photo-item';
+                            photoItem.dataset.url = url;
+                            photoItem.innerHTML = `
+                                <img src="${url}" alt="Photo ${index + 1}" loading="lazy" />
+                                <div class="photo-select-indicator"></div>
+                            `;
+
+                            // Toggle selection on click
+                            photoItem.addEventListener('click', () => {
+                                photoItem.classList.toggle('selected');
+
+                                if (photoItem.classList.contains('selected')) {
+                                    if (!selectedPhotoUrls.includes(url)) {
+                                        selectedPhotoUrls.push(url);
+                                    }
+                                } else {
+                                    selectedPhotoUrls = selectedPhotoUrls.filter(u => u !== url);
+                                }
+
+                                // Update save button text and state
+                                const saveBtn = document.getElementById('save-selected-photos-btn');
+                                if (saveBtn) {
+                                    saveBtn.textContent = `💾 Save Selected (${selectedPhotoUrls.length})`;
+                                    saveBtn.disabled = selectedPhotoUrls.length === 0;
+                                }
                             });
-                            modalThumbnailStrip.appendChild(thumb);
+
+                            searchPhotosGrid.appendChild(photoItem);
                         });
 
-                        newSearchBtn.textContent = `Found ${newImageUrls.length} from website!`;
+                        // Show the selection UI
+                        searchPhotosResults.classList.add('active');
+
+                        // Add fallback class to parent for browsers without :has() support
+                        const modalMainColumn = document.querySelector('.modal-main-column');
+                        if (modalMainColumn) {
+                            modalMainColumn.classList.add('search-photos-active');
+                        }
+
+                        // Reset save button
+                        if (saveSelectedPhotosBtn) {
+                            saveSelectedPhotosBtn.textContent = '💾 Save Selected (0)';
+                            saveSelectedPhotosBtn.disabled = true;
+                        }
+
+                        newSearchBtn.textContent = `Found ${newImageUrls.length} photos!`;
                         setTimeout(() => {
                             newSearchBtn.textContent = originalText;
-                        }, 3000);
+                        }, 2000);
                     } else {
                         // No images found from website
                         newSearchBtn.textContent = websiteUrl ? 'No website photos found' : 'No website available';
@@ -2536,8 +3198,137 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                     newSearchBtn.disabled = false;
                 }
             });
+
+            // Save Selected Photos button handler
+            if (saveSelectedPhotosBtn) {
+                const newSaveBtn = saveSelectedPhotosBtn.cloneNode(true);
+                saveSelectedPhotosBtn.parentNode.replaceChild(newSaveBtn, saveSelectedPhotosBtn);
+
+                newSaveBtn.addEventListener('click', async () => {
+                    if (selectedPhotoUrls.length === 0) return;
+
+                    newSaveBtn.disabled = true;
+                    newSaveBtn.textContent = 'Saving photos...';
+
+                    try {
+                        // Get existing custom images
+                        const existingCustomImages = record.fields._customImages || [];
+
+                        // Create new photos array with URL objects
+                        const newPhotos = selectedPhotoUrls.map(url => ({ url }));
+
+                        // Combine existing and new photos
+                        const allPhotos = [...existingCustomImages, ...newPhotos];
+
+                        // Update the record in state.records.all
+                        const recordIndex = state.records.all.findIndex(r => r.id === record.id);
+                        if (recordIndex !== -1) {
+                            state.records.all[recordIndex].fields._customImages = allPhotos;
+                        }
+
+                        // Also update the record reference passed to the modal
+                        record.fields._customImages = allPhotos;
+
+                        log('Modal', `Saved ${selectedPhotoUrls.length} new photos to item. Total photos: ${allPhotos.length}`);
+
+                        // Trigger save to persist changes to Airtable
+                        if (typeof triggerSave === 'function') {
+                            await triggerSave();
+                        }
+
+                        // Sync plan state across all views
+                        if (typeof syncPlanState === 'function') {
+                            syncPlanState('modal', 'itemUpdated', { recordId: record.id, itemName: record.fields.Name });
+                        }
+
+                        // Add the new photos to the thumbnail strip
+                        selectedPhotoUrls.forEach((url) => {
+                            // Add to imageUrls array for the modal
+                            imageUrls.push(url);
+
+                            // Create thumbnail
+                            const thumb = document.createElement('div');
+                            thumb.className = 'thumbnail-img custom-photo-thumb';
+                            thumb.style.backgroundImage = `url('${url}')`;
+                            thumb.addEventListener('click', () => {
+                                currentPhotoIndex = imageUrls.indexOf(url);
+                                modalMainImage.style.backgroundImage = `url('${url}')`;
+                                modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
+                                thumb.classList.add('active');
+                            });
+                            modalThumbnailStrip.appendChild(thumb);
+                        });
+
+                        // Hide the selection UI
+                        searchPhotosResults.classList.remove('active');
+                        searchPhotosGrid.innerHTML = '';
+                        selectedPhotoUrls = [];
+
+                        // Remove fallback class from parent
+                        const modalMainColumn = document.querySelector('.modal-main-column');
+                        if (modalMainColumn) {
+                            modalMainColumn.classList.remove('search-photos-active');
+                        }
+
+                        // Show success message on the search button
+                        const searchBtn = document.getElementById('modal-search-photos-btn');
+                        if (searchBtn) {
+                            const originalText = searchBtn.textContent;
+                            searchBtn.textContent = '✓ Photos saved!';
+                            setTimeout(() => {
+                                searchBtn.textContent = originalText;
+                            }, 2000);
+                        }
+
+                    } catch (error) {
+                        console.error('Error saving selected photos:', error);
+                        alert('Failed to save photos. Please try again.');
+                    } finally {
+                        newSaveBtn.textContent = '💾 Save Selected (0)';
+                        newSaveBtn.disabled = true;
+                    }
+                });
+            }
+
+            // Cancel button handler
+            if (cancelPhotoSelectionBtn) {
+                const newCancelBtn = cancelPhotoSelectionBtn.cloneNode(true);
+                cancelPhotoSelectionBtn.parentNode.replaceChild(newCancelBtn, cancelPhotoSelectionBtn);
+
+                newCancelBtn.addEventListener('click', () => {
+                    // Hide the selection UI
+                    searchPhotosResults.classList.remove('active');
+                    searchPhotosGrid.innerHTML = '';
+                    selectedPhotoUrls = [];
+
+                    // Remove fallback class from parent
+                    const modalMainColumn = document.querySelector('.modal-main-column');
+                    if (modalMainColumn) {
+                        modalMainColumn.classList.remove('search-photos-active');
+                    }
+
+                    // Reset save button
+                    const saveBtn = document.getElementById('save-selected-photos-btn');
+                    if (saveBtn) {
+                        saveBtn.textContent = '💾 Save Selected (0)';
+                        saveBtn.disabled = true;
+                    }
+                });
+            }
         } else {
             searchPhotosContainer.style.display = 'none';
+            // Also reset the photo selection UI when viewing non-AI records
+            if (searchPhotosResults) {
+                searchPhotosResults.classList.remove('active');
+            }
+            if (searchPhotosGrid) {
+                searchPhotosGrid.innerHTML = '';
+            }
+            // Remove fallback class from parent
+            const modalMainColumn = document.querySelector('.modal-main-column');
+            if (modalMainColumn) {
+                modalMainColumn.classList.remove('search-photos-active');
+            }
         }
     }
 
@@ -2601,6 +3392,44 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             await copyShareLinkToClipboard(shareUrl.toString(), shareBtn);
         }
     });
+
+    // Add Edit Item button for manual/custom items (items added via manual add feature)
+    const isManualItem = record.isManual === true ||
+                         record.id?.startsWith('manual-add-') ||
+                         record.id?.startsWith('manual-presentation-') ||
+                         record.id?.startsWith('ai-search-') ||
+                         record.id?.startsWith('ai-presentation-');
+
+    if (isManualItem) {
+        const editItemBtn = document.createElement('button');
+        editItemBtn.className = 'card-action-btn edit-item-btn';
+        editItemBtn.id = 'modal-edit-item-btn';
+        editItemBtn.dataset.recordId = record.id;
+        editItemBtn.innerHTML = '✏️ Edit Item';
+        editItemBtn.title = 'Edit item details';
+        editItemBtn.style.marginRight = '10px';
+        modalHeaderActions.appendChild(editItemBtn);
+
+        // Track edit mode state
+        let isEditMode = false;
+
+        editItemBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            isEditMode = !isEditMode;
+
+            if (isEditMode) {
+                // Enter edit mode
+                editItemBtn.innerHTML = '❌ Cancel Edit';
+                editItemBtn.classList.add('editing');
+                enableItemEditMode(record, modalItemName, modalItemDescription);
+            } else {
+                // Exit edit mode without saving
+                editItemBtn.innerHTML = '✏️ Edit Item';
+                editItemBtn.classList.remove('editing');
+                disableItemEditMode(record, modalItemName, modalItemDescription);
+            }
+        });
+    }
 
     if (record.fields['Item Type'] === 'Event') {
         const rsvpYes = record.fields.RSVPs || [];
@@ -3715,6 +4544,38 @@ export function hideDetailModal() {
     // Reset the rendering guard when modal is closed
     isModalRendering = false;
 
+    // Refresh presentation carousel if images may have been updated
+    const recordId = modalOverlay?.dataset?.recordId;
+    if (recordId && typeof window.itemImagesCache !== 'undefined' && window.itemImagesCache.has(recordId)) {
+        const cached = window.itemImagesCache.get(recordId);
+        const carousel = document.querySelector(`.itinerary-media-carousel[data-record-id="${recordId}"]`);
+        if (carousel && cached && cached.images && cached.images.length > 0) {
+            // Check if the carousel needs re-rendering (e.g., new images were added)
+            const currentThumbnailCount = carousel.querySelectorAll('.itinerary-thumbnail').length;
+            if (currentThumbnailCount !== cached.images.length || cached.images.length === 1) {
+                // Re-render the carousel with updated images
+                const currentIndex = cached.currentIndex || 0;
+                const thumbnails = cached.images.map((url, index) =>
+                    `<div class="itinerary-thumbnail ${index === currentIndex ? 'active' : ''}"
+                          data-record-id="${recordId}"
+                          data-index="${index}"
+                          style="background-image: url('${url}')"></div>`
+                ).join('');
+
+                const newCarouselHTML = `
+                    <div class="itinerary-media-carousel" data-record-id="${recordId}">
+                        <div class="itinerary-main-image" style="background-image: url('${cached.images[currentIndex]}')"></div>
+                        ${cached.images.length > 1 ? `
+                            <div class="itinerary-thumbnails">${thumbnails}</div>
+                        ` : ''}
+                    </div>
+                `;
+                carousel.outerHTML = newCarouselHTML;
+                console.log('[Modal DEBUG] Re-rendered presentation carousel with updated images');
+            }
+        }
+    }
+
     const closeBtn = document.getElementById('modal-close-btn');
     if (closeBtn) {
         closeBtn.onclick = null;
@@ -3815,7 +4676,11 @@ export async function showCheckoutModal(shopSettings) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
 
-        const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
+        // Use selections if available, otherwise fall back to selectedOptionIndex
+        const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
+            ? itemInfo.selections
+            : itemInfo.selectedOptionIndex;
+        const price = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
 
         const itemTotal = price * (itemInfo.quantity || 1);
         finalTotal += itemTotal;

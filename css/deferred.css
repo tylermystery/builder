@@ -2455,16 +2455,19 @@
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
-/* Presentation Header - Frosted Glass Style */
+/* Presentation Header - Visible Style with Grouped Color Variations */
 .presentation-header {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
     position: sticky;
     top: 0;
     z-index: 1001;
-    background-color: rgba(255, 255, 255, 0.7);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background-color: rgba(255, 255, 255, 0.15);
+    box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(8px) saturate(1.2);
+    -webkit-backdrop-filter: blur(8px) saturate(1.2);
     flex-shrink: 0;
 }
 
@@ -2505,7 +2508,8 @@
 .presentation-shop-title {
     font-size: 1.2em;
     font-weight: 600;
-    color: #333;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     margin: 0;
     white-space: nowrap;
     overflow: hidden;
@@ -2522,7 +2526,8 @@
 
 .presentation-event-label {
     font-size: 1em;
-    color: #6c757d;
+    color: rgba(255, 255, 255, 0.85);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     font-weight: 500;
 }
 
@@ -2712,21 +2717,57 @@ html.presentation-active {
     max-width: 800px;
     margin: 0 auto 20px auto;
     padding: 30px 20px;
-    background-color: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    background-color: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(8px) saturate(1.2);
+    -webkit-backdrop-filter: blur(8px) saturate(1.2);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+    position: relative;
+}
+
+/* Hue-rotate color variations for itinerary sections - matching grouping carousel logic */
+.itinerary-section:nth-child(5n+1) {
+    backdrop-filter: blur(8px) saturate(1.5) hue-rotate(60deg);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5) hue-rotate(60deg);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.itinerary-section:nth-child(5n+2) {
+    backdrop-filter: blur(8px) saturate(1.3) hue-rotate(120deg);
+    -webkit-backdrop-filter: blur(8px) saturate(1.3) hue-rotate(120deg);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.itinerary-section:nth-child(5n+3) {
+    backdrop-filter: blur(8px) saturate(1.6) hue-rotate(180deg);
+    -webkit-backdrop-filter: blur(8px) saturate(1.6) hue-rotate(180deg);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.itinerary-section:nth-child(5n+4) {
+    backdrop-filter: blur(8px) saturate(1.4) hue-rotate(240deg);
+    -webkit-backdrop-filter: blur(8px) saturate(1.4) hue-rotate(240deg);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.itinerary-section:nth-child(5n+5) {
+    backdrop-filter: blur(8px) saturate(1.5) hue-rotate(300deg);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5) hue-rotate(300deg);
+    border-color: rgba(255, 255, 255, 0.3);
 }
 
 .itinerary-section-title {
     font-size: 1.3em;
     font-weight: 600;
-    color: #333;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     margin: 0 0 20px 0;
     padding-bottom: 10px;
-    border-bottom: 2px solid #007bff;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.5);
 }
 
 .itinerary-header {
@@ -2738,7 +2779,8 @@ html.presentation-active {
 .itinerary-event-title {
     font-size: 2em;
     font-weight: 700;
-    color: #212529;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
     margin: 0 0 10px 0;
 }
 
@@ -2748,13 +2790,15 @@ html.presentation-active {
 
 .itinerary-date {
     font-size: 1.1em;
-    color: #007bff;
+    color: rgba(150, 220, 255, 1);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     font-weight: 500;
 }
 
 .itinerary-notes {
     font-size: 1em;
-    color: #6c757d;
+    color: rgba(255, 255, 255, 0.8);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     margin: 0 0 25px 0;
     line-height: 1.5;
 }
@@ -2762,14 +2806,15 @@ html.presentation-active {
 .itinerary-collaborators {
     margin-top: 25px;
     padding-top: 20px;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .itinerary-collaborators h3 {
     font-size: 0.9em;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #6c757d;
+    color: rgba(255, 255, 255, 0.7);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     margin: 0 0 15px 0;
 }
 
@@ -2787,7 +2832,8 @@ html.presentation-active {
     font-size: 0.85em;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #6c757d;
+    color: rgba(255, 255, 255, 0.7);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     margin: 0;
     text-align: center;
 }
@@ -2844,8 +2890,8 @@ html.presentation-active {
     height: 32px;
     border: none;
     border-radius: 50%;
-    background: rgba(0, 0, 0, 0.1);
-    color: #333;
+    background: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
     font-size: 1.2em;
     cursor: pointer;
     display: flex;
@@ -2856,7 +2902,7 @@ html.presentation-active {
 }
 
 .collaborators-carousel-btn:hover:not(:disabled) {
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(255, 255, 255, 0.35);
 }
 
 .collaborators-carousel-btn:disabled {
@@ -2927,18 +2973,18 @@ html.presentation-active {
     display: block;
     margin: 12px auto 0;
     padding: 6px 16px;
-    border: 1px solid #dee2e6;
+    border: 1px solid rgba(255, 255, 255, 0.4);
     border-radius: 16px;
     background: transparent;
-    color: #007bff;
+    color: rgba(255, 255, 255, 0.9);
     font-size: 0.85em;
     cursor: pointer;
     transition: background-color 0.2s, border-color 0.2s;
 }
 
 .collaborators-expand-btn:hover {
-    background: rgba(0, 123, 255, 0.1);
-    border-color: #007bff;
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.6);
 }
 
 /* Collaborators Modal (expanded full list view) */
@@ -3019,7 +3065,7 @@ html.presentation-active {
 }
 
 .no-collaborators {
-    color: #6c757d;
+    color: rgba(255, 255, 255, 0.7);
     font-style: italic;
 }
 
@@ -3335,7 +3381,7 @@ html.presentation-active {
 .itinerary-empty,
 .no-collaborators {
     text-align: center;
-    color: #6c757d;
+    color: rgba(255, 255, 255, 0.7);
     padding: 30px 20px;
     font-style: italic;
 }
@@ -3351,14 +3397,16 @@ html.presentation-active {
 .itinerary-empty-title {
     font-size: 1.4em;
     font-weight: 600;
-    color: #333;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     margin: 0 0 10px 0;
     font-style: normal;
 }
 
 .itinerary-empty-subtitle {
     font-size: 1em;
-    color: #6c757d;
+    color: rgba(255, 255, 255, 0.75);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     margin: 0 0 25px 0;
     font-style: normal;
 }
@@ -3529,7 +3577,8 @@ html.presentation-active {
 .itinerary-accordion-title {
     font-size: 1.3em;
     font-weight: 600;
-    color: #333;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     margin: 0;
     padding-bottom: 0;
     border-bottom: none;
@@ -3548,7 +3597,7 @@ html.presentation-active {
 .itinerary-accordion-icon::after {
     content: '';
     position: absolute;
-    background-color: #007bff;
+    background-color: rgba(255, 255, 255, 0.9);
     transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
@@ -3576,7 +3625,8 @@ html.presentation-active {
 
 .itinerary-accordion-summary {
     font-size: 0.9em;
-    color: #6c757d;
+    color: rgba(255, 255, 255, 0.7);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     margin: 10px 0 0 0;
     line-height: 1.4;
     max-height: 60px;
@@ -3595,7 +3645,8 @@ html.presentation-active {
 .accordion-section-title {
     font-size: 1.2em;
     font-weight: 600;
-    color: #333;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     margin: 0;
     flex: 1;
     white-space: nowrap;
@@ -3649,19 +3700,19 @@ html.presentation-active {
 
 .itinerary-accordion.itinerary-items .itinerary-accordion-header,
 .itinerary-accordion.itinerary-chat .itinerary-accordion-header {
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid rgba(255, 255, 255, 0.25);
     padding-top: 20px;
 }
 
 /* Summary styling variations */
 .itinerary-accordion-summary .summary-count {
     font-weight: 600;
-    color: #007bff;
+    color: rgba(150, 220, 255, 1);
 }
 
 .itinerary-accordion-summary .summary-highlight {
     font-weight: 500;
-    color: #495057;
+    color: rgba(255, 255, 255, 0.85);
 }
 
 /* Item summary when collapsed */
@@ -8445,6 +8496,425 @@ hr.total-divider {
 }
 
 /* =============================================================================
+   PRESENTATION MANUAL ADD SECTION
+   ============================================================================= */
+
+.presentation-manual-add-section {
+    margin-top: 25px;
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(46, 204, 113, 0.05) 0%, rgba(52, 152, 219, 0.08) 100%);
+    border-radius: 12px;
+    border: 1px dashed rgba(46, 204, 113, 0.3);
+}
+
+.presentation-manual-add-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.presentation-manual-add-icon {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.presentation-manual-add-title {
+    font-size: 1em;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.presentation-manual-add-content {
+    padding-left: 38px;
+}
+
+.presentation-manual-add-description {
+    font-size: 0.9em;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 0 0 12px 0;
+}
+
+.presentation-manual-add-form {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+
+.presentation-manual-add-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    font-size: 0.95em;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.95);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.presentation-manual-add-input:focus {
+    outline: none;
+    border-color: #2ecc71;
+    box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.15);
+}
+
+.presentation-manual-add-input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.presentation-manual-add-input:disabled {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.presentation-manual-add-btn {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+    white-space: nowrap;
+}
+
+.presentation-manual-add-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+}
+
+.presentation-manual-add-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.presentation-manual-add-btn:disabled {
+    background: #95a5a6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.presentation-manual-add-btn.added {
+    background: linear-gradient(135deg, #27ae60, #1e8449);
+}
+
+/* Mobile responsive for presentation manual add section */
+@media (max-width: 768px) {
+    .presentation-manual-add-section {
+        margin-top: 20px;
+        padding: 15px;
+    }
+
+    .presentation-manual-add-content {
+        padding-left: 0;
+    }
+
+    .presentation-manual-add-form {
+        flex-direction: column;
+    }
+
+    .presentation-manual-add-btn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .presentation-manual-add-header {
+        gap: 8px;
+    }
+
+    .presentation-manual-add-icon {
+        width: 24px;
+        height: 24px;
+        font-size: 1em;
+    }
+
+    .presentation-manual-add-title {
+        font-size: 0.95em;
+    }
+
+    .presentation-manual-add-input {
+        padding: 8px 12px;
+    }
+
+    .presentation-manual-add-btn {
+        padding: 10px 16px;
+    }
+}
+
+/* =============================================================================
+   ITEM EDIT MODE IN DETAIL MODAL
+   ============================================================================= */
+
+/* Edit button styling */
+.edit-item-btn {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: all 0.2s ease;
+}
+
+.edit-item-btn:hover {
+    background: linear-gradient(135deg, #2980b9, #2573a7);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+}
+
+.edit-item-btn.editing {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+}
+
+.edit-item-btn.editing:hover {
+    background: linear-gradient(135deg, #c0392b, #a93226);
+}
+
+/* Edit container styling */
+.item-edit-container {
+    margin-bottom: 15px;
+}
+
+.item-edit-label {
+    display: block;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #666;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.item-edit-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 0.95em;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background: #fafafa;
+    box-sizing: border-box;
+}
+
+.item-edit-input:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+    background: white;
+}
+
+.item-edit-name-input {
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+.item-edit-desc-input {
+    min-height: 100px;
+    resize: vertical;
+    font-family: inherit;
+    line-height: 1.5;
+}
+
+.item-edit-price-input {
+    max-width: 150px;
+}
+
+/* Save button container */
+.item-edit-save-container {
+    margin-bottom: 15px;
+}
+
+.item-edit-save-btn {
+    width: 100%;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.item-edit-save-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #27ae60, #1e8449);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+}
+
+.item-edit-save-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.item-edit-save-btn:disabled {
+    background: #95a5a6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Mobile responsive for item edit mode */
+@media (max-width: 768px) {
+    .item-edit-input {
+        padding: 10px 12px;
+    }
+
+    .item-edit-name-input {
+        font-size: 1em;
+    }
+
+    .item-edit-save-btn {
+        padding: 10px 16px;
+    }
+}
+
+/* Photo Upload Section in Edit Mode */
+.item-edit-photos-container {
+    margin-bottom: 15px;
+}
+
+.item-edit-photos-upload {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.item-edit-photo-input {
+    display: none;
+}
+
+.item-edit-photo-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.item-edit-photo-btn:hover {
+    background: linear-gradient(135deg, #2980b9, #1a5276);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+
+.item-edit-photo-btn:active {
+    transform: translateY(0);
+}
+
+.photo-btn-icon {
+    font-size: 1.1em;
+}
+
+.item-edit-photos-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.photo-preview-item {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.photo-preview-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.photo-remove-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    background: rgba(231, 76, 60, 0.9);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: bold;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.photo-preview-item:hover .photo-remove-btn {
+    opacity: 1;
+}
+
+.photo-remove-btn:hover {
+    background: rgba(192, 57, 43, 1);
+}
+
+/* Custom photo thumbnail indicator in modal gallery */
+.custom-photo-thumb {
+    position: relative;
+}
+
+.custom-photo-thumb::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 8px;
+    height: 8px;
+    background: #3498db;
+    border-radius: 50%;
+    border: 1px solid white;
+}
+
+/* Mobile responsive for photo upload */
+@media (max-width: 768px) {
+    .photo-preview-item {
+        width: 60px;
+        height: 60px;
+    }
+
+    .photo-remove-btn {
+        opacity: 1;
+        width: 18px;
+        height: 18px;
+        font-size: 12px;
+    }
+
+    .item-edit-photo-btn {
+        padding: 10px 16px;
+        font-size: 0.9em;
+    }
+}
+
+/* =============================================================================
    TASK STATUS UI FOR PLAN ELEMENTS
    ============================================================================= */
 
@@ -9013,3 +9483,684 @@ hr.total-divider {
     display: inline-flex;
     align-items: center;
 }
+
+/* ============================================
+   Comment Input and Image Upload Styles
+   ============================================ */
+
+/* Comments section container */
+.component-comments-section {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* Comments header with toggle button */
+.component-comments-header {
+    margin-bottom: 0;
+}
+
+.component-comments-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9em;
+    color: #666;
+    transition: background-color 0.2s, color 0.2s;
+    width: 100%;
+    justify-content: flex-start;
+}
+
+.component-comments-toggle:hover {
+    background: rgba(0, 123, 255, 0.08);
+    color: #007bff;
+}
+
+.component-comments-toggle.expanded {
+    background: rgba(0, 123, 255, 0.05);
+    color: #007bff;
+}
+
+.component-comments-toggle .comments-icon {
+    font-size: 1.1em;
+}
+
+.component-comments-toggle .comments-count {
+    background: rgba(0, 123, 255, 0.15);
+    color: #007bff;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    font-weight: 600;
+    min-width: 20px;
+    text-align: center;
+}
+
+.component-comments-toggle .comments-label {
+    flex: 1;
+    text-align: left;
+}
+
+.component-comments-toggle .comments-toggle-icon {
+    font-size: 0.8em;
+    transition: transform 0.2s;
+}
+
+.component-comments-toggle.expanded .comments-toggle-icon {
+    transform: rotate(180deg);
+}
+
+/* Comments body (collapsible) */
+.component-comments-body {
+    margin-top: 12px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 8px;
+}
+
+/* Comments list */
+.component-comments-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.comments-loading,
+.comments-error,
+.comments-empty {
+    text-align: center;
+    padding: 20px;
+    color: #888;
+    font-size: 0.9em;
+}
+
+.comments-error {
+    color: #dc3545;
+}
+
+/* Individual comment */
+.component-comment {
+    background: #fff;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    transition: box-shadow 0.2s;
+}
+
+.component-comment:hover {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.component-comment.own-comment {
+    background: linear-gradient(135deg, rgba(0, 123, 255, 0.05) 0%, rgba(0, 123, 255, 0.02) 100%);
+    border-left: 3px solid #007bff;
+}
+
+.component-comment.deleted {
+    background: #f8f8f8;
+    color: #888;
+    padding: 10px;
+}
+
+.deleted-comment-text {
+    color: #888;
+    font-size: 0.9em;
+}
+
+/* Comment header */
+.comment-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.comment-author {
+    font-weight: 600;
+    color: #333;
+    font-size: 0.9em;
+}
+
+.comment-time {
+    color: #888;
+    font-size: 0.8em;
+}
+
+.comment-edited {
+    color: #888;
+    font-size: 0.75em;
+    font-style: italic;
+}
+
+/* Comment content */
+.comment-content {
+    color: #333;
+    font-size: 0.95em;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+/* Comment reactions */
+.comment-reactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.comment-reaction-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.05);
+    border: 1px solid transparent;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.comment-reaction-badge:hover {
+    background: rgba(0, 123, 255, 0.1);
+    border-color: rgba(0, 123, 255, 0.2);
+}
+
+.comment-reaction-badge.user-reacted {
+    background: rgba(0, 123, 255, 0.15);
+    border-color: rgba(0, 123, 255, 0.3);
+}
+
+.comment-reaction-badge .reaction-count {
+    font-size: 0.85em;
+    color: #666;
+}
+
+/* Comment actions */
+.comment-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.component-comment:hover .comment-actions {
+    opacity: 1;
+}
+
+.comment-action-btn {
+    background: transparent;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    color: #666;
+    transition: background 0.2s, color 0.2s;
+}
+
+.comment-action-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #333;
+}
+
+/* Comment edit input */
+.comment-edit-input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 0.95em;
+    margin-bottom: 8px;
+}
+
+.comment-edit-input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.15);
+}
+
+.comment-edit-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.comment-edit-save,
+.comment-edit-cancel {
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    cursor: pointer;
+    border: none;
+    transition: background 0.2s;
+}
+
+.comment-edit-save {
+    background: #007bff;
+    color: #fff;
+}
+
+.comment-edit-save:hover {
+    background: #0056b3;
+}
+
+.comment-edit-cancel {
+    background: #f0f0f0;
+    color: #666;
+}
+
+.comment-edit-cancel:hover {
+    background: #e0e0e0;
+}
+
+/* Comment input wrapper */
+.component-comment-input-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+}
+
+.component-comment-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    font-size: 0.9em;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.component-comment-input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.15);
+}
+
+.component-comment-input:disabled {
+    background: #f5f5f5;
+    color: #888;
+}
+
+.component-comment-submit {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1em;
+    transition: transform 0.2s, box-shadow 0.2s;
+    flex-shrink: 0;
+}
+
+.component-comment-submit:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.4);
+}
+
+.component-comment-submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Comment input row with image button */
+.comment-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+}
+
+/* Comment image upload button */
+.comment-image-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #f0f0f0;
+    color: #666;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1em;
+    transition: background-color 0.2s, transform 0.2s;
+    flex-shrink: 0;
+}
+
+.comment-image-btn:hover {
+    background: #e0e0e0;
+    transform: scale(1.05);
+}
+
+.comment-image-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Comment image preview in input area */
+.comment-image-preview {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    margin-bottom: 8px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    max-width: 100%;
+    overflow: hidden;
+    position: relative;
+}
+
+.comment-preview-thumbnail {
+    width: 60px;
+    height: 60px;
+    min-width: 60px;
+    min-height: 60px;
+    max-width: 60px;
+    max-height: 60px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    flex-shrink: 0;
+}
+
+.comment-preview-remove {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    line-height: 1;
+    transition: background-color 0.2s;
+    margin-left: auto;
+}
+
+.comment-preview-remove:hover {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+/* Upload loading state */
+.component-comment-input-wrapper.uploading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.component-comment-input-wrapper.uploading .comment-input-row::after {
+    content: '';
+    width: 20px;
+    height: 20px;
+    border: 2px solid #e0e0e0;
+    border-top-color: #007bff;
+    border-radius: 50%;
+    animation: comment-upload-spin 0.8s linear infinite;
+    position: absolute;
+    right: 50px;
+}
+
+@keyframes comment-upload-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Comment attachments in message list */
+.comment-attachments {
+    margin-top: 8px;
+}
+
+.comment-attachment {
+    display: inline-block;
+}
+
+.comment-attachment-image {
+    display: block;
+}
+
+.comment-attachment-image img {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.comment-attachment-image img:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Mobile adjustments for comment image attachments */
+@media (max-width: 768px) {
+    .comment-image-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 0.95em;
+    }
+
+    .comment-preview-thumbnail {
+        width: 50px;
+        height: 50px;
+        min-width: 50px;
+        min-height: 50px;
+        max-width: 50px;
+        max-height: 50px;
+    }
+
+    .comment-attachment-image img {
+        max-height: 150px;
+    }
+}
+
+/* Component comment reply indicator */
+.comment-reply-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(0, 123, 255, 0.08);
+    border-left: 3px solid #007bff;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.85em;
+    gap: 8px;
+}
+
+.comment-reply-indicator .reply-indicator-text {
+    color: #555;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.comment-reply-indicator .reply-indicator-text strong {
+    color: #007bff;
+}
+
+.comment-reply-indicator .cancel-reply-btn {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 50%;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.comment-reply-indicator .cancel-reply-btn:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: #333;
+}
+
+/* Comment reaction picker - positioned via JS to avoid overflow clipping */
+.comment-reaction-picker {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    padding: 8px;
+    display: flex;
+    gap: 4px;
+    min-width: 200px;
+    min-height: 40px;
+}
+
+.comment-reaction-picker .reaction-picker-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1.2em;
+    transition: background 0.2s, transform 0.2s;
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+}
+
+.comment-reaction-picker .reaction-picker-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+    transform: scale(1.15);
+}
+
+/* Mobile responsive for comments */
+@media (max-width: 768px) {
+    .component-comments-body {
+        padding: 10px;
+    }
+
+    .component-comments-list {
+        max-height: 250px;
+    }
+
+    .component-comment {
+        padding: 10px;
+    }
+
+    .comment-actions {
+        opacity: 1;
+    }
+
+    .component-comment-input {
+        padding: 8px 12px;
+        font-size: 0.85em;
+    }
+
+    .component-comment-submit {
+        width: 32px;
+        height: 32px;
+    }
+}
+
+/* Nested replies container */
+.comment-replies-container {
+    margin-left: 24px;
+    margin-top: 8px;
+    padding-left: 12px;
+    border-left: 2px solid rgba(0, 123, 255, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Reply comment styling */
+.component-comment.comment-reply {
+    background: rgba(0, 0, 0, 0.02);
+    font-size: 0.95em;
+    padding: 10px;
+}
+
+.component-comment.comment-reply.own-comment {
+    background: linear-gradient(135deg, rgba(0, 123, 255, 0.03) 0%, rgba(0, 123, 255, 0.01) 100%);
+    border-left: 2px solid #007bff;
+}
+
+/* Reply count badge in comment header */
+.comment-reply-count {
+    font-size: 0.8em;
+    color: #007bff;
+    background: rgba(0, 123, 255, 0.1);
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+}
+
+/* Task button with linked task indicator */
+.comment-task-btn.has-task {
+    color: #28a745;
+    background: rgba(40, 167, 69, 0.1);
+    border-radius: 4px;
+}
+
+.comment-task-btn.has-task:hover {
+    background: rgba(40, 167, 69, 0.2);
+}
+
+/* Linked task popup styles */
+.linked-task-name {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #fff;
+    padding: 8px 0;
+}
+
+.linked-task-description {
+    color: rgba(255, 255, 255, 0.8);
+    padding: 8px 0;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.linked-task-info {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.85em;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.linked-task-info .info-label {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* Mobile responsive for replies */
+@media (max-width: 768px) {
+    .comment-replies-container {
+        margin-left: 16px;
+        padding-left: 8px;
+    }
+
+    .component-comment.comment-reply {
+        padding: 8px;
+    }
+}
+
+/* ============================================
+   END COMPONENT COMMENTS FEATURE
+   ============================================ */

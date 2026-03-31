@@ -52,7 +52,11 @@ export function showReceiptModal(paymentIndex) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
 
-        const unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
+        // Use selections if available, otherwise fall back to selectedOptionIndex
+        const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
+            ? itemInfo.selections
+            : itemInfo.selectedOptionIndex;
+        const unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
         const quantity = itemInfo.quantity || 1;
         const itemTotal = unitPrice * quantity;
         itemsSubtotal += itemTotal;

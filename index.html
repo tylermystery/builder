@@ -180,6 +180,55 @@ body.modal-open {
 #modal-item-name {
     margin-top: 0;
 }
+/* AI Confidence Badge Styles */
+.ai-confidence-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 500;
+    margin: 8px 0;
+    cursor: help;
+}
+.ai-confidence-badge .confidence-icon {
+    font-size: 0.9em;
+}
+.ai-confidence-badge .confidence-score {
+    font-size: 0.85em;
+    opacity: 0.8;
+}
+/* High confidence - green/verified */
+.ai-confidence-badge.confidence-high {
+    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+    color: #155724;
+    border: 1px solid #28a745;
+}
+/* Moderate confidence - blue/likely */
+.ai-confidence-badge.confidence-moderate {
+    background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+    color: #0c5460;
+    border: 1px solid #17a2b8;
+}
+/* Low confidence - yellow/estimated */
+.ai-confidence-badge.confidence-low {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
+    color: #856404;
+    border: 1px solid #ffc107;
+}
+/* Very low confidence - red/draft */
+.ai-confidence-badge.confidence-very-low {
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+    color: #721c24;
+    border: 1px solid #dc3545;
+}
+/* Unknown confidence - gray/suggested */
+.ai-confidence-badge.confidence-unknown {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    color: #495057;
+    border: 1px solid #6c757d;
+}
 #modal-item-price {
     font-size: 1.5em;
     font-weight: bold;
@@ -216,14 +265,53 @@ body.modal-open {
         flex-direction: column;
         max-height: 95vh;
         height: auto;
+        overflow-y: auto;
     }
     .modal-main-column {
         flex: none;
         height: 250px;
+        position: relative;
+        z-index: 1;
+    }
+    /* When search photos results are active, allow the column to expand */
+    /* Supports both :has() selector and fallback class for older browsers */
+    .modal-main-column:has(#search-photos-results.active),
+    .modal-main-column.search-photos-active {
+        height: auto;
+        min-height: 250px;
+        flex: none;
+        z-index: 10;
+        background: white;
     }
     .modal-sidebar-column {
         flex: 1;
         padding: 20px;
+        position: relative;
+        z-index: 1;
+    }
+    /* Mobile styles for search photos grid */
+    #search-photos-results {
+        background: white;
+        position: relative;
+        z-index: 5;
+    }
+    #search-photos-results.active {
+        max-height: none;
+        overflow-y: visible;
+    }
+    .search-photos-grid {
+        max-height: 45vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .search-photos-actions {
+        position: sticky;
+        bottom: 0;
+        background: #f8f9fa;
+        padding: 12px 0;
+        margin-top: 10px;
+        z-index: 10;
+        border-top: 1px solid #ddd;
     }
 }
 
@@ -1485,6 +1573,185 @@ html.presentation-active {
     to { transform: rotate(360deg); }
 }
 
+/* Photo Selection Grid for Search More Photos */
+#search-photos-results {
+    display: none;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+#search-photos-results.active {
+    display: block;
+}
+
+.search-photos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.search-photo-item {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 3px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.search-photo-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.search-photo-item:hover {
+    border-color: #6366f1;
+    transform: scale(1.02);
+}
+
+.search-photo-item.selected {
+    border-color: #22c55e;
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3);
+}
+
+.search-photo-item .photo-select-indicator {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
+    border: 2px solid #ccc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.search-photo-item.selected .photo-select-indicator {
+    background: #22c55e;
+    border-color: #22c55e;
+    color: white;
+}
+
+.search-photo-item .photo-select-indicator::after {
+    content: '';
+}
+
+.search-photo-item.selected .photo-select-indicator::after {
+    content: '✓';
+}
+
+.search-photos-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.save-selected-photos-btn {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+}
+
+.save-selected-photos-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+}
+
+.save-selected-photos-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.cancel-selection-btn {
+    background: #6b7280;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.cancel-selection-btn:hover {
+    background: #4b5563;
+}
+
+.search-photos-hint {
+    text-align: center;
+    color: #6b7280;
+    font-size: 0.85rem;
+    margin-bottom: 10px;
+}
+
+/* Set as Cover Thumbnail Styles */
+.thumbnail-img.is-cover {
+    position: relative;
+}
+.thumbnail-img.is-cover::after {
+    content: '⭐';
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fbbf24;
+    font-size: 10px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    line-height: 1;
+}
+#set-cover-photo-container {
+    display: flex;
+    justify-content: center;
+    padding: 8px 10px;
+    background-color: #f8f9fa;
+    border-top: 1px solid #eee;
+}
+#set-cover-photo-btn {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 16px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
+    display: none;
+}
+#set-cover-photo-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(245, 158, 11, 0.4);
+}
+#set-cover-photo-btn.visible {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+#set-cover-photo-btn.success {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+}
+
 /* Critical Mobile Summary Bar Styles - Base styles needed before deferred CSS */
 #mobile-summary-bar {
     position: fixed;
@@ -2271,10 +2538,27 @@ html.presentation-active {
             <div class="modal-main-column">
                 <div id="modal-main-image"></div>
                 <div id="modal-thumbnail-strip"></div>
+                <div id="set-cover-photo-container">
+                    <button id="set-cover-photo-btn" title="Use this photo as the item's cover image">
+                        ⭐ Set as Cover
+                    </button>
+                </div>
                 <div id="modal-search-photos-container" style="display: none;">
                     <button id="modal-search-photos-btn" class="search-photos-btn" title="Search for more photos">
                         🔍 Search More Photos
                     </button>
+                    <div id="search-photos-results">
+                        <p class="search-photos-hint">Select the photos you want to save to this item:</p>
+                        <div class="search-photos-grid" id="search-photos-grid"></div>
+                        <div class="search-photos-actions">
+                            <button class="save-selected-photos-btn" id="save-selected-photos-btn" disabled>
+                                💾 Save Selected (0)
+                            </button>
+                            <button class="cancel-selection-btn" id="cancel-photo-selection-btn">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 <div class="modal-sidebar-column">
@@ -2607,30 +2891,50 @@ html.presentation-active {
                     </div>
                 </section>
 
-                <!-- Items Section - Rendered dynamically -->
-                <section class="itinerary-section itinerary-items itinerary-accordion" data-section="items">
-                    <div class="itinerary-accordion-header" data-section="items">
-                        <div class="itinerary-accordion-title-row">
-                            <!-- Add button at the beginning of items, title removed -->
-                            <button id="presentation-add-btn" class="presentation-add-item-btn" title="Add items to plan" aria-label="Add items to plan">
-                                <span class="add-icon">+</span>
-                                <span class="add-text">Add</span>
-                            </button>
-                            <span class="itinerary-accordion-icon"></span>
-                        </div>
-                        <p class="itinerary-accordion-summary" id="items-summary"></p>
-                    </div>
-                    <div class="itinerary-accordion-content">
-                        <div id="itinerary-items-list" class="itinerary-items-list">
-                            <!-- Items will be rendered here by JavaScript -->
-                        </div>
-                        <!-- Reactions Summary Section -->
-                        <div id="reactions-summary-container" class="reactions-summary-container">
-                            <!-- Reactions summary and rankings will be rendered here by JavaScript -->
-                        </div>
-                    </div>
+                <!-- Add Item Section - Standalone add functionality -->
+                <section class="itinerary-section itinerary-add-section" data-section="add">
+                    <button id="presentation-add-btn" class="presentation-add-item-btn" title="Add items to plan" aria-label="Add items to plan">
+                        <span class="add-icon">+</span>
+                        <span class="add-text">Add</span>
+                    </button>
+                    <button id="presentation-toggle-all-btn" class="presentation-toggle-all-btn" title="Collapse/Expand all items" aria-label="Toggle all item accordions">
+                        <span class="toggle-all-icon">▼</span>
+                        <span class="toggle-all-text">Collapse All</span>
+                    </button>
+                    <button id="presentation-toggle-archived" class="presentation-status-toggle" title="Show/Hide archived items" aria-label="Toggle archived items" style="display: none;">
+                        <span class="toggle-icon">📦</span>
+                        <span class="toggle-label">Archived</span>
+                        <span class="toggle-count">0</span>
+                    </button>
+                    <button id="presentation-toggle-completed" class="presentation-status-toggle" title="Show/Hide completed items" aria-label="Toggle completed items" style="display: none;">
+                        <span class="toggle-icon">✓</span>
+                        <span class="toggle-label">Completed</span>
+                        <span class="toggle-count">0</span>
+                    </button>
                 </section>
 
+                <!-- Plan Items Container - Each item rendered as its own container -->
+                <div id="itinerary-items-list" class="itinerary-items-list">
+                    <!-- Individual plan item containers will be rendered here by JavaScript -->
+                </div>
+
+                <!-- Reactions Summary Section -->
+                <div id="reactions-summary-container" class="reactions-summary-container">
+                    <!-- Reactions summary and rankings will be rendered here by JavaScript -->
+                </div>
+
+            </div>
+        </div>
+        <!-- Drag-and-Drop Buckets for Presentation View (Archive/Completed) -->
+        <!-- Always visible when presentation modal is open, grayed out until dragging -->
+        <div id="presentation-drag-buckets" class="presentation-drag-buckets">
+            <div id="drag-bucket-archive" class="drag-bucket drag-bucket-archive" data-bucket="archive">
+                <span class="bucket-icon">📦</span>
+                <span class="bucket-label">Archive</span>
+            </div>
+            <div id="drag-bucket-completed" class="drag-bucket drag-bucket-completed" data-bucket="completed">
+                <span class="bucket-icon">✓</span>
+                <span class="bucket-label">Completed</span>
             </div>
         </div>
         <!-- Floating Chat Button for Presentation View -->

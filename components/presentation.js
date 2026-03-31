@@ -12,6 +12,7 @@ import { updateEventPlanSection, updateIdeasCarousel } from './sidebar.js';
 import { syncPlanState, registerSyncCallback, unregisterSyncCallback } from '../utils/planStateSync.js';
 import { showUserModal } from '../auth.js';
 import { showToast } from '../ui.js';
+import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 
 console.log('[Presentation DEBUG] presentation.js module loaded');
 console.log('[Presentation DEBUG] QUICK_REACTIONS available:', ['👍', '❤️', '😂', '😮', '😢', '🎉']);
@@ -136,6 +137,8 @@ let reactionsSummaryEl = null;
 
 // Track loaded images for each item
 const itemImagesCache = new Map();
+// Expose to window for cross-component updates (e.g., modal cover photo changes)
+window.itemImagesCache = itemImagesCache;
 
 // Track accordion state (all sections start expanded)
 const accordionState = {
@@ -157,6 +160,7 @@ let presentationWhosHereList = null;
 
 // Search modal elements
 let presentationAddBtn = null;
+let presentationToggleAllBtn = null;
 let presentationSearchModal = null;
 let presentationSearchClose = null;
 let presentationSearchInput = null;
@@ -168,6 +172,19 @@ let presentationBrowseCategories = null;
 // Search modal state
 let presentationSearchController = null;
 let presentationSearchDebounceTimer = null;
+
+// Drag-drop state
+let sortableInstance = null;
+let dragBucketsEl = null;
+let dragBucketArchive = null;
+let dragBucketCompleted = null;
+let isDragging = false;
+let dragDelayTimer = null;
+const DRAG_DELAY_MS = 300; // Delay before drag buckets appear (ms)
+
+// Show/hide state for archived and completed items
+let showArchivedItems = true;
+let showCompletedItems = true;
 const PRESENTATION_SEARCH_DEBOUNCE = 300;
 
 // --- Presentation Background Engine ---
@@ -345,6 +362,7 @@ function ensureDOMElements() {
 
     // Search modal elements
     presentationAddBtn = document.getElementById('presentation-add-btn');
+    presentationToggleAllBtn = document.getElementById('presentation-toggle-all-btn');
     presentationSearchModal = document.getElementById('presentation-search-modal');
     presentationSearchClose = document.getElementById('presentation-search-close');
     presentationSearchInput = document.getElementById('presentation-search-input');
@@ -352,6 +370,16 @@ function ensureDOMElements() {
     presentationSearchResults = document.getElementById('presentation-search-results');
     presentationRefinementChips = document.getElementById('presentation-refinement-chips');
     presentationBrowseCategories = document.getElementById('presentation-browse-categories');
+
+    // Drag-drop bucket elements
+    dragBucketsEl = document.getElementById('presentation-drag-buckets');
+    dragBucketArchive = document.getElementById('drag-bucket-archive');
+    dragBucketCompleted = document.getElementById('drag-bucket-completed');
+    console.log('[Presentation DEBUG] Bucket elements found:', {
+        dragBucketsEl: !!dragBucketsEl,
+        dragBucketArchive: !!dragBucketArchive,
+        dragBucketCompleted: !!dragBucketCompleted
+    });
 
     /* DEBUG: DOM elements after init
     console.log('[Accordion DEBUG] DOM elements after init:', {
@@ -1302,6 +1330,655 @@ function closeExpandedEmojiPicker() {
     }
 }
 
+// ============================================
+// SENTIMENT ANALYSIS POPUP
+// ============================================
+
+/**
+ * Generate HTML for the sentiment analysis popup with a sentiment graph
+ * showing where each item lies on the sentiment scale
+ */
+function createSentimentPopupHTML() {
+    console.log('[SentimentPopup DEBUG] createSentimentPopupHTML called');
+
+    const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
+    const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
+    const combinedList = [...locked, ...favorites];
+
+    console.log('[SentimentPopup DEBUG] combinedList length:', combinedList.length);
+    console.log('[SentimentPopup DEBUG] state.session.reactions:', state.session.reactions);
+
+    // Calculate scores for all items
+    const itemsWithScores = combinedList.map(item => {
+        const record = state.records.all.find(r => r.id === item.recordId);
+        const name = record?.fields.Name || 'Unknown Item';
+        const reactions = state.session.reactions.get(item.recordId);
+        const reactionCount = reactions instanceof Map ? reactions.size : 0;
+        const totalScore = getItemReactionScore(item.recordId);
+
+        // Calculate average score per reaction for positioning on scale
+        const avgScore = reactionCount > 0 ? totalScore / reactionCount : 0;
+
+        // Get emoji breakdown
+        const emojiBreakdown = {};
+        if (reactions instanceof Map) {
+            reactions.forEach((emoji) => {
+                emojiBreakdown[emoji] = (emojiBreakdown[emoji] || 0) + 1;
+            });
+        }
+
+        return {
+            recordId: item.recordId,
+            type: item.type,
+            name,
+            totalScore,
+            avgScore,
+            reactionCount,
+            emojiBreakdown,
+            summaryEmoji: getItemSummaryEmoji(item.recordId)
+        };
+    });
+
+    // Filter to only items with reactions for the graph
+    const itemsWithReactions = itemsWithScores.filter(item => item.reactionCount > 0);
+
+    // Calculate totals
+    const totalReactions = itemsWithScores.reduce((sum, item) => sum + item.reactionCount, 0);
+    const totalScore = itemsWithScores.reduce((sum, item) => sum + item.totalScore, 0);
+
+    // Determine overall sentiment
+    let overallSentiment = 'neutral';
+    let sentimentEmoji = '😐';
+    let sentimentText = 'Mixed reactions';
+    let sentimentDescription = 'The group has varied opinions about the plan items.';
+
+    if (totalScore > 8) {
+        overallSentiment = 'very-positive';
+        sentimentEmoji = '🎉';
+        sentimentText = 'Very Enthusiastic!';
+        sentimentDescription = 'Everyone is excited about this plan! High positive sentiment across items.';
+    } else if (totalScore > 3) {
+        overallSentiment = 'positive';
+        sentimentEmoji = '😊';
+        sentimentText = 'Generally Positive';
+        sentimentDescription = 'The group is happy with most of the plan items.';
+    } else if (totalScore < -8) {
+        overallSentiment = 'very-negative';
+        sentimentEmoji = '😟';
+        sentimentText = 'Needs Attention';
+        sentimentDescription = 'Multiple items have concerns. Consider reviewing the plan together.';
+    } else if (totalScore < -3) {
+        overallSentiment = 'negative';
+        sentimentEmoji = '😕';
+        sentimentText = 'Some Concerns';
+        sentimentDescription = 'A few items might need discussion or alternatives.';
+    }
+
+    // Count sentiment categories
+    const positiveItems = itemsWithReactions.filter(item => item.avgScore > 0.5).length;
+    const negativeItems = itemsWithReactions.filter(item => item.avgScore < -0.5).length;
+    const neutralItems = itemsWithReactions.filter(item => item.avgScore >= -0.5 && item.avgScore <= 0.5).length;
+
+    // Generate graph items HTML - position items on a -5 to +5 scale
+    // The scale represents average sentiment per reaction
+    const minScore = -5;
+    const maxScore = 5;
+    const scaleRange = maxScore - minScore;
+
+    let graphItemsHTML = '';
+    if (itemsWithReactions.length > 0) {
+        // Sort by average score for consistent layering
+        const sortedItems = [...itemsWithReactions].sort((a, b) => a.avgScore - b.avgScore);
+
+        graphItemsHTML = sortedItems.map((item, index) => {
+            // Clamp avgScore to scale range
+            const clampedScore = Math.max(minScore, Math.min(maxScore, item.avgScore));
+            // Calculate position as percentage (0% = -5, 100% = +5)
+            const position = ((clampedScore - minScore) / scaleRange) * 100;
+
+            // Determine sentiment class
+            let sentimentClass = 'neutral';
+            if (item.avgScore > 0.5) sentimentClass = 'positive';
+            else if (item.avgScore < -0.5) sentimentClass = 'negative';
+
+            // Truncate name for display
+            const displayName = item.name.length > 20 ? item.name.substring(0, 18) + '...' : item.name;
+
+            // Create emoji pills for breakdown tooltip
+            const emojiPills = Object.entries(item.emojiBreakdown)
+                .map(([emoji, count]) => `${emoji}${count > 1 ? '×' + count : ''}`)
+                .join(' ');
+
+            return `
+                <div class="sentiment-graph-item ${sentimentClass}"
+                     style="left: ${position}%;"
+                     data-record-id="${item.recordId}"
+                     title="${item.name}\nAvg Score: ${item.avgScore.toFixed(2)}\nReactions: ${emojiPills}">
+                    <span class="graph-item-emoji">${item.summaryEmoji || '💬'}</span>
+                    <span class="graph-item-name">${displayName}</span>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // Generate ranking list for detailed breakdown
+    let rankingHTML = '';
+    if (itemsWithReactions.length > 0) {
+        const rankedItems = [...itemsWithReactions].sort((a, b) => b.totalScore - a.totalScore);
+
+        rankingHTML = rankedItems.map((item, index) => {
+            const rank = index + 1;
+            let medalHTML = '';
+            if (rank === 1) medalHTML = '<span class="rank-medal">🥇</span>';
+            else if (rank === 2) medalHTML = '<span class="rank-medal">🥈</span>';
+            else if (rank === 3) medalHTML = '<span class="rank-medal">🥉</span>';
+
+            const emojiPills = Object.entries(item.emojiBreakdown)
+                .map(([emoji, count]) => `<span class="emoji-pill">${emoji}${count > 1 ? `<sup>${count}</sup>` : ''}</span>`)
+                .join('');
+
+            let sentimentClass = 'neutral';
+            if (item.avgScore > 0.5) sentimentClass = 'positive';
+            else if (item.avgScore < -0.5) sentimentClass = 'negative';
+
+            return `
+                <div class="sentiment-ranking-item ${sentimentClass}" data-record-id="${item.recordId}">
+                    <div class="ranking-position">
+                        ${medalHTML}
+                        <span class="ranking-number">#${rank}</span>
+                    </div>
+                    <div class="ranking-info">
+                        <div class="ranking-name">${item.name}</div>
+                        <div class="ranking-reactions">${emojiPills}</div>
+                    </div>
+                    <div class="ranking-score">
+                        <span class="score-value ${item.totalScore >= 0 ? 'positive' : 'negative'}">
+                            ${item.totalScore >= 0 ? '+' : ''}${item.totalScore.toFixed(1)}
+                        </span>
+                        <span class="score-label">score</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // Empty state
+    if (totalReactions === 0) {
+        return `
+            <div class="sentiment-popup-modal">
+                <div class="sentiment-popup-header">
+                    <h2 class="sentiment-popup-title">Sentiment Analysis</h2>
+                    <button class="sentiment-popup-close" title="Close">&times;</button>
+                </div>
+                <div class="sentiment-popup-empty">
+                    <span class="empty-icon">✨</span>
+                    <h3>No Reactions Yet</h3>
+                    <p>React to plan items using emojis to see sentiment analysis.</p>
+                    <p class="empty-hint">Each collaborator's reaction contributes to the overall sentiment score.</p>
+                </div>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="sentiment-popup-modal">
+            <div class="sentiment-popup-header">
+                <h2 class="sentiment-popup-title">Sentiment Analysis</h2>
+                <button class="sentiment-popup-close" title="Close">&times;</button>
+            </div>
+
+            <div class="sentiment-popup-content">
+                <!-- Overall Sentiment Banner -->
+                <div class="sentiment-overall-banner ${overallSentiment}">
+                    <span class="banner-emoji">${sentimentEmoji}</span>
+                    <div class="banner-text">
+                        <span class="banner-title">${sentimentText}</span>
+                        <span class="banner-description">${sentimentDescription}</span>
+                    </div>
+                </div>
+
+                <!-- Stats Row -->
+                <div class="sentiment-stats-row">
+                    <div class="sentiment-stat-card">
+                        <span class="stat-value">${totalReactions}</span>
+                        <span class="stat-label">Total Reactions</span>
+                    </div>
+                    <div class="sentiment-stat-card">
+                        <span class="stat-value">${itemsWithReactions.length}</span>
+                        <span class="stat-label">Items Rated</span>
+                    </div>
+                    <div class="sentiment-stat-card ${totalScore >= 0 ? 'positive' : 'negative'}">
+                        <span class="stat-value">${totalScore >= 0 ? '+' : ''}${totalScore.toFixed(1)}</span>
+                        <span class="stat-label">Net Score</span>
+                    </div>
+                </div>
+
+                <!-- Sentiment Distribution -->
+                <div class="sentiment-distribution">
+                    <h3 class="section-title">Sentiment Distribution</h3>
+                    <div class="distribution-bars">
+                        <div class="distribution-item positive">
+                            <span class="dist-icon">👍</span>
+                            <div class="dist-bar-container">
+                                <div class="dist-bar" style="width: ${itemsWithReactions.length > 0 ? (positiveItems / itemsWithReactions.length * 100) : 0}%"></div>
+                            </div>
+                            <span class="dist-count">${positiveItems}</span>
+                        </div>
+                        <div class="distribution-item neutral">
+                            <span class="dist-icon">🤷</span>
+                            <div class="dist-bar-container">
+                                <div class="dist-bar" style="width: ${itemsWithReactions.length > 0 ? (neutralItems / itemsWithReactions.length * 100) : 0}%"></div>
+                            </div>
+                            <span class="dist-count">${neutralItems}</span>
+                        </div>
+                        <div class="distribution-item negative">
+                            <span class="dist-icon">👎</span>
+                            <div class="dist-bar-container">
+                                <div class="dist-bar" style="width: ${itemsWithReactions.length > 0 ? (negativeItems / itemsWithReactions.length * 100) : 0}%"></div>
+                            </div>
+                            <span class="dist-count">${negativeItems}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sentiment Graph -->
+                <div class="sentiment-graph-section">
+                    <h3 class="section-title">Item Sentiment Map</h3>
+                    <p class="section-hint">Items positioned by their average sentiment score</p>
+                    <div class="sentiment-graph">
+                        <div class="graph-scale">
+                            <div class="scale-zone negative">
+                                <span class="zone-label">😟 Negative</span>
+                            </div>
+                            <div class="scale-zone neutral">
+                                <span class="zone-label">😐 Neutral</span>
+                            </div>
+                            <div class="scale-zone positive">
+                                <span class="zone-label">😊 Positive</span>
+                            </div>
+                        </div>
+                        <div class="graph-track">
+                            <div class="track-markers">
+                                <span class="marker" style="left: 0%">-5</span>
+                                <span class="marker" style="left: 25%">-2.5</span>
+                                <span class="marker" style="left: 50%">0</span>
+                                <span class="marker" style="left: 75%">+2.5</span>
+                                <span class="marker" style="left: 100%">+5</span>
+                            </div>
+                            <div class="graph-items">
+                                ${graphItemsHTML}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ranking List -->
+                <div class="sentiment-ranking-section">
+                    <h3 class="section-title">Item Rankings</h3>
+                    <div class="sentiment-ranking-list">
+                        ${rankingHTML}
+                    </div>
+                </div>
+
+                <!-- Analysis Info -->
+                <div class="sentiment-info">
+                    <div class="info-icon">ℹ️</div>
+                    <div class="info-text">
+                        <strong>How scores are calculated:</strong> Each emoji has a sentiment value from -5 (very negative) to +5 (very positive).
+                        An item's score is the sum of all reaction values. Click any item to scroll to it in the plan.
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Show the sentiment analysis popup
+ */
+function showSentimentPopup() {
+    // Close any existing popup
+    closeSentimentPopup();
+
+    console.log('[SentimentPopup DEBUG] Starting showSentimentPopup');
+
+    const popupHTML = createSentimentPopupHTML();
+    const pickerZIndex = getModalZIndex('picker');
+
+    console.log('[SentimentPopup DEBUG] popupHTML length:', popupHTML.length);
+    console.log('[SentimentPopup DEBUG] z-index:', pickerZIndex);
+
+    const popupContainer = document.createElement('div');
+    popupContainer.className = 'sentiment-popup-overlay';
+    popupContainer.innerHTML = popupHTML;
+
+    // Apply inline styles for positioning
+    popupContainer.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: ${pickerZIndex};
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+        box-sizing: border-box;
+        overflow-y: auto;
+    `;
+
+    document.body.appendChild(popupContainer);
+
+    // Apply inline styles to the modal element to ensure it displays correctly
+    // This addresses potential CSS loading/specificity issues
+    const modalElement = popupContainer.querySelector('.sentiment-popup-modal');
+    if (modalElement) {
+        console.log('[SentimentPopup DEBUG] Modal element found, applying inline styles');
+        modalElement.style.cssText = `
+            background: white;
+            border-radius: 16px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: sentimentPopupIn 0.3s ease-out;
+            flex-shrink: 0;
+        `;
+
+        // Apply inline styles to header
+        const headerElement = modalElement.querySelector('.sentiment-popup-header');
+        if (headerElement) {
+            headerElement.style.cssText = `
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 20px 24px;
+                border-bottom: 1px solid #eee;
+                position: sticky;
+                top: 0;
+                background: white;
+                border-radius: 16px 16px 0 0;
+                z-index: 1;
+            `;
+            console.log('[SentimentPopup DEBUG] Header styles applied');
+        }
+
+        // Apply inline styles to title
+        const titleElement = modalElement.querySelector('.sentiment-popup-title');
+        if (titleElement) {
+            titleElement.style.cssText = `
+                margin: 0;
+                font-size: 1.4em;
+                font-weight: 700;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+            `;
+        }
+
+        // Apply inline styles to close button
+        const closeBtn = modalElement.querySelector('.sentiment-popup-close');
+        if (closeBtn) {
+            closeBtn.style.cssText = `
+                width: 32px;
+                height: 32px;
+                border: none;
+                background: #f5f5f5;
+                border-radius: 50%;
+                font-size: 1.5em;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+                color: #666;
+            `;
+        }
+
+        // Apply inline styles to content area
+        const contentElement = modalElement.querySelector('.sentiment-popup-content');
+        if (contentElement) {
+            contentElement.style.cssText = `
+                padding: 24px;
+            `;
+            console.log('[SentimentPopup DEBUG] Content styles applied');
+        }
+
+        // Apply inline styles to empty state if present
+        const emptyElement = modalElement.querySelector('.sentiment-popup-empty');
+        if (emptyElement) {
+            emptyElement.style.cssText = `
+                text-align: center;
+                padding: 40px 20px;
+            `;
+            console.log('[SentimentPopup DEBUG] Empty state styles applied');
+        }
+
+        // Apply inline styles to key content sections
+        const bannerElement = modalElement.querySelector('.sentiment-overall-banner');
+        if (bannerElement) {
+            bannerElement.style.cssText = `
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                padding: 16px 20px;
+                border-radius: 12px;
+                margin-bottom: 20px;
+                background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.05) 100%);
+                border: 1px solid rgba(102, 126, 234, 0.2);
+            `;
+            const bannerEmoji = bannerElement.querySelector('.banner-emoji');
+            if (bannerEmoji) bannerEmoji.style.fontSize = '2.5em';
+            const bannerText = bannerElement.querySelector('.banner-text');
+            if (bannerText) bannerText.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
+            const bannerTitle = bannerElement.querySelector('.banner-title');
+            if (bannerTitle) bannerTitle.style.cssText = 'font-size: 1.2em; font-weight: 700; color: #333;';
+            const bannerDesc = bannerElement.querySelector('.banner-description');
+            if (bannerDesc) bannerDesc.style.cssText = 'font-size: 0.9em; color: #666;';
+            console.log('[SentimentPopup DEBUG] Banner styles applied');
+        }
+
+        // Stats row
+        const statsRow = modalElement.querySelector('.sentiment-stats-row');
+        if (statsRow) {
+            statsRow.style.cssText = 'display: flex; gap: 12px; margin-bottom: 24px;';
+            statsRow.querySelectorAll('.sentiment-stat-card').forEach(card => {
+                card.style.cssText = 'flex: 1; background: #f8f9fa; border-radius: 10px; padding: 16px; text-align: center; border: 1px solid #eee;';
+                const statValue = card.querySelector('.stat-value');
+                if (statValue) statValue.style.cssText = 'display: block; font-size: 1.8em; font-weight: 700; color: #333;';
+                const statLabel = card.querySelector('.stat-label');
+                if (statLabel) statLabel.style.cssText = 'font-size: 0.75em; color: #666; text-transform: uppercase; letter-spacing: 0.5px;';
+            });
+            console.log('[SentimentPopup DEBUG] Stats row styles applied');
+        }
+
+        // Section titles
+        modalElement.querySelectorAll('.section-title').forEach(title => {
+            title.style.cssText = 'margin: 0 0 12px; font-size: 1em; font-weight: 600; color: #333;';
+        });
+        modalElement.querySelectorAll('.section-hint').forEach(hint => {
+            hint.style.cssText = 'margin: -8px 0 12px; font-size: 0.8em; color: #999;';
+        });
+
+        // Distribution section
+        const distSection = modalElement.querySelector('.sentiment-distribution');
+        if (distSection) {
+            distSection.style.cssText = 'margin-bottom: 24px; padding: 16px; background: #f8f9fa; border-radius: 12px;';
+            const distBars = distSection.querySelector('.distribution-bars');
+            if (distBars) distBars.style.cssText = 'display: flex; flex-direction: column; gap: 10px;';
+            distSection.querySelectorAll('.distribution-item').forEach(item => {
+                item.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+                const icon = item.querySelector('.dist-icon');
+                if (icon) icon.style.cssText = 'font-size: 1.3em; width: 28px; text-align: center;';
+                const barContainer = item.querySelector('.dist-bar-container');
+                if (barContainer) barContainer.style.cssText = 'flex: 1; height: 24px; background: #e9ecef; border-radius: 12px; overflow: hidden;';
+                const bar = item.querySelector('.dist-bar');
+                if (bar) {
+                    let bgColor = '#6c757d';
+                    if (item.classList.contains('positive')) bgColor = 'linear-gradient(90deg, #28a745 0%, #5cb85c 100%)';
+                    else if (item.classList.contains('negative')) bgColor = 'linear-gradient(90deg, #dc3545 0%, #ff6b6b 100%)';
+                    bar.style.cssText = `height: 100%; border-radius: 12px; background: ${bgColor}; transition: width 0.5s ease;`;
+                }
+                const count = item.querySelector('.dist-count');
+                if (count) count.style.cssText = 'min-width: 24px; font-weight: 600; color: #333;';
+            });
+            console.log('[SentimentPopup DEBUG] Distribution styles applied');
+        }
+
+        // Graph section
+        const graphSection = modalElement.querySelector('.sentiment-graph-section');
+        if (graphSection) {
+            graphSection.style.cssText = 'margin-bottom: 24px;';
+            const graph = graphSection.querySelector('.sentiment-graph');
+            if (graph) {
+                graph.style.cssText = 'background: #f8f9fa; border-radius: 12px; padding: 16px; overflow: hidden;';
+                const graphScale = graph.querySelector('.graph-scale');
+                if (graphScale) {
+                    graphScale.style.cssText = 'display: flex; margin-bottom: 8px;';
+                    graphScale.querySelectorAll('.scale-zone').forEach(zone => {
+                        let bgColor = '#f8f9fa';
+                        if (zone.classList.contains('negative')) bgColor = 'rgba(220, 53, 69, 0.1)';
+                        else if (zone.classList.contains('neutral')) bgColor = 'rgba(108, 117, 125, 0.1)';
+                        else if (zone.classList.contains('positive')) bgColor = 'rgba(40, 167, 69, 0.1)';
+                        zone.style.cssText = `flex: 1; padding: 8px; text-align: center; font-size: 0.75em; background: ${bgColor}; border-radius: 6px; margin: 0 2px;`;
+                    });
+                }
+                const graphTrack = graph.querySelector('.graph-track');
+                if (graphTrack) {
+                    graphTrack.style.cssText = 'position: relative; height: 80px; background: linear-gradient(90deg, rgba(220, 53, 69, 0.05) 0%, rgba(220, 53, 69, 0.05) 30%, rgba(108, 117, 125, 0.05) 30%, rgba(108, 117, 125, 0.05) 70%, rgba(40, 167, 69, 0.05) 70%, rgba(40, 167, 69, 0.05) 100%); border-radius: 8px; margin-top: 12px;';
+                    const markers = graphTrack.querySelector('.track-markers');
+                    if (markers) {
+                        markers.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; height: 20px; display: flex; justify-content: space-between; padding: 0 4px;';
+                        markers.querySelectorAll('.marker').forEach(m => m.style.cssText = 'font-size: 0.65em; color: #999;');
+                    }
+                    const graphItems = graphTrack.querySelector('.graph-items');
+                    if (graphItems) {
+                        graphItems.style.cssText = 'position: absolute; top: 24px; left: 0; right: 0; bottom: 8px;';
+                        graphItems.querySelectorAll('.sentiment-graph-item').forEach(item => {
+                            let borderColor = '#6c757d';
+                            if (item.classList.contains('positive')) borderColor = '#28a745';
+                            else if (item.classList.contains('negative')) borderColor = '#dc3545';
+                            item.style.cssText += `; position: absolute; transform: translateX(-50%); background: white; border: 2px solid ${borderColor}; border-radius: 8px; padding: 4px 8px; font-size: 0.75em; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.1);`;
+                        });
+                    }
+                }
+            }
+            console.log('[SentimentPopup DEBUG] Graph section styles applied');
+        }
+
+        // Ranking section
+        const rankingSection = modalElement.querySelector('.sentiment-ranking-section');
+        if (rankingSection) {
+            rankingSection.style.cssText = 'margin-bottom: 24px;';
+            const rankingList = rankingSection.querySelector('.sentiment-ranking-list');
+            if (rankingList) {
+                rankingList.style.cssText = 'max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;';
+                rankingList.querySelectorAll('.sentiment-ranking-item').forEach(item => {
+                    let borderColor = '#eee';
+                    if (item.classList.contains('positive')) borderColor = '#28a745';
+                    else if (item.classList.contains('negative')) borderColor = '#dc3545';
+                    item.style.cssText = `display: flex; align-items: center; gap: 12px; padding: 12px; background: white; border-radius: 10px; border: 1px solid #eee; border-left: 3px solid ${borderColor}; cursor: pointer; transition: all 0.2s ease;`;
+                });
+            }
+            console.log('[SentimentPopup DEBUG] Ranking section styles applied');
+        }
+
+        // Info section
+        const infoSection = modalElement.querySelector('.sentiment-info');
+        if (infoSection) {
+            infoSection.style.cssText = 'display: flex; gap: 12px; padding: 16px; background: #f0f4ff; border-radius: 10px; border: 1px solid #d0d8ff;';
+            const infoIcon = infoSection.querySelector('.info-icon');
+            if (infoIcon) infoIcon.style.fontSize = '1.2em';
+            const infoText = infoSection.querySelector('.info-text');
+            if (infoText) infoText.style.cssText = 'font-size: 0.85em; color: #555; line-height: 1.5;';
+            console.log('[SentimentPopup DEBUG] Info section styles applied');
+        }
+    } else {
+        console.error('[SentimentPopup DEBUG] ERROR: Modal element .sentiment-popup-modal not found in popupContainer');
+        console.log('[SentimentPopup DEBUG] popupContainer innerHTML preview:', popupHTML.substring(0, 500));
+    }
+
+    // Add click handler for the popup content
+    popupContainer.addEventListener('click', handleSentimentPopupClick);
+
+    // Close on background click
+    popupContainer.addEventListener('click', (e) => {
+        if (e.target === popupContainer) {
+            closeSentimentPopup();
+        }
+    });
+
+    // Close on Escape
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeSentimentPopup();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    log('Presentation', 'Sentiment popup opened');
+    console.log('[SentimentPopup DEBUG] Popup opened and appended to body');
+}
+
+/**
+ * Close the sentiment analysis popup
+ */
+function closeSentimentPopup() {
+    const existingPopup = document.querySelector('.sentiment-popup-overlay');
+    if (existingPopup) {
+        existingPopup.remove();
+    }
+}
+
+/**
+ * Handle clicks within the sentiment popup
+ */
+function handleSentimentPopupClick(e) {
+    e.stopPropagation();
+
+    // Close button
+    if (e.target.classList.contains('sentiment-popup-close')) {
+        closeSentimentPopup();
+        return;
+    }
+
+    // Click on ranking item or graph item to scroll to it
+    const clickableItem = e.target.closest('.sentiment-ranking-item, .sentiment-graph-item');
+    if (clickableItem) {
+        const recordId = clickableItem.dataset.recordId;
+        closeSentimentPopup();
+
+        // Scroll to the item in the presentation view
+        const targetItem = document.querySelector(`.itinerary-item[data-record-id="${recordId}"]`);
+        if (targetItem) {
+            targetItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Brief highlight
+            targetItem.classList.add('highlight');
+            setTimeout(() => targetItem.classList.remove('highlight'), 2000);
+        }
+    }
+}
+
+/**
+ * Initialize click handler for the event emoji indicator to open sentiment popup
+ */
+function initializeEventEmojiClickHandler() {
+    const eventEmojiEl = document.getElementById('event-emoji-indicator');
+    if (eventEmojiEl) {
+        eventEmojiEl.style.cursor = 'pointer';
+        eventEmojiEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showSentimentPopup();
+        });
+        log('Presentation', 'Event emoji indicator click handler initialized');
+    }
+}
+
 // Handle clicks within the emoji picker
 function handleEmojiPickerClick(e) {
     // Stop propagation to prevent any parent handlers from firing
@@ -1541,7 +2218,7 @@ function generateItemSummary(record, itemInfo, type) {
 }
 
 async function renderItineraryItem(item, index) {
-    const { recordId, type } = item;
+    const { recordId, type, itemStatus = 'active' } = item;
     const record = state.records.all.find(r => r.id === recordId);
 
     if (!record) {
@@ -1562,14 +2239,30 @@ async function renderItineraryItem(item, index) {
     // Fetch images if not cached
     if (!itemImagesCache.has(recordId)) {
         const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
-        itemImagesCache.set(recordId, { images: imageUrls || [], currentIndex: 0 });
+        // Use the selectedImageIndex from itemInfo if set, otherwise default to 0
+        const selectedIndex = itemInfo?.selectedImageIndex ?? 0;
+        const validIndex = Math.min(selectedIndex, (imageUrls?.length || 1) - 1);
+        itemImagesCache.set(recordId, { images: imageUrls || [], currentIndex: validIndex });
     }
 
     const cachedImages = itemImagesCache.get(recordId);
     const mediaCarouselHTML = createMediaCarousel(cachedImages.images, recordId);
 
-    const typeLabel = type === 'favorites' ? 'Idea' : 'Confirmed';
-    const typeClass = type === 'favorites' ? 'item-type-idea' : 'item-type-confirmed';
+    // Determine the display label based on itemStatus
+    let typeLabel = type === 'favorites' ? 'Idea' : 'Confirmed';
+    let typeClass = type === 'favorites' ? 'item-type-idea' : 'item-type-confirmed';
+
+    // Override label/class if item is archived or completed
+    if (itemStatus === 'archived') {
+        typeLabel = 'Archived';
+        typeClass = 'item-type-archived';
+    } else if (itemStatus === 'completed') {
+        typeLabel = 'Completed';
+        typeClass = 'item-type-completed';
+    }
+
+    // Add status class to section
+    const statusClass = itemStatus !== 'active' ? `item-status-${itemStatus}` : '';
 
     // Generate summary for collapsed state
     const itemSummary = generateItemSummary(record, itemInfo, type);
@@ -1598,80 +2291,134 @@ async function renderItineraryItem(item, index) {
     // Task status button for this item
     const taskStatusButtonHTML = renderTaskStatusButton('item', recordId);
 
+    // Each item is wrapped in its own section container for independent layout
     return `
-        <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}" data-item-name="${escapeHtml(name)}">
-            <div class="item-accordion-header" data-record-id="${recordId}">
-                <div class="item-accordion-title-row">
-                    ${taskStatusButtonHTML}
-                    <h3 class="item-accordion-title">${name}</h3>
-                    ${emojiIndicatorHTML}
-                    <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
-                    <span class="item-accordion-icon"></span>
+        <section class="itinerary-section itinerary-item-section ${statusClass}" data-section="item-${recordId}" data-item-status="${itemStatus}">
+            <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}" data-item-name="${escapeHtml(name)}">
+                <div class="item-accordion-header" data-record-id="${recordId}">
+                    <div class="item-accordion-title-row">
+                        ${taskStatusButtonHTML}
+                        <h3 class="item-accordion-title">${name}</h3>
+                        ${emojiIndicatorHTML}
+                        <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
+                        <span class="item-accordion-icon"></span>
+                    </div>
+                    <p class="item-accordion-summary">${itemSummary}</p>
                 </div>
-                <p class="item-accordion-summary">${itemSummary}</p>
-            </div>
-            <div class="item-accordion-content itinerary-item-clickable">
-                <div class="itinerary-item-content">
-                    ${mediaCarouselHTML}
-                    <div class="itinerary-item-details">
-                        <div class="itinerary-item-price-qty">
-                            <span class="itinerary-item-price">$${price.toFixed(2)}</span>
-                            ${quantity > 1 ? `<span class="itinerary-item-qty">× ${quantity}</span>` : ''}
-                        </div>
-                        ${selectedOptionsHTML}
-                        ${note ? `
-                            <div class="itinerary-item-note">
-                                <strong>Note:</strong> ${note}
+                <div class="item-accordion-content itinerary-item-clickable">
+                    <div class="itinerary-item-content">
+                        ${mediaCarouselHTML}
+                        <div class="itinerary-item-details">
+                            <div class="itinerary-item-price-qty">
+                                <span class="itinerary-item-price">$${price.toFixed(2)}</span>
+                                ${quantity > 1 ? `<span class="itinerary-item-qty">× ${quantity}</span>` : ''}
                             </div>
-                        ` : ''}
-                        <div class="itinerary-item-reactions" data-record-id="${recordId}"></div>
-                        <button class="itinerary-item-expand-btn" data-record-id="${recordId}" title="View full details">
-                            <span class="expand-btn-icon">↗</span>
-                            <span class="expand-btn-text">More Details</span>
-                        </button>
-                    </div>
-                </div>
-                <!-- Component Comments Section -->
-                <div class="component-comments-section" data-component-type="item" data-component-id="${recordId}">
-                    <div class="component-comments-header">
-                        <button class="component-comments-toggle" data-component-id="${recordId}" title="Show comments">
-                            <span class="comments-icon">💬</span>
-                            <span class="comments-count" data-component-id="${recordId}">0</span>
-                            <span class="comments-label">Comments</span>
-                            <span class="comments-toggle-icon">▼</span>
-                        </button>
-                    </div>
-                    <div class="component-comments-body" data-component-id="${recordId}" style="display: none;">
-                        <div class="component-comments-list" data-component-id="${recordId}">
-                            <!-- Comments will be rendered here -->
-                        </div>
-                        <div class="component-comment-input-wrapper">
-                            <input type="text" class="component-comment-input" data-component-id="${recordId}" placeholder="Add a comment..." />
-                            <button class="component-comment-submit" data-component-id="${recordId}" title="Post comment">
-                                <span>→</span>
+                            ${selectedOptionsHTML}
+                            ${note ? `
+                                <div class="itinerary-item-note">
+                                    <strong>Note:</strong> ${note}
+                                </div>
+                            ` : ''}
+                            <div class="itinerary-item-reactions" data-record-id="${recordId}"></div>
+                            <button class="itinerary-item-expand-btn" data-record-id="${recordId}" title="View full details">
+                                <span class="expand-btn-icon">↗</span>
+                                <span class="expand-btn-text">More Details</span>
                             </button>
                         </div>
                     </div>
+                    <!-- Component Comments Section -->
+                    <div class="component-comments-section" data-component-type="item" data-component-id="${recordId}">
+                        <div class="component-comments-header">
+                            <button class="component-comments-toggle" data-component-id="${recordId}" title="Show comments">
+                                <span class="comments-icon">💬</span>
+                                <span class="comments-count" data-component-id="${recordId}">0</span>
+                                <span class="comments-label">Comments</span>
+                                <span class="comments-toggle-icon">▼</span>
+                            </button>
+                        </div>
+                        <div class="component-comments-body" data-component-id="${recordId}" style="display: none;">
+                            <div class="component-comments-list" data-component-id="${recordId}">
+                                <!-- Comments will be rendered here -->
+                            </div>
+                            <div class="component-comment-input-wrapper">
+                                <div class="comment-image-preview" data-component-id="${recordId}" style="display: none;">
+                                    <img class="comment-preview-thumbnail" src="" alt="Preview" />
+                                    <button class="comment-preview-remove" data-component-id="${recordId}" title="Remove image">×</button>
+                                </div>
+                                <div class="comment-input-row">
+                                    <input type="file" class="comment-image-input" data-component-id="${recordId}" accept="image/*" style="display: none;" />
+                                    <button class="comment-image-btn" data-component-id="${recordId}" title="Attach image">
+                                        <span>📷</span>
+                                    </button>
+                                    <input type="text" class="component-comment-input" data-component-id="${recordId}" placeholder="Add a comment..." />
+                                    <button class="component-comment-submit" data-component-id="${recordId}" title="Post comment">
+                                        <span>→</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </article>
+            </article>
+        </section>
     `;
 }
 
 async function renderAllItems() {
     const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
     const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
-    const combinedList = [...locked, ...favorites]; // Confirmed items first, then ideas
+    let combinedList = [...locked, ...favorites]; // Confirmed items first, then ideas
+
+    // Get archived and completed items sets
+    const archivedItems = state.session.archivedItems || new Set();
+    const completedItems = state.session.completedItems || new Set();
+
+    // Add status to each item (active, archived, or completed)
+    combinedList = combinedList.map(item => {
+        let itemStatus = 'active';
+        if (archivedItems.has(item.recordId)) {
+            itemStatus = 'archived';
+        } else if (completedItems.has(item.recordId)) {
+            itemStatus = 'completed';
+        }
+        return { ...item, itemStatus };
+    });
+
+    // Filter based on show/hide toggles
+    combinedList = combinedList.filter(item => {
+        if (item.itemStatus === 'archived' && !showArchivedItems) return false;
+        if (item.itemStatus === 'completed' && !showCompletedItems) return false;
+        return true;
+    });
+
+    // Apply custom ordering if available
+    const customOrder = state.session.planItemOrder || [];
+    if (customOrder.length > 0) {
+        const orderMap = new Map(customOrder.map((id, index) => [id, index]));
+        combinedList.sort((a, b) => {
+            const orderA = orderMap.has(a.recordId) ? orderMap.get(a.recordId) : Infinity;
+            const orderB = orderMap.has(b.recordId) ? orderMap.get(b.recordId) : Infinity;
+            return orderA - orderB;
+        });
+    }
+
+    // Count archived and completed items for toggle visibility
+    const archivedCount = archivedItems.size;
+    const completedCount = completedItems.size;
+
+    // Update toggle buttons visibility
+    updateStatusToggles(archivedCount, completedCount);
 
     if (combinedList.length === 0) {
         // Show recommendations when no items exist
         // All 4 pillars are shown as suggestions since there are no items
         const allCategories = ["Activities", "Food & Drink", "Venues", "Extras"];
         let emptyStateHTML = `
-            <div class="presentation-empty-state">
-                <p class="itinerary-empty-title">Start Building Your Event Plan</p>
-                <p class="itinerary-empty-subtitle">Add items from these categories to create your perfect event:</p>
-                <div class="presentation-suggestions">
+            <section class="itinerary-section itinerary-empty-section" data-section="empty">
+                <div class="presentation-empty-state">
+                    <p class="itinerary-empty-title">Start Building Your Event Plan</p>
+                    <p class="itinerary-empty-subtitle">Add items from these categories to create your perfect event:</p>
+                    <div class="presentation-suggestions">
         `;
 
         allCategories.forEach(cat => {
@@ -1684,8 +2431,9 @@ async function renderAllItems() {
         });
 
         emptyStateHTML += `
+                    </div>
                 </div>
-            </div>
+            </section>
         `;
 
         itineraryItemsListEl.innerHTML = emptyStateHTML;
@@ -1718,6 +2466,330 @@ async function renderAllItems() {
 
     // Update the event-level emoji indicator
     updateEventEmojiIndicator();
+
+    // Initialize drag-and-drop functionality
+    initializeItemDragDrop();
+}
+
+// Load SortableJS dynamically if not already loaded
+async function loadSortableJS() {
+    if (window.Sortable) {
+        return window.Sortable;
+    }
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js';
+        script.onload = () => resolve(window.Sortable);
+        script.onerror = () => reject(new Error('Failed to load SortableJS'));
+        document.head.appendChild(script);
+    });
+}
+
+// Initialize drag-and-drop for plan items
+async function initializeItemDragDrop() {
+    console.log('[Presentation DEBUG] initializeItemDragDrop called, itineraryItemsListEl:', !!itineraryItemsListEl);
+    if (!itineraryItemsListEl) {
+        console.log('[Presentation DEBUG] No itineraryItemsListEl, exiting initializeItemDragDrop');
+        return;
+    }
+
+    // Destroy existing sortable instance if exists
+    if (sortableInstance) {
+        sortableInstance.destroy();
+        sortableInstance = null;
+    }
+
+    try {
+        const Sortable = await loadSortableJS();
+        console.log('[Presentation DEBUG] SortableJS loaded:', !!Sortable);
+
+        sortableInstance = new Sortable(itineraryItemsListEl, {
+            animation: 200,
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            handle: '.itinerary-item-section', // Entire section is draggable
+            delay: 150, // Small delay for touch devices
+            delayOnTouchOnly: true,
+            touchStartThreshold: 5,
+
+            onStart: function(evt) {
+                console.log('[Presentation DEBUG] Drag onStart triggered');
+                isDragging = true;
+                // Start timer to show drag buckets after delay
+                dragDelayTimer = setTimeout(() => {
+                    console.log('[Presentation DEBUG] dragDelayTimer fired, calling showDragBuckets');
+                    showDragBuckets();
+                }, DRAG_DELAY_MS);
+
+                // Add document-level listeners to track drag position
+                document.addEventListener('mousemove', handleDragMove);
+                document.addEventListener('touchmove', handleDragMove, { passive: true });
+            },
+
+            onEnd: function(evt) {
+                console.log('[Presentation DEBUG] Drag onEnd triggered');
+                isDragging = false;
+                clearTimeout(dragDelayTimer);
+
+                // Remove document-level listeners
+                document.removeEventListener('mousemove', handleDragMove);
+                document.removeEventListener('touchmove', handleDragMove);
+
+                // Check if dropped on a bucket
+                const droppedOnBucket = checkBucketDrop(evt.originalEvent, evt.item);
+                console.log('[Presentation DEBUG] droppedOnBucket:', droppedOnBucket);
+                if (droppedOnBucket) {
+                    hideDragBuckets();
+                    return; // Item was moved to bucket, don't update order
+                }
+
+                hideDragBuckets();
+
+                // Update the order in state
+                updateItemOrder();
+            }
+        });
+
+        console.log('[Presentation DEBUG] Sortable instance created');
+        log('Presentation', 'Drag-drop initialized for plan items');
+    } catch (error) {
+        console.error('[Presentation] Failed to initialize drag-drop:', error);
+    }
+}
+
+// Show drag buckets during drag (colorize them)
+function showDragBuckets() {
+    console.log('[Presentation DEBUG] showDragBuckets called, isDragging:', isDragging, 'dragBucketsEl:', !!dragBucketsEl);
+    if (dragBucketsEl && isDragging) {
+        console.log('[Presentation DEBUG] Adding drag-active class to buckets');
+        dragBucketsEl.classList.add('drag-active');
+    }
+}
+
+// Hide drag buckets (decolorize them, but keep visible)
+function hideDragBuckets() {
+    console.log('[Presentation DEBUG] hideDragBuckets called, dragBucketsEl:', !!dragBucketsEl);
+    if (dragBucketsEl) {
+        dragBucketsEl.classList.remove('drag-active');
+        // Remove drag-over from all buckets
+        if (dragBucketArchive) dragBucketArchive.classList.remove('drag-over');
+        if (dragBucketCompleted) dragBucketCompleted.classList.remove('drag-over');
+    }
+}
+
+// Check if pointer is over a bucket and update hover state
+function checkBucketHover(event) {
+    if (!dragBucketsEl || !isDragging) return;
+
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+    // Check archive bucket
+    if (dragBucketArchive) {
+        const archiveRect = dragBucketArchive.getBoundingClientRect();
+        const overArchive = clientX >= archiveRect.left && clientX <= archiveRect.right &&
+                          clientY >= archiveRect.top && clientY <= archiveRect.bottom;
+        dragBucketArchive.classList.toggle('drag-over', overArchive);
+    }
+
+    // Check completed bucket
+    if (dragBucketCompleted) {
+        const completedRect = dragBucketCompleted.getBoundingClientRect();
+        const overCompleted = clientX >= completedRect.left && clientX <= completedRect.right &&
+                             clientY >= completedRect.top && clientY <= completedRect.bottom;
+        dragBucketCompleted.classList.toggle('drag-over', overCompleted);
+    }
+}
+
+// Handle mouse/touch move during drag
+function handleDragMove(event) {
+    checkBucketHover(event);
+}
+
+// Check if item was dropped on a bucket
+function checkBucketDrop(event, item) {
+    console.log('[Presentation DEBUG] checkBucketDrop called, event:', !!event, 'item:', !!item, 'dragBucketsEl:', !!dragBucketsEl);
+    if (!dragBucketsEl) return false;
+
+    const clientX = event?.changedTouches ? event.changedTouches[0].clientX : event?.clientX;
+    const clientY = event?.changedTouches ? event.changedTouches[0].clientY : event?.clientY;
+    console.log('[Presentation DEBUG] Drop coordinates:', { clientX, clientY });
+
+    // Get record ID from the dragged item
+    const itemSection = item.closest('.itinerary-item-section');
+    const article = itemSection?.querySelector('.itinerary-item');
+    const recordId = article?.dataset.recordId;
+    console.log('[Presentation DEBUG] recordId from item:', recordId);
+
+    if (!recordId) return false;
+
+    // Check archive bucket
+    if (dragBucketArchive) {
+        const archiveRect = dragBucketArchive.getBoundingClientRect();
+        console.log('[Presentation DEBUG] Archive bucket rect:', archiveRect);
+        if (clientX >= archiveRect.left && clientX <= archiveRect.right &&
+            clientY >= archiveRect.top && clientY <= archiveRect.bottom) {
+            console.log('[Presentation DEBUG] Dropped on archive bucket!');
+            archiveItem(recordId);
+            return true;
+        }
+    }
+
+    // Check completed bucket
+    if (dragBucketCompleted) {
+        const completedRect = dragBucketCompleted.getBoundingClientRect();
+        console.log('[Presentation DEBUG] Completed bucket rect:', completedRect);
+        if (clientX >= completedRect.left && clientX <= completedRect.right &&
+            clientY >= completedRect.top && clientY <= completedRect.bottom) {
+            console.log('[Presentation DEBUG] Dropped on completed bucket!');
+            completeItem(recordId);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// Archive an item
+async function archiveItem(recordId) {
+    if (!recordId) return;
+
+    // Initialize archivedItems if not exists
+    if (!state.session.archivedItems) {
+        state.session.archivedItems = new Set();
+    }
+
+    // Add to archived items (item stays in its position, just changes status)
+    state.session.archivedItems.add(recordId);
+
+    // Get item name for toast
+    const record = state.records.all.find(r => r.id === recordId);
+    const itemName = record?.fields?.Name || 'Item';
+
+    // Re-render items
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+
+    // Show toast notification
+    showToast(`"${itemName}" archived`, 'info');
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Item ${recordId} archived`);
+}
+
+// Mark an item as completed
+async function completeItem(recordId) {
+    if (!recordId) return;
+
+    // Initialize completedItems if not exists
+    if (!state.session.completedItems) {
+        state.session.completedItems = new Set();
+    }
+
+    // Add to completed items (item stays in its position, just changes status)
+    state.session.completedItems.add(recordId);
+
+    // Get item name for toast
+    const record = state.records.all.find(r => r.id === recordId);
+    const itemName = record?.fields?.Name || 'Item';
+
+    // Re-render items
+    await renderAllItems();
+    generateItemsSummary();
+    updatePresentationHeaderTotal();
+
+    // Show toast notification
+    showToast(`"${itemName}" marked complete`, 'success');
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Item ${recordId} marked completed`);
+}
+
+// Update the status toggle buttons visibility and state
+function updateStatusToggles(archivedCount, completedCount) {
+    const archivedToggle = document.getElementById('presentation-toggle-archived');
+    const completedToggle = document.getElementById('presentation-toggle-completed');
+
+    // Show/hide archived toggle based on whether there are archived items
+    if (archivedToggle) {
+        if (archivedCount > 0) {
+            archivedToggle.style.display = 'inline-flex';
+            archivedToggle.classList.toggle('active', showArchivedItems);
+            const countEl = archivedToggle.querySelector('.toggle-count');
+            if (countEl) countEl.textContent = archivedCount;
+        } else {
+            archivedToggle.style.display = 'none';
+        }
+    }
+
+    // Show/hide completed toggle based on whether there are completed items
+    if (completedToggle) {
+        if (completedCount > 0) {
+            completedToggle.style.display = 'inline-flex';
+            completedToggle.classList.toggle('active', showCompletedItems);
+            const countEl = completedToggle.querySelector('.toggle-count');
+            if (countEl) countEl.textContent = completedCount;
+        } else {
+            completedToggle.style.display = 'none';
+        }
+    }
+}
+
+// Toggle archived items visibility
+async function toggleArchivedItems() {
+    showArchivedItems = !showArchivedItems;
+    await renderAllItems();
+    log('Presentation', `Archived items ${showArchivedItems ? 'shown' : 'hidden'}`);
+}
+
+// Toggle completed items visibility
+async function toggleCompletedItems() {
+    showCompletedItems = !showCompletedItems;
+    await renderAllItems();
+    log('Presentation', `Completed items ${showCompletedItems ? 'shown' : 'hidden'}`);
+}
+
+// Update item order in state after drag reorder
+function updateItemOrder() {
+    if (!itineraryItemsListEl) return;
+
+    // Get all item sections in current DOM order
+    const itemSections = itineraryItemsListEl.querySelectorAll('.itinerary-item-section');
+    const newOrder = [];
+
+    itemSections.forEach(section => {
+        const article = section.querySelector('.itinerary-item');
+        if (article && article.dataset.recordId) {
+            newOrder.push(article.dataset.recordId);
+        }
+    });
+
+    // Update state
+    state.session.planItemOrder = newOrder;
+
+    // Save session
+    triggerSave();
+
+    log('Presentation', `Item order updated: ${newOrder.length} items`);
+}
+
+// Cleanup drag-drop on presentation view close
+function cleanupItemDragDrop() {
+    if (sortableInstance) {
+        sortableInstance.destroy();
+        sortableInstance = null;
+    }
+    isDragging = false;
+    clearTimeout(dragDelayTimer);
+    document.removeEventListener('mousemove', handleDragMove);
+    document.removeEventListener('touchmove', handleDragMove);
+    hideDragBuckets();
 }
 
 // Render the reactions summary section showing component rankings
@@ -2415,12 +3487,41 @@ async function loadTaskDetailComments(overlay, componentType, elementId) {
             let displayContent = fields.Content || '';
             displayContent = displayContent.replace(/^\[PLAN_COMMENT:\w+\]\s*/i, '');
 
+            // Strip out embedded [ATTACHMENTS:...] from display content
+            let attachments = [];
+            const attachmentMatch = displayContent.match(/\[ATTACHMENTS:(.*?)\]$/);
+            if (attachmentMatch) {
+                try {
+                    attachments = JSON.parse(attachmentMatch[1]);
+                    displayContent = displayContent.replace(/\[ATTACHMENTS:.*?\]$/, '').trim();
+                } catch (e) {
+                    console.warn('[TaskStatus] Failed to parse embedded attachments:', e);
+                }
+            }
+
             if (isDeleted) {
                 return `
                     <div class="task-detail-comment deleted" data-comment-id="${comment.id}">
                         <em class="deleted-comment-text">This comment was deleted</em>
                     </div>
                 `;
+            }
+
+            // Build attachments HTML for popup comments
+            let attachmentsHTML = '';
+            if (Array.isArray(attachments) && attachments.length > 0) {
+                attachmentsHTML = '<div class="comment-attachments">';
+                attachments.forEach(attachment => {
+                    if (attachment.type === 'image' && attachment.url) {
+                        const optimizedUrl = applyCloudinaryTransform(attachment.url, 'w_200,h_150,c_limit,f_auto,q_auto');
+                        attachmentsHTML += `
+                            <a href="${escapeHtml(attachment.url)}" target="_blank" class="comment-attachment comment-attachment-image">
+                                <img src="${escapeHtml(optimizedUrl)}" alt="Attached image" loading="lazy" />
+                            </a>
+                        `;
+                    }
+                });
+                attachmentsHTML += '</div>';
             }
 
             return `
@@ -2430,7 +3531,8 @@ async function loadTaskDetailComments(overlay, componentType, elementId) {
                         <span class="comment-time" title="${timestamp.toLocaleString()}">${timeAgo}</span>
                         ${isEdited ? '<span class="comment-edited">(edited)</span>' : ''}
                     </div>
-                    <div class="comment-content">${escapeHtml(displayContent)}</div>
+                    ${displayContent ? `<div class="comment-content">${escapeHtml(displayContent)}</div>` : ''}
+                    ${attachmentsHTML}
                 </div>
             `;
         }).join('');
@@ -3793,6 +4895,44 @@ function toggleItemAccordion(itemElement) {
     log('Presentation', `Item accordion ${isExpanded ? 'collapsed' : 'expanded'} for record ${itemElement.dataset.recordId}`);
 }
 
+// Track the collapsed/expanded state for "toggle all" functionality
+let allItemsCollapsed = false;
+
+// Toggle all item accordions (collapse/expand all)
+function toggleAllItemAccordions() {
+    const itemAccordions = modal?.querySelectorAll('.item-accordion');
+    if (!itemAccordions || itemAccordions.length === 0) return;
+
+    // Determine new state: if currently "all collapsed", expand all; otherwise collapse all
+    const shouldExpand = allItemsCollapsed;
+
+    itemAccordions.forEach(item => {
+        if (shouldExpand) {
+            item.classList.add('expanded');
+        } else {
+            item.classList.remove('expanded');
+        }
+    });
+
+    // Update the state
+    allItemsCollapsed = !shouldExpand;
+
+    // Update button text and icon
+    if (presentationToggleAllBtn) {
+        const textEl = presentationToggleAllBtn.querySelector('.toggle-all-text');
+        if (textEl) {
+            textEl.textContent = allItemsCollapsed ? 'Expand All' : 'Collapse All';
+        }
+        if (allItemsCollapsed) {
+            presentationToggleAllBtn.classList.add('collapsed');
+        } else {
+            presentationToggleAllBtn.classList.remove('collapsed');
+        }
+    }
+
+    log('Presentation', `All item accordions ${shouldExpand ? 'expanded' : 'collapsed'}`);
+}
+
 // Handle item accordion header clicks
 function handleItemAccordionClick(e) {
     // Check if clicking on the item accordion header specifically
@@ -3888,6 +5028,16 @@ function initializeAccordions() {
     generateHeaderSummary();
     generateItemsSummary();
 
+    // Reset the toggle all button state (all items start expanded)
+    allItemsCollapsed = false;
+    if (presentationToggleAllBtn) {
+        const textEl = presentationToggleAllBtn.querySelector('.toggle-all-text');
+        if (textEl) {
+            textEl.textContent = 'Collapse All';
+        }
+        presentationToggleAllBtn.classList.remove('collapsed');
+    }
+
     // console.log('[Accordion DEBUG] initializeAccordions completed');
 }
 
@@ -3915,6 +5065,61 @@ function handleThumbnailClick(e) {
         carousel.querySelectorAll('.itinerary-thumbnail').forEach((thumb, i) => {
             thumb.classList.toggle('active', i === index);
         });
+    }
+}
+
+/**
+ * Add an image to an item's image carousel.
+ * This is called when a user uploads an image via a comment.
+ * @param {string} itemId - The item/component ID
+ * @param {string} imageUrl - The URL of the image to add
+ */
+function addImageToItemCarousel(itemId, imageUrl) {
+    console.log('[CommentImage DEBUG] addImageToItemCarousel called for:', itemId, 'url:', imageUrl?.substring(0, 50) + '...');
+
+    if (!itemId || !imageUrl) {
+        console.log('[CommentImage DEBUG] Missing itemId or imageUrl');
+        return;
+    }
+
+    // Get or initialize the image cache for this item
+    if (!itemImagesCache.has(itemId)) {
+        // Initialize cache if it doesn't exist (e.g., for manual items with no initial images)
+        itemImagesCache.set(itemId, { images: [], currentIndex: 0 });
+        console.log('[CommentImage DEBUG] Initialized image cache for item:', itemId);
+    }
+
+    const cached = itemImagesCache.get(itemId);
+
+    // Check if image already exists in the cache (avoid duplicates)
+    if (cached.images.includes(imageUrl)) {
+        console.log('[CommentImage DEBUG] Image already in carousel, skipping');
+        return;
+    }
+
+    // Add the image to the cache
+    cached.images.push(imageUrl);
+    console.log('[CommentImage DEBUG] Added image to cache. Total images:', cached.images.length);
+
+    // Update the carousel in the DOM
+    const carousel = document.querySelector(`.itinerary-media-carousel[data-record-id="${itemId}"]`);
+    const itemContainer = document.querySelector(`.itinerary-item[data-record-id="${itemId}"]`);
+
+    if (carousel) {
+        // Re-render the carousel with the new image
+        const newCarouselHTML = createMediaCarousel(cached.images, itemId);
+        carousel.outerHTML = newCarouselHTML;
+        console.log('[CommentImage DEBUG] Updated carousel with new image');
+    } else if (itemContainer) {
+        // If there was no carousel (e.g., item had no images), create one
+        const noImagesDiv = itemContainer.querySelector('.itinerary-item-no-images');
+        if (noImagesDiv) {
+            const newCarouselHTML = createMediaCarousel(cached.images, itemId);
+            noImagesDiv.outerHTML = newCarouselHTML;
+            console.log('[CommentImage DEBUG] Created new carousel replacing "no images" placeholder');
+        }
+    } else {
+        console.log('[CommentImage DEBUG] No carousel element found for item:', itemId);
     }
 }
 
@@ -4085,6 +5290,31 @@ function handleComponentCommentsClick(e) {
         return;
     }
 
+    // Handle image button clicks (trigger file input)
+    const imageBtn = e.target.closest('.comment-image-btn');
+    if (imageBtn) {
+        e.stopPropagation();
+        const componentId = imageBtn.dataset.componentId;
+        console.log('[CommentImage DEBUG] Camera button clicked for componentId:', componentId);
+        const fileInput = document.querySelector(`.comment-image-input[data-component-id="${componentId}"]`);
+        console.log('[CommentImage DEBUG] fileInput found:', !!fileInput);
+        if (fileInput) {
+            fileInput.click();
+            console.log('[CommentImage DEBUG] fileInput.click() triggered');
+        }
+        return;
+    }
+
+    // Handle image preview remove button
+    const removeBtn = e.target.closest('.comment-preview-remove');
+    if (removeBtn) {
+        e.stopPropagation();
+        const componentId = removeBtn.dataset.componentId;
+        console.log('[CommentImage DEBUG] Remove button clicked for componentId:', componentId);
+        clearCommentImagePreview(componentId);
+        return;
+    }
+
     // Handle comment action buttons (edit, delete, react)
     const actionBtn = e.target.closest('.comment-action-btn');
     if (actionBtn) {
@@ -4119,6 +5349,103 @@ function handleComponentCommentsKeydown(e) {
             const componentId = input.dataset.componentId;
             submitComponentComment(componentId);
         }
+    }
+}
+
+/**
+ * Handle file input change for comment image attachments
+ */
+function handleCommentImageInputChange(e) {
+    const fileInput = e.target;
+    if (!fileInput.classList.contains('comment-image-input')) return;
+
+    const componentId = fileInput.dataset.componentId;
+    const file = fileInput.files?.[0];
+
+    console.log('[CommentImage DEBUG] File input change triggered');
+    console.log('[CommentImage DEBUG] componentId:', componentId);
+    console.log('[CommentImage DEBUG] file:', file ? { name: file.name, type: file.type, size: file.size } : null);
+
+    if (!file) {
+        console.log('[CommentImage DEBUG] No file selected, returning');
+        return;
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        console.log('[CommentImage DEBUG] Invalid file type:', file.type);
+        showToast('Please select an image file', 'error');
+        fileInput.value = '';
+        return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+        console.log('[CommentImage DEBUG] File too large:', file.size);
+        showToast('Image must be less than 10MB', 'error');
+        fileInput.value = '';
+        return;
+    }
+
+    console.log('[CommentImage DEBUG] File validation passed, creating preview');
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        console.log('[CommentImage DEBUG] FileReader onload triggered');
+        const previewContainer = document.querySelector(`.comment-image-preview[data-component-id="${componentId}"]`);
+        const thumbnail = previewContainer?.querySelector('.comment-preview-thumbnail');
+        const removeBtn = previewContainer?.querySelector('.comment-preview-remove');
+
+        console.log('[CommentImage DEBUG] previewContainer found:', !!previewContainer);
+        console.log('[CommentImage DEBUG] thumbnail found:', !!thumbnail);
+        console.log('[CommentImage DEBUG] removeBtn found:', !!removeBtn);
+
+        if (previewContainer && thumbnail) {
+            thumbnail.src = event.target.result;
+            previewContainer.style.display = 'flex';
+
+            console.log('[CommentImage DEBUG] Preview displayed');
+            console.log('[CommentImage DEBUG] previewContainer.style.display:', previewContainer.style.display);
+            console.log('[CommentImage DEBUG] previewContainer.classList:', Array.from(previewContainer.classList));
+            console.log('[CommentImage DEBUG] thumbnail.naturalWidth:', thumbnail.naturalWidth);
+            console.log('[CommentImage DEBUG] thumbnail.naturalHeight:', thumbnail.naturalHeight);
+            console.log('[CommentImage DEBUG] thumbnail.offsetWidth:', thumbnail.offsetWidth);
+            console.log('[CommentImage DEBUG] thumbnail.offsetHeight:', thumbnail.offsetHeight);
+            console.log('[CommentImage DEBUG] previewContainer computed style:', window.getComputedStyle(previewContainer).cssText.substring(0, 200));
+            console.log('[CommentImage DEBUG] thumbnail computed style:', window.getComputedStyle(thumbnail).cssText.substring(0, 200));
+        } else {
+            console.log('[CommentImage DEBUG] ❌ Could not find previewContainer or thumbnail');
+        }
+    };
+    reader.onerror = (error) => {
+        console.log('[CommentImage DEBUG] ❌ FileReader error:', error);
+    };
+    reader.readAsDataURL(file);
+}
+
+/**
+ * Clear the comment image preview and file input
+ */
+function clearCommentImagePreview(componentId) {
+    console.log('[CommentImage DEBUG] clearCommentImagePreview called for componentId:', componentId);
+    const fileInput = document.querySelector(`.comment-image-input[data-component-id="${componentId}"]`);
+    const previewContainer = document.querySelector(`.comment-image-preview[data-component-id="${componentId}"]`);
+    const thumbnail = previewContainer?.querySelector('.comment-preview-thumbnail');
+
+    console.log('[CommentImage DEBUG] Found elements - fileInput:', !!fileInput, 'previewContainer:', !!previewContainer, 'thumbnail:', !!thumbnail);
+
+    if (fileInput) {
+        fileInput.value = '';
+        console.log('[CommentImage DEBUG] File input cleared');
+    }
+    if (previewContainer) {
+        previewContainer.style.display = 'none';
+        console.log('[CommentImage DEBUG] Preview container hidden');
+    }
+    if (thumbnail) {
+        thumbnail.src = '';
+        console.log('[CommentImage DEBUG] Thumbnail src cleared');
     }
 }
 
@@ -4188,6 +5515,10 @@ async function loadComponentComments(componentId) {
         // Cache comments
         componentCommentsCache.set(cacheKey, comments);
 
+        // Extract images from comments and add to carousel
+        // This ensures images from previously posted comments appear in the item's carousel
+        extractAndAddCommentImages(componentId, comments);
+
         // Render comments
         renderComponentComments(componentId, comments);
 
@@ -4199,6 +5530,44 @@ async function loadComponentComments(componentId) {
         console.log('[ComponentComment DEBUG] ❌ Error loading comments:', error);
         log('Presentation', `Error loading comments: ${error.message}`);
         commentsList.innerHTML = '<div class="comments-error">Failed to load comments</div>';
+    }
+}
+
+/**
+ * Extract images from comments and add them to the item's carousel.
+ * This ensures images uploaded via comments appear in the item's image gallery.
+ * @param {string} componentId - The item/component ID
+ * @param {Array} comments - Array of comment records
+ */
+function extractAndAddCommentImages(componentId, comments) {
+    if (!comments || comments.length === 0) return;
+
+    let imagesAdded = 0;
+
+    comments.forEach(comment => {
+        const content = comment.fields?.Content || '';
+
+        // Parse attachments from Content field (embedded as [ATTACHMENTS:...])
+        const attachmentMatch = content.match(/\[ATTACHMENTS:(.*?)\]$/);
+        if (attachmentMatch) {
+            try {
+                const attachments = JSON.parse(attachmentMatch[1]);
+                if (Array.isArray(attachments)) {
+                    attachments.forEach(attachment => {
+                        if (attachment.type === 'image' && attachment.url) {
+                            addImageToItemCarousel(componentId, attachment.url);
+                            imagesAdded++;
+                        }
+                    });
+                }
+            } catch (e) {
+                console.warn('[ComponentComment] Failed to parse attachments for carousel:', e);
+            }
+        }
+    });
+
+    if (imagesAdded > 0) {
+        console.log('[ComponentComment DEBUG] Extracted and added', imagesAdded, 'images from comments to carousel for:', componentId);
     }
 }
 
@@ -4288,21 +5657,66 @@ function renderComponentComments(componentId, comments) {
             reactionsHTML += '</div>';
         }
 
+        // Parse attachments from Content field (embedded as [ATTACHMENTS:...])
+        // This is because the Messages table doesn't have a separate Attachments field
+        let displayContent = fields.Content || '';
+        let attachments = [];
+
+        // Strip out [PLAN_COMMENT:xxx] or [PLAN_COMMENT:item:componentId] prefix from display content
+        // The pattern now handles both formats: [PLAN_COMMENT:type] and [PLAN_COMMENT:item:manual-presentation-xxx]
+        displayContent = displayContent.replace(/^\[PLAN_COMMENT:[^\]]+\]\s*/i, '');
+
+        // Check for embedded attachments in content
+        const attachmentMatch = displayContent.match(/\[ATTACHMENTS:(.*?)\]$/);
+        if (attachmentMatch) {
+            try {
+                attachments = JSON.parse(attachmentMatch[1]);
+                // Remove the attachment marker from display content
+                displayContent = displayContent.replace(/\[ATTACHMENTS:.*?\]$/, '').trim();
+            } catch (e) {
+                console.warn('[ComponentComment] Failed to parse embedded attachments:', e);
+            }
+        }
+
+        // Build attachments HTML
+        let attachmentsHTML = '';
+        if (Array.isArray(attachments) && attachments.length > 0) {
+            attachmentsHTML = '<div class="comment-attachments">';
+            attachments.forEach(attachment => {
+                if (attachment.type === 'image' && attachment.url) {
+                    // Apply Cloudinary transformations for optimized display
+                    const optimizedUrl = applyCloudinaryTransform(attachment.url, 'w_400,h_300,c_limit,f_auto,q_auto');
+                    attachmentsHTML += `
+                        <a href="${escapeHtml(attachment.url)}" target="_blank" class="comment-attachment comment-attachment-image">
+                            <img src="${escapeHtml(optimizedUrl)}" alt="Attached image" loading="lazy" />
+                        </a>
+                    `;
+                }
+            });
+            attachmentsHTML += '</div>';
+        }
+
         // Get reply count for parent comments
         const replies = repliesByParent.get(comment.id) || [];
         const replyCountHtml = !isReply && replies.length > 0
             ? `<span class="comment-reply-count">${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}</span>`
             : '';
 
+        // Only show content div if there's actual text content (after removing attachment marker)
+        const contentHTML = displayContent && displayContent.trim()
+            ? `<div class="comment-content">${escapeHtml(displayContent)}</div>`
+            : '';
+
         return `
-            <div class="component-comment ${isOwn ? 'own-comment' : ''} ${isReply ? 'comment-reply' : ''}" data-comment-id="${comment.id}" data-sender-name="${escapeHtml(fields.SenderName)}" data-content="${escapeHtml(fields.Content)}">
+            <div class="component-comment ${isOwn ? 'own-comment' : ''} ${isReply ? 'comment-reply' : ''}" data-comment-id="${comment.id}" data-sender-name="${escapeHtml(fields.SenderName)}" data-content="${escapeHtml(displayContent || '')}">
                 <div class="comment-header">
                     <span class="comment-author">${escapeHtml(fields.SenderName)}${isOwn ? ' (You)' : ''}</span>
                     <span class="comment-time" title="${timestamp.toLocaleString()}">${timeAgo}</span>
                     ${isEdited ? '<span class="comment-edited">(edited)</span>' : ''}
                     ${replyCountHtml}
                 </div>
-                <div class="comment-content">${escapeHtml(fields.Content)}</div>
+                ${contentHTML}
+                ${attachmentsHTML}
                 ${reactionsHTML}
                 <div class="comment-actions">
                     <button class="comment-action-btn" data-action="reply" title="Reply to this comment">↩</button>
@@ -4365,8 +5779,13 @@ async function submitComponentComment(componentId) {
     let content = input.value.trim();
     console.log('[ComponentComment DEBUG] Content:', content?.substring(0, 50) + (content?.length > 50 ? '...' : ''));
 
-    if (!content) {
-        console.log('[ComponentComment DEBUG] ❌ Empty content - aborting');
+    // Check for attached image
+    const fileInput = document.querySelector(`.comment-image-input[data-component-id="${componentId}"]`);
+    const hasImage = fileInput?.files?.[0];
+
+    // Require either content or image
+    if (!content && !hasImage) {
+        console.log('[ComponentComment DEBUG] ❌ Empty content and no image - aborting');
         return;
     }
 
@@ -4393,9 +5812,67 @@ async function submitComponentComment(componentId) {
     // Disable input while submitting
     input.disabled = true;
     const submitBtn = document.querySelector(`.component-comment-submit[data-component-id="${componentId}"]`);
+    const imageBtn = document.querySelector(`.comment-image-btn[data-component-id="${componentId}"]`);
     if (submitBtn) submitBtn.disabled = true;
+    if (imageBtn) imageBtn.disabled = true;
+
+    // Show loading state on input wrapper
+    const inputWrapper = input.closest('.component-comment-input-wrapper');
+    if (inputWrapper) inputWrapper.classList.add('uploading');
+
+    let attachments = [];
 
     try {
+        // Upload image if attached
+        if (hasImage) {
+            console.log('[ComponentComment DEBUG] Uploading attached image...');
+            const file = fileInput.files[0];
+
+            // Convert file to base64
+            const base64Data = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+
+            // Upload to Cloudinary via serverless function
+            const uploadResponse = await fetch('/.netlify/functions/cloudinary-upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    imageData: base64Data,
+                    sessionId: sessionId,
+                    itemId: componentId
+                })
+            });
+
+            if (!uploadResponse.ok) {
+                // Try to parse JSON error, but handle plain text errors gracefully
+                let errorMessage = 'Image upload failed';
+                const responseText = await uploadResponse.text();
+                try {
+                    const errorData = JSON.parse(responseText);
+                    errorMessage = errorData.error || errorData.message || errorMessage;
+                } catch (parseErr) {
+                    // Response wasn't JSON, use the text or status as the error
+                    // Netlify returns "Internal Error. ID: xxx" for crashed functions
+                    if (responseText.startsWith('Internal Error')) {
+                        errorMessage = 'Image upload service error. Please try again or use a smaller image.';
+                    } else {
+                        errorMessage = responseText || `Upload failed with status ${uploadResponse.status}`;
+                    }
+                }
+                console.error('[ComponentComment DEBUG] Upload error:', errorMessage);
+                throw new Error(errorMessage);
+            }
+
+            const uploadResult = await uploadResponse.json();
+            console.log('[ComponentComment DEBUG] Image uploaded:', uploadResult.secure_url);
+
+            attachments = [{ url: uploadResult.secure_url, type: 'image' }];
+        }
+
         console.log('[ComponentComment DEBUG] Calling api.postComponentComment...');
         // Post comment via API with parent comment ID if this is a reply
         const newComment = await api.postComponentComment(
@@ -4405,7 +5882,8 @@ async function submitComponentComment(componentId) {
             currentUser.id,
             currentUser.name,
             content,
-            parentCommentId
+            parentCommentId,
+            attachments
         );
         console.log('[ComponentComment DEBUG] postComponentComment result:', newComment ? 'SUCCESS (id: ' + newComment.id + ')' : 'FAILED');
 
@@ -4413,6 +5891,18 @@ async function submitComponentComment(componentId) {
             // Clear input and reply state
             input.value = '';
             input.placeholder = 'Add a comment...';
+
+            // Clear image preview if an image was attached
+            clearCommentImagePreview(componentId);
+
+            // If an image was attached, add it to the item's image carousel
+            if (attachments.length > 0) {
+                attachments.forEach(attachment => {
+                    if (attachment.type === 'image' && attachment.url) {
+                        addImageToItemCarousel(componentId, attachment.url);
+                    }
+                });
+            }
 
             // Clear reply state if this was a reply
             if (isReply) {
@@ -4463,14 +5953,18 @@ async function submitComponentComment(componentId) {
             log('Presentation', `Comment posted to component ${componentId}`);
         } else {
             console.log('[ComponentComment DEBUG] ❌ postComponentComment returned null/false');
+            showToast('Failed to post comment', 'error');
         }
     } catch (error) {
         console.log('[ComponentComment DEBUG] ❌ Exception:', error);
         log('Presentation', `Error posting comment: ${error.message}`);
+        showToast(error.message || 'Failed to post comment', 'error');
     } finally {
-        // Re-enable input
+        // Re-enable inputs and remove loading state
         input.disabled = false;
         if (submitBtn) submitBtn.disabled = false;
+        if (imageBtn) imageBtn.disabled = false;
+        if (inputWrapper) inputWrapper.classList.remove('uploading');
         input.focus();
     }
 }
@@ -5427,15 +6921,39 @@ async function loadAllCommentCounts() {
         const allComments = await api.fetchAllComponentComments(sessionId);
         console.log('[ComponentComment DEBUG] fetchAllComponentComments returned:', allComments?.length, 'comments');
 
-        // Group by componentId (from Item Link field) and count
+        // Group by componentId and count
+        // Also collect comments by component for image extraction
         const countsByComponent = new Map();
+        const commentsByComponent = new Map();
+
         allComments.forEach(comment => {
-            // Item Link is an array of record IDs
+            let componentId = null;
+
+            // Check for Item Link field (regular items starting with 'rec')
             const itemLinks = comment.fields['Item Link'];
             if (itemLinks && itemLinks.length > 0) {
-                const componentId = itemLinks[0]; // Get the first linked item ID
+                componentId = itemLinks[0]; // Get the first linked item ID
+            }
+
+            // Check for manual items via content prefix [PLAN_COMMENT:item:componentId]
+            if (!componentId) {
+                const content = comment.fields?.Content || '';
+                const manualItemMatch = content.match(/^\[PLAN_COMMENT:item:(manual-presentation-\d+)\]/);
+                if (manualItemMatch) {
+                    componentId = manualItemMatch[1];
+                }
+            }
+
+            if (componentId) {
+                // Update count
                 const current = countsByComponent.get(componentId) || 0;
                 countsByComponent.set(componentId, current + 1);
+
+                // Collect comments for image extraction
+                if (!commentsByComponent.has(componentId)) {
+                    commentsByComponent.set(componentId, []);
+                }
+                commentsByComponent.get(componentId).push(comment);
             }
         });
 
@@ -5444,6 +6962,11 @@ async function loadAllCommentCounts() {
         // Update all count badges
         countsByComponent.forEach((count, componentId) => {
             updateCommentCount(componentId, count);
+        });
+
+        // Extract images from comments and add to carousels
+        commentsByComponent.forEach((comments, componentId) => {
+            extractAndAddCommentImages(componentId, comments);
         });
 
         console.log('[ComponentComment DEBUG] ✅ Updated badges for', countsByComponent.size, 'components');
@@ -5550,6 +7073,9 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Render presentation header (copies logo and title from main header)
     renderPresentationHeader();
 
+    // Initialize click handler for sentiment popup on emoji indicator
+    initializeEventEmojiClickHandler();
+
     // Update the running total cost in the header
     updatePresentationHeaderTotal();
 
@@ -5572,6 +7098,46 @@ export async function showPresentationView(listType, startRecordId = null) {
     document.body.classList.remove('presentation-loading');
     document.documentElement.classList.remove('presentation-loading');
     document.addEventListener('keydown', handleKeyDown);
+
+    // Show drag buckets (grayed out initially, colorize on drag)
+    if (dragBucketsEl) {
+        console.log('[Presentation DEBUG] Showing drag buckets (grayed out)');
+        dragBucketsEl.classList.add('buckets-shown');
+        // Debug: Log the bucket element state after adding class
+        const computedStyle = window.getComputedStyle(dragBucketsEl);
+        console.log('[Presentation DEBUG] Bucket container after adding buckets-shown:', {
+            classList: Array.from(dragBucketsEl.classList),
+            display: computedStyle.display,
+            visibility: computedStyle.visibility,
+            opacity: computedStyle.opacity,
+            zIndex: computedStyle.zIndex,
+            position: computedStyle.position,
+            boundingRect: dragBucketsEl.getBoundingClientRect()
+        });
+        // Debug: Check individual buckets
+        if (dragBucketArchive) {
+            const archiveStyle = window.getComputedStyle(dragBucketArchive);
+            console.log('[Presentation DEBUG] Archive bucket:', {
+                display: archiveStyle.display,
+                opacity: archiveStyle.opacity,
+                left: archiveStyle.left,
+                position: archiveStyle.position,
+                boundingRect: dragBucketArchive.getBoundingClientRect()
+            });
+        }
+        if (dragBucketCompleted) {
+            const completedStyle = window.getComputedStyle(dragBucketCompleted);
+            console.log('[Presentation DEBUG] Completed bucket:', {
+                display: completedStyle.display,
+                opacity: completedStyle.opacity,
+                right: completedStyle.right,
+                position: completedStyle.position,
+                boundingRect: dragBucketCompleted.getBoundingClientRect()
+            });
+        }
+    } else {
+        console.log('[Presentation DEBUG] dragBucketsEl not found when opening modal');
+    }
 
     // Start the background animation
     startPresentationBackgroundAnimation();
@@ -5604,6 +7170,16 @@ export function hidePresentationView() {
 
     // Hide collaborators modal if open
     hideCollaboratorsModal();
+
+    // Cleanup drag-drop functionality
+    cleanupItemDragDrop();
+
+    // Hide drag buckets
+    if (dragBucketsEl) {
+        console.log('[Presentation DEBUG] Hiding drag buckets');
+        dragBucketsEl.classList.remove('buckets-shown');
+        dragBucketsEl.classList.remove('drag-active');
+    }
 
     modal.classList.remove('active');
     modal.style.display = 'none';
@@ -5747,6 +7323,7 @@ export function setupPresentationEventListeners() {
     console.log('[Events DEBUG] Adding handleComponentCommentsClick listener to itineraryItemsListEl');
     itineraryItemsListEl.addEventListener('click', handleComponentCommentsClick);
     itineraryItemsListEl.addEventListener('keydown', handleComponentCommentsKeydown);
+    itineraryItemsListEl.addEventListener('change', handleCommentImageInputChange);
 
     // Handle task status button clicks on items
     console.log('[Events DEBUG] Adding handleTaskStatusClick listener to itineraryItemsListEl:', itineraryItemsListEl);
@@ -5822,6 +7399,23 @@ function setupSearchModalEventListeners() {
     // Add button opens search modal
     if (presentationAddBtn) {
         presentationAddBtn.addEventListener('click', openSearchModal);
+    }
+
+    // Toggle all button collapses/expands all item accordions
+    if (presentationToggleAllBtn) {
+        presentationToggleAllBtn.addEventListener('click', toggleAllItemAccordions);
+    }
+
+    // Toggle archived items button
+    const archivedToggle = document.getElementById('presentation-toggle-archived');
+    if (archivedToggle) {
+        archivedToggle.addEventListener('click', toggleArchivedItems);
+    }
+
+    // Toggle completed items button
+    const completedToggle = document.getElementById('presentation-toggle-completed');
+    if (completedToggle) {
+        completedToggle.addEventListener('click', toggleCompletedItems);
     }
 
     // Close button
@@ -6170,6 +7764,8 @@ async function performPresentationSearch(searchTerm) {
                     Phone: phone,
                     Email: email,
                     Hours: availability,
+                    // AI confidence score (0.0-1.0)
+                    '_aiConfidence': source.Confidence || source.confidence || null,
                     // Store website URL for image scraping (to match events.js structure)
                     '_aiWebsite': website || null,
                     // Null fields to match events.js structure
@@ -6206,15 +7802,21 @@ async function performPresentationSearch(searchTerm) {
             presentationSearchResults.appendChild(aiSection);
         }
 
-        // Show no results message if nothing found
+        // Always add manual add option after AI results
+        const manualAddSection = createPresentationManualAddOption(searchTerm);
+        presentationSearchResults.appendChild(manualAddSection);
+
+        // Show no results message if nothing found (but keep manual add option)
         if (catalogMatches.length === 0 && aiRecords.length === 0) {
-            presentationSearchResults.innerHTML = `
-                <div class="presentation-no-results">
-                    <div class="presentation-no-results-icon">🔍</div>
-                    <p class="presentation-no-results-text">No results found for "${searchTerm}"</p>
-                    <p class="presentation-no-results-hint">Try a different search term or browse categories</p>
-                </div>
+            // Insert no results message before the manual add section
+            const noResultsDiv = document.createElement('div');
+            noResultsDiv.className = 'presentation-no-results';
+            noResultsDiv.innerHTML = `
+                <div class="presentation-no-results-icon">🔍</div>
+                <p class="presentation-no-results-text">No results found for "${searchTerm}"</p>
+                <p class="presentation-no-results-hint">Try a different search term, browse categories, or add a custom item below</p>
             `;
+            presentationSearchResults.insertBefore(noResultsDiv, manualAddSection);
         }
 
     } catch (error) {
@@ -6226,17 +7828,145 @@ async function performPresentationSearch(searchTerm) {
         log('Presentation', `AI search error: ${error.message}`);
         aiLoadingSection.remove();
 
-        // Show error state if no catalog matches either
+        // Add manual add option even on error
+        const manualAddSection = createPresentationManualAddOption(searchTerm);
+        presentationSearchResults.appendChild(manualAddSection);
+
+        // Show error state if no catalog matches either (but keep manual add option)
         if (catalogMatches.length === 0) {
-            presentationSearchResults.innerHTML = `
-                <div class="presentation-no-results">
-                    <div class="presentation-no-results-icon">⚠️</div>
-                    <p class="presentation-no-results-text">Search encountered an issue</p>
-                    <p class="presentation-no-results-hint">Please try again or browse categories</p>
-                </div>
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'presentation-no-results';
+            errorDiv.innerHTML = `
+                <div class="presentation-no-results-icon">⚠️</div>
+                <p class="presentation-no-results-text">Search encountered an issue</p>
+                <p class="presentation-no-results-hint">Please try again, browse categories, or add a custom item below</p>
             `;
+            presentationSearchResults.insertBefore(errorDiv, manualAddSection);
         }
     }
+}
+
+/**
+ * Creates a manual add item section for the presentation search modal
+ * Allows users to add a custom item with the search term as the default name
+ * @param {string} searchTerm - The search term to use as default item name
+ * @returns {HTMLElement} The manual add section element
+ */
+function createPresentationManualAddOption(searchTerm) {
+    const section = document.createElement('div');
+    section.className = 'presentation-manual-add-section';
+    section.innerHTML = `
+        <div class="presentation-manual-add-header">
+            <span class="presentation-manual-add-icon">+</span>
+            <span class="presentation-manual-add-title">Can't find what you're looking for?</span>
+        </div>
+        <div class="presentation-manual-add-content">
+            <p class="presentation-manual-add-description">Add a custom item to your plan:</p>
+            <div class="presentation-manual-add-form">
+                <input type="text" class="presentation-manual-add-input" value="${searchTerm.replace(/"/g, '&quot;')}" placeholder="Item name">
+                <button class="presentation-manual-add-btn">Add to Plan</button>
+            </div>
+        </div>
+    `;
+
+    // Attach click handler for the add button
+    const addBtn = section.querySelector('.presentation-manual-add-btn');
+    const nameInput = section.querySelector('.presentation-manual-add-input');
+
+    addBtn.addEventListener('click', async () => {
+        const itemName = nameInput.value.trim();
+        if (!itemName) {
+            nameInput.focus();
+            return;
+        }
+
+        addBtn.disabled = true;
+        addBtn.textContent = 'Adding...';
+
+        try {
+            // Create a manual item record
+            const timestamp = Date.now();
+            const manualId = `manual-presentation-${timestamp}`;
+
+            const manualRecord = {
+                id: manualId,
+                fields: {
+                    Name: itemName,
+                    Description: `Manually added item from presentation search: "${searchTerm}"`,
+                    Price: 0,
+                    ServiceType: 'Custom Item',
+                    'Item Type': 'Bookable Item',
+                    Status: 'Available',
+                    'Pricing Type': 'per person',
+                    Stores: [state.ui.activeShopId],
+                    Rankings: JSON.stringify({
+                        "profileSource": "manual_presentation_add",
+                        "Tags": [searchTerm.toLowerCase(), "manual-add", "custom"]
+                    }),
+                    'Location Details': null,
+                    'Additional Information': null,
+                    Options: null,
+                    'Parent Item': null,
+                    'Headcount min': null,
+                    'Media Tags': null,
+                    'Curated Images': null,
+                    Subcategories: null,
+                    'iCal URL': null,
+                    'Lead Time (days)': null,
+                    RSVPs: null,
+                    Date: null,
+                    'Chat Enabled': false,
+                    Duration: null,
+                    Capacity: null
+                },
+                isManual: true
+            };
+
+            // Add to records
+            state.records.all.push(manualRecord);
+
+            // Add to plan (cart.items as idea first)
+            state.cart.items.set(manualId, {
+                quantity: 1,
+                selectedOptionIndex: 0,
+                selections: {},
+                note: `Manually added from presentation search: "${searchTerm}"`
+            });
+
+            // Trigger save to persist changes
+            await triggerSave();
+
+            // Update the presentation view items list
+            await renderAllItems();
+
+            // Update the catalog view's event plan panel
+            await updateEventPlanSection();
+
+            // Sync plan state across all views
+            syncPlanState('presentation', 'itemAdded', { recordId: manualId, itemName: itemName });
+
+            // Update button state
+            addBtn.textContent = 'Added!';
+            addBtn.classList.add('added');
+            nameInput.disabled = true;
+
+            log('Presentation', `Manually added item: ${manualId} - "${itemName}"`);
+
+        } catch (error) {
+            log('Presentation', `Error adding manual item: ${error.message}`);
+            addBtn.disabled = false;
+            addBtn.textContent = 'Add to Plan';
+        }
+    });
+
+    // Allow Enter key to submit
+    nameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            addBtn.click();
+        }
+    });
+
+    return section;
 }
 
 /**

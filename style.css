@@ -4152,7 +4152,9 @@ body.presentation-active #wtf-plans-panel-overlay {
 .itinerary-items-list {
     display: flex;
     flex-direction: column;
-    gap: 25px;
+    gap: 20px;
+    max-width: 800px;
+    margin: 0 auto;
 }
 
 .itinerary-loading,
@@ -4348,6 +4350,16 @@ body.presentation-active #wtf-plans-panel-overlay {
 .item-type-confirmed {
     background: #d4edda;
     color: #155724;
+}
+
+.item-type-archived {
+    background: #868e96;
+    color: #fff;
+}
+
+.item-type-completed {
+    background: #28a745;
+    color: #fff;
 }
 
 .itinerary-item-price-qty {
@@ -4659,6 +4671,9 @@ body.presentation-active #wtf-plans-panel-overlay {
     background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
     border-radius: 16px;
     border: 1px solid rgba(102, 126, 234, 0.2);
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .reactions-summary-empty {
@@ -4973,6 +4988,528 @@ body.presentation-active #wtf-plans-panel-overlay {
     }
 }
 
+/* ============================================
+   Sentiment Analysis Popup Styles
+   ============================================ */
+
+/* Popup Modal Container */
+.sentiment-popup-modal {
+    background: white;
+    border-radius: 16px;
+    max-width: 600px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: sentimentPopupIn 0.3s ease-out;
+}
+
+@keyframes sentimentPopupIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Popup Header */
+.sentiment-popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #eee;
+    position: sticky;
+    top: 0;
+    background: white;
+    border-radius: 16px 16px 0 0;
+    z-index: 1;
+}
+
+.sentiment-popup-title {
+    margin: 0;
+    font-size: 1.4em;
+    font-weight: 700;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.sentiment-popup-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: #f5f5f5;
+    border-radius: 50%;
+    font-size: 1.5em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    color: #666;
+}
+
+.sentiment-popup-close:hover {
+    background: #e0e0e0;
+    transform: scale(1.1);
+}
+
+/* Popup Content */
+.sentiment-popup-content {
+    padding: 24px;
+}
+
+/* Empty State */
+.sentiment-popup-empty {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.sentiment-popup-empty .empty-icon {
+    font-size: 3em;
+    display: block;
+    margin-bottom: 16px;
+}
+
+.sentiment-popup-empty h3 {
+    margin: 0 0 10px;
+    color: #333;
+}
+
+.sentiment-popup-empty p {
+    margin: 0 0 8px;
+    color: #666;
+}
+
+.sentiment-popup-empty .empty-hint {
+    font-size: 0.85em;
+    color: #999;
+}
+
+/* Overall Sentiment Banner */
+.sentiment-overall-banner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+.sentiment-overall-banner.very-positive,
+.sentiment-overall-banner.positive {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.15) 0%, rgba(40, 167, 69, 0.05) 100%);
+    border: 1px solid rgba(40, 167, 69, 0.2);
+}
+
+.sentiment-overall-banner.very-negative,
+.sentiment-overall-banner.negative {
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.15) 0%, rgba(220, 53, 69, 0.05) 100%);
+    border: 1px solid rgba(220, 53, 69, 0.2);
+}
+
+.sentiment-overall-banner.neutral {
+    background: linear-gradient(135deg, rgba(108, 117, 125, 0.15) 0%, rgba(108, 117, 125, 0.05) 100%);
+    border: 1px solid rgba(108, 117, 125, 0.2);
+}
+
+.sentiment-overall-banner .banner-emoji {
+    font-size: 2.5em;
+}
+
+.sentiment-overall-banner .banner-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sentiment-overall-banner .banner-title {
+    font-size: 1.2em;
+    font-weight: 700;
+    color: #333;
+}
+
+.sentiment-overall-banner .banner-description {
+    font-size: 0.9em;
+    color: #666;
+}
+
+/* Stats Row */
+.sentiment-stats-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.sentiment-stat-card {
+    flex: 1;
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+    border: 1px solid #eee;
+}
+
+.sentiment-stat-card .stat-value {
+    display: block;
+    font-size: 1.8em;
+    font-weight: 700;
+    color: #333;
+}
+
+.sentiment-stat-card .stat-label {
+    font-size: 0.75em;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sentiment-stat-card.positive .stat-value {
+    color: #28a745;
+}
+
+.sentiment-stat-card.negative .stat-value {
+    color: #dc3545;
+}
+
+/* Section Titles */
+.sentiment-popup-content .section-title {
+    margin: 0 0 12px;
+    font-size: 1em;
+    font-weight: 600;
+    color: #333;
+}
+
+.sentiment-popup-content .section-hint {
+    margin: -8px 0 12px;
+    font-size: 0.8em;
+    color: #999;
+}
+
+/* Sentiment Distribution */
+.sentiment-distribution {
+    margin-bottom: 24px;
+    padding: 16px;
+    background: #f8f9fa;
+    border-radius: 12px;
+}
+
+.distribution-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.distribution-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.distribution-item .dist-icon {
+    font-size: 1.3em;
+    width: 28px;
+    text-align: center;
+}
+
+.distribution-item .dist-bar-container {
+    flex: 1;
+    height: 24px;
+    background: #e9ecef;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.distribution-item .dist-bar {
+    height: 100%;
+    border-radius: 12px;
+    transition: width 0.5s ease;
+}
+
+.distribution-item.positive .dist-bar {
+    background: linear-gradient(90deg, #28a745 0%, #5cb85c 100%);
+}
+
+.distribution-item.neutral .dist-bar {
+    background: linear-gradient(90deg, #6c757d 0%, #adb5bd 100%);
+}
+
+.distribution-item.negative .dist-bar {
+    background: linear-gradient(90deg, #dc3545 0%, #f86c6b 100%);
+}
+
+.distribution-item .dist-count {
+    font-weight: 600;
+    min-width: 24px;
+    text-align: right;
+    color: #666;
+}
+
+/* Sentiment Graph */
+.sentiment-graph-section {
+    margin-bottom: 24px;
+}
+
+.sentiment-graph {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 16px;
+    overflow: hidden;
+}
+
+.graph-scale {
+    display: flex;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.scale-zone {
+    flex: 1;
+    padding: 8px;
+    text-align: center;
+}
+
+.scale-zone.negative {
+    background: linear-gradient(90deg, rgba(220, 53, 69, 0.2) 0%, rgba(220, 53, 69, 0.1) 100%);
+}
+
+.scale-zone.neutral {
+    background: linear-gradient(90deg, rgba(108, 117, 125, 0.1) 0%, rgba(108, 117, 125, 0.1) 100%);
+}
+
+.scale-zone.positive {
+    background: linear-gradient(90deg, rgba(40, 167, 69, 0.1) 0%, rgba(40, 167, 69, 0.2) 100%);
+}
+
+.scale-zone .zone-label {
+    font-size: 0.75em;
+    font-weight: 500;
+    color: #666;
+}
+
+.graph-track {
+    position: relative;
+    min-height: 80px;
+    padding-top: 30px;
+}
+
+.track-markers {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 24px;
+    display: flex;
+}
+
+.track-markers .marker {
+    position: absolute;
+    font-size: 0.7em;
+    color: #999;
+    transform: translateX(-50%);
+}
+
+.graph-items {
+    position: relative;
+    min-height: 50px;
+    padding: 8px 0;
+}
+
+.sentiment-graph-item {
+    position: absolute;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: white;
+    border: 2px solid #ddd;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+    max-width: 100px;
+    z-index: 1;
+}
+
+.sentiment-graph-item:hover {
+    transform: translateX(-50%) scale(1.1);
+    z-index: 10;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.sentiment-graph-item.positive {
+    border-color: #28a745;
+    background: rgba(40, 167, 69, 0.05);
+}
+
+.sentiment-graph-item.negative {
+    border-color: #dc3545;
+    background: rgba(220, 53, 69, 0.05);
+}
+
+.sentiment-graph-item.neutral {
+    border-color: #6c757d;
+    background: rgba(108, 117, 125, 0.05);
+}
+
+.sentiment-graph-item .graph-item-emoji {
+    font-size: 1.3em;
+}
+
+.sentiment-graph-item .graph-item-name {
+    font-size: 0.65em;
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 80px;
+    text-align: center;
+}
+
+/* Ranking Section in Popup */
+.sentiment-ranking-section {
+    margin-bottom: 20px;
+}
+
+.sentiment-ranking-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.sentiment-ranking-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-left: 4px solid transparent;
+}
+
+.sentiment-ranking-item:hover {
+    background: #e9ecef;
+    transform: translateX(4px);
+}
+
+.sentiment-ranking-item.positive {
+    border-left-color: #28a745;
+}
+
+.sentiment-ranking-item.negative {
+    border-left-color: #dc3545;
+}
+
+.sentiment-ranking-item.neutral {
+    border-left-color: #6c757d;
+}
+
+.sentiment-ranking-item .ranking-position {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 45px;
+}
+
+.sentiment-ranking-item .rank-medal {
+    font-size: 1.2em;
+}
+
+.sentiment-ranking-item .ranking-number {
+    font-weight: 600;
+    color: #999;
+    font-size: 0.85em;
+}
+
+.sentiment-ranking-item .ranking-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.sentiment-ranking-item .ranking-name {
+    font-weight: 600;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sentiment-ranking-item .ranking-reactions {
+    display: flex;
+    gap: 3px;
+    margin-top: 4px;
+}
+
+.sentiment-ranking-item .ranking-score {
+    text-align: right;
+}
+
+.sentiment-ranking-item .score-value {
+    display: block;
+    font-size: 1.1em;
+    font-weight: 700;
+}
+
+.sentiment-ranking-item .score-value.positive {
+    color: #28a745;
+}
+
+.sentiment-ranking-item .score-value.negative {
+    color: #dc3545;
+}
+
+.sentiment-ranking-item .score-label {
+    font-size: 0.65em;
+    color: #999;
+    text-transform: uppercase;
+}
+
+/* Info Box */
+.sentiment-info {
+    display: flex;
+    gap: 12px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+    border-radius: 10px;
+    border: 1px solid rgba(102, 126, 234, 0.15);
+}
+
+.sentiment-info .info-icon {
+    font-size: 1.2em;
+}
+
+.sentiment-info .info-text {
+    font-size: 0.85em;
+    color: #555;
+    line-height: 1.5;
+}
+
+.sentiment-info .info-text strong {
+    color: #333;
+}
+
+/* Event Emoji Indicator - Make it clickable */
+.event-emoji-indicator.visible {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.event-emoji-indicator.visible:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.4);
+}
+
 /* Mobile Responsive Styles for Emoji Picker */
 @media (max-width: 768px) {
     .emoji-picker-modal {
@@ -5010,6 +5547,76 @@ body.presentation-active #wtf-plans-panel-overlay {
         margin-top: 8px;
         padding-top: 8px;
         border-top: 1px solid #eee;
+    }
+
+    /* Sentiment Popup Mobile Styles */
+    .sentiment-popup-modal {
+        max-height: 95vh;
+        border-radius: 12px;
+    }
+
+    .sentiment-popup-header {
+        padding: 16px 20px;
+    }
+
+    .sentiment-popup-title {
+        font-size: 1.2em;
+    }
+
+    .sentiment-popup-content {
+        padding: 16px;
+    }
+
+    .sentiment-overall-banner {
+        flex-direction: column;
+        text-align: center;
+        gap: 12px;
+    }
+
+    .sentiment-overall-banner .banner-emoji {
+        font-size: 2em;
+    }
+
+    .sentiment-stats-row {
+        flex-wrap: wrap;
+    }
+
+    .sentiment-stat-card {
+        flex: 1 1 calc(50% - 6px);
+        padding: 12px;
+    }
+
+    .sentiment-stat-card .stat-value {
+        font-size: 1.5em;
+    }
+
+    .sentiment-graph-item {
+        padding: 4px 6px;
+    }
+
+    .sentiment-graph-item .graph-item-emoji {
+        font-size: 1.1em;
+    }
+
+    .sentiment-graph-item .graph-item-name {
+        display: none;
+    }
+
+    .sentiment-ranking-list {
+        max-height: 200px;
+    }
+
+    .sentiment-ranking-item {
+        padding: 10px 12px;
+    }
+
+    .sentiment-ranking-item .ranking-name {
+        font-size: 0.9em;
+    }
+
+    .sentiment-info {
+        flex-direction: column;
+        text-align: center;
     }
 }
 
@@ -5414,6 +6021,354 @@ body.presentation-active #wtf-plans-panel-overlay {
 
 .presentation-add-item-btn .add-text {
     font-weight: 500;
+}
+
+/* Standalone Add Section Container */
+.itinerary-add-section {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    padding: 15px 20px;
+    flex-wrap: wrap;
+}
+
+/* Collapse/Expand All Button */
+.presentation-toggle-all-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: rgba(108, 117, 125, 0.1);
+    border: 1px solid rgba(108, 117, 125, 0.3);
+    border-radius: 20px;
+    font-size: 0.95em;
+    color: #6c757d;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
+    white-space: nowrap;
+}
+
+.presentation-toggle-all-btn:hover {
+    background: rgba(108, 117, 125, 0.2);
+    border-color: rgba(108, 117, 125, 0.5);
+    transform: translateY(-1px);
+}
+
+.presentation-toggle-all-btn .toggle-all-icon {
+    font-size: 0.8em;
+    transition: transform 0.3s ease;
+}
+
+.presentation-toggle-all-btn.collapsed .toggle-all-icon {
+    transform: rotate(-90deg);
+}
+
+.presentation-toggle-all-btn .toggle-all-text {
+    font-weight: 500;
+}
+
+/* Status Toggle Buttons (Archived/Completed) */
+.presentation-status-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    background: rgba(108, 117, 125, 0.08);
+    border: 1px solid rgba(108, 117, 125, 0.2);
+    border-radius: 16px;
+    font-size: 0.85em;
+    color: #6c757d;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.presentation-status-toggle:hover {
+    background: rgba(108, 117, 125, 0.15);
+    border-color: rgba(108, 117, 125, 0.4);
+}
+
+.presentation-status-toggle.active {
+    background: rgba(108, 117, 125, 0.15);
+    border-color: rgba(108, 117, 125, 0.5);
+}
+
+.presentation-status-toggle:not(.active) {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+.presentation-status-toggle .toggle-icon {
+    font-size: 0.9em;
+}
+
+.presentation-status-toggle .toggle-label {
+    font-weight: 500;
+}
+
+.presentation-status-toggle .toggle-count {
+    background: rgba(0, 0, 0, 0.1);
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+/* Individual Item Section Container - each plan item gets its own container */
+.itinerary-item-section {
+    padding: 0;
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+    position: relative;
+    cursor: grab;
+}
+
+.itinerary-item-section .itinerary-item {
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+}
+
+/* Archived item styling - grayscale effect */
+.itinerary-item-section.item-status-archived {
+    filter: grayscale(100%);
+    opacity: 0.7;
+}
+
+.itinerary-item-section.item-status-archived:hover {
+    filter: grayscale(80%);
+    opacity: 0.85;
+}
+
+/* Completed item styling - strikethrough effect */
+.itinerary-item-section.item-status-completed .item-accordion-title {
+    text-decoration: line-through;
+    text-decoration-color: rgba(40, 167, 69, 0.6);
+    text-decoration-thickness: 2px;
+}
+
+.itinerary-item-section.item-status-completed .item-accordion-summary {
+    text-decoration: line-through;
+    text-decoration-color: rgba(40, 167, 69, 0.4);
+    text-decoration-thickness: 1px;
+    opacity: 0.7;
+}
+
+.itinerary-item-section.item-status-completed {
+    opacity: 0.85;
+}
+
+.itinerary-item-section.item-status-completed:hover {
+    opacity: 1;
+}
+
+/* Drag-and-Drop Styles for Presentation View */
+/* Buckets are always visible when presentation modal is open, grayed out by default */
+.presentation-drag-buckets {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 10000;
+    display: none; /* Hidden by default, shown via JS when modal is open */
+}
+
+/* When presentation modal is open, buckets container is shown */
+.presentation-drag-buckets.buckets-shown {
+    display: block;
+}
+
+/* Active during drag - enables pointer events for drop targets */
+.presentation-drag-buckets.drag-active {
+    display: block;
+}
+
+.drag-bucket {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 100px;
+    height: 160px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 16px;
+    backdrop-filter: blur(20px);
+    pointer-events: auto;
+    transition: all 0.3s ease, transform 0.2s ease;
+    /* Dormant state: more visible than before (was 0.35, now 0.6) */
+    opacity: 0.6;
+    filter: grayscale(50%);
+}
+
+/* Archive bucket - subtle gray/blue tint in dormant state */
+.drag-bucket-archive {
+    left: 16px;
+    background: linear-gradient(135deg, rgba(108, 117, 145, 0.85), rgba(73, 80, 107, 0.85));
+    border: 3px solid rgba(100, 150, 200, 0.8);
+    box-shadow: 0 4px 20px rgba(100, 150, 200, 0.4);
+}
+
+/* Completed bucket - subtle gray/green tint in dormant state */
+.drag-bucket-completed {
+    right: 16px;
+    background: linear-gradient(135deg, rgba(108, 167, 125, 0.85), rgba(73, 130, 87, 0.85));
+    border: 3px solid rgba(100, 200, 150, 0.8);
+    box-shadow: 0 4px 20px rgba(100, 200, 150, 0.4);
+}
+
+/* Active drag state - colorize buckets */
+.presentation-drag-buckets.drag-active .drag-bucket {
+    opacity: 0.85;
+    filter: grayscale(0%);
+}
+
+.presentation-drag-buckets.drag-active .drag-bucket-archive {
+    background: linear-gradient(135deg, rgba(108, 117, 125, 0.9), rgba(73, 80, 87, 0.9));
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.presentation-drag-buckets.drag-active .drag-bucket-completed {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.9), rgba(25, 135, 84, 0.9));
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.drag-bucket .bucket-icon {
+    font-size: 2em;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.drag-bucket .bucket-label {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Hover/drag-over state for buckets */
+.drag-bucket.drag-over {
+    transform: translateY(-50%) scale(1.15);
+    opacity: 1;
+    filter: grayscale(0%);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+}
+
+.drag-bucket-archive.drag-over {
+    background: linear-gradient(135deg, rgba(108, 117, 125, 1), rgba(73, 80, 87, 1));
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+.drag-bucket-completed.drag-over {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 1), rgba(25, 135, 84, 1));
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* Mobile-friendly bucket sizing */
+@media (max-width: 768px) {
+    .drag-bucket {
+        width: 70px;
+        height: 100px;
+        gap: 4px;
+    }
+    .drag-bucket-archive {
+        left: 8px;
+    }
+    .drag-bucket-completed {
+        right: 8px;
+    }
+    .drag-bucket .bucket-icon {
+        font-size: 1.4em;
+    }
+    .drag-bucket .bucket-label {
+        font-size: 0.7em;
+    }
+}
+
+/* Sortable ghost styling */
+.itinerary-item-section.sortable-ghost {
+    opacity: 0.4;
+    background: rgba(0, 123, 255, 0.1);
+}
+
+/* Sortable drag styling */
+.itinerary-item-section.sortable-drag {
+    opacity: 1;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    z-index: 9999;
+    cursor: grabbing;
+}
+
+/* Sortable chosen (about to drag) styling */
+.itinerary-item-section.sortable-chosen {
+    box-shadow: 0 4px 16px rgba(0, 123, 255, 0.3);
+    cursor: grabbing;
+}
+
+/* Drag handle indicator on items */
+.itinerary-item-section::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 40px;
+    background: linear-gradient(to bottom,
+        transparent 0%,
+        rgba(0, 0, 0, 0.15) 20%,
+        rgba(0, 0, 0, 0.15) 80%,
+        transparent 100%
+    );
+    border-radius: 2px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.itinerary-item-section:hover::before {
+    opacity: 1;
+}
+
+/* Mobile adjustments for drag buckets */
+@media (max-width: 768px) {
+    .drag-bucket {
+        width: 80px;
+        height: 120px;
+    }
+
+    .drag-bucket-archive {
+        left: 8px;
+    }
+
+    .drag-bucket-completed {
+        right: 8px;
+    }
+
+    .drag-bucket .bucket-icon {
+        font-size: 1.5em;
+    }
+
+    .drag-bucket .bucket-label {
+        font-size: 0.75em;
+    }
+}
+
+/* Empty state section */
+.itinerary-empty-section {
+    padding: 20px;
 }
 
 .itinerary-accordion-title {
@@ -10153,6 +11108,153 @@ hr.total-divider {
 }
 
 /* ============================================
+   MANUAL ADD ITEM SECTION
+   ============================================ */
+
+.manual-add-section {
+    margin-top: 25px;
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(46, 204, 113, 0.05) 0%, rgba(52, 152, 219, 0.08) 100%);
+    border-radius: 12px;
+    border: 1px dashed rgba(46, 204, 113, 0.3);
+}
+
+.manual-add-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.manual-add-icon {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.manual-add-title {
+    font-size: 1em;
+    font-weight: 600;
+    color: #333;
+}
+
+.manual-add-content {
+    padding-left: 38px;
+}
+
+.manual-add-description {
+    font-size: 0.9em;
+    color: #666;
+    margin: 0 0 12px 0;
+}
+
+.manual-add-form {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+
+.manual-add-name-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.95em;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.manual-add-name-input:focus {
+    outline: none;
+    border-color: #2ecc71;
+    box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.15);
+}
+
+.manual-add-name-input:disabled {
+    background: #f5f5f5;
+    color: #999;
+}
+
+.manual-add-btn {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+    white-space: nowrap;
+}
+
+.manual-add-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+}
+
+.manual-add-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.manual-add-btn:disabled {
+    background: #95a5a6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Mobile responsive for manual add section */
+@media (max-width: 768px) {
+    .manual-add-section {
+        margin-top: 20px;
+        padding: 15px;
+    }
+
+    .manual-add-content {
+        padding-left: 0;
+    }
+
+    .manual-add-form {
+        flex-direction: column;
+    }
+
+    .manual-add-btn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .manual-add-header {
+        gap: 8px;
+    }
+
+    .manual-add-icon {
+        width: 24px;
+        height: 24px;
+        font-size: 1em;
+    }
+
+    .manual-add-title {
+        font-size: 0.95em;
+    }
+
+    .manual-add-name-input {
+        padding: 8px 12px;
+    }
+
+    .manual-add-btn {
+        padding: 10px 16px;
+    }
+}
+
+/* ============================================
    COMPONENT COMMENTS FEATURE
    ============================================ */
 
@@ -10434,8 +11536,9 @@ hr.total-divider {
 /* Comment input wrapper */
 .component-comment-input-wrapper {
     display: flex;
-    gap: 8px;
-    align-items: center;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
 }
 
 .component-comment-input {
@@ -10482,6 +11585,162 @@ hr.total-divider {
     opacity: 0.5;
     cursor: not-allowed;
     transform: none;
+}
+
+/* Comment input row with image button */
+.comment-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+}
+
+/* Comment image upload button */
+.comment-image-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #f0f0f0;
+    color: #666;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1em;
+    transition: background-color 0.2s, transform 0.2s;
+    flex-shrink: 0;
+}
+
+.comment-image-btn:hover {
+    background: #e0e0e0;
+    transform: scale(1.05);
+}
+
+.comment-image-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Comment image preview in input area */
+.comment-image-preview {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    margin-bottom: 8px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    max-width: 100%;
+    overflow: hidden;
+    position: relative;
+}
+
+.comment-preview-thumbnail {
+    width: 60px;
+    height: 60px;
+    min-width: 60px;
+    min-height: 60px;
+    max-width: 60px;
+    max-height: 60px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    flex-shrink: 0;
+}
+
+.comment-preview-remove {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    line-height: 1;
+    transition: background-color 0.2s;
+    margin-left: auto;
+}
+
+.comment-preview-remove:hover {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+/* Upload loading state */
+.component-comment-input-wrapper.uploading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.component-comment-input-wrapper.uploading .comment-input-row::after {
+    content: '';
+    width: 20px;
+    height: 20px;
+    border: 2px solid #e0e0e0;
+    border-top-color: #007bff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    position: absolute;
+    right: 50px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Comment attachments in message list */
+.comment-attachments {
+    margin-top: 8px;
+}
+
+.comment-attachment {
+    display: inline-block;
+}
+
+.comment-attachment-image {
+    display: block;
+}
+
+.comment-attachment-image img {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.comment-attachment-image img:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Mobile adjustments for comment image attachments */
+@media (max-width: 768px) {
+    .comment-image-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 0.95em;
+    }
+
+    .comment-preview-thumbnail {
+        width: 50px;
+        height: 50px;
+        min-width: 50px;
+        min-height: 50px;
+        max-width: 50px;
+        max-height: 50px;
+    }
+
+    .comment-attachment-image img {
+        max-height: 150px;
+    }
 }
 
 /* Component comment reply indicator */

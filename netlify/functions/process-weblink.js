@@ -56,6 +56,13 @@ Your task is to:
 RESPOND ONLY WITH A VALID JSON OBJECT. Do not include markdown code blocks or any text before/after the JSON.
 
 === COMPREHENSIVE BUSINESS INFO FIELDS (include in ALL items) ===
+- "Confidence": A confidence score from 0.0 to 1.0 indicating how certain you are about this information:
+  - 1.0: Certain - verified real business, well-known, URL provided, direct knowledge
+  - 0.8-0.99: High confidence - real business you recognize, details likely accurate
+  - 0.6-0.79: Moderate - generic/category-based suggestion, some details may be estimates
+  - 0.4-0.59: Low - speculative suggestion, details are best guesses
+  - 0.0-0.39: Very low - highly uncertain, placeholder information
+  Be honest - if the user provided a specific URL, that's high confidence. If you're making general category suggestions, that's moderate confidence.
 - "Website": The official website URL (use actual known URLs, or null if unknown)
 - "Location": Full address or neighborhood/area (e.g., "123 Main St, San Francisco, CA" or "Mission District, San Francisco")
 - "Availability": General availability info (e.g., "Open daily 10am-6pm", "Reservations required", "Weekends only", "By appointment")
@@ -90,6 +97,7 @@ Return this structure:
   "itemType": "Specific",
   "Name": "The official name",
   "Description": "A 1-2 sentence compelling description for an event plan.",
+  "Confidence": <0.0-1.0 - how certain you are about this info>,
   "Price": <number - estimated price, use 0 if free or unknown>,
   "PricingType": "<per person|per charter|per bus|per vehicle|per hour|per group|flat rate>",
   "ServiceType": "Partner Activity",
@@ -120,6 +128,7 @@ Return this structure with 3-5 top recommendations, EACH with comprehensive info
     {
       "Name": "Specific Place 1",
       "Description": "1-2 sentence description",
+      "Confidence": <0.0-1.0>,
       "Price": <number>,
       "PricingType": "<per person|per charter|per bus|per vehicle|per hour|per group|flat rate>",
       "ServiceType": "Partner Activity",
@@ -134,6 +143,7 @@ Return this structure with 3-5 top recommendations, EACH with comprehensive info
     {
       "Name": "Specific Place 2",
       "Description": "1-2 sentence description",
+      "Confidence": <0.0-1.0>,
       "Price": <number>,
       "PricingType": "<per person|per charter|per bus|per vehicle|per hour|per group|flat rate>",
       "ServiceType": "Partner Activity",
@@ -157,6 +167,7 @@ Example Response (Specific):
   "itemType": "Specific",
   "Name": "Exploratorium After Dark",
   "Description": "A renowned hands-on museum of science and art, open for adults-only (18+) evenings with a cash bar and music.",
+  "Confidence": 0.95,
   "Price": 40,
   "PricingType": "per person",
   "ServiceType": "Partner Activity",
@@ -187,6 +198,7 @@ Example Response (Grouping):
     {
       "Name": "Flour + Water",
       "Description": "Award-winning Mission district spot known for fresh pasta and wood-fired Neapolitan pizza.",
+      "Confidence": 0.85,
       "Price": 65,
       "PricingType": "per person",
       "ServiceType": "Partner Activity",
@@ -201,6 +213,7 @@ Example Response (Grouping):
     {
       "Name": "Delfina",
       "Description": "Neighborhood Italian favorite serving seasonal Californian-Italian cuisine in a warm atmosphere.",
+      "Confidence": 0.82,
       "Price": 55,
       "PricingType": "per person",
       "ServiceType": "Partner Activity",
@@ -215,6 +228,7 @@ Example Response (Grouping):
     {
       "Name": "Cotogna",
       "Description": "Michael Tusk's rustic Italian kitchen featuring house-made pastas and wood-fired dishes.",
+      "Confidence": 0.80,
       "Price": 75,
       "PricingType": "per person",
       "ServiceType": "Partner Activity",
@@ -240,6 +254,7 @@ Example Response (Grouping):
     {
       "Name": "Escape Room SF",
       "Description": "Challenging themed escape rooms that require teamwork and communication to solve puzzles.",
+      "Confidence": 0.70,
       "Price": 35,
       "PricingType": "per person",
       "ServiceType": "Partner Activity",
@@ -254,6 +269,7 @@ Example Response (Grouping):
     {
       "Name": "Urban Putt",
       "Description": "Indoor miniature golf in a creative, art-filled space perfect for casual team outings.",
+      "Confidence": 0.88,
       "Price": 15,
       "PricingType": "per person",
       "ServiceType": "Partner Activity",
@@ -268,6 +284,7 @@ Example Response (Grouping):
     {
       "Name": "The Winery SF",
       "Description": "Wine blending workshops where teams create their own custom blend in an urban winery.",
+      "Confidence": 0.75,
       "Price": 75,
       "PricingType": "per person",
       "ServiceType": "Partner Activity",
@@ -293,6 +310,7 @@ Example Response (Grouping):
     {
       "Name": "SF Charter Bus Company",
       "Description": "Full-service charter bus rental with professional drivers for corporate events, weddings, and group outings.",
+      "Confidence": 0.55,
       "Price": 1200,
       "PricingType": "per charter",
       "ServiceType": "Partner Activity",
@@ -307,6 +325,7 @@ Example Response (Grouping):
     {
       "Name": "Bay Area Party Bus",
       "Description": "Luxury party buses with premium sound systems, lighting, and bar setups for celebrations.",
+      "Confidence": 0.60,
       "Price": 800,
       "PricingType": "per bus",
       "ServiceType": "Partner Activity",
@@ -321,6 +340,7 @@ Example Response (Grouping):
     {
       "Name": "Wine Country Tour Coaches",
       "Description": "Comfortable coach buses perfect for wine country tours and corporate retreats.",
+      "Confidence": 0.58,
       "Price": 950,
       "PricingType": "per charter",
       "ServiceType": "Partner Activity",
