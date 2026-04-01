@@ -4,11 +4,298 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
 import { showReceiptModal } from './receipt.js';
+
+/**
+ * Helper to create or update a meta tag
+ * @param {string} selector - CSS selector to find existing tag
+ * @param {Object} attributes - Attributes to set on the tag
+ */
+function setMetaTag(selector, attributes) {
+    let tag = document.querySelector(selector);
+    if (!tag) {
+        tag = document.createElement('meta');
+        document.head.appendChild(tag);
+    }
+    for (const [key, value] of Object.entries(attributes)) {
+        tag.setAttribute(key, value);
+    }
+}
+
+/**
+ * Helper to create or update a link tag
+ * @param {string} selector - CSS selector to find existing tag
+ * @param {Object} attributes - Attributes to set on the tag
+ */
+function setLinkTag(selector, attributes) {
+    let tag = document.querySelector(selector);
+    if (!tag) {
+        tag = document.createElement('link');
+        document.head.appendChild(tag);
+    }
+    for (const [key, value] of Object.entries(attributes)) {
+        tag.setAttribute(key, value);
+    }
+}
+
+/**
+ * Comprehensive SEO meta tags update including Open Graph, Twitter Cards, keywords, and canonical URL.
+ * @param {Object} record - The item record for SEO metadata.
+ * @param {string} title - The page title.
+ * @param {string} description - The page description.
+ * @param {string[]} tags - AI-generated tags for keywords.
+ * @param {string} imageUrl - Image URL for social sharing.
+ */
+function updateFullSeoMetadata(record, title, description, tags = [], imageUrl = '') {
+    // Update page title
+    document.title = title;
+
+    // Basic meta description
+    setMetaTag('meta[name="description"]', { name: 'description', content: description });
+
+    // Keywords from AI profile tags
+    if (tags.length > 0) {
+        setMetaTag('meta[name="keywords"]', { name: 'keywords', content: tags.join(', ') });
+    }
+
+    // Generate canonical URL with AI tags for SEO
+    const slug = generateSlug(record.fields.Name, record.id, tags);
+    const canonicalUrl = `${window.location.origin}/item/${slug}`;
+    setLinkTag('link[rel="canonical"]', { rel: 'canonical', href: canonicalUrl });
+
+    // Open Graph meta tags for Facebook, LinkedIn, etc.
+    setMetaTag('meta[property="og:type"]', { property: 'og:type', content: record.fields['Item Type'] === 'Event' ? 'event' : 'product' });
+    setMetaTag('meta[property="og:title"]', { property: 'og:title', content: title });
+    setMetaTag('meta[property="og:description"]', { property: 'og:description', content: description });
+    setMetaTag('meta[property="og:url"]', { property: 'og:url', content: canonicalUrl });
+    setMetaTag('meta[property="og:site_name"]', { property: 'og:site_name', content: 'WTFun' });
+
+    if (imageUrl) {
+        setMetaTag('meta[property="og:image"]', { property: 'og:image', content: imageUrl });
+        setMetaTag('meta[property="og:image:alt"]', { property: 'og:image:alt', content: record.fields.Name || 'Item image' });
+    }
+
+    // Twitter Card meta tags
+    setMetaTag('meta[name="twitter:card"]', { name: 'twitter:card', content: imageUrl ? 'summary_large_image' : 'summary' });
+    setMetaTag('meta[name="twitter:title"]', { name: 'twitter:title', content: title });
+    setMetaTag('meta[name="twitter:description"]', { name: 'twitter:description', content: description });
+
+    if (imageUrl) {
+        setMetaTag('meta[name="twitter:image"]', { name: 'twitter:image', content: imageUrl });
+        setMetaTag('meta[name="twitter:image:alt"]', { name: 'twitter:image:alt', content: record.fields.Name || 'Item image' });
+    }
+
+    // Additional structured meta tags for events
+    if (record.fields['Item Type'] === 'Event') {
+        if (record.fields['Start Date'] || record.fields['Event Date'] || record.fields.Date) {
+            const eventDate = record.fields['Start Date'] || record.fields['Event Date'] || record.fields.Date;
+            setMetaTag('meta[property="event:start_time"]', { property: 'event:start_time', content: eventDate });
+        }
+        if (record.fields.Location) {
+            setMetaTag('meta[property="event:location"]', { property: 'event:location', content: record.fields.Location });
+        }
+    }
+
+    // Product-specific meta for non-events
+    if (record.fields['Item Type'] !== 'Event' && record.fields.Price) {
+        setMetaTag('meta[property="product:price:amount"]', { property: 'product:price:amount', content: record.fields.Price.toString() });
+        setMetaTag('meta[property="product:price:currency"]', { property: 'product:price:currency', content: 'USD' });
+    }
+}
+
+/**
+ * Resets SEO meta tags to default values when modal is closed.
+ */
+function resetSeoMetadata() {
+    document.title = 'WTFun | Plan Your Perfect Event';
+    setMetaTag('meta[name="description"]', { name: 'description', content: 'Plan your perfect event with WTFun.' });
+
+    // Remove item-specific meta tags
+    const tagsToRemove = [
+        'meta[name="keywords"]',
+        'link[rel="canonical"]',
+        'meta[property="og:type"]',
+        'meta[property="og:title"]',
+        'meta[property="og:description"]',
+        'meta[property="og:url"]',
+        'meta[property="og:image"]',
+        'meta[property="og:image:alt"]',
+        'meta[name="twitter:card"]',
+        'meta[name="twitter:title"]',
+        'meta[name="twitter:description"]',
+        'meta[name="twitter:image"]',
+        'meta[name="twitter:image:alt"]',
+        'meta[property="event:start_time"]',
+        'meta[property="event:location"]',
+        'meta[property="product:price:amount"]',
+        'meta[property="product:price:currency"]'
+    ];
+
+    tagsToRemove.forEach(selector => {
+        const tag = document.querySelector(selector);
+        if (tag && selector !== 'meta[name="description"]') {
+            tag.remove();
+        }
+    });
+
+    // Reset Open Graph site name
+    setMetaTag('meta[property="og:site_name"]', { property: 'og:site_name', content: 'WTFun' });
+}
+
+/**
+ * Updates the page's title and meta description for SEO purposes.
+ * @param {string} title - The new page title.
+ * @param {string} description - The new meta description.
+ * @deprecated Use updateFullSeoMetadata for comprehensive SEO support.
+ */
+function updatePageMetadata(title, description) {
+    document.title = title;
+
+    let metaDescription = document.querySelector('meta[name="description"]');
+    if (!metaDescription) {
+        metaDescription = document.createElement('meta');
+        metaDescription.setAttribute('name', 'description');
+        document.head.appendChild(metaDescription);
+    }
+    metaDescription.setAttribute('content', description);
+}
+
+/**
+ * Updates the JSON-LD Schema markup for SEO purposes.
+ * Generates schema.org/Event or schema.org/Product based on the item type.
+ * Includes AI-generated tags as keywords for better search visibility.
+ * @param {Object} record - The item record to generate schema for.
+ */
+function updateSchema(record) {
+    const itemType = record.fields['Item Type'];
+    const name = record.fields.Name || 'Untitled';
+    const description = record.fields.Description || '';
+    const price = record.fields.Price || 0;
+
+    // Get image URL from first attachment if available
+    let imageUrl = '';
+    if (record.fields.Images && record.fields.Images.length > 0) {
+        imageUrl = record.fields.Images[0].url || '';
+    }
+
+    // Extract AI-generated tags for schema keywords
+    let tags = [];
+    const aiProfileString = record.fields.AI_Profile || record.fields.Rankings;
+    if (aiProfileString) {
+        try {
+            const aiProfile = JSON.parse(aiProfileString);
+            tags = aiProfile.Tags || aiProfile.SearchTerms || [];
+        } catch (e) {
+            // Ignore parsing errors
+        }
+    }
+
+    let schemaData;
+
+    if (itemType === 'Event') {
+        // Generate schema.org/Event
+        schemaData = {
+            '@context': 'https://schema.org',
+            '@type': 'Event',
+            'name': name,
+            'startDate': record.fields['Start Date'] || record.fields['Event Date'] || record.fields.Date || '',
+            'location': {
+                '@type': 'Place',
+                'name': record.fields.Location || 'Unknown Location'
+            },
+            'offers': {
+                '@type': 'Offer',
+                'price': price,
+                'priceCurrency': 'USD'
+            },
+            'organizer': {
+                '@type': 'Organization',
+                'name': 'WTFun',
+                'url': window.location.origin
+            }
+        };
+
+        // Add image if available
+        if (imageUrl) {
+            schemaData.image = imageUrl;
+        }
+
+        // Add description if available
+        if (description) {
+            schemaData.description = description;
+        }
+
+        // Add AI-generated tags as keywords
+        if (tags.length > 0) {
+            schemaData.keywords = tags.join(', ');
+        }
+    } else {
+        // Generate schema.org/Product for all other item types
+        schemaData = {
+            '@context': 'https://schema.org',
+            '@type': 'Product',
+            'name': name,
+            'description': description,
+            'offers': {
+                '@type': 'Offer',
+                'price': price,
+                'priceCurrency': 'USD',
+                'availability': 'https://schema.org/InStock'
+            },
+            'brand': {
+                '@type': 'Organization',
+                'name': 'WTFun'
+            }
+        };
+
+        // Add image if available
+        if (imageUrl) {
+            schemaData.image = imageUrl;
+        }
+
+        // Add AI-generated tags as keywords
+        if (tags.length > 0) {
+            schemaData.keywords = tags.join(', ');
+        }
+    }
+
+    // Find or create the JSON-LD script tag
+    let scriptTag = document.getElementById('dynamic-schema');
+    if (!scriptTag) {
+        scriptTag = document.createElement('script');
+        scriptTag.type = 'application/ld+json';
+        scriptTag.id = 'dynamic-schema';
+        document.head.appendChild(scriptTag);
+    }
+
+    // Set the schema content
+    scriptTag.textContent = JSON.stringify(schemaData);
+}
+
+/**
+ * Resets the JSON-LD Schema to a default Organization schema.
+ * Called when modal is closed to prevent stale data.
+ */
+function resetSchema() {
+    let scriptTag = document.getElementById('dynamic-schema');
+
+    // Default Organization schema
+    const defaultSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'Organization',
+        'name': 'WTFun',
+        'url': window.location.origin,
+        'description': 'Plan your perfect event with WTFun.'
+    };
+
+    if (scriptTag) {
+        scriptTag.textContent = JSON.stringify(defaultSchema);
+    }
+}
 
 /**
  * [V3.7] Generates the "Intelligent Blurb" by calling the central recommendation engine.
@@ -998,6 +1285,49 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
+
+    // --- SEO: Update page title, meta description, schema markup, OG tags, etc. ---
+    const itemName = record.fields.Name || 'Untitled';
+    const seoTitle = `${itemName} | WTFun`;
+    let seoDescription = record.fields.Description || '';
+
+    // Extract AI-generated tags for SEO (keywords, URL slug, etc.)
+    let seoTags = [];
+    const aiProfileString = record.fields.AI_Profile || record.fields.Rankings;
+    if (aiProfileString) {
+        try {
+            const aiProfile = JSON.parse(aiProfileString);
+            seoTags = aiProfile.Tags || aiProfile.SearchTerms || [];
+        } catch (e) {
+            // Ignore parsing errors
+        }
+    }
+
+    // Generate description from AI tags if none exists
+    if (!seoDescription && seoTags.length > 0) {
+        seoDescription = `Book ${itemName}. Features: ${seoTags.join(', ')}.`;
+    }
+
+    // Fallback description if still empty
+    if (!seoDescription) {
+        seoDescription = `Check out ${itemName} on WTFun.`;
+    }
+
+    // Truncate to 160 characters for SEO best practices
+    if (seoDescription.length > 160) {
+        seoDescription = seoDescription.substring(0, 157) + '...';
+    }
+
+    // Get image URL for social sharing
+    let seoImageUrl = '';
+    if (imageUrls.length > 0 && !imageUrls[0].includes('placeholder')) {
+        seoImageUrl = imageUrls[0];
+    }
+
+    // Use comprehensive SEO function with AI tags exposed
+    updateFullSeoMetadata(record, seoTitle, seoDescription, seoTags, seoImageUrl);
+    updateSchema(record);
+    // --- END SEO ---
 
     // Parse options and record names early for event logic
     const parsedOptionGroups = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
@@ -2124,6 +2454,11 @@ export function hideDetailModal() {
         log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
         currentItemChatRecordId = null;
     }
+
+    // --- SEO: Reset all SEO meta tags and schema markup ---
+    resetSeoMetadata();
+    resetSchema();
+    // --- END SEO ---
 
     if (modalOverlay) {
         modalOverlay.classList.remove('active');

@@ -398,17 +398,35 @@ export function debounce(func, delay = 300) {
  * Must match the slug generation logic in build.js for consistency.
  * @param {string} name - The item name to convert to a slug.
  * @param {string} recordId - The Airtable record ID to append.
- * @returns {string} The generated slug (e.g., "sunset-boat-party-rec123").
+ * @param {string[]} [tags] - Optional AI-generated tags to include for SEO.
+ * @returns {string} The generated slug (e.g., "sunset-boat-party-outdoor-fun-rec123").
  */
-export function generateSlug(name, recordId) {
+export function generateSlug(name, recordId, tags = []) {
     if (!name || typeof name !== 'string') {
         return recordId; // Fallback to just the record ID if no name
     }
-    const slug = name
+
+    // Process the item name
+    let slug = name
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric with dashes
-        .replace(/^-+|-+$/g, '')     // Remove leading/trailing dashes
-        .substring(0, 60);           // Limit length for reasonable URLs
+        .replace(/^-+|-+$/g, '');    // Remove leading/trailing dashes
+
+    // Add up to 3 AI tags to the slug for SEO (if provided)
+    if (tags && tags.length > 0) {
+        const tagSlug = tags
+            .slice(0, 3) // Only use first 3 tags to keep URL reasonable
+            .map(tag => tag.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''))
+            .filter(tag => tag.length > 0 && !slug.includes(tag)) // Avoid duplicates
+            .join('-');
+
+        if (tagSlug) {
+            slug = `${slug}-${tagSlug}`;
+        }
+    }
+
+    // Limit total length for reasonable URLs (leaving room for recordId)
+    slug = slug.substring(0, 60);
 
     return `${slug}-${recordId}`;
 }
@@ -454,6 +472,7 @@ export function extractRecordIdFromPath(path) {
  * @param {Object} options - Optional configuration.
  * @param {string} options.itemName - The item name to use for generating pretty URL slugs.
  *   If not provided, will attempt to look up from state.records.all.
+ * @param {string[]} options.tags - Optional AI-generated tags to include in the URL slug.
  */
 export function updateUrl(paramsToUpdate, options = {}) {
     const url = new URL(window.location);
@@ -469,16 +488,31 @@ export function updateUrl(paramsToUpdate, options = {}) {
     if (isSettingOpenItem) {
         // Generate a pretty URL for the item
         let itemName = options.itemName;
+        let tags = options.tags || [];
 
-        // Try to find the record name from state if not provided
-        if (!itemName && state.records && state.records.all) {
+        // Try to find the record name and tags from state if not provided
+        if (state.records && state.records.all) {
             const record = state.records.all.find(r => r.id === openItemValue);
-            if (record && record.fields && record.fields.Name) {
-                itemName = record.fields.Name;
+            if (record && record.fields) {
+                if (!itemName && record.fields.Name) {
+                    itemName = record.fields.Name;
+                }
+                // Extract AI tags for SEO-friendly URLs
+                if (tags.length === 0) {
+                    const aiProfileString = record.fields.AI_Profile || record.fields.Rankings;
+                    if (aiProfileString) {
+                        try {
+                            const aiProfile = JSON.parse(aiProfileString);
+                            tags = aiProfile.Tags || aiProfile.SearchTerms || [];
+                        } catch (e) {
+                            // Ignore parsing errors
+                        }
+                    }
+                }
             }
         }
 
-        const slug = generateSlug(itemName, openItemValue);
+        const slug = generateSlug(itemName, openItemValue, tags);
         const prettyPath = `/item/${slug}`;
 
         // Build the query string for any other parameters (excluding openItem)

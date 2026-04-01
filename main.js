@@ -174,21 +174,30 @@ async function initialize() {
     try {
         const [stores, records] = await Promise.all([api.fetchAllStores(), api.fetchAllRecords()]);
 
-        const DEFAULT_V21_PROFILE = JSON.stringify({
-            "profileSource": "system_default_v21",
-            "Pillars": { "Activities": 8, "Food/Drink": 0, "Venue": 0, "Extras": 0 },
-            "Vibe": { "Energy": 7, "Relaxation": 3, "Formality": 2, "Novelty": 6 },
-            "Intellect": { "Creative": 5, "Analytical": 5 },
-            "Physicality": { "Intensity": 5, "Accessibility": 5 },
-            "Tags": ["active", "default", "testing", "generic", "fun"]
-        });
-
+        // Prioritize AI-generated Rankings over default profiles
+        // Rankings field contains AI profiler determined rankings from Gemini
         records.forEach(record => {
-            if (!record.fields.AI_Profile && (record.fields['Item Type'] === 'Bookable Item' || record.fields['Item Type'] === 'Event')) {
-                record.fields.AI_Profile = DEFAULT_V21_PROFILE;
-            }
-            if (record.fields.AI_Profile && record.fields.Rankings) {
-                 record.fields.Rankings = null;
+            const isProfileableItem = record.fields['Item Type'] === 'Bookable Item' || record.fields['Item Type'] === 'Event';
+
+            if (isProfileableItem) {
+                // If item has AI-generated Rankings, use that as the AI_Profile
+                if (record.fields.Rankings && !record.fields.AI_Profile) {
+                    record.fields.AI_Profile = record.fields.Rankings;
+                    log('Main', `Applied AI-generated Rankings to AI_Profile for: ${record.fields.Name}`);
+                }
+                // If item has both, prefer Rankings (AI-generated) over existing AI_Profile if Rankings has AI source
+                else if (record.fields.Rankings && record.fields.AI_Profile) {
+                    try {
+                        const rankingsProfile = JSON.parse(record.fields.Rankings);
+                        // If Rankings has AI source, it should take precedence
+                        if (rankingsProfile.profileSource && rankingsProfile.profileSource.includes('ai_')) {
+                            record.fields.AI_Profile = record.fields.Rankings;
+                            log('Main', `Updated AI_Profile with newer AI-generated Rankings for: ${record.fields.Name}`);
+                        }
+                    } catch (e) {
+                        // If Rankings can't be parsed, keep existing AI_Profile
+                    }
+                }
             }
         });
 
@@ -196,7 +205,7 @@ async function initialize() {
             stores: { all: stores },
             records: { all: records }
         });
-        log('Main', `Fetched ${stores.length} stores and ${records.length} items. Applied default AI profiles.`);
+        log('Main', `Fetched ${stores.length} stores and ${records.length} items. Applied AI-generated Rankings where available.`);
 
     } catch (error) {
         console.error("Failed to load initial store/item data:", error);
