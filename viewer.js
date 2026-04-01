@@ -436,22 +436,33 @@ function updateViewerCount() {
 // ─── Status Polling ─────────────────────────────────────────────────────────
 
 function startStatusPolling(sessionId) {
-    pollInterval = setInterval(async () => {
-        try {
-            const info = await fetchStreamInfo(sessionId);
-            if (!info.streamActive) {
-                stopStatusPolling();
-                handleStreamEnd();
+    // Use a longer initial poll interval; Pusher handles the primary stream-ended detection
+    let pollDelay = 30000;
+    const maxPollDelay = 60000;
+
+    function poll() {
+        pollInterval = setTimeout(async () => {
+            try {
+                const info = await fetchStreamInfo(sessionId);
+                if (!info.streamActive) {
+                    stopStatusPolling();
+                    handleStreamEnd();
+                    return;
+                }
+            } catch {
+                // Ignore transient errors in polling
             }
-        } catch {
-            // Ignore transient errors in polling
-        }
-    }, 15000);
+            // Exponential backoff up to max
+            pollDelay = Math.min(pollDelay * 1.5, maxPollDelay);
+            poll();
+        }, pollDelay);
+    }
+    poll();
 }
 
 function stopStatusPolling() {
     if (pollInterval) {
-        clearInterval(pollInterval);
+        clearTimeout(pollInterval);
         pollInterval = null;
     }
 }

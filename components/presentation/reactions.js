@@ -57,7 +57,6 @@ export function broadcastReactionUpdate(recordId, itemReactions, userId) {
             reactionsObj[odUserId] = emojiData;
         }
     });
-    console.log(`[REACTIONS-DEBUG] broadcastReactionUpdate via Pusher: recordId="${recordId}"`, JSON.stringify(reactionsObj));
     channel.trigger('client-item-reaction-update', {
         recordId,
         reactions: reactionsObj,
@@ -143,7 +142,7 @@ export function getItemSummaryEmoji(recordId) {
             commentReactionsMerged = true;
         }
     } catch (e) {
-        console.log(`[SUMMARY-DEBUG] getItemSummaryEmoji(${recordId}): comment reactions unavailable (${e.message})`);
+        // Comment reactions may not be available during early initialization
     }
 
     if (!aggregateReactions || aggregateReactions.size === 0) {
@@ -151,7 +150,6 @@ export function getItemSummaryEmoji(recordId) {
     }
 
     const { summaryEmoji, democraticAverage, userCount, totalReactions } = computeDemocraticAverage(aggregateReactions);
-    console.log(`[SUMMARY-DEBUG] getItemSummaryEmoji(${recordId}): hierarchical summary → ${summaryEmoji} (avg: ${democraticAverage.toFixed(2)}, ${userCount} users, ${totalReactions} reactions, commentsIncluded: ${commentReactionsMerged})`);
     return summaryEmoji || '💬';
 }
 
@@ -165,7 +163,6 @@ export function updateItemEmojiIndicator(recordId) {
 
     const summaryEmoji = getItemSummaryEmoji(recordId);
     const reactionCount = getItemReactionCount(recordId);
-    console.log(`[SUMMARY-DEBUG] updateItemEmojiIndicator(${recordId}): summaryEmoji=${summaryEmoji}, reactionCount=${reactionCount}`);
 
     if (summaryEmoji && reactionCount > 0) {
         emojiIndicator.innerHTML = `<span class="emoji-indicator-emoji">${summaryEmoji}</span>${reactionCount > 1 ? `<span class="emoji-indicator-count">${reactionCount}</span>` : ''}`;
@@ -222,7 +219,6 @@ export function getEventSummaryEmoji() {
     });
 
     if (componentAverages.length === 0) {
-        console.log(`[SUMMARY-DEBUG] getEventSummaryEmoji: no items with reactions across ${allItemIds.length} plan items`);
         return { emoji: '', count: 0, totalReactions: 0, averageScore: 0 };
     }
 
@@ -239,7 +235,6 @@ export function getEventSummaryEmoji() {
         }
     });
 
-    console.log(`[SUMMARY-DEBUG] getEventSummaryEmoji: ${componentAverages.length}/${allItemIds.length} items with reactions, planAvg: ${eventAverageScore.toFixed(2)} → ${closestEmoji}, ${totalReactionCount} total reactions`);
     return {
         emoji: closestEmoji || '💬',
         count: componentAverages.length,
@@ -256,7 +251,6 @@ export function updateEventEmojiIndicator() {
     if (!eventEmojiEl) return;
 
     const { emoji, count, totalReactions, averageScore } = getEventSummaryEmoji();
-    console.log(`[SUMMARY-DEBUG] updateEventEmojiIndicator: emoji=${emoji}, count=${count}, totalReactions=${totalReactions}, avgScore=${averageScore?.toFixed(2) || 'N/A'}`);
 
     if (emoji && count > 0) {
         const countDisplay = count > 1 ? `<span class="event-emoji-count">${count}</span>` : '';
@@ -314,20 +308,16 @@ export function renderReactions(recordId, reactionContainer) {
  * @param {Event} e
  */
 export function handleReactionClick(e) {
-    console.log('[ReactionClick DEBUG] handleReactionClick called, target:', e.target);
     const button = e.target.closest('.reaction-btn');
-    console.log('[ReactionClick DEBUG] button found:', button);
     if (!button) return;
 
     e.stopPropagation();
     e.preventDefault();
 
     const recordId = button.dataset.recordId;
-    console.log('[ReactionClick DEBUG] recordId:', recordId);
 
     // Check if this is the "more" button to open expanded picker
     if (button.classList.contains('reaction-more-btn')) {
-        console.log('[ReactionClick DEBUG] More button clicked, calling showExpandedEmojiPicker');
         if (_deps && _deps.showExpandedEmojiPicker) {
             _deps.showExpandedEmojiPicker(recordId, button);
         }
@@ -336,7 +326,6 @@ export function handleReactionClick(e) {
 
     const emoji = button.dataset.emoji;
     const currentUser = getCurrentUser();
-    console.log(`[REACTIONS-DEBUG] handleReactionClick: recordId="${recordId}", emoji="${emoji}", userId="${currentUser.id}"`);
 
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, new Map());

@@ -903,14 +903,9 @@ export async function initializePresentationChat() {
 
     const channelName = `presence-session-${sessionId}`;
     presentationChatChannel = presentationPusher.subscribe(channelName);
-    console.warn('[SYNC DEBUG] Pusher: subscribing to channel:', channelName);
 
     // Bind presence events
     presentationChatChannel.bind('pusher:subscription_succeeded', (members) => {
-        console.warn('[SYNC DEBUG] Pusher: subscription_succeeded on', channelName, {
-            memberCount: members?.count,
-            socketId: presentationPusher?.connection?.socket_id,
-        });
         if (presentationMessageInput) {
             presentationMessageInput.disabled = false;
             presentationMessageInput.placeholder = 'Type a message...';
