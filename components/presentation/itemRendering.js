@@ -430,7 +430,6 @@ export async function renderCompactCard(item) {
     const { recordId, type, itemStatus = 'active' } = item;
     const state = _deps.getState();
     let record = _deps.getRecordById(recordId);
-    console.log(`[CARD DEBUG] renderCompactCard called for: ${recordId} (type=${type}, status=${itemStatus})`);
     if (!record) {
         const solutionRec = window._solutionRecords?.get(recordId);
         const cartInfo = state.cart.lockedItems.get(recordId) || state.cart.items.get(recordId);
@@ -917,13 +916,12 @@ export function scheduleRenderAllItems() {
     renderDebounceTimer = setTimeout(() => {
         renderDebounceTimer = null;
         renderAllItems();
-    }, 50);
+    }, 150);
 }
 
 export async function renderAllItems() {
     const state = _deps.getState();
     const PRES_DEBUG = typeof window !== 'undefined' && window.__PRES_DEBUG__;
-    console.log('[ITEMS DEBUG] ========== renderAllItems CALLED ==========');
 
     const itineraryItemsListEl = _deps.getItineraryItemsListEl();
     if (!itineraryItemsListEl) return;
@@ -994,20 +992,63 @@ export async function renderAllItems() {
     }
 
     const showSingleItemNudge = combinedList.length === 1;
-    itineraryItemsListEl.innerHTML = '<p class="itinerary-loading" role="status" aria-live="polite">Loading items...</p>';
     itineraryItemsListEl.classList.add('board-view');
     itineraryItemsListEl.setAttribute('role', 'list');
     itineraryItemsListEl.setAttribute('aria-label', 'Plan board items');
 
+    // Pre-fetch all uncached images in parallel before rendering cards
+    const uncachedItems = [];
     const relatedGroups = state.session.relatedGroups || [];
-    const renderedGroupIds = new Set();
-    const itemsHTML = [];
-
     const itemToGroupMap = new Map();
     for (const g of relatedGroups) {
         const gItems = Array.isArray(g) ? g : (g.items || []);
         for (const gId of gItems) itemToGroupMap.set(gId, g);
     }
+
+    // Collect all record IDs that need image fetching (items + group lead images)
+    const seenGroupIds = new Set();
+    for (const item of combinedList) {
+        const group = itemToGroupMap.get(item.recordId);
+        if (group && group.id && !seenGroupIds.has(group.id)) {
+            seenGroupIds.add(group.id);
+            const groupItems = Array.isArray(group) ? group : (group.items || []);
+            const firstItemId = groupItems[0];
+            if (firstItemId && !itemImagesCache.has(firstItemId)) {
+                const firstRecord = _deps.getRecordById(firstItemId);
+                if (firstRecord) {
+                    uncachedItems.push({ recordId: firstItemId, record: firstRecord, selectedImageIndex: 0 });
+                }
+            }
+        } else if (!group || !group.id) {
+            if (!itemImagesCache.has(item.recordId)) {
+                const record = _deps.getRecordById(item.recordId);
+                if (record) {
+                    const itemInfo = item.type === 'favorites' ? state.cart.items.get(item.recordId) : state.cart.lockedItems.get(item.recordId);
+                    uncachedItems.push({ recordId: item.recordId, record, selectedImageIndex: itemInfo?.selectedImageIndex ?? 0 });
+                }
+            }
+        }
+    }
+
+    // Fetch all uncached images in parallel (batch of up to 10 concurrent)
+    if (uncachedItems.length > 0) {
+        const BATCH_SIZE = 10;
+        for (let i = 0; i < uncachedItems.length; i += BATCH_SIZE) {
+            const batch = uncachedItems.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map(async ({ recordId, record, selectedImageIndex }) => {
+                try {
+                    const { imageUrls } = await _deps.api.fetchImagesForRecord(record, state.records.all, new Map());
+                    const validIndex = Math.min(selectedImageIndex, (imageUrls?.length || 1) - 1);
+                    itemImagesCache.set(recordId, { images: imageUrls || [], currentIndex: validIndex });
+                } catch (err) {
+                    itemImagesCache.set(recordId, { images: [], currentIndex: 0 });
+                }
+            }));
+        }
+    }
+
+    const renderedGroupIds = new Set();
+    const itemsHTML = [];
 
     let lastSection = null;
     const activeLockedItems = combinedList.filter(item => item.itemStatus === 'active' && item.type === 'locked');
@@ -1099,10 +1140,13 @@ export async function renderAllItems() {
 
     itineraryItemsListEl.innerHTML = itemsHTML.join('');
 
-    setTimeout(() => {
-        const cards = itineraryItemsListEl.querySelectorAll('.compact-card');
-        cards.forEach(card => card.classList.add('settled'));
-    }, 600);
+    // Use rAF to defer the settled class until after paint, then apply with stagger
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            const cards = itineraryItemsListEl.querySelectorAll('.compact-card');
+            cards.forEach(card => card.classList.add('settled'));
+        });
+    });
 
     // Post-render hooks (delegated back to presentation.js)
     _deps.onAfterRenderAllItems();

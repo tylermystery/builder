@@ -90,8 +90,8 @@ async function handlePlanSyncUpdate(changeType, summary, changeData) {
         case 'itemAdded':
         case 'itemRemoved':
         case 'itemUpdated':
-            await itemRendering.renderAllItems();
-            headerSummary.generateItemsSummary();
+            // Use debounced render to coalesce rapid successive updates
+            itemRendering.scheduleRenderAllItems();
             headerSummary.updatePresentationHeaderTotal();
             headerSummary.updatePlanSummaryDashboard();
             break;
@@ -103,7 +103,7 @@ async function handlePlanSyncUpdate(changeType, summary, changeData) {
         case 'fullRefresh':
         case 'sessionLoaded':
             headerSummary.renderEventHeader();
-            await itemRendering.renderAllItems();
+            itemRendering.scheduleRenderAllItems();
             initializeAccordions();
             headerSummary.updatePresentationHeaderTotal();
             headerSummary.updatePlanSummaryDashboard();
@@ -264,18 +264,23 @@ function ensureDOMElements() {
         itemImagesCache,
         hidePresentationView,
         onAfterRenderAllItems: () => {
+            // Critical interactions first (user needs these immediately)
             cardInteractions.initializeCompactCardClicks();
             reactionSummaryBar.initializeReactionZones();
-            reactionRankings.renderReactionsSummary();
-            reactions.updateEventEmojiIndicator();
-            dragAndDrop.initializeItemDragDrop().catch(err => {
-                console.error('[Presentation] initializeItemDragDrop error:', err);
+
+            // Defer non-critical post-render work to avoid blocking the main thread
+            requestAnimationFrame(() => {
+                reactionRankings.renderReactionsSummary();
+                reactions.updateEventEmojiIndicator();
+                dragAndDrop.initializeItemDragDrop().catch(err => {
+                    console.error('[Presentation] initializeItemDragDrop error:', err);
+                });
+                dragAndDrop.initializeRadialMenu();
+                dragAndDrop.attachRadialMenuListeners();
+                registerActionHandler(dragAndDrop.handleActionMenuAction);
+                headerSummary.updatePlanSummaryDashboard();
+                recalculateVitality();
             });
-            dragAndDrop.initializeRadialMenu();
-            dragAndDrop.attachRadialMenuListeners();
-            registerActionHandler(dragAndDrop.handleActionMenuAction);
-            headerSummary.updatePlanSummaryDashboard();
-            setTimeout(() => { recalculateVitality(); }, 0);
         },
     };
 
@@ -407,28 +412,63 @@ export async function showPresentationView(listType, startRecordId = null) {
 
     const modal = presState.getModal();
 
-    // Load user permissions if not already loaded (handles direct URL access)
-    if (state.permissions?.isLoading !== false && state.session.id && state.session.user?.isAuthenticated && state.session.user?.id) {
-        try {
-            const { role, permissionRecord } = await api.fetchUserRole(state.session.id, state.session.user.id);
-            setState({
-                permissions: {
-                    currentRole: role,
-                    isLoading: false,
-                    permissionRecord: permissionRecord
-                }
-            });
-        } catch (error) {
-            console.error('[Presentation] Error loading permissions:', error);
-            setState({
-                permissions: {
-                    currentRole: null,
-                    isLoading: false,
-                    permissionRecord: null
-                }
-            });
-        }
+    // Parallelize independent async operations: permissions + tasks fetch
+    const projectId = state.session.id;
+    const needsPermissions = state.permissions?.isLoading !== false && state.session.id && state.session.user?.isAuthenticated && state.session.user?.id;
+    const needsTasks = projectId && !state.tasks.byProject.has(projectId);
+
+    const parallelPromises = [];
+
+    if (needsPermissions) {
+        parallelPromises.push(
+            api.fetchUserRole(state.session.id, state.session.user.id)
+                .then(({ role, permissionRecord }) => {
+                    setState({
+                        permissions: {
+                            currentRole: role,
+                            isLoading: false,
+                            permissionRecord: permissionRecord
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('[Presentation] Error loading permissions:', error);
+                    setState({
+                        permissions: {
+                            currentRole: null,
+                            isLoading: false,
+                            permissionRecord: null
+                        }
+                    });
+                })
+        );
     }
+
+    if (needsTasks) {
+        parallelPromises.push(
+            api.fetchTasks(projectId)
+                .then(tasks => {
+                    if (Array.isArray(tasks)) {
+                        tasks.forEach(task => {
+                            state.tasks.all.set(task.id, task);
+                        });
+                        state.tasks.byProject.set(projectId, tasks);
+                    }
+                })
+                .catch(error => {
+                    console.error('[Presentation] Error fetching tasks:', error);
+                })
+        );
+    }
+
+    // Wait for both to complete in parallel
+    if (parallelPromises.length > 0) {
+        await Promise.all(parallelPromises);
+    }
+
+    // Load task links after tasks are available
+    taskStatusManagement.loadCommentTaskLinks();
+    window.dispatchEvent(new CustomEvent('tasks-state-updated'));
 
     // Register sync callback to handle updates from other views
     registerSyncCallback('presentation', handlePlanSyncUpdate);
@@ -445,32 +485,10 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Initialize the Universal Vitality UI system
     initVitalityUI();
 
-    // Fetch tasks for this project if not already loaded
-    const projectId = state.session.id;
-    if (projectId && !state.tasks.byProject.has(projectId)) {
-        try {
-            const tasks = await api.fetchTasks(projectId);
-            if (Array.isArray(tasks)) {
-                tasks.forEach(task => {
-                    state.tasks.all.set(task.id, task);
-                });
-                state.tasks.byProject.set(projectId, tasks);
-                taskStatusManagement.loadCommentTaskLinks();
-                window.dispatchEvent(new CustomEvent('tasks-state-updated'));
-            }
-        } catch (error) {
-            console.error('[Presentation] Error fetching tasks:', error);
-        }
-    } else {
-        taskStatusManagement.loadCommentTaskLinks();
-        window.dispatchEvent(new CustomEvent('tasks-state-updated'));
-    }
-
     // Mark that catalog will need rendering when exiting presentation view
     presState.setCatalogNeedsRender(true);
 
-    // Clear image cache and comments cache for fresh load
-    itemImagesCache.clear();
+    // Clear comments cache for fresh load (keep image cache for faster re-opens)
     componentComments.getCache().clear();
 
     // Load task statuses from session state

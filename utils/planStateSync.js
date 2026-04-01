@@ -10,7 +10,7 @@ import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 
 // Track pending updates to debounce rapid changes
 let updateDebounceTimer = null;
-const UPDATE_DEBOUNCE_MS = 50;
+const UPDATE_DEBOUNCE_MS = 100;
 
 // Registered callbacks for different UI components
 const syncCallbacks = {
@@ -149,8 +149,6 @@ export function getPlanSummary() {
             if (diff < closestDiff) { closestDiff = diff; planReactionEmoji = emoji; }
         }
     }
-    console.log(`[SUMMARY-DEBUG] getPlanSummary: ${planReactedItemCount}/${allItemIds.length} items with reactions, planReactionScore: ${planReactionScore.toFixed(2)}, emoji: ${planReactionEmoji}, totalReactions: ${planTotalReactions}`);
-
     const summary = {
         lockedItemsCount,
         ideasCount,
@@ -223,7 +221,6 @@ export function syncPlanState(source, changeType = 'fullRefresh', changeData = {
         debugLog(`Dispatched planStateChanged event`);
 
         // Trigger vitality recalculation on every plan change
-        console.log('[PlanSync-Vitality DEBUG] About to call requestVitalityRecalc() from syncPlanState debounce. items size:', state.cart.items.size, 'lockedItems size:', state.cart.lockedItems.size);
         requestVitalityRecalc();
 
         debugLog(`========== SYNC COMPLETE ==========`);
@@ -264,7 +261,6 @@ export function syncPlanStateImmediate(source, changeType = 'fullRefresh', chang
     document.dispatchEvent(event);
 
     // Trigger vitality recalculation immediately
-    console.log('[PlanSync-Vitality DEBUG] About to call requestVitalityRecalc() from syncPlanStateImmediate. items size:', state.cart.items.size, 'lockedItems size:', state.cart.lockedItems.size);
     requestVitalityRecalc();
 
     debugLog(`========== IMMEDIATE SYNC COMPLETE ==========`);
