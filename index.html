@@ -2788,6 +2788,30 @@ select:focus-visible,
 
     <!-- Netlify Identity loaded on demand when auth is needed -->
     <script>
+    // Handle Netlify Identity hash tokens early to prevent "Link Disabled" errors
+    // This catches users clicking old Identity confirmation emails
+    (function() {
+      var hash = window.location.hash;
+      if (hash) {
+        // Check for Netlify Identity tokens in hash
+        var identityTokens = ['confirmation_token', 'recovery_token', 'invite_token', 'access_token'];
+        var hasIdentityToken = identityTokens.some(function(token) {
+          return hash.includes(token + '=');
+        });
+
+        if (hasIdentityToken) {
+          console.log('[Identity Redirect] Detected Netlify Identity hash token, clearing hash to prevent interference');
+          // Clear the hash to prevent the identity widget from processing an invalid token
+          // This prevents the "Link Disabled" error
+          if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          }
+          // Show a user-friendly message
+          console.warn('[Auth] Old or invalid Netlify Identity link detected. Please use the email sign-in form to request a new link.');
+        }
+      }
+    })();
+
     window.loadNetlifyIdentity = function() {
       if (window._identityLoading) return window._identityLoading;
       window._identityLoading = new Promise((resolve) => {
@@ -2864,7 +2888,7 @@ select:focus-visible,
         </div>
     </div>
     
-    <div id="toast-notification"></div>
+    <div id="toast-notification" role="status" aria-live="polite"></div>
 
     <!-- Projects Panel (Slide-out) -->
     <div id="projects-panel" class="projects-panel" style="display: none;">
@@ -3169,7 +3193,11 @@ select:focus-visible,
                 <div id="event-plan-notification" style="display: none;"></div>
 
                 <div id="cart-items-container">
-                     <p style="font-size: 0.9em; color: #6c757d; text-align: center; padding: 20px 10px;">Your event plan is empty. Browse the catalog and add items to get started!</p>
+                     <div class="empty-state empty-state-subtle">
+                         <div class="empty-state-icon">📋</div>
+                         <div class="empty-state-title">Your plan is empty</div>
+                         <div class="empty-state-description">Browse the catalog and add items to start building your perfect event!</div>
+                     </div>
                 </div>
                 <div id="event-health-score" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
                     <p style="font-size: 0.9em; color: #6c757d; text-align: center;">Add an item to see your Plan Health.</p>
@@ -3287,7 +3315,7 @@ select:focus-visible,
         </div>
     </div>
 
-    <div id="detail-modal-overlay" class="modal-overlay">
+    <div id="detail-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-item-name">
         <div class="modal-content">
             <button id="modal-close-btn" class="modal-close-btn" title="Close" aria-label="Close item details modal">×</button>
             <div class="modal-main-column">
@@ -3347,10 +3375,10 @@ select:focus-visible,
         </div>
     </div>
     
-    <div id="checkout-modal-overlay" class="modal-overlay">
+    <div id="checkout-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="checkout-modal-title">
         <div class="checkout-modal-content">
             <button id="checkout-close-btn" class="modal-close-btn" title="Close" aria-label="Close checkout modal">×</button>
-            <h3>Checkout Summary</h3>
+            <h3 id="checkout-modal-title">Checkout Summary</h3>
             <div id="checkout-summary-details">
                 <p>This is a summary of the items in your plan.</p>
             </div>
@@ -3413,10 +3441,10 @@ select:focus-visible,
         </div>
     </div>
 
-    <div id="quick-pay-modal-overlay" class="modal-overlay">
+    <div id="quick-pay-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="quick-pay-title">
         <div class="quick-pay-modal-content">
             <button id="quick-pay-close-btn" class="modal-close-btn" title="Close" aria-label="Close quick pay modal">×</button>
-            <h3>Quick Pay Options</h3>
+            <h3 id="quick-pay-title">Quick Pay Options</h3>
             <p class="quick-pay-description">Choose your preferred payment method to pay the store directly:</p>
             <div id="quick-pay-options-container">
                 <!-- Payment options will be dynamically inserted here -->
@@ -3443,11 +3471,11 @@ select:focus-visible,
     </div>
     END DORMANT FEATURE -->
 
-<div id="itinerary-modal-overlay" class="modal-overlay">
+<div id="itinerary-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="itinerary-modal-title">
     <div class="modal-content itinerary-content" style="max-width: 90vw; width: 1400px; height: 90vh;">
-        <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>
-        
-        <div class="beta-banner">The Itinerary Builder is now a Visual Scene Builder! We'd love your feedback!</div>
+        <button id="itinerary-close-btn" class="modal-close-btn" title="Close" aria-label="Close scene builder">×</button>
+
+        <div class="beta-banner" id="itinerary-modal-title">The Itinerary Builder is now a Visual Scene Builder! We'd love your feedback!</div>
 
         <div class="itinerary-container scene-builder-container">
             <div id="scene-builder-canvas">
@@ -3863,12 +3891,12 @@ select:focus-visible,
         </button>
     </div>
 
-    <div id="user-modal-overlay" class="modal-overlay">
+    <div id="user-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
         <div class="checkout-modal-content" style="max-width: 400px;">
-            <button id="user-modal-close-btn" class="modal-close-btn" title="Close">×</button>
-        
+            <button id="user-modal-close-btn" class="modal-close-btn" title="Close" aria-label="Close sign in modal">×</button>
+
             <div id="signin-view">
-                <h3>Sign In or Create Account</h3>
+                <h3 id="user-modal-title">Sign In or Create Account</h3>
                 <p>Choose your preferred sign-in method. Once logged in, your plans are saved to your account automatically!</p>
 
                 <!-- Email Magic Link Authentication (Recommended) -->
@@ -3879,26 +3907,25 @@ select:focus-visible,
                             <label for="signin-email">Email Address</label>
                             <input type="email" id="signin-email" autocomplete="email" required>
                         </div>
+                        <p style="margin-top: 10px; font-size: 0.85em; line-height: 1.5; color: #666;">By entering your email, you agree to receive transactional and project-related emails from WTFun. You can manage your notification preferences in your Account Settings at any time. View our <a href="/privacy-policy.html" target="_blank" style="color: #007bff; text-decoration: underline;">Privacy Policy</a> and <a href="/terms-of-service.html" target="_blank" style="color: #007bff; text-decoration: underline;">Terms of Service</a>.</p>
                         <button class="primary-action-btn" type="submit" style="background-color: #007bff;">Send Magic Link</button>
                     </form>
                     <p id="signin-message" style="margin-top: 10px;"></p>
                 </div>
 
-                <!-- DORMANT FEATURE: Phone/SMS Authentication - hidden until fully functional
-                     TODO: Re-enable phone authentication when SMS carrier approval is complete
+                <!-- Phone/SMS Authentication -->
                 <details style="margin-bottom: 15px;">
-                    <summary style="cursor: pointer; padding: 10px; background: #f5f5f5; border-radius: 4px;">Sign In with Phone (Currently Limited)</summary>
+                    <summary style="cursor: pointer; padding: 10px; background: #f5f5f5; border-radius: 4px;">Sign In with Phone</summary>
                     <div style="padding: 15px 0;">
-                        <p style="margin-bottom: 10px; color: #ff9800; font-size: 0.9em;">Note: SMS authentication is currently pending carrier approval. Email authentication is more reliable.</p>
                         <form id="sms-signin-form">
                             <div class="form-row">
                                 <label for="signin-phone">Phone Number (with country code)</label>
                                 <input type="tel" id="signin-phone" placeholder="+1234567890" autocomplete="tel">
                             </div>
                             <div class="form-row" style="margin-top: 15px;">
-                                <label style="display: flex; align-items: flex-start; cursor: pointer; font-size: 0.9em;">
-                                    <input type="checkbox" id="sms-consent-checkbox" style="margin-right: 8px; margin-top: 3px; cursor: pointer;">
-                                    <span style="line-height: 1.4;">I agree to receive text messages for authentication purposes. Message and data rates may apply. Reply STOP to opt out. <a href="/privacy-policy.html" target="_blank" style="color: #007bff; text-decoration: underline;">Privacy Policy</a></span>
+                                <label style="display: flex; align-items: flex-start; cursor: pointer; font-size: 0.85em; line-height: 1.5;">
+                                    <input type="checkbox" id="sms-consent-checkbox" style="margin-right: 10px; margin-top: 4px; cursor: pointer; flex-shrink: 0;">
+                                    <span>I agree to receive automated transactional and operational communications (Email and SMS) from WTFun regarding my projects, task updates, and account security. Message/email frequency varies. For SMS, message and data rates may apply and you can reply STOP to opt-out. View our <a href="/privacy-policy.html" target="_blank" style="color: #007bff; text-decoration: underline;">Privacy Policy</a> and <a href="/terms-of-service.html" target="_blank" style="color: #007bff; text-decoration: underline;">Terms of Service</a>.</span>
                                 </label>
                             </div>
                             <button class="primary-action-btn" type="submit" style="background-color: #4CAF50;">Send SMS Code</button>
@@ -3915,7 +3942,6 @@ select:focus-visible,
                         <p id="sms-message" style="margin-top: 10px;"></p>
                     </div>
                 </details>
-                END DORMANT FEATURE: Phone/SMS -->
 
                 <!-- DORMANT FEATURE: Google SSO - temporarily disabled until fully functional
                      TODO: Re-enable Google SSO when authentication issues are resolved
@@ -4014,10 +4040,10 @@ select:focus-visible,
         <a href="/crm-login.html">Admin Dashboard</a>
     </div>
   
-    <div id="shop-switcher-overlay" class="modal-overlay">
+    <div id="shop-switcher-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="shop-switcher-title">
         <div class="checkout-modal-content" style="max-width: 500px;">
-            <button id="shop-switcher-close-btn" class="modal-close-btn" title="Close">×</button>
-            <h3>Select a Shop</h3>
+            <button id="shop-switcher-close-btn" class="modal-close-btn" title="Close" aria-label="Close shop switcher">×</button>
+            <h3 id="shop-switcher-title">Select a Shop</h3>
             <div id="shop-list-container"></div>
         </div>
     </div>
@@ -4030,10 +4056,10 @@ select:focus-visible,
         <button id="mobile-view-plan-btn">View Plan</button>
     </div>
 
-<div id="calendar-modal-overlay" class="modal-overlay">
+<div id="calendar-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="calendar-modal-title">
         <div class="modal-content calendar-modal-content">
-            <button id="calendar-close-btn" class="modal-close-btn" title="Close">×</button>
-            <div class="beta-banner calendar-header">The Events Calendar is a Beta feature. We'd love your feedback!</div>
+            <button id="calendar-close-btn" class="modal-close-btn" title="Close" aria-label="Close calendar">×</button>
+            <div class="beta-banner calendar-header" id="calendar-modal-title">The Events Calendar is a Beta feature. We'd love your feedback!</div>
             <div id="calendar-view-controls">
                 <button id="calendar-view-month" class="calendar-view-btn active" data-view="month">📅 Month</button>
                 <button id="calendar-view-week" class="calendar-view-btn" data-view="week">📆 Week</button>

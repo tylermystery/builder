@@ -98,7 +98,12 @@ async function _handleSuccessfulLogin(payload) {
     hideUserModal();
 }
 
-export function showUserModal() {
+/**
+ * Show the user modal with optional specific view
+ * @param {Object} options - Optional configuration
+ * @param {string} options.section - Which section to show: 'phone' opens to phone sign-in for Twilio verification
+ */
+export function showUserModal(options = {}) {
     const user = state.session.user;
     const ownerDashboardLink = document.getElementById('owner-dashboard-link');
 
@@ -130,6 +135,15 @@ export function showUserModal() {
         // Refresh biometric section visibility when showing signin view
         // This ensures passkey login option appears if user has created one
         refreshBiometricSectionVisibility();
+
+        // If specific section requested, expand it (e.g., 'phone' for Twilio verification)
+        if (options.section === 'phone') {
+            const phoneDetails = signinView.querySelector('details');
+            if (phoneDetails) {
+                phoneDetails.open = true;
+                log('Auth', 'Opened phone sign-in section for direct link access');
+            }
+        }
     }
 
     // Populate Background Effects dropdown (only once)
@@ -176,12 +190,17 @@ async function handleSignIn(e) {
     signinMessage.style.color = '#333';
     signinMessage.textContent = `Sending confirmation email...`;
     try {
+        log('Auth', 'Calling /api/auth-start endpoint');
         const response = await fetch('/api/auth-start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: email, siteUrl: window.location.origin }),
         });
+
+        log('Auth', `auth-start response status: ${response.status}`);
         const data = await response.json();
+        log('Auth', `auth-start response data:`, data);
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to send confirmation email.');
         }
@@ -213,8 +232,10 @@ async function handleSignIn(e) {
         });
 
     } catch (error) {
+        console.error('[Auth] Sign-in error:', error);
+        log('Auth', `Sign-in failed: ${error.message}`);
         signinMessage.style.color = '#dc3545';
-        signinMessage.textContent = error.message;
+        signinMessage.textContent = error.message || 'Unable to sign in. Please try again.';
     }
 }
 

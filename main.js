@@ -12,7 +12,7 @@ import { debounce, updateUrl, extractRecordIdFromPath } from './utils.js';
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js';
 import { initializeSessionChat } from './chat.js';
 import { setupCalendarEventListeners } from './components/calendarView.js';
-import { setupAuthEventListeners, updateUserProfileIcon, initializeBiometricAuth, showBiometricSetupPromptIfNeeded, updateBiometricManagementUI } from './auth.js';
+import { setupAuthEventListeners, updateUserProfileIcon, initializeBiometricAuth, showBiometricSetupPromptIfNeeded, updateBiometricManagementUI, showUserModal } from './auth.js';
 import * as backgroundEngine from './components/backgroundEngine.js';
 import fluidEffect from './components/effects/fluid.js';
 import { showReceiptModal } from './components/receipt.js';
@@ -265,6 +265,14 @@ function syncUiWithUrl() {
             ui.showPresentationView('ideas');
         } else if (view === 'itinerary') {
             ui.showItineraryModal();
+        } else if (view === 'account-phone') {
+            // Direct link to account popup with phone sign-in section expanded (for Twilio verification)
+            showUserModal({ section: 'phone' });
+            log('Main', 'Opened account modal with phone section for direct link (Twilio)');
+        } else if (view === 'account') {
+            // Direct link to account popup (general account access)
+            showUserModal();
+            log('Main', 'Opened account modal for direct link');
         } else if (openItemId) {
             // Wait for deferred CSS before showing modal on direct URL access
             // This prevents styling issues where the page behind the modal looks broken

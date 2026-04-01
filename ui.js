@@ -893,10 +893,17 @@ export function showShopSwitcher() {
     });
 }
 
-export function showToast(message, duration = 5000) {
+export function showToast(message, duration = 5000, variant = 'success') {
     const toast = document.getElementById('toast-notification');
     if (toast) {
+        // Remove any existing variant classes
+        toast.classList.remove('toast-success', 'toast-error', 'toast-warning', 'toast-info');
+        // Add the specified variant class
+        toast.classList.add(`toast-${variant}`);
         toast.textContent = message;
+        // Set appropriate aria-live for screen readers
+        toast.setAttribute('role', variant === 'error' ? 'alert' : 'status');
+        toast.setAttribute('aria-live', variant === 'error' ? 'assertive' : 'polite');
         toast.classList.add('show');
         setTimeout(() => {
             toast.classList.remove('show');
