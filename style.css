@@ -2264,6 +2264,7 @@ body.presentation-active #wtf-plans-panel-overlay {
     background-size: cover;
     background-position: center;
     border-right: 1px solid #eee;
+    position: relative; /* Required for positioning ai-image-source-modal */
 }
 #modal-thumbnail-strip {
     display: flex;
@@ -12105,6 +12106,39 @@ hr.total-divider {
     background: linear-gradient(135deg, rgba(149, 165, 166, 0.9), rgba(127, 140, 141, 0.9));
     color: white;
     box-shadow: 0 2px 6px rgba(149, 165, 166, 0.4);
+}
+
+/* AI Image Source Indicator - shows whether image is AI approximated or verified */
+.ai-image-source {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.65em;
+    font-weight: 600;
+    z-index: 10;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    transition: all 0.3s ease;
+}
+
+.ai-image-source.approximation {
+    background: linear-gradient(135deg, rgba(155, 89, 182, 0.85), rgba(52, 152, 219, 0.85));
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    animation: pulse-soft 2s ease-in-out infinite;
+}
+
+.ai-image-source.polished {
+    background: linear-gradient(135deg, rgba(39, 174, 96, 0.9), rgba(46, 204, 113, 0.9));
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+@keyframes pulse-soft {
+    0%, 100% { opacity: 0.9; }
+    50% { opacity: 1; }
 }
 
 /* Image loading status overlay */

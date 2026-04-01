@@ -1510,6 +1510,51 @@ function getDeterministicPlaceholder(record) {
     return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/w_600,h_520,c_fill,b_rgb:${bgColor}/l_text:Arial_36_bold:${encodedName},co_rgb:FFFFFF,g_center/${placeholderPublicID}.jpg`;
 }
 
+/**
+ * Generates an AI-approximated placeholder image with distinct visual styling
+ * Uses Cloudinary transformations to create a sketch/pencil-style effect
+ * indicating this is an AI approximation that may improve with "Dig Into"
+ */
+function getAIApproximatedPlaceholder(record) {
+    const name = record.fields?.Name || 'Unknown Item';
+    const mediaKeywords = record.fields?.[CONSTANTS.FIELD_NAMES.MEDIA_TAGS] || '';
+    const category = record.fields?.Category || '';
+    const confidence = record.fields?._aiConfidence ?? record._aiConfidence ?? null;
+
+    // Generate a color based on the name (for visual variety)
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+        hash = ((hash << 5) - hash) + name.charCodeAt(i);
+        hash = hash & hash;
+    }
+
+    // Purple/blue gradient palette for AI items (reflects AI theme)
+    const aiColors = ['667eea', '764ba2', '6c5ce7', '74b9ff', '81ecec', 'a29bfe', 'fd79a8', 'fdcb6e'];
+    const bgColor = aiColors[Math.abs(hash) % aiColors.length];
+
+    // Shortened name for overlay (first 18 chars to leave room for AI badge)
+    const shortName = name.length > 18 ? name.substring(0, 18) + '...' : name;
+    const encodedName = encodeURIComponent(shortName);
+
+    // Cloudinary placeholder with AI-specific styling
+    // Uses cartoonify effect for a sketched/draft look that indicates AI approximation
+    const placeholderPublicID = 'ww71meppejsewxsxr4x7';
+
+    // Apply visual effect based on confidence level
+    let effectTransform = 'e_cartoonify:30'; // Default sketchy effect
+    if (confidence !== null) {
+        if (confidence >= 0.75) {
+            effectTransform = 'e_improve'; // Cleaner look for higher confidence
+        } else if (confidence >= 0.5) {
+            effectTransform = 'e_cartoonify:15,e_sharpen:50'; // Semi-polished
+        } else {
+            effectTransform = 'e_cartoonify:50,e_grayscale'; // Very sketchy for low confidence
+        }
+    }
+
+    return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/w_600,h_520,c_fill,${effectTransform},b_rgb:${bgColor}/l_text:Arial_32_bold:${encodedName},co_rgb:FFFFFF,g_center/${placeholderPublicID}.jpg`;
+}
+
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
     // === IMAGE DEBUG: Log entry to fetchImagesForRecord ===
     const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.isAI === true;
@@ -1537,15 +1582,53 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     // STEP 0: Check for custom user-uploaded images first (highest priority)
     // ============================================================
     const customImages = record.fields?._customImages;
+
+    // DEBUG: Log the raw custom images data
+    console.log('[AI IMAGE DEBUG API] === Checking custom images for record ===');
+    console.log('[AI IMAGE DEBUG API] Record ID:', record.id);
+    console.log('[AI IMAGE DEBUG API] record.fields._customImages exists:', !!customImages);
+    console.log('[AI IMAGE DEBUG API] record.fields._customImages type:', typeof customImages);
+    console.log('[AI IMAGE DEBUG API] record.fields._customImages is Array:', Array.isArray(customImages));
+    console.log('[AI IMAGE DEBUG API] record.fields._customImages length:', customImages?.length || 0);
+    console.log('[AI IMAGE DEBUG API] record.fields._customImages raw:', JSON.stringify(customImages));
+    console.log('[AI IMAGE DEBUG API] record.fields._hasAIGeneratedImage:', record.fields?._hasAIGeneratedImage);
+
     if (customImages && Array.isArray(customImages) && customImages.length > 0) {
-        console.log('[IMAGE DEBUG] Found custom user-uploaded images:', {
+        // Check if any of the custom images are AI-generated
+        const hasAIGeneratedImage = customImages.some(img => img.isAIGenerated === true);
+
+        console.log('[AI IMAGE DEBUG API] Processing custom images:', {
             recordId: record.id,
-            customImageCount: customImages.length
+            customImageCount: customImages.length,
+            hasAIGeneratedImage: hasAIGeneratedImage,
+            images: customImages.map(img => ({
+                url: (img.url || img).substring(0, 80) + '...',
+                isAIGenerated: img.isAIGenerated
+            }))
         });
+
         imageUrls = customImages.map(img => img.url || img);
-        imageSource = 'custom_upload';
+        // Use 'ai_generated' source if all images are AI-generated, otherwise 'custom_upload'
+        imageSource = hasAIGeneratedImage && customImages.every(img => img.isAIGenerated)
+            ? 'ai_generated'
+            : (hasAIGeneratedImage ? 'mixed_ai_custom' : 'custom_upload');
+
+        console.log('[AI IMAGE DEBUG API] Image source determined:', imageSource);
+        console.log('[AI IMAGE DEBUG API] Image URLs:', imageUrls);
+
         imageCache.set(cacheKey, imageUrls);
-        return { imageUrls, status: 'success', source: imageSource };
+        const returnValue = {
+            imageUrls,
+            status: imageSource, // Use the image source as status for consistency with other return paths
+            source: imageSource,
+            isAIGenerated: hasAIGeneratedImage,
+            // Return the full custom images array for components that need AI metadata
+            customImagesData: customImages
+        };
+        console.log('[AI IMAGE DEBUG API] Returning:', JSON.stringify(returnValue));
+        return returnValue;
+    } else {
+        console.log('[AI IMAGE DEBUG API] No custom images found for record', record.id);
     }
 
     // ============================================================
@@ -1653,16 +1736,23 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         log('API', `No images found for ${record.id} after all checks, using placeholder.`);
 
         if (isAIRecord) {
+            updateImageStatus(record.id, 'using_ai_placeholder', 'Using AI approximated image');
+            // Use AI-specific placeholder with visual styling
+            imageUrls = [getAIApproximatedPlaceholder(record)];
+            imageSource = 'ai_approximation';
+            console.log('[IMAGE DEBUG] Step 4 - Using AI approximated placeholder:', {
+                recordId: record.id,
+                placeholderUrl: imageUrls[0]
+            });
+        } else {
             updateImageStatus(record.id, 'using_placeholder', 'Using placeholder image');
+            imageUrls = [getDeterministicPlaceholder(record)];
+            imageSource = 'placeholder';
+            console.log('[IMAGE DEBUG] Step 4 - Using deterministic placeholder:', {
+                recordId: record.id,
+                placeholderUrl: imageUrls[0]
+            });
         }
-
-        imageUrls = [getDeterministicPlaceholder(record)];
-        imageSource = 'placeholder';
-
-        console.log('[IMAGE DEBUG] Step 4 - Using deterministic placeholder:', {
-            recordId: record.id,
-            placeholderUrl: imageUrls[0]
-        });
     }
 
     console.log('[IMAGE DEBUG] fetchImagesForRecord COMPLETE:', {
