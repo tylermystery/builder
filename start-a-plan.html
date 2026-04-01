@@ -155,6 +155,133 @@
             display: block;
         }
 
+        /* Debug Panel Styles - Mobile-friendly debugging */
+        .debug-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            max-height: 40vh;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: #00ff00;
+            font-family: 'Courier New', Consolas, monospace;
+            font-size: 12px;
+            overflow-y: auto;
+            padding: 12px;
+            z-index: 9999;
+            display: none;
+            border-top: 2px solid #00ff00;
+        }
+
+        .debug-panel.visible {
+            display: block;
+        }
+
+        .debug-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #00ff0044;
+        }
+
+        .debug-panel-title {
+            font-weight: bold;
+            color: #00ff00;
+        }
+
+        .debug-panel-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .debug-btn {
+            background: none;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .debug-btn:hover {
+            background: #00ff0022;
+        }
+
+        .debug-entry {
+            margin-bottom: 8px;
+            padding: 8px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            word-break: break-word;
+        }
+
+        .debug-timestamp {
+            color: #888;
+            font-size: 10px;
+        }
+
+        .debug-action {
+            color: #ffff00;
+            font-weight: bold;
+        }
+
+        .debug-data {
+            color: #00ffff;
+            white-space: pre-wrap;
+            margin-top: 4px;
+        }
+
+        .debug-error {
+            color: #ff4444;
+        }
+
+        .debug-success {
+            color: #44ff44;
+        }
+
+        .debug-toggle {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #333 0%, #111 100%);
+            border: 2px solid #00ff00;
+            color: #00ff00;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .debug-toggle:hover {
+            background: linear-gradient(135deg, #444 0%, #222 100%);
+        }
+
+        .debug-toggle.has-logs::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 12px;
+            height: 12px;
+            background: #ff4444;
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
         @media (max-width: 640px) {
             .container {
                 padding: 32px 24px;
@@ -199,15 +326,117 @@
         </div>
     </div>
 
+    <!-- Debug Toggle Button -->
+    <button id="debugToggle" class="debug-toggle" title="Toggle Debug Panel">🔧</button>
+
+    <!-- Debug Panel -->
+    <div id="debugPanel" class="debug-panel">
+        <div class="debug-panel-header">
+            <span class="debug-panel-title">📋 Quick Plan Debug Log</span>
+            <div class="debug-panel-controls">
+                <button class="debug-btn" id="clearDebugLog">Clear</button>
+                <button class="debug-btn" id="closeDebugPanel">✕</button>
+            </div>
+        </div>
+        <div id="debugLogContent"></div>
+    </div>
+
     <script>
         (function() {
             const planIdeaInput = document.getElementById('planIdea');
             const startPlanButton = document.getElementById('startPlanButton');
             const errorMessage = document.getElementById('errorMessage');
 
+            // Debug Panel Elements
+            const debugToggle = document.getElementById('debugToggle');
+            const debugPanel = document.getElementById('debugPanel');
+            const debugLogContent = document.getElementById('debugLogContent');
+            const clearDebugLog = document.getElementById('clearDebugLog');
+            const closeDebugPanel = document.getElementById('closeDebugPanel');
+
+            // Debug state
+            let debugLogs = [];
+            let enrichmentPollInterval = null;
+
+            /**
+             * Add a debug log entry to the panel
+             * @param {string} action - The action description
+             * @param {any} data - Optional data to display
+             * @param {string} type - 'info', 'success', 'error', 'data'
+             */
+            function debugLog(action, data = null, type = 'info') {
+                const timestamp = new Date().toISOString();
+                const entry = { timestamp, action, data, type };
+                debugLogs.push(entry);
+
+                // Add visual indicator if panel is closed
+                if (!debugPanel.classList.contains('visible')) {
+                    debugToggle.classList.add('has-logs');
+                }
+
+                // Render the entry
+                const entryEl = document.createElement('div');
+                entryEl.className = 'debug-entry';
+
+                let dataClass = '';
+                if (type === 'error') dataClass = 'debug-error';
+                else if (type === 'success') dataClass = 'debug-success';
+
+                let html = `<div class="debug-timestamp">${timestamp}</div>`;
+                html += `<div class="debug-action ${dataClass}">[${type.toUpperCase()}] ${action}</div>`;
+
+                if (data !== null) {
+                    const dataStr = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
+                    html += `<div class="debug-data">${escapeHtml(dataStr)}</div>`;
+                }
+
+                entryEl.innerHTML = html;
+                debugLogContent.appendChild(entryEl);
+
+                // Auto-scroll to bottom
+                debugPanel.scrollTop = debugPanel.scrollHeight;
+            }
+
+            /**
+             * Escape HTML for safe display
+             */
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            /**
+             * Toggle debug panel visibility
+             */
+            function toggleDebugPanel() {
+                debugPanel.classList.toggle('visible');
+                if (debugPanel.classList.contains('visible')) {
+                    debugToggle.classList.remove('has-logs');
+                }
+            }
+
+            /**
+             * Clear all debug logs
+             */
+            function clearDebugLogs() {
+                debugLogs = [];
+                debugLogContent.innerHTML = '';
+                debugLog('Debug log cleared', null, 'info');
+            }
+
+            // Debug panel event listeners
+            debugToggle.addEventListener('click', toggleDebugPanel);
+            closeDebugPanel.addEventListener('click', () => debugPanel.classList.remove('visible'));
+            clearDebugLog.addEventListener('click', clearDebugLogs);
+
+            // Initialize debug log
+            debugLog('Page loaded', { userAgent: navigator.userAgent, timestamp: Date.now() }, 'info');
+
             function showError(message) {
                 errorMessage.textContent = message;
                 errorMessage.classList.add('visible');
+                debugLog('Error shown to user', { message }, 'error');
             }
 
             function hideError() {
@@ -219,14 +448,79 @@
                 if (isLoading) {
                     startPlanButton.classList.add('loading');
                     startPlanButton.textContent = '';
+                    debugLog('Loading state enabled', null, 'info');
                 } else {
                     startPlanButton.classList.remove('loading');
                     startPlanButton.textContent = 'Start Plan';
+                    debugLog('Loading state disabled', null, 'info');
                 }
+            }
+
+            /**
+             * Poll for enrichment results after plan creation
+             * @param {string} planId - The new plan ID
+             */
+            async function pollForEnrichment(planId) {
+                debugLog('Starting enrichment polling', { planId }, 'info');
+
+                let attempts = 0;
+                const maxAttempts = 15; // Poll for up to 30 seconds
+                const pollInterval = 2000; // Poll every 2 seconds
+
+                enrichmentPollInterval = setInterval(async () => {
+                    attempts++;
+                    debugLog(`Enrichment poll attempt ${attempts}/${maxAttempts}`, { planId }, 'info');
+
+                    try {
+                        const response = await fetch(`/api/get-project?id=${planId}`);
+                        if (response.ok) {
+                            const project = await response.json();
+
+                            // Check if enrichment fields are populated
+                            const hasEnrichment = project.Goals || project.Date ||
+                                                   (project.Name && project.Name.length < 50);
+
+                            debugLog('Project data fetched', {
+                                name: project.Name,
+                                planType: project.Plan_Type,
+                                date: project.Date,
+                                goals: project.Goals,
+                                guestCount: project['Guest Count'],
+                                location: project.Location,
+                                hasEnrichment
+                            }, hasEnrichment ? 'success' : 'data');
+
+                            if (hasEnrichment || attempts >= maxAttempts) {
+                                clearInterval(enrichmentPollInterval);
+                                if (hasEnrichment) {
+                                    debugLog('AI Enrichment completed!', {
+                                        extractedFields: {
+                                            name: project.Name,
+                                            type: project.Plan_Type,
+                                            date: project.Date,
+                                            goals: project.Goals,
+                                            guestCount: project['Guest Count'],
+                                            location: project.Location
+                                        }
+                                    }, 'success');
+                                } else {
+                                    debugLog('Max polling attempts reached', null, 'info');
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        debugLog('Enrichment poll error', { error: error.message }, 'error');
+                    }
+                }, pollInterval);
             }
 
             async function handleSubmit() {
                 const idea = planIdeaInput.value.trim();
+
+                debugLog('Submit initiated', {
+                    ideaLength: idea.length,
+                    ideaPreview: idea.substring(0, 100) + (idea.length > 100 ? '...' : '')
+                }, 'info');
 
                 if (!idea) {
                     showError('Please enter an idea to start your plan.');
@@ -238,6 +532,11 @@
                 setLoading(true);
 
                 try {
+                    debugLog('Sending request to /api/create-quick-plan', {
+                        ideaLength: idea.length
+                    }, 'info');
+
+                    const startTime = performance.now();
                     const response = await fetch('/api/create-quick-plan', {
                         method: 'POST',
                         headers: {
@@ -245,20 +544,46 @@
                         },
                         body: JSON.stringify({ idea: idea })
                     });
+                    const endTime = performance.now();
+
+                    debugLog('Response received', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        duration: `${(endTime - startTime).toFixed(0)}ms`
+                    }, response.ok ? 'info' : 'error');
 
                     const data = await response.json();
+
+                    debugLog('Response data parsed', data, response.ok ? 'success' : 'error');
 
                     if (!response.ok) {
                         throw new Error(data.error || 'Failed to create plan');
                     }
 
                     if (data.newPlanId) {
-                        // Redirect to the new plan's detail page
-                        window.location.href = '/?session=' + data.newPlanId;
+                        debugLog('Plan created successfully!', {
+                            planId: data.newPlanId,
+                            redirectUrl: '/?session=' + data.newPlanId
+                        }, 'success');
+
+                        // Start polling for enrichment results
+                        pollForEnrichment(data.newPlanId);
+
+                        // Show success and delay redirect to allow viewing debug output
+                        debugLog('Redirecting to plan in 3 seconds...', null, 'info');
+                        debugLog('(Tip: Keep debug panel open to see AI enrichment results)', null, 'info');
+
+                        setTimeout(() => {
+                            window.location.href = '/?session=' + data.newPlanId;
+                        }, 3000);
                     } else {
                         throw new Error('No plan ID returned');
                     }
                 } catch (error) {
+                    debugLog('Request failed', {
+                        error: error.message,
+                        stack: error.stack
+                    }, 'error');
                     console.error('Error creating plan:', error);
                     showError(error.message || 'Something went wrong. Please try again.');
                     setLoading(false);
@@ -272,8 +597,21 @@
             planIdeaInput.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                     e.preventDefault();
+                    debugLog('Submit triggered via keyboard', { key: 'Ctrl/Cmd+Enter' }, 'info');
                     handleSubmit();
                 }
+            });
+
+            // Log text input changes (debounced)
+            let inputTimeout;
+            planIdeaInput.addEventListener('input', function() {
+                clearTimeout(inputTimeout);
+                inputTimeout = setTimeout(() => {
+                    debugLog('Input updated', {
+                        length: planIdeaInput.value.length,
+                        wordCount: planIdeaInput.value.trim().split(/\s+/).filter(w => w).length
+                    }, 'info');
+                }, 500);
             });
         })();
     </script>

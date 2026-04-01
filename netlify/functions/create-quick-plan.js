@@ -7,8 +7,25 @@ const fetch = require('node-fetch');
 // Environment variables for Airtable access
 const { AIRTABLE_PAT, BASE_ID } = process.env;
 
-// Target the existing Projects table
-const PROJECTS_TABLE = 'Projects';
+// Target the existing Sessions table (also referred to as "Projects" in the UI)
+const SESSIONS_TABLE = 'Sessions';
+
+// Debug logging prefix for this module
+const DEBUG_PREFIX = '[create-quick-plan]';
+
+/**
+ * Debug logger for plan creation - focused logging for this feature
+ * @param {string} action - The action being performed
+ * @param {any} data - Data to log (optional)
+ */
+function debugLog(action, data = null) {
+  const timestamp = new Date().toISOString();
+  if (data !== null) {
+    console.log(`${DEBUG_PREFIX} [${timestamp}] ${action}:`, JSON.stringify(data, null, 2));
+  } else {
+    console.log(`${DEBUG_PREFIX} [${timestamp}] ${action}`);
+  }
+}
 
 /**
  * Triggers background AI enrichment of the newly created plan
@@ -23,7 +40,7 @@ function triggerBackgroundEnrichment(projectId, ideaText) {
     ? `${process.env.URL}/.netlify/functions/enrich-quick-plan`
     : '/.netlify/functions/enrich-quick-plan';
 
-  console.log(`[create-quick-plan] Triggering background AI enrichment for project ${projectId}`);
+  debugLog('Triggering background AI enrichment', { projectId, enrichmentUrl });
 
   // Fire and forget - don't await
   fetch(enrichmentUrl, {
@@ -36,19 +53,19 @@ function triggerBackgroundEnrichment(projectId, ideaText) {
   })
     .then(response => {
       if (response.ok) {
-        console.log(`[create-quick-plan] Background enrichment triggered successfully`);
+        debugLog('Background enrichment triggered successfully', { projectId });
       } else {
-        console.warn(`[create-quick-plan] Background enrichment returned status ${response.status}`);
+        debugLog('Background enrichment returned non-OK status', { projectId, status: response.status });
       }
     })
     .catch(error => {
       // Log but don't fail - enrichment is optional
-      console.warn(`[create-quick-plan] Background enrichment failed: ${error.message}`);
+      debugLog('Background enrichment failed (non-critical)', { projectId, error: error.message });
     });
 }
 
 exports.handler = async (event) => {
-  console.log('[create-quick-plan] Function invoked');
+  debugLog('Function invoked', { method: event.httpMethod });
 
   // Only allow POST requests
   if (event.httpMethod !== 'POST') {
@@ -61,7 +78,7 @@ exports.handler = async (event) => {
 
   // Validate environment variables
   if (!AIRTABLE_PAT || !BASE_ID) {
-    console.error('[create-quick-plan] CRITICAL: Missing required environment variables');
+    debugLog('ERROR: Missing required environment variables');
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -71,13 +88,12 @@ exports.handler = async (event) => {
 
   try {
     // Parse the incoming request body
-    console.log('[create-quick-plan] Parsing request body');
     const requestData = JSON.parse(event.body || '{}');
     const { idea } = requestData;
 
     // Validate the idea text
     if (!idea || typeof idea !== 'string' || idea.trim().length === 0) {
-      console.log('[create-quick-plan] Validation failed: Missing or empty idea');
+      debugLog('Validation failed: Missing or empty idea');
       return {
         statusCode: 400,
         headers: { 'Content-Type': 'application/json' },
@@ -86,11 +102,14 @@ exports.handler = async (event) => {
     }
 
     const ideaText = idea.trim();
-    console.log(`[create-quick-plan] Creating plan with idea (${ideaText.length} chars)`);
+    debugLog('Creating plan', {
+      ideaLength: ideaText.length,
+      ideaPreview: ideaText.substring(0, 100) + (ideaText.length > 100 ? '...' : '')
+    });
 
     // Prepare the record fields
-    // Name: First 50 characters of the idea text
-    // Description: Full idea text
+    // Name: First 50 characters of the idea text (will be updated by AI enrichment)
+    // Description: Full idea text (preserved for reference)
     const planName = ideaText.length > 50
       ? ideaText.substring(0, 50)
       : ideaText;
@@ -100,13 +119,13 @@ exports.handler = async (event) => {
       'Description': ideaText
     };
 
-    console.log('[create-quick-plan] Airtable fields prepared:', JSON.stringify({
-      Name: planName,
-      DescriptionLength: ideaText.length
-    }));
+    debugLog('Creating Airtable record', {
+      name: planName,
+      descriptionLength: ideaText.length
+    });
 
     // Create the record in Airtable
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(PROJECTS_TABLE)}`;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(SESSIONS_TABLE)}`;
 
     const response = await fetch(url, {
       method: 'POST',
@@ -117,21 +136,19 @@ exports.handler = async (event) => {
       body: JSON.stringify({ fields: airtableFields })
     });
 
-    console.log('[create-quick-plan] Airtable response status:', response.status);
-
     if (!response.ok) {
       const errorBody = await response.text();
-      console.error('[create-quick-plan] Airtable error:', errorBody);
+      debugLog('Airtable error', { status: response.status, error: errorBody });
       throw new Error(`Airtable API request failed: ${response.status}`);
     }
 
     const result = await response.json();
     const newRecordId = result.id;
 
-    console.log('[create-quick-plan] Successfully created plan with ID:', newRecordId);
+    debugLog('Plan created successfully', { planId: newRecordId });
 
     // Trigger background AI enrichment (fire-and-forget)
-    // This will suggest a Plan_Type and create initial Tasks without blocking the response
+    // This will extract structured data (date, goals, name, items) and create initial Tasks
     triggerBackgroundEnrichment(newRecordId, ideaText);
 
     // Return success response with the new record ID
@@ -145,8 +162,7 @@ exports.handler = async (event) => {
     };
 
   } catch (error) {
-    console.error('[create-quick-plan] Function failed:', error.message);
-    console.error('[create-quick-plan] Stack:', error.stack);
+    debugLog('Function failed', { error: error.message, stack: error.stack });
 
     return {
       statusCode: 500,
