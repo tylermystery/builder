@@ -2007,6 +2007,19 @@ html.presentation-active {
 }
 .locked-item-name {
     font-weight: bold;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    white-space: normal;
+    overflow: visible;
+}
+.locked-item-name-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: calc(100% - 80px); /* Leave space for the dig button */
+    flex-shrink: 1;
 }
 .locked-item-option, .locked-item-note {
     font-size: 0.8em;
@@ -2380,6 +2393,235 @@ body.presentation-active #wtf-plans-panel-overlay {
 }
 .ai-options-save-catalog-btn:hover {
     background: #0056b3;
+}
+
+/* AI Solutions Container (for concept items) */
+.ai-solutions-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.solutions-loading {
+    padding: 15px;
+    text-align: center;
+    color: #666;
+    font-style: italic;
+}
+
+/* Solution Item Badges - Rectangular badges for AI-generated solutions */
+.solution-item-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    width: 100%;
+    position: relative;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.solution-item-badge:hover {
+    border-color: #667eea;
+    background: linear-gradient(135deg, #f0f4ff 0%, #ffffff 100%);
+    box-shadow: 0 3px 8px rgba(102, 126, 234, 0.15);
+    transform: translateX(3px);
+}
+
+.solution-item-badge:active {
+    transform: translateX(1px);
+}
+
+/* Solution badge confidence indicator dot */
+.solution-badge-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* Solution badge name */
+.solution-badge-name {
+    flex: 1;
+    font-weight: 500;
+    color: #333;
+    font-size: 0.95em;
+}
+
+/* Solution badge price */
+.solution-badge-price {
+    font-size: 0.85em;
+    color: #666;
+    font-weight: 500;
+    background: #f0f0f0;
+    padding: 3px 8px;
+    border-radius: 4px;
+}
+
+/* Dig Solution Info button in sidebar */
+.dig-solution-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7em;
+    margin-left: 6px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+    flex-shrink: 0; /* Prevent button from shrinking */
+}
+
+.dig-solution-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+.dig-solution-btn:active {
+    transform: scale(0.98);
+}
+
+.dig-solution-btn:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+/* Categorize button styles */
+.categorize-item-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: linear-gradient(135deg, #43a047 0%, #1b5e20 100%);
+    color: white;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.categorize-item-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(67, 160, 71, 0.4);
+}
+
+.categorize-item-btn:active {
+    transform: scale(0.98);
+}
+
+.categorize-item-btn:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+/* Category badges container */
+.modal-categories-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+/* Individual category badge */
+.category-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    cursor: help;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.category-badge:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Category badge color variations - already handled inline but these are fallbacks */
+.category-badge.primary {
+    background: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #a5d6a7;
+}
+
+.category-badge.secondary {
+    background: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffcc80;
+}
+
+.category-badge.tertiary {
+    background: #f3e5f5;
+    color: #7b1fa2;
+    border: 1px solid #ce93d8;
+}
+
+/* Solution accuracy badge in sidebar */
+.solution-accuracy-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 0.7em;
+    margin-left: 6px;
+}
+
+/* Solution breadcrumb back navigation */
+.solution-back-link {
+    color: #667eea;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.solution-back-link:hover {
+    color: #764ba2;
+    text-decoration: underline;
+}
+
+.breadcrumb-separator {
+    color: #999;
+    margin: 0 5px;
+}
+
+.breadcrumb-current {
+    color: #333;
+    font-weight: 500;
+}
+
+/* Solution type badge (shown in solution item detail modal) */
+.solution-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 500;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.solution-badge-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
 }
 
 #modal-quantity-selector {

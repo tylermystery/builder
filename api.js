@@ -461,10 +461,13 @@ export async function loadSessionFromAirtable(sessionId) {
             // This ensures the plan appears in their plans list immediately
             if (!isCollaborator) {
                 console.log(`[SESSION-LOAD] User ${state.session.user.id} not yet collaborator on session ${sessionId}, adding...`);
-                // Fire async - don't block session load, just log errors
-                associateSessionWithUser(sessionId, state.session.user.id).catch(err => {
+                // Await the association to ensure plan appears in wtfplans list immediately
+                try {
+                    await associateSessionWithUser(sessionId, state.session.user.id);
+                    console.log('[SESSION-LOAD] Successfully associated user with session');
+                } catch (err) {
                     console.error('[SESSION-LOAD] Failed to auto-associate user with session:', err.message);
-                });
+                }
             }
         } else {
             state.session.isOwned = false;
@@ -547,7 +550,8 @@ export async function loadSessionFromAirtable(sessionId) {
 
                 // Restore custom records from saved session data
                 // These are items that were created via AI parsing or manually added, and don't exist in Airtable
-                // Includes: AI-generated items (ai-*), manually added items (manual-add-*, manual-presentation-*)
+                // Includes: AI-generated items (ai-*), manually added items (manual-add-*, manual-presentation-*),
+                // and solution items (solution-*)
                 if (savedState.aiRecords && Object.keys(savedState.aiRecords).length > 0) {
                     const customRecordsToRestore = Object.values(savedState.aiRecords);
                     for (const customRecord of customRecordsToRestore) {
@@ -557,11 +561,21 @@ export async function loadSessionFromAirtable(sessionId) {
                             if (customRecord.isManual) {
                                 customRecord.isManual = true;
                             }
+                            // Preserve solution item flags and data
+                            if (customRecord.isSolution) {
+                                customRecord.isSolution = true;
+                                // Restore to solution records registry for sidebar rendering
+                                if (!window._solutionRecords) {
+                                    window._solutionRecords = new Map();
+                                }
+                                window._solutionRecords.set(customRecord.id, customRecord);
+                                log('API', `Restored solution record to registry: ${customRecord.id}`);
+                            }
                             state.records.all.push(customRecord);
                         }
                     }
                     log('API', `Restored ${customRecordsToRestore.length} custom items from session data`);
-                    console.log(`[SESSION-LOAD] Restored ${customRecordsToRestore.length} custom items (AI + manual)`);
+                    console.log(`[SESSION-LOAD] Restored ${customRecordsToRestore.length} custom items (AI + manual + solution)`);
                 }
 
                 // Fetch ghost items (archived/deleted items in the plan)
@@ -706,23 +720,38 @@ export async function saveSessionToAirtable() {
 
     // Collect custom item records that are in the cart (ideas or locked)
     // These need to be persisted since they don't exist in Airtable
-    // Includes: AI-generated items (ai-*), manually added items (manual-add-*, manual-presentation-*)
+    // Includes: AI-generated items (ai-*), manually added items (manual-add-*, manual-presentation-*),
+    // and solution items (solution-*)
     const allCartItemIds = [
         ...Array.from(state.cart.items.keys()),
         ...Array.from(state.cart.lockedItems.keys())
     ];
     const customRecordsToSave = {};
     for (const itemId of allCartItemIds) {
-        // Custom items include AI-generated items and manually added items
-        const isCustomItem = itemId.startsWith('ai-') || itemId.startsWith('manual-');
+        // Custom items include AI-generated items, manually added items, and solution items
+        const isCustomItem = itemId.startsWith('ai-') || itemId.startsWith('manual-') || itemId.startsWith('solution-');
         if (isCustomItem) {
-            const customRecord = state.records.all.find(r => r.id === itemId);
+            // Look in state.records.all first
+            let customRecord = state.records.all.find(r => r.id === itemId);
+
+            // For solution items, also check the solution records registry
+            if (!customRecord && itemId.startsWith('solution-') && window._solutionRecords) {
+                customRecord = window._solutionRecords.get(itemId);
+            }
+
             if (customRecord) {
                 customRecordsToSave[itemId] = {
                     id: customRecord.id,
                     fields: customRecord.fields,
                     isAI: itemId.startsWith('ai-'),
-                    isManual: itemId.startsWith('manual-') || customRecord.isManual === true
+                    isManual: itemId.startsWith('manual-') || customRecord.isManual === true,
+                    isSolution: itemId.startsWith('solution-') || customRecord.isSolution === true,
+                    parentConceptId: customRecord.parentConceptId,
+                    parentConceptRecord: customRecord.parentConceptRecord,
+                    solutionData: customRecord.solutionData,
+                    // Preserve research data for solution items that have been "dug"
+                    _researchData: customRecord._researchData,
+                    _aiConfidence: customRecord._aiConfidence
                 };
             }
         }
@@ -1701,8 +1730,8 @@ export async function postPlanEvent(sessionId, eventType, eventData = {}) {
                 SessionID: [sessionId],
                 SenderID: 'system',
                 SenderName: 'System',
-                Content: eventContent,
-                EventType: eventType
+                Content: eventContent
+                // Note: EventType is stored in Content JSON, not as a separate field
             }
         }]
     };
@@ -4762,6 +4791,144 @@ export async function generateTopOptions(record) {
         return result;
     } catch (error) {
         console.error('Error generating top options:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Generate solutions for a concept/idea item using AI
+ * For conceptual items, this returns specific solutions (catalog items or AI-suggested providers)
+ * instead of product variations.
+ * @param {Object} record - The concept item record to generate solutions for
+ * @returns {Promise<Object>} - Object with success flag and solutions array
+ */
+export async function generateConceptSolutions(record) {
+    if (!record || !record.fields) {
+        console.error('generateConceptSolutions called without valid record');
+        return { success: false, error: 'Invalid record' };
+    }
+
+    const conceptData = {
+        name: record.fields.Name || record.fields['Display Name'] || 'Unknown Concept',
+        description: record.fields.Description || '',
+        category: record.fields.Category || record.fields['Item Type'] || '',
+        location: record.fields.Location || '',
+        budget: record.fields.Price || record.fields['Base Price'] || null
+    };
+
+    log('API', `Generating solutions for concept: ${conceptData.name}`);
+
+    try {
+        const response = await fetch('/.netlify/functions/generate-concept-solutions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(conceptData)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error from generate-concept-solutions function:', errorText);
+            throw new Error(`Failed to generate solutions: ${errorText}`);
+        }
+
+        const result = await response.json();
+        log('API', `Successfully generated ${result.solutions?.length || 0} solutions for ${conceptData.name}`);
+        return result;
+    } catch (error) {
+        console.error('Error generating concept solutions:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Research a solution item to dig for more detailed information using AI
+ * This fills in details like location, pricing, rankings, etc. similar to full AI-parsed items
+ * @param {Object} solutionRecord - The solution record to research
+ * @returns {Promise<Object>} - Object with success flag and research data including accuracy score
+ */
+export async function digSolutionDetails(solutionRecord) {
+    if (!solutionRecord || !solutionRecord.fields) {
+        console.error('digSolutionDetails called without valid solution record');
+        return { success: false, error: 'Invalid solution record' };
+    }
+
+    const solutionData = {
+        name: solutionRecord.fields.Name || 'Unknown Solution',
+        description: solutionRecord.fields.Description || solutionRecord.solutionData?.description || '',
+        price: solutionRecord.fields.Price || null,
+        category: solutionRecord.fields.Category || '',
+        parentConcept: solutionRecord.parentConceptRecord?.fields?.Name || ''
+    };
+
+    log('API', `Digging for details on solution: ${solutionData.name}`);
+
+    try {
+        const response = await fetch('/.netlify/functions/dig-solution-details', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(solutionData)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error from dig-solution-details function:', errorText);
+            throw new Error(`Failed to research solution: ${errorText}`);
+        }
+
+        const result = await response.json();
+        log('API', `Successfully researched solution ${solutionData.name} with confidence ${result.research?.confidence || 'N/A'}`);
+        return result;
+    } catch (error) {
+        console.error('Error researching solution details:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Categorize an item to find the top 3 event types it's best suited for
+ * Uses AI to analyze the item and suggest appropriate event categories
+ * @param {Object} itemRecord - The item record to categorize
+ * @returns {Promise<Object>} - Object with success flag and categorization data
+ */
+export async function categorizeItem(itemRecord) {
+    if (!itemRecord || !itemRecord.fields) {
+        console.error('categorizeItem called without valid item record');
+        return { success: false, error: 'Invalid item record' };
+    }
+
+    const itemData = {
+        name: itemRecord.fields.Name || 'Unknown Item',
+        description: itemRecord.fields.Description || '',
+        price: itemRecord.fields.Price || null,
+        category: itemRecord.fields.Categories || itemRecord.fields.Category || ''
+    };
+
+    log('API', `Categorizing item: ${itemData.name}`);
+
+    try {
+        const response = await fetch('/.netlify/functions/categorize-item', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(itemData)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error from categorize-item function:', errorText);
+            throw new Error(`Failed to categorize item: ${errorText}`);
+        }
+
+        const result = await response.json();
+        log('API', `Successfully categorized ${itemData.name} with ${result.categorization?.categories?.length || 0} categories`);
+        return result;
+    } catch (error) {
+        console.error('Error categorizing item:', error);
         return { success: false, error: error.message };
     }
 }

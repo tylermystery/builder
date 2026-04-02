@@ -70,11 +70,45 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
 
+    // === DIG INFO DEBUG START ===
+    console.log('[DIG-INFO DEBUG] createLockedInItemElement called for:', {
+        recordId: record.id,
+        recordName: fields?.Name,
+        isSolutionFlag: record.isSolution,
+        startsWithSolution: record.id.startsWith('solution-'),
+        hasResearchData: !!record._researchData,
+        researchConfidence: record._researchData?.confidence,
+        recordKeys: Object.keys(record)
+    });
+    // === DIG INFO DEBUG END ===
+
     // Determine if this is a custom/AI-generated item (affects price display and image sourcing)
     const isCustomItem = record.id.startsWith('custom-') ||
                          record.id.startsWith('ai-search-') ||
                          record.id.startsWith('ai-child-') ||
                          record.id.startsWith('ai-presentation-');
+
+    // Check if this is a solution item (AI-generated from concept) or a manually added item
+    // Manual items (manual-add-*, manual-presentation-*) are also researchable - they are user concepts
+    const isSolutionItem = record.id.startsWith('solution-') || record.isSolution === true;
+    const isManualItem = record.id.startsWith('manual-add-') ||
+                         record.id.startsWith('manual-presentation-') ||
+                         record.isManual === true;
+    const isResearchableItem = isSolutionItem || isManualItem;
+
+    // === DIG INFO DEBUG START ===
+    console.log('[DIG-INFO DEBUG] Solution item check:', {
+        recordId: record.id,
+        isSolutionItem: isSolutionItem,
+        isManualItem: isManualItem,
+        isResearchableItem: isResearchableItem,
+        checkResult1_startsWithSolution: record.id.startsWith('solution-'),
+        checkResult2_isSolutionTrue: record.isSolution === true,
+        checkResult3_startsWithManualAdd: record.id.startsWith('manual-add-'),
+        checkResult4_startsWithManualPresentation: record.id.startsWith('manual-presentation-'),
+        checkResult5_isManualTrue: record.isManual === true
+    });
+    // === DIG INFO DEBUG END ===
 
     // Fetch images for all items (including AI-parsed and custom items)
     // The fetchImagesForRecord function now handles multi-tier image sourcing
@@ -213,10 +247,71 @@ async function createLockedInItemElement(record, itemInfo) {
         }
     }
 
+    // Check if this solution has been researched (has research data with confidence)
+    const hasResearchData = isResearchableItem && record._researchData?.confidence != null;
+    const confidenceScore = hasResearchData ? Math.round(record._researchData.confidence * 100) : null;
+    const confidenceLevel = confidenceScore >= 80 ? 'high' : confidenceScore >= 50 ? 'medium' : 'low';
+    const confidenceColors = { high: '#28a745', medium: '#ffc107', low: '#6c757d' };
+
+    // === DIG INFO DEBUG START ===
+    console.log('[DIG-INFO DEBUG] Research data check:', {
+        recordId: record.id,
+        isSolutionItem: isSolutionItem,
+        isManualItem: isManualItem,
+        isResearchableItem: isResearchableItem,
+        hasResearchData: hasResearchData,
+        confidenceRaw: record._researchData?.confidence,
+        confidenceScore: confidenceScore,
+        confidenceLevel: confidenceLevel
+    });
+    // === DIG INFO DEBUG END ===
+
+    // Build the AI solution indicator and dig button for researchable items (solutions and manual items)
+    let solutionBadgeHtml = '';
+    if (isResearchableItem) {
+        // === DIG INFO DEBUG START ===
+        console.log('[DIG-INFO DEBUG] Entering isResearchableItem block, hasResearchData:', hasResearchData);
+        // === DIG INFO DEBUG END ===
+        if (hasResearchData) {
+            // Show accuracy score badge for researched items
+            // === DIG INFO DEBUG START ===
+            console.log('[DIG-INFO DEBUG] Rendering accuracy badge for researched item:', record.id);
+            // === DIG INFO DEBUG END ===
+            solutionBadgeHtml = `
+                <span class="solution-accuracy-badge"
+                      style="display: inline-flex; align-items: center; gap: 4px; background: ${confidenceColors[confidenceLevel]}20; color: ${confidenceColors[confidenceLevel]}; padding: 2px 6px; border-radius: 10px; font-size: 0.7em; margin-left: 6px; border: 1px solid ${confidenceColors[confidenceLevel]}40;"
+                      data-tippy-content="AI research accuracy: ${confidenceScore}%<br><em>${record._researchData.confidenceNotes || 'Based on AI research'}</em>">
+                    <span style="font-size: 0.9em;">&#x2714;</span> ${confidenceScore}%
+                </span>`;
+        } else {
+            // Show dig/research button for unresearched items
+            // === DIG INFO DEBUG START ===
+            console.log('[DIG-INFO DEBUG] Rendering Dig Info button for unresearched item:', record.id);
+            // === DIG INFO DEBUG END ===
+            solutionBadgeHtml = `
+                <button class="dig-solution-btn"
+                        data-record-id="${record.id}"
+                        style="display: inline-flex; align-items: center; gap: 3px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 2px 8px; border-radius: 10px; font-size: 0.7em; margin-left: 6px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;"
+                        data-tippy-content="Click to research this item and get detailed information with accuracy score">
+                    <span style="font-size: 1em;">&#x1F50D;</span> Dig Info
+                </button>`;
+        }
+        // === DIG INFO DEBUG START ===
+        console.log('[DIG-INFO DEBUG] solutionBadgeHtml generated:',
+            'recordId=' + record.id +
+            ', htmlLength=' + solutionBadgeHtml.length +
+            ', htmlPreview="' + solutionBadgeHtml.substring(0, 150).replace(/\n/g, ' ').replace(/\s+/g, ' ') + '..."');
+        // === DIG INFO DEBUG END ===
+    } else {
+        // === DIG INFO DEBUG START ===
+        console.log('[DIG-INFO DEBUG] NOT a researchable item, no badge will be shown:', record.id);
+        // === DIG INFO DEBUG END ===
+    }
+
     itemElement.innerHTML = `
         <img class="locked-item-thumbnail lazy-load" data-src="${imageUrl}" width="60" height="60" alt="${fields.Name}" loading="lazy">
         <div class="locked-item-details">
-            <p class="locked-item-name">${fields.Name}</p>
+            <p class="locked-item-name"><span class="locked-item-name-text">${fields.Name}</span>${solutionBadgeHtml}</p>
             ${optionDisplay ? `<p class="locked-item-option">${optionDisplay}</p>` : ''}
             <p class="locked-item-pricing">${quantityDisplay} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
             ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
@@ -225,6 +320,14 @@ async function createLockedInItemElement(record, itemInfo) {
             <button class="demote-locked-item-btn" title="Remove from Plan">Unsave</button>
         </div>
     `;
+
+    // === DIG INFO DEBUG START ===
+    console.log('[DIG-INFO DEBUG] After setting innerHTML:',
+        'recordId=' + record.id +
+        ', htmlContainsDigBtn=' + itemElement.innerHTML.includes('dig-solution-btn') +
+        ', htmlContainsDigText=' + itemElement.innerHTML.includes('Dig Info') +
+        ', itemNameElementText=' + (itemElement.querySelector('.locked-item-name')?.innerHTML?.substring(0, 150) || 'null'));
+    // === DIG INFO DEBUG END ===
 
     // Initialize Tippy tooltip for the warning asterisk if present
     const warningSpan = itemElement.querySelector('.min-qty-warning');
@@ -258,6 +361,42 @@ async function createLockedInItemElement(record, itemInfo) {
             arrow: true
         });
     }
+
+    // Initialize Tippy tooltip for the dig solution button if present
+    const digBtn = itemElement.querySelector('.dig-solution-btn');
+    // === DIG INFO DEBUG START ===
+    console.log('[DIG-INFO DEBUG] Dig button query result:',
+        'recordId=' + record.id +
+        ', digBtnFound=' + (!!digBtn) +
+        ', digBtnOuterHTML=' + (digBtn ? digBtn.outerHTML.substring(0, 100) : 'null') +
+        ', tippyAvailable=' + (!!window.tippy));
+    // === DIG INFO DEBUG END ===
+    if (digBtn && window.tippy) {
+        tippy(digBtn, {
+            content: digBtn.dataset.tippyContent,
+            allowHTML: true,
+            placement: 'top',
+            arrow: true
+        });
+        // === DIG INFO DEBUG START ===
+        console.log('[DIG-INFO DEBUG] Tippy initialized for dig button:', record.id);
+        // === DIG INFO DEBUG END ===
+    }
+
+    // Initialize Tippy tooltip for the accuracy badge if present
+    const accuracyBadge = itemElement.querySelector('.solution-accuracy-badge');
+    if (accuracyBadge && window.tippy) {
+        tippy(accuracyBadge, {
+            content: accuracyBadge.dataset.tippyContent,
+            allowHTML: true,
+            placement: 'top',
+            arrow: true
+        });
+    }
+
+    // === DIG INFO DEBUG START ===
+    console.log('[DIG-INFO DEBUG] createLockedInItemElement COMPLETE for:', record.id);
+    // === DIG INFO DEBUG END ===
 
     return itemElement;
 }
@@ -1774,11 +1913,51 @@ export async function updateEventPlanSection() {
             // Create a document fragment to batch DOM updates
             const fragment = document.createDocumentFragment();
 
+            // === DIG INFO DEBUG START ===
+            console.log('[DIG-INFO DEBUG] ========== RENDERING LOCKED ITEMS ==========');
+            console.log('[DIG-INFO DEBUG] Total locked items:', state.cart.lockedItems.size);
+            console.log('[DIG-INFO DEBUG] Locked item IDs:', [...state.cart.lockedItems.keys()]);
+            console.log('[DIG-INFO DEBUG] window._solutionRecords exists:', !!window._solutionRecords);
+            console.log('[DIG-INFO DEBUG] window._solutionRecords size:', window._solutionRecords?.size || 0);
+            if (window._solutionRecords) {
+                console.log('[DIG-INFO DEBUG] Solution records keys:', [...window._solutionRecords.keys()]);
+            }
+            // === DIG INFO DEBUG END ===
+
             for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+                // === DIG INFO DEBUG START ===
+                console.log('[DIG-INFO DEBUG] Processing locked item:', recordId);
+                // === DIG INFO DEBUG END ===
+
                 // Find the record in state.records.all or state.records.archive (for ghost items)
                 let record = state.records.all.find(r => r.id === recordId);
+                // === DIG INFO DEBUG START ===
+                console.log('[DIG-INFO DEBUG] Found in state.records.all:', !!record);
+                // === DIG INFO DEBUG END ===
                 if (!record) {
                     record = state.records.archive.find(r => r.id === recordId);
+                    // === DIG INFO DEBUG START ===
+                    console.log('[DIG-INFO DEBUG] Found in state.records.archive:', !!record);
+                    // === DIG INFO DEBUG END ===
+                }
+
+                // Check solution records registry for AI-generated solution items
+                if (!record && recordId.startsWith('solution-') && window._solutionRecords) {
+                    record = window._solutionRecords.get(recordId);
+                    // === DIG INFO DEBUG START ===
+                    console.log('[DIG-INFO DEBUG] Found in window._solutionRecords:', !!record);
+                    if (record) {
+                        console.log('[DIG-INFO DEBUG] Solution record details:', {
+                            id: record.id,
+                            isSolution: record.isSolution,
+                            hasFields: !!record.fields,
+                            fieldKeys: record.fields ? Object.keys(record.fields) : []
+                        });
+                    }
+                    // === DIG INFO DEBUG END ===
+                    if (record) {
+                        log('Sidebar', `Found solution record in registry: ${recordId}`);
+                    }
                 }
 
                 if (record) {
@@ -1786,6 +1965,9 @@ export async function updateEventPlanSection() {
                     fragment.appendChild(itemElement);
                 } else {
                     log('Sidebar', `Could not render item ${recordId}, not found in state.records.all or archive.`);
+                    // === DIG INFO DEBUG START ===
+                    console.log('[DIG-INFO DEBUG] FAILED to find record:', recordId);
+                    // === DIG INFO DEBUG END ===
                 }
             }
 

@@ -1459,6 +1459,36 @@ body.modal-open {
     font-weight: 500;
 }
 
+/* Draft item styling in WTF Plans list */
+.wtf-plans-item.draft-item {
+    background-color: #fefef8;
+    border-left: 3px solid #ffc107;
+}
+
+.wtf-plans-item.draft-item:hover {
+    background-color: #fdfde8;
+}
+
+.wtf-plans-item.draft-item .wtf-plans-item-icon {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.wtf-plans-item.draft-item .wtf-plans-item-preview {
+    color: #856404;
+}
+
+/* Override draft styling when it's also the current session */
+.wtf-plans-item.draft-item.current-session {
+    background-color: #fff9e6;
+    border-left: 3px solid #ffc107;
+}
+
+.wtf-plans-item.draft-item.current-session .wtf-plans-item-icon {
+    background-color: #ffc107;
+    color: white;
+}
+
 /* WTF Plans panel overlay */
 .wtf-plans-panel-overlay {
     position: fixed;
@@ -2187,6 +2217,7 @@ html.presentation-active {
         <div class="wtf-plans-panel-filters">
             <button class="wtf-plans-filter-btn active" data-filter="all">All</button>
             <button class="wtf-plans-filter-btn" data-filter="plans">Plans</button>
+            <button class="wtf-plans-filter-btn" data-filter="drafts">Drafts</button>
             <button class="wtf-plans-filter-btn" data-filter="rsvps">RSVPs</button>
             <button class="wtf-plans-filter-btn" data-filter="favorites">Favorites</button>
             <button class="wtf-plans-filter-btn" data-filter="projects">Projects</button>

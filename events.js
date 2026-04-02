@@ -2223,13 +2223,37 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         else if (addToPlanBtn) {
             e.stopPropagation();
             const recordId = addToPlanBtn.closest('[data-record-id]')?.dataset.recordId;
-            if (!recordId) return;
+            console.log('[DEBUG Events] Add to Plan clicked, recordId:', recordId);
+            if (!recordId) {
+                console.log('[DEBUG Events] No recordId found - exiting');
+                return;
+            }
 
             addEnergy();
 
             // Check if this is Union Machine Works being added
-            const record = state.records.all.find(r => r.id === recordId);
-            if (!record) return;
+            let record = state.records.all.find(r => r.id === recordId);
+
+            // DEBUG: Check if this is a solution item (not in state.records.all)
+            const isSolutionItem = recordId?.startsWith('solution-');
+            console.log('[DEBUG Events] Looking for record in state.records.all:', {
+                recordId,
+                found: !!record,
+                isSolutionItem,
+                solutionRecordsAvailable: !!window._solutionRecords,
+                solutionRecordExists: window._solutionRecords?.has(recordId)
+            });
+
+            // If it's a solution item, try to get from the solution registry
+            if (!record && isSolutionItem && window._solutionRecords) {
+                record = window._solutionRecords.get(recordId);
+                console.log('[DEBUG Events] Retrieved solution record from registry:', record);
+            }
+
+            if (!record) {
+                console.log('[DEBUG Events] Record not found - exiting. This is the issue: solution items are not in state.records.all');
+                return;
+            }
 
             const isUmwBeingAdded = record.fields.Name && record.fields.Name.includes("Union Machine Works");
 
@@ -2347,6 +2371,13 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             state.cart.lockedItems.set(recordId, itemInfo);
             state.cart.items.delete(recordId);
 
+            console.log('[DEBUG Events] Successfully added item to lockedItems:', {
+                recordId,
+                itemName: record.fields?.Name,
+                isSolution: record.isSolution,
+                itemInfo
+            });
+
             // Add progress for adding item to plan (scaled by quantity)
             const progressDelta = 0.0002 * (itemInfo.quantity || 1);
             updateProgress(progressDelta);
@@ -2426,6 +2457,134 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             syncPlanState('catalog', 'itemRemoved', { recordId, itemName: record?.fields?.Name || 'Item' });
 
             triggerSave();
+        } else if (e.target.closest('.dig-solution-btn')) {
+            // Handle "Dig Info" button for AI solution items - research and fill in details
+            e.stopPropagation();
+            const digBtn = e.target.closest('.dig-solution-btn');
+            const recordId = digBtn.dataset.recordId;
+
+            if (!recordId) {
+                log('Events', 'Dig button clicked but no record ID found');
+                return;
+            }
+
+            log('Events', `Digging for details on solution: ${recordId}`);
+
+            // Find the solution record in the registry
+            let solutionRecord = null;
+            if (recordId.startsWith('solution-') && window._solutionRecords) {
+                solutionRecord = window._solutionRecords.get(recordId);
+            }
+
+            if (!solutionRecord) {
+                log('Events', `Solution record ${recordId} not found in registry`);
+                ui.showToast('Could not find solution record');
+                return;
+            }
+
+            // Update button to show loading state
+            const originalContent = digBtn.innerHTML;
+            digBtn.innerHTML = '<span style="font-size: 1em;">&#x23F3;</span> Researching...';
+            digBtn.disabled = true;
+            digBtn.style.opacity = '0.7';
+
+            try {
+                // Call the API to research the solution
+                const result = await api.digSolutionDetails(solutionRecord);
+
+                if (!result.success) {
+                    throw new Error(result.error || 'Failed to research solution');
+                }
+
+                const research = result.research;
+                log('Events', `Successfully researched solution ${recordId} with confidence ${research.confidence}`);
+
+                // Update the solution record with research data
+                solutionRecord._researchData = research;
+
+                // Update fields with researched information
+                if (research.name) solutionRecord.fields.Name = research.name;
+                if (research.description) solutionRecord.fields.Description = research.description;
+                if (research.price?.estimate) solutionRecord.fields.Price = research.price.estimate;
+
+                // Add location details
+                if (research.location?.serviceArea) {
+                    solutionRecord.fields['Location Details'] = research.location.serviceArea;
+                    if (research.location.type) {
+                        solutionRecord.fields['Location Details'] += ` (${research.location.type} service)`;
+                    }
+                }
+
+                // Add availability/lead time info to Additional Information
+                let additionalInfo = '';
+                if (research.availability?.leadTime) {
+                    additionalInfo += `Booking: ${research.availability.leadTime}`;
+                }
+                if (research.availability?.hours) {
+                    additionalInfo += additionalInfo ? '\n\n' : '';
+                    additionalInfo += `Hours: ${research.availability.hours}`;
+                }
+                if (research.goodToKnow) {
+                    additionalInfo += additionalInfo ? '\n\n' : '';
+                    additionalInfo += `Good to Know: ${research.goodToKnow}`;
+                }
+                if (additionalInfo) {
+                    solutionRecord.fields['Additional Information'] = additionalInfo;
+                }
+
+                // Add rankings/profile data
+                if (research.rankings) {
+                    const rankingsData = {
+                        profileSource: 'ai_solution_research',
+                        Fun: research.rankings.Fun || 0,
+                        Social: research.rankings.Social || 0,
+                        Active: research.rankings.Active || 0,
+                        Creative: research.rankings.Creative || 0,
+                        Learning: research.rankings.Learning || 0,
+                        Relaxing: research.rankings.Relaxing || 0,
+                        Tags: research.imageKeywords || []
+                    };
+                    solutionRecord.fields.Rankings = JSON.stringify(rankingsData);
+                }
+
+                // Add media tags for image searching
+                if (research.imageKeywords && research.imageKeywords.length > 0) {
+                    solutionRecord.fields['Media Tags'] = research.imageKeywords.join(' ');
+                }
+
+                // Store confidence score on the record
+                solutionRecord._aiConfidence = research.confidence;
+
+                // Update the registry with the enriched record
+                window._solutionRecords.set(recordId, solutionRecord);
+
+                // Also update in state.records.all if present
+                const stateIndex = state.records.all.findIndex(r => r.id === recordId);
+                if (stateIndex !== -1) {
+                    state.records.all[stateIndex] = solutionRecord;
+                }
+
+                // Refresh the sidebar to show the accuracy badge
+                await ui.updateEventPlanSection();
+
+                // Show success toast with accuracy score
+                const accuracyPercent = Math.round(research.confidence * 100);
+                ui.showToast(`Research complete! Accuracy: ${accuracyPercent}%`);
+
+                addEnergy(); // Visual feedback
+
+                // Save the session to persist the research data
+                triggerSave();
+
+            } catch (error) {
+                console.error('Error researching solution:', error);
+                ui.showToast('Failed to research solution. Try again.');
+
+                // Restore button
+                digBtn.innerHTML = originalContent;
+                digBtn.disabled = false;
+                digBtn.style.opacity = '1';
+            }
         } else if (removeIdeaBtn && e.target === removeIdeaBtn) {
             e.stopPropagation();
             const recordId = ideaItem.dataset.recordId;
@@ -2514,9 +2673,13 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 updateProgress(0.00001);
                 ui.showDetailModal(record);
             }
-        } else if (lockedItemCard && !e.target.closest('.demote-locked-item-btn, .edit-btn')) {
+        } else if (lockedItemCard && !e.target.closest('.demote-locked-item-btn, .edit-btn, .dig-solution-btn')) {
             const recordId = lockedItemCard.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
+            let record = state.records.all.find(r => r.id === recordId);
+            // Check solution records registry for AI-generated solution items
+            if (!record && recordId && recordId.startsWith('solution-') && window._solutionRecords) {
+                record = window._solutionRecords.get(recordId);
+            }
             if (record) ui.showDetailModal(record);
         } else if (ideaItem && !e.target.closest('.add-to-plan-btn, .remove-btn')) {
             const recordId = ideaItem.dataset.recordId;
