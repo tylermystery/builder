@@ -18,8 +18,20 @@ let collaboratorsListEl = null;
 let itineraryItemsListEl = null;
 let chatMessagesEl = null;
 
+// Accordion summary elements
+let headerSummaryEl = null;
+let itemsSummaryEl = null;
+let chatSummaryEl = null;
+
 // Track loaded images for each item
 const itemImagesCache = new Map();
+
+// Track accordion state (all sections start expanded)
+const accordionState = {
+    header: true,
+    items: true,
+    chat: true
+};
 
 function ensureDOMElements() {
     if (modal) return true; // Already initialized
@@ -33,6 +45,11 @@ function ensureDOMElements() {
     collaboratorsListEl = document.getElementById('itinerary-collaborators-list');
     itineraryItemsListEl = document.getElementById('itinerary-items-list');
     chatMessagesEl = document.getElementById('itinerary-chat-messages');
+
+    // Accordion summary elements
+    headerSummaryEl = document.getElementById('header-summary');
+    itemsSummaryEl = document.getElementById('items-summary');
+    chatSummaryEl = document.getElementById('chat-summary');
 
     if (!modal) {
         console.error('[Presentation] Modal element #presentation-modal-overlay not found in DOM');
@@ -245,6 +262,157 @@ function renderChatMessages() {
     });
 }
 
+// Generate summary for the event header section
+function generateHeaderSummary() {
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Untitled Event';
+    const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    const collaboratorCount = state.session.userProfiles.size;
+
+    let datePart = '';
+    if (dateValue) {
+        const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);
+        datePart = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    let summary = `<span class="summary-highlight">${eventName}</span>`;
+    if (datePart) {
+        summary += ` on ${datePart}`;
+    }
+    if (collaboratorCount > 0) {
+        const hostWord = collaboratorCount === 1 ? 'host' : 'hosts';
+        summary += ` &bull; <span class="summary-count">${collaboratorCount}</span> ${hostWord}`;
+    }
+
+    if (headerSummaryEl) {
+        headerSummaryEl.innerHTML = summary;
+    }
+}
+
+// Generate summary for the items section
+function generateItemsSummary() {
+    const favoritesCount = state.cart.items.size;
+    const lockedCount = state.cart.lockedItems.size;
+    const totalCount = favoritesCount + lockedCount;
+
+    if (totalCount === 0) {
+        if (itemsSummaryEl) {
+            itemsSummaryEl.textContent = 'No items added yet';
+        }
+        return;
+    }
+
+    // Get first few item names for preview
+    const allItems = [...state.cart.lockedItems.keys(), ...state.cart.items.keys()];
+    const itemNames = allItems.slice(0, 3).map(id => {
+        const record = state.records.all.find(r => r.id === id);
+        return record?.fields?.Name || 'Item';
+    });
+
+    let summary = `<span class="summary-count">${totalCount}</span> item${totalCount !== 1 ? 's' : ''}`;
+
+    if (lockedCount > 0 && favoritesCount > 0) {
+        summary += ` (<span class="summary-count">${lockedCount}</span> confirmed, <span class="summary-count">${favoritesCount}</span> idea${favoritesCount !== 1 ? 's' : ''})`;
+    } else if (lockedCount > 0) {
+        summary += ` (all confirmed)`;
+    } else {
+        summary += ` (all ideas)`;
+    }
+
+    if (itemNames.length > 0) {
+        const namePreview = itemNames.join(', ');
+        const moreCount = totalCount - itemNames.length;
+        summary += ` &bull; <span class="item-preview">${namePreview}${moreCount > 0 ? ` +${moreCount} more` : ''}</span>`;
+    }
+
+    if (itemsSummaryEl) {
+        itemsSummaryEl.innerHTML = summary;
+    }
+}
+
+// Generate summary for the chat section
+function generateChatSummary() {
+    const messagesList = document.getElementById('messages-list');
+    if (!messagesList) {
+        if (chatSummaryEl) {
+            chatSummaryEl.textContent = 'No discussion yet';
+        }
+        return;
+    }
+
+    const messages = messagesList.querySelectorAll('.message-wrapper');
+    const messageCount = messages.length;
+
+    if (messageCount === 0) {
+        if (chatSummaryEl) {
+            chatSummaryEl.textContent = 'No messages yet';
+        }
+        return;
+    }
+
+    // Get unique participants
+    const participants = new Set();
+    messages.forEach(msg => {
+        const authorEl = msg.querySelector('.message-author');
+        if (authorEl) {
+            participants.add(authorEl.textContent.trim());
+        }
+    });
+
+    let summary = `<span class="summary-count">${messageCount}</span> message${messageCount !== 1 ? 's' : ''}`;
+
+    if (participants.size > 0) {
+        summary += ` from <span class="summary-count">${participants.size}</span> participant${participants.size !== 1 ? 's' : ''}`;
+    }
+
+    // Get preview of latest message
+    const lastMessage = messages[messages.length - 1];
+    const lastContent = lastMessage?.querySelector('.message-content');
+    if (lastContent) {
+        const text = lastContent.textContent.trim();
+        if (text) {
+            const truncated = text.length > 50 ? text.substring(0, 50) + '...' : text;
+            summary += ` &bull; "${truncated}"`;
+        }
+    }
+
+    if (chatSummaryEl) {
+        chatSummaryEl.innerHTML = summary;
+    }
+}
+
+// Toggle accordion section
+function toggleAccordion(section) {
+    const sectionEl = modal.querySelector(`.itinerary-accordion[data-section="${section}"]`);
+    if (!sectionEl) return;
+
+    accordionState[section] = !accordionState[section];
+
+    if (accordionState[section]) {
+        sectionEl.classList.add('expanded');
+    } else {
+        sectionEl.classList.remove('expanded');
+    }
+
+    log('Presentation', `Accordion ${section} ${accordionState[section] ? 'expanded' : 'collapsed'}`);
+}
+
+// Initialize accordion states and update UI
+function initializeAccordions() {
+    // Set all sections to expanded state initially
+    Object.keys(accordionState).forEach(section => {
+        accordionState[section] = true;
+        const sectionEl = modal.querySelector(`.itinerary-accordion[data-section="${section}"]`);
+        if (sectionEl) {
+            sectionEl.classList.add('expanded');
+        }
+    });
+
+    // Generate all summaries
+    generateHeaderSummary();
+    generateItemsSummary();
+    generateChatSummary();
+}
+
 function handleThumbnailClick(e) {
     const thumbnail = e.target.closest('.itinerary-thumbnail');
     if (!thumbnail) return;
@@ -356,6 +524,9 @@ export async function showPresentationView(listType, startRecordId = null) {
     await renderAllItems();
     renderChatMessages();
 
+    // Initialize accordions and generate summaries
+    initializeAccordions();
+
     // Show modal
     modal.classList.add('active');
     modal.style.display = 'flex';
@@ -393,6 +564,23 @@ export function setupPresentationEventListeners() {
         updateUrl({ view: null });
         hidePresentationView();
     });
+
+    // Handle accordion header clicks
+    const scrollContainer = modal.querySelector('.presentation-itinerary-scroll');
+    if (scrollContainer) {
+        scrollContainer.addEventListener('click', (e) => {
+            const accordionHeader = e.target.closest('.itinerary-accordion-header');
+            if (!accordionHeader) return;
+
+            // Don't trigger accordion on interactive elements inside
+            if (e.target.closest('button') || e.target.closest('a')) return;
+
+            const section = accordionHeader.dataset.section;
+            if (section) {
+                toggleAccordion(section);
+            }
+        });
+    }
 
     // Handle thumbnail clicks for image carousel
     itineraryItemsListEl.addEventListener('click', handleThumbnailClick);

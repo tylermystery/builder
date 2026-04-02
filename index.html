@@ -1937,37 +1937,62 @@ body.modal-open {
             <div class="presentation-itinerary-scroll">
 
                 <!-- Event Header Section -->
-                <section class="itinerary-section itinerary-header">
-                    <h1 id="summary-event-name" class="itinerary-event-title"></h1>
-                    <div class="itinerary-event-meta">
-                        <span id="summary-event-date" class="itinerary-date"></span>
+                <section class="itinerary-section itinerary-header itinerary-accordion" data-section="header">
+                    <div class="itinerary-accordion-header" data-section="header">
+                        <div class="itinerary-accordion-title-row">
+                            <h2 class="itinerary-accordion-title">Event Details</h2>
+                            <span class="itinerary-accordion-icon"></span>
+                        </div>
+                        <p class="itinerary-accordion-summary" id="header-summary"></p>
                     </div>
-                    <p id="summary-event-notes" class="itinerary-notes"></p>
+                    <div class="itinerary-accordion-content">
+                        <h1 id="summary-event-name" class="itinerary-event-title"></h1>
+                        <div class="itinerary-event-meta">
+                            <span id="summary-event-date" class="itinerary-date"></span>
+                        </div>
+                        <p id="summary-event-notes" class="itinerary-notes"></p>
 
-                    <!-- Hosts & Collaborators -->
-                    <div id="itinerary-collaborators" class="itinerary-collaborators">
-                        <h3>Hosts & Collaborators</h3>
-                        <div id="itinerary-collaborators-list" class="collaborators-list"></div>
-                    </div>
+                        <!-- Hosts & Collaborators -->
+                        <div id="itinerary-collaborators" class="itinerary-collaborators">
+                            <h3>Hosts & Collaborators</h3>
+                            <div id="itinerary-collaborators-list" class="collaborators-list"></div>
+                        </div>
 
-                    <div class="itinerary-actions">
-                        <button id="presentation-share-btn" class="itinerary-share-btn" title="Copy link to share this itinerary">Share Itinerary</button>
+                        <div class="itinerary-actions">
+                            <button id="presentation-share-btn" class="itinerary-share-btn" title="Copy link to share this itinerary">Share Itinerary</button>
+                        </div>
                     </div>
                 </section>
 
                 <!-- Items Section - Rendered dynamically -->
-                <section class="itinerary-section itinerary-items">
-                    <h2 class="itinerary-section-title">Itinerary</h2>
-                    <div id="itinerary-items-list" class="itinerary-items-list">
-                        <!-- Items will be rendered here by JavaScript -->
+                <section class="itinerary-section itinerary-items itinerary-accordion" data-section="items">
+                    <div class="itinerary-accordion-header" data-section="items">
+                        <div class="itinerary-accordion-title-row">
+                            <h2 class="itinerary-accordion-title">Itinerary</h2>
+                            <span class="itinerary-accordion-icon"></span>
+                        </div>
+                        <p class="itinerary-accordion-summary" id="items-summary"></p>
+                    </div>
+                    <div class="itinerary-accordion-content">
+                        <div id="itinerary-items-list" class="itinerary-items-list">
+                            <!-- Items will be rendered here by JavaScript -->
+                        </div>
                     </div>
                 </section>
 
                 <!-- Event Chat Section -->
-                <section class="itinerary-section itinerary-chat">
-                    <h2 class="itinerary-section-title">Event Discussion</h2>
-                    <div id="itinerary-chat-messages" class="itinerary-chat-messages">
-                        <!-- Chat messages will be rendered here -->
+                <section class="itinerary-section itinerary-chat itinerary-accordion" data-section="chat">
+                    <div class="itinerary-accordion-header" data-section="chat">
+                        <div class="itinerary-accordion-title-row">
+                            <h2 class="itinerary-accordion-title">Event Discussion</h2>
+                            <span class="itinerary-accordion-icon"></span>
+                        </div>
+                        <p class="itinerary-accordion-summary" id="chat-summary"></p>
+                    </div>
+                    <div class="itinerary-accordion-content">
+                        <div id="itinerary-chat-messages" class="itinerary-chat-messages">
+                            <!-- Chat messages will be rendered here -->
+                        </div>
                     </div>
                 </section>
 
