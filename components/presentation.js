@@ -13,6 +13,7 @@ import { syncPlanState, registerSyncCallback, unregisterSyncCallback } from '../
 import { showUserModal } from '../auth.js';
 import { showToast } from '../ui.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
+import { refreshForumData, onNewItemReceived } from './forumPanel.js';
 
 console.log('[Presentation DEBUG] presentation.js module loaded');
 console.log('[Presentation DEBUG] QUICK_REACTIONS available:', ['👍', '❤️', '😂', '😮', '😢', '🎉']);
@@ -4335,6 +4336,10 @@ async function initializePresentationChat() {
             addPresentationMessageToUI(data.senderName, data.content, false, data.timestamp, data.senderId, {
                 messageId: data.messageId
             });
+            // Refresh forum panel if open
+            refreshForumData();
+            // Update notification counts
+            onNewItemReceived('message', { timestamp: data.timestamp });
         }
     });
 
@@ -4345,6 +4350,10 @@ async function initializePresentationChat() {
             if (wrapper) {
                 updatePresentationReactionsDisplay(wrapper, data.reactions);
             }
+            // Refresh forum panel if open to show updated reactions
+            refreshForumData();
+            // Update notification counts
+            onNewItemReceived('reaction', { timestamp: new Date().toISOString() });
         }
     });
 
@@ -4364,6 +4373,8 @@ async function initializePresentationChat() {
                     }
                 }
             }
+            // Refresh forum panel if open to show edited message
+            refreshForumData();
         }
     });
 
@@ -4375,6 +4386,8 @@ async function initializePresentationChat() {
                 wrapper.classList.add('deleted-message');
                 wrapper.innerHTML = `<div class="chat-message deleted"><em>This message was deleted</em></div>`;
             }
+            // Refresh forum panel if open to show deleted message
+            refreshForumData();
         }
     });
 
@@ -4398,6 +4411,10 @@ async function initializePresentationChat() {
                     parentWrapper.querySelector('.chat-message')?.appendChild(threadIndicator);
                 }
             }
+            // Refresh forum panel if open to show new replies
+            refreshForumData();
+            // Update notification counts
+            onNewItemReceived('reply', { timestamp: new Date().toISOString() });
         }
     });
 
@@ -4442,6 +4459,10 @@ async function initializePresentationChat() {
                 );
             }
 
+            // Refresh forum panel if open to show new component comments
+            refreshForumData();
+            // Update notification counts for new component comment
+            onNewItemReceived('comment', { timestamp: data.comment.fields?.Timestamp || new Date().toISOString() });
             log('Presentation', `Received component comment from ${data.senderId} on ${componentId}`);
         }
     });
@@ -4453,6 +4474,8 @@ async function initializePresentationChat() {
             if (commentEl) {
                 updateCommentReactionsDisplay(commentEl, data.reactions);
             }
+            // Refresh forum panel if open to show updated reactions
+            refreshForumData();
         }
     });
 

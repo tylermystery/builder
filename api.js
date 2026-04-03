@@ -1763,25 +1763,32 @@ export async function postPlanEvent(sessionId, eventType, eventData = {}) {
     }
 }
 
-export async function postChatMessage(sessionId, senderId, senderName, content) {
+export async function postChatMessage(sessionId, senderId, senderName, content, itemId = null) {
     if (!sessionId || !sessionId.startsWith('rec')) {
         log('API', `postChatMessage: Invalid sessionId provided: "${sessionId}". Cannot save message.`);
-        return;
+        return null;
     }
      if (!content || !content.trim()) {
          log('API', 'postChatMessage: Attempted to send empty message.');
-         return;
+         return null;
      }
 
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}`;
+    const fields = {
+        SessionID: [sessionId],
+        SenderID: senderId,
+        SenderName: senderName,
+        Content: content.trim(),
+    };
+
+    // Add Item Link if itemId is provided (for component affiliation)
+    if (itemId && itemId.startsWith('rec')) {
+        fields['Item Link'] = [itemId];
+    }
+
     const payload = {
         records: [{
-            fields: {
-                SessionID: [sessionId],
-                SenderID: senderId,
-                SenderName: senderName,
-                Content: content.trim(),
-            }
+            fields: fields
         }]
     };
 
@@ -1827,6 +1834,9 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
             await Promise.allSettled(notificationPromises);
             log('API', `Triggered all notifications for message ${newMessageRecordId}.`);
         }
+
+        // Return the new message record ID so caller can update UI
+        return newMessageRecordId;
     } catch (error) {
         console.error("CRITICAL: Failed to save chat message to database.", error);
          if (typeof ui !== 'undefined' && ui.showToast) {
@@ -1834,6 +1844,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
          } else {
              alert(`Could not save message: ${error.message}`);
          }
+        return null;
     }
 }
 

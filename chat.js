@@ -7,6 +7,8 @@ import { log } from './utils/debug.js';
 import { triggerSave, openChatWidget } from './events.js';
 import { updateUrl } from './utils.js';
 import { getDebugLogs, isDebugPanelInitialized } from './utils/debug-panel.js';
+import { refreshForumData, setGetCurrentUser, onNewItemReceived, updateNotificationBadges, initializeNotificationTracking } from './components/forumPanel.js';
+import * as unifiedStream from './components/unifiedStream.js';
 
 let currentUser = null;
 let pusher = null;
@@ -15,6 +17,11 @@ const FUN_ADJECTIVES = ['Happy', 'Clever', 'Sunny', 'Lucky', 'Creative', 'Brave'
 const FUN_NOUNS = ['Panda', 'Wombat', 'Explorer', 'Starship', 'Juggler', 'Wizard', 'Dolphin', 'Robot', 'Pineapple', 'Comet'];
 let originalTitle = document.title;
 let isTabActive = true;
+
+// Unified stream state
+let showReactions = true;
+let allTopicsExpanded = false;
+let selectedComponent = null;
 
 // Session history filter state - track which message types are visible
 // DORMANT FEATURE: Plan and Debug toggles hidden - chat is always shown
@@ -100,6 +107,507 @@ function createHistoryFilterToggles() {
     */
     // END DORMANT FEATURE
 }
+
+/**
+ * Initialize stream toggle controls (reactions, expand/collapse, view mode)
+ * Sets up event listeners for the toggle buttons in chat header and forum header
+ */
+function initializeStreamToggles() {
+    // Chat header toggle buttons
+    const chatReactionsBtn = document.getElementById('stream-toggle-reactions');
+    const chatExpandBtn = document.getElementById('stream-toggle-expand');
+    const chatViewToggle = document.getElementById('stream-view-toggle');
+
+    // Forum header toggle buttons
+    const forumReactionsBtn = document.getElementById('forum-toggle-reactions');
+    const forumExpandBtn = document.getElementById('forum-toggle-expand');
+
+    // Toggle reactions visibility
+    const handleReactionsToggle = () => {
+        showReactions = !showReactions;
+        // Update all reaction containers
+        document.querySelectorAll('.message-reactions, .stream-reactions, .forum-reactions').forEach(el => {
+            el.style.display = showReactions ? 'flex' : 'none';
+        });
+        // Update button states
+        [chatReactionsBtn, forumReactionsBtn].forEach(btn => {
+            if (btn) {
+                btn.classList.toggle('active', showReactions);
+                btn.setAttribute('aria-pressed', showReactions.toString());
+                btn.title = showReactions ? 'Hide Reactions' : 'Show Reactions';
+            }
+        });
+        log('Chat', `Reactions visibility toggled: ${showReactions}`);
+    };
+
+    // Toggle expand/collapse all
+    const handleExpandToggle = () => {
+        allTopicsExpanded = !allTopicsExpanded;
+        // Expand/collapse all thread replies
+        document.querySelectorAll('.thread-replies, .stream-replies, .forum-replies-container').forEach(el => {
+            if (allTopicsExpanded) {
+                el.classList.add('expanded');
+            } else {
+                el.classList.remove('expanded');
+            }
+        });
+        // Update thread indicators
+        document.querySelectorAll('.thread-indicator, .forum-thread-indicator').forEach(el => {
+            if (allTopicsExpanded) {
+                el.classList.add('expanded');
+                const arrow = el.querySelector('.thread-arrow');
+                if (arrow) arrow.textContent = '▼';
+            } else {
+                el.classList.remove('expanded');
+                const arrow = el.querySelector('.thread-arrow');
+                if (arrow) arrow.textContent = '▶';
+            }
+        });
+        // Update button states
+        [chatExpandBtn, forumExpandBtn].forEach(btn => {
+            if (btn) {
+                btn.classList.toggle('active', allTopicsExpanded);
+                btn.setAttribute('aria-pressed', allTopicsExpanded.toString());
+                btn.title = allTopicsExpanded ? 'Collapse All' : 'Expand All';
+            }
+        });
+        log('Chat', `All topics ${allTopicsExpanded ? 'expanded' : 'collapsed'}`);
+    };
+
+    // Toggle view mode (compact/expanded)
+    const handleViewToggle = () => {
+        const chatWindow = document.getElementById('chat-window');
+        if (!chatWindow) return;
+
+        const isExpanded = chatWindow.classList.contains('stream-view-expanded');
+
+        if (isExpanded) {
+            chatWindow.classList.remove('stream-view-expanded');
+            chatWindow.classList.add('stream-view-compact');
+            if (chatViewToggle) {
+                chatViewToggle.innerHTML = '<span>⛶</span>';
+                chatViewToggle.title = 'Expand View';
+            }
+        } else {
+            chatWindow.classList.remove('stream-view-compact');
+            chatWindow.classList.add('stream-view-expanded');
+            if (chatViewToggle) {
+                chatViewToggle.innerHTML = '<span>⛶</span>';
+                chatViewToggle.title = 'Compact View';
+            }
+        }
+        log('Chat', `View mode toggled: ${isExpanded ? 'compact' : 'expanded'}`);
+    };
+
+    // Attach event listeners
+    if (chatReactionsBtn) chatReactionsBtn.addEventListener('click', handleReactionsToggle);
+    if (chatExpandBtn) chatExpandBtn.addEventListener('click', handleExpandToggle);
+    if (chatViewToggle) chatViewToggle.addEventListener('click', handleViewToggle);
+    if (forumReactionsBtn) forumReactionsBtn.addEventListener('click', handleReactionsToggle);
+    if (forumExpandBtn) forumExpandBtn.addEventListener('click', handleExpandToggle);
+
+    log('Chat', 'Stream toggle controls initialized');
+}
+
+/**
+ * Initialize component selector for message affiliation
+ * Populates the dropdown with plan items
+ */
+function initializeComponentSelector() {
+    const chatSelector = document.getElementById('stream-component-select');
+    const forumSelector = document.getElementById('forum-component-select');
+
+    const populateSelector = (selector) => {
+        if (!selector) return;
+
+        // Clear existing options except the first one
+        while (selector.options.length > 1) {
+            selector.remove(1);
+        }
+
+        // Add plan items as options
+        const planItems = state.records?.all || [];
+        planItems.forEach(item => {
+            if (item.fields?.Name) {
+                const option = document.createElement('option');
+                option.value = item.id;
+                option.textContent = item.fields.Name;
+                selector.appendChild(option);
+            }
+        });
+    };
+
+    // Populate both selectors
+    populateSelector(chatSelector);
+    populateSelector(forumSelector);
+
+    // Handle selection changes
+    const handleSelectorChange = (e) => {
+        selectedComponent = e.target.value || null;
+        // Sync both selectors
+        if (chatSelector) chatSelector.value = selectedComponent || '';
+        if (forumSelector) forumSelector.value = selectedComponent || '';
+        log('Chat', `Component affiliation set to: ${selectedComponent || 'Plan-wide'}`);
+    };
+
+    if (chatSelector) chatSelector.addEventListener('change', handleSelectorChange);
+    if (forumSelector) forumSelector.addEventListener('change', handleSelectorChange);
+
+    // Show selector when there are items
+    const chatSelectorContainer = document.getElementById('stream-component-selector');
+    if (chatSelectorContainer && planItems.length > 0) {
+        chatSelectorContainer.style.display = 'flex';
+    }
+
+    log('Chat', 'Component selector initialized');
+}
+
+/**
+ * Get the currently selected component for message affiliation
+ */
+export function getSelectedComponent() {
+    return selectedComponent;
+}
+
+/**
+ * Set the selected component (for context-based default)
+ */
+export function setSelectedComponent(componentId) {
+    selectedComponent = componentId;
+    const chatSelector = document.getElementById('stream-component-select');
+    const forumSelector = document.getElementById('forum-component-select');
+    if (chatSelector) chatSelector.value = componentId || '';
+    if (forumSelector) forumSelector.value = componentId || '';
+}
+
+// ===== CONTEXT MENU AND MARK UNREAD FEATURE =====
+
+// Track unread messages
+let unreadMessages = new Set();
+let contextMenuTarget = null;
+
+/**
+ * Initialize context menu for messages
+ * Provides actions: Reply, React, Mark Unread, Create Task, Copy Text
+ */
+function initializeContextMenu() {
+    // Create context menu if it doesn't exist
+    let menu = document.getElementById('message-context-menu');
+    if (!menu) {
+        menu = document.createElement('div');
+        menu.id = 'message-context-menu';
+        menu.className = 'stream-context-menu';
+        menu.style.display = 'none';
+        menu.innerHTML = `
+            <button class="context-menu-item" data-action="reply">
+                <span class="context-icon">↩</span> Reply
+            </button>
+            <button class="context-menu-item" data-action="react">
+                <span class="context-icon">😊</span> Add Reaction
+            </button>
+            <hr class="context-divider">
+            <button class="context-menu-item" data-action="mark-unread">
+                <span class="context-icon">📬</span> Mark as Unread
+            </button>
+            <button class="context-menu-item" data-action="create-task">
+                <span class="context-icon">✅</span> Create Task
+            </button>
+            <hr class="context-divider">
+            <button class="context-menu-item" data-action="copy">
+                <span class="context-icon">📋</span> Copy Text
+            </button>
+        `;
+        document.body.appendChild(menu);
+    }
+
+    // Load unread messages from localStorage
+    loadUnreadMessages();
+
+    // Context menu trigger on right-click
+    document.addEventListener('contextmenu', (e) => {
+        const messageWrapper = e.target.closest('.message-wrapper, .forum-thread');
+        if (messageWrapper) {
+            e.preventDefault();
+            showContextMenu(e, messageWrapper);
+        }
+    });
+
+    // Hide context menu on click elsewhere
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.stream-context-menu')) {
+            hideContextMenu();
+        }
+    });
+
+    // Context menu action handler
+    menu.addEventListener('click', (e) => {
+        const action = e.target.closest('.context-menu-item')?.dataset.action;
+        if (action && contextMenuTarget) {
+            handleContextMenuAction(action);
+        }
+        hideContextMenu();
+    });
+
+    log('Chat', 'Context menu initialized');
+}
+
+/**
+ * Show context menu at position
+ */
+function showContextMenu(e, target) {
+    const menu = document.getElementById('message-context-menu');
+    if (!menu) return;
+
+    contextMenuTarget = target;
+    const messageId = target.dataset.messageId;
+
+    // Update mark unread text based on current state
+    const markUnreadItem = menu.querySelector('[data-action="mark-unread"]');
+    if (markUnreadItem && messageId) {
+        const isUnread = unreadMessages.has(messageId);
+        markUnreadItem.innerHTML = `<span class="context-icon">${isUnread ? '📭' : '📬'}</span> ${isUnread ? 'Mark as Read' : 'Mark as Unread'}`;
+    }
+
+    // Position menu
+    menu.style.display = 'block';
+    menu.style.left = `${e.pageX}px`;
+    menu.style.top = `${e.pageY}px`;
+
+    // Ensure menu stays in viewport
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+        menu.style.left = `${e.pageX - rect.width}px`;
+    }
+    if (rect.bottom > window.innerHeight) {
+        menu.style.top = `${e.pageY - rect.height}px`;
+    }
+}
+
+/**
+ * Hide context menu
+ */
+function hideContextMenu() {
+    const menu = document.getElementById('message-context-menu');
+    if (menu) {
+        menu.style.display = 'none';
+    }
+    contextMenuTarget = null;
+}
+
+/**
+ * Handle context menu action
+ */
+async function handleContextMenuAction(action) {
+    if (!contextMenuTarget) return;
+
+    const messageId = contextMenuTarget.dataset.messageId;
+    const messageContent = contextMenuTarget.querySelector('.message-content, .forum-message-content')?.textContent || '';
+    const senderName = contextMenuTarget.querySelector('.sender, .forum-sender-name')?.textContent || 'Unknown';
+
+    switch (action) {
+        case 'reply':
+            if (messageId) {
+                startReply(messageId, senderName, messageContent);
+            }
+            break;
+
+        case 'react':
+            if (messageId) {
+                showReactionPicker(contextMenuTarget, messageId, null);
+            }
+            break;
+
+        case 'mark-unread':
+            if (messageId) {
+                toggleMessageUnread(messageId);
+            }
+            break;
+
+        case 'create-task':
+            await createTaskFromMessage(messageId, messageContent);
+            break;
+
+        case 'copy':
+            copyMessageToClipboard(messageContent);
+            break;
+    }
+
+    log('Chat', `Context menu action: ${action} on message ${messageId}`);
+}
+
+/**
+ * Toggle message unread state
+ */
+export function toggleMessageUnread(messageId) {
+    if (!messageId) return;
+
+    if (unreadMessages.has(messageId)) {
+        unreadMessages.delete(messageId);
+    } else {
+        unreadMessages.add(messageId);
+    }
+
+    saveUnreadMessages();
+    updateMessageUnreadUI(messageId);
+    updateUnreadBadge();
+
+    log('Chat', `Message ${messageId} unread state: ${unreadMessages.has(messageId)}`);
+}
+
+/**
+ * Mark message as unread
+ */
+export function markMessageUnread(messageId) {
+    if (!messageId) return;
+
+    unreadMessages.add(messageId);
+    saveUnreadMessages();
+    updateMessageUnreadUI(messageId);
+    updateUnreadBadge();
+}
+
+/**
+ * Mark message as read
+ */
+export function markMessageRead(messageId) {
+    if (!messageId) return;
+
+    unreadMessages.delete(messageId);
+    saveUnreadMessages();
+    updateMessageUnreadUI(messageId);
+    updateUnreadBadge();
+}
+
+/**
+ * Update message UI to show unread state
+ */
+function updateMessageUnreadUI(messageId) {
+    const wrapper = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (wrapper) {
+        wrapper.classList.toggle('unread', unreadMessages.has(messageId));
+    }
+}
+
+/**
+ * Update unread badge count
+ */
+function updateUnreadBadge() {
+    const count = unreadMessages.size;
+
+    // Update any unread badges
+    const badges = document.querySelectorAll('.stream-unread-badge');
+    badges.forEach(badge => {
+        badge.textContent = count > 99 ? '99+' : count.toString();
+        badge.style.display = count > 0 ? 'inline-flex' : 'none';
+    });
+}
+
+/**
+ * Load unread messages from localStorage
+ */
+function loadUnreadMessages() {
+    const sessionId = state.session?.id;
+    const userId = currentUser?.id;
+    if (!sessionId || !userId) return;
+
+    const key = `wtf_unread_${sessionId}_${userId}`;
+    try {
+        const stored = localStorage.getItem(key);
+        if (stored) {
+            unreadMessages = new Set(JSON.parse(stored));
+        }
+    } catch (e) {
+        log('Chat', 'Error loading unread messages:', e);
+    }
+}
+
+/**
+ * Save unread messages to localStorage
+ */
+function saveUnreadMessages() {
+    const sessionId = state.session?.id;
+    const userId = currentUser?.id;
+    if (!sessionId || !userId) return;
+
+    const key = `wtf_unread_${sessionId}_${userId}`;
+    try {
+        localStorage.setItem(key, JSON.stringify([...unreadMessages]));
+    } catch (e) {
+        log('Chat', 'Error saving unread messages:', e);
+    }
+}
+
+/**
+ * Create task from message content
+ */
+async function createTaskFromMessage(messageId, content) {
+    if (!currentUser) {
+        log('Chat', 'Cannot create task: no current user');
+        return;
+    }
+
+    try {
+        // Find the message in session history
+        const message = sessionHistoryItems.find(item =>
+            item.type === 'chat' && item.data?.messageId === messageId
+        );
+
+        const componentId = message?.data?.componentInfo?.id || selectedComponent;
+        const taskName = content.substring(0, 100);
+        const taskDescription = content;
+
+        log('Chat', `Creating task from message: ${taskName}`);
+
+        // TODO: Integrate with actual task creation API
+        // For now, show a confirmation
+        showToast(`Task created: "${taskName.substring(0, 30)}${taskName.length > 30 ? '...' : ''}"`);
+
+        // If the presentation module has a task creation function, use it
+        if (typeof window.createTaskFromComment === 'function' && componentId) {
+            const componentRecord = state.records.all.find(r => r.id === componentId);
+            if (componentRecord) {
+                await window.createTaskFromComment(componentRecord, content, messageId);
+            }
+        }
+
+    } catch (error) {
+        log('Chat', `Error creating task: ${error.message}`);
+        showToast('Failed to create task', 'error');
+    }
+}
+
+/**
+ * Copy message text to clipboard
+ */
+function copyMessageToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('Text copied to clipboard');
+    }).catch(err => {
+        log('Chat', 'Failed to copy text:', err);
+        showToast('Failed to copy text', 'error');
+    });
+}
+
+/**
+ * Show a toast notification
+ */
+function showToast(message, type = 'success') {
+    let toast = document.querySelector('.stream-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.className = 'stream-toast';
+        document.body.appendChild(toast);
+    }
+
+    toast.textContent = message;
+    toast.className = `stream-toast ${type} visible`;
+
+    setTimeout(() => {
+        toast.classList.remove('visible');
+    }, 3000);
+}
+
+// ===== END CONTEXT MENU AND MARK UNREAD FEATURE =====
 
 /**
  * Toggles a history filter and re-renders the messages list
@@ -660,16 +1168,18 @@ function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmi
     });
     actionsContainer.appendChild(reactionBtn);
 
-    // Reply button
-    const replyBtn = document.createElement('button');
-    replyBtn.className = 'msg-action-btn reply-btn';
-    replyBtn.innerHTML = '↩';
-    replyBtn.title = 'Reply';
-    replyBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        startReply(messageId, sender, message);
-    });
-    actionsContainer.appendChild(replyBtn);
+    // Reply button (only for messages with valid IDs - not for newly sent messages that haven't been saved yet)
+    if (messageId && messageId.startsWith && messageId.startsWith('rec')) {
+        const replyBtn = document.createElement('button');
+        replyBtn.className = 'msg-action-btn reply-btn';
+        replyBtn.innerHTML = '↩';
+        replyBtn.title = 'Reply';
+        replyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            startReply(messageId, sender, message);
+        });
+        actionsContainer.appendChild(replyBtn);
+    }
 
     // Edit button (only for own messages)
     if (isSent && messageId) {
@@ -1091,6 +1601,10 @@ export function getCurrentUser() {
     // Always call getSimpleUserIdentity to ensure authentication status is checked
     return getSimpleUserIdentity();
 }
+
+// Initialize forum panel with getCurrentUser reference to avoid circular dependency
+setGetCurrentUser(getCurrentUser);
+
 function showNewMessageNotification(sender, message) {
   if (Notification.permission === 'granted' && !document.hasFocus()) {
     const notification = new Notification(`New message from ${sender}`, {
@@ -1157,6 +1671,15 @@ export async function initializeSessionChat() {
 
     // Create the history filter toggles
     createHistoryFilterToggles();
+
+    // Initialize stream toggle controls (reactions, expand/collapse, view mode)
+    initializeStreamToggles();
+
+    // Initialize component selector for message affiliation
+    initializeComponentSelector();
+
+    // Initialize unified stream context menu
+    initializeContextMenu();
 
     currentUser = getSimpleUserIdentity();
     if (!state.session.userProfiles.has(currentUser.id)) {
@@ -1268,6 +1791,16 @@ export async function initializeSessionChat() {
 
         // Render the filtered history
         renderFilteredHistory();
+
+        // Initialize notification tracking early (before forum panel is opened)
+        // This sets baseline timestamps for first-time visitors
+        initializeNotificationTracking();
+
+        // Update forum panel notification badges after loading chat history
+        // Pass the loaded messages and events so badge counts work before forum panel is opened
+        const chatMessages = sessionHistoryItems.filter(item => item.type === 'chat');
+        const planEvents = sessionHistoryItems.filter(item => item.type === 'planEvent');
+        updateNotificationBadges({ messages: chatMessages, events: planEvents });
     }
 
     pusher = new Pusher('236f480714e5001590b5', {
@@ -1302,7 +1835,8 @@ export async function initializeSessionChat() {
                     reactions: {},
                     isEdited: false,
                     isDeleted: false,
-                    replyCount: 0
+                    replyCount: 0,
+                    componentInfo: data.componentInfo || null // Include component affiliation
                 }
             };
             sessionHistoryItems.push(messageData);
@@ -1313,6 +1847,10 @@ export async function initializeSessionChat() {
                     renderHistoryItem(messagesList, messageData);
                 }
             }
+            // Refresh forum panel if open
+            refreshForumData();
+            // Update notification counts for new message
+            onNewItemReceived('message', { timestamp, sessionHistoryItems });
             showNewMessageNotification(data.senderName, data.content);
             if (!isTabActive) {
                 document.title = 'New Message! - ' + originalTitle;
@@ -1327,6 +1865,10 @@ export async function initializeSessionChat() {
             if (wrapper) {
                 updateReactionsDisplay(wrapper, data.reactions);
             }
+            // Refresh forum panel if open to show updated reactions
+            refreshForumData();
+            // Update notification counts for new reaction
+            onNewItemReceived('reaction', { timestamp: new Date().toISOString(), sessionHistoryItems });
         }
     });
 
@@ -1346,6 +1888,8 @@ export async function initializeSessionChat() {
                     }
                 }
             }
+            // Refresh forum panel if open to show edited message
+            refreshForumData();
         }
     });
 
@@ -1357,6 +1901,8 @@ export async function initializeSessionChat() {
                 wrapper.classList.add('deleted-message');
                 wrapper.innerHTML = `<div class="chat-message deleted"><em>This message was deleted</em></div>`;
             }
+            // Refresh forum panel if open to show deleted message
+            refreshForumData();
         }
     });
 
@@ -1380,6 +1926,10 @@ export async function initializeSessionChat() {
                     parentWrapper.querySelector('.chat-message')?.appendChild(threadIndicator);
                 }
             }
+            // Refresh forum panel if open to show new replies
+            refreshForumData();
+            // Update notification counts for new reply
+            onNewItemReceived('reply', { timestamp: new Date().toISOString(), sessionHistoryItems });
         }
     });
 
@@ -1429,6 +1979,11 @@ export async function initializeSessionChat() {
                 document.title = 'New Comment! - ' + originalTitle;
             }
 
+            // Refresh forum panel if open to show new component comments
+            refreshForumData();
+            // Update notification counts for new component comment
+            onNewItemReceived('comment', { timestamp, sessionHistoryItems });
+
             log('Chat', `Received component comment from ${data.senderId} on ${componentId}`);
         }
     });
@@ -1440,6 +1995,19 @@ export async function sendMessage(message, recordId = null) {
     requestNotificationPermissionIfNeeded();
     const sessionId = state.session.id || 'default-session';
     const timestamp = new Date().toISOString();
+
+    // Get component affiliation (from parameter, selector, or null for plan-wide)
+    const componentId = recordId || selectedComponent || null;
+    let componentInfo = null;
+    if (componentId) {
+        const componentRecord = state.records?.all?.find(r => r.id === componentId);
+        if (componentRecord) {
+            componentInfo = {
+                id: componentId,
+                name: componentRecord.fields?.Name || 'Item'
+            };
+        }
+    }
 
     // Check if this is a reply
     if (replyingToMessage) {
@@ -1489,7 +2057,8 @@ export async function sendMessage(message, recordId = null) {
                 reactions: {},
                 isEdited: false,
                 isDeleted: false,
-                replyCount: 0
+                replyCount: 0,
+                componentInfo: componentInfo // Include component affiliation
             }
         };
         sessionHistoryItems.push(messageData);
@@ -1502,13 +2071,54 @@ export async function sendMessage(message, recordId = null) {
             }
         }
 
-        await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
+        // Pass componentId to the API call
+        const newMessageId = await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message, componentId);
+
+        // Update the message data and UI element with the real message ID
+        if (newMessageId) {
+            messageData.data.messageId = newMessageId;
+
+            // Find and update the wrapper element (it's the last one without a messageId)
+            const messagesList = document.getElementById('messages-list');
+            if (messagesList) {
+                const wrappers = messagesList.querySelectorAll('.message-wrapper.sent:not([data-message-id])');
+                const lastWrapper = wrappers.length > 0 ? wrappers[wrappers.length - 1] : null;
+                if (lastWrapper) {
+                    lastWrapper.dataset.messageId = newMessageId;
+                    // Add the reply button now that we have a valid message ID
+                    const actionsContainer = lastWrapper.querySelector('.message-actions');
+                    if (actionsContainer && !actionsContainer.querySelector('.reply-btn')) {
+                        const replyBtn = document.createElement('button');
+                        replyBtn.className = 'msg-action-btn reply-btn';
+                        replyBtn.innerHTML = '↩';
+                        replyBtn.title = 'Reply';
+                        replyBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            startReply(newMessageId, currentUser.name, message);
+                        });
+                        // Insert after the reaction button
+                        const reactionBtn = actionsContainer.querySelector('.reaction-btn');
+                        if (reactionBtn && reactionBtn.nextSibling) {
+                            actionsContainer.insertBefore(replyBtn, reactionBtn.nextSibling);
+                        } else {
+                            actionsContainer.appendChild(replyBtn);
+                        }
+                    }
+                }
+            }
+        }
+
         sessionChatChannel.trigger('client-new-message', {
             content: message,
             senderId: currentUser.id,
             senderName: currentUser.name,
-            timestamp: timestamp
+            timestamp: timestamp,
+            messageId: newMessageId, // Include the message ID for other clients
+            componentInfo: componentInfo // Include component affiliation
         });
+
+        // Reset component selector after sending (optional - uncomment if desired)
+        // setSelectedComponent(null);
     }
 }
 
@@ -1773,4 +2383,7 @@ export function addPlanEventToHistory(record) {
             addEventToUI(messagesList, record);
         }
     }
+
+    // Refresh forum panel if open to show new plan event
+    refreshForumData();
 }

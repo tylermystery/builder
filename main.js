@@ -19,6 +19,7 @@ import { showReceiptModal } from './components/receipt.js';
 import { updateFooter } from './components/footer.js';
 import { initializeProjectsDashboard, updateProjectsData, showProjectsLoading } from './components/projectsDashboard.js';
 import { initializeWtfPlansPanel, syncWtfPlansPanelWithUrl } from './components/wtfPlansPanel.js';
+import { initializeForumPanel, syncForumPanelWithUrl } from './components/forumPanel.js';
 import { applyCloudinaryTransform } from './utils/imageOptimizer.js';
 
 
@@ -221,6 +222,9 @@ function syncUiWithUrl() {
 
     // Sync WTF Plans panel state with URL (for browser back/forward navigation)
     syncWtfPlansPanelWithUrl(params);
+
+    // Sync Forum Panel state with URL (for browser back/forward navigation)
+    syncForumPanelWithUrl(params);
 
     // --- Sync 'My Plan'/'My Likes' Button Active State ---
     const categoryFilters = document.getElementById('category-filters');
@@ -841,6 +845,7 @@ async function initialize() {
 
         initializeBiometricAuth(); // Initialize biometric/passkey authentication
         initializeWtfPlansPanel(); // Initialize WTF Plans panel
+        initializeForumPanel(); // Initialize Forum Panel
         updateUserProfileIcon();
 
         // If user is already authenticated, fetch their projects (skip in presentation mode)
