@@ -1,10 +1,10 @@
 // REPLACE THE ENTIRE CONTENTS of components/modal.js
 console.log('[MODULE DEBUG] modal.js module starting to load...', performance.now().toFixed(2) + 'ms');
 
-import { state, getRecordById } from '../state.js';
+import { state, getRecordById, getAggregateReactions } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
-import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS } from '../config.js';
+import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage } from '../config.js';
 import { getCurrentUser } from '../chat.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { log } from '../utils/debug.js';
@@ -15,7 +15,7 @@ import { triggerSave } from '../events.js';
 import { showForumPanel } from './forumPanel.js';
 import { openUCPForItem } from './unifiedChatPanel.js';
 import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
-import { showGoodnessReport, updateModalVitalityBadge } from '../vitality/vitalityUI.js';
+import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
 import { openActionMenu } from './actionMenu.js';
 
 console.log('[MODULE DEBUG] modal.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
@@ -1647,8 +1647,15 @@ function buildModalRSBPanelDOM(recordId) {
     const tabs = document.createElement('div');
     tabs.className = 'rsb-tabs';
 
-    const allReactions = state.session.reactions?.get(recordId);
-    const reactionCount = (allReactions instanceof Map) ? allReactions.size : 0;
+    // Use hierarchical aggregate for reaction count
+    const allReactions = getAggregateReactions(recordId);
+    let reactionCount = 0;
+    if (allReactions instanceof Map) {
+        allReactions.forEach((emojiData) => {
+            reactionCount += (emojiData instanceof Set) ? emojiData.size : 1;
+        });
+    }
+    console.log(`[SUMMARY-DEBUG] buildModalRSBPanelDOM(${recordId}): hierarchical reactionCount=${reactionCount}, users=${allReactions instanceof Map ? allReactions.size : 0}`);
 
     // We don't have direct access to the presentation's componentCommentsCache,
     // so we'll use the modal's own cache mechanism
@@ -1731,7 +1738,15 @@ function buildModalRSBReactionsContent(container, recordId) {
     try {
         const user = getCurrentUser();
         const reactions = state.session.reactions?.get(recordId);
-        if (reactions instanceof Map) currentUserEmoji = reactions.get(user.id);
+        if (reactions instanceof Map) {
+            const emojiData = reactions.get(user.id);
+            // Multi-emoji model: convert to Set for checking
+            if (emojiData instanceof Set) {
+                currentUserEmoji = emojiData;
+            } else if (typeof emojiData === 'string') {
+                currentUserEmoji = new Set([emojiData]);
+            }
+        }
     } catch (_) {}
 
     const emojiLayout = document.createElement('div');
@@ -1757,7 +1772,9 @@ function buildModalRSBReactionsContent(container, recordId) {
 
 function buildModalRSBEmojiButton(emoji, recordId, currentUserEmoji) {
     const btn = document.createElement('button');
-    btn.className = `rsb-emoji-btn${currentUserEmoji === emoji ? ' selected' : ''}`;
+    // Multi-emoji: check if the emoji is in the user's Set
+    const isSelected = currentUserEmoji instanceof Set ? currentUserEmoji.has(emoji) : currentUserEmoji === emoji;
+    btn.className = `rsb-emoji-btn${isSelected ? ' selected' : ''}`;
     btn.textContent = emoji;
     btn.dataset.emoji = emoji;
     btn.dataset.recordId = recordId;
@@ -1831,18 +1848,15 @@ function buildModalRSBRadialGrid(container, recordId, currentUserEmoji, parentCo
 
     const center = document.createElement('div');
     center.className = 'rsb-radial-center';
-    const reactions = state.session.reactions?.get(recordId);
+    // Use hierarchical aggregate for the radial center score
+    const reactions = getAggregateReactions(recordId);
     let summaryEmoji = '😊';
     let avgScore = 0;
     if (reactions && reactions instanceof Map && reactions.size > 0) {
-        let total = 0;
-        reactions.forEach(e => { total += (REACTION_SCORES[e] || 0); });
-        avgScore = total / reactions.size;
-        let closestDiff = Infinity;
-        Object.entries(REACTION_SCORES).forEach(([e, s]) => {
-            const d = Math.abs(s - avgScore);
-            if (d < closestDiff) { closestDiff = d; summaryEmoji = e; }
-        });
+        const result = computeDemocraticAverage(reactions);
+        avgScore = result.democraticAverage;
+        summaryEmoji = result.summaryEmoji;
+        console.log(`[SUMMARY-DEBUG] buildModalRSBRadialGrid(${recordId}): hierarchical democraticAverage=${avgScore.toFixed(2)}, summaryEmoji=${summaryEmoji}, users=${result.userCount}`);
     }
     center.innerHTML = `
         <span class="rsb-radial-center-emoji">${summaryEmoji}</span>
@@ -1973,16 +1987,32 @@ function handleModalRSBEmojiSelect(recordId, emoji) {
     let currentUser;
     try { currentUser = getCurrentUser(); }
     catch (_) { currentUser = { id: 'anonymous', name: 'Anonymous' }; }
+    console.log(`[REACTIONS-DEBUG] handleModalRSBEmojiSelect: recordId="${recordId}", emoji="${emoji}", userId="${currentUser.id}"`);
 
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, new Map());
     }
 
     const itemReactions = state.session.reactions.get(recordId);
-    if (itemReactions.get(currentUser.id) === emoji) {
+
+    // Multi-emoji model: each user has a Set of emojis
+    let userEmojiSet = itemReactions.get(currentUser.id);
+    if (!(userEmojiSet instanceof Set)) {
+        userEmojiSet = userEmojiSet ? new Set([userEmojiSet]) : new Set();
+    }
+
+    // Toggle: if emoji already in set, remove it; otherwise add it
+    if (userEmojiSet.has(emoji)) {
+        userEmojiSet.delete(emoji);
+    } else {
+        userEmojiSet.add(emoji);
+    }
+
+    // Clean up empty sets, otherwise store the updated set
+    if (userEmojiSet.size === 0) {
         itemReactions.delete(currentUser.id);
     } else {
-        itemReactions.set(currentUser.id, emoji);
+        itemReactions.set(currentUser.id, userEmojiSet);
     }
 
     // Re-render the modal RSB
@@ -1998,6 +2028,11 @@ function handleModalRSBEmojiSelect(recordId, emoji) {
     triggerSave();
     requestVitalityRecalc();
 
+    // Broadcast via Pusher for real-time sync with other users
+    if (typeof window.broadcastReactionUpdate === 'function') {
+        window.broadcastReactionUpdate(recordId, itemReactions, currentUser.id);
+    }
+
     log('Modal', `RSB reaction ${emoji} set for item ${recordId} by ${currentUser.id}`);
 }
 
@@ -2009,20 +2044,27 @@ function buildModalRSBSummaryContent(container, recordId) {
     const summaryDiv = document.createElement('div');
     summaryDiv.className = 'rsb-reaction-summary';
 
-    const allReactions = state.session.reactions?.get(recordId);
-    if (!allReactions || !(allReactions instanceof Map) || allReactions.size === 0) {
+    // Use hierarchical aggregate: direct + variations
+    const allReactions = getAggregateReactions(recordId);
+    console.log(`[SUMMARY-DEBUG] buildModalRSBSummaryContent(${recordId}): hierarchical reactions size=${allReactions.size}`);
+    if (!allReactions || allReactions.size === 0) {
         summaryDiv.innerHTML = '<div class="rsb-summary-empty">No reactions yet — use the React tab to be first!</div>';
         container.appendChild(summaryDiv);
         return;
     }
 
+    // Use democratic averaging for multi-emoji model
+    const { democraticAverage, summaryEmoji: avgEmoji, userCount, totalReactions } = computeDemocraticAverage(allReactions);
+    console.log(`[SUMMARY-DEBUG] buildModalRSBSummaryContent(${recordId}): avg=${democraticAverage.toFixed(2)}, emoji=${avgEmoji}, ${userCount} users, ${totalReactions} reactions`);
+
+    // Count individual emojis across all users
     const emojiCounts = {};
-    let totalScore = 0;
-    allReactions.forEach((emoji) => {
-        emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
-        totalScore += (REACTION_SCORES[emoji] || 0);
+    allReactions.forEach((emojiData) => {
+        const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+        for (const emoji of emojis) {
+            emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
+        }
     });
-    const avg = totalScore / allReactions.size;
 
     // Pills
     const pillsDiv = document.createElement('div');
@@ -2044,26 +2086,22 @@ function buildModalRSBSummaryContent(container, recordId) {
     const whoDiv = document.createElement('div');
     whoDiv.className = 'rsb-summary-who';
     const names = [];
-    allReactions.forEach((emoji, userId) => {
+    allReactions.forEach((emojiData, userId) => {
         const name = state.session.userProfiles?.get(userId) || 'Someone';
-        names.push(`${name} ${emoji}`);
+        const emojiStr = emojiData instanceof Set ? Array.from(emojiData).join('') : emojiData;
+        names.push(`${name} ${emojiStr}`);
     });
     whoDiv.textContent = names.length <= 3 ? names.join(', ') : `${names.slice(0, 2).join(', ')} & ${names.length - 2} more`;
     summaryDiv.appendChild(whoDiv);
 
     // Average
-    let closestEmoji = '😊';
-    let closestDiff = Infinity;
-    Object.entries(REACTION_SCORES).forEach(([e, s]) => {
-        const d = Math.abs(s - avg);
-        if (d < closestDiff) { closestDiff = d; closestEmoji = e; }
-    });
+    let closestEmoji = avgEmoji;
     const avgDiv = document.createElement('div');
     avgDiv.className = 'rsb-summary-avg';
     avgDiv.innerHTML = `
         <span class="rsb-summary-avg-emoji">${closestEmoji}</span>
         <span class="rsb-summary-avg-label">Average Sentiment</span>
-        <span class="rsb-summary-avg-score">${avg >= 0 ? '+' : ''}${avg.toFixed(2)}</span>
+        <span class="rsb-summary-avg-score">${democraticAverage >= 0 ? '+' : ''}${democraticAverage.toFixed(2)}</span>
     `;
     summaryDiv.appendChild(avgDiv);
 
@@ -5440,8 +5478,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         modalItemPrice.innerHTML = priceText + pricingTypeHTML;
     }
 
-    // Inject vitality/goodness badge next to the price
-    if (modalItemPrice) {
+    // Inject vitality/goodness badge next to the price (skip when vitality UI is dormant)
+    if (modalItemPrice && !isVitalityUIDormant()) {
         // Remove any previous badge
         const existingBadge = document.getElementById('modal-vitality-badge');
         if (existingBadge) existingBadge.remove();

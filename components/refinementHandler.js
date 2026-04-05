@@ -562,7 +562,12 @@ export function saveTempReactions(reactions) {
         for (const [key, userReactionsMap] of reactions.entries()) {
             const userReaction = userReactionsMap.get(authorId);
             if (userReaction) {
-                tempReactions[key] = userReaction;
+                // Multi-emoji model: convert Set to array for JSON storage
+                if (userReaction instanceof Set) {
+                    tempReactions[key] = Array.from(userReaction);
+                } else {
+                    tempReactions[key] = [userReaction]; // Legacy string -> array
+                }
             }
         }
         localStorage.setItem(TEMP_REACTIONS_KEY, JSON.stringify(tempReactions));
@@ -614,14 +619,16 @@ export function mergeTempDataOnLogin(newUserId, newUserName) {
             const tempReactions = JSON.parse(tempReactStr);
             let mergedCount = 0;
 
-            for (const [reactionKey, emoji] of Object.entries(tempReactions)) {
+            for (const [reactionKey, emojiData] of Object.entries(tempReactions)) {
                 if (!state.session.reactions.has(reactionKey)) {
                     state.session.reactions.set(reactionKey, new Map());
                 }
                 const reactionMap = state.session.reactions.get(reactionKey);
                 // Only set if user hasn't already reacted (don't overwrite)
                 if (!reactionMap.has(newUserId)) {
-                    reactionMap.set(newUserId, emoji);
+                    // Multi-emoji model: convert array to Set
+                    const emojiSet = Array.isArray(emojiData) ? new Set(emojiData) : new Set([emojiData]);
+                    reactionMap.set(newUserId, emojiSet);
                     mergedCount++;
                 }
             }

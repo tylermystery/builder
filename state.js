@@ -112,6 +112,23 @@ export let state = {
         isLoading: true,          // True while permissions are being fetched
         permissionRecord: null,   // The Collaborator_Permissions record if exists
     },
+    // v3.8: Live Stream State (Agora WebRTC)
+    stream: {
+        isActive: false,           // Whether a stream is currently live in this session
+        isHost: false,             // Whether the current user is the stream host
+        hostUserId: null,          // User ID of the stream host
+        channelName: null,         // Agora channel name (derived from plan/session ID)
+        startedAt: null,           // Timestamp when stream started
+        viewerCount: 0,            // Current number of viewers
+        localAudioEnabled: true,   // Local microphone state
+        localVideoEnabled: true,   // Local camera state
+        shareableLink: null,       // Shareable URL for the stream
+    },
+    // v3.8: Top-level plan reference
+    topLevelPlan: {
+        id: null,                  // Session ID of the auto-created top-level plan
+        name: null,                // Name of the top-level plan
+    },
 };
 
 /**
@@ -143,8 +160,9 @@ export function invalidateRecordsIndex() {
  * Get aggregate reactions across all variations for an item.
  * With per-variation compound keys (recordId::variationAuthorId),
  * this aggregates reactions across all variations into a single Map.
+ * Multi-emoji model: each user has a Set<emoji> of their reactions.
  * @param {string} recordId
- * @returns {Map<userId, emoji>} Aggregated reactions
+ * @returns {Map<userId, Set<emoji>>} Aggregated reactions (multi-emoji per user)
  */
 export function getAggregateReactions(recordId) {
     const aggregate = new Map();
@@ -153,8 +171,17 @@ export function getAggregateReactions(recordId) {
     for (const [key, reactionsMap] of state.session.reactions.entries()) {
         if (key === recordId || key.startsWith(prefix)) {
             if (reactionsMap instanceof Map) {
-                for (const [userId, emoji] of reactionsMap.entries()) {
-                    aggregate.set(userId, emoji);
+                for (const [userId, emojiData] of reactionsMap.entries()) {
+                    if (!aggregate.has(userId)) {
+                        aggregate.set(userId, new Set());
+                    }
+                    const userSet = aggregate.get(userId);
+                    // Support both old (string) and new (Set) format
+                    if (emojiData instanceof Set) {
+                        for (const e of emojiData) userSet.add(e);
+                    } else if (typeof emojiData === 'string') {
+                        userSet.add(emojiData);
+                    }
                 }
             }
         }
@@ -236,6 +263,22 @@ export function setState(newState) {
         updatedState.permissions = {
             ...state.permissions,
             ...newState.permissions
+        };
+    }
+
+    // Deep merge for stream state (v3.8)
+    if (newState.stream) {
+        updatedState.stream = {
+            ...state.stream,
+            ...newState.stream
+        };
+    }
+
+    // Deep merge for top-level plan (v3.8)
+    if (newState.topLevelPlan) {
+        updatedState.topLevelPlan = {
+            ...state.topLevelPlan,
+            ...newState.topLevelPlan
         };
     }
 

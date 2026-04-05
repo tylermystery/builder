@@ -5426,13 +5426,44 @@ body.ucp-panel-open .unified-chat-panel {
                 <div id="presentation-header-center">
                     <div class="presentation-header-title-row">
                         <span id="presentation-event-label" class="presentation-event-label">Viewing Plan</span>
+                        <span id="presentation-live-badge" class="presentation-live-badge" style="display: none;">
+                            <span class="live-dot"></span>
+                            <span>LIVE</span>
+                        </span>
                         <button id="plan-focus-regenerate-btn" class="plan-focus-regenerate-btn" title="Regenerate plan focus from goals" aria-label="Regenerate plan focus" style="display: none;">&#x21BB;</button>
                     </div>
                     <div id="goal-chips-container" class="goal-chips-container"></div>
                 </div>
 
-                <!-- Right: Vitality emoji (injected by vitalityUI.js) + Price -->
+                <!-- Right: Video Chat Toolbar (v3.8) + Vitality emoji + Price -->
                 <div id="presentation-header-right">
+                    <!-- Live Stream Toolbar -->
+                    <div id="live-stream-toolbar" class="live-stream-toolbar" style="display: none;">
+                        <!-- Go Live button (shown when no stream active) -->
+                        <button id="live-go-live-btn" class="live-toolbar-btn live-go-live-btn" title="Start live video" aria-label="Go Live">
+                            <span class="live-btn-icon">&#x1F4F9;</span>
+                            <span class="live-btn-label">Go Live</span>
+                        </button>
+
+                        <!-- Stream Controls (shown when stream is active) -->
+                        <div id="live-stream-controls" class="live-stream-controls" style="display: none;">
+                            <div id="live-indicator" class="live-indicator">
+                                <span class="live-dot"></span>
+                                <span class="live-text">LIVE</span>
+                                <span id="live-viewer-count" class="live-viewer-count">0</span>
+                            </div>
+                            <button id="live-toggle-audio" class="live-toolbar-btn live-control-btn" title="Toggle microphone" aria-label="Toggle microphone">
+                                <span class="live-btn-icon" id="live-audio-icon">&#x1F3A4;</span>
+                            </button>
+                            <button id="live-toggle-video" class="live-toolbar-btn live-control-btn" title="Toggle camera" aria-label="Toggle camera">
+                                <span class="live-btn-icon" id="live-video-icon">&#x1F4F7;</span>
+                            </button>
+                            <button id="live-end-stream" class="live-toolbar-btn live-end-btn" title="End stream" aria-label="End stream">
+                                <span class="live-btn-icon">&#x23F9;</span>
+                            </button>
+                        </div>
+                    </div>
+
                     <button id="presentation-header-total" class="presentation-header-total" title="View checkout" aria-label="View checkout summary"></button>
                 </div>
             </div>
@@ -5440,6 +5471,24 @@ body.ucp-panel-open .unified-chat-panel {
             <div id="presentation-logo-container" class="presentation-logo-container" style="display:none;"></div>
             <h1 id="presentation-shop-title" class="presentation-shop-title" style="display:none;"></h1>
         </header>
+
+        <!-- Live Video Preview Strip (v3.8) - shown below header when stream is active -->
+        <div id="live-video-strip" class="live-video-strip" style="display: none;">
+            <div class="live-video-strip-inner">
+                <!-- Local video (host's camera) -->
+                <div id="live-local-video" class="live-video-cell live-video-local">
+                    <div class="live-video-placeholder">
+                        <span>&#x1F4F9;</span>
+                        <span>Starting camera...</span>
+                    </div>
+                </div>
+                <!-- Remote video tiles will be inserted here dynamically -->
+                <div id="live-remote-videos" class="live-remote-videos"></div>
+            </div>
+            <button id="live-video-strip-toggle" class="live-video-strip-toggle" title="Collapse video" aria-label="Toggle video strip">
+                <span class="live-strip-toggle-icon">&#x25B2;</span>
+            </button>
+        </div>
 
         <!-- Search Modal for Presentation View -->
         <div id="presentation-search-modal" class="presentation-search-modal">
@@ -5807,8 +5856,15 @@ body.ucp-panel-open .unified-chat-panel {
             <div class="ucp-header-left">
                 <h3 class="ucp-title">Conversations</h3>
                 <span id="ucp-online-count" class="ucp-online-badge" title="People online">0</span>
+                <span id="ucp-live-badge" class="ucp-live-badge" style="display: none;">
+                    <span class="live-dot"></span>
+                    <span>LIVE</span>
+                </span>
             </div>
             <div class="ucp-header-right">
+                <button id="ucp-fullscreen-btn" class="ucp-fullscreen-btn" title="Expand to full screen" aria-label="Toggle full screen">
+                    <span id="ucp-fullscreen-icon">&#x26F6;</span>
+                </button>
                 <button id="ucp-menu-btn" class="ucp-menu-btn" title="Chat options" aria-label="Chat options">
                     <span class="ucp-menu-icon">&#x22EE;</span>
                 </button>
@@ -5816,6 +5872,16 @@ body.ucp-panel-open .unified-chat-panel {
                     <span>&times;</span>
                 </button>
             </div>
+        </div>
+        <!-- v3.8: Video area (shown in full-screen mode when stream is active) -->
+        <div id="ucp-video-area" class="ucp-video-area" style="display: none;">
+            <div id="ucp-video-main" class="ucp-video-main">
+                <div class="ucp-video-placeholder">
+                    <span>&#x1F4F9;</span>
+                    <span>No active stream</span>
+                </div>
+            </div>
+            <div id="ucp-video-tiles" class="ucp-video-tiles"></div>
         </div>
         <div class="ucp-filters">
             <button class="ucp-filter-btn active" data-filter="all">All</button>

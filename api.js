@@ -608,11 +608,44 @@ export async function loadSessionFromAirtable(sessionId) {
 
                 const reactionsObject = savedState.itemReactions || {};
                 state.session.reactions = new Map();
+                console.log('[REACTIONS-DEBUG] Loading reactions from saved state. Keys found:', Object.keys(reactionsObject));
                 for (const reactionKey in reactionsObject) {
-                    // Backward compatibility: plain recordId keys (no "::") are migrated
-                    // to compound keys as "recordId::original" (Decision 3A)
-                    const normalizedKey = reactionKey.includes('::') ? reactionKey : `${reactionKey}::original`;
-                    state.session.reactions.set(normalizedKey, new Map(Object.entries(reactionsObject[reactionKey])));
+                    // Reverse any prior "::original" normalization so runtime lookups
+                    // using plain recordId work correctly. Photo compound keys (::photo::)
+                    // are preserved as-is for future Phase 5 support.
+                    let finalKey = reactionKey;
+                    if (reactionKey.endsWith('::original')) {
+                        finalKey = reactionKey.replace('::original', '');
+                        console.log(`[REACTIONS-DEBUG] De-normalized key "${reactionKey}" -> "${finalKey}"`);
+                    }
+                    const userReactionsRaw = reactionsObject[reactionKey];
+                    const userReactionsMap = new Map();
+                    for (const [userId, emojiData] of Object.entries(userReactionsRaw)) {
+                        // Support both legacy (string) and new (array) format
+                        if (Array.isArray(emojiData)) {
+                            userReactionsMap.set(userId, new Set(emojiData));
+                        } else if (typeof emojiData === 'string') {
+                            // Migrate legacy single-emoji to Set with one element
+                            userReactionsMap.set(userId, new Set([emojiData]));
+                        }
+                    }
+                    // If finalKey already exists (e.g. both "rec123" and "rec123::original"
+                    // are present), merge the user reactions rather than overwriting
+                    if (state.session.reactions.has(finalKey)) {
+                        const existingMap = state.session.reactions.get(finalKey);
+                        for (const [userId, emojiSet] of userReactionsMap.entries()) {
+                            if (existingMap.has(userId)) {
+                                const existing = existingMap.get(userId);
+                                for (const e of emojiSet) existing.add(e);
+                            } else {
+                                existingMap.set(userId, emojiSet);
+                            }
+                        }
+                        console.log(`[REACTIONS-DEBUG] Merged duplicate key "${finalKey}"`);
+                    } else {
+                        state.session.reactions.set(finalKey, userReactionsMap);
+                    }
+                    console.log(`[REACTIONS-DEBUG] Loaded reaction key="${finalKey}", users=${(state.session.reactions.get(finalKey))?.size || 0}`);
                 }
 
                 state.session.userProfiles = new Map(Object.entries(savedState.userProfiles || {}));
@@ -916,8 +949,21 @@ export async function saveSessionToAirtable() {
 
     const reactionsForSaving = {};
     for (const [recordId, userReactionsMap] of state.session.reactions.entries()) {
-        reactionsForSaving[recordId] = Object.fromEntries(userReactionsMap);
+        const userObj = {};
+        for (const [userId, emojiData] of userReactionsMap.entries()) {
+            // Save Sets as arrays; preserve legacy strings for backward compat
+            if (emojiData instanceof Set) {
+                userObj[userId] = Array.from(emojiData);
+            } else if (typeof emojiData === 'string') {
+                // Legacy: wrap single string in array for forward compat
+                userObj[userId] = [emojiData];
+            } else {
+                userObj[userId] = emojiData;
+            }
+        }
+        reactionsForSaving[recordId] = userObj;
     }
+    console.log('[REACTIONS-DEBUG] Saving reactions. Keys:', Object.keys(reactionsForSaving), 'Total keys:', Object.keys(reactionsForSaving).length);
 
     // Collect custom item records that are in the cart (ideas or locked)
     // These need to be persisted since they don't exist in Airtable
@@ -6122,5 +6168,215 @@ export async function upsertCommunityFund(itemRecordId, itemName, donationAmount
     } catch (error) {
         console.error('[API] upsertCommunityFund error:', error);
         return null;
+    }
+}
+
+// ─── v3.8: Top-Level Plan Auto-Creation ─────────────────────────────────────
+
+/**
+ * Ensure a top-level plan exists for the authenticated user.
+ * If the user has no sessions or no session marked as a top-level plan,
+ * create one automatically. This serves as the user's default workspace
+ * for video sessions and other features that require a plan context.
+ *
+ * @param {string} userId - The authenticated user's ID
+ * @param {string} userName - The user's display name
+ * @param {string} storeId - Optional store ID context
+ * @returns {Promise<{id: string, name: string}|null>} The top-level plan info, or null on failure
+ */
+export async function ensureTopLevelPlan(userId, userName, storeId = null) {
+    if (!userId) {
+        log('API', 'ensureTopLevelPlan: No user ID provided');
+        return null;
+    }
+
+    try {
+        // Check if user already has a top-level plan by looking for a session
+        // with the special "TopLevel" tag in its name or Goals field
+        const sessions = await fetchUserSessions(userId, storeId);
+
+        // Look for an existing top-level plan (identified by a marker in Goals)
+        const topLevelPlan = sessions.find(session => {
+            const goals = session.fields?.Goals || '';
+            return goals.includes('[top-level-plan]');
+        });
+
+        if (topLevelPlan) {
+            log('API', `Found existing top-level plan: ${topLevelPlan.id} (${topLevelPlan.fields?.Name || 'Unnamed'})`);
+            return {
+                id: topLevelPlan.id,
+                name: topLevelPlan.fields?.Name || 'My Workspace',
+            };
+        }
+
+        // No top-level plan exists - create one
+        const planName = userName ? `${userName}'s Workspace` : 'My Workspace';
+        log('API', `Creating top-level plan for user ${userId}: "${planName}"`);
+
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fields: {
+                    Name: planName,
+                    Collaborators: userId,
+                    Goals: '[top-level-plan] Default workspace for live sessions and quick collaboration',
+                    ...(storeId ? { Stores: [storeId] } : {}),
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[API] Error creating top-level plan:', errorText);
+            return null;
+        }
+
+        const data = await response.json();
+        log('API', `Top-level plan created: ${data.id}`);
+
+        return {
+            id: data.id,
+            name: planName,
+        };
+    } catch (error) {
+        console.error('[API] ensureTopLevelPlan error:', error);
+        return null;
+    }
+}
+
+// ─── v3.8 Phase 2: Stream-Plan Association ──────────────────────────────────
+
+/**
+ * Update stream metadata on a session record in Airtable.
+ * Called when a host starts a live stream to associate the stream with the plan.
+ *
+ * @param {string} sessionId - The session/plan record ID
+ * @param {Object} streamData - Stream metadata fields
+ * @param {boolean} streamData.StreamActive - Whether stream is active
+ * @param {string} streamData.StreamHostUserId - Host user ID
+ * @param {string} streamData.StreamStartedAt - ISO timestamp
+ * @param {string} streamData.AgoraChannelName - Agora channel name
+ * @returns {Promise<boolean>} Success status
+ */
+export async function updateStreamMetadata(sessionId, streamData) {
+    if (!sessionId) return false;
+
+    try {
+        // Store stream metadata in the session's "Items with Variations" JSON
+        // which is used as a general-purpose metadata store for sessions
+        const sessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+        const getResponse = await fetch(sessionUrl, {
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!getResponse.ok) {
+            throw new Error(`Failed to fetch session: ${getResponse.status}`);
+        }
+
+        const sessionRecord = await getResponse.json();
+        let sessionMeta = {};
+        try {
+            sessionMeta = JSON.parse(sessionRecord.fields?.['Items with Variations'] || '{}');
+        } catch { sessionMeta = {}; }
+
+        // Add stream metadata under a dedicated key
+        sessionMeta._streamMeta = {
+            active: streamData.StreamActive,
+            hostUserId: streamData.StreamHostUserId,
+            startedAt: streamData.StreamStartedAt,
+            channelName: streamData.AgoraChannelName,
+        };
+
+        const updateResponse = await fetch(sessionUrl, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fields: {
+                    'Items with Variations': JSON.stringify(sessionMeta)
+                }
+            })
+        });
+
+        if (!updateResponse.ok) {
+            throw new Error(`Failed to update stream metadata: ${updateResponse.status}`);
+        }
+
+        log('API', `Stream metadata updated for session ${sessionId}`);
+        return true;
+    } catch (error) {
+        console.error('[API] updateStreamMetadata error:', error);
+        return false;
+    }
+}
+
+/**
+ * Clear stream metadata from a session record when the stream ends.
+ *
+ * @param {string} sessionId - The session/plan record ID
+ * @returns {Promise<boolean>} Success status
+ */
+export async function clearStreamMetadata(sessionId) {
+    if (!sessionId) return false;
+
+    try {
+        const sessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+        const getResponse = await fetch(sessionUrl, {
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!getResponse.ok) {
+            throw new Error(`Failed to fetch session: ${getResponse.status}`);
+        }
+
+        const sessionRecord = await getResponse.json();
+        let sessionMeta = {};
+        try {
+            sessionMeta = JSON.parse(sessionRecord.fields?.['Items with Variations'] || '{}');
+        } catch { sessionMeta = {}; }
+
+        // Clear the stream metadata
+        sessionMeta._streamMeta = {
+            active: false,
+            hostUserId: null,
+            startedAt: null,
+            channelName: null,
+        };
+
+        const updateResponse = await fetch(sessionUrl, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fields: {
+                    'Items with Variations': JSON.stringify(sessionMeta)
+                }
+            })
+        });
+
+        if (!updateResponse.ok) {
+            throw new Error(`Failed to clear stream metadata: ${updateResponse.status}`);
+        }
+
+        log('API', `Stream metadata cleared for session ${sessionId}`);
+        return true;
+    } catch (error) {
+        console.error('[API] clearStreamMetadata error:', error);
+        return false;
     }
 }

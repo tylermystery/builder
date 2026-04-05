@@ -12,6 +12,13 @@ import { openActionMenu } from '../components/actionMenu.js';
 
 console.log('[VitalityUI DEBUG] ✅ vitalityUI.js MODULE LOADED, openActionMenu imported:', typeof openActionMenu);
 
+// ─── DORMANT FLAG ────────────────────────────────────────────────────────────
+// When true, all vitality UI rendering is suppressed (no realm pulses, synergy
+// lines, header emoji morph, or vitality badges). The vitality engine continues
+// to compute scores in the background; only the visual layer is hidden.
+// Emojis alone drive all displayed summaries while vitality is dormant.
+let VITALITY_UI_DORMANT = true;
+
 // Track previous Net Emoji for morph transition
 let previousPlanEmoji = '⚖️';
 let morphContainerEl = null;
@@ -27,10 +34,15 @@ let vitalityListenerRegistered = false;
  * Call this once after the DOM is ready and the presentation view exists.
  */
 export function initVitalityUI() {
-    console.log('[VitalityUI DEBUG] initVitalityUI() called, listenerRegistered:', vitalityListenerRegistered);
+    console.log('[VitalityUI DEBUG] initVitalityUI() called, listenerRegistered:', vitalityListenerRegistered, 'dormant:', VITALITY_UI_DORMANT);
     // Listen for recalculation events (only register once)
     if (!vitalityListenerRegistered) {
         document.addEventListener('vitalityRecalculated', (e) => {
+            // When dormant, skip all visual updates but still log for debugging
+            if (VITALITY_UI_DORMANT) {
+                console.log('[VitalityUI DEBUG] vitalityRecalculated event received (DORMANT - skipping visual updates)');
+                return;
+            }
             console.log('[VitalityUI DEBUG] vitalityRecalculated event received:', {
                 planNet: e.detail.planNet,
                 planNetEmoji: e.detail.planNetEmoji,
@@ -54,6 +66,12 @@ export function initVitalityUI() {
         });
         vitalityListenerRegistered = true;
         console.log('[VitalityUI DEBUG] vitalityRecalculated event listener REGISTERED');
+    }
+
+    // Skip header injection when dormant
+    if (VITALITY_UI_DORMANT) {
+        console.log('[VitalityUI DEBUG] Vitality UI is DORMANT — skipping header injection');
+        return;
     }
 
     // Inject the Net Emoji container + time scope selector into the presentation header
@@ -473,7 +491,7 @@ function drawSynergyFlowLines(synergies) {
  * Shows the 4-realm bar chart, community sentiment reaction pills, and rank among plan items.
  */
 export function showGoodnessReport(recordId) {
-    if (!recordId) return;
+    if (VITALITY_UI_DORMANT || !recordId) return;
 
     // Close any existing report popup
     closeGoodnessReport();
@@ -527,7 +545,10 @@ export function showGoodnessReport(recordId) {
     let reactionPillsHTML = '<span class="goodness-no-reactions">No reactions yet</span>';
     if (reactions && reactions instanceof Map && reactions.size > 0) {
         const emojiCounts = {};
-        reactions.forEach((emoji) => { emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1; });
+        reactions.forEach((emojiData) => {
+            const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+            for (const emoji of emojis) { emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1; }
+        });
         reactionPillsHTML = Object.entries(emojiCounts)
             .map(([emoji, count]) => {
                 const score = REACTION_SCORES[emoji] || 0;
@@ -648,7 +669,7 @@ function closeGoodnessReport() {
  * @param {string} recordId - The record currently displayed in the modal
  */
 export function updateModalVitalityBadge(recordId) {
-    if (!recordId) return;
+    if (VITALITY_UI_DORMANT || !recordId) return;
     const scores = state.vitality?.itemScores?.get(recordId);
     const emoji = scores?.goodnessEmoji || scores?.netEmoji || '⚖️';
     const label = scores?.goodnessLabel || scores?.netLabel || 'Neutral';
@@ -674,7 +695,32 @@ export function cleanupVitalityUI() {
  * Force a re-draw of flow lines (call on window resize or card reorder).
  */
 export function refreshFlowLines() {
+    if (VITALITY_UI_DORMANT) return;
     if (state.vitality && state.vitality.synergies) {
         drawSynergyFlowLines(state.vitality.synergies);
     }
+}
+
+/**
+ * Set the dormant state for vitality UI.
+ * When dormant, all vitality visual rendering is suppressed.
+ * @param {boolean} dormant
+ */
+export function setVitalityUIDormant(dormant) {
+    VITALITY_UI_DORMANT = dormant;
+    console.log('[VitalityUI] Vitality UI dormant:', dormant);
+    if (dormant) {
+        cleanupVitalityUI();
+        // Remove injected header section if present
+        const headerSection = document.getElementById('vitality-header-section');
+        if (headerSection) headerSection.remove();
+    }
+}
+
+/**
+ * Check if vitality UI is currently dormant.
+ * @returns {boolean}
+ */
+export function isVitalityUIDormant() {
+    return VITALITY_UI_DORMANT;
 }

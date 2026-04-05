@@ -3,9 +3,9 @@ const PRES_DEBUG = typeof window !== 'undefined' && window.__PRES_DEBUG__;
 
 console.log('[MODULE DEBUG] presentation.js module starting to load...', performance.now().toFixed(2) + 'ms');
 
-import { state, setState, getRecordById, invalidateRecordsIndex } from '../state.js';
+import { state, setState, getRecordById, invalidateRecordsIndex, getAggregateReactions } from '../state.js';
 import * as api from '../api.js';
-import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, EMOJI_TIERS, REACTION_SCORES, getModalZIndex } from '../config.js';
+import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, EMOJI_TIERS, REACTION_SCORES, getModalZIndex, computeDemocraticAverage } from '../config.js';
 import { updateUrl, getRecordPrice, parseOptions, flattenOptionGroups } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getCurrentUser, sendMessage as sendChatMessage, getReplyingToMessage, clearReplyState } from '../chat.js';
@@ -19,12 +19,13 @@ import { showUserModal } from '../auth.js';
 import { showToast } from '../ui.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { resizeImageForUpload } from '../utils/imageResizer.js';
-import { refreshForumData, onNewItemReceived } from './forumPanel.js';
+import { refreshForumData, onNewItemReceived, getComponentMessageReactions } from './forumPanel.js';
 import { initializeToastNotifications, handlePusherEvent as handleToastPusherEvent } from './toastNotifications.js';
-import { initializeUnifiedChatPanel, showUnifiedChatPanel, hideUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage } from './unifiedChatPanel.js';
+import { initializeUnifiedChatPanel, showUnifiedChatPanel, hideUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage, updateUCPVideoArea, updateUCPLiveBadge, isUCPFullscreen } from './unifiedChatPanel.js';
 import { initVitalityUI, cleanupVitalityUI, refreshFlowLines } from '../vitality/vitalityUI.js';
 import { requestVitalityRecalc, recalculateVitality } from '../vitality/vitalityEngine.js';
 import { openActionMenu, closeActionMenu, isActionMenuOpen, registerActionHandler } from './actionMenu.js';
+import * as liveStream from './liveStream.js';
 
 console.log('[MODULE DEBUG] presentation.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -143,6 +144,22 @@ let floatingChatBtn = null;
 // Reactions summary DOM element
 let reactionsSummaryEl = null;
 
+// v3.8: Live stream toolbar DOM element references
+let liveStreamToolbar = null;
+let liveGoLiveBtn = null;
+let liveStreamControls = null;
+let liveToggleAudioBtn = null;
+let liveToggleVideoBtn = null;
+let liveEndStreamBtn = null;
+let liveViewerCountEl = null;
+let liveAudioIcon = null;
+let liveVideoIcon = null;
+let liveVideoStrip = null;
+let liveLocalVideoEl = null;
+let liveRemoteVideosEl = null;
+let liveVideoStripToggle = null;
+let presentationLiveBadge = null;
+
 // Track loaded images for each item
 const itemImagesCache = new Map();
 // Expose to window for cross-component updates (e.g., modal cover photo changes)
@@ -157,6 +174,28 @@ const accordionState = {
 // Pusher instance for presentation chat
 let presentationPusher = null;
 let presentationChatChannel = null;
+
+// Expose a function for other modules (e.g. modal.js) to broadcast reaction updates via Pusher
+window.broadcastReactionUpdate = function(recordId, itemReactions, userId) {
+    if (!presentationChatChannel) {
+        console.log('[REACTIONS-DEBUG] broadcastReactionUpdate: no Pusher channel available');
+        return;
+    }
+    const reactionsObj = {};
+    itemReactions.forEach((emojiData, odUserId) => {
+        if (emojiData instanceof Set) {
+            reactionsObj[odUserId] = Array.from(emojiData);
+        } else {
+            reactionsObj[odUserId] = emojiData;
+        }
+    });
+    console.log(`[REACTIONS-DEBUG] broadcastReactionUpdate via Pusher: recordId="${recordId}"`, JSON.stringify(reactionsObj));
+    presentationChatChannel.trigger('client-item-reaction-update', {
+        recordId,
+        reactions: reactionsObj,
+        userId
+    });
+};
 
 // Chat elements (may not exist in all presentation contexts)
 let chatMessagesEl = null;
@@ -516,6 +555,22 @@ function ensureDOMElements() {
         itemsSummaryEl: !!itemsSummaryEl
     });
     */
+
+    // v3.8: Live stream toolbar DOM elements
+    liveStreamToolbar = document.getElementById('live-stream-toolbar');
+    liveGoLiveBtn = document.getElementById('live-go-live-btn');
+    liveStreamControls = document.getElementById('live-stream-controls');
+    liveToggleAudioBtn = document.getElementById('live-toggle-audio');
+    liveToggleVideoBtn = document.getElementById('live-toggle-video');
+    liveEndStreamBtn = document.getElementById('live-end-stream');
+    liveViewerCountEl = document.getElementById('live-viewer-count');
+    liveAudioIcon = document.getElementById('live-audio-icon');
+    liveVideoIcon = document.getElementById('live-video-icon');
+    liveVideoStrip = document.getElementById('live-video-strip');
+    liveLocalVideoEl = document.getElementById('live-local-video');
+    liveRemoteVideosEl = document.getElementById('live-remote-videos');
+    liveVideoStripToggle = document.getElementById('live-video-strip-toggle');
+    presentationLiveBadge = document.getElementById('presentation-live-badge');
 
     if (!modal) {
         console.error('[Presentation] Modal element #presentation-modal-overlay not found in DOM');
@@ -1249,60 +1304,77 @@ function getItemReactionScore(recordId) {
     const reactions = state.session.reactions.get(recordId);
     if (!reactions || !(reactions instanceof Map)) return 0;
 
+    // Multi-emoji model: sum all emoji scores across all users
     let score = 0;
-    reactions.forEach((emoji) => {
-        score += getReactionScore(emoji);
+    reactions.forEach((emojiData) => {
+        const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+        for (const emoji of emojis) {
+            score += getReactionScore(emoji);
+        }
     });
     return score;
 }
 
-// Get reaction count for an item
+// Get reaction count for an item (hierarchical: includes variations + comments)
 function getItemReactionCount(recordId) {
-    const reactions = state.session.reactions.get(recordId);
-    if (!reactions || !(reactions instanceof Map)) return 0;
-    return reactions.size;
+    const aggregateReactions = getAggregateReactions(recordId);
+    if (!aggregateReactions || aggregateReactions.size === 0) return 0;
+    // Count total individual reactions across all users
+    let count = 0;
+    aggregateReactions.forEach((emojiData) => {
+        const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+        count += emojis.size;
+    });
+    // Also count comment reactions
+    try {
+        const commentReactions = getComponentMessageReactions(recordId);
+        if (commentReactions && commentReactions.size > 0) {
+            commentReactions.forEach((emojiData) => {
+                const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+                count += emojis.size;
+            });
+        }
+    } catch (e) { /* comment reactions may not be available during early init */ }
+    return count;
 }
 
 /**
- * Get a summary emoji that represents the overall sentiment/activity for an item
- * based on the average score of all reactions. Returns the emoji whose score is
- * closest to the calculated average score from all collaborators' reactions.
+ * Get a hierarchical summary emoji for an item, incorporating:
+ * 1. Direct reactions on the item
+ * 2. Reactions on variations/options (via compound keys like recordId::*)
+ * 3. Reactions from comment threads linked to this item (via componentId)
+ * Returns the emoji whose score is closest to the combined democratic average.
  * @param {string} recordId - The item record ID
- * @returns {string} A single emoji closest to the average reaction score, or empty string if none
+ * @returns {string} A single emoji closest to the democratic average score, or empty string if none
  */
 function getItemSummaryEmoji(recordId) {
-    const reactions = state.session.reactions.get(recordId);
-    if (!reactions || !(reactions instanceof Map) || reactions.size === 0) {
-        return '';
-    }
+    // Step 1: Get aggregate reactions across direct + variations (compound keys)
+    const aggregateReactions = getAggregateReactions(recordId);
 
-    // Calculate the average score from all reactions
-    let totalScore = 0;
-    let reactionCount = 0;
-    reactions.forEach((emoji) => {
-        totalScore += getReactionScore(emoji);
-        reactionCount++;
-    });
-
-    if (reactionCount === 0) {
-        return '';
-    }
-
-    const averageScore = totalScore / reactionCount;
-
-    // Find the emoji with the score closest to the average
-    let closestEmoji = '';
-    let closestDifference = Infinity;
-
-    Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
-        const difference = Math.abs(score - averageScore);
-        if (difference < closestDifference) {
-            closestDifference = difference;
-            closestEmoji = emoji;
+    // Step 2: Merge in comment/thread reactions linked to this item
+    let commentReactionsMerged = false;
+    try {
+        const commentReactions = getComponentMessageReactions(recordId);
+        if (commentReactions && commentReactions.size > 0) {
+            for (const [userId, emojiSet] of commentReactions) {
+                if (!aggregateReactions.has(userId)) aggregateReactions.set(userId, new Set());
+                const userSet = aggregateReactions.get(userId);
+                for (const emoji of emojiSet) userSet.add(emoji);
+            }
+            commentReactionsMerged = true;
         }
-    });
+    } catch (e) {
+        // getComponentMessageReactions may not be available during early init
+        console.log(`[SUMMARY-DEBUG] getItemSummaryEmoji(${recordId}): comment reactions unavailable (${e.message})`);
+    }
 
-    return closestEmoji || '💬';
+    if (!aggregateReactions || aggregateReactions.size === 0) {
+        return '';
+    }
+
+    const { summaryEmoji, democraticAverage, userCount, totalReactions } = computeDemocraticAverage(aggregateReactions);
+    console.log(`[SUMMARY-DEBUG] getItemSummaryEmoji(${recordId}): hierarchical summary → ${summaryEmoji} (avg: ${democraticAverage.toFixed(2)}, ${userCount} users, ${totalReactions} reactions, commentsIncluded: ${commentReactionsMerged})`);
+    return summaryEmoji || '💬';
 }
 
 /**
@@ -1315,6 +1387,7 @@ function updateItemEmojiIndicator(recordId) {
 
     const summaryEmoji = getItemSummaryEmoji(recordId);
     const reactionCount = getItemReactionCount(recordId);
+    console.log(`[SUMMARY-DEBUG] updateItemEmojiIndicator(${recordId}): summaryEmoji=${summaryEmoji}, reactionCount=${reactionCount}`);
 
     if (summaryEmoji && reactionCount > 0) {
         emojiIndicator.innerHTML = `<span class="emoji-indicator-emoji">${summaryEmoji}</span>${reactionCount > 1 ? `<span class="emoji-indicator-count">${reactionCount}</span>` : ''}`;
@@ -1336,10 +1409,10 @@ function updateItemEmojiIndicator(recordId) {
 }
 
 /**
- * Calculate the event-level emoji by averaging all component summary emojis.
- * Uses the same averaging logic as individual components, but aggregates
- * the averaged scores from each component that has reactions.
- * @returns {{emoji: string, count: number, totalReactions: number}} Event emoji, component count, and total reactions
+ * Calculate the plan-level emoji by averaging all item hierarchical summary scores.
+ * Uses getAggregateReactions (which includes variations) + comment reactions per item,
+ * then averages those per-item democratic averages for the plan-level score.
+ * @returns {{emoji: string, count: number, totalReactions: number, averageScore: number}} Plan emoji data
  */
 function getEventSummaryEmoji() {
     // Get all items in the plan (locked and favorites/ideas)
@@ -1352,32 +1425,38 @@ function getEventSummaryEmoji() {
     let totalReactionCount = 0;
 
     allItemIds.forEach(recordId => {
-        const reactions = state.session.reactions.get(recordId);
-        if (!reactions || !(reactions instanceof Map) || reactions.size === 0) {
-            return;
-        }
+        // Use hierarchical aggregate (direct + variations)
+        const aggregateReactions = getAggregateReactions(recordId);
 
-        // Calculate this component's average score (same as getItemSummaryEmoji)
-        let totalScore = 0;
-        let reactionCount = 0;
-        reactions.forEach((emoji) => {
-            totalScore += getReactionScore(emoji);
-            reactionCount++;
-        });
+        // Also merge in comment reactions
+        try {
+            const commentReactions = getComponentMessageReactions(recordId);
+            if (commentReactions && commentReactions.size > 0) {
+                for (const [userId, emojiSet] of commentReactions) {
+                    if (!aggregateReactions.has(userId)) aggregateReactions.set(userId, new Set());
+                    const userSet = aggregateReactions.get(userId);
+                    for (const emoji of emojiSet) userSet.add(emoji);
+                }
+            }
+        } catch (e) { /* comment reactions may not be available */ }
 
-        if (reactionCount > 0) {
-            const averageScore = totalScore / reactionCount;
-            componentAverages.push(averageScore);
-            totalReactionCount += reactionCount;
+        if (!aggregateReactions || aggregateReactions.size === 0) return;
+
+        const { democraticAverage, totalReactions } = computeDemocraticAverage(aggregateReactions);
+
+        if (totalReactions > 0) {
+            componentAverages.push(democraticAverage);
+            totalReactionCount += totalReactions;
         }
     });
 
     // No components with reactions
     if (componentAverages.length === 0) {
-        return { emoji: '', count: 0, totalReactions: 0 };
+        console.log(`[SUMMARY-DEBUG] getEventSummaryEmoji: no items with reactions across ${allItemIds.length} plan items`);
+        return { emoji: '', count: 0, totalReactions: 0, averageScore: 0 };
     }
 
-    // Calculate the average of all component averages (event-level average)
+    // Calculate the average of all component averages (plan-level average)
     const eventAverageScore = componentAverages.reduce((sum, avg) => sum + avg, 0) / componentAverages.length;
 
     // Find the emoji with the score closest to the event average
@@ -1392,10 +1471,12 @@ function getEventSummaryEmoji() {
         }
     });
 
+    console.log(`[SUMMARY-DEBUG] getEventSummaryEmoji: ${componentAverages.length}/${allItemIds.length} items with reactions, planAvg: ${eventAverageScore.toFixed(2)} → ${closestEmoji}, ${totalReactionCount} total reactions`);
     return {
         emoji: closestEmoji || '💬',
         count: componentAverages.length,
-        totalReactions: totalReactionCount
+        totalReactions: totalReactionCount,
+        averageScore: eventAverageScore
     };
 }
 
@@ -1408,7 +1489,8 @@ function updateEventEmojiIndicator() {
     const eventEmojiEl = document.getElementById('event-emoji-indicator');
     if (!eventEmojiEl) return;
 
-    const { emoji, count, totalReactions } = getEventSummaryEmoji();
+    const { emoji, count, totalReactions, averageScore } = getEventSummaryEmoji();
+    console.log(`[SUMMARY-DEBUG] updateEventEmojiIndicator: emoji=${emoji}, count=${count}, totalReactions=${totalReactions}, avgScore=${averageScore?.toFixed(2) || 'N/A'}`);
 
     if (emoji && count > 0) {
         // Show count of components with reactions if more than 1
@@ -1628,17 +1710,20 @@ function createSentimentPopupHTML() {
         const record = getRecordById(item.recordId);
         const name = record?.fields.Name || 'Unknown Item';
         const reactions = state.session.reactions.get(item.recordId);
-        const reactionCount = reactions instanceof Map ? reactions.size : 0;
         const totalScore = getItemReactionScore(item.recordId);
+        const reactionCount = getItemReactionCount(item.recordId);
 
         // Calculate average score per reaction for positioning on scale
         const avgScore = reactionCount > 0 ? totalScore / reactionCount : 0;
 
-        // Get emoji breakdown
+        // Get emoji breakdown (across all users' Sets)
         const emojiBreakdown = {};
         if (reactions instanceof Map) {
-            reactions.forEach((emoji) => {
-                emojiBreakdown[emoji] = (emojiBreakdown[emoji] || 0) + 1;
+            reactions.forEach((emojiData) => {
+                const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+                for (const emoji of emojis) {
+                    emojiBreakdown[emoji] = (emojiBreakdown[emoji] || 0) + 1;
+                }
             });
         }
 
@@ -2391,6 +2476,7 @@ function handleEmojiPickerClick(e) {
 // Select an emoji reaction for an item
 function selectEmoji(recordId, emoji) {
     const currentUser = getCurrentUser();
+    console.log(`[REACTIONS-DEBUG] selectEmoji called: recordId="${recordId}", emoji="${emoji}", userId="${currentUser.id}"`);
 
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, new Map());
@@ -2398,12 +2484,26 @@ function selectEmoji(recordId, emoji) {
 
     const itemReactions = state.session.reactions.get(recordId);
 
-    // Toggle if same emoji, otherwise set new
-    if (itemReactions.get(currentUser.id) === emoji) {
+    // Multi-emoji model: each user has a Set of emojis
+    let userEmojiSet = itemReactions.get(currentUser.id);
+    if (!(userEmojiSet instanceof Set)) {
+        userEmojiSet = userEmojiSet ? new Set([userEmojiSet]) : new Set();
+    }
+
+    // Toggle: if emoji already in set, remove it; otherwise add it
+    if (userEmojiSet.has(emoji)) {
+        userEmojiSet.delete(emoji);
+    } else {
+        userEmojiSet.add(emoji);
+    }
+
+    // Clean up empty sets, otherwise store the updated set
+    if (userEmojiSet.size === 0) {
         itemReactions.delete(currentUser.id);
     } else {
-        itemReactions.set(currentUser.id, emoji);
+        itemReactions.set(currentUser.id, userEmojiSet);
     }
+    console.log(`[REACTIONS-DEBUG] selectEmoji result: key="${recordId}", userEmojis=[${Array.from(userEmojiSet)}], totalUsers=${itemReactions.size}`);
 
     // Re-render reactions for this item
     const reactionContainer = document.querySelector(`.itinerary-item-reactions[data-record-id="${recordId}"]`);
@@ -2425,11 +2525,16 @@ function selectEmoji(recordId, emoji) {
 
     // Broadcast item reaction update via Pusher for real-time sync
     if (presentationChatChannel) {
-        // Convert Map to object for Pusher transmission
+        // Convert Map<userId, Set<emoji>> to object for Pusher transmission
         const reactionsObj = {};
-        itemReactions.forEach((userEmoji, odUserId) => {
-            reactionsObj[odUserId] = userEmoji;
+        itemReactions.forEach((emojiData, odUserId) => {
+            if (emojiData instanceof Set) {
+                reactionsObj[odUserId] = Array.from(emojiData);
+            } else {
+                reactionsObj[odUserId] = emojiData;
+            }
         });
+        console.log(`[REACTIONS-DEBUG] Pusher broadcast: recordId="${recordId}", payload=`, JSON.stringify(reactionsObj));
         presentationChatChannel.trigger('client-item-reaction-update', {
             recordId,
             reactions: reactionsObj,
@@ -2446,12 +2551,17 @@ function renderReactions(recordId, reactionContainer) {
     if (!(allReactions instanceof Map)) {
         allReactions = new Map();
     }
-    const currentUserReaction = allReactions.get(currentUser.id);
+    // Get current user's emoji set
+    const currentUserEmojiSet = allReactions.get(currentUser.id);
 
     // Quick reaction buttons (8 most common)
-    const buttonsHTML = EMOJI_REACTIONS.map(emoji =>
-        `<button class="reaction-btn ${currentUserReaction === emoji ? 'selected' : ''}" data-emoji="${emoji}" data-record-id="${recordId}">${emoji}</button>`
-    ).join('');
+    const buttonsHTML = EMOJI_REACTIONS.map(emoji => {
+        // Check if this emoji is in the user's set
+        const isSelected = currentUserEmojiSet instanceof Set
+            ? currentUserEmojiSet.has(emoji)
+            : currentUserEmojiSet === emoji;
+        return `<button class="reaction-btn ${isSelected ? 'selected' : ''}" data-emoji="${emoji}" data-record-id="${recordId}">${emoji}</button>`;
+    }).join('');
 
     // More button to open full picker
     const moreButtonHTML = `<button class="reaction-btn reaction-more-btn" data-record-id="${recordId}" title="More reactions">+</button>`;
@@ -2459,9 +2569,10 @@ function renderReactions(recordId, reactionContainer) {
     // Summary showing who reacted (simplified - just names and emojis)
     let summaryHTML = '';
     if (allReactions.size > 0) {
-        summaryHTML = Array.from(allReactions.entries()).map(([userId, reaction]) => {
+        summaryHTML = Array.from(allReactions.entries()).map(([userId, emojiData]) => {
             const name = state.session.userProfiles.get(userId) || 'A User';
-            return `<span class="reaction-user">${name}: ${reaction}</span>`;
+            const emojiStr = emojiData instanceof Set ? Array.from(emojiData).join('') : emojiData;
+            return `<span class="reaction-user">${name}: ${emojiStr}</span>`;
         }).join('');
     }
 
@@ -3156,31 +3267,38 @@ async function renderCompactCard(item) {
         pillsHTML = `<div class="compact-card-pills">${pillElements}${morePill}</div>`;
     }
 
-    // --- Reaction zone summary ---
-    const reactions = state.session.reactions?.get(recordId);
+    // --- Reaction zone summary (hierarchical: direct + variations + comments) ---
+    const reactions = getAggregateReactions(recordId);
+    // Merge comment reactions into the aggregate
+    try {
+        const commentReactions = getComponentMessageReactions(recordId);
+        if (commentReactions && commentReactions.size > 0) {
+            for (const [userId, emojiSet] of commentReactions) {
+                if (!reactions.has(userId)) reactions.set(userId, new Set());
+                const userSet = reactions.get(userId);
+                for (const emoji of emojiSet) userSet.add(emoji);
+            }
+        }
+    } catch (e) { /* comment reactions may not be available during early init */ }
+    if (reactions.size === 0 && state.session.reactions?.size > 0) {
+        console.log(`[SUMMARY-DEBUG] Compact card ${recordId}: no hierarchical reactions found. Available keys: [${Array.from(state.session.reactions.keys()).slice(0, 5).join(', ')}${state.session.reactions.size > 5 ? '...' : ''}]`);
+    }
     let reactionZoneSummaryEmoji = '😊';
     let reactionZoneScoreText = '';
     let reactionZoneSummaryText = 'React';
     let rzReactionCount = 0;
     if (reactions && reactions instanceof Map && reactions.size > 0) {
-        rzReactionCount = reactions.size;
-        let total = 0;
+        const { democraticAverage, summaryEmoji: bestEmoji, totalReactions } = computeDemocraticAverage(reactions);
+        rzReactionCount = totalReactions;
         const emojiCounts = {};
-        reactions.forEach((emoji) => {
-            total += (REACTION_SCORES[emoji] || 0);
-            emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
-        });
-        const average = total / rzReactionCount;
-        // Find closest emoji to average score
-        let closestDiff = Infinity;
-        Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
-            const diff = Math.abs(score - average);
-            if (diff < closestDiff) {
-                closestDiff = diff;
-                reactionZoneSummaryEmoji = emoji;
+        reactions.forEach((emojiData) => {
+            const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+            for (const emoji of emojis) {
+                emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
             }
         });
-        reactionZoneScoreText = `${average >= 0 ? '+' : ''}${average.toFixed(1)}`;
+        reactionZoneSummaryEmoji = bestEmoji;
+        reactionZoneScoreText = `${democraticAverage >= 0 ? '+' : ''}${democraticAverage.toFixed(1)}`;
         // Build compact pill summary of top emojis
         const sorted = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]);
         const top3 = sorted.slice(0, 3).map(([emoji, count]) => `${emoji}${count > 1 ? count : ''}`).join(' ');
@@ -3410,18 +3528,51 @@ async function renderCompactGroupCard(group) {
         groupTaskBadgeHTML = taskChips;
     }
 
-    // --- Aggregate reaction bar across group members ---
+    // --- Aggregate reaction bar across group members (with democratic average) ---
+    // Merge all member reactions into a single Map<userId, Set<emoji>> for democratic averaging
+    const groupMergedReactions = new Map();
     const groupEmojiCounts = {};
     let groupTotalReactions = 0;
     for (const gId of groupItems) {
-        const memberReactions = state.session.reactions?.get(gId);
-        if (memberReactions && memberReactions instanceof Map) {
-            memberReactions.forEach((emoji) => {
-                groupEmojiCounts[emoji] = (groupEmojiCounts[emoji] || 0) + 1;
-                groupTotalReactions++;
-            });
+        const memberReactions = getAggregateReactions(gId);
+        if (memberReactions && memberReactions.size > 0) {
+            for (const [userId, emojiSet] of memberReactions) {
+                if (!groupMergedReactions.has(userId)) groupMergedReactions.set(userId, new Set());
+                const userSet = groupMergedReactions.get(userId);
+                for (const emoji of emojiSet) {
+                    userSet.add(emoji);
+                    groupEmojiCounts[emoji] = (groupEmojiCounts[emoji] || 0) + 1;
+                    groupTotalReactions++;
+                }
+            }
         }
+        // Also include comment reactions for each group member
+        try {
+            const memberCommentReactions = getComponentMessageReactions(gId);
+            if (memberCommentReactions && memberCommentReactions.size > 0) {
+                for (const [userId, emojiSet] of memberCommentReactions) {
+                    if (!groupMergedReactions.has(userId)) groupMergedReactions.set(userId, new Set());
+                    const userSet = groupMergedReactions.get(userId);
+                    for (const emoji of emojiSet) {
+                        userSet.add(emoji);
+                        groupEmojiCounts[emoji] = (groupEmojiCounts[emoji] || 0) + 1;
+                        groupTotalReactions++;
+                    }
+                }
+            }
+        } catch (e) { /* comment reactions may not be available */ }
     }
+
+    // Compute group-level democratic average
+    let groupSummaryEmoji = '';
+    let groupSummaryScore = '';
+    if (groupMergedReactions.size > 0) {
+        const { democraticAverage, summaryEmoji, userCount, totalReactions } = computeDemocraticAverage(groupMergedReactions);
+        groupSummaryEmoji = summaryEmoji;
+        groupSummaryScore = `${democraticAverage >= 0 ? '+' : ''}${democraticAverage.toFixed(1)}`;
+        console.log(`[SUMMARY-DEBUG] renderCompactGroupCard(${groupId}): group democratic avg → ${summaryEmoji} (avg: ${democraticAverage.toFixed(2)}, ${userCount} users, ${totalReactions} reactions across ${groupItems.length} members)`);
+    }
+
     let groupReactionBarHTML = '';
     if (groupTotalReactions > 0) {
         const sortedGroupEmoji = Object.entries(groupEmojiCounts).sort((a, b) => b[1] - a[1]);
@@ -3429,7 +3580,11 @@ async function renderCompactGroupCard(group) {
             `<span class="compact-reaction-pill" title="${emoji} ${count}">${emoji}<span class="compact-reaction-count">${count}</span></span>`
         ).join('');
         const moreGroupReactions = sortedGroupEmoji.length > 3 ? `<span class="compact-reaction-pill compact-reaction-overflow">+${sortedGroupEmoji.length - 3}</span>` : '';
-        groupReactionBarHTML = `<span class="compact-card-reactions" title="${groupTotalReactions} reaction${groupTotalReactions !== 1 ? 's' : ''} across group">${top3Group}${moreGroupReactions}</span>`;
+        // Include group summary emoji + score at the start of the reaction bar
+        const summaryPill = groupSummaryEmoji
+            ? `<span class="compact-reaction-pill compact-reaction-summary" title="Group sentiment: ${groupSummaryEmoji} (${groupSummaryScore})">${groupSummaryEmoji}<span class="compact-reaction-score">${groupSummaryScore}</span></span>`
+            : '';
+        groupReactionBarHTML = `<span class="compact-card-reactions" title="${groupTotalReactions} reaction${groupTotalReactions !== 1 ? 's' : ''} across group">${summaryPill}${top3Group}${moreGroupReactions}</span>`;
     }
 
     // Build group meta bar HTML (only if there's content)
@@ -4267,7 +4422,9 @@ function buildRSBTierRow(tier, recordId, currentUserEmoji) {
  */
 function buildRSBEmojiButton(emoji, recordId, currentUserEmoji) {
     const btn = document.createElement('button');
-    btn.className = `rsb-emoji-btn${currentUserEmoji === emoji ? ' selected' : ''}`;
+    // Fix: currentUserEmoji is a Set in multi-emoji model, not a string
+    const isSelected = currentUserEmoji instanceof Set ? currentUserEmoji.has(emoji) : currentUserEmoji === emoji;
+    btn.className = `rsb-emoji-btn${isSelected ? ' selected' : ''}`;
     btn.textContent = emoji;
     btn.dataset.emoji = emoji;
     btn.dataset.recordId = recordId;
@@ -4296,16 +4453,17 @@ function buildRSBRadialGrid(container, recordId, currentUserEmoji, isModal) {
     const radial = document.createElement('div');
     radial.className = 'rsb-radial-container';
 
-    // Center hub showing current summary
+    // Center hub showing current hierarchical summary
     const center = document.createElement('div');
     center.className = 'rsb-radial-center';
     const summaryEmoji = getItemSummaryEmoji(recordId) || '😊';
-    const reactions = state.session.reactions?.get(recordId);
+    // Use hierarchical aggregate for the radial center score
+    const reactions = getAggregateReactions(recordId);
     let avgScore = 0;
     if (reactions && reactions instanceof Map && reactions.size > 0) {
-        let total = 0;
-        reactions.forEach(e => { total += (REACTION_SCORES[e] || 0); });
-        avgScore = total / reactions.size;
+        const { democraticAverage } = computeDemocraticAverage(reactions);
+        avgScore = democraticAverage;
+        console.log(`[SUMMARY-DEBUG] buildRSBRadialGrid(${recordId}): hierarchical democraticAverage=${avgScore.toFixed(2)}, users=${reactions.size}`);
     }
     center.innerHTML = `
         <span class="rsb-radial-center-emoji">${summaryEmoji}</span>
@@ -4473,22 +4631,38 @@ function buildRSBSummaryContent(container, recordId) {
     const summaryDiv = document.createElement('div');
     summaryDiv.className = 'rsb-reaction-summary';
 
-    const reactions = state.session.reactions?.get(recordId);
+    // Use hierarchical aggregate: direct + variations + comments
+    const reactions = getAggregateReactions(recordId);
+    try {
+        const commentReactions = getComponentMessageReactions(recordId);
+        if (commentReactions && commentReactions.size > 0) {
+            for (const [userId, emojiSet] of commentReactions) {
+                if (!reactions.has(userId)) reactions.set(userId, new Set());
+                const userSet = reactions.get(userId);
+                for (const emoji of emojiSet) userSet.add(emoji);
+            }
+        }
+    } catch (e) { /* comment reactions may not be available */ }
 
-    if (!reactions || !(reactions instanceof Map) || reactions.size === 0) {
+    if (!reactions || reactions.size === 0) {
         summaryDiv.innerHTML = '<div class="rsb-summary-empty">No reactions yet — react to be the first!</div>';
         container.appendChild(summaryDiv);
         return;
     }
 
-    // Build pills for each unique emoji
+    // Build pills for each unique emoji (multi-emoji model)
     const emojiCounts = {};
-    let totalScore = 0;
-    reactions.forEach((emoji) => {
-        emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
-        totalScore += (REACTION_SCORES[emoji] || 0);
+    let totalEmojiCount = 0;
+    reactions.forEach((emojiData) => {
+        const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+        for (const emoji of emojis) {
+            emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
+            totalEmojiCount++;
+        }
     });
-    const avg = totalScore / reactions.size;
+    // Use democratic average (equal weight per user) for hierarchical summary
+    const { democraticAverage: avg, summaryEmoji: democraticEmoji } = computeDemocraticAverage(reactions);
+    console.log(`[SUMMARY-DEBUG] buildRSBSummaryContent(${recordId}): hierarchical democraticAvg=${avg.toFixed(2)}, totalEmojis=${totalEmojiCount}, users=${reactions.size}`);
 
     const pillsDiv = document.createElement('div');
     pillsDiv.className = 'rsb-summary-pills';
@@ -4510,9 +4684,10 @@ function buildRSBSummaryContent(container, recordId) {
     const whoDiv = document.createElement('div');
     whoDiv.className = 'rsb-summary-who';
     const userNames = [];
-    reactions.forEach((emoji, userId) => {
+    reactions.forEach((emojiData, userId) => {
         const name = state.session.userProfiles?.get(userId) || 'Someone';
-        userNames.push(`${name} ${emoji}`);
+        const emojiStr = emojiData instanceof Set ? Array.from(emojiData).join('') : emojiData;
+        userNames.push(`${name} ${emojiStr}`);
     });
     const whoText = userNames.length <= 3
         ? userNames.join(', ')
@@ -4520,18 +4695,11 @@ function buildRSBSummaryContent(container, recordId) {
     whoDiv.textContent = whoText;
     summaryDiv.appendChild(whoDiv);
 
-    // Average score
-    let closestEmoji = '😊';
-    let closestDiff = Infinity;
-    Object.entries(REACTION_SCORES).forEach(([e, s]) => {
-        const d = Math.abs(s - avg);
-        if (d < closestDiff) { closestDiff = d; closestEmoji = e; }
-    });
-
+    // Average score - use the democratic emoji already computed above
     const avgDiv = document.createElement('div');
     avgDiv.className = 'rsb-summary-avg';
     avgDiv.innerHTML = `
-        <span class="rsb-summary-avg-emoji">${closestEmoji}</span>
+        <span class="rsb-summary-avg-emoji">${democraticEmoji}</span>
         <span class="rsb-summary-avg-label">Average Sentiment</span>
         <span class="rsb-summary-avg-score">${avg >= 0 ? '+' : ''}${avg.toFixed(2)}</span>
     `;
@@ -4742,9 +4910,18 @@ function handleRSBEmojiSelect(recordId, emoji, btn) {
     // Reuse the existing selectEmoji function which handles state, Pusher, and save
     selectEmoji(recordId, emoji);
 
-    // Update selected state in all visible RSB emoji buttons for this record
+    // Update selected state in all visible RSB emoji buttons based on current user's Set
+    let currentUserSet = null;
+    try {
+        const user = getCurrentUser();
+        const reactions = state.session.reactions?.get(recordId);
+        if (reactions instanceof Map) {
+            currentUserSet = reactions.get(user.id);
+        }
+    } catch (_) { /* anonymous */ }
     document.querySelectorAll(`.rsb-emoji-btn[data-record-id="${recordId}"]`).forEach(b => {
-        b.classList.toggle('selected', b.dataset.emoji === emoji && !btn.classList.contains('selected'));
+        const isInSet = currentUserSet instanceof Set ? currentUserSet.has(b.dataset.emoji) : false;
+        b.classList.toggle('selected', isInSet);
     });
 
     // Refresh the whole panel if it's open
@@ -4802,48 +4979,43 @@ function clearRSBEmojiPreview(recordId) {
  */
 function calculateReactionPreview(recordId, previewEmojiValue) {
     const reactions = state.session.reactions?.get(recordId);
-    let total = 0;
-    let count = 0;
-    let currentUserReaction = null;
 
     let currentUser;
     try { currentUser = getCurrentUser(); }
     catch (_) { currentUser = { id: 'anonymous', name: 'Anonymous' }; }
 
+    // Build a temporary copy with the preview emoji toggled for the current user
+    const tempReactions = new Map();
     if (reactions && reactions instanceof Map) {
-        reactions.forEach((emoji, userId) => {
-            total += (REACTION_SCORES[emoji] || 0);
-            count += 1;
-            if (userId === currentUser.id) currentUserReaction = emoji;
-        });
+        for (const [userId, emojiData] of reactions) {
+            const emojiSet = emojiData instanceof Set ? new Set(emojiData) : new Set([emojiData]);
+            tempReactions.set(userId, emojiSet);
+        }
     }
 
-    const isToggleOff = currentUserReaction === previewEmojiValue;
+    // Toggle the preview emoji for the current user
+    if (!tempReactions.has(currentUser.id)) {
+        tempReactions.set(currentUser.id, new Set());
+    }
+    const userSet = tempReactions.get(currentUser.id);
+    const isToggleOff = userSet.has(previewEmojiValue);
     if (isToggleOff) {
-        total -= (REACTION_SCORES[currentUserReaction] || 0);
-        count -= 1;
-    } else if (currentUserReaction) {
-        total -= (REACTION_SCORES[currentUserReaction] || 0);
-        total += (REACTION_SCORES[previewEmojiValue] || 0);
+        userSet.delete(previewEmojiValue);
     } else {
-        total += (REACTION_SCORES[previewEmojiValue] || 0);
-        count += 1;
+        userSet.add(previewEmojiValue);
+    }
+    // Clean up empty set
+    if (userSet.size === 0) {
+        tempReactions.delete(currentUser.id);
     }
 
-    const average = count > 0 ? total / count : 0;
-    let summaryEmoji = '😊';
-    if (count > 0) {
-        let closestDiff = Infinity;
-        Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
-            const diff = Math.abs(score - average);
-            if (diff < closestDiff) { closestDiff = diff; summaryEmoji = emoji; }
-        });
-    }
-    return { count, total, average, summaryEmoji, isToggleOff };
+    const { democraticAverage, summaryEmoji, totalReactions } = computeDemocraticAverage(tempReactions);
+
+    return { count: totalReactions, total: democraticAverage * tempReactions.size, average: democraticAverage, summaryEmoji, isToggleOff };
 }
 
 /**
- * Update the reaction zone summary display for an item.
+ * Update the reaction zone summary display for an item (hierarchical).
  */
 function updateReactionZoneSummary(recordId) {
     const zone = document.querySelector(`.compact-card-reaction-zone[data-record-id="${recordId}"]`);
@@ -4853,28 +5025,38 @@ function updateReactionZoneSummary(recordId) {
     const textEl = zone.querySelector('.reaction-zone-summary-text');
     const scoreEl = zone.querySelector('.reaction-zone-summary-score');
 
-    const reactions = state.session.reactions?.get(recordId);
+    // Use hierarchical aggregate: direct + variations + comments
+    const reactions = getAggregateReactions(recordId);
+    try {
+        const commentReactions = getComponentMessageReactions(recordId);
+        if (commentReactions && commentReactions.size > 0) {
+            for (const [userId, emojiSet] of commentReactions) {
+                if (!reactions.has(userId)) reactions.set(userId, new Set());
+                const userSet = reactions.get(userId);
+                for (const emoji of emojiSet) userSet.add(emoji);
+            }
+        }
+    } catch (e) { /* comment reactions may not be available */ }
+
+    console.log(`[SUMMARY-DEBUG] updateReactionZoneSummary(${recordId}): hierarchical reactions size=${reactions.size}`);
     let summaryEmoji = '😊';
     let summaryText = 'React';
     let scoreText = '';
 
     if (reactions && reactions instanceof Map && reactions.size > 0) {
-        let total = 0;
+        const { democraticAverage, summaryEmoji: bestEmoji, totalReactions } = computeDemocraticAverage(reactions);
         const emojiCounts = {};
-        reactions.forEach((emoji) => {
-            total += (REACTION_SCORES[emoji] || 0);
-            emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
+        reactions.forEach((emojiData) => {
+            const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+            for (const emoji of emojis) {
+                emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
+            }
         });
-        const avg = total / reactions.size;
-        let closestDiff = Infinity;
-        Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
-            const diff = Math.abs(score - avg);
-            if (diff < closestDiff) { closestDiff = diff; summaryEmoji = emoji; }
-        });
-        scoreText = `${avg >= 0 ? '+' : ''}${avg.toFixed(1)}`;
+        summaryEmoji = bestEmoji;
+        scoreText = `${democraticAverage >= 0 ? '+' : ''}${democraticAverage.toFixed(1)}`;
         const sorted = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]);
         const top3 = sorted.slice(0, 3).map(([emoji, count]) => `${emoji}${count > 1 ? count : ''}`).join(' ');
-        summaryText = `${reactions.size} reaction${reactions.size !== 1 ? 's' : ''} ${top3}`;
+        summaryText = `${totalReactions} reaction${totalReactions !== 1 ? 's' : ''} ${top3}`;
     }
 
     if (emojiEl) emojiEl.textContent = summaryEmoji;
@@ -7398,8 +7580,13 @@ async function addReactionToItem(recordId, emoji) {
     // Use current user ID or generate anonymous ID
     const userId = state.session.user?.id || `anon-${Date.now()}`;
 
-    // Add/update reaction
-    itemReactions.set(userId, emoji);
+    // Multi-emoji model: add emoji to user's set
+    let userEmojiSet = itemReactions.get(userId);
+    if (!(userEmojiSet instanceof Set)) {
+        userEmojiSet = userEmojiSet ? new Set([userEmojiSet]) : new Set();
+    }
+    userEmojiSet.add(emoji);
+    itemReactions.set(userId, userEmojiSet);
 
     // Get item name for toast
     const record = getRecordById(recordId);
@@ -9591,6 +9778,325 @@ async function dissolveGroup(groupId) {
     triggerSave();
 }
 
+// ─── v3.8: Live Stream Toolbar ──────────────────────────────────────────────
+
+/**
+ * Initialize the live stream toolbar in the presentation header.
+ * Shows/hides the toolbar based on auth state and sets up event listeners.
+ */
+function initializeLiveStreamToolbar() {
+    if (!liveStreamToolbar) return;
+
+    // Register liveStream callbacks
+    liveStream.registerCallbacks({
+        onStreamStarted: handleStreamStarted,
+        onStreamEnded: handleStreamEnded,
+        onRemoteUserJoined: handleRemoteUserJoined,
+        onRemoteUserLeft: handleRemoteUserLeft,
+        onViewerCountChanged: handleViewerCountChanged,
+        onError: handleStreamError,
+    });
+
+    // Show toolbar (visible to all users; Go Live button checks auth)
+    liveStreamToolbar.style.display = '';
+
+    // Go Live button
+    if (liveGoLiveBtn) {
+        liveGoLiveBtn.addEventListener('click', handleGoLiveClick);
+    }
+
+    // Stream control buttons
+    if (liveToggleAudioBtn) {
+        liveToggleAudioBtn.addEventListener('click', handleToggleAudio);
+    }
+    if (liveToggleVideoBtn) {
+        liveToggleVideoBtn.addEventListener('click', handleToggleVideo);
+    }
+    if (liveEndStreamBtn) {
+        liveEndStreamBtn.addEventListener('click', handleEndStream);
+    }
+
+    // Video strip collapse toggle
+    if (liveVideoStripToggle) {
+        liveVideoStripToggle.addEventListener('click', () => {
+            if (liveVideoStrip) {
+                liveVideoStrip.classList.toggle('collapsed');
+            }
+        });
+    }
+
+    // Update toolbar state to match current stream state
+    updateLiveStreamToolbarUI();
+
+    log('Presentation', 'Live stream toolbar initialized');
+}
+
+/**
+ * Update the toolbar UI to reflect the current stream state.
+ */
+function updateLiveStreamToolbarUI() {
+    if (!liveStreamToolbar) return;
+
+    const isLive = state.stream.isActive;
+    const isHost = state.stream.isHost;
+
+    // Toggle between Go Live button and stream controls
+    if (liveGoLiveBtn) {
+        liveGoLiveBtn.style.display = isLive ? 'none' : '';
+    }
+    if (liveStreamControls) {
+        liveStreamControls.style.display = isLive ? '' : 'none';
+    }
+
+    // Update audio/video toggle icons
+    if (liveAudioIcon) {
+        const audioEnabled = state.stream.localAudioEnabled;
+        liveAudioIcon.textContent = audioEnabled ? '\u{1F3A4}' : '\u{1F507}';
+        if (liveToggleAudioBtn) {
+            liveToggleAudioBtn.classList.toggle('muted', !audioEnabled);
+            liveToggleAudioBtn.title = audioEnabled ? 'Mute microphone' : 'Unmute microphone';
+        }
+    }
+    if (liveVideoIcon) {
+        const videoEnabled = state.stream.localVideoEnabled;
+        liveVideoIcon.textContent = videoEnabled ? '\u{1F4F7}' : '\u{1F6AB}';
+        if (liveToggleVideoBtn) {
+            liveToggleVideoBtn.classList.toggle('muted', !videoEnabled);
+            liveToggleVideoBtn.title = videoEnabled ? 'Turn off camera' : 'Turn on camera';
+        }
+    }
+
+    // Show/hide controls based on host vs viewer
+    if (!isHost && isLive) {
+        // Viewers can't toggle audio/video or end stream
+        if (liveToggleAudioBtn) liveToggleAudioBtn.style.display = 'none';
+        if (liveToggleVideoBtn) liveToggleVideoBtn.style.display = 'none';
+        if (liveEndStreamBtn) liveEndStreamBtn.style.display = 'none';
+    } else if (isHost && isLive) {
+        if (liveToggleAudioBtn) liveToggleAudioBtn.style.display = '';
+        if (liveToggleVideoBtn) liveToggleVideoBtn.style.display = '';
+        if (liveEndStreamBtn) liveEndStreamBtn.style.display = '';
+    }
+
+    // Update viewer count
+    if (liveViewerCountEl) {
+        liveViewerCountEl.textContent = state.stream.viewerCount || 0;
+    }
+
+    // Show/hide video strip
+    if (liveVideoStrip) {
+        liveVideoStrip.style.display = isLive ? '' : 'none';
+    }
+}
+
+/**
+ * v3.8 Phase 2: Update the LIVE badge on the presentation header title.
+ * Also updates the UCP live badge and video area.
+ */
+function updatePresentationLiveBadge() {
+    const isLive = state.stream.isActive;
+
+    // Update presentation header badge
+    if (presentationLiveBadge) {
+        presentationLiveBadge.style.display = isLive ? '' : 'none';
+    }
+
+    // Update UCP live badge
+    updateUCPLiveBadge();
+
+    // Update UCP video area visibility
+    updateUCPVideoArea();
+}
+
+/**
+ * Handle "Go Live" button click.
+ */
+async function handleGoLiveClick() {
+    // Check authentication
+    if (!state.session.user?.isAuthenticated) {
+        showToast('Sign in to go live');
+        showUserModal();
+        return;
+    }
+
+    // Check for session/plan context
+    if (!state.session.id) {
+        showToast('A plan is required to start a live stream');
+        return;
+    }
+
+    // Disable button during initialization
+    if (liveGoLiveBtn) {
+        liveGoLiveBtn.disabled = true;
+        const label = liveGoLiveBtn.querySelector('.live-btn-label');
+        if (label) label.textContent = 'Starting...';
+    }
+
+    try {
+        const channelName = `plan-${state.session.id}`;
+        const success = await liveStream.startStream({
+            channelName,
+            videoContainer: liveLocalVideoEl,
+        });
+
+        if (!success) {
+            showToast('Failed to start stream. Please check camera/mic permissions.');
+        }
+    } catch (error) {
+        console.error('[Presentation] Go Live error:', error);
+        showToast('Error starting stream: ' + (error.message || 'Unknown error'));
+    } finally {
+        // Re-enable button
+        if (liveGoLiveBtn) {
+            liveGoLiveBtn.disabled = false;
+            const label = liveGoLiveBtn.querySelector('.live-btn-label');
+            if (label) label.textContent = 'Go Live';
+        }
+    }
+}
+
+async function handleToggleAudio() {
+    const enabled = await liveStream.toggleAudio();
+    updateLiveStreamToolbarUI();
+}
+
+async function handleToggleVideo() {
+    const enabled = await liveStream.toggleVideo();
+    updateLiveStreamToolbarUI();
+}
+
+async function handleEndStream() {
+    await liveStream.endStream();
+    // UI update happens via callback
+}
+
+function handleStreamStarted(channelName, uid) {
+    log('Presentation', `Stream started: channel=${channelName}, uid=${uid}`);
+    updateLiveStreamToolbarUI();
+    updatePresentationLiveBadge();
+
+    // Clear the placeholder in the local video container
+    if (liveLocalVideoEl) {
+        const placeholder = liveLocalVideoEl.querySelector('.live-video-placeholder');
+        if (placeholder) placeholder.style.display = 'none';
+    }
+
+    // Broadcast stream status via Pusher if available
+    if (presentationChatChannel) {
+        presentationChatChannel.trigger('client-stream-started', {
+            channelName,
+            hostUserId: state.session.user?.id,
+            hostName: state.session.user?.name || 'Someone',
+        });
+    }
+
+    // v3.8 Phase 2: Persist stream metadata to Airtable (non-blocking)
+    if (state.session.id) {
+        api.updateStreamMetadata(state.session.id, {
+            StreamActive: true,
+            StreamHostUserId: state.session.user?.id,
+            StreamStartedAt: new Date().toISOString(),
+            AgoraChannelName: channelName,
+        }).catch(err => console.warn('[Presentation] Stream metadata update failed:', err.message));
+    }
+
+    showToast('You are now live!');
+}
+
+function handleStreamEnded() {
+    log('Presentation', 'Stream ended');
+    updateLiveStreamToolbarUI();
+    updatePresentationLiveBadge();
+
+    // Clear video containers
+    if (liveLocalVideoEl) {
+        liveLocalVideoEl.innerHTML = '<div class="live-video-placeholder"><span>\u{1F4F9}</span><span>Camera off</span></div>';
+    }
+    if (liveRemoteVideosEl) {
+        liveRemoteVideosEl.innerHTML = '';
+    }
+
+    // Broadcast stream ended via Pusher
+    if (presentationChatChannel) {
+        presentationChatChannel.trigger('client-stream-ended', {
+            hostUserId: state.session.user?.id,
+        });
+    }
+
+    // v3.8 Phase 2: Clear stream metadata in Airtable (non-blocking)
+    if (state.session.id) {
+        api.clearStreamMetadata(state.session.id)
+            .catch(err => console.warn('[Presentation] Stream metadata clear failed:', err.message));
+    }
+
+    showToast('Stream ended');
+}
+
+function handleRemoteUserJoined(uid, mediaType, totalRemote) {
+    log('Presentation', `Remote user ${uid} joined (${mediaType}), total: ${totalRemote}`);
+
+    if (mediaType === 'video' && liveRemoteVideosEl) {
+        // Create a video cell for the remote user if it doesn't exist
+        let cell = liveRemoteVideosEl.querySelector(`[data-remote-uid="${uid}"]`);
+        if (!cell) {
+            cell = document.createElement('div');
+            cell.className = 'live-video-cell';
+            cell.setAttribute('data-remote-uid', uid);
+            liveRemoteVideosEl.appendChild(cell);
+        }
+        liveStream.playRemoteVideo(uid, cell);
+    }
+
+    updateLiveStreamToolbarUI();
+}
+
+function handleRemoteUserLeft(uid, totalRemote) {
+    log('Presentation', `Remote user ${uid} left, total: ${totalRemote}`);
+
+    if (liveRemoteVideosEl) {
+        const cell = liveRemoteVideosEl.querySelector(`[data-remote-uid="${uid}"]`);
+        if (cell) cell.remove();
+    }
+
+    updateLiveStreamToolbarUI();
+}
+
+function handleViewerCountChanged(count) {
+    if (liveViewerCountEl) {
+        liveViewerCountEl.textContent = count;
+    }
+}
+
+function handleStreamError(errorType, message) {
+    console.error(`[Presentation] Stream error (${errorType}):`, message);
+    showToast(message || 'Stream error occurred');
+}
+
+/**
+ * Cleanup live stream resources when leaving presentation view.
+ */
+function cleanupLiveStreamToolbar() {
+    if (liveGoLiveBtn) {
+        liveGoLiveBtn.removeEventListener('click', handleGoLiveClick);
+    }
+    if (liveToggleAudioBtn) {
+        liveToggleAudioBtn.removeEventListener('click', handleToggleAudio);
+    }
+    if (liveToggleVideoBtn) {
+        liveToggleVideoBtn.removeEventListener('click', handleToggleVideo);
+    }
+    if (liveEndStreamBtn) {
+        liveEndStreamBtn.removeEventListener('click', handleEndStream);
+    }
+
+    // End any active stream
+    if (state.stream.isActive) {
+        liveStream.endStream();
+    }
+}
+
+// ─── End Live Stream Toolbar ────────────────────────────────────────────────
+
 // Initialize merge dialog event listeners
 function initializeMergeDialogListeners() {
     // Close button
@@ -9759,14 +10265,17 @@ function calculateReactionRankings() {
     // Calculate scores for all items
     const itemsWithScores = combinedList.map(item => {
         const reactions = state.session.reactions.get(item.recordId);
-        const reactionCount = reactions instanceof Map ? reactions.size : 0;
+        const reactionCount = getItemReactionCount(item.recordId);
         const score = getItemReactionScore(item.recordId);
 
-        // Get emoji breakdown
+        // Get emoji breakdown (across all users' Sets)
         const emojiBreakdown = {};
         if (reactions instanceof Map) {
-            reactions.forEach((emoji) => {
-                emojiBreakdown[emoji] = (emojiBreakdown[emoji] || 0) + 1;
+            reactions.forEach((emojiData) => {
+                const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+                for (const emoji of emojis) {
+                    emojiBreakdown[emoji] = (emojiBreakdown[emoji] || 0) + 1;
+                }
             });
         }
 
@@ -11425,6 +11934,7 @@ async function initializePresentationChat() {
     presentationChatChannel.bind('client-item-reaction-update', (data) => {
         if (data.userId !== currentUser.id) {
             const { recordId, reactions } = data;
+            console.log(`[REACTIONS-DEBUG] Pusher received: recordId="${recordId}", from="${data.userId}", payload=`, JSON.stringify(reactions));
 
             // Update local state from received reactions object
             if (!state.session.reactions.has(recordId)) {
@@ -11435,8 +11945,13 @@ async function initializePresentationChat() {
             // Clear existing and rebuild from received data
             itemReactions.clear();
             if (reactions && typeof reactions === 'object') {
-                Object.entries(reactions).forEach(([odUserId, userEmoji]) => {
-                    itemReactions.set(odUserId, userEmoji);
+                Object.entries(reactions).forEach(([odUserId, emojiData]) => {
+                    // Support both array (new multi-emoji) and string (legacy) formats
+                    if (Array.isArray(emojiData)) {
+                        itemReactions.set(odUserId, new Set(emojiData));
+                    } else if (typeof emojiData === 'string') {
+                        itemReactions.set(odUserId, new Set([emojiData]));
+                    }
                 });
             }
 
@@ -11457,6 +11972,39 @@ async function initializePresentationChat() {
 
             // Update the event-level emoji indicator
             updateEventEmojiIndicator();
+        }
+    });
+
+    // v3.8: Handle stream-started broadcast from another user (viewer auto-join)
+    presentationChatChannel.bind('client-stream-started', (data) => {
+        if (data.hostUserId !== currentUser.id) {
+            log('Presentation', `Stream started by ${data.hostName} (channel: ${data.channelName})`);
+            setState({
+                stream: {
+                    isActive: true,
+                    isHost: false,
+                    hostUserId: data.hostUserId,
+                    channelName: data.channelName,
+                    startedAt: Date.now(),
+                }
+            });
+            updateLiveStreamToolbarUI();
+            updatePresentationLiveBadge();
+            showToast(`${data.hostName} is now live!`);
+
+            // Auto-join as viewer
+            liveStream.joinAsViewer({ channelName: data.channelName });
+        }
+    });
+
+    // v3.8: Handle stream-ended broadcast from another user
+    presentationChatChannel.bind('client-stream-ended', (data) => {
+        if (data.hostUserId !== currentUser.id) {
+            log('Presentation', 'Remote stream ended');
+            liveStream.endStream();
+            updateLiveStreamToolbarUI();
+            updatePresentationLiveBadge();
+            showToast('Stream has ended');
         }
     });
 
@@ -12109,6 +12657,7 @@ function handleReactionClick(e) {
 
     const emoji = button.dataset.emoji;
     const currentUser = getCurrentUser();
+    console.log(`[REACTIONS-DEBUG] handleReactionClick: recordId="${recordId}", emoji="${emoji}", userId="${currentUser.id}"`);
 
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, new Map());
@@ -12116,10 +12665,24 @@ function handleReactionClick(e) {
 
     const itemReactions = state.session.reactions.get(recordId);
 
-    if (itemReactions.get(currentUser.id) === emoji) {
+    // Multi-emoji model: each user has a Set of emojis
+    let userEmojiSet = itemReactions.get(currentUser.id);
+    if (!(userEmojiSet instanceof Set)) {
+        userEmojiSet = userEmojiSet ? new Set([userEmojiSet]) : new Set();
+    }
+
+    // Toggle: if emoji already in set, remove it; otherwise add it
+    if (userEmojiSet.has(emoji)) {
+        userEmojiSet.delete(emoji);
+    } else {
+        userEmojiSet.add(emoji);
+    }
+
+    // Clean up empty sets, otherwise store the updated set
+    if (userEmojiSet.size === 0) {
         itemReactions.delete(currentUser.id);
     } else {
-        itemReactions.set(currentUser.id, emoji);
+        itemReactions.set(currentUser.id, userEmojiSet);
     }
 
     // Re-render reactions for this item
@@ -12142,10 +12705,14 @@ function handleReactionClick(e) {
 
     // Broadcast item reaction update via Pusher for real-time sync
     if (presentationChatChannel) {
-        // Convert Map to object for Pusher transmission
+        // Convert Map<userId, Set<emoji>> to object for Pusher transmission
         const reactionsObj = {};
-        itemReactions.forEach((userEmoji, odUserId) => {
-            reactionsObj[odUserId] = userEmoji;
+        itemReactions.forEach((emojiData, odUserId) => {
+            if (emojiData instanceof Set) {
+                reactionsObj[odUserId] = Array.from(emojiData);
+            } else {
+                reactionsObj[odUserId] = emojiData;
+            }
         });
         presentationChatChannel.trigger('client-item-reaction-update', {
             recordId,
@@ -14188,6 +14755,9 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Initialize merge dialog event listeners
     initializeMergeDialogListeners();
 
+    // v3.8: Initialize live stream toolbar
+    initializeLiveStreamToolbar();
+
     log('Presentation', 'Itinerary view rendered successfully');
     if (PRES_DEBUG) console.log('[PRESENTATION DEBUG] ========== showPresentationView COMPLETE ==========');
 }
@@ -14201,6 +14771,9 @@ export function hidePresentationView() {
 
     // Clean up Vitality UI (flow lines, etc.)
     cleanupVitalityUI();
+
+    // v3.8: Clean up live stream toolbar
+    cleanupLiveStreamToolbar();
 
     // Hide the Unified Chat Panel
     hideUnifiedChatPanel();

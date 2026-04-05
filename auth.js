@@ -112,6 +112,25 @@ async function _handleSuccessfulLogin(payload) {
     document.dispatchEvent(new CustomEvent('userLoggedIn'));
     updateUserProfileIcon();
 
+    // v3.8: Ensure a top-level plan exists for the user (non-blocking)
+    // This creates a default workspace plan if the user doesn't have one yet
+    const userId = state.session.user.id;
+    const userName = state.session.user.name;
+    const storeId = state.session.storeId;
+    api.ensureTopLevelPlan(userId, userName, storeId).then(topLevelPlan => {
+        if (topLevelPlan) {
+            setState({
+                topLevelPlan: {
+                    id: topLevelPlan.id,
+                    name: topLevelPlan.name,
+                }
+            });
+            console.log(`[LOGIN-ASSOC] Top-level plan set: ${topLevelPlan.id} (${topLevelPlan.name})`);
+        }
+    }).catch(err => {
+        console.warn('[LOGIN-ASSOC] Top-level plan creation failed (non-blocking):', err.message);
+    });
+
     // Explicitly hide the biometric setup prompt since the user just logged in successfully
     // This prevents it from flashing briefly if the userLoggedIn event triggers showBiometricSetupPromptIfNeeded
     const biometricSetupPrompt = document.getElementById('biometric-setup-prompt');

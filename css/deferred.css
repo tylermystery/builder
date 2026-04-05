@@ -3134,6 +3134,462 @@
     display: none;
 }
 
+/* ─── Live Stream Toolbar (v3.8) ──────────────────────────────────────────── */
+
+/* Toolbar container in header right section */
+.live-stream-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#presentation-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Go Live button */
+.live-go-live-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(220, 53, 69, 0.2);
+    border: 1px solid rgba(220, 53, 69, 0.4);
+    color: rgba(255, 255, 255, 0.95);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.8em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+    backdrop-filter: blur(4px);
+    white-space: nowrap;
+}
+
+.live-go-live-btn:hover {
+    background: rgba(220, 53, 69, 0.4);
+    box-shadow: 0 2px 10px rgba(220, 53, 69, 0.3);
+}
+
+.live-go-live-btn:active {
+    transform: scale(0.97);
+}
+
+/* Stream controls row (visible when live) */
+.live-stream-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* LIVE indicator badge */
+.live-indicator {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(220, 53, 69, 0.3);
+    border: 1px solid rgba(220, 53, 69, 0.5);
+    padding: 3px 10px;
+    border-radius: 16px;
+    font-size: 0.7em;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+    backdrop-filter: blur(4px);
+}
+
+.live-dot {
+    width: 8px;
+    height: 8px;
+    background: #dc3545;
+    border-radius: 50%;
+    animation: live-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.live-text {
+    text-transform: uppercase;
+}
+
+.live-viewer-count {
+    opacity: 0.8;
+    font-weight: 400;
+}
+
+.live-viewer-count::before {
+    content: '\00B7 ';
+}
+
+/* Toolbar control buttons (mute, camera, end) */
+.live-toolbar-btn {
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.live-control-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.85em;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.live-control-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.live-control-btn:active {
+    transform: scale(0.93);
+}
+
+.live-control-btn.muted {
+    background: rgba(220, 53, 69, 0.3);
+    border-color: rgba(220, 53, 69, 0.5);
+}
+
+/* End stream button */
+.live-end-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(220, 53, 69, 0.35);
+    border: 1px solid rgba(220, 53, 69, 0.5);
+    color: #fff;
+    font-size: 0.85em;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.live-end-btn:hover {
+    background: rgba(220, 53, 69, 0.55);
+}
+
+.live-end-btn:active {
+    transform: scale(0.93);
+}
+
+.live-btn-icon {
+    font-size: 1em;
+    line-height: 1;
+}
+
+.live-btn-label {
+    font-size: 0.85em;
+}
+
+/* ─── Live Video Preview Strip ────────────────────────────────────────────── */
+
+.live-video-strip {
+    position: relative;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    max-height: 200px;
+}
+
+.live-video-strip.collapsed {
+    max-height: 0;
+    border-bottom: none;
+}
+
+.live-video-strip-inner {
+    display: flex;
+    gap: 4px;
+    padding: 6px 12px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.2) transparent;
+}
+
+/* Individual video cell */
+.live-video-cell {
+    flex: 0 0 auto;
+    width: 160px;
+    height: 120px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(30, 30, 40, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    position: relative;
+}
+
+.live-video-local {
+    border-color: rgba(220, 53, 69, 0.5);
+}
+
+.live-video-cell video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.live-video-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.7em;
+    gap: 4px;
+}
+
+.live-video-placeholder span:first-child {
+    font-size: 2em;
+}
+
+/* Collapse/expand toggle for video strip */
+.live-video-strip-toggle {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    color: rgba(255, 255, 255, 0.7);
+    padding: 2px 16px;
+    font-size: 0.6em;
+    cursor: pointer;
+    z-index: 1;
+    transition: background 0.2s ease;
+}
+
+.live-video-strip-toggle:hover {
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+}
+
+.live-video-strip.collapsed .live-strip-toggle-icon {
+    transform: rotate(180deg);
+    display: inline-block;
+}
+
+.live-strip-toggle-icon {
+    display: inline-block;
+    transition: transform 0.3s ease;
+}
+
+/* ─── v3.8 Phase 2: Presentation LIVE Badge ──────────────────────────────────── */
+
+.presentation-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(220, 53, 69, 0.3);
+    border: 1px solid rgba(220, 53, 69, 0.5);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.65em;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    vertical-align: middle;
+    margin-left: 6px;
+    backdrop-filter: blur(4px);
+    cursor: pointer;
+}
+
+/* ─── v3.8 Phase 2: UCP Full-Screen Mode ─────────────────────────────────────── */
+
+/* Full-screen expand button */
+.ucp-fullscreen-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    font-size: 1em;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: background 0.2s ease, color 0.2s ease;
+    line-height: 1;
+}
+
+.ucp-fullscreen-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+/* UCP LIVE badge in header */
+.ucp-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(220, 53, 69, 0.3);
+    border: 1px solid rgba(220, 53, 69, 0.5);
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 0.6em;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-left: 4px;
+}
+
+.ucp-live-badge .live-dot {
+    width: 6px;
+    height: 6px;
+}
+
+/* Full-screen panel mode */
+.unified-chat-panel.ucp-fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    max-width: 100vw;
+    height: 100vh;
+    z-index: 10000;
+    border-radius: 0;
+    border: none;
+    transform: none;
+    display: flex;
+    flex-direction: column;
+    background: rgba(10, 10, 18, 0.98);
+    backdrop-filter: blur(20px);
+}
+
+/* Body class to hide content behind fullscreen UCP */
+body.ucp-fullscreen-active {
+    overflow: hidden;
+}
+
+/* ─── v3.8 Phase 2: UCP Video Area (Full-screen mode) ────────────────────────── */
+
+.ucp-video-area {
+    flex: 0 0 auto;
+    max-height: 55vh;
+    min-height: 200px;
+    background: rgba(0, 0, 0, 0.5);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.ucp-video-main {
+    flex: 1;
+    position: relative;
+    min-height: 160px;
+    background: rgba(15, 15, 25, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ucp-video-main video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+}
+
+.ucp-video-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 0.85em;
+}
+
+.ucp-video-placeholder span:first-child {
+    font-size: 2.5em;
+}
+
+/* Video tiles strip for remote participants */
+.ucp-video-tiles {
+    display: flex;
+    gap: 4px;
+    padding: 4px 8px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    background: rgba(0, 0, 0, 0.3);
+    min-height: 0;
+}
+
+.ucp-video-tiles:empty {
+    display: none;
+}
+
+.ucp-video-tile {
+    flex: 0 0 auto;
+    width: 120px;
+    height: 90px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(30, 30, 40, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.ucp-video-tile video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* In fullscreen mode, content area fills remaining space */
+.unified-chat-panel.ucp-fullscreen .ucp-content {
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* In fullscreen mode, input area stays at bottom */
+.unified-chat-panel.ucp-fullscreen .ucp-input-area {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 10px 16px;
+}
+
+/* ─── v3.8 Phase 2: Project Dashboard LIVE Badge ─────────────────────────────── */
+
+.project-tree-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(220, 53, 69, 0.3);
+    border: 1px solid rgba(220, 53, 69, 0.5);
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 0.55em;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+
+.project-tree-live-badge .live-dot {
+    width: 5px;
+    height: 5px;
+}
+
 .back-icon, .share-icon {
     font-size: 1.1em;
     font-weight: bold;
@@ -15278,6 +15734,36 @@ hr.total-divider {
     font-style: italic;
 }
 
+/* Phase 2: Group-level summary pill (democratic average) */
+.compact-reaction-summary {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.15);
+    font-weight: 600;
+}
+
+.compact-reaction-score {
+    font-size: 0.75em;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+    min-width: 8px;
+    text-align: center;
+}
+
+/* Phase 2: Thread summary emoji in forum panel */
+.thread-summary-emoji {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    font-size: 1em;
+    opacity: 0.9;
+    cursor: default;
+    transition: transform 0.15s ease;
+}
+
+.thread-summary-emoji:hover {
+    transform: scale(1.15);
+}
+
 .compact-card-badges {
     display: flex;
     gap: 4px;
@@ -17447,168 +17933,240 @@ body.presentation-active .rsb-layout-toggle-fab {
    UNIFIED ACTION MENU - Radial emoji reactions + collaborator actions
    ========================================================================== */
 
-/* Overlay backdrop */
+/* ==========================================================================
+   VITALITY CANVAS v2 — Full-Screen "People Layer" Action Menu
+   Full-screen takeover with the item highlighted in the center (20-40% of screen),
+   menu options on outer edges, open comments visible, and easy selection with
+   slight mouse/finger movement.
+   ========================================================================== */
+
+/* ── Overlay: full-screen takeover ── */
 .action-menu-overlay {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
     display: flex;
     justify-content: center;
     align-items: center;
     opacity: 0;
-    transition: opacity 0.2s ease-out;
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
+    pointer-events: none;
+    transition: opacity 0.35s ease-out, backdrop-filter 0.35s ease-out;
+    -webkit-backdrop-filter: blur(12px) brightness(0.4);
+    backdrop-filter: blur(12px) brightness(0.4);
     z-index: 100000;
 }
 .action-menu-overlay.action-menu-visible {
     opacity: 1;
+    pointer-events: auto;
 }
 .action-menu-overlay.action-menu-closing {
     opacity: 0;
     pointer-events: none;
+    transition: opacity 0.35s ease-in;
 }
 
-/* Root container — positioned at the center point */
-.action-menu-root {
-    position: fixed;
-    width: 0;
-    height: 0;
-    transform-origin: center center;
-}
-
-/* ── Center hub ── */
-.action-menu-center {
-    position: absolute;
-    width: 76px;
-    height: 76px;
-    left: -38px;
-    top: -38px;
-    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-    border-radius: 50%;
+/* ── Layout grid: top bar | middle (left|center|right) | bottom bar ── */
+.vc2-layout {
     display: flex;
     flex-direction: column;
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+    z-index: 1;
+}
+
+/* ── Top Bar: vitality analytics + tier + close ── */
+.vc2-top-bar {
+    display: flex;
     align-items: center;
-    justify-content: center;
-    z-index: 10;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), 0 0 0 3px rgba(255, 255, 255, 0.2);
-    cursor: default;
-    transition: transform 0.2s ease;
+    gap: 16px;
+    padding: 10px 20px;
+    background: rgba(15, 23, 42, 0.85);
+    border-bottom: 1px solid rgba(99, 102, 241, 0.15);
+    flex-shrink: 0;
+    min-height: 52px;
+    z-index: 5;
+    animation: vc2SlideDown 0.35s ease-out both;
 }
-.action-menu-center:hover {
-    transform: scale(1.05);
-}
-
-.action-menu-center-emoji {
-    font-size: 1.6em;
-    line-height: 1;
-    transition: all 0.2s ease;
-}
-.action-menu-center-emoji.previewing {
-    transform: scale(1.15);
-    filter: drop-shadow(0 0 8px rgba(255, 200, 0, 0.5));
+@keyframes vc2SlideDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-.action-menu-center-score {
-    font-size: 0.65em;
-    color: #94a3b8;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    transition: color 0.2s ease;
-}
-.action-menu-center-score.previewing {
-    color: #fbbf24;
-}
-
-.action-menu-center-label {
-    font-size: 0.5em;
-    color: #94a3b8;
-    text-align: center;
-    max-width: 66px;
+.vc2-top-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.1em;
+    font-weight: 700;
+    color: #e2e8f0;
+    flex-shrink: 0;
+    max-width: 30%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    transition: color 0.2s ease;
 }
-.action-menu-center-label.previewing {
-    color: #f59e0b;
-}
-
-/* ── Inner ring: emoji buttons ── */
-.action-menu-emoji-ring {
-    position: absolute;
-    width: 0;
-    height: 0;
-    left: 0;
-    top: 0;
-}
-
-.action-menu-emoji-btn {
-    position: absolute;
-    border: none;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    padding: 0;
-    gap: 1px;
-    opacity: 0;
-    transform: scale(0.3);
-    transition: opacity 0.2s ease-out, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, box-shadow 0.15s ease;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    border: 1.5px solid rgba(255, 255, 255, 0.2);
-}
-.action-menu-visible .action-menu-emoji-btn {
-    opacity: 1;
-    transform: scale(1);
-}
-.action-menu-emoji-btn:hover {
-    background: rgba(255, 255, 255, 0.25);
-    transform: scale(1.2) !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-    z-index: 5;
-    border-color: rgba(255, 255, 255, 0.4);
-}
-.action-menu-emoji-btn.selected {
-    background: rgba(59, 130, 246, 0.35);
-    border-color: rgba(59, 130, 246, 0.7);
-    box-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
-}
-
-.action-menu-emoji-char {
+.vc2-top-goodness {
     font-size: 1.2em;
-    line-height: 1;
-    pointer-events: none;
+    filter: drop-shadow(0 0 4px rgba(255, 200, 0, 0.3));
+}
+.vc2-top-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.action-menu-emoji-score {
-    font-size: 0.55em;
-    color: #e2e8f0;
+.vc2-vitality-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+.vc2-vitality-pip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+.vc2-pip-emoji {
+    font-size: 0.85em;
+    flex-shrink: 0;
+}
+.vc2-pip-bar {
+    flex: 1;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    min-width: 20px;
+}
+.vc2-pip-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.4s ease;
+}
+
+.vc2-top-reactions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #94a3b8;
+    font-size: 0.85em;
+    flex-shrink: 0;
+}
+.vc2-reaction-emoji {
+    font-size: 1.2em;
+}
+.vc2-reaction-score {
+    color: #fbbf24;
     font-weight: 600;
-    pointer-events: none;
     font-variant-numeric: tabular-nums;
 }
 
-/* ── Outer ring: collaborator actions ── */
-.action-menu-action-ring {
-    position: absolute;
-    width: 0;
-    height: 0;
-    left: 0;
-    top: 0;
+.vc2-tier-selector {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #cbd5e1;
+    font-size: 0.8em;
+    font-weight: 600;
+    padding: 4px 12px;
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: 12px;
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+.vc2-tier-selector.tier-changed {
+    animation: tierBounce 0.3s ease;
+}
+@keyframes tierBounce {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+}
+.vc2-tier-label { color: #e2e8f0; }
+.vc2-tier-nav { color: #64748b; font-size: 0.85em; }
+
+.vc2-close-btn {
+    width: 36px;
+    height: 36px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    color: #94a3b8;
+    font-size: 1.1em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+}
+.vc2-close-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
 }
 
+/* ── Middle Row: left panel | center | right panel ── */
+.vc2-middle-row {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* ── Left Panel: system actions + quick comments ── */
+.vc2-left-panel {
+    width: 90px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 8px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: rgba(15, 23, 42, 0.5);
+    border-right: 1px solid rgba(99, 102, 241, 0.1);
+    animation: vc2SlideRight 0.35s ease-out both;
+}
+@keyframes vc2SlideRight {
+    from { opacity: 0; transform: translateX(-30px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.vc2-panel-label {
+    font-size: 0.6em;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 700;
+    text-align: center;
+    width: 100%;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.vc2-panel-label-comments {
+    margin-top: 8px;
+}
+
+.vc2-guest-note {
+    color: #94a3b8;
+    font-size: 0.6em;
+    text-align: center;
+    padding: 12px 4px;
+}
+
+/* ── Action buttons (v2 edge layout) ── */
 .action-menu-action-btn {
-    position: absolute;
-    border: 2px solid rgba(255, 255, 255, 0.4);
+    border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
     display: flex;
     flex-direction: column;
@@ -17618,224 +18176,511 @@ body.presentation-active .rsb-layout-toggle-fab {
     padding: 0;
     gap: 2px;
     opacity: 0;
-    transform: scale(0.3);
-    transition: opacity 0.2s ease-out, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transform: scale(0.4);
+    transition:
+        opacity 0.25s ease-out,
+        transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow 0.2s ease,
+        border-color 0.2s ease;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    flex-shrink: 0;
+    animation: vc2BtnEnter 0.4s ease-out both;
+}
+@keyframes vc2BtnEnter {
+    from { opacity: 0; transform: scale(0.4); }
+    to { opacity: 0.95; transform: scale(1); }
 }
 .action-menu-visible .action-menu-action-btn {
     opacity: 0.95;
     transform: scale(1);
 }
 .action-menu-action-btn:hover {
-    transform: scale(1.18) !important;
+    transform: scale(1.25) !important;
     opacity: 1 !important;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
-    z-index: 5;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(99, 102, 241, 0.2);
+    z-index: 15;
     border-color: rgba(255, 255, 255, 0.7);
 }
 .action-menu-action-btn:active {
-    transform: scale(0.95) !important;
+    transform: scale(0.92) !important;
+}
+
+/* Magnetic highlight for action/comment buttons */
+.action-menu-action-btn.vc-magnetic-active {
+    border-color: rgba(255, 255, 255, 0.9) !important;
+    box-shadow:
+        0 0 25px rgba(255, 255, 255, 0.25),
+        0 0 50px rgba(99, 102, 241, 0.2),
+        0 8px 32px rgba(0, 0, 0, 0.5) !important;
+    z-index: 30 !important;
+    transition: transform 0.12s ease-out, box-shadow 0.12s ease !important;
 }
 
 .action-menu-action-icon {
-    font-size: 1.7em;
+    font-size: 1.4em;
     line-height: 1;
     pointer-events: none;
 }
 
 .action-menu-action-label {
-    font-size: 0.7em;
+    font-size: 0.55em;
     color: rgba(255, 255, 255, 0.95);
     font-weight: 700;
     letter-spacing: 0.3px;
     pointer-events: none;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-/* ── Tier label ── */
-.action-menu-tier-label {
-    position: absolute;
-    top: 46px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(30, 41, 59, 0.92);
-    color: #e2e8f0;
-    font-size: 0.7em;
-    font-weight: 600;
-    padding: 4px 12px;
-    border-radius: 12px;
-    white-space: nowrap;
-    pointer-events: none;
-    transition: opacity 0.2s ease, transform 0.2s ease;
-    z-index: 5;
-}
-.action-menu-tier-label.tier-changed {
-    animation: tierBounce 0.3s ease;
-}
-@keyframes tierBounce {
-    0% { transform: translateX(-50%) scale(1); }
-    50% { transform: translateX(-50%) scale(1.15); }
-    100% { transform: translateX(-50%) scale(1); }
-}
-
-/* ── Vitality summary panel ── */
-.action-menu-vitality-summary {
-    position: absolute;
-    top: 280px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(15, 23, 42, 0.94);
-    border-radius: 12px;
-    padding: 10px 14px;
-    min-width: 200px;
-    max-width: 260px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    z-index: 2;
-    pointer-events: none;
-}
-.action-menu-footnote {
-    opacity: 0.85;
-    font-size: 0.95em;
-}
-
-.action-menu-guest-note {
-    position: absolute;
-    top: 170px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(15, 23, 42, 0.85);
-    color: #e2e8f0;
-    font-size: 0.65em;
-    font-weight: 600;
-    padding: 6px 12px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    letter-spacing: 0.4px;
-    text-transform: uppercase;
-    pointer-events: none;
-    z-index: 3;
-}
-
-.action-menu-summary-title {
-    font-size: 0.7em;
-    color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 6px;
-    font-weight: 700;
-}
-
-.action-menu-realm-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 4px;
-}
-
-.action-menu-realm-icon {
-    font-size: 0.85em;
-    width: 20px;
-    text-align: center;
-}
-
-.action-menu-realm-bar-track {
-    flex: 1;
-    height: 5px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    max-width: 100%;
     overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.action-menu-realm-bar-fill {
-    height: 100%;
-    border-radius: 2px;
-    transition: width 0.4s ease;
-}
-
-.action-menu-realm-val {
-    font-size: 0.65em;
-    font-weight: 600;
-    width: 40px;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-}
-
-.action-menu-summary-sentiment {
-    font-size: 0.65em;
-    color: #94a3b8;
-    margin-top: 5px;
-    text-align: center;
-}
-
-.action-menu-summary-formula {
-    font-size: 0.6em;
-    color: #94a3b8;
-    margin-top: 5px;
-    text-align: center;
+/* ── Center Panel: highlighted item card ── */
+.vc2-center-panel {
+    flex: 1;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    padding: 20px;
+    min-width: 0;
+    overflow-y: auto;
+    animation: vc2FadeScale 0.4s ease-out both;
+    animation-delay: 0.1s;
+}
+@keyframes vc2FadeScale {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+/* Highlighted card clone — prominent, not blurred */
+.vc2-highlighted-card {
+    transform: scale(1.15);
+    box-shadow:
+        0 0 0 3px rgba(99, 102, 241, 0.5),
+        0 0 60px rgba(99, 102, 241, 0.15),
+        0 20px 60px rgba(0, 0, 0, 0.5) !important;
+    border-radius: 12px !important;
+    max-width: 420px;
+    width: 100%;
+    position: relative;
+    z-index: 2;
+    pointer-events: none;
+    transition: transform 0.3s ease;
+}
+/* Override any dimming/filter on the cloned card */
+.vc2-highlighted-card,
+.vc2-highlighted-card * {
+    filter: none !important;
+    opacity: 1 !important;
+}
+
+/* Fallback card when clone isn't available */
+.vc2-fallback-card {
+    background: linear-gradient(135deg, #1e293b, #334155);
+    border: 2px solid rgba(99, 102, 241, 0.4);
+    border-radius: 16px;
+    padding: 24px 32px;
+    max-width: 400px;
+    width: 100%;
+    box-shadow:
+        0 0 0 3px rgba(99, 102, 241, 0.3),
+        0 0 60px rgba(99, 102, 241, 0.1),
+        0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.vc2-fallback-name {
+    color: #f1f5f9;
+    font-size: 1.4em;
+    margin: 0 0 8px 0;
+}
+.vc2-fallback-price {
+    color: #fbbf24;
+    font-size: 1.1em;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+.vc2-fallback-desc {
+    color: #94a3b8;
+    font-size: 0.9em;
+    line-height: 1.4;
+    margin: 0;
+}
+
+/* Center Hub (analytics row below the card) */
+.vc2-center-hub {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-top: 16px;
+    padding: 10px 20px;
+    background: rgba(15, 23, 42, 0.8);
+    border-radius: 12px;
+    border: 1px solid rgba(99, 102, 241, 0.15);
+}
+.vc2-hub-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.vc2-hub-goodness {
+    font-size: 1.3em;
+    filter: drop-shadow(0 0 4px rgba(255, 200, 0, 0.3));
+}
+.action-menu-center-emoji {
+    font-size: 1.5em;
+    transition: all 0.2s ease;
+}
+.action-menu-center-emoji.previewing {
+    transform: scale(1.3);
+    filter: drop-shadow(0 0 12px rgba(255, 200, 0, 0.6));
+}
+.action-menu-center-score {
+    font-size: 0.85em;
+    color: #94a3b8;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.2s ease;
+}
+.action-menu-center-score.previewing {
+    color: #fbbf24;
+}
+.action-menu-center-label {
+    font-size: 0.7em;
+    color: #64748b;
+    text-align: center;
+    transition: color 0.2s ease;
+}
+.action-menu-center-label.previewing {
+    color: #f59e0b;
+}
+
+/* ── Right Panel: comments/conversations ── */
+.vc2-right-panel {
+    width: 280px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: rgba(15, 23, 42, 0.5);
+    border-left: 1px solid rgba(99, 102, 241, 0.1);
+    animation: vc2SlideLeft 0.35s ease-out both;
+}
+@keyframes vc2SlideLeft {
+    from { opacity: 0; transform: translateX(30px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* People reactions (who reacted with what) */
+.vc2-people-reactions {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    margin-bottom: 4px;
+}
+.vc2-people-label {
+    font-size: 0.7em;
+    color: #94a3b8;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.vc2-people-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+    font-size: 0.8em;
+}
+.vc2-people-emoji {
+    font-size: 1.1em;
+    flex-shrink: 0;
+}
+.vc2-people-users {
+    color: #cbd5e1;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.vc2-people-score {
+    color: #fbbf24;
+    font-weight: 600;
+    font-size: 0.85em;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+/* Comments container */
+.vc2-comments-container {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.vc2-comments-loading,
+.vc2-comments-empty {
+    color: #64748b;
+    font-size: 0.8em;
+    text-align: center;
+    padding: 16px 8px;
+}
+
+/* Comment bubbles */
+.vc2-comment-bubble {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 8px 10px;
+    transition: border-color 0.2s ease;
+    animation: vc2CommentFade 0.3s ease-out both;
+}
+.vc2-comment-bubble:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+}
+@keyframes vc2CommentFade {
+    from { opacity: 0; transform: translateX(10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.vc2-comment-reply {
+    margin-left: 16px;
+    border-left: 2px solid rgba(99, 102, 241, 0.2);
+}
+.vc2-comment-replies {
+    display: flex;
+    flex-direction: column;
     gap: 4px;
 }
 
-.action-menu-summary-goodness {
-    font-size: 1.4em;
-    transition: transform 0.2s ease;
+.vc2-comment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 3px;
 }
-.action-menu-summary-goodness.previewing {
-    transform: scale(1.2);
-    filter: drop-shadow(0 0 6px rgba(255, 200, 0, 0.5));
+.vc2-comment-sender {
+    font-size: 0.7em;
+    color: #818cf8;
+    font-weight: 600;
+}
+.vc2-comment-time {
+    font-size: 0.6em;
+    color: #475569;
+}
+.vc2-comment-content {
+    font-size: 0.8em;
+    color: #cbd5e1;
+    line-height: 1.4;
+    word-break: break-word;
+}
+.vc2-comment-reactions {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+.vc2-comment-reaction {
+    font-size: 0.75em;
+    background: rgba(99, 102, 241, 0.15);
+    padding: 1px 6px;
+    border-radius: 8px;
+    border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+/* ── Bottom Bar: emoji reactions strip ── */
+.vc2-bottom-bar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 20px;
+    background: rgba(15, 23, 42, 0.85);
+    border-top: 1px solid rgba(99, 102, 241, 0.15);
+    min-height: 70px;
+    z-index: 5;
+    animation: vc2SlideUp 0.35s ease-out both;
+}
+@keyframes vc2SlideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.vc2-emoji-strip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    position: relative;
+    width: auto;
+    height: auto;
+}
+
+/* Emoji buttons in strip layout (not absolute) */
+.vc2-emoji-strip .action-menu-emoji-btn {
+    position: relative;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    gap: 1px;
+    opacity: 0;
+    transform: scale(0.5);
+    transition:
+        opacity 0.2s ease-out,
+        transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+        background 0.15s ease,
+        box-shadow 0.2s ease;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    border: 1.5px solid rgba(255, 255, 255, 0.12);
+    flex-shrink: 0;
+    animation: vc2EmojiPop 0.3s ease-out both;
+}
+@keyframes vc2EmojiPop {
+    from { opacity: 0; transform: scale(0.5) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.vc2-emoji-strip .action-menu-emoji-btn.vc2-emoji-entered {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.vc2-emoji-strip .action-menu-emoji-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.3) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), 0 0 15px rgba(99, 102, 241, 0.25);
+    z-index: 15;
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.vc2-emoji-strip .action-menu-emoji-btn.selected {
+    background: rgba(59, 130, 246, 0.3);
+    border-color: rgba(59, 130, 246, 0.7);
+    box-shadow: 0 0 16px rgba(59, 130, 246, 0.5);
+}
+
+/* Magnetic active — larger, glowing, obvious */
+.vc2-emoji-strip .action-menu-emoji-btn.vc-magnetic-active {
+    background: rgba(255, 255, 255, 0.3) !important;
+    border-color: rgba(255, 255, 255, 0.7) !important;
+    box-shadow:
+        0 0 25px rgba(99, 102, 241, 0.5),
+        0 0 50px rgba(139, 92, 246, 0.25),
+        0 8px 32px rgba(0, 0, 0, 0.4) !important;
+    z-index: 30 !important;
+    transition: transform 0.12s ease-out, box-shadow 0.12s ease !important;
+}
+
+.action-menu-emoji-char {
+    font-size: 1.25em;
+    line-height: 1;
+    pointer-events: none;
+}
+
+.action-menu-emoji-score {
+    font-size: 0.5em;
+    color: #cbd5e1;
+    font-weight: 600;
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
 }
 
 /* ── Mobile adjustments ── */
 @media (max-width: 768px) {
-    .action-menu-center {
-        width: 64px;
-        height: 64px;
-        left: -32px;
-        top: -32px;
+    .action-menu-overlay {
+        -webkit-backdrop-filter: blur(10px) brightness(0.4);
+        backdrop-filter: blur(10px) brightness(0.4);
     }
-    .action-menu-center-emoji {
-        font-size: 1.4em;
+
+    .vc2-top-bar {
+        padding: 8px 12px;
+        gap: 8px;
+        min-height: 44px;
+        flex-wrap: wrap;
     }
-    .action-menu-center-score {
-        font-size: 0.55em;
+    .vc2-top-title {
+        font-size: 0.9em;
+        max-width: 50%;
     }
-    .action-menu-center-label {
-        font-size: 0.45em;
-        max-width: 56px;
+    .vc2-vitality-bar {
+        display: none;
     }
+    .vc2-tier-selector {
+        font-size: 0.7em;
+        padding: 3px 8px;
+    }
+
+    .vc2-left-panel {
+        width: 70px;
+        padding: 8px 4px;
+        gap: 6px;
+    }
+
+    .vc2-right-panel {
+        width: 200px;
+        padding: 8px;
+    }
+
+    .vc2-highlighted-card {
+        transform: scale(1.05);
+        max-width: 90%;
+    }
+    .vc2-center-panel {
+        padding: 10px;
+    }
+
+    .vc2-bottom-bar {
+        padding: 8px 10px;
+        min-height: 56px;
+    }
+
+    .vc2-emoji-strip {
+        gap: 4px;
+    }
+
     .action-menu-emoji-char {
         font-size: 1.05em;
     }
     .action-menu-emoji-score {
-        font-size: 0.5em;
+        font-size: 0.45em;
     }
     .action-menu-action-icon {
-        font-size: 1.15em;
+        font-size: 1.2em;
     }
     .action-menu-action-label {
         font-size: 0.5em;
     }
-    .action-menu-tier-label {
-        font-size: 0.6em;
-        top: 38px;
+    .vc2-panel-label {
+        font-size: 0.5em;
     }
-    .action-menu-vitality-summary {
-        min-width: 170px;
-        max-width: 220px;
-        padding: 8px 10px;
-        top: 220px;
+    .vc2-comment-content {
+        font-size: 0.75em;
     }
-    .action-menu-guest-note {
-        top: 140px;
-        font-size: 0.6em;
+}
+
+/* Very small screens: collapse panels */
+@media (max-width: 480px) {
+    .vc2-left-panel {
+        width: 56px;
+    }
+    .vc2-right-panel {
+        width: 160px;
+    }
+    .vc2-highlighted-card {
+        transform: scale(1);
     }
 }
 
 /* ==========================================================================
-   END UNIFIED ACTION MENU
+   END VITALITY CANVAS v2
    ========================================================================== */
 
 /* ==========================================================================

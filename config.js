@@ -3,6 +3,34 @@ export const STRIPE_PUBLISHABLE_KEY = 'pk_live_opXi3umu9588LiitWvYhdk9H';
 export const CLOUDINARY_CLOUD_NAME = 'daedqizre';
 export const RECORDS_PER_LOAD = 10;
 
+// --- Agora Live Stream Configuration (v3.8) ---
+export const AGORA_APP_ID = typeof window !== 'undefined' && window.__AGORA_APP_ID__ || '';
+export const AGORA_SDK_URL = 'https://download.agora.io/sdk/release/AgoraRTC_N-4.22.0.js';
+export const LIVE_STREAM_CONFIG = {
+    codec: 'vp8',
+    mode: 'live',             // 'live' mode for broadcast scenario (host + audience)
+    role: 'host',             // default role, overridden per user
+    videoProfile: {
+        width: 640,
+        height: 360,
+        frameRate: 15,
+        bitrateMin: 200,
+        bitrateMax: 600,
+    },
+    audioProfile: 'speech_low_quality',  // optimized for voice, lower bandwidth
+};
+
+// Ryry AI Assistant voice command configuration
+export const RYRY_CONFIG = {
+    wakeWord: 'ryry',
+    commands: {
+        LOG_TASK: { keywords: ['log task'], description: 'Create a new task in the current plan' },
+        SET_PRIORITY: { keywords: ['set priority'], description: 'Set priority on the most recent task' },
+        PROJECT_UPDATE: { keywords: ['project update'], description: 'Post a project update to the plan chat' },
+    },
+    confirmationTimeoutMs: 5000,  // 5 second undo window for voice commands
+};
+
 // Base categories for item classification
 export const BASE_CATEGORIES = [
     { id: 'Activities', label: 'Activities', icon: '🎯', color: '#1565c0', bg: '#e3f2fd', border: '#90caf9' },
@@ -159,6 +187,113 @@ export const EMOJI_TIERS = [
         emojis: ['🏺', '⚗️', '🔮', '📿', '🪘', '🪗', '🪕', '🪈', '🪆', '🪅', '🪤', '🪃', '🪙', '⚱️', '🧿', '🎐']
     }
 ];
+
+// ─── Democratic Averaging & Multi-Emoji Utilities ────────────────────────────
+
+/**
+ * Compute the democratic average score from multi-emoji reactions.
+ * Algorithm:
+ *   1. For each user, compute the average of their emoji scores.
+ *   2. The democratic average = mean of all per-user averages.
+ * This ensures each user has equal weight regardless of how many emojis they added.
+ *
+ * @param {Map<string, Set<string>>} reactionsMap - Map<userId, Set<emoji>>
+ * @returns {{ democraticAverage: number, summaryEmoji: string, userCount: number, totalReactions: number }}
+ */
+export function computeDemocraticAverage(reactionsMap) {
+    if (!reactionsMap || !(reactionsMap instanceof Map) || reactionsMap.size === 0) {
+        return { democraticAverage: 0, summaryEmoji: '😊', userCount: 0, totalReactions: 0 };
+    }
+
+    let userCount = 0;
+    let totalReactions = 0;
+    let sumOfUserAverages = 0;
+
+    for (const [, emojiData] of reactionsMap) {
+        // Support both Set (new) and string (legacy) formats
+        const emojiSet = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+        if (emojiSet.size === 0) continue;
+
+        let userTotal = 0;
+        for (const emoji of emojiSet) {
+            userTotal += (REACTION_SCORES[emoji] || 0);
+            totalReactions++;
+        }
+        const userAvg = userTotal / emojiSet.size;
+        sumOfUserAverages += userAvg;
+        userCount++;
+    }
+
+    if (userCount === 0) {
+        return { democraticAverage: 0, summaryEmoji: '😊', userCount: 0, totalReactions: 0 };
+    }
+
+    const democraticAverage = sumOfUserAverages / userCount;
+
+    // Find the closest emoji from the full REACTION_SCORES table
+    let summaryEmoji = '😊';
+    let closestDiff = Infinity;
+    for (const [emoji, score] of Object.entries(REACTION_SCORES)) {
+        const diff = Math.abs(score - democraticAverage);
+        if (diff < closestDiff) {
+            closestDiff = diff;
+            summaryEmoji = emoji;
+        }
+    }
+
+    return { democraticAverage, summaryEmoji, userCount, totalReactions };
+}
+
+/**
+ * Convert message-format reactions to the democratic average input format.
+ * Messages store reactions as { emoji: [userId1, userId2] } while item reactions
+ * use Map<userId, Set<emoji>>. This bridges the two models so computeDemocraticAverage
+ * can be used on message/thread reactions too.
+ *
+ * @param {Object} msgReactions - Message reactions in { emoji: [userId, ...] } format
+ * @returns {Map<string, Set<string>>} Map<userId, Set<emoji>> suitable for computeDemocraticAverage
+ */
+export function convertMessageReactions(msgReactions) {
+    const userMap = new Map();
+    if (!msgReactions || typeof msgReactions !== 'object') return userMap;
+    for (const [emoji, userIds] of Object.entries(msgReactions)) {
+        if (!Array.isArray(userIds)) continue;
+        for (const userId of userIds) {
+            if (!userMap.has(userId)) userMap.set(userId, new Set());
+            userMap.get(userId).add(emoji);
+        }
+    }
+    console.log(`[SUMMARY-DEBUG] convertMessageReactions: ${Object.keys(msgReactions).length} emoji types → ${userMap.size} users`);
+    return userMap;
+}
+
+/**
+ * Generate a short hash for a photo URL to create stable compound reaction keys.
+ * Format: recordId::photo::hash
+ * @param {string} url - The photo URL
+ * @returns {string} An 8-character hex hash
+ */
+export function hashPhotoUrl(url) {
+    if (!url) return '00000000';
+    let hash = 0;
+    for (let i = 0; i < url.length; i++) {
+        const char = url.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    // Convert to positive hex string, pad to 8 chars
+    return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+/**
+ * Build a compound reaction key for a photo.
+ * @param {string} recordId - The parent item record ID
+ * @param {string} photoUrl - The photo URL
+ * @returns {string} Compound key like "recordId::photo::a1b2c3d4"
+ */
+export function getPhotoReactionKey(recordId, photoUrl) {
+    return `${recordId}::photo::${hashPhotoUrl(photoUrl)}`;
+}
 
 export const CONSTANTS = {
     CLOUDINARY_CLOUD_NAME: 'daedqizre',
