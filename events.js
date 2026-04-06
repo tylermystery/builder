@@ -8,7 +8,7 @@ import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
-import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice } from './utils.js';
+import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, preloadStripe } from './utils.js';
 import { sendMessage, getCurrentUser, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName, toggleRecentChats, addPlanEventToHistory } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
@@ -1119,6 +1119,13 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     // Initialize plan state synchronization system
     initializePlanStateSync();
     console.log('[Events DEBUG] Plan state sync system initialized');
+
+    // Preload Stripe.js when user hovers over checkout button
+    const checkoutBtnEl = document.getElementById('checkout-btn');
+    if (checkoutBtnEl) {
+        checkoutBtnEl.addEventListener('mouseenter', preloadStripe, { once: true });
+        checkoutBtnEl.addEventListener('touchstart', preloadStripe, { once: true });
+    }
 
     // Initialize sidebar sync callback for receiving updates from other views
     ui.initializeSidebarSync();
