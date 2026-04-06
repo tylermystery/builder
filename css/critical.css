@@ -535,7 +535,7 @@ body.presentation-active .modal-overlay.active {
 /* Catalog Grid */
 #catalog-container {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 25px;
     min-height: 420px; /* Reserve space for at least one row of cards - prevents layout shift */
     /* CRITICAL: Prevent catalog container from expanding beyond parent */

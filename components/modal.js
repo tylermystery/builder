@@ -6,7 +6,7 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage } from '../config.js';
 import { getCurrentUser } from '../chat.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
@@ -3483,19 +3483,26 @@ async function buildPlanComponentCards(container, componentRecords, sessionId) {
     // Import getRecordPrice for price calculation
     const { getRecordPrice } = await import('../utils.js');
 
-    for (const componentData of componentRecords) {
+    // === PERFORMANCE: Fetch all component images in parallel instead of sequentially ===
+    const imageResults = await Promise.all(
+        componentRecords.map(async (componentData) => {
+            try {
+                const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(componentData.record, state.records.all, new Map());
+                return fetchedUrls || [];
+            } catch (e) {
+                console.warn('Failed to fetch images for component:', componentData.record.id, e);
+                return [];
+            }
+        })
+    );
+
+    for (let i = 0; i < componentRecords.length; i++) {
+        const componentData = componentRecords[i];
         const record = componentData.record;
         const type = componentData.type;
         const history = componentData.history;
 
-        // Fetch all images for this component (including AI-sourced items)
-        let imageUrls = [];
-        try {
-            const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
-            imageUrls = fetchedUrls || [];
-        } catch (e) {
-            console.warn('Failed to fetch images for component:', record.id, e);
-        }
+        let imageUrls = imageResults[i];
         if (imageUrls.length === 0) {
             imageUrls = [ui.getPlaceholderImage([])];
         }
@@ -4372,7 +4379,57 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     resetModalState();
     modalOverlay.dataset.recordId = record.id;
 
-    // Check if this item is linked to a session (unified view mode)
+    // === PERFORMANCE: Show modal immediately with loading placeholder for image ===
+    // Show the modal overlay right away so the user sees instant feedback.
+    // Synchronous data (name, price, description) populates immediately.
+    // Async data (images, session lookups) fills in progressively.
+    const modalMainImageLoading = document.createElement('div');
+    modalMainImageLoading.className = 'modal-image-loading-placeholder';
+    modalMainImageLoading.innerHTML = '<div class="loading-spinner"></div>';
+    modalMainImage.appendChild(modalMainImageLoading);
+
+    // Show the overlay immediately (before any async work)
+    const isPresentationActiveEarly = document.body.classList.contains('presentation-active');
+    const modalZIndexEarly = getModalZIndex('detail');
+    modalOverlay.classList.add('active');
+    modalOverlay.style.cssText = `
+        display: flex;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.6);
+        z-index: ${modalZIndexEarly};
+        justify-content: center;
+        align-items: center;
+        opacity: 1;
+        pointer-events: auto;
+    `;
+    const modalContentElEarly = modalOverlay.querySelector('.modal-content');
+    if (modalContentElEarly) {
+        const isMobileEarly = window.innerWidth <= 768;
+        modalContentElEarly.style.cssText = `
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            width: 90%;
+            max-width: 1100px;
+            height: ${isMobileEarly ? 'auto' : '90vh'};
+            max-height: ${isMobileEarly ? '95vh' : '700px'};
+            display: flex;
+            flex-direction: ${isMobileEarly ? 'column' : 'row'};
+            overflow: hidden;
+            position: relative;
+            color: #333;
+            transform: scale(1);
+            opacity: 1;
+            pointer-events: auto;
+        `;
+    }
+    document.body.classList.add('modal-open');
+
+    // Start session lookups asynchronously (don't block modal display)
     let linkedSession = null;
     let linkedSessionId = null;
     let itemIsContainedInSession = false; // Flag to indicate item is a component of a plan
@@ -4384,18 +4441,19 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         // FALLBACK: For Events that were published before LinkedSession was added,
         // try to find the session by searching for which session has this event in its LinkedItem field
         if (record.fields['Item Type'] === 'Event') {
-            linkedSession = await api.fetchSessionByLinkedItem(record.id);
-            if (linkedSession) {
-                linkedSessionId = linkedSession.id;
-            } else {
-                // NEW: Check if this event item is contained as a component in another plan
-                // This handles the case where an event item was added to a plan via "Add to Plan"
-                linkedSession = await api.fetchSessionContainingItem(record.id, state.ui.activeShopId);
-                if (linkedSession) {
-                    linkedSessionId = linkedSession.id;
-                    itemIsContainedInSession = true; // This item is a component, not the parent event
-                    log('Modal', `Event item found as component in session ${linkedSessionId}`);
-                }
+            // Run both fallback lookups in parallel for speed
+            const [byLinkedItem, containingItem] = await Promise.all([
+                api.fetchSessionByLinkedItem(record.id),
+                api.fetchSessionContainingItem(record.id, state.ui.activeShopId)
+            ]);
+            if (byLinkedItem) {
+                linkedSession = byLinkedItem;
+                linkedSessionId = byLinkedItem.id;
+            } else if (containingItem) {
+                linkedSession = containingItem;
+                linkedSessionId = containingItem.id;
+                itemIsContainedInSession = true; // This item is a component, not the parent event
+                log('Modal', `Event item found as component in session ${linkedSessionId}`);
             }
         }
     }
@@ -4464,6 +4522,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             rapidPayBtn.parentNode.replaceChild(newRapidPayBtn, rapidPayBtn);
             newRapidPayBtn._updateText = updateRapidPayLabel;
 
+            // Preload Stripe.js on hover so it's ready when checkout opens
+            newRapidPayBtn.addEventListener('mouseenter', preloadStripe, { once: true });
+            newRapidPayBtn.addEventListener('touchstart', preloadStripe, { once: true });
+
             newRapidPayBtn.addEventListener('click', () => {
                 const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
                 const quantity = quantityInput ? parseInt(quantityInput.value, 10) || 1 : 1;
@@ -4493,6 +4555,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         if (chipInBtn) {
             const newChipInBtn = chipInBtn.cloneNode(true);
             chipInBtn.parentNode.replaceChild(newChipInBtn, chipInBtn);
+
+            // Preload Stripe.js on hover so it's ready when checkout opens
+            newChipInBtn.addEventListener('mouseenter', preloadStripe, { once: true });
+            newChipInBtn.addEventListener('touchstart', preloadStripe, { once: true });
 
             newChipInBtn.addEventListener('click', () => {
                 const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
@@ -7958,75 +8024,20 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
     ui.updateCardIcon(record.id);
 
-    // Get the appropriate z-index based on presentation state
+    // Remove the image loading placeholder now that the real image is set
+    const loadingPlaceholder = modalMainImage.querySelector('.modal-image-loading-placeholder');
+    if (loadingPlaceholder) loadingPlaceholder.remove();
+
+    // Re-apply z-index in case presentation state changed during async work
     const isPresentationActive = document.body.classList.contains('presentation-active');
     const modalZIndex = getModalZIndex('detail');
+    modalOverlay.style.zIndex = modalZIndex;
 
-    modalOverlay.classList.add('active');
-
-    // CRITICAL FIX: Apply essential overlay styles inline to ensure they work
-    // even if CSS hasn't fully loaded (direct URL access scenario)
-    // Use dynamic z-index based on presentation state (1100 when presentation active, 1000 otherwise)
-    modalOverlay.style.cssText = `
-        display: flex;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.6);
-        z-index: ${modalZIndex};
-        justify-content: center;
-        align-items: center;
-        opacity: 1;
-        pointer-events: auto;
-    `;
-
-    // Also ensure modal-content has critical styles applied
+    // Apply critical styles to modal columns (depends on final content being populated)
     const modalContentEl = modalOverlay.querySelector('.modal-content');
     if (modalContentEl) {
-        // Check if we're on mobile for responsive styles
         const isMobile = window.innerWidth <= 768;
 
-        // Apply critical modal content styles inline
-        if (isMobile) {
-            modalContentEl.style.cssText = `
-                background: #fff;
-                border-radius: 12px;
-                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-                width: 90%;
-                max-width: 1100px;
-                height: auto;
-                max-height: 95vh;
-                display: flex;
-                flex-direction: column;
-                overflow: hidden;
-                position: relative;
-                color: #333;
-                transform: scale(1);
-                opacity: 1;
-                pointer-events: auto;
-            `;
-        } else {
-            modalContentEl.style.cssText = `
-                background: #fff;
-                border-radius: 12px;
-                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-                width: 90%;
-                max-width: 1100px;
-                height: 90vh;
-                max-height: 700px;
-                display: flex;
-                overflow: hidden;
-                position: relative;
-                color: #333;
-                transform: scale(1);
-                opacity: 1;
-                pointer-events: auto;
-            `;
-        }
-
-        // Apply critical styles to modal columns
         const modalMainColumn = modalContentEl.querySelector('.modal-main-column');
         if (modalMainColumn) {
             if (isMobile) {
@@ -8071,8 +8082,6 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         }
     }
 
-    document.body.classList.add('modal-open');
-
     // DEBUG: Log modal overlay state after activation
     requestAnimationFrame(() => {
         const presentationEl = document.getElementById('presentation-modal-overlay');
@@ -8099,7 +8108,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             console.log('[Modal DEBUG] Modal content styles:', {
                 computedBgColor: window.getComputedStyle(modalContent).backgroundColor,
                 computedTransform: window.getComputedStyle(modalContent).transform,
-                computedOpacity: window.getComputedStyle(modalContent).opacity
+                computedOpacity: window.getComputedStyle(modalContent).opacity,
+                computedFlexDirection: window.getComputedStyle(modalContent).flexDirection,
+                inlineFlexDirection: modalContent.style.flexDirection,
+                windowWidth: window.innerWidth
             });
         }
 
@@ -8422,6 +8434,7 @@ export async function showGroupDetailModal(group, allRecords) {
                 height: 90vh;
                 max-height: 700px;
                 display: flex;
+                flex-direction: row;
                 overflow: hidden;
                 position: relative;
                 color: #333;
@@ -8840,7 +8853,45 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         if (p2pSection) p2pSection.style.display = 'none';
     }
 
-    // Initialize Stripe on demand (lazy load)
+    // === PERFORMANCE: Show checkout modal immediately with loading state for payment ===
+    // The summary is populated synchronously above. Show the modal now so the user
+    // sees instant feedback while Stripe loads in the background.
+    const paymentForm = document.getElementById('payment-form');
+    if (paymentForm) {
+        paymentForm.style.display = 'block';
+        // Show loading placeholder while Stripe loads
+        const stripeLoadingPlaceholder = document.createElement('div');
+        stripeLoadingPlaceholder.className = 'stripe-loading-placeholder';
+        stripeLoadingPlaceholder.innerHTML = '<div class="loading-spinner"></div><span>Loading payment...</span>';
+        stripeLoadingPlaceholder.id = 'stripe-loading-placeholder';
+        paymentForm.insertBefore(stripeLoadingPlaceholder, paymentForm.firstChild);
+    }
+
+    // Get the appropriate z-index based on presentation state
+    const isPresentationActive = document.body.classList.contains('presentation-active');
+    const checkoutZIndex = getModalZIndex('checkout');
+
+    checkoutModalOverlay.classList.add('active');
+    setTimeout(() => {
+        checkoutModalOverlay.style.cssText = `
+            display: flex;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: ${checkoutZIndex};
+            justify-content: center;
+            align-items: center;
+            opacity: 1;
+            pointer-events: auto;
+        `;
+        if(checkoutCloseBtn) checkoutCloseBtn.focus();
+    }, 0);
+    document.body.classList.add('modal-open');
+
+    // Initialize Stripe on demand (lazy load) — now happens after modal is visible
     try {
         if (!window.Stripe) {
             log('Modal', 'Loading Stripe.js dynamically...');
@@ -8849,19 +8900,20 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
     } catch (err) {
         console.error("Failed to initialize Stripe:", err);
+        // Remove loading placeholder on error
+        const placeholder = document.getElementById('stripe-loading-placeholder');
+        if (placeholder) placeholder.remove();
         alert(`Could not initialize payment system: ${err.message}.`);
         return;
     }
 
-    // --- NEW: Ensure payment form is visible by default ---
-    // updateCheckoutDisplay will hide it if the plan is paid
-    const paymentForm = document.getElementById('payment-form');
-    if (paymentForm) paymentForm.style.display = 'block';
-    // --- END NEW ---
+    // Remove the Stripe loading placeholder now that Stripe is ready
+    const stripePlaceholder = document.getElementById('stripe-loading-placeholder');
+    if (stripePlaceholder) stripePlaceholder.remove();
 
     // --- 2. Update UI (calculates tip and base amount due) ---\
     // This now updates module-level 'currentBaseAmount' and will create the payment element
-    await updateCheckoutDisplay(); 
+    await updateCheckoutDisplay();
     tipAmountInput.addEventListener('input', debounce(async () => await updateCheckoutDisplay(), 500));
 
     // --- 3. Create Payment Intent (MOVED to updateCheckoutDisplay) ---\
@@ -8869,51 +8921,8 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         // --- 4. Call create-payment-intent (Happens in updateCheckoutDisplay) ---\
         // --- 5. Update UI with initial fees (Happens in updateCheckoutDisplay) ---\
         // --- 6. Create and Mount PaymentElement (Happens in updateCheckoutDisplay) ---\
-        
+
         checkoutModalOverlay.cardElement = null; // Clear old reference
-
-        // Get the appropriate z-index based on presentation state
-        const isPresentationActive = document.body.classList.contains('presentation-active');
-        const checkoutZIndex = getModalZIndex('checkout');
-
-        console.log('[Checkout Modal DEBUG] Before activation:', {
-            isPresentationActive,
-            calculatedZIndex: checkoutZIndex
-        });
-
-        // --- 8. Show Modal ---\
-        checkoutModalOverlay.classList.add('active');
-        setTimeout(() => {
-            // Apply inline styles with proper z-index for presentation mode
-            checkoutModalOverlay.style.cssText = `
-                display: flex;
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background-color: rgba(0, 0, 0, 0.6);
-                z-index: ${checkoutZIndex};
-                justify-content: center;
-                align-items: center;
-                opacity: 1;
-                pointer-events: auto;
-            `;
-            if(checkoutCloseBtn) checkoutCloseBtn.focus();
-
-            // DEBUG: Log z-index after showing
-            requestAnimationFrame(() => {
-                const presentationEl = document.getElementById('presentation-modal-overlay');
-                const presentationZIndex = presentationEl ? window.getComputedStyle(presentationEl).zIndex : 'N/A';
-                console.log('[Checkout Modal DEBUG] After activation:', {
-                    computedZIndex: window.getComputedStyle(checkoutModalOverlay).zIndex,
-                    isPresentationActive: document.body.classList.contains('presentation-active'),
-                    presentationZIndex,
-                    isModalAbovePresentation: parseInt(window.getComputedStyle(checkoutModalOverlay).zIndex) > parseInt(presentationZIndex)
-                });
-            });
-        }, 0);
-        document.body.classList.add('modal-open');
 
     } catch (err) {
         // This catch block now only catches errors related to showing the modal,

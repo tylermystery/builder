@@ -854,7 +854,7 @@
 }
 #catalog-container {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 25px;
     /* Allow container to shrink below content size for grid children */
     min-width: 0;

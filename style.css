@@ -1594,7 +1594,7 @@ html.presentation-active {
 }
 #catalog-container {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 25px;
     /* CRITICAL: Prevent catalog container from expanding beyond parent */
     min-width: 0;
@@ -10288,7 +10288,8 @@ hr.total-divider {
 }
 /* --- END GROUPING CAROUSEL SECTION STYLES --- */
 
-@media (max-width: 768px) {
+/* Detail modal: only stack vertically on narrow screens */
+@media (max-width: 600px) {
     .modal-content {
         flex-direction: column;
         height: 95vh;
@@ -10297,8 +10298,9 @@ hr.total-divider {
     }
 
     .modal-main-column {
-        flex: 1;
-        min-height: 250px;
+        flex: 0 0 auto;
+        max-height: 40vh;
+        min-height: 200px;
         border-right: none;
         border-bottom: 1px solid #eee;
     }
@@ -10316,7 +10318,9 @@ hr.total-divider {
         width: 65px;
         height: 50px;
     }
+}
 
+@media (max-width: 768px) {
     #calendar-body {
         padding: 10px;
     }
@@ -12859,6 +12863,56 @@ hr.total-divider {
 .image-loading-status.loaded {
     opacity: 0;
     pointer-events: none;
+}
+
+/* Modal image loading placeholder - shown while async image fetch is in progress */
+.modal-image-loading-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+    z-index: 5;
+}
+
+.modal-image-loading-placeholder .loading-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-top-color: #666;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes skeleton-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Stripe loading placeholder in checkout modal */
+.stripe-loading-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 40px 20px;
+    color: #666;
+    font-size: 0.9em;
+}
+
+.stripe-loading-placeholder .loading-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-top-color: #635bff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
 }
 
 /* AI Grouping Card (parent container for AI-generated category results) */

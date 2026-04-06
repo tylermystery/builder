@@ -616,9 +616,10 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                 ungroupedSection = document.createElement('div');
                 ungroupedSection.className = 'ungrouped-items-section';
                 ungroupedSection.style.display = 'grid';
-                ungroupedSection.style.gridTemplateColumns = 'repeat(auto-fill, minmax(320px, 1fr))';
+                ungroupedSection.style.gridTemplateColumns = 'repeat(auto-fill, minmax(260px, 1fr))';
                 ungroupedSection.style.gap = '25px';
                 ungroupedSection.style.marginTop = '20px';
+                console.log('[Catalog DEBUG] Ungrouped section grid created with minmax(260px, 1fr)');
                 catalogContainer.appendChild(ungroupedSection);
             }
 
@@ -717,7 +718,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
             const ungroupedSection = document.createElement('div');
             ungroupedSection.className = 'ungrouped-items-section';
             ungroupedSection.style.display = 'grid';
-            ungroupedSection.style.gridTemplateColumns = 'repeat(auto-fill, minmax(320px, 1fr))';
+            ungroupedSection.style.gridTemplateColumns = 'repeat(auto-fill, minmax(260px, 1fr))';
             ungroupedSection.style.gap = '25px';
             ungroupedSection.style.marginTop = '20px';
 
@@ -761,6 +762,21 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     }
 
     log('UI', `Rendered ${recordsToRender.length} records to the DOM.`);
+
+    // DEBUG: Log computed catalog grid styles
+    requestAnimationFrame(() => {
+        const container = document.getElementById('catalog-container');
+        if (container) {
+            const computed = window.getComputedStyle(container);
+            console.log('[Catalog DEBUG] After render - computed grid:', {
+                display: computed.display,
+                gridTemplateColumns: computed.gridTemplateColumns,
+                containerWidth: container.offsetWidth,
+                parentWidth: container.parentElement?.offsetWidth,
+                childCount: container.children.length
+            });
+        }
+    });
 }
 
 let mainGetItemState;

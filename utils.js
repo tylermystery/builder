@@ -106,6 +106,19 @@ export async function loadStripe() {
 }
 
 /**
+ * Preloads Stripe.js on hover/interaction so it's ready when checkout opens.
+ * Call this on mouseenter/touchstart of payment-related buttons.
+ * Safe to call multiple times — loadScript deduplicates.
+ */
+export function preloadStripe() {
+    if (!window.Stripe && !loadingPromises.has('stripe')) {
+        loadScript('https://js.stripe.com/v3/', 'stripe').catch(() => {
+            // Silently ignore preload failures — will retry on actual checkout
+        });
+    }
+}
+
+/**
  * Lazy loads Flatpickr library and CSS on demand
  * @returns {Promise<void>}
  */

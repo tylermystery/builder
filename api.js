@@ -4180,6 +4180,26 @@ export async function publishSessionAsPackage(sessionId, packageData = {}) {
 }
 
 /**
+ * In-memory session cache to avoid repeated Airtable lookups during a browsing session.
+ * Sessions don't change frequently, so a 2-minute TTL is safe.
+ */
+const sessionCache = new Map();
+const SESSION_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+
+function getMemCachedSession(key) {
+    const entry = sessionCache.get(key);
+    if (entry && (Date.now() - entry.timestamp < SESSION_CACHE_TTL_MS)) {
+        return entry.data;
+    }
+    sessionCache.delete(key);
+    return undefined;
+}
+
+function setMemCachedSession(key, data) {
+    sessionCache.set(key, { data, timestamp: Date.now() });
+}
+
+/**
  * Fetches a single session by ID
  * @param {string} sessionId - The session record ID
  * @returns {Promise<Object>} The session record
@@ -4187,6 +4207,12 @@ export async function publishSessionAsPackage(sessionId, packageData = {}) {
 export async function fetchSessionById(sessionId) {
     if (!sessionId) {
         return null;
+    }
+
+    // Check cache first
+    const cached = getMemCachedSession(`id:${sessionId}`);
+    if (cached !== undefined) {
+        return cached;
     }
 
     // Fetch all fields from the session record
@@ -4206,6 +4232,7 @@ export async function fetchSessionById(sessionId) {
         }
 
         const data = await response.json();
+        setMemCachedSession(`id:${sessionId}`, data);
         return data;
     } catch (error) {
         console.error("Error fetching session:", error);
@@ -4382,6 +4409,12 @@ export async function fetchSessionByLinkedItem(eventId) {
         return null;
     }
 
+    // Check cache first
+    const cached = getMemCachedSession(`linked:${eventId}`);
+    if (cached !== undefined) {
+        return cached;
+    }
+
     // Build a formula to find sessions where LinkedItem contains this event ID
     const formula = `FIND('${eventId}', ARRAYJOIN({LinkedItem}))`;
     const encodedFormula = encodeURIComponent(formula);
@@ -4401,8 +4434,11 @@ export async function fetchSessionByLinkedItem(eventId) {
         const data = await response.json();
 
         if (data.records && data.records.length > 0) {
-            return data.records[0]; // Take the first match
+            const result = data.records[0];
+            setMemCachedSession(`linked:${eventId}`, result);
+            return result; // Take the first match
         } else {
+            setMemCachedSession(`linked:${eventId}`, null);
             return null;
         }
     } catch (error) {
@@ -4421,6 +4457,13 @@ export async function fetchSessionByLinkedItem(eventId) {
 export async function fetchSessionContainingItem(itemId, storeId = null) {
     if (!itemId) {
         return null;
+    }
+
+    // Check cache first
+    const cacheKey = `containing:${itemId}:${storeId || 'all'}`;
+    const cached = getMemCachedSession(cacheKey);
+    if (cached !== undefined) {
+        return cached;
     }
 
     log('API', `Searching for sessions containing item ${itemId}...`);
@@ -4471,6 +4514,7 @@ export async function fetchSessionContainingItem(itemId, storeId = null) {
                         // Check if itemId is in lockedInItems or ideasItems
                         if (lockedInItems[itemId] || ideasItems[itemId]) {
                             log('API', `Found item ${itemId} in session ${session.id} (${session.fields.Name})`);
+                            setMemCachedSession(cacheKey, session);
                             return session;
                         }
                     } catch (e) {
@@ -4479,8 +4523,10 @@ export async function fetchSessionContainingItem(itemId, storeId = null) {
                 }
             }
             log('API', `Item ${itemId} not found in any session's plan items`);
+            setMemCachedSession(cacheKey, null);
             return null;
         } else {
+            setMemCachedSession(cacheKey, null);
             return null;
         }
     } catch (error) {
