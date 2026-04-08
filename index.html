@@ -1930,6 +1930,9 @@ body.modal-open {
     </div>
     
     <div id="presentation-modal-overlay" class="presentation-fullpage">
+        <!-- Background Canvas for Presentation View -->
+        <canvas id="presentation-bg-canvas" class="presentation-bg-canvas"></canvas>
+
         <!-- Presentation View Header - Mirrors Main Site Header -->
         <header id="presentation-header" class="presentation-header">
             <div class="header-content">
@@ -2003,6 +2006,10 @@ body.modal-open {
                         <div id="itinerary-items-list" class="itinerary-items-list">
                             <!-- Items will be rendered here by JavaScript -->
                         </div>
+                        <!-- Reactions Summary Section -->
+                        <div id="reactions-summary-container" class="reactions-summary-container">
+                            <!-- Reactions summary and rankings will be rendered here by JavaScript -->
+                        </div>
                     </div>
                 </section>
 
@@ -2045,6 +2052,11 @@ body.modal-open {
 
             </div>
         </div>
+        <!-- Floating Chat Button for Presentation View -->
+        <button id="presentation-floating-chat-btn" title="Jump to Chat">
+            <span class="chat-icon">💬</span>
+            <span class="chat-badge" style="display: none;"></span>
+        </button>
     </div>
 
     <div id="user-modal-overlay" class="modal-overlay">
@@ -2068,13 +2080,8 @@ body.modal-open {
                     <p id="signin-message" style="margin-top: 10px;"></p>
                 </div>
 
-                <!-- DORMANT FEATURE: Phone/SMS and Google SSO Authentication - hidden until fully functional
+                <!-- DORMANT FEATURE: Phone/SMS Authentication - hidden until fully functional
                      TODO: Re-enable phone authentication when SMS carrier approval is complete
-                     TODO: Re-enable Google SSO when OAuth configuration is complete
-                <div class="sso-divider">
-                    <span>OR</span>
-                </div>
-
                 <details style="margin-bottom: 15px;">
                     <summary style="cursor: pointer; padding: 10px; background: #f5f5f5; border-radius: 4px;">Sign In with Phone (Currently Limited)</summary>
                     <div style="padding: 15px 0;">
@@ -2104,17 +2111,44 @@ body.modal-open {
                         <p id="sms-message" style="margin-top: 10px;"></p>
                     </div>
                 </details>
+                END DORMANT FEATURE: Phone/SMS -->
 
                 <div class="sso-divider">
                     <span>OR</span>
                 </div>
 
-                <button id="google-sso-btn" class="sso-btn" disabled style="opacity: 0.5; cursor: not-allowed;">
+                <button id="google-sso-btn" class="sso-btn">
                     <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" style="margin-right: 8px;"><path d="M16.51 8.1H9.18V11.16H13.25C13.04 12.56 12.08 13.81 10.63 14.73V16.88H13.01C15.13 15.01 16.51 11.9 16.51 8.1Z" fill="#4285F4"></path><path d="M9.18 17.5C11.59 17.5 13.6 16.7 15.01 15.38L12.63 13.73C11.85 14.28 10.63 14.69 9.18 14.69C6.93 14.69 5.02 13.25 4.3 11.25H1.83V13.38C3.25 15.88 6.09 17.5 9.18 17.5Z" fill="#34A853"></path><path d="M4.3 11.25C4.12 10.75 4.03 10.21 4.03 9.63C4.03 9.05 4.12 8.51 4.3 8.01V5.88H1.83C1.09 7.22 0.63 8.63 0.63 10.13C0.63 11.63 1.09 13.04 1.83 14.38L4.3 11.25Z" fill="#FBBC05"></path><path d="M9.18 4.5C10.51 4.5 11.68 4.97 12.68 5.88L15.08 3.48C13.6 2.09 11.59 1.5 9.18 1.5C6.09 1.5 3.25 3.12 1.83 5.62L4.3 7.75C5.02 5.75 6.93 4.5 9.18 4.5Z" fill="#EA4335"></path></svg>
-                    Sign In with Google (Temporarily Unavailable)
+                    Sign In with Google
                 </button>
-                <p style="font-size: 0.85em; color: #999; margin-top: 5px;">Google SSO is currently being configured. Please use SMS authentication.</p>
-                END DORMANT FEATURE -->
+
+                <!-- Biometric/Passkey Authentication (Hidden by default, shown when available) -->
+                <div id="biometric-auth-section" style="display: none; margin-top: 15px;">
+                    <div class="sso-divider">
+                        <span>OR</span>
+                    </div>
+                    <button id="biometric-login-btn" class="sso-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
+                        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
+                            <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"></path>
+                        </svg>
+                        <span id="biometric-btn-text">Sign In with Biometrics</span>
+                    </button>
+                    <p id="biometric-message" style="margin-top: 10px; font-size: 0.9em; color: #666;"></p>
+                </div>
+
+                <!-- Setup Biometric option (shown after email login) -->
+                <div id="biometric-setup-prompt" style="display: none; margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                    <p style="margin: 0 0 10px 0; font-size: 0.9em; color: #333;">
+                        <strong>Enable quick login!</strong> Set up Face ID, Touch ID, or fingerprint for faster sign-in next time.
+                    </p>
+                    <button id="setup-biometric-btn" class="sso-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; width: 100%;">
+                        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
+                            <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"></path>
+                        </svg>
+                        Set Up Biometric Login
+                    </button>
+                    <button id="skip-biometric-setup" style="margin-top: 8px; background: none; border: none; color: #666; cursor: pointer; font-size: 0.85em; text-decoration: underline;">Skip for now</button>
+                </div>
             </div>
 
             <div id="profile-view" style="display: none;">
@@ -2136,6 +2170,18 @@ body.modal-open {
                         </div>
 
                         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+
+                        <!-- Biometric Login Management -->
+                        <div id="biometric-management-section" class="form-row" style="display: none;">
+                            <label style="font-weight: 600; margin-bottom: 10px; display: block;">Biometric Login</label>
+                            <div id="biometric-status" style="margin-bottom: 10px; padding: 10px; border-radius: 8px; background: #e8f5e9;">
+                                <span id="biometric-status-text" style="color: #2e7d32; font-size: 0.9em;">Biometric login is enabled</span>
+                            </div>
+                            <button id="add-passkey-btn" class="primary-action-btn" type="button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); width: 100%;">
+                                Add New Passkey
+                            </button>
+                            <p style="font-size: 0.85em; color: #6c757d; margin-top: 5px;">Use Face ID, Touch ID, or fingerprint to sign in quickly</p>
+                        </div>
 
                         <div class="form-row">
                             <label style="font-weight: 600; margin-bottom: 10px; display: block;">Background Animation</label>

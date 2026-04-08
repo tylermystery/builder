@@ -137,6 +137,27 @@
   to = "/.netlify/functions/merchant-feed"
   status = 200
 
+# WebAuthn/Biometric authentication redirects
+[[redirects]]
+  from = "/api/auth-webauthn-register-options"
+  to = "/.netlify/functions/auth-webauthn-register-options"
+  status = 200
+
+[[redirects]]
+  from = "/api/auth-webauthn-register-verify"
+  to = "/.netlify/functions/auth-webauthn-register-verify"
+  status = 200
+
+[[redirects]]
+  from = "/api/auth-webauthn-auth-options"
+  to = "/.netlify/functions/auth-webauthn-auth-options"
+  status = 200
+
+[[redirects]]
+  from = "/api/auth-webauthn-auth-verify"
+  to = "/.netlify/functions/auth-webauthn-auth-verify"
+  status = 200
+
 # SPA routing for item detail pages (pretty URLs)
 # Enables direct links and page refresh on /item/* routes
 [[redirects]]

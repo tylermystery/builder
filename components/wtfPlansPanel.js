@@ -486,12 +486,12 @@ function handleWtfPlanItemClick(item) {
             // Replace current URL with wtfPlans state (this is the state we want to return to on back)
             window.history.replaceState({ wtfPlans: 'open', filter: currentFilter }, '', wtfPlansUrl.toString());
 
-            // Now push the new session URL
+            // Now push the new session URL with presentation view as default
             const sessionUrl = new URL(window.location.href);
             sessionUrl.searchParams.delete('wtfPlans');
             sessionUrl.searchParams.delete('wtfFilter');
             sessionUrl.searchParams.set('session', item.id);
-            sessionUrl.searchParams.delete('view');
+            sessionUrl.searchParams.set('view', 'present'); // Default to presentation view
             sessionUrl.searchParams.delete('category');
             // Use location.href for session navigation as it requires full reload to load session data
             window.location.href = sessionUrl.toString();

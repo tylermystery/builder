@@ -731,57 +731,187 @@ export function setupAuthEventListeners() {
 
     // --- NETLIFY IDENTITY SSO SETUP ---
     // Wait for Netlify Identity to be ready before setting up SSO
-    if (typeof netlifyIdentity !== 'undefined') {
-        initializeNetlifyIdentity();
-    } else {
-        // Wait for the script to load
-        window.addEventListener('load', () => {
-            if (typeof netlifyIdentity !== 'undefined') {
-                initializeNetlifyIdentity();
-            } else {
-                console.error('Netlify Identity widget failed to load');
-            }
+    console.log('[Google SSO DEBUG] ========== NETLIFY IDENTITY SSO SETUP START ==========');
+    console.log('[Google SSO DEBUG] Checking if netlifyIdentity is already defined:', typeof netlifyIdentity !== 'undefined');
+
+    // Check if the Google SSO button exists
+    const googleSsoBtnCheck = document.getElementById('google-sso-btn');
+    console.log('[Google SSO DEBUG] google-sso-btn element found at setup time:', !!googleSsoBtnCheck);
+    if (googleSsoBtnCheck) {
+        console.log('[Google SSO DEBUG] google-sso-btn element details:', {
+            tagName: googleSsoBtnCheck.tagName,
+            id: googleSsoBtnCheck.id,
+            className: googleSsoBtnCheck.className,
+            disabled: googleSsoBtnCheck.disabled,
+            style: {
+                display: getComputedStyle(googleSsoBtnCheck).display,
+                visibility: getComputedStyle(googleSsoBtnCheck).visibility,
+                pointerEvents: getComputedStyle(googleSsoBtnCheck).pointerEvents,
+                opacity: getComputedStyle(googleSsoBtnCheck).opacity,
+                cursor: getComputedStyle(googleSsoBtnCheck).cursor
+            },
+            parentElement: googleSsoBtnCheck.parentElement?.id || googleSsoBtnCheck.parentElement?.className
         });
     }
+
+    if (typeof netlifyIdentity !== 'undefined') {
+        console.log('[Google SSO DEBUG] netlifyIdentity already available, initializing immediately');
+        initializeNetlifyIdentity();
+    } else {
+        console.log('[Google SSO DEBUG] netlifyIdentity not yet available, checking for loadNetlifyIdentity function...');
+
+        // Try to load Netlify Identity if the loader is available
+        if (typeof window.loadNetlifyIdentity === 'function') {
+            console.log('[Google SSO DEBUG] loadNetlifyIdentity function found! Loading Netlify Identity...');
+            window.loadNetlifyIdentity().then(() => {
+                console.log('[Google SSO DEBUG] Netlify Identity script loaded via loadNetlifyIdentity()');
+                if (typeof netlifyIdentity !== 'undefined') {
+                    console.log('[Google SSO DEBUG] netlifyIdentity is now defined, initializing...');
+                    initializeNetlifyIdentity();
+                } else {
+                    console.error('[Google SSO DEBUG] ERROR: netlifyIdentity still undefined after script load!');
+                }
+            }).catch(err => {
+                console.error('[Google SSO DEBUG] ERROR loading Netlify Identity:', err);
+            });
+        } else {
+            console.log('[Google SSO DEBUG] loadNetlifyIdentity function NOT found, falling back to window load event');
+            // Wait for the script to load
+            window.addEventListener('load', () => {
+                console.log('[Google SSO DEBUG] Window load event fired');
+                console.log('[Google SSO DEBUG] Checking netlifyIdentity after window load:', typeof netlifyIdentity !== 'undefined');
+                if (typeof netlifyIdentity !== 'undefined') {
+                    initializeNetlifyIdentity();
+                } else {
+                    console.error('[Google SSO DEBUG] ERROR: Netlify Identity widget failed to load after window load');
+                    // Try loading it explicitly
+                    if (typeof window.loadNetlifyIdentity === 'function') {
+                        console.log('[Google SSO DEBUG] Attempting late load via loadNetlifyIdentity...');
+                        window.loadNetlifyIdentity().then(() => {
+                            if (typeof netlifyIdentity !== 'undefined') {
+                                console.log('[Google SSO DEBUG] Late load successful, initializing...');
+                                initializeNetlifyIdentity();
+                            }
+                        });
+                    }
+                }
+            });
+        }
+    }
+    console.log('[Google SSO DEBUG] ========== NETLIFY IDENTITY SSO SETUP END ==========');
 }
 
 function initializeNetlifyIdentity() {
-    console.log('[Auth] ========== NETLIFY IDENTITY INITIALIZATION START ==========');
-    console.log('[Auth] Window.netlifyIdentity exists:', typeof netlifyIdentity !== 'undefined');
-    console.log('[Auth] Initializing Netlify Identity');
-    
+    console.log('[Google SSO DEBUG] ========== NETLIFY IDENTITY INITIALIZATION START ==========');
+    console.log('[Google SSO DEBUG] Window.netlifyIdentity exists:', typeof netlifyIdentity !== 'undefined');
+    console.log('[Google SSO DEBUG] netlifyIdentity object:', netlifyIdentity);
+    console.log('[Google SSO DEBUG] Initializing Netlify Identity');
+
     // Initialize the widget
-    console.log('[Auth] Calling netlifyIdentity.init()');
-    netlifyIdentity.init({
-        locale: 'en'
-    });
-    console.log('[Auth] netlifyIdentity.init() completed');
+    console.log('[Google SSO DEBUG] Calling netlifyIdentity.init()');
+    try {
+        netlifyIdentity.init({
+            locale: 'en'
+        });
+        console.log('[Google SSO DEBUG] netlifyIdentity.init() completed successfully');
+    } catch (initError) {
+        console.error('[Google SSO DEBUG] ERROR in netlifyIdentity.init():', initError);
+    }
 
     // Set up Google SSO button
     const googleSsoBtn = document.getElementById('google-sso-btn');
-    console.log('[Auth] Google SSO button element found:', !!googleSsoBtn);
+    console.log('[Google SSO DEBUG] Google SSO button element lookup result:', googleSsoBtn);
+    console.log('[Google SSO DEBUG] Google SSO button element found:', !!googleSsoBtn);
+
     if (googleSsoBtn) {
-        googleSsoBtn.addEventListener('click', () => {
-            console.log('[Auth] ========== GOOGLE SSO BUTTON CLICKED ==========');
-            console.log('[Auth] Timestamp:', new Date().toISOString());
+        console.log('[Google SSO DEBUG] Checking button state before attaching listener:', {
+            disabled: googleSsoBtn.disabled,
+            display: getComputedStyle(googleSsoBtn).display,
+            visibility: getComputedStyle(googleSsoBtn).visibility,
+            pointerEvents: getComputedStyle(googleSsoBtn).pointerEvents,
+            cursor: getComputedStyle(googleSsoBtn).cursor,
+            zIndex: getComputedStyle(googleSsoBtn).zIndex,
+            position: getComputedStyle(googleSsoBtn).position,
+            opacity: getComputedStyle(googleSsoBtn).opacity,
+            width: getComputedStyle(googleSsoBtn).width,
+            height: getComputedStyle(googleSsoBtn).height,
+            boundingRect: googleSsoBtn.getBoundingClientRect()
+        });
+
+        // Check if there are any existing event listeners (indirect check via onclick attribute)
+        console.log('[Google SSO DEBUG] Existing onclick attribute:', googleSsoBtn.onclick);
+
+        console.log('[Google SSO DEBUG] Attaching click event listener to google-sso-btn...');
+
+        googleSsoBtn.addEventListener('click', (event) => {
+            console.log('[Google SSO DEBUG] ========== GOOGLE SSO BUTTON CLICKED ==========');
+            console.log('[Google SSO DEBUG] Click event:', event);
+            console.log('[Google SSO DEBUG] Click event type:', event.type);
+            console.log('[Google SSO DEBUG] Event target:', event.target);
+            console.log('[Google SSO DEBUG] Event currentTarget:', event.currentTarget);
+            console.log('[Google SSO DEBUG] Event bubbles:', event.bubbles);
+            console.log('[Google SSO DEBUG] Event cancelable:', event.cancelable);
+            console.log('[Google SSO DEBUG] Event defaultPrevented:', event.defaultPrevented);
+            console.log('[Google SSO DEBUG] Event isTrusted:', event.isTrusted);
+            console.log('[Google SSO DEBUG] Timestamp:', new Date().toISOString());
+            console.log('[Google SSO DEBUG] netlifyIdentity available at click time:', typeof netlifyIdentity !== 'undefined');
+
             try {
                 // Trigger Google login directly
-                console.log('[Auth] Opening Netlify Identity modal...');
+                console.log('[Google SSO DEBUG] Opening Netlify Identity modal...');
+                console.log('[Google SSO DEBUG] User modal overlay z-index:', getComputedStyle(userModalOverlay).zIndex);
                 netlifyIdentity.open('login');
-                console.log('[Auth] Netlify Identity modal opened');
+                console.log('[Google SSO DEBUG] Netlify Identity modal open() called');
+
+                // Log the z-index of the Netlify Identity modal once it opens
+                setTimeout(() => {
+                    const netlifyModal = document.querySelector('.ReactModal__Overlay');
+                    if (netlifyModal) {
+                        console.log('[Google SSO DEBUG] Netlify Identity modal found in DOM');
+                        console.log('[Google SSO DEBUG] Netlify modal z-index (computed):', getComputedStyle(netlifyModal).zIndex);
+                        console.log('[Google SSO DEBUG] Netlify modal position:', getComputedStyle(netlifyModal).position);
+                    } else {
+                        console.log('[Google SSO DEBUG] Netlify Identity modal not found in DOM after timeout');
+                    }
+                }, 500);
+
                 netlifyIdentity.on('open', () => {
+                    console.log('[Google SSO DEBUG] Netlify Identity modal opened event received');
                     // Automatically select Google provider
                     const googleBtn = document.querySelector('.btnProvider[data-provider="google"]');
+                    console.log('[Google SSO DEBUG] Looking for Google provider button:', googleBtn);
                     if (googleBtn) {
+                        console.log('[Google SSO DEBUG] Auto-clicking Google provider button');
                         googleBtn.click();
+                    } else {
+                        console.log('[Google SSO DEBUG] Google provider button not found in modal');
                     }
                 });
             } catch (error) {
-                console.error('[Auth] Error opening Google SSO:', error);
+                console.error('[Google SSO DEBUG] Error opening Google SSO:', error);
+                console.error('[Google SSO DEBUG] Error stack:', error.stack);
                 signinMessage.textContent = "Error opening Google sign-in. Please try again.";
                 signinMessage.style.color = '#dc3545';
             }
         });
+
+        console.log('[Google SSO DEBUG] Click event listener attached to google-sso-btn');
+
+        // Add a direct onclick test to verify the button is clickable
+        googleSsoBtn.addEventListener('mousedown', () => {
+            console.log('[Google SSO DEBUG] mousedown event on google-sso-btn');
+        });
+        googleSsoBtn.addEventListener('mouseup', () => {
+            console.log('[Google SSO DEBUG] mouseup event on google-sso-btn');
+        });
+        googleSsoBtn.addEventListener('mouseenter', () => {
+            console.log('[Google SSO DEBUG] mouseenter event on google-sso-btn');
+        });
+
+    } else {
+        console.error('[Google SSO DEBUG] ERROR: google-sso-btn element NOT FOUND in DOM!');
+        console.log('[Google SSO DEBUG] DOM check - signin-view exists:', !!document.getElementById('signin-view'));
+        console.log('[Google SSO DEBUG] DOM check - user-modal-overlay exists:', !!document.getElementById('user-modal-overlay'));
     }
 
     // Handle successful login
@@ -844,6 +974,479 @@ function initializeNetlifyIdentity() {
     
     console.log('[Auth] ========== NETLIFY IDENTITY INITIALIZATION COMPLETE ==========');
 }
+
+// ============================================
+// WEBAUTHN / BIOMETRIC AUTHENTICATION
+// ============================================
+
+// Check if WebAuthn is available on this device
+function isWebAuthnAvailable() {
+    return window.PublicKeyCredential !== undefined &&
+           typeof window.PublicKeyCredential === 'function';
+}
+
+// Check if platform authenticator (Face ID, Touch ID, etc.) is available
+async function isPlatformAuthenticatorAvailable() {
+    if (!isWebAuthnAvailable()) return false;
+    try {
+        return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    } catch (e) {
+        console.warn('[WebAuthn] Platform authenticator check failed:', e);
+        return false;
+    }
+}
+
+// Check if this user has a passkey stored (by checking localStorage marker)
+function hasStoredPasskey(email) {
+    const passkeys = JSON.parse(localStorage.getItem('passkeyEmails') || '[]');
+    return passkeys.includes(email);
+}
+
+// Mark that a user has set up a passkey
+function markPasskeySetup(email) {
+    const passkeys = JSON.parse(localStorage.getItem('passkeyEmails') || '[]');
+    if (!passkeys.includes(email)) {
+        passkeys.push(email);
+        localStorage.setItem('passkeyEmails', JSON.stringify(passkeys));
+    }
+}
+
+// Convert base64url string to ArrayBuffer
+function base64urlToArrayBuffer(base64url) {
+    const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+    const padding = '='.repeat((4 - base64.length % 4) % 4);
+    const binary = atob(base64 + padding);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+}
+
+// Convert ArrayBuffer to base64url string
+function arrayBufferToBase64url(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+// Register a new passkey (biometric credential)
+async function registerPasskey(email) {
+    console.log('[WebAuthn] ========== PASSKEY REGISTRATION START ==========');
+    console.log('[WebAuthn] Registering passkey for email:', email);
+
+    const biometricMessage = document.getElementById('biometric-message');
+    const signinMessage = document.getElementById('signin-message');
+    const messageEl = biometricMessage || signinMessage;
+
+    try {
+        // Get registration options from server
+        if (messageEl) {
+            messageEl.textContent = 'Setting up biometric login...';
+            messageEl.style.color = '#333';
+        }
+
+        const optionsRes = await fetch('/api/auth-webauthn-register-options', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+
+        if (!optionsRes.ok) {
+            const errorData = await optionsRes.json();
+            throw new Error(errorData.error || 'Failed to get registration options');
+        }
+
+        const { options, userId } = await optionsRes.json();
+        console.log('[WebAuthn] Received registration options for user:', userId);
+
+        // Convert challenge and user.id from base64url to ArrayBuffer
+        options.challenge = base64urlToArrayBuffer(options.challenge);
+        options.user.id = base64urlToArrayBuffer(options.user.id);
+
+        // Convert excludeCredentials if present
+        if (options.excludeCredentials) {
+            options.excludeCredentials = options.excludeCredentials.map(cred => ({
+                ...cred,
+                id: base64urlToArrayBuffer(cred.id)
+            }));
+        }
+
+        if (messageEl) {
+            messageEl.textContent = 'Please authenticate with your device...';
+        }
+
+        // Create the credential
+        console.log('[WebAuthn] Creating credential...');
+        const credential = await navigator.credentials.create({
+            publicKey: options
+        });
+
+        console.log('[WebAuthn] Credential created:', credential.id);
+
+        // Prepare the credential for sending to server
+        const credentialForServer = {
+            id: credential.id,
+            rawId: arrayBufferToBase64url(credential.rawId),
+            type: credential.type,
+            response: {
+                clientDataJSON: arrayBufferToBase64url(credential.response.clientDataJSON),
+                attestationObject: arrayBufferToBase64url(credential.response.attestationObject)
+            },
+            transports: credential.response.getTransports ? credential.response.getTransports() : ['internal'],
+            deviceName: getDeviceName()
+        };
+
+        // Verify and store the credential
+        if (messageEl) {
+            messageEl.textContent = 'Verifying...';
+        }
+
+        const verifyRes = await fetch('/api/auth-webauthn-register-verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credential: credentialForServer, userId })
+        });
+
+        if (!verifyRes.ok) {
+            const errorData = await verifyRes.json();
+            throw new Error(errorData.error || 'Failed to verify registration');
+        }
+
+        const result = await verifyRes.json();
+        console.log('[WebAuthn] Registration successful!');
+
+        // Mark that this email has a passkey
+        markPasskeySetup(email);
+
+        // Update UI
+        if (messageEl) {
+            messageEl.textContent = 'Biometric login enabled!';
+            messageEl.style.color = '#28a745';
+        }
+
+        // Log the user in with the returned credentials
+        await _handleSuccessfulLogin(result);
+
+        console.log('[WebAuthn] ========== PASSKEY REGISTRATION COMPLETE ==========');
+        return true;
+
+    } catch (error) {
+        console.error('[WebAuthn] Registration error:', error);
+
+        if (messageEl) {
+            if (error.name === 'NotAllowedError') {
+                messageEl.textContent = 'Biometric setup was cancelled. You can try again later.';
+            } else if (error.name === 'InvalidStateError') {
+                messageEl.textContent = 'A passkey is already registered on this device.';
+            } else {
+                messageEl.textContent = error.message || 'Failed to set up biometric login.';
+            }
+            messageEl.style.color = '#dc3545';
+        }
+
+        return false;
+    }
+}
+
+// Authenticate using a passkey
+async function authenticateWithPasskey(email = null) {
+    console.log('[WebAuthn] ========== PASSKEY AUTHENTICATION START ==========');
+    console.log('[WebAuthn] Authenticating' + (email ? ` for email: ${email}` : ' (discoverable)'));
+
+    const biometricMessage = document.getElementById('biometric-message');
+    const signinMessage = document.getElementById('signin-message');
+    const messageEl = biometricMessage || signinMessage;
+
+    try {
+        if (messageEl) {
+            messageEl.textContent = 'Preparing biometric login...';
+            messageEl.style.color = '#333';
+        }
+
+        // Get authentication options from server
+        const optionsRes = await fetch('/api/auth-webauthn-auth-options', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+
+        if (!optionsRes.ok) {
+            const errorData = await optionsRes.json();
+            if (errorData.code === 'NO_PASSKEY') {
+                // User doesn't have a passkey set up
+                throw new Error('NO_PASSKEY');
+            }
+            throw new Error(errorData.error || 'Failed to get authentication options');
+        }
+
+        const { options, userId } = await optionsRes.json();
+        console.log('[WebAuthn] Received authentication options');
+
+        // Convert challenge from base64url to ArrayBuffer
+        options.challenge = base64urlToArrayBuffer(options.challenge);
+
+        // Convert allowCredentials if present
+        if (options.allowCredentials) {
+            options.allowCredentials = options.allowCredentials.map(cred => ({
+                ...cred,
+                id: base64urlToArrayBuffer(cred.id)
+            }));
+        }
+
+        if (messageEl) {
+            messageEl.textContent = 'Please authenticate with your device...';
+        }
+
+        // Get the credential
+        console.log('[WebAuthn] Requesting credential...');
+        const credential = await navigator.credentials.get({
+            publicKey: options
+        });
+
+        console.log('[WebAuthn] Got credential:', credential.id);
+
+        // Prepare the credential for sending to server
+        const credentialForServer = {
+            id: credential.id,
+            rawId: arrayBufferToBase64url(credential.rawId),
+            type: credential.type,
+            response: {
+                clientDataJSON: arrayBufferToBase64url(credential.response.clientDataJSON),
+                authenticatorData: arrayBufferToBase64url(credential.response.authenticatorData),
+                signature: arrayBufferToBase64url(credential.response.signature),
+                userHandle: credential.response.userHandle ? arrayBufferToBase64url(credential.response.userHandle) : null
+            }
+        };
+
+        // Verify the credential
+        if (messageEl) {
+            messageEl.textContent = 'Verifying...';
+        }
+
+        const verifyRes = await fetch('/api/auth-webauthn-auth-verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credential: credentialForServer })
+        });
+
+        if (!verifyRes.ok) {
+            const errorData = await verifyRes.json();
+            throw new Error(errorData.error || 'Authentication failed');
+        }
+
+        const result = await verifyRes.json();
+        console.log('[WebAuthn] Authentication successful!');
+
+        if (messageEl) {
+            messageEl.textContent = 'Success! Signing you in...';
+            messageEl.style.color = '#28a745';
+        }
+
+        // Log the user in
+        await _handleSuccessfulLogin(result);
+
+        console.log('[WebAuthn] ========== PASSKEY AUTHENTICATION COMPLETE ==========');
+        return true;
+
+    } catch (error) {
+        console.error('[WebAuthn] Authentication error:', error);
+
+        if (messageEl) {
+            if (error.message === 'NO_PASSKEY') {
+                messageEl.textContent = 'No biometric login found. Please sign in with email first, then set up biometric login.';
+            } else if (error.name === 'NotAllowedError') {
+                messageEl.textContent = 'Biometric authentication was cancelled.';
+            } else {
+                messageEl.textContent = error.message || 'Biometric authentication failed.';
+            }
+            messageEl.style.color = '#dc3545';
+        }
+
+        return false;
+    }
+}
+
+// Get a friendly device name
+function getDeviceName() {
+    const ua = navigator.userAgent;
+    if (/iPhone/.test(ua)) return 'iPhone';
+    if (/iPad/.test(ua)) return 'iPad';
+    if (/Android/.test(ua)) return 'Android Device';
+    if (/Mac/.test(ua)) return 'Mac';
+    if (/Windows/.test(ua)) return 'Windows PC';
+    if (/Linux/.test(ua)) return 'Linux';
+    return 'Unknown Device';
+}
+
+// Initialize biometric UI elements
+async function initializeBiometricAuth() {
+    console.log('[WebAuthn] ========== BIOMETRIC UI INITIALIZATION ==========');
+
+    const biometricSection = document.getElementById('biometric-auth-section');
+    const biometricLoginBtn = document.getElementById('biometric-login-btn');
+    const biometricBtnText = document.getElementById('biometric-btn-text');
+    const biometricSetupPrompt = document.getElementById('biometric-setup-prompt');
+    const setupBiometricBtn = document.getElementById('setup-biometric-btn');
+    const skipBiometricSetup = document.getElementById('skip-biometric-setup');
+    const biometricManagement = document.getElementById('biometric-management-section');
+    const addPasskeyBtn = document.getElementById('add-passkey-btn');
+
+    // Check if WebAuthn is available
+    const webauthnAvailable = isWebAuthnAvailable();
+    const platformAvailable = await isPlatformAuthenticatorAvailable();
+
+    console.log('[WebAuthn] WebAuthn available:', webauthnAvailable);
+    console.log('[WebAuthn] Platform authenticator available:', platformAvailable);
+
+    if (!webauthnAvailable || !platformAvailable) {
+        console.log('[WebAuthn] Biometric auth not available on this device');
+        // Keep biometric section hidden
+        return;
+    }
+
+    // Check if user has a stored passkey email (for returning users)
+    const lastEmail = localStorage.getItem('lastSignInEmail');
+    const hasPasskey = lastEmail && hasStoredPasskey(lastEmail);
+
+    // Set appropriate button text based on device
+    if (biometricBtnText) {
+        const ua = navigator.userAgent;
+        if (/iPhone|iPad/.test(ua)) {
+            biometricBtnText.textContent = 'Sign In with Face ID / Touch ID';
+        } else if (/Android/.test(ua)) {
+            biometricBtnText.textContent = 'Sign In with Fingerprint';
+        } else if (/Mac/.test(ua)) {
+            biometricBtnText.textContent = 'Sign In with Touch ID';
+        } else if (/Windows/.test(ua)) {
+            biometricBtnText.textContent = 'Sign In with Windows Hello';
+        }
+    }
+
+    // Show biometric login button if user has a passkey
+    if (biometricSection && hasPasskey) {
+        biometricSection.style.display = 'block';
+        console.log('[WebAuthn] Showing biometric login option for:', lastEmail);
+    }
+
+    // Handle biometric login button click
+    if (biometricLoginBtn) {
+        biometricLoginBtn.addEventListener('click', async () => {
+            console.log('[WebAuthn] Biometric login button clicked');
+            const email = localStorage.getItem('lastSignInEmail');
+            await authenticateWithPasskey(email);
+        });
+    }
+
+    // Handle setup biometric button click (after first login)
+    if (setupBiometricBtn) {
+        setupBiometricBtn.addEventListener('click', async () => {
+            console.log('[WebAuthn] Setup biometric button clicked');
+            const email = state.session.user.email;
+            if (email) {
+                await registerPasskey(email);
+                if (biometricSetupPrompt) {
+                    biometricSetupPrompt.style.display = 'none';
+                }
+            }
+        });
+    }
+
+    // Handle skip button
+    if (skipBiometricSetup) {
+        skipBiometricSetup.addEventListener('click', () => {
+            console.log('[WebAuthn] User skipped biometric setup');
+            if (biometricSetupPrompt) {
+                biometricSetupPrompt.style.display = 'none';
+            }
+            localStorage.setItem('biometricSetupSkipped', 'true');
+        });
+    }
+
+    // Handle add passkey button in profile
+    if (addPasskeyBtn) {
+        addPasskeyBtn.addEventListener('click', async () => {
+            console.log('[WebAuthn] Add passkey button clicked');
+            const email = state.session.user.email;
+            if (email) {
+                await registerPasskey(email);
+            }
+        });
+    }
+
+    // Show biometric management in profile if available
+    if (biometricManagement) {
+        biometricManagement.style.display = 'block';
+    }
+
+    console.log('[WebAuthn] ========== BIOMETRIC UI INITIALIZATION COMPLETE ==========');
+}
+
+// Show biometric setup prompt after successful login (if not already set up)
+function showBiometricSetupPromptIfNeeded() {
+    const biometricSetupPrompt = document.getElementById('biometric-setup-prompt');
+    const email = state.session.user.email;
+
+    if (!biometricSetupPrompt || !email) return;
+
+    // Check conditions
+    const hasPasskey = hasStoredPasskey(email);
+    const skipped = localStorage.getItem('biometricSetupSkipped') === 'true';
+
+    isPlatformAuthenticatorAvailable().then(available => {
+        if (available && !hasPasskey && !skipped) {
+            console.log('[WebAuthn] Showing biometric setup prompt');
+            biometricSetupPrompt.style.display = 'block';
+        }
+    });
+}
+
+// Update biometric management UI when user is authenticated
+function updateBiometricManagementUI() {
+    const biometricManagement = document.getElementById('biometric-management-section');
+    const biometricStatus = document.getElementById('biometric-status');
+    const biometricStatusText = document.getElementById('biometric-status-text');
+
+    if (!biometricManagement) return;
+
+    isPlatformAuthenticatorAvailable().then(available => {
+        if (!available) {
+            biometricManagement.style.display = 'none';
+            return;
+        }
+
+        biometricManagement.style.display = 'block';
+
+        const email = state.session.user.email;
+        const hasPasskey = email && hasStoredPasskey(email);
+
+        if (biometricStatus && biometricStatusText) {
+            if (hasPasskey) {
+                biometricStatus.style.background = '#e8f5e9';
+                biometricStatusText.style.color = '#2e7d32';
+                biometricStatusText.textContent = 'Biometric login is enabled';
+            } else {
+                biometricStatus.style.background = '#fff3e0';
+                biometricStatusText.style.color = '#e65100';
+                biometricStatusText.textContent = 'Biometric login not set up yet';
+            }
+        }
+    });
+}
+
+// Expose functions for external use
+export {
+    initializeBiometricAuth,
+    registerPasskey,
+    authenticateWithPasskey,
+    showBiometricSetupPromptIfNeeded,
+    updateBiometricManagementUI,
+    isPlatformAuthenticatorAvailable
+};
 
 // --- DEBUG ---
 console.log('[auth.js] 4. File execution finished. Exports are ready.');

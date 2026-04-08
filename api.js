@@ -1562,6 +1562,296 @@ export async function banUser(userId) {
     state.session.bannedUsers.add(userId);
 }
 
+// --- ENHANCED CHAT FEATURES ---
+
+/**
+ * Updates a chat message content (for editing)
+ * @param {string} messageId - The Airtable record ID of the message
+ * @param {string} newContent - The new message content
+ * @param {string} senderId - The ID of the user trying to edit (for verification)
+ * @returns {Promise<object|null>} The updated record or null on failure
+ */
+export async function updateChatMessage(messageId, newContent, senderId) {
+    if (!messageId || !messageId.startsWith('rec')) {
+        log('API', `updateChatMessage: Invalid messageId provided: "${messageId}"`);
+        return null;
+    }
+    if (!newContent || !newContent.trim()) {
+        log('API', 'updateChatMessage: Attempted to save empty message.');
+        return null;
+    }
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}/${messageId}`;
+
+    const payload = {
+        fields: {
+            Content: newContent.trim(),
+            EditedAt: new Date().toISOString(),
+            IsEdited: true
+        }
+    };
+
+    try {
+        log('API', `Updating message ${messageId}`);
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            log('API', `Failed to update message: ${errorData?.error?.message || response.statusText}`);
+            return null;
+        }
+
+        const result = await response.json();
+        log('API', `Message ${messageId} updated successfully`);
+        return result;
+    } catch (error) {
+        log('API', `Error updating message: ${error.message}`);
+        return null;
+    }
+}
+
+/**
+ * Deletes a chat message (soft delete by marking as deleted)
+ * @param {string} messageId - The Airtable record ID of the message
+ * @param {string} senderId - The ID of the user trying to delete (for verification)
+ * @returns {Promise<boolean>} True if successful, false otherwise
+ */
+export async function deleteChatMessage(messageId, senderId) {
+    if (!messageId || !messageId.startsWith('rec')) {
+        log('API', `deleteChatMessage: Invalid messageId provided: "${messageId}"`);
+        return false;
+    }
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}/${messageId}`;
+
+    // Soft delete - mark message as deleted rather than removing from database
+    const payload = {
+        fields: {
+            IsDeleted: true,
+            DeletedAt: new Date().toISOString()
+        }
+    };
+
+    try {
+        log('API', `Soft-deleting message ${messageId}`);
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            log('API', `Failed to delete message: ${errorData?.error?.message || response.statusText}`);
+            return false;
+        }
+
+        log('API', `Message ${messageId} deleted successfully`);
+        return true;
+    } catch (error) {
+        log('API', `Error deleting message: ${error.message}`);
+        return false;
+    }
+}
+
+/**
+ * Adds or removes a reaction to a message
+ * @param {string} messageId - The Airtable record ID of the message
+ * @param {string} userId - The user adding/removing the reaction
+ * @param {string} emoji - The emoji reaction
+ * @param {boolean} add - True to add, false to remove
+ * @returns {Promise<object|null>} The updated reactions or null on failure
+ */
+export async function toggleMessageReaction(messageId, userId, emoji, add = true) {
+    if (!messageId || !messageId.startsWith('rec')) {
+        log('API', `toggleMessageReaction: Invalid messageId provided: "${messageId}"`);
+        return null;
+    }
+
+    // First, fetch the current reactions
+    const getUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}/${messageId}`;
+
+    try {
+        const getResponse = await fetch(getUrl, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!getResponse.ok) {
+            log('API', `Failed to fetch message for reactions`);
+            return null;
+        }
+
+        const record = await getResponse.json();
+        let reactions = {};
+
+        // Parse existing reactions (stored as JSON string)
+        if (record.fields.Reactions) {
+            try {
+                reactions = JSON.parse(record.fields.Reactions);
+            } catch (e) {
+                reactions = {};
+            }
+        }
+
+        // Initialize emoji array if needed
+        if (!reactions[emoji]) {
+            reactions[emoji] = [];
+        }
+
+        // Add or remove user from the reaction
+        const userIndex = reactions[emoji].indexOf(userId);
+        if (add && userIndex === -1) {
+            reactions[emoji].push(userId);
+        } else if (!add && userIndex !== -1) {
+            reactions[emoji].splice(userIndex, 1);
+        }
+
+        // Remove emoji key if no users
+        if (reactions[emoji].length === 0) {
+            delete reactions[emoji];
+        }
+
+        // Update the message with new reactions
+        const updateUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}/${messageId}`;
+        const payload = {
+            fields: {
+                Reactions: JSON.stringify(reactions)
+            }
+        };
+
+        const updateResponse = await fetch(updateUrl, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!updateResponse.ok) {
+            log('API', `Failed to update reactions`);
+            return null;
+        }
+
+        log('API', `Reaction ${emoji} ${add ? 'added to' : 'removed from'} message ${messageId}`);
+        return reactions;
+    } catch (error) {
+        log('API', `Error toggling reaction: ${error.message}`);
+        return null;
+    }
+}
+
+/**
+ * Posts a reply to an existing message (threaded reply)
+ * @param {string} parentMessageId - The ID of the message being replied to
+ * @param {string} sessionId - The session ID (for session chat)
+ * @param {string} itemId - The item ID (for item chat)
+ * @param {string} senderId - The sender's user ID
+ * @param {string} senderName - The sender's display name
+ * @param {string} content - The reply content
+ * @returns {Promise<object|null>} The created record or null on failure
+ */
+export async function postReplyMessage(parentMessageId, sessionId, itemId, senderId, senderName, content) {
+    if (!parentMessageId || !parentMessageId.startsWith('rec')) {
+        log('API', `postReplyMessage: Invalid parentMessageId: "${parentMessageId}"`);
+        return null;
+    }
+    if (!content || !content.trim()) {
+        log('API', 'postReplyMessage: Attempted to send empty reply.');
+        return null;
+    }
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}`;
+
+    const fields = {
+        SenderID: senderId,
+        SenderName: senderName,
+        Content: content.trim(),
+        ParentMessageID: parentMessageId
+    };
+
+    // Link to session or item
+    if (sessionId && sessionId.startsWith('rec')) {
+        fields.SessionID = [sessionId];
+    }
+    if (itemId && itemId.startsWith('rec')) {
+        fields['Item Link'] = [itemId];
+    }
+
+    const payload = { records: [{ fields }] };
+
+    try {
+        log('API', `Posting reply to message ${parentMessageId}`);
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            log('API', `Failed to post reply: ${errorData?.error?.message || response.statusText}`);
+            return null;
+        }
+
+        const result = await response.json();
+        log('API', `Reply posted successfully with ID: ${result.records[0].id}`);
+        return result.records[0];
+    } catch (error) {
+        log('API', `Error posting reply: ${error.message}`);
+        return null;
+    }
+}
+
+/**
+ * Fetches replies to a specific message
+ * @param {string} parentMessageId - The ID of the parent message
+ * @returns {Promise<Array>} Array of reply records
+ */
+export async function fetchMessageReplies(parentMessageId) {
+    if (!parentMessageId || !parentMessageId.startsWith('rec')) {
+        log('API', `fetchMessageReplies: Invalid parentMessageId: "${parentMessageId}"`);
+        return [];
+    }
+
+    const formula = `{ParentMessageID} = '${parentMessageId}'`;
+    const encodedFormula = encodeURIComponent(formula);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            log('API', `Failed to fetch replies for message ${parentMessageId}`);
+            return [];
+        }
+
+        const data = await response.json();
+        log('API', `Fetched ${data.records.length} replies for message ${parentMessageId}`);
+        return data.records;
+    } catch (error) {
+        log('API', `Error fetching replies: ${error.message}`);
+        return [];
+    }
+}
+
+// --- END ENHANCED CHAT FEATURES ---
+
 
 export async function updateUserFlagStatus(userId, isFlagged) {
     log('API', `[MODERATION] Simulating API call to update flag for user: ${userId} to ${isFlagged}`);
