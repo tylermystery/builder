@@ -883,14 +883,84 @@ async function initialize() {
         }
 
         // --- Phase 1b: Invite flow handling ---
-        const isInvite = urlParams.get('invite') === 'true';
+        // Support both new tokenized invites and legacy plaintext invites
+        const inviteToken = urlParams.get('invite_token');
+        const isLegacyInvite = urlParams.get('invite') === 'true';
         const inviteEmail = urlParams.get('email');
         const inviteRole = urlParams.get('role');
 
-        if (isInvite) {
-            log('Main', `Invite link detected. Email: ${inviteEmail}, Role: ${inviteRole}`);
+        if (inviteToken) {
+            // New tokenized invite flow — validate token server-side
+            log('Main', `Tokenized invite link detected. Token: ${inviteToken.substring(0, 8)}...`);
 
-            // Store invite info for post-login association
+            (async () => {
+                try {
+                    const resp = await fetch('/api/validate-invite-token', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token: inviteToken })
+                    });
+                    const result = await resp.json();
+
+                    if (!resp.ok) {
+                        log('Main', `Invite token validation failed: ${result.error}`);
+                        ui.showToast(result.error || 'Invalid invite link.', 5000, 'error');
+                        // Clean token from URL
+                        const cleanUrl = new URL(window.location.href);
+                        cleanUrl.searchParams.delete('invite_token');
+                        history.replaceState({}, '', cleanUrl.toString());
+                        return;
+                    }
+
+                    // Token is valid — store invite info for post-login processing
+                    sessionStorage.setItem('pendingInvite', JSON.stringify({
+                        sessionId: result.sessionId,
+                        email: result.email || '',
+                        role: result.role || 'editor'
+                    }));
+
+                    // If we're not on the right session, redirect
+                    if (result.sessionId && result.sessionId !== sessionId) {
+                        window.location.href = `/?session=${result.sessionId}`;
+                        return;
+                    }
+
+                    if (!state.session.user.isAuthenticated) {
+                        // Pre-fill sign-in email
+                        if (result.email) {
+                            const signinEmailInput = document.getElementById('signin-email');
+                            if (signinEmailInput) signinEmailInput.value = result.email;
+                            localStorage.setItem('lastSignInEmail', result.email);
+                        }
+                        const planName = result.sessionName || state.session.name || 'a plan';
+                        const inviter = result.inviterName || 'Someone';
+                        log('Main', `Tokenized invitee landing: prompting auth for plan "${planName}"`);
+                        setTimeout(() => {
+                            showUserModal();
+                            const signinMessage = document.getElementById('signin-message');
+                            if (signinMessage) {
+                                signinMessage.style.color = '#667eea';
+                                signinMessage.textContent = `${inviter} invited you to collaborate on "${planName}"! Sign in to join.`;
+                            }
+                        }, 800);
+                    } else {
+                        log('Main', 'Tokenized invitee already authenticated, processing invite...');
+                        handlePendingInvite();
+                    }
+                } catch (err) {
+                    console.error('[Main] Error validating invite token:', err);
+                    ui.showToast('Could not validate invite link. Please try again.', 5000, 'error');
+                }
+                // Clean token from URL
+                const cleanUrl = new URL(window.location.href);
+                cleanUrl.searchParams.delete('invite_token');
+                history.replaceState({}, '', cleanUrl.toString());
+            })();
+
+        } else if (isLegacyInvite) {
+            // Legacy invite flow (backwards compatibility for any in-flight emails)
+            log('Main', `Legacy invite link detected. Email: ${inviteEmail}, Role: ${inviteRole}`);
+
             if (inviteEmail || inviteRole) {
                 sessionStorage.setItem('pendingInvite', JSON.stringify({
                     sessionId: sessionId,
@@ -900,20 +970,13 @@ async function initialize() {
             }
 
             if (!state.session.user.isAuthenticated) {
-                // Pre-fill sign-in email from invite URL
                 if (inviteEmail) {
                     const signinEmailInput = document.getElementById('signin-email');
-                    if (signinEmailInput) {
-                        signinEmailInput.value = inviteEmail;
-                    }
+                    if (signinEmailInput) signinEmailInput.value = inviteEmail;
                     localStorage.setItem('lastSignInEmail', inviteEmail);
                 }
-
-                // Show a brief welcome banner before prompting sign-in
                 const planName = state.session.name || state.eventDetails?.combined?.get?.('Event Name') || 'a plan';
-                log('Main', `Invitee landing: prompting auth for plan "${planName}"`);
-
-                // Small delay to let the UI settle, then prompt sign-in
+                log('Main', `Legacy invitee landing: prompting auth for plan "${planName}"`);
                 setTimeout(() => {
                     showUserModal();
                     const signinMessage = document.getElementById('signin-message');
@@ -923,12 +986,10 @@ async function initialize() {
                     }
                 }, 800);
             } else {
-                // User is already authenticated - process the invite immediately
-                log('Main', 'Invitee already authenticated, processing invite...');
+                log('Main', 'Legacy invitee already authenticated, processing invite...');
                 handlePendingInvite();
             }
 
-            // Clean invite params from URL to avoid re-triggering
             const cleanUrl = new URL(window.location.href);
             cleanUrl.searchParams.delete('invite');
             cleanUrl.searchParams.delete('email');

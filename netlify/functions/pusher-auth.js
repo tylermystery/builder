@@ -25,6 +25,7 @@ exports.handler = async (event) => {
         user_id: params.get('user_id'),
         user_info: {
             name: params.get('user_name'),
+            role: params.get('user_role') || 'viewer',
         },
     };
 
