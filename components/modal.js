@@ -1628,12 +1628,75 @@ function initModalReactions(recordId) {
 
     section.style.display = 'block';
 
-    // Clear old content and replace with consolidated RSB
+    // Clear old content and replace with consolidated RSB inside an accordion
     section.innerHTML = '';
     section.className = 'modal-reactions-section modal-rsb-host';
 
+    // Build summary text for collapsed state
+    const allReactions = getAggregateReactions(recordId);
+    let reactionCount = 0;
+    if (allReactions instanceof Map) {
+        allReactions.forEach((emojiData) => {
+            reactionCount += (emojiData instanceof Set) ? emojiData.size : 1;
+        });
+    }
+    const commentCount = modalCommentsCache.get(recordId)?.messages?.length || 0;
+
+    let summaryText = '';
+    if (reactionCount > 0 || commentCount > 0) {
+        const parts = [];
+        if (reactionCount > 0) {
+            // Get top emojis for preview
+            const emojiCounts = {};
+            allReactions.forEach((emojiData) => {
+                const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+                for (const emoji of emojis) {
+                    emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
+                }
+            });
+            const topEmojis = Object.entries(emojiCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3)
+                .map(([e]) => e)
+                .join('');
+            parts.push(`${topEmojis} ${reactionCount} reaction${reactionCount !== 1 ? 's' : ''}`);
+        }
+        if (commentCount > 0) {
+            parts.push(`💬 ${commentCount} comment${commentCount !== 1 ? 's' : ''}`);
+        }
+        summaryText = parts.join(' · ');
+    } else {
+        summaryText = 'React & Comment';
+    }
+
+    // Accordion: expanded in presentation, collapsed in catalog
+    const startExpanded = isPresentationActive;
+
+    // Accordion header
+    const header = document.createElement('button');
+    header.className = 'modal-rsb-accordion-header' + (startExpanded ? ' expanded' : '');
+    header.type = 'button';
+    header.innerHTML = `
+        <span class="modal-rsb-accordion-chevron">${startExpanded ? '▾' : '▸'}</span>
+        <span class="modal-rsb-accordion-summary">${summaryText}</span>
+    `;
+
+    // Accordion body
+    const body = document.createElement('div');
+    body.className = 'modal-rsb-accordion-body' + (startExpanded ? ' expanded' : '');
+
     const panel = buildModalRSBPanelDOM(recordId);
-    section.appendChild(panel);
+    body.appendChild(panel);
+
+    header.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isExpanded = body.classList.toggle('expanded');
+        header.classList.toggle('expanded', isExpanded);
+        header.querySelector('.modal-rsb-accordion-chevron').textContent = isExpanded ? '▾' : '▸';
+    });
+
+    section.appendChild(header);
+    section.appendChild(body);
 }
 
 /**

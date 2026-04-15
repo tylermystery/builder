@@ -1016,6 +1016,10 @@ function updatePresenceUI(members) {
     if (whosHereCount) whosHereCount.innerText = count;
     // Update unified chat panel online count
     updateUCPOnlineCount(count);
+
+    // Update presence avatar bar (near chat toggle)
+    updatePresenceAvatarBar(members);
+
     if (whosHereList) {
         whosHereList.innerHTML = '';
         members.each((member) => {
@@ -1025,7 +1029,7 @@ function updatePresenceUI(members) {
                 state.session.userProfiles.set(profileId, profileName);
                 triggerSave();
             }
- 
+
             const userElement = document.createElement('div');
             const displayName = member.id === currentUser.id ? currentUser.name : member.info.name;
             userElement.innerText = `🟢 ${displayName} ${member.id === currentUser.id ? '(You)' : ''}`;
@@ -1033,6 +1037,73 @@ function updatePresenceUI(members) {
         });
     }
 }
+
+/**
+ * Role-based color mapping for presence avatars
+ */
+const ROLE_COLORS = {
+    owner: '#764ba2',   // Purple
+    editor: '#667eea',  // Blue
+    viewer: '#6c757d'   // Gray
+};
+
+/**
+ * Get initials from a display name (up to 2 characters)
+ */
+function getInitials(name) {
+    if (!name) return '?';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+}
+
+/**
+ * Update the presence avatar bar in the catalog view (near chat toggle)
+ */
+function updatePresenceAvatarBar(members) {
+    const container = document.getElementById('presence-avatar-bar');
+    if (!container) return;
+
+    container.innerHTML = '';
+    const MAX_AVATARS = 5;
+    const memberList = [];
+    members.each((member) => memberList.push(member));
+
+    const visibleMembers = memberList.slice(0, MAX_AVATARS);
+    const overflowCount = memberList.length - MAX_AVATARS;
+
+    visibleMembers.forEach((member) => {
+        const displayName = member.id === currentUser.id ? currentUser.name : member.info.name;
+        const role = member.info?.role || 'viewer';
+        const color = ROLE_COLORS[role] || ROLE_COLORS.viewer;
+        const initials = getInitials(displayName);
+        const isYou = member.id === currentUser.id;
+
+        const avatar = document.createElement('div');
+        avatar.className = 'presence-avatar';
+        avatar.style.backgroundColor = color;
+        avatar.textContent = initials;
+        avatar.title = `${displayName}${isYou ? ' (You)' : ''} — ${role}`;
+        avatar.setAttribute('data-member-id', member.id);
+        container.appendChild(avatar);
+    });
+
+    if (overflowCount > 0) {
+        const overflow = document.createElement('div');
+        overflow.className = 'presence-avatar presence-avatar-overflow';
+        overflow.textContent = `+${overflowCount}`;
+        overflow.title = `${overflowCount} more online`;
+        container.appendChild(overflow);
+    }
+
+    // Show/hide the bar based on member count
+    container.style.display = memberList.length > 0 ? 'flex' : 'none';
+}
+
+// Export for use in other modules
+export { updatePresenceAvatarBar, ROLE_COLORS, getInitials };
 
 /**
  * Adds a plan event entry to the chat UI (system events like plan creation, AI interpretation, etc.)
@@ -1660,6 +1731,8 @@ function bindPresenceEvents() {
             name: member?.info?.name || 'Someone',
             userId: member?.id
         });
+        // Notify activity log of new collaborator joining
+        onNewItemReceived('event', { timestamp: new Date().toISOString(), sessionHistoryItems });
     });
     sessionChatChannel.bind('pusher:member_removed', (member) => {
         updatePresenceUI(sessionChatChannel.members);
@@ -1895,8 +1968,8 @@ export async function initializeSessionChat() {
         auth: {
             params: {
                 user_id: currentUser.id,
-                user_name: currentUser.name
-
+                user_name: currentUser.name,
+                user_role: state.session.permissions?.currentRole || 'viewer'
            }
         }
     });

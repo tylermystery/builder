@@ -9,7 +9,7 @@ import { state, setState, getRecordById } from '../../state.js';
 import * as api from '../../api.js';
 import { getModalZIndex } from '../../config.js';
 import { log } from '../../utils/debug.js';
-import { getCurrentUser } from '../../chat.js';
+import { getCurrentUser, ROLE_COLORS, getInitials } from '../../chat.js';
 import { triggerSave } from '../../events.js';
 import { showToast } from '../../ui.js';
 import { applyCloudinaryTransform } from '../../utils/imageOptimizer.js';
@@ -754,6 +754,9 @@ function updatePresentationPresenceUI(members) {
         });
     }
 
+    // Update presentation header presence avatar bar
+    updatePresentationPresenceAvatarBar(members);
+
     // Update collaborator name buttons with online presence indicators
     const collabBtns = document.querySelectorAll('.collaborator-name-btn[data-collaborator-id]');
     collabBtns.forEach(btn => {
@@ -775,6 +778,48 @@ function updatePresentationPresenceUI(members) {
             teamCountNumber.textContent = totalTeam;
         }
     }
+}
+
+/**
+ * Update the presence avatar bar in the presentation header
+ */
+function updatePresentationPresenceAvatarBar(members) {
+    const container = document.getElementById('presentation-presence-avatar-bar');
+    if (!container) return;
+
+    container.innerHTML = '';
+    const MAX_AVATARS = 5;
+    const memberList = [];
+    const currentUser = getCurrentUser();
+    members.each((member) => memberList.push(member));
+
+    const visibleMembers = memberList.slice(0, MAX_AVATARS);
+    const overflowCount = memberList.length - MAX_AVATARS;
+
+    visibleMembers.forEach((member) => {
+        const displayName = member.id === currentUser.id ? currentUser.name : member.info.name;
+        const role = member.info?.role || 'viewer';
+        const color = ROLE_COLORS[role] || ROLE_COLORS.viewer;
+        const initials = getInitials(displayName);
+        const isYou = member.id === currentUser.id;
+
+        const avatar = document.createElement('div');
+        avatar.className = 'presence-avatar';
+        avatar.style.backgroundColor = color;
+        avatar.textContent = initials;
+        avatar.title = `${displayName}${isYou ? ' (You)' : ''} — ${role}`;
+        container.appendChild(avatar);
+    });
+
+    if (overflowCount > 0) {
+        const overflow = document.createElement('div');
+        overflow.className = 'presence-avatar presence-avatar-overflow';
+        overflow.textContent = `+${overflowCount}`;
+        overflow.title = `${overflowCount} more online`;
+        container.appendChild(overflow);
+    }
+
+    container.style.display = memberList.length > 0 ? 'flex' : 'none';
 }
 
 // ---------------------------------------------------------------------------
@@ -896,7 +941,8 @@ export async function initializePresentationChat() {
         auth: {
             params: {
                 user_id: currentUser.id,
-                user_name: currentUser.name
+                user_name: currentUser.name,
+                user_role: state.session.permissions?.currentRole || 'viewer'
             }
         }
     });

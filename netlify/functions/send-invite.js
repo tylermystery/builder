@@ -1,8 +1,9 @@
 // FILE: netlify/functions/send-invite.js
-// Sends email invitations to collaborate on a plan
+// Sends email invitations to collaborate on a plan using tokenized invite links
 
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
+const crypto = require('crypto');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL: NETLIFY_URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -34,9 +35,28 @@ exports.handler = async (event) => {
         // Cap role to editor max (prevent URL tampering to owner)
         const assignedRole = (role === 'viewer') ? 'Viewer' : 'Editor';
 
+        // Generate a secure invite token and store in Netlify Blobs
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+        const { getStore } = require('@netlify/blobs');
+        const store = getStore({ name: 'invite-tokens', consistency: 'strong' });
+        await store.setJSON(token, {
+            token,
+            sessionId,
+            email,
+            role: assignedRole.toLowerCase(),
+            invitedBy: invitedBy || '',
+            inviterName: inviterName || '',
+            sessionName: sessionName || '',
+            createdAt: new Date().toISOString(),
+            expiresAt,
+            consumed: false
+        });
+
         const baseUrl = SITE_URL || NETLIFY_URL;
-        // Include email and role in invite link so main app can pre-fill auth and set permissions
-        const inviteLink = `${baseUrl}/?session=${sessionId}&invite=true&email=${encodeURIComponent(email)}&role=${assignedRole.toLowerCase()}`;
+        // Use tokenized invite link — no sensitive data in URL
+        const inviteLink = `${baseUrl}/?invite_token=${token}`;
         const planName = sessionName || 'an event plan';
         const senderName = inviterName || 'Someone';
 

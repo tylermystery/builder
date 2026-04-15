@@ -2289,6 +2289,76 @@
     border: 2px solid white;
 }
 
+/* ─── Presence Avatar Bar ─────────────────────────────────────────── */
+.presence-avatar-bar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-direction: row-reverse;
+}
+
+#chat-widget-container .presence-avatar-bar {
+    position: absolute;
+    bottom: 50px;
+    right: 0;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 0;
+}
+
+.presence-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+    cursor: default;
+    position: relative;
+    flex-shrink: 0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    transition: transform 0.15s ease;
+}
+
+.presence-avatar:hover {
+    transform: scale(1.15);
+    z-index: 2;
+}
+
+/* Stack avatars with negative margin in horizontal layout */
+#presentation-presence-avatar-bar .presence-avatar {
+    margin-left: -8px;
+}
+#presentation-presence-avatar-bar .presence-avatar:first-child {
+    margin-left: 0;
+}
+
+.presence-avatar-overflow {
+    background-color: #adb5bd !important;
+    font-size: 11px;
+}
+
+/* Presentation header avatar bar */
+#presentation-presence-avatar-bar {
+    margin-right: 8px;
+}
+
+/* Mobile responsive */
+@media (max-width: 600px) {
+    .presence-avatar {
+        width: 26px;
+        height: 26px;
+        font-size: 10px;
+    }
+    #chat-widget-container .presence-avatar-bar {
+        bottom: 46px;
+    }
+}
+
 #chat-window {
     width: 350px;
     height: 500px;
@@ -6169,6 +6239,43 @@ hr.total-divider {
 
 .modal-rsb-host .rsb-panel--modal {
     max-height: 55vh;
+}
+
+/* Accordion wrapper for modal RSB */
+.modal-rsb-accordion-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(8px);
+    cursor: pointer;
+    font-size: 0.82em;
+    color: #475569;
+    transition: background 0.15s ease;
+}
+.modal-rsb-accordion-header:hover {
+    background: rgba(255, 255, 255, 0.95);
+}
+.modal-rsb-accordion-chevron {
+    font-size: 0.9em;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.modal-rsb-accordion-summary {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.modal-rsb-accordion-body {
+    display: none;
+    margin-top: 4px;
+}
+.modal-rsb-accordion-body.expanded {
+    display: block;
 }
 
 .modal-reactions-score-badge {
