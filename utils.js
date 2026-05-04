@@ -538,8 +538,18 @@ export function updateUrl(paramsToUpdate, options = {}) {
             }
         }
 
-        const slug = generateSlug(itemName, openItemValue, tags);
-        const prettyPath = `/item/${slug}`;
+        // Preserve the existing shared slug when the current URL already points at
+        // this same record. Otherwise opening a share link like
+        // /item/short-slug-recXYZ would rewrite the path to /item/longer-canonical-slug-recXYZ
+        // on modal open, surprising the user and breaking the URL they just arrived at.
+        let prettyPath;
+        if (window.location.pathname.startsWith('/item/') &&
+            extractRecordIdFromPath(window.location.pathname) === openItemValue) {
+            prettyPath = window.location.pathname;
+        } else {
+            const slug = generateSlug(itemName, openItemValue, tags);
+            prettyPath = `/item/${slug}`;
+        }
 
         // Build the query string for any other parameters (excluding openItem)
         const otherParams = new URLSearchParams(searchParams);
