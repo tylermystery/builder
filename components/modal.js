@@ -8535,6 +8535,11 @@ export async function showGroupDetailModal(group, allRecords) {
 }
 
 export function hideDetailModal() {
+    console.log('[MODAL DEBUG] hideDetailModal called.', {
+        wasActive: !!modalOverlay && modalOverlay.classList.contains('active'),
+        recordId: modalOverlay?.dataset?.recordId || null,
+        url: window.location.pathname + window.location.search
+    });
     // Reset the rendering guard when modal is closed
     isModalRendering = false;
 
@@ -8585,6 +8590,16 @@ export function hideDetailModal() {
     if (modalOverlay) {
         modalOverlay.classList.remove('active');
         setTimeout(() => {
+            // Skip cleanup if the modal was re-opened during the 300ms transition
+            // window. This happens on direct /item/ URL loads (and refreshes while a
+            // modal is open) where syncUiWithUrl calls hideDetailModal first to clear
+            // any stale state, then showDetailModal a moment later — without this
+            // guard the deferred cleanup wiped the freshly opened modal and the
+            // visitor saw the modal flash then disappear back to the catalog.
+            if (modalOverlay.classList.contains('active')) {
+                console.log('[MODAL DEBUG] hideDetailModal deferred cleanup skipped — modal was reopened during the 300ms transition.');
+                return;
+            }
             // Clear inline styles that were set for the direct URL access fix
             modalOverlay.style.cssText = '';
             modalOverlay.style.display = 'none';

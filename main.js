@@ -1024,7 +1024,14 @@ async function initialize() {
         log('Main', `Active Shop set to: ${activeShop.fields.Name} (ID: ${activeShop.id})`);
 
         if (!state.session.id) {
-            if (api.isAirtableOnline()) {
+            // Skip auto-session creation when landing on a direct /item/ share URL.
+            // Why: the visitor is just viewing a shared item; auto-creating a session
+            // injects ?session=... into the URL, which pollutes share links and can
+            // make recipients inherit the original sharer's plan id.
+            const isDirectItemUrl = window.location.pathname.startsWith('/item/');
+            if (isDirectItemUrl) {
+                log('Main', 'Direct item URL detected — skipping auto-session creation to keep share URL clean.');
+            } else if (api.isAirtableOnline()) {
                 log('Main', 'No session ID found, creating new session for guest chat...');
                 await api.saveSessionToAirtable();
             } else {
