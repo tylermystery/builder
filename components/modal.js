@@ -388,7 +388,16 @@ export function getShopSettings() {
 const quickPayModalOverlay = document.getElementById('quick-pay-modal-overlay');
 
 /**
- * Payment app configuration with icons and URL generators
+ * Payment app configuration with icons and URL generators.
+ *
+ * Recognized keys in `App_Pay_JSON`: `zelle`, `venmo`, `cashapp`, `paypal`, `check`.
+ * Any other key is rendered as a generic copy-to-clipboard "manual entry" via
+ * `getPaymentAppConfig` below, so the JSON is open-ended.
+ *
+ * Value shape per key:
+ *   - string — the handle / username / instructions text (most common)
+ *   - object — `{ instructions: string, url?: string }` for entries that need
+ *     both copyable text and a clickable link
  */
 const PAYMENT_APPS = {
     zelle: {
@@ -396,6 +405,20 @@ const PAYMENT_APPS = {
         icon: 'Z',
         cssClass: 'zelle',
         // Zelle doesn't have a universal deep link, show email/phone for manual entry
+        getUrl: (handle, amount, itemName) => null,
+        getDisplayHandle: (handle) => handle,
+        getCopyText: (handle, amount, itemName) => {
+            if (amount && amount > 0) {
+                return `${handle} - Amount: $${amount.toFixed(2)}${itemName ? ` for ${itemName}` : ''}`;
+            }
+            return handle;
+        }
+    },
+    check: {
+        name: 'Check',
+        icon: '✓',
+        cssClass: 'check',
+        // Checks are paid offline; no deep link, copy the instructions for the customer.
         getUrl: (handle, amount, itemName) => null,
         getDisplayHandle: (handle) => handle,
         getCopyText: (handle, amount, itemName) => {
@@ -464,6 +487,71 @@ const PAYMENT_APPS = {
     }
 };
 
+/**
+ * Resolves a payment-method config for a given `App_Pay_JSON` key.
+ * Returns the first-class entry from `PAYMENT_APPS` when one exists, otherwise
+ * synthesizes a generic copy-to-clipboard config so unknown keys still render
+ * as a usable manual-entry button instead of being silently skipped.
+ *
+ * @param {string} key - Raw key from `App_Pay_JSON` (case-insensitive)
+ * @returns {object} Payment app config with name/icon/cssClass and getters
+ */
+function getPaymentAppConfig(key) {
+    const lowerKey = String(key || '').toLowerCase();
+    if (PAYMENT_APPS[lowerKey]) return PAYMENT_APPS[lowerKey];
+
+    const rawKey = String(key || '');
+    const displayName = rawKey.charAt(0).toUpperCase() + rawKey.slice(1).toLowerCase();
+    const iconChar = (displayName.charAt(0) || '?').toUpperCase();
+
+    // Allow object values shaped like { instructions, url } for the manual-entry fallback.
+    const extractText = (handle) => {
+        if (handle && typeof handle === 'object') {
+            return handle.instructions || handle.url || '';
+        }
+        return String(handle || '');
+    };
+    const extractUrl = (handle) => {
+        if (handle && typeof handle === 'object' && handle.url) return handle.url;
+        return null;
+    };
+
+    return {
+        name: displayName,
+        icon: iconChar,
+        cssClass: 'generic',
+        getUrl: (handle) => extractUrl(handle),
+        getDisplayHandle: (handle) => extractText(handle),
+        getCopyText: (handle, amount, itemName) => {
+            const base = extractText(handle);
+            if (amount && amount > 0) {
+                return `${base}${base ? ' - ' : ''}Amount: $${amount.toFixed(2)}${itemName ? ` for ${itemName}` : ''}`;
+            }
+            return base;
+        }
+    };
+}
+
+/**
+ * Serializes a handle value (string or object) for storage in a dataset attribute.
+ * Object values come from the generic-fallback `{ instructions, url }` shape.
+ */
+function serializeHandle(handle) {
+    return handle && typeof handle === 'object' ? JSON.stringify(handle) : String(handle ?? '');
+}
+
+/**
+ * Inverse of serializeHandle — restores objects when the stored value is JSON.
+ */
+function deserializeHandle(serialized) {
+    if (typeof serialized !== 'string') return serialized;
+    const trimmed = serialized.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try { return JSON.parse(trimmed); } catch { /* fall through */ }
+    }
+    return serialized;
+}
+
 // Tip percentages for quick pay
 const TIP_OPTIONS = [
     { label: 'No Tip', percent: 0 },
@@ -518,11 +606,11 @@ export function showQuickPayModal(paymentOptions, amount = 0, itemName = '', qua
         const paymentBtns = optionsContainer.querySelectorAll('.quick-pay-option-btn');
         paymentBtns.forEach(btn => {
             const appKey = btn.dataset.appKey;
-            const handle = btn.dataset.handle;
-            if (!appKey || !handle) return;
+            const handleRaw = btn.dataset.handle;
+            if (!appKey || handleRaw === undefined) return;
 
-            const appConfig = PAYMENT_APPS[appKey];
-            if (!appConfig) return;
+            const appConfig = getPaymentAppConfig(appKey);
+            const handle = deserializeHandle(handleRaw);
 
             const url = appConfig.getUrl(handle, totalWithTip, itemName);
             if (url) {
@@ -608,8 +696,13 @@ export function showQuickPayModal(paymentOptions, amount = 0, itemName = '', qua
     } else {
         // Generate buttons for each payment option
         for (const [key, handle] of Object.entries(paymentOptions)) {
-            const appConfig = PAYMENT_APPS[key.toLowerCase()];
-            if (!appConfig || !handle) continue;
+            // Skip empty values, but allow any key — unknown keys get a generic
+            // manual-entry config from getPaymentAppConfig.
+            const isEmpty = handle === null || handle === undefined || handle === ''
+                || (typeof handle === 'object' && !handle.instructions && !handle.url);
+            if (isEmpty) continue;
+
+            const appConfig = getPaymentAppConfig(key);
 
             const url = appConfig.getUrl(handle, amount, itemName);
             const displayHandle = appConfig.getDisplayHandle(handle);
@@ -618,7 +711,7 @@ export function showQuickPayModal(paymentOptions, amount = 0, itemName = '', qua
             optionElement.className = 'quick-pay-option-btn';
             // Store data attributes for tip updates
             optionElement.dataset.appKey = key.toLowerCase();
-            optionElement.dataset.handle = handle;
+            optionElement.dataset.handle = serializeHandle(handle);
             optionElement.dataset.amount = amount.toFixed(2);
 
             if (url) {
@@ -765,8 +858,11 @@ function renderCheckoutP2POptions(paymentOptions, amount, itemName) {
     }
 
     for (const [key, handle] of Object.entries(paymentOptions)) {
-        const appConfig = PAYMENT_APPS[key.toLowerCase()];
-        if (!appConfig || !handle) continue;
+        const isEmpty = handle === null || handle === undefined || handle === ''
+            || (typeof handle === 'object' && !handle.instructions && !handle.url);
+        if (isEmpty) continue;
+
+        const appConfig = getPaymentAppConfig(key);
 
         const url = appConfig.getUrl(handle, amount, itemName);
         const displayHandle = appConfig.getDisplayHandle(handle);
@@ -774,7 +870,7 @@ function renderCheckoutP2POptions(paymentOptions, amount, itemName) {
         const optionElement = document.createElement(url ? 'a' : 'div');
         optionElement.className = 'quick-pay-option-btn';
         optionElement.dataset.appKey = key.toLowerCase();
-        optionElement.dataset.handle = handle;
+        optionElement.dataset.handle = serializeHandle(handle);
         optionElement.dataset.amount = amount.toFixed(2);
 
         if (url) {
@@ -823,11 +919,11 @@ function updateP2PPaymentLinks(amount) {
     const paymentBtns = p2pContainer.querySelectorAll('.quick-pay-option-btn');
     paymentBtns.forEach(btn => {
         const appKey = btn.dataset.appKey;
-        const handle = btn.dataset.handle;
-        if (!appKey || !handle) return;
+        const handleRaw = btn.dataset.handle;
+        if (!appKey || handleRaw === undefined) return;
 
-        const appConfig = PAYMENT_APPS[appKey];
-        if (!appConfig) return;
+        const appConfig = getPaymentAppConfig(appKey);
+        const handle = deserializeHandle(handleRaw);
 
         const itemName = currentCheckoutScope?.itemName || 'Plan Checkout';
         const url = appConfig.getUrl(handle, amount, itemName);
