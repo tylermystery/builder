@@ -7940,6 +7940,14 @@ hr.total-divider {
     background: linear-gradient(135deg, #003087, #009cde);
 }
 
+.quick-pay-icon.check {
+    background: linear-gradient(135deg, #2c7a7b, #38b2ac);
+}
+
+.quick-pay-icon.generic {
+    background: linear-gradient(135deg, #4a5568, #718096);
+}
+
 .quick-pay-option-info {
     display: flex;
     flex-direction: column;
@@ -18175,6 +18183,14 @@ body.presentation-active .rsb-layout-toggle-fab {
 
 #checkout-p2p-options .quick-pay-icon.paypal {
     background: linear-gradient(135deg, #003087, #009cde);
+}
+
+#checkout-p2p-options .quick-pay-icon.check {
+    background: linear-gradient(135deg, #2c7a7b, #38b2ac);
+}
+
+#checkout-p2p-options .quick-pay-icon.generic {
+    background: linear-gradient(135deg, #4a5568, #718096);
 }
 
 #checkout-p2p-options .quick-pay-option-info {
