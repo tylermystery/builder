@@ -1500,7 +1500,9 @@ async function updateCheckoutDisplay() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     amount: Math.round(currentBaseAmount * 100),
-                    paymentMethodType: currentPaymentType // Use the stored payment type
+                    paymentMethodType: currentPaymentType,
+                    sessionId: state.session?.id || null,
+                    customerEmail: document.getElementById('customer-email')?.value || null
                 }),
             });
             if (!intentResponse.ok) throw new Error('Could not update payment intent.');
@@ -1598,7 +1600,9 @@ async function handlePaymentTypeChange(event) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 amount: Math.round(currentBaseAmount * 100),
-                paymentMethodType: currentPaymentType
+                paymentMethodType: currentPaymentType,
+                sessionId: state.session?.id || null,
+                customerEmail: document.getElementById('customer-email')?.value || null
             }),
         });
         if (!intentResponse.ok) {

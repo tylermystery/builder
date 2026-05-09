@@ -2,7 +2,51 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Store Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f6fa; color: #333; padding: 20px; }
+        #dashboard-wrapper { max-width: 900px; margin: 0 auto; }
+        header { margin-bottom: 24px; }
+        header h1 { font-size: 24px; color: #333; }
+        h2 { font-size: 18px; margin: 20px 0 12px; color: #444; }
+        .dashboard-section { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+        .dashboard-section h3 { font-size: 16px; margin-bottom: 12px; color: #333; }
+
+        /* Direct payment form */
+        .direct-payment-form { display: flex; flex-direction: column; gap: 12px; }
+        .direct-payment-form label { font-size: 14px; font-weight: 600; color: #555; }
+        .direct-payment-form input,
+        .direct-payment-form select,
+        .direct-payment-form textarea { padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; font-family: inherit; }
+        .direct-payment-form textarea { resize: vertical; min-height: 60px; }
+        .form-row { display: flex; gap: 12px; align-items: flex-end; }
+        .form-row > div { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+        .checkbox-row { display: flex; align-items: center; gap: 8px; }
+        .checkbox-row input[type="checkbox"] { width: 16px; height: 16px; }
+        .checkbox-row label { font-weight: normal; }
+
+        .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-danger { background-color: #dc3545; color: white; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; }
+        .status-msg { font-size: 13px; color: #666; margin-top: 8px; }
+        .status-msg.success { color: #28a745; }
+        .status-msg.error { color: #dc3545; }
+
+        /* Sessions list */
+        .session-option { padding: 8px; border-bottom: 1px solid #f0f0f0; }
+        .session-option:last-child { border-bottom: none; }
+
+        /* Confirmation overlay */
+        .confirm-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
+        .confirm-overlay.active { display: flex; }
+        .confirm-box { background: #fff; border-radius: 10px; padding: 24px; max-width: 400px; width: 90%; text-align: center; }
+        .confirm-box p { margin-bottom: 16px; font-size: 15px; line-height: 1.5; }
+        .confirm-box .btn-row { display: flex; gap: 12px; justify-content: center; }
+        .confirm-box .btn-cancel { background: #e0e0e0; color: #333; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    </style>
 </head>
 <body>
     <div id="dashboard-wrapper">
@@ -10,20 +54,71 @@
             <h1 id="store-name-header">Loading Store...</h1>
         </header>
         <main>
-            <h2>Store Settings</h2>
-            <div id="store-settings-container">
-            <div id="admin-tools" style="padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9;">
-                <h4>Admin Tools</h4>
-                <button id="admin-bulk-profile-btn" style="background-color: #dc3545; color: white; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 1em;">
+            <!-- Direct Payment Section -->
+            <div class="dashboard-section" id="direct-payment-section" style="display: none;">
+                <h3>Record a Direct Payment</h3>
+                <div class="direct-payment-form">
+                    <div>
+                        <label for="dp-session-select">Session / Booking</label>
+                        <select id="dp-session-select">
+                            <option value="">Select a session...</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div>
+                            <label for="dp-amount">Amount ($)</label>
+                            <input type="number" id="dp-amount" min="0.01" step="0.01" placeholder="0.00">
+                        </div>
+                        <div>
+                            <label for="dp-method">Payment Method</label>
+                            <select id="dp-method">
+                                <option value="direct-cash">Cash</option>
+                                <option value="direct-check">Check</option>
+                                <option value="direct-etransfer">E-Transfer</option>
+                                <option value="direct-other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="dp-note">Note (optional)</label>
+                        <textarea id="dp-note" placeholder="e.g., Cash payment at pickup"></textarea>
+                    </div>
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="dp-send-receipt" checked>
+                        <label for="dp-send-receipt">Send receipt email to customer</label>
+                    </div>
+                    <div>
+                        <button class="btn-primary" id="dp-submit-btn">Record Payment</button>
+                        <div class="status-msg" id="dp-status"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Tools -->
+            <div class="dashboard-section">
+                <h3>Admin Tools</h3>
+                <button id="admin-bulk-profile-btn" class="btn-danger">
                     Run AI Profiler on All Items
                 </button>
-                <p id="admin-status-message" style="font-size: 0.9em; color: #666; margin-top: 10px;">Status: Ready</p>
+                <p id="admin-status-message" class="status-msg">Status: Ready</p>
             </div>
-            </div>
+
             <h2>Your Items</h2>
             <div id="item-list-container"></div>
         </main>
     </div>
-    <script type="module" src="store-dashboard.js"></script>
+
+    <!-- Confirmation dialog -->
+    <div class="confirm-overlay" id="dp-confirm-overlay">
+        <div class="confirm-box">
+            <p id="dp-confirm-text"></p>
+            <div class="btn-row">
+                <button class="btn-cancel" id="dp-confirm-cancel">Cancel</button>
+                <button class="btn-primary" id="dp-confirm-ok">Confirm Payment</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="store-dashboard.js"></script>
 </body>
 </html>

@@ -67,6 +67,8 @@ exports.handler = async (event) => {
     baseAmountInCents = body.amount; // This is the subtotal + tip (excluding fee)
     // Client must send the selected payment type for accurate fee calculation
     paymentMethodType = body.paymentMethodType || 'card';
+    var sessionId = body.sessionId || null;
+    var customerEmail = body.customerEmail || null;
   } catch (error) {
     console.error('[create-payment-intent] Error parsing request body:', error);
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid request body.' }) };
@@ -109,8 +111,13 @@ exports.handler = async (event) => {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: finalAmountInCents, // Charge the full amount including the fee
       currency: 'usd',
-      // Allow Stripe to determine the best method types based on the user's element display
       automatic_payment_methods: { enabled: true },
+      metadata: {
+        sessionId: sessionId || '',
+        customerEmail: customerEmail || '',
+        baseAmountInCents: String(baseAmountInCents),
+        processingFeeInCents: String(processingFeeInCents),
+      },
     });
 
     console.log(`[create-payment-intent] PaymentIntent created: id=${paymentIntent.id}, status=${paymentIntent.status}, amount=${paymentIntent.amount}c`);
