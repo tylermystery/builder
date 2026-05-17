@@ -1538,7 +1538,11 @@ async function updateCheckoutDisplay() {
 
             currentClientSecret = newClientSecret; // Update the secret
             elements = stripe.elements({ clientSecret: currentClientSecret });
-            paymentElement = elements.create('payment');
+            paymentElement = elements.create('payment', {
+                fields: {
+                    billingDetails: { name: 'never', email: 'never' }
+                }
+            });
             paymentElement.mount('#payment-element');
 
             // 4. Add listener to update payment type AND fetch new fee
@@ -1662,7 +1666,9 @@ async function handlePaymentTypeChange(event) {
             currentClientSecret = newClientSecret;
             elements = stripe.elements({ clientSecret: currentClientSecret });
             paymentElement = elements.create('payment', {
-                defaultValues: { billingDetails: {} }
+                fields: {
+                    billingDetails: { name: 'never', email: 'never' }
+                }
             });
             paymentElement.mount('#payment-element');
 
