@@ -1,6 +1,6 @@
 import { state } from '../state.js';
 import { CONSTANTS } from '../config.js';
-import { getRecordPrice, getEffectiveMinQuantity } from '../utils.js';
+import { getRecordPrice, getEffectiveMinQuantity, parseOptions, flattenOptionGroups } from '../utils.js';
 import { log } from '../utils/debug.js';
 
 export function showReceiptModal(paymentIndex) {
@@ -76,9 +76,45 @@ export function showReceiptModal(paymentIndex) {
             }
         }
 
+        // Build option details for receipt
+        let optionDetailLines = [];
+        const optionGroups = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+
+        if (itemInfo.selections && Object.keys(itemInfo.selections).length > 0) {
+            const sortedKeys = Object.keys(itemInfo.selections).sort((a, b) => {
+                const indexA = parseInt(a.replace('group', ''), 10) || 0;
+                const indexB = parseInt(b.replace('group', ''), 10) || 0;
+                return indexA - indexB;
+            });
+            for (const groupKey of sortedKeys) {
+                const optionValue = itemInfo.selections[groupKey];
+                const groupIndexMatch = groupKey.match(/^group(\d+)$/);
+                if (!groupIndexMatch) continue;
+                const groupIndex = parseInt(groupIndexMatch[1], 10);
+                const group = optionGroups[groupIndex];
+                if (!group || !group.options) continue;
+                const optionIndices = Array.isArray(optionValue) ? optionValue : [optionValue];
+                for (const optIdx of optionIndices) {
+                    const option = group.options[optIdx];
+                    if (!option || !option.name) continue;
+                    const groupLabel = group.name && group.name !== 'Options' ? `${group.name}: ` : '';
+                    optionDetailLines.push(`${groupLabel}${option.name}`);
+                }
+            }
+        } else if (itemInfo.selectedOptionIndex != null) {
+            const flatOptions = flattenOptionGroups(optionGroups);
+            const option = flatOptions[itemInfo.selectedOptionIndex];
+            if (option && option.name) {
+                optionDetailLines.push(`${option.name}`);
+            }
+        }
+        const optionDetailsForReceipt = optionDetailLines.length > 0
+            ? '<br>' + optionDetailLines.map(l => `<small style="color: #666; padding-left: 10px;">› ${l}</small>`).join('<br>')
+            : '';
+
         itemsHtml += `
             <tr>
-                <td>${record.fields.Name}${edgeCaseNote}</td>
+                <td>${record.fields.Name}${optionDetailsForReceipt}${edgeCaseNote}</td>
                 <td style="text-align: center;">${quantity}</td>
                 <td style="text-align: right;">$${unitPrice.toFixed(2)}</td>
                 <td style="text-align: right;">$${itemTotal.toFixed(2)}</td>
