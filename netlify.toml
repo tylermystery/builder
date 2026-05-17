@@ -79,6 +79,16 @@
   status = 200
 
 [[redirects]]
+  from = "/api/stripe-webhook"
+  to = "/.netlify/functions/stripe-webhook"
+  status = 200
+
+[[redirects]]
+  from = "/api/record-direct-payment"
+  to = "/.netlify/functions/record-direct-payment"
+  status = 200
+
+[[redirects]]
   from = "/api/pusher-auth"
   to = "/.netlify/functions/pusher-auth"
   status = 200

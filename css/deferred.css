@@ -19027,3 +19027,39 @@ body.presentation-active .rsb-layout-toggle-fab {
         bottom: 67px;
     }
 }
+
+/* Mobile checkout breathing room */
+@media (max-width: 480px) {
+    .checkout-modal-content {
+        padding: 20px 16px;
+        max-height: 95vh;
+        border-radius: 8px 8px 0 0;
+    }
+    #payment-form .form-row {
+        margin-bottom: 12px;
+    }
+    #payment-form label {
+        font-size: 0.85em;
+        margin-bottom: 4px;
+    }
+    .checkout-total-row.processing-fee-row,
+    .checkout-total-row.final-total-row {
+        font-size: 0.85em !important;
+    }
+    .checkout-total-row.final-total-row {
+        font-size: 1.1em !important;
+    }
+    .checkout-total-deposit-section {
+        padding: 10px 0 !important;
+    }
+    #payment-submit-btn {
+        width: 100%;
+        padding: 14px;
+        font-size: 1.1em;
+        margin-top: 8px;
+    }
+    #checkout-summary-list li {
+        padding: 8px 0;
+        font-size: 0.9em;
+    }
+}

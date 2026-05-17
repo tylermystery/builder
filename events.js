@@ -322,7 +322,6 @@ async function handlePaymentFormSubmit(event) {
 
         if (error) {
             if (error.type === "card_error" || error.type === "validation_error") {
-                // Translate common Stripe errors to user-friendly messages
                 let userMessage = error.message;
                 if (error.code === 'card_declined') {
                     userMessage = "Your card was declined. Please try another payment method.";
@@ -334,8 +333,18 @@ async function handlePaymentFormSubmit(event) {
                     userMessage = "The security code (CVC) is incorrect. Please check and try again.";
                 } else if (error.code === 'processing_error') {
                     userMessage = "An error occurred while processing your card. Please try again.";
+                } else if (error.code === 'incorrect_number') {
+                    userMessage = "The card number is incorrect. Please check and try again.";
+                } else if (error.code === 'incorrect_zip') {
+                    userMessage = "The ZIP/postal code doesn't match the card. Please check and try again.";
                 }
                 throw new Error(userMessage);
+            } else if (error.type === "api_connection_error") {
+                console.error('[ACH DEBUG] Stripe connection error:', error);
+                throw new Error("We couldn't reach our payment processor. Please check your connection and try again.");
+            } else if (error.type === "rate_limit_error") {
+                console.error('[ACH DEBUG] Stripe rate limit error:', error);
+                throw new Error("Too many requests. Please wait a moment and try again.");
             } else {
                 console.error('[ACH DEBUG] Stripe confirmPayment non-card error:', error);
                 throw new Error("An unexpected error occurred during payment. Please try again or contact support.");
