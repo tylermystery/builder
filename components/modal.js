@@ -4734,6 +4734,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     quantity: quantity,
                     price: price,
                     record: record,
+                    selectedOptionIndex: selectedOptionIndex,
                     highlightChipIn: false
                 });
             });
@@ -4764,10 +4765,11 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     mode: 'item',
                     itemId: record.id,
                     itemName: itemName,
-                    quantity: 0, // Default to 0 = donation only (crowdfunding mode)
-                    maxQuantity: quantity, // Pass the current quantity as reference for the toggle max
+                    quantity: 0,
+                    maxQuantity: quantity,
                     price: price,
                     record: record,
+                    selectedOptionIndex: selectedOptionIndex,
                     highlightChipIn: true
                 });
             });
@@ -8819,6 +8821,19 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         const itemTotal = (scope.price || 0) * initialQty;
         finalTotal = itemTotal;
 
+        // Build option detail lines for item mode
+        let itemOptionDetailsHtml = '';
+        if (scope.record) {
+            const optionGroups = parseOptions(scope.record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+            if (optionGroups && optionGroups.length > 0 && scope.selectedOptionIndex != null) {
+                const flatOptions = flattenOptionGroups(optionGroups);
+                const option = flatOptions[scope.selectedOptionIndex];
+                if (option && option.name) {
+                    itemOptionDetailsHtml = `<small class="checkout-option-detail">› ${option.name}</small>`;
+                }
+            }
+        }
+
         const listItem = document.createElement('li');
         listItem.id = 'checkout-scope-item';
         if (initialQty === 0) {
@@ -8826,6 +8841,7 @@ export async function showCheckoutModal(shopSettings, scope = null) {
             listItem.innerHTML = `
                 <div class="summary-item-details">
                     <span class="summary-item-name">${scope.itemName || 'Item'}</span>
+                    ${itemOptionDetailsHtml}
                     <small class="summary-item-donation-note">Chip in to crowdfund this item</small>
                 </div>
                 <span class="summary-item-price">—</span>
@@ -8834,6 +8850,7 @@ export async function showCheckoutModal(shopSettings, scope = null) {
             listItem.innerHTML = `
                 <div class="summary-item-details">
                     <span class="summary-item-name">${scope.itemName || 'Item'} (x${initialQty})</span>
+                    ${itemOptionDetailsHtml}
                 </div>
                 <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
             `;
@@ -8930,9 +8947,46 @@ export async function showCheckoutModal(shopSettings, scope = null) {
             noteHtml = `<small class="checkout-summary-note">Note: ${itemInfo.note}</small>`;
         }
 
+        // Build option detail lines
+        let optionDetailsHtml = '';
+        const optionGroups = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        if (optionGroups && optionGroups.length > 0) {
+            const optionLines = [];
+            if (itemInfo.selections && Object.keys(itemInfo.selections).length > 0) {
+                const sortedKeys = Object.keys(itemInfo.selections).sort((a, b) => {
+                    return (parseInt(a.replace('group', ''), 10) || 0) - (parseInt(b.replace('group', ''), 10) || 0);
+                });
+                for (const groupKey of sortedKeys) {
+                    const optionValue = itemInfo.selections[groupKey];
+                    const groupIndexMatch = groupKey.match(/^group(\d+)$/);
+                    if (!groupIndexMatch) continue;
+                    const groupIndex = parseInt(groupIndexMatch[1], 10);
+                    const group = optionGroups[groupIndex];
+                    if (!group || !group.options) continue;
+                    const optionIndices = Array.isArray(optionValue) ? optionValue : [optionValue];
+                    for (const optIdx of optionIndices) {
+                        const option = group.options[optIdx];
+                        if (!option || !option.name) continue;
+                        const groupLabel = group.name && group.name !== 'Options' ? `${group.name}: ` : '';
+                        optionLines.push(`${groupLabel}${option.name}`);
+                    }
+                }
+            } else if (itemInfo.selectedOptionIndex != null) {
+                const flatOptions = flattenOptionGroups(optionGroups);
+                const option = flatOptions[itemInfo.selectedOptionIndex];
+                if (option && option.name) {
+                    optionLines.push(option.name);
+                }
+            }
+            if (optionLines.length > 0) {
+                optionDetailsHtml = optionLines.map(l => `<small class="checkout-option-detail">› ${l}</small>`).join('');
+            }
+        }
+
         listItem.innerHTML = `
             <div class="summary-item-details">
                 <span class="summary-item-name">${record.fields.Name} (x${itemInfo.quantity || 1})</span>
+                ${optionDetailsHtml}
                 ${edgeCaseNote}
                 ${noteHtml}
             </div>

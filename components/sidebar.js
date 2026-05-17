@@ -150,20 +150,18 @@ async function createLockedInItemElement(record, itemInfo) {
     itemElement.className = 'locked-item-card';
     itemElement.dataset.recordId = record.id;
 
-    // Build selected options display string from either selections or legacy selectedOptionIndex
-    // Options are now supported for all item types including custom and AI-parsed items
-    let optionNames = [];
+    // Build selected options display with group names and price effects
+    let optionDetailsHtml = '';
     const optionGroups = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
 
     if (itemInfo.selections && Object.keys(itemInfo.selections).length > 0) {
-        // New format: selections object with groupIndex -> optionIndex mapping
-        // Supports both single-select (number) and multi-select (array) formats
         const sortedKeys = Object.keys(itemInfo.selections).sort((a, b) => {
             const indexA = parseInt(a.replace('group', ''), 10) || 0;
             const indexB = parseInt(b.replace('group', ''), 10) || 0;
             return indexA - indexB;
         });
 
+        const optionLines = [];
         for (const groupKey of sortedKeys) {
             const optionValue = itemInfo.selections[groupKey];
             const groupIndexMatch = groupKey.match(/^group(\d+)$/);
@@ -173,26 +171,26 @@ async function createLockedInItemElement(record, itemInfo) {
             const group = optionGroups[groupIndex];
             if (!group || !group.options) continue;
 
-            // Handle both single index and array of indices (multi-select)
             const optionIndices = Array.isArray(optionValue) ? optionValue : [optionValue];
 
             for (const optionIndex of optionIndices) {
                 const option = group.options[optionIndex];
-                if (option && option.name) {
-                    optionNames.push(option.name);
-                }
+                if (!option || !option.name) continue;
+
+                const groupLabel = group.name && group.name !== 'Options' ? `${group.name}: ` : '';
+                optionLines.push(`<span class="option-detail-line">${groupLabel}<strong>${option.name}</strong></span>`);
             }
         }
+        if (optionLines.length > 0) {
+            optionDetailsHtml = optionLines.join('<br>');
+        }
     } else if (itemInfo.selectedOptionIndex != null) {
-        // Legacy format: single selectedOptionIndex
         const flatOptions = flattenOptionGroups(optionGroups);
-        if (flatOptions[itemInfo.selectedOptionIndex]) {
-            optionNames.push(flatOptions[itemInfo.selectedOptionIndex].name);
+        const option = flatOptions[itemInfo.selectedOptionIndex];
+        if (option && option.name) {
+            optionDetailsHtml = `<span class="option-detail-line"><strong>${option.name}</strong></span>`;
         }
     }
-
-    // Build display string: "Color: Red, Size: Large" or just "Red, Large"
-    const optionDisplay = optionNames.join(', ');
 
     // Use selections for price if available, otherwise fall back to selectedOptionIndex
     const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
@@ -320,7 +318,7 @@ async function createLockedInItemElement(record, itemInfo) {
         <img class="locked-item-thumbnail lazy-load" data-src="${imageUrl}" width="60" height="60" alt="${fields.Name}" loading="lazy">
         <div class="locked-item-details">
             <p class="locked-item-name"><span class="locked-item-name-text">${fields.Name}</span>${solutionBadgeHtml}</p>
-            ${optionDisplay ? `<p class="locked-item-option">${optionDisplay}</p>` : ''}
+            ${optionDetailsHtml ? `<div class="locked-item-options">${optionDetailsHtml}</div>` : ''}
             <p class="locked-item-pricing">${quantityDisplay} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
             ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
         </div>
