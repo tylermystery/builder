@@ -56,7 +56,7 @@ exports.handler = async (event) => {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
 
-  let baseAmountInCents, paymentMethodType;
+  let baseAmountInCents, paymentMethodType, existingPaymentIntentId;
   try {
     // Defensive: validate request body exists
     if (!event.body) {
@@ -69,12 +69,13 @@ exports.handler = async (event) => {
     paymentMethodType = body.paymentMethodType || 'card';
     var sessionId = body.sessionId || null;
     var customerEmail = body.customerEmail || null;
+    existingPaymentIntentId = body.paymentIntentId || null;
   } catch (error) {
     console.error('[create-payment-intent] Error parsing request body:', error);
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid request body.' }) };
   }
 
-  console.log(`[create-payment-intent] Received request. Base amount: ${baseAmountInCents} cents, Payment Type: ${paymentMethodType}`);
+  console.log(`[create-payment-intent] Received request. Base amount: ${baseAmountInCents} cents, Payment Type: ${paymentMethodType}, Update: ${existingPaymentIntentId || 'new'}`);
 
   // Validate amount
   if (typeof baseAmountInCents !== 'number' || isNaN(baseAmountInCents)) {
@@ -106,26 +107,45 @@ exports.handler = async (event) => {
     const processingFeeInCents = calculateProcessingFee(baseAmountInCents, paymentMethodType);
     const finalAmountInCents = baseAmountInCents + processingFeeInCents;
 
-    console.log(`[create-payment-intent] Creating PaymentIntent: base=${baseAmountInCents}c + fee=${processingFeeInCents}c = total=${finalAmountInCents}c, type=${paymentMethodType}`);
+    let paymentIntent;
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: finalAmountInCents, // Charge the full amount including the fee
-      currency: 'usd',
-      automatic_payment_methods: { enabled: true },
-      metadata: {
-        sessionId: sessionId || '',
-        customerEmail: customerEmail || '',
-        baseAmountInCents: String(baseAmountInCents),
-        processingFeeInCents: String(processingFeeInCents),
-      },
-    });
-
-    console.log(`[create-payment-intent] PaymentIntent created: id=${paymentIntent.id}, status=${paymentIntent.status}, amount=${paymentIntent.amount}c`);
+    if (existingPaymentIntentId) {
+      // Update existing PaymentIntent — keeps the same client_secret so the
+      // Stripe PaymentElement doesn't need to be rebuilt (preserves user's
+      // payment-method selection and avoids the "double-click" bug).
+      console.log(`[create-payment-intent] Updating PaymentIntent ${existingPaymentIntentId}: base=${baseAmountInCents}c + fee=${processingFeeInCents}c = total=${finalAmountInCents}c, type=${paymentMethodType}`);
+      paymentIntent = await stripe.paymentIntents.update(existingPaymentIntentId, {
+        amount: finalAmountInCents,
+        metadata: {
+          sessionId: sessionId || '',
+          customerEmail: customerEmail || '',
+          baseAmountInCents: String(baseAmountInCents),
+          processingFeeInCents: String(processingFeeInCents),
+        },
+      });
+      console.log(`[create-payment-intent] PaymentIntent updated: id=${paymentIntent.id}, status=${paymentIntent.status}, amount=${paymentIntent.amount}c`);
+    } else {
+      // Create a new PaymentIntent
+      console.log(`[create-payment-intent] Creating PaymentIntent: base=${baseAmountInCents}c + fee=${processingFeeInCents}c = total=${finalAmountInCents}c, type=${paymentMethodType}`);
+      paymentIntent = await stripe.paymentIntents.create({
+        amount: finalAmountInCents,
+        currency: 'usd',
+        automatic_payment_methods: { enabled: true },
+        metadata: {
+          sessionId: sessionId || '',
+          customerEmail: customerEmail || '',
+          baseAmountInCents: String(baseAmountInCents),
+          processingFeeInCents: String(processingFeeInCents),
+        },
+      });
+      console.log(`[create-payment-intent] PaymentIntent created: id=${paymentIntent.id}, status=${paymentIntent.status}, amount=${paymentIntent.amount}c`);
+    }
 
     return {
       statusCode: 200,
       body: JSON.stringify({
           clientSecret: paymentIntent.client_secret,
+          paymentIntentId: paymentIntent.id,
           processingFeeInCents: processingFeeInCents
       }),
     };
