@@ -4,6 +4,7 @@
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
 const crypto = require('crypto');
+const { DEFAULT_FROM } = require('./utils/email-config');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL: NETLIFY_URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -63,7 +64,7 @@ exports.handler = async (event) => {
         // Send the invitation email
         const msg = {
             to: email,
-            from: 'info@tylersmysterytours.com',
+            from: DEFAULT_FROM,
             subject: `${senderName} invited you to collaborate on "${planName}"`,
             html: `
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px;">

@@ -1,5 +1,6 @@
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
+const { SENDER_EMAIL, SENDER_NAME } = require('./utils/email-config');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -103,8 +104,8 @@ exports.handler = async (event) => {
           if (usersRes.ok) {
             const { records: users } = await usersRes.json();
             const sessionName = session.fields.Name || 'Your Booking';
-            const storeName = store.fields.Name || 'WhatTheFun';
-            const contactEmail = store.fields.ContactEmail || 'info@tylersmysterytours.com';
+            const storeName = store.fields.Name || SENDER_NAME;
+            const contactEmail = store.fields.ContactEmail || SENDER_EMAIL;
             const planUrl = `${baseUrl}/?session=${sessionId}`;
 
             for (const user of users) {

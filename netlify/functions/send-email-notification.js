@@ -1,5 +1,6 @@
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
+const { DEFAULT_FROM } = require('./utils/email-config');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -146,7 +147,7 @@ exports.handler = async (event) => {
 
         return sgMail.send({
           to: user.fields.Email,
-          from: 'info@tylersmysterytours.com',
+          from: DEFAULT_FROM,
           subject: template.subject(templateData),
           html: template.html(templateData)
         });

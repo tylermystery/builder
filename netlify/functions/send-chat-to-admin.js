@@ -2,6 +2,7 @@
 
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
+const { DEFAULT_FROM, SENDER_EMAIL } = require('./utils/email-config');
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL } = process.env;
 
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -35,11 +36,11 @@ exports.handler = async (event) => {
     // 3. Construct and send the email
     const baseUrl = SITE_URL || URL; // Use production URL or fallback to Netlify's default
     const viewPlanUrl = `${baseUrl}/?session=${sessionId}`;
-    const adminEmail = 'info@tylersmysterytours.com';
+    const adminEmail = SENDER_EMAIL;
 
     const msg = {
       to: adminEmail,
-      from: 'info@tylersmysterytours.com', // Must be a verified SendGrid sender
+      from: DEFAULT_FROM, // Must be a verified SendGrid sender
       subject: `[New Chat Message] In plan: "${sessionName}"`,
       html: `
         <p>A new chat message was sent in the plan: <strong>${sessionName}</strong></p>
