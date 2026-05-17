@@ -4,6 +4,7 @@
 
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
+const { DEFAULT_FROM } = require('./utils/email-config');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL: NETLIFY_URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -147,7 +148,7 @@ exports.handler = async (event) => {
 
                 await sgMail.send({
                     to: userEmail,
-                    from: 'info@tylersmysterytours.com',
+                    from: DEFAULT_FROM,
                     subject: `Daily Digest: ${totalActivity} new update${totalActivity !== 1 ? 's' : ''} in your plans`,
                     html: emailHtml
                 });

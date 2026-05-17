@@ -1,6 +1,7 @@
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
 const crypto = require('crypto');
+const { DEFAULT_FROM } = require('./utils/email-config');
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY } = process.env;
 
 // Debug: Log environment variable availability at cold start
@@ -85,8 +86,8 @@ exports.handler = async (event) => {
 
         const msg = {
             to: email,
-            from: 'info@tylersmysterytours.com', // Replace with your verified sender
-            subject: 'Confirm Your Sign-In for TMT Shop',
+            from: DEFAULT_FROM,
+            subject: 'Confirm Your Sign-In for TMT & WhatTheFun',
             html: `<p>Hello!</p><p>Please click the link below to confirm your sign-in attempt. This link will expire in 15 minutes.</p><p><a href="${confirmationLink}">Confirm Sign-In</a></p>`,
         };
 

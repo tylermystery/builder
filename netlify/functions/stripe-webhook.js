@@ -1,6 +1,7 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
+const { SENDER_EMAIL, SENDER_NAME } = require('./utils/email-config');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, STRIPE_WEBHOOK_SECRET, SITE_URL, URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -59,8 +60,8 @@ async function updateSessionPayment(sessionId, paymentHistory, extraFields = {})
 
 function buildReceiptEmail(session, payment, store, baseUrl) {
   const sessionName = session.fields.Name || 'Your Booking';
-  const storeName = store?.fields?.Name || 'WhatTheFun';
-  const contactEmail = store?.fields?.ContactEmail || 'info@tylersmysterytours.com';
+  const storeName = store?.fields?.Name || SENDER_NAME;
+  const contactEmail = store?.fields?.ContactEmail || SENDER_EMAIL;
   const senderName = store?.fields?.SenderName || storeName;
   const planUrl = `${baseUrl}/?session=${session.id}`;
 
@@ -136,8 +137,8 @@ function buildReceiptEmail(session, payment, store, baseUrl) {
 
 function buildMerchantNotificationEmail(session, payment, store, baseUrl) {
   const sessionName = session.fields.Name || 'A Booking';
-  const storeName = store?.fields?.Name || 'WhatTheFun';
-  const contactEmail = store?.fields?.ContactEmail || 'info@tylersmysterytours.com';
+  const storeName = store?.fields?.Name || SENDER_NAME;
+  const contactEmail = store?.fields?.ContactEmail || SENDER_EMAIL;
   const amountStr = `$${(payment.amount || 0).toFixed(2)}`;
   const customerEmail = payment.customerEmail || 'Unknown';
   const dashboardUrl = store?.fields?.OwnerDashboardID
