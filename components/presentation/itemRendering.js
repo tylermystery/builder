@@ -684,7 +684,7 @@ export async function renderCompactCard(item) {
         const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0) ? itemInfo.selections : itemInfo.selectedOptionIndex;
         let unitPrice = itemInfo.overridePrice ?? _deps.getRecordPrice(record, priceParam);
         if (!isNaN(unitPrice) && unitPrice > 0) {
-            const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
+            const effectiveQuantity = Math.max(parseFloat(itemInfo.quantity) || 1, 1);
             const totalPrice = unitPrice * effectiveQuantity;
             const priceText = effectiveQuantity > 1
                 ? `$${totalPrice.toFixed(0)} (${effectiveQuantity}x)`

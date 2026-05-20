@@ -146,7 +146,7 @@ export function updatePresentationHeaderTotal() {
             }
         }
 
-        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
+        const effectiveQuantity = Math.max(parseFloat(itemInfo.quantity) || 1, 1);
         subtotal += unitPrice * effectiveQuantity;
     });
 

@@ -109,7 +109,7 @@ export function getPlanSummary() {
             }
         }
 
-        const quantity = parseInt(itemInfo.quantity) || 1;
+        const quantity = parseFloat(itemInfo.quantity) || 1;
         subtotal += unitPrice * quantity;
     });
 

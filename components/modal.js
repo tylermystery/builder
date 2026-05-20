@@ -8,6 +8,7 @@ import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTIO
 import { getCurrentUser } from '../chat.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { log } from '../utils/debug.js';
+import { getDayStatus, AVAILABILITY_STATUS } from '../availability.js';
 import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { resizeImageForUpload } from '../utils/imageResizer.js';
@@ -4683,7 +4684,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         const updateRapidPayLabel = () => {
             if (!rapidPayBtn) return;
             const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
-            const currentQuantity = quantityInput ? parseInt(quantityInput.value, 10) || 1 : 1;
+            const currentQuantity = quantityInput ? parseFloat(quantityInput.value) || 1 : 1;
             const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
             let selectedOptionIndex = itemState.selectedOptionIndex || 0;
             if (optionRadios.length > 0) {
@@ -4716,7 +4717,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
             newRapidPayBtn.addEventListener('click', () => {
                 const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
-                const quantity = quantityInput ? parseInt(quantityInput.value, 10) || 1 : 1;
+                const quantity = quantityInput ? parseFloat(quantityInput.value) || 1 : 1;
                 const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
                 let selectedOptionIndex = itemState.selectedOptionIndex || 0;
                 if (optionRadios.length > 0) {
@@ -4751,7 +4752,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
             newChipInBtn.addEventListener('click', () => {
                 const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
-                const quantity = quantityInput ? parseInt(quantityInput.value, 10) || 1 : 1;
+                const quantity = quantityInput ? parseFloat(quantityInput.value) || 1 : 1;
                 const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
                 let selectedOptionIndex = itemState.selectedOptionIndex || 0;
                 if (optionRadios.length > 0) {
@@ -7690,7 +7691,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         const airtableMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         const effectiveMin = getEffectiveMinQuantity(record);
 
-        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button type="button" class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${effectiveMin}" step="1"><button type="button" class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
+        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button type="button" class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${effectiveMin}" step="0.1"><button type="button" class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
 
         // Remove any existing nudge/badge elements to prevent duplication
         const existingNudge = modalActionsContainer.querySelector('.umw-sales-nudge');
@@ -8003,6 +8004,15 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             // Initialize date field with Flatpickr single mode (lazy-loaded)
             let modalItemDatePicker = null;
             if (modalItemDateInput) {
+                // Clean up previous Flatpickr instance and listener from prior modal opens
+                if (modalItemDateInput._flatpickr) {
+                    try { modalItemDateInput._flatpickr.destroy(); } catch (_) {}
+                    delete modalItemDateInput._flatpickr;
+                }
+                if (modalItemDateInput._initHandler) {
+                    modalItemDateInput.removeEventListener('focus', modalItemDateInput._initHandler);
+                }
+
                 const initModalDatePicker = async () => {
                     if (modalItemDatePicker) {
                         modalItemDatePicker.open();
@@ -8015,6 +8025,28 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                         modalItemDatePicker = window.flatpickr(modalItemDateInput, {
                             mode: "single",
                             dateFormat: "M j, Y",
+                            onDayCreate: (dObj, dStr, fp, dayElem) => {
+                                const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
+                                if (!icalUrl) return;
+                                const busyTimes = state.calendar.busyTimes.get(icalUrl);
+                                if (!busyTimes || busyTimes.length === 0) return;
+                                const status = getDayStatus(dayElem.dateObj, busyTimes, record);
+                                dayElem.classList.remove('available-full', 'available-partial', 'unavailable');
+                                switch (status.status) {
+                                    case AVAILABILITY_STATUS.FULL: dayElem.classList.add('available-full'); break;
+                                    case AVAILABILITY_STATUS.PARTIAL: dayElem.classList.add('available-partial'); break;
+                                    case AVAILABILITY_STATUS.NONE: dayElem.classList.add('unavailable'); break;
+                                }
+                                dayElem.title = status.reason;
+                            },
+                            onOpen: async (selectedDates, dateStr, instance) => {
+                                if (record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]) {
+                                    const busyTimes = await api.fetchCalendarForRecord(record);
+                                    if (busyTimes && busyTimes.length > 0 && instance.config) {
+                                        instance.redraw();
+                                    }
+                                }
+                            },
                             onChange: (selectedDates) => {
                                 if (selectedDates.length >= 1) {
                                     saveTimeField('itemDate', selectedDates[0].toISOString());
@@ -8038,6 +8070,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     }
                 };
 
+                modalItemDateInput._initHandler = initModalDatePicker;
                 modalItemDateInput.addEventListener('focus', initModalDatePicker);
 
                 // If there's already a saved date, show it in the input

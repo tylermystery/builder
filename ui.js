@@ -494,8 +494,8 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                 if (!selector) return;
                 const input = selector.querySelector('.quantity-input');
                 if (!input) return;
-                const currentValue = parseInt(input.value, 10) || 1;
-                input.value = currentValue + 1;
+                const currentValue = parseFloat(input.value) || 1;
+                input.value = parseFloat((currentValue + 1).toFixed(2));
                 input.dispatchEvent(new Event('change', { bubbles: true }));
             } else if (minusBtn) {
                 e.stopPropagation();
@@ -504,10 +504,10 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                 if (!selector) return;
                 const input = selector.querySelector('.quantity-input');
                 if (!input) return;
-                const currentValue = parseInt(input.value, 10) || 1;
-                const minValue = parseInt(input.min, 10) || 1;
+                const currentValue = parseFloat(input.value) || 1;
+                const minValue = parseFloat(input.min) || 1;
                 if (currentValue > minValue) {
-                    input.value = currentValue - 1;
+                    input.value = parseFloat((currentValue - 1).toFixed(2));
                     input.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             }

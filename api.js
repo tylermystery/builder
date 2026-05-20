@@ -1660,6 +1660,8 @@ export async function fetchStoreDetailsByIds(storeIds) {
     }
 }
 
+const pendingCalendarRequests = new Map();
+
 export async function fetchCalendarForRecord(record) {
     if (!record || !record.fields) return [];
     const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
@@ -1672,23 +1674,36 @@ export async function fetchCalendarForRecord(record) {
         log('API', `Cache hit for iCal URL: ${icalUrl}`);
         return state.calendar.busyTimes.get(icalUrl);
     }
+
+    if (pendingCalendarRequests.has(icalUrl)) {
+        log('API', `Deduplicating calendar request for ${record.fields.Name}`);
+        return pendingCalendarRequests.get(icalUrl);
+    }
+
      log('API', `Fetching calendar for ${record.fields.Name} from URL: ${icalUrl}`);
 
-    try {
-        const proxyUrl = `/api/calendar?url=${encodeURIComponent(icalUrl)}`;
-        const response = await fetch(proxyUrl);
-        if (!response.ok) {
-            throw new Error(`Calendar proxy function error: ${response.status} ${response.statusText}`);
+    const promise = (async () => {
+        try {
+            const proxyUrl = `/api/calendar?url=${encodeURIComponent(icalUrl)}`;
+            const response = await fetch(proxyUrl);
+            if (!response.ok) {
+                throw new Error(`Calendar proxy function error: ${response.status} ${response.statusText}`);
+            }
+            const busyTimes = await response.json();
+            state.calendar.busyTimes.set(icalUrl, busyTimes);
+            log('API', `Successfully fetched and cached ${busyTimes.length} busy times for ${record.fields.Name}`);
+            return busyTimes;
+        } catch (error) {
+            console.error(`Failed to fetch/parse calendar for ${record.fields.Name} (${icalUrl}):`, error);
+            state.calendar.busyTimes.set(icalUrl, []);
+            return [];
+        } finally {
+            pendingCalendarRequests.delete(icalUrl);
         }
-        const busyTimes = await response.json();
-        state.calendar.busyTimes.set(icalUrl, busyTimes);
-         log('API', `Successfully fetched and cached ${busyTimes.length} busy times for ${icalUrl}`);
-        return busyTimes;
-    } catch (error) {
-        console.error(`Failed to fetch/parse calendar for ${record.fields.Name} (${icalUrl}):`, error);
-        state.calendar.busyTimes.set(icalUrl, []);
-        return [];
-    }
+    })();
+
+    pendingCalendarRequests.set(icalUrl, promise);
+    return promise;
 }
 
 
