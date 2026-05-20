@@ -21,6 +21,13 @@ export function parseICalDate(dateString) {
     return new Date(Date.UTC(year, month, day, hour, minute, second));
 }
 
+function toBusyDate(val) {
+    if (!val) return new Date(NaN);
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) return d;
+    return parseICalDate(val) || new Date(NaN);
+}
+
 export function getDayStatus(day, busyTimes, record) {
     const leadTime = parseInt(record.fields[CONSTANTS.FIELD_NAMES.LEAD_TIME] || 0, 10);
     const today = new Date();
@@ -40,8 +47,8 @@ export function getDayStatus(day, busyTimes, record) {
     dayEnd.setHours(23, 59, 59, 999);
 
     const busyPeriods = busyTimes.filter(busy => {
-        const busyStart = new Date(busy.start);
-        const busyEnd = new Date(busy.end);
+        const busyStart = toBusyDate(busy.start);
+        const busyEnd = toBusyDate(busy.end);
         return busyStart <= dayEnd && busyEnd >= dayStart;
     });
 
@@ -52,8 +59,8 @@ export function getDayStatus(day, busyTimes, record) {
     const totalMinutes = 24 * 60;
     let busyMinutes = 0;
     busyPeriods.forEach(busy => {
-        const start = new Date(Math.max(busy.start, dayStart));
-        const end = new Date(Math.min(busy.end, dayEnd));
+        const start = new Date(Math.max(toBusyDate(busy.start), dayStart));
+        const end = new Date(Math.min(toBusyDate(busy.end), dayEnd));
         const minutes = (end - start) / (1000 * 60);
         busyMinutes += minutes;
     });
@@ -93,8 +100,8 @@ export function checkAvailability(start, end, busyTimes) {
     if (!Array.isArray(busyTimes)) return true;
 
     for (const event of busyTimes) {
-        const eventStart = new Date(event.start);
-        const eventEnd = new Date(event.end);
+        const eventStart = toBusyDate(event.start);
+        const eventEnd = toBusyDate(event.end);
         if (start < eventEnd && end > eventStart) {
             return false;
         }
@@ -116,10 +123,10 @@ export function getAvailableSlotsForDay(day, busyTimes) {
     const availableSlots = [];
     let lastEnd = dayStart;
 
-    busyTimes.sort((a, b) => new Date(a.start) - new Date(b.start));
+    busyTimes.sort((a, b) => toBusyDate(a.start) - toBusyDate(b.start));
     busyTimes.forEach(busy => {
-        const start = new Date(Math.max(busy.start, dayStart));
-        const end = new Date(Math.min(busy.end, dayEnd));
+        const start = new Date(Math.max(toBusyDate(busy.start), dayStart));
+        const end = new Date(Math.min(toBusyDate(busy.end), dayEnd));
 
         if (start > lastEnd) {
             availableSlots.push({
@@ -193,6 +200,20 @@ export async function getCombinedPlanStatus(date, lockedItems, options = {}) {
         }
     }
 
+    return overallStatus;
+}
+
+export function getPlanDayStatusSync(day, lockedRecords) {
+    let overallStatus = AVAILABILITY_STATUS.FULL;
+    for (const record of lockedRecords) {
+        const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
+        if (!icalUrl) continue;
+        const busyTimes = state.calendar.busyTimes.get(icalUrl);
+        if (!busyTimes || busyTimes.length === 0) continue;
+        const dayStatus = getDayStatus(day, busyTimes, record);
+        if (dayStatus.status === AVAILABILITY_STATUS.NONE) return AVAILABILITY_STATUS.NONE;
+        if (dayStatus.status === AVAILABILITY_STATUS.PARTIAL) overallStatus = AVAILABILITY_STATUS.PARTIAL;
+    }
     return overallStatus;
 }
 

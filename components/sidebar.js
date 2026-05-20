@@ -2313,7 +2313,7 @@ export function updateTotalCost() {
         // Custom items don't have a min headcount, so default to 1
         const minHeadcount = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         // Use itemInfo.quantity for all items
-        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
+        const effectiveQuantity = Math.max(parseFloat(itemInfo.quantity) || 1, 1);
 
         subtotal += unitPrice * effectiveQuantity;
     });

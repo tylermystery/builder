@@ -602,7 +602,7 @@ function parsePlanItemsData(plan) {
                     unitPrice = parseFloat(record.fields?.Price) || 0;
                 }
 
-                const quantity = parseInt(itemInfo.quantity) || 1;
+                const quantity = parseFloat(itemInfo.quantity) || 1;
                 totalCost += unitPrice * quantity;
             });
         }

@@ -632,7 +632,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const itemState = ui.getItemState(record.id);
     const effectiveMin = getEffectiveMinQuantity(record);
     const isLocked = state.cart.lockedItems.has(record.id);
-    const quantitySelectorHTML = `<div class="quantity-selector"><button type="button" class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${effectiveMin}" step="1" aria-label="Quantity"><button type="button" class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
+    const quantitySelectorHTML = `<div class="quantity-selector"><button type="button" class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${effectiveMin}" step="0.1" aria-label="Quantity"><button type="button" class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
     const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex);
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';

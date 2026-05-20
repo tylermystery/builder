@@ -7,7 +7,7 @@ import * as ui from './ui.js';
 import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
-import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
+import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus, getPlanDayStatusSync } from './availability.js';
 import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, preloadStripe } from './utils.js';
 import { sendMessage, getCurrentUser, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName, toggleRecentChats, addPlanEventToHistory } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
@@ -2477,7 +2477,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             let itemInfo;
             const modalOverlay = document.getElementById('detail-modal-overlay');
             if (modalOverlay?.classList.contains('active') && modalOverlay.dataset.recordId === recordId) {
-                const quantity = parseInt(document.querySelector('#modal-quantity-selector .quantity-input')?.value, 10) || 1;
+                const quantity = parseFloat(document.querySelector('#modal-quantity-selector .quantity-input')?.value) || 1;
                 const note = document.getElementById('modal-item-note')?.value || '';
 
                 // Extract selections from option groups
@@ -2947,7 +2947,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         if (target.matches('.quantity-input')) {
             const currentState = isLocked ? state.cart.lockedItems.get(recordId) : state.cart.items.get(recordId);
             oldQuantity = currentState?.quantity || 1;
-            updates.quantity = parseInt(target.value, 10);
+            updates.quantity = parseFloat(target.value);
         } else if (target.matches('#modal-item-note')) {
             updates.note = target.value;
         } else if (e.detail?.selections !== undefined) {
@@ -3017,6 +3017,29 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     eventPlanDatePicker = window.flatpickr(eventDateInput, {
                         mode: "single",
                         dateFormat: "M j, Y",
+                        onDayCreate: (dObj, dStr, fp, dayElem) => {
+                            const lockedRecords = Array.from(state.cart.lockedItems.keys())
+                                .map(id => state.records.all.find(r => r.id === id))
+                                .filter(r => r && r.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]);
+                            if (lockedRecords.length === 0) return;
+                            const status = getPlanDayStatusSync(dayElem.dateObj, lockedRecords);
+                            dayElem.classList.remove('available-full', 'available-partial', 'unavailable');
+                            switch (status) {
+                                case AVAILABILITY_STATUS.FULL: dayElem.classList.add('available-full'); break;
+                                case AVAILABILITY_STATUS.PARTIAL: dayElem.classList.add('available-partial'); break;
+                                case AVAILABILITY_STATUS.NONE: dayElem.classList.add('unavailable'); break;
+                            }
+                        },
+                        onOpen: async (selectedDates, dateStr, instance) => {
+                            const lockedRecords = Array.from(state.cart.lockedItems.keys())
+                                .map(id => state.records.all.find(r => r.id === id))
+                                .filter(r => r && r.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]);
+                            if (lockedRecords.length === 0) return;
+                            await Promise.all(lockedRecords.map(r => api.fetchCalendarForRecord(r)));
+                            if (instance.config) {
+                                instance.redraw();
+                            }
+                        },
                         onChange: async (selectedDates) => {
                             if (state.ui.isInitializing) return;
                             if (selectedDates.length > 0) {
