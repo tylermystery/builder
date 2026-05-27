@@ -33,16 +33,26 @@ exports.handler = async function (event, context) {
         const rawBlocks = extractAllVEventBlocks(icalData);
         console.log(`[CAL-DEBUG] Raw VEVENT blocks found: ${rawBlocks.length}`);
 
+        const blocksByType = { recurrenceId: 0, rrule: 0, standalone: 0 };
+        for (const block of rawBlocks) {
+            if (block.recurrenceId !== null) blocksByType.recurrenceId++;
+            else if (block.hasRRule) blocksByType.rrule++;
+            else blocksByType.standalone++;
+        }
+        console.log(`[CAL-DEBUG] Block breakdown: ${JSON.stringify(blocksByType)}`);
+
         const parsed = ical.sync.parseICS(icalData);
         const nodeIcalVevents = Object.keys(parsed).filter(k => parsed[k].type === 'VEVENT');
         console.log(`[CAL-DEBUG] node-ical returned ${nodeIcalVevents.length} VEVENTs (UID-merged)`);
 
         const busyTimes = [];
         const overrideDates = new Set();
+        const standaloneKeys = new Set();
 
         let rawOccurrenceCount = 0;
         let rruleExpandedCount = 0;
         let singleEventCount = 0;
+        let standaloneFromRawCount = 0;
 
         for (const block of rawBlocks) {
             const hasRecurrenceId = block.recurrenceId !== null;
@@ -54,9 +64,18 @@ exports.handler = async function (event, context) {
                     rawOccurrenceCount++;
                 }
                 overrideDates.add(start.toISOString().slice(0, 10));
+            } else if (!block.hasRRule) {
+                const start = block.start;
+                const end = block.end || new Date(start.getTime() + (block.isDateOnly ? 24 * 60 * 60 * 1000 : 0));
+                if (end >= windowStart && start <= windowEnd) {
+                    busyTimes.push({ start: start.toISOString(), end: end.toISOString() });
+                    standaloneFromRawCount++;
+                    standaloneKeys.add(start.toISOString() + '|' + end.toISOString());
+                    console.log(`[CAL-DEBUG] Standalone event from raw: "${block.summary}" ${start.toISOString()} -> ${end.toISOString()}`);
+                }
             }
         }
-        console.log(`[CAL-DEBUG] RECURRENCE-ID occurrences added: ${rawOccurrenceCount}, override dates: ${overrideDates.size}`);
+        console.log(`[CAL-DEBUG] RECURRENCE-ID occurrences added: ${rawOccurrenceCount}, standalone from raw: ${standaloneFromRawCount}, override dates: ${overrideDates.size}`);
 
         for (const key of nodeIcalVevents) {
             const ev = parsed[key];
@@ -92,8 +111,11 @@ exports.handler = async function (event, context) {
                     addIfInWindow(busyTimes, start, end, windowStart, windowEnd);
                 }
             } else {
-                if (addIfInWindow(busyTimes, start, end, windowStart, windowEnd)) {
-                    singleEventCount++;
+                const evKey = start.toISOString() + '|' + end.toISOString();
+                if (!standaloneKeys.has(evKey)) {
+                    if (addIfInWindow(busyTimes, start, end, windowStart, windowEnd)) {
+                        singleEventCount++;
+                    }
                 }
             }
         }
@@ -106,7 +128,7 @@ exports.handler = async function (event, context) {
             return true;
         });
 
-        console.log(`[CAL-DEBUG] Summary: ${dedupedBusyTimes.length} busy times after dedup (raw: ${rawOccurrenceCount}, rrule: ${rruleExpandedCount}, single: ${singleEventCount}, dupes removed: ${busyTimes.length - dedupedBusyTimes.length})`);
+        console.log(`[CAL-DEBUG] Summary: ${dedupedBusyTimes.length} busy times after dedup (recurrence-id: ${rawOccurrenceCount}, standalone-raw: ${standaloneFromRawCount}, rrule: ${rruleExpandedCount}, single-nodeical: ${singleEventCount}, dupes removed: ${busyTimes.length - dedupedBusyTimes.length})`);
         console.log(`[CAL-DEBUG] ALL busy times: ${JSON.stringify(dedupedBusyTimes)}`);
 
         return {
@@ -136,10 +158,11 @@ function extractAllVEventBlocks(icalText) {
         const end = endRaw ? parseICalDate(endRaw) : null;
         const recurrenceId = getICalProp(body, 'RECURRENCE-ID');
         const summary = getICalPropValue(body, 'SUMMARY');
+        const hasRRule = /(?:^|\n)RRULE:/m.test(body);
         const isDateOnly = getICalPropRaw(body, 'DTSTART').indexOf('VALUE=DATE') !== -1 &&
                            getICalPropRaw(body, 'DTSTART').indexOf('VALUE=DATE-TIME') === -1;
 
-        blocks.push({ start, end, recurrenceId, summary, isDateOnly });
+        blocks.push({ start, end, recurrenceId, summary, hasRRule, isDateOnly });
     }
     return blocks;
 }
