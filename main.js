@@ -1049,6 +1049,8 @@ async function initialize() {
         localStorage.setItem('lastVisitedShopId', activeShop.id);
         log('Main', `Active Shop set to: ${activeShop.fields.Name} (ID: ${activeShop.id})`);
 
+        document.title = `${activeShop.fields.Name} WTFun`;
+
         if (!state.session.id) {
             // Skip auto-session creation when landing on a direct /item/ share URL.
             // Why: the visitor is just viewing a shared item; auto-creating a session

@@ -123,7 +123,10 @@ function updateFullSeoMetadata(record, title, description, tags = [], imageUrl =
  * Resets SEO meta tags to default values when modal is closed.
  */
 function resetSeoMetadata() {
-    document.title = 'WTFun | Plan Your Perfect Event';
+    const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
+    const shopName = activeShop?.fields?.Name || '';
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
+    document.title = eventName || (shopName ? `${shopName} WTFun` : 'WTFun');
     setMetaTag('meta[name="description"]', { name: 'description', content: 'Plan your perfect event with WTFun.' });
 
     // Remove item-specific meta tags
