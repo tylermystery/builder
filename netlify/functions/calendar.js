@@ -1,7 +1,8 @@
 const fetch = require('node-fetch');
-const ical = require('node-ical');
+require('temporal-polyfill/global');
+const { RRuleTemporal } = require('rrule-temporal');
 
-exports.handler = async function (event, context) {
+exports.handler = async function (event) {
     const { url } = event.queryStringParameters;
 
     if (!url) {
@@ -12,132 +13,38 @@ exports.handler = async function (event, context) {
     }
 
     const decodedUrl = decodeURIComponent(url);
-    console.log(`[CAL-DEBUG] Request for iCal URL: ${decodedUrl}`);
+    console.log(`[CAL] Fetching: ${decodedUrl}`);
 
     try {
         const response = await fetch(decodedUrl);
-        console.log(`[CAL-DEBUG] Fetch status: ${response.status}`);
         if (!response.ok) {
-            throw new Error(`Failed to fetch iCal feed: ${response.statusText}`);
+            throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
         }
-        const icalData = await response.text();
-        console.log(`[CAL-DEBUG] Raw data: ${icalData.length} chars`);
+        const rawText = await response.text();
+        console.log(`[CAL] Received ${rawText.length} chars`);
 
         const now = new Date();
         const windowStart = new Date(now);
         windowStart.setMonth(windowStart.getMonth() - 3);
         const windowEnd = new Date(now);
         windowEnd.setFullYear(windowEnd.getFullYear() + 2);
-        console.log(`[CAL-DEBUG] Window: ${windowStart.toISOString()} to ${windowEnd.toISOString()}`);
 
-        const rawBlocks = extractAllVEventBlocks(icalData);
-        console.log(`[CAL-DEBUG] Raw VEVENT blocks found: ${rawBlocks.length}`);
+        const busyTimes = parseICalFeed(rawText, windowStart, windowEnd);
 
-        const blocksByType = { recurrenceId: 0, rrule: 0, standalone: 0 };
-        for (const block of rawBlocks) {
-            if (block.recurrenceId !== null) blocksByType.recurrenceId++;
-            else if (block.hasRRule) blocksByType.rrule++;
-            else blocksByType.standalone++;
+        console.log(`[CAL] Returning ${busyTimes.length} busy times`);
+        if (busyTimes.length <= 100) {
+            console.log(`[CAL] All busy times: ${JSON.stringify(busyTimes)}`);
+        } else {
+            console.log(`[CAL] First 20: ${JSON.stringify(busyTimes.slice(0, 20))}`);
         }
-        console.log(`[CAL-DEBUG] Block breakdown: ${JSON.stringify(blocksByType)}`);
-
-        const parsed = ical.sync.parseICS(icalData);
-        const nodeIcalVevents = Object.keys(parsed).filter(k => parsed[k].type === 'VEVENT');
-        console.log(`[CAL-DEBUG] node-ical returned ${nodeIcalVevents.length} VEVENTs (UID-merged)`);
-
-        const busyTimes = [];
-        const overrideDates = new Set();
-        const standaloneKeys = new Set();
-
-        let rawOccurrenceCount = 0;
-        let rruleExpandedCount = 0;
-        let singleEventCount = 0;
-        let standaloneFromRawCount = 0;
-
-        for (const block of rawBlocks) {
-            const hasRecurrenceId = block.recurrenceId !== null;
-            if (hasRecurrenceId) {
-                const start = block.start;
-                const end = block.end || new Date(start.getTime() + (block.isDateOnly ? 24 * 60 * 60 * 1000 : 0));
-                if (end >= windowStart && start <= windowEnd) {
-                    busyTimes.push({ start: start.toISOString(), end: end.toISOString() });
-                    rawOccurrenceCount++;
-                }
-                overrideDates.add(start.toISOString().slice(0, 10));
-            } else if (!block.hasRRule) {
-                const start = block.start;
-                const end = block.end || new Date(start.getTime() + (block.isDateOnly ? 24 * 60 * 60 * 1000 : 0));
-                if (end >= windowStart && start <= windowEnd) {
-                    busyTimes.push({ start: start.toISOString(), end: end.toISOString() });
-                    standaloneFromRawCount++;
-                    standaloneKeys.add(start.toISOString() + '|' + end.toISOString());
-                    console.log(`[CAL-DEBUG] Standalone event from raw: "${block.summary}" ${start.toISOString()} -> ${end.toISOString()}`);
-                }
-            }
-        }
-        console.log(`[CAL-DEBUG] RECURRENCE-ID occurrences added: ${rawOccurrenceCount}, standalone from raw: ${standaloneFromRawCount}, override dates: ${overrideDates.size}`);
-
-        for (const key of nodeIcalVevents) {
-            const ev = parsed[key];
-            if (!ev.start) continue;
-
-            const start = ev.start instanceof Date ? ev.start : new Date(ev.start);
-            if (isNaN(start.getTime())) continue;
-
-            const end = getEventEnd(ev, start);
-
-            if (ev.rrule) {
-                const duration = end.getTime() - start.getTime();
-                try {
-                    let occurrences = ev.rrule.between(windowStart, windowEnd, true);
-                    if (occurrences.length === 0) {
-                        try {
-                            const allOcc = ev.rrule.all((_, i) => i < 500);
-                            occurrences = allOcc.filter(o => o >= windowStart && o <= windowEnd);
-                        } catch (e) { /* fallback failed */ }
-                    }
-                    for (const occ of occurrences) {
-                        const dateKey = occ.toISOString().slice(0, 10);
-                        if (!overrideDates.has(dateKey)) {
-                            busyTimes.push({
-                                start: occ.toISOString(),
-                                end: new Date(occ.getTime() + duration).toISOString(),
-                            });
-                            rruleExpandedCount++;
-                        }
-                    }
-                } catch (rruleErr) {
-                    console.warn(`[CAL-DEBUG] RRULE expansion failed for "${ev.summary}": ${rruleErr.message}`);
-                    addIfInWindow(busyTimes, start, end, windowStart, windowEnd);
-                }
-            } else {
-                const evKey = start.toISOString() + '|' + end.toISOString();
-                if (!standaloneKeys.has(evKey)) {
-                    if (addIfInWindow(busyTimes, start, end, windowStart, windowEnd)) {
-                        singleEventCount++;
-                    }
-                }
-            }
-        }
-
-        const seen = new Set();
-        const dedupedBusyTimes = busyTimes.filter(bt => {
-            const key = bt.start + '|' + bt.end;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-        });
-
-        console.log(`[CAL-DEBUG] Summary: ${dedupedBusyTimes.length} busy times after dedup (recurrence-id: ${rawOccurrenceCount}, standalone-raw: ${standaloneFromRawCount}, rrule: ${rruleExpandedCount}, single-nodeical: ${singleEventCount}, dupes removed: ${busyTimes.length - dedupedBusyTimes.length})`);
-        console.log(`[CAL-DEBUG] ALL busy times: ${JSON.stringify(dedupedBusyTimes)}`);
 
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(dedupedBusyTimes),
+            body: JSON.stringify(busyTimes),
         };
     } catch (error) {
-        console.error('[CAL-DEBUG] iCal fetch/parse error:', error);
+        console.error('[CAL] Error:', error);
         return {
             statusCode: 500,
             body: JSON.stringify({ error: 'Failed to process calendar data.' }),
@@ -145,51 +52,247 @@ exports.handler = async function (event, context) {
     }
 };
 
-function extractAllVEventBlocks(icalText) {
+/**
+ * Parse an iCal feed and return busy times within the given window.
+ * Completely self-contained — no dependency on node-ical.
+ */
+function parseICalFeed(rawText, windowStart, windowEnd) {
+    const text = unfold(rawText);
+
+    const vevents = extractBlocks(text, 'VEVENT');
+    console.log(`[CAL] Found ${vevents.length} VEVENT blocks`);
+
+    const parsed = vevents.map(parseVEvent).filter(Boolean);
+
+    const byUid = new Map();
+    const standalone = [];
+    let counts = { recurring: 0, override: 0, standalone: 0, skipped: 0 };
+
+    for (const ev of parsed) {
+        if (ev.recurrenceId) {
+            counts.override++;
+            const list = byUid.get(ev.uid) || { base: null, overrides: [] };
+            list.overrides.push(ev);
+            byUid.set(ev.uid, list);
+        } else if (ev.rruleText) {
+            counts.recurring++;
+            const list = byUid.get(ev.uid) || { base: null, overrides: [] };
+            list.base = ev;
+            byUid.set(ev.uid, list);
+        } else {
+            counts.standalone++;
+            standalone.push(ev);
+        }
+    }
+    console.log(`[CAL] Classified: ${JSON.stringify(counts)}`);
+
+    const busyTimes = [];
+
+    // Process standalone events
+    for (const ev of standalone) {
+        const start = ev.startUTC;
+        const end = ev.endUTC;
+        if (end >= windowStart && start <= windowEnd) {
+            busyTimes.push({ start: start.toISOString(), end: end.toISOString() });
+            console.log(`[CAL] Standalone: "${ev.summary}" ${start.toISOString()} -> ${end.toISOString()}`);
+        }
+    }
+
+    // Process recurring events
+    for (const [uid, group] of byUid) {
+        const base = group.base;
+        const overrides = group.overrides;
+
+        // Dates overridden by RECURRENCE-ID (keyed by date string for matching)
+        const overrideDateKeys = new Set();
+
+        // Add override events
+        for (const ov of overrides) {
+            const start = ov.startUTC;
+            const end = ov.endUTC;
+            if (end >= windowStart && start <= windowEnd) {
+                busyTimes.push({ start: start.toISOString(), end: end.toISOString() });
+            }
+            if (ov.recurrenceIdUTC) {
+                overrideDateKeys.add(ov.recurrenceIdUTC.toISOString().slice(0, 10));
+            }
+        }
+
+        if (!base) {
+            // Only overrides exist for this UID (orphaned overrides — unusual but handle it)
+            continue;
+        }
+
+        // Expand RRULE
+        const duration = base.endUTC.getTime() - base.startUTC.getTime();
+        const exdateKeys = new Set((base.exdates || []).map(d => d.toISOString().slice(0, 10)));
+
+        const occurrences = expandRRule(base.rruleText, base.startUTC, base.tzid, windowStart, windowEnd);
+
+        let rruleCount = 0;
+        for (const occ of occurrences) {
+            const dateKey = occ.toISOString().slice(0, 10);
+            if (overrideDateKeys.has(dateKey) || exdateKeys.has(dateKey)) continue;
+            const occEnd = new Date(occ.getTime() + duration);
+            if (occEnd >= windowStart && occ <= windowEnd) {
+                busyTimes.push({ start: occ.toISOString(), end: occEnd.toISOString() });
+                rruleCount++;
+            }
+        }
+        console.log(`[CAL] Recurring "${base.summary}" (${uid}): ${rruleCount} occurrences from RRULE, ${overrides.length} overrides, ${exdateKeys.size} exdates`);
+    }
+
+    // Deduplicate
+    const seen = new Set();
+    const deduped = busyTimes.filter(bt => {
+        const key = bt.start + '|' + bt.end;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+
+    console.log(`[CAL] Total: ${deduped.length} busy times (${busyTimes.length - deduped.length} dupes removed)`);
+    return deduped;
+}
+
+// ---- iCal text processing ----
+
+/** RFC 5545 Section 3.1: unfold long content lines (CRLF + whitespace → nothing) */
+function unfold(text) {
+    return text.replace(/\r?\n[ \t]/g, '');
+}
+
+/** Extract all blocks of a given type (e.g. VEVENT, VTIMEZONE) */
+function extractBlocks(text, type) {
     const blocks = [];
-    const veventRegex = /BEGIN:VEVENT([\s\S]*?)END:VEVENT/g;
-    let match;
-    while ((match = veventRegex.exec(icalText)) !== null) {
-        const body = match[1];
-        const start = parseICalDate(getICalProp(body, 'DTSTART'));
-        if (!start) continue;
-
-        const endRaw = getICalProp(body, 'DTEND');
-        const end = endRaw ? parseICalDate(endRaw) : null;
-        const recurrenceId = getICalProp(body, 'RECURRENCE-ID');
-        const summary = getICalPropValue(body, 'SUMMARY');
-        const hasRRule = /(?:^|\n)RRULE:/m.test(body);
-        const isDateOnly = getICalPropRaw(body, 'DTSTART').indexOf('VALUE=DATE') !== -1 &&
-                           getICalPropRaw(body, 'DTSTART').indexOf('VALUE=DATE-TIME') === -1;
-
-        blocks.push({ start, end, recurrenceId, summary, hasRRule, isDateOnly });
+    const regex = new RegExp(`BEGIN:${type}\\r?\\n([\\s\\S]*?)END:${type}`, 'g');
+    let m;
+    while ((m = regex.exec(text)) !== null) {
+        blocks.push(m[1]);
     }
     return blocks;
 }
 
-function getICalPropRaw(body, propName) {
-    const regex = new RegExp(`(?:^|\\n)(${propName}[^:]*:[^\\n]*)`, 'm');
+// ---- VEVENT parsing ----
+
+function parseVEvent(body) {
+    const dtstartRaw = getPropFull(body, 'DTSTART');
+    if (!dtstartRaw) return null;
+
+    const dtendRaw = getPropFull(body, 'DTEND');
+    const durationRaw = getPropValue(body, 'DURATION');
+    const rruleText = getPropValue(body, 'RRULE');
+    const recurrenceIdRaw = getPropFull(body, 'RECURRENCE-ID');
+    const uid = getPropValue(body, 'UID') || '';
+    const summary = getPropValue(body, 'SUMMARY') || '';
+    const exdateLines = getAllPropFull(body, 'EXDATE');
+
+    const isDateOnly = hasParam(dtstartRaw.params, 'VALUE', 'DATE') &&
+                       !hasParam(dtstartRaw.params, 'VALUE', 'DATE-TIME');
+    const tzid = getParamValue(dtstartRaw.params, 'TZID');
+
+    const startUTC = toUTC(dtstartRaw.value, tzid, isDateOnly);
+    if (!startUTC) {
+        console.log(`[CAL] SKIP: unparseable DTSTART for "${summary}": raw="${dtstartRaw.value}" tzid="${tzid}"`);
+        return null;
+    }
+
+    let endUTC;
+    if (dtendRaw) {
+        const endTzid = getParamValue(dtendRaw.params, 'TZID') || tzid;
+        const endDateOnly = hasParam(dtendRaw.params, 'VALUE', 'DATE') &&
+                            !hasParam(dtendRaw.params, 'VALUE', 'DATE-TIME');
+        endUTC = toUTC(dtendRaw.value, endTzid, endDateOnly);
+    }
+    if (!endUTC && durationRaw) {
+        endUTC = new Date(startUTC.getTime() + parseDuration(durationRaw));
+    }
+    if (!endUTC) {
+        endUTC = isDateOnly
+            ? new Date(startUTC.getTime() + 24 * 60 * 60 * 1000)
+            : new Date(startUTC.getTime());
+    }
+
+    let recurrenceIdUTC = null;
+    if (recurrenceIdRaw) {
+        const ridTzid = getParamValue(recurrenceIdRaw.params, 'TZID') || tzid;
+        const ridDateOnly = hasParam(recurrenceIdRaw.params, 'VALUE', 'DATE');
+        recurrenceIdUTC = toUTC(recurrenceIdRaw.value, ridTzid, ridDateOnly);
+    }
+
+    // Parse EXDATE values
+    const exdates = [];
+    for (const ex of exdateLines) {
+        const exTzid = getParamValue(ex.params, 'TZID') || tzid;
+        const exDateOnly = hasParam(ex.params, 'VALUE', 'DATE');
+        for (const val of ex.value.split(',')) {
+            const d = toUTC(val.trim(), exTzid, exDateOnly);
+            if (d) exdates.push(d);
+        }
+    }
+
+    return {
+        uid,
+        summary,
+        startUTC,
+        endUTC,
+        isDateOnly,
+        tzid,
+        rruleText: rruleText || null,
+        recurrenceId: recurrenceIdRaw ? recurrenceIdRaw.value : null,
+        recurrenceIdUTC,
+        exdates,
+    };
+}
+
+// ---- Property extraction ----
+
+/** Get a single property's full info: { params, value } */
+function getPropFull(body, name) {
+    const regex = new RegExp(`(?:^|\\n)(${name}(?:;[^:]*)?):(.*)`, 'm');
     const m = body.match(regex);
-    return m ? m[1] : '';
+    if (!m) return null;
+    return { params: m[1].slice(name.length), value: m[2].trim() };
 }
 
-function getICalProp(body, propName) {
-    const raw = getICalPropRaw(body, propName);
-    if (!raw) return null;
-    const colonIdx = raw.indexOf(':');
-    return colonIdx >= 0 ? raw.slice(colonIdx + 1).trim() : null;
+/** Get just the value of a property */
+function getPropValue(body, name) {
+    const full = getPropFull(body, name);
+    return full ? full.value : null;
 }
 
-function getICalPropValue(body, propName) {
-    const raw = getICalPropRaw(body, propName);
-    if (!raw) return null;
-    const colonIdx = raw.indexOf(':');
-    return colonIdx >= 0 ? raw.slice(colonIdx + 1).trim() : raw.trim();
+/** Get ALL instances of a property (e.g. multiple EXDATE lines) */
+function getAllPropFull(body, name) {
+    const results = [];
+    const regex = new RegExp(`(?:^|\\n)(${name}(?:;[^:]*)?):(.*)`, 'gm');
+    let m;
+    while ((m = regex.exec(body)) !== null) {
+        results.push({ params: m[1].slice(name.length), value: m[2].trim() });
+    }
+    return results;
 }
 
-function parseICalDate(dateStr) {
+function hasParam(paramsStr, paramName, paramValue) {
+    if (!paramsStr) return false;
+    const regex = new RegExp(`${paramName}=${paramValue}(?:;|$)`, 'i');
+    return regex.test(paramsStr);
+}
+
+function getParamValue(paramsStr, paramName) {
+    if (!paramsStr) return null;
+    const regex = new RegExp(`${paramName}=([^;]+)`, 'i');
+    const m = paramsStr.match(regex);
+    return m ? m[1].trim() : null;
+}
+
+// ---- Date/time conversion ----
+
+/** Parse an iCal date/time value and convert to a JS Date in UTC */
+function toUTC(dateStr, tzid, isDateOnly) {
     if (!dateStr) return null;
     dateStr = dateStr.trim();
+
+    // VALUE=DATE: 20260704
     if (/^\d{8}$/.test(dateStr)) {
         return new Date(Date.UTC(
             parseInt(dateStr.slice(0, 4)),
@@ -197,60 +300,134 @@ function parseICalDate(dateStr) {
             parseInt(dateStr.slice(6, 8))
         ));
     }
-    if (/^\d{8}T\d{6}Z?$/.test(dateStr)) {
-        const y = parseInt(dateStr.slice(0, 4));
-        const mo = parseInt(dateStr.slice(4, 6)) - 1;
-        const d = parseInt(dateStr.slice(6, 8));
-        const h = parseInt(dateStr.slice(9, 11));
-        const mi = parseInt(dateStr.slice(11, 13));
-        const s = parseInt(dateStr.slice(13, 15));
-        if (dateStr.endsWith('Z')) {
-            return new Date(Date.UTC(y, mo, d, h, mi, s));
+
+    // DateTime: 20260725T100000 or 20260725T100000Z
+    const dtMatch = dateStr.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/);
+    if (dtMatch) {
+        const [, y, mo, d, h, mi, s, z] = dtMatch;
+        if (z) {
+            // Explicit UTC
+            return new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +s));
         }
-        return new Date(Date.UTC(y, mo, d, h, mi, s));
+        if (tzid) {
+            // Convert from local timezone to UTC
+            return tzToUTC(`${y}-${mo}-${d}T${h}:${mi}:${s}`, tzid);
+        }
+        // No timezone specified — treat as UTC (common for floating times)
+        return new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +s));
     }
+
+    // Fallback: try native Date parsing
     const d = new Date(dateStr);
     return isNaN(d.getTime()) ? null : d;
 }
 
-function getEventEnd(ev, start) {
-    if (ev.end) {
-        const end = ev.end instanceof Date ? ev.end : new Date(ev.end);
-        if (!isNaN(end.getTime())) return end;
+/** Convert a local time string to UTC using the IANA timezone */
+function tzToUTC(isoLocal, tzid) {
+    try {
+        // isoLocal is like "2026-07-25T10:00:00"
+        // Create a date assuming it's UTC
+        const asUTC = new Date(isoLocal + 'Z');
+        // Find what that UTC instant looks like in the target timezone
+        const localStr = asUTC.toLocaleString('en-US', { timeZone: tzid, hour12: false });
+        const asLocal = new Date(localStr);
+        // The offset is the difference
+        const offset = asUTC.getTime() - asLocal.getTime();
+        return new Date(asUTC.getTime() + offset);
+    } catch {
+        // Invalid timezone — fall back to treating as UTC
+        return new Date(isoLocal + 'Z');
     }
-    if (ev.duration) {
-        const ms = typeof ev.duration === 'number'
-            ? ev.duration
-            : parseDurationToMs(ev.duration);
-        if (ms > 0) return new Date(start.getTime() + ms);
-    }
-    if (ev.start && ev.start.dateOnly) {
-        return new Date(start.getTime() + 24 * 60 * 60 * 1000);
-    }
-    return new Date(start.getTime());
 }
 
-function addIfInWindow(busyTimes, start, end, windowStart, windowEnd) {
-    if (end >= windowStart && start <= windowEnd) {
-        busyTimes.push({ start: start.toISOString(), end: end.toISOString() });
-        return true;
+// ---- RRULE expansion ----
+
+function expandRRule(rruleText, startUTC, tzid, windowStart, windowEnd) {
+    if (!rruleText) return [];
+
+    try {
+        const opts = parseRRuleText(rruleText);
+        const tz = tzid || 'UTC';
+        const isoStr = startUTC.toISOString().replace('Z', '');
+        const dtstart = Temporal.ZonedDateTime.from(`${isoStr}[UTC]`).withTimeZone(tz);
+
+        opts.dtstart = dtstart;
+
+        const rule = new RRuleTemporal(opts);
+        const wsT = Temporal.Instant.fromEpochMilliseconds(windowStart.getTime()).toZonedDateTimeISO('UTC');
+        const weT = Temporal.Instant.fromEpochMilliseconds(windowEnd.getTime()).toZonedDateTimeISO('UTC');
+
+        const occurrences = rule.between(wsT, weT);
+        return occurrences.map(o => new Date(o.toInstant().epochMilliseconds));
+    } catch (err) {
+        console.warn(`[CAL] RRULE expansion failed: ${err.message} | rule: ${rruleText}`);
+        // Fallback: return just the start date itself
+        return [startUTC];
     }
-    return false;
 }
 
-function parseDurationToMs(dur) {
-    if (!dur) return 0;
-    if (typeof dur === 'number') return dur;
-    if (typeof dur === 'object') {
-        let ms = 0;
-        if (dur.weeks) ms += dur.weeks * 7 * 24 * 60 * 60 * 1000;
-        if (dur.days) ms += dur.days * 24 * 60 * 60 * 1000;
-        if (dur.hours) ms += dur.hours * 60 * 60 * 1000;
-        if (dur.minutes) ms += dur.minutes * 60 * 1000;
-        if (dur.seconds) ms += dur.seconds * 1000;
-        return ms;
+function parseRRuleText(text) {
+    const opts = {};
+    for (const part of text.split(';')) {
+        const [key, val] = part.split('=');
+        if (!key || !val) continue;
+        switch (key.toUpperCase()) {
+            case 'FREQ':
+                opts.freq = val.toUpperCase();
+                break;
+            case 'COUNT':
+                opts.count = parseInt(val, 10);
+                break;
+            case 'INTERVAL':
+                opts.interval = parseInt(val, 10);
+                break;
+            case 'UNTIL': {
+                const d = toUTC(val, null, false);
+                if (d) {
+                    const iso = d.toISOString().replace('Z', '');
+                    opts.until = Temporal.ZonedDateTime.from(`${iso}[UTC]`);
+                }
+                break;
+            }
+            case 'BYDAY':
+                opts.byday = val.split(',').map(s => s.trim());
+                break;
+            case 'BYMONTH':
+                opts.bymonth = val.split(',').map(s => parseInt(s, 10));
+                break;
+            case 'BYMONTHDAY':
+                opts.bymonthday = val.split(',').map(s => parseInt(s, 10));
+                break;
+            case 'BYHOUR':
+                opts.byhour = val.split(',').map(s => parseInt(s, 10));
+                break;
+            case 'BYMINUTE':
+                opts.byminute = val.split(',').map(s => parseInt(s, 10));
+                break;
+            case 'BYSECOND':
+                opts.bysecond = val.split(',').map(s => parseInt(s, 10));
+                break;
+            case 'BYSETPOS':
+                opts.bysetpos = val.split(',').map(s => parseInt(s, 10));
+                break;
+            case 'BYWEEKNO':
+                opts.byweekno = val.split(',').map(s => parseInt(s, 10));
+                break;
+            case 'BYYEARDAY':
+                opts.byyearday = val.split(',').map(s => parseInt(s, 10));
+                break;
+            case 'WKST':
+                opts.wkst = val.toUpperCase();
+                break;
+        }
     }
-    if (typeof dur !== 'string') return 0;
+    return opts;
+}
+
+// ---- Duration parsing ----
+
+function parseDuration(dur) {
+    if (!dur || typeof dur !== 'string') return 0;
     let ms = 0;
     const w = dur.match(/(\d+)W/); if (w) ms += parseInt(w[1]) * 7 * 24 * 60 * 60 * 1000;
     const d = dur.match(/(\d+)D/); if (d) ms += parseInt(d[1]) * 24 * 60 * 60 * 1000;
