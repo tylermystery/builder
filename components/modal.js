@@ -8,7 +8,7 @@ import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTIO
 import { getCurrentUser } from '../chat.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { log } from '../utils/debug.js';
-import { getDayStatus, AVAILABILITY_STATUS } from '../availability.js';
+import { getDayStatus, AVAILABILITY_STATUS, logBusyTimeSummary } from '../availability.js';
 import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { resizeImageForUpload } from '../utils/imageResizer.js';
@@ -8041,7 +8041,9 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                             },
                             onOpen: async (selectedDates, dateStr, instance) => {
                                 if (record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]) {
+                                    console.log(`[ICAL] Modal calendar opened for "${record.fields.Name || record.id}"`);
                                     const busyTimes = await api.fetchCalendarForRecord(record);
+                                    logBusyTimeSummary(`"${record.fields.Name || record.id}"`, busyTimes);
                                     if (busyTimes && busyTimes.length > 0 && instance.config) {
                                         instance.redraw();
                                     }

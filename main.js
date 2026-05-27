@@ -124,6 +124,28 @@ window.debugAirtableCache = () => {
     return info;
 };
 
+window.debugICalAvailability = () => {
+    console.log('=== ICAL AVAILABILITY DEBUG DUMP ===');
+    const busyTimesMap = state.calendar.busyTimes;
+    console.log(`Cached URLs: ${busyTimesMap.size}`);
+    busyTimesMap.forEach((times, url) => {
+        console.log(`  URL: ${url}`);
+        console.log(`  ${times.length} busy times: ${JSON.stringify(times)}`);
+    });
+    console.log(`Locked items: ${state.cart.lockedItems.size}`);
+    state.cart.lockedItems.forEach((info, id) => {
+        const record = state.records.all.find(r => r.id === id);
+        const name = record?.fields?.Name || id;
+        const icalUrl = record?.fields?.['iCal URL'] || 'NONE';
+        const cached = busyTimesMap.get(icalUrl);
+        console.log(`  "${name}": iCal=${icalUrl !== 'NONE' ? 'YES' : 'NO'}, cached=${cached ? cached.length : 'NO'}, date=${info?.itemDate || 'none'}`);
+    });
+    const planDate = state.eventDetails.combined.get('date');
+    console.log(`Plan date: ${planDate || 'NONE'}`);
+    console.log('=== END ICAL DEBUG ===');
+    return { busyTimesCache: Object.fromEntries(busyTimesMap), lockedItems: Object.fromEntries(state.cart.lockedItems) };
+};
+
 /**
  * Handles the return from a Stripe ACH payment redirect (Financial Connections).
  * After Stripe redirects the user back, the URL contains payment_success=true,

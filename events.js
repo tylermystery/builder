@@ -7,7 +7,7 @@ import * as ui from './ui.js';
 import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
-import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus, getPlanDayStatusSync } from './availability.js';
+import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus, getPlanDayStatusSync, logBusyTimeSummary } from './availability.js';
 import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, preloadStripe } from './utils.js';
 import { sendMessage, getCurrentUser, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName, toggleRecentChats, addPlanEventToHistory } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
@@ -3035,7 +3035,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                                 .map(id => state.records.all.find(r => r.id === id))
                                 .filter(r => r && r.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]);
                             if (lockedRecords.length === 0) return;
-                            await Promise.all(lockedRecords.map(r => api.fetchCalendarForRecord(r)));
+                            console.log(`[ICAL] Plan calendar opened - fetching calendars for ${lockedRecords.length} items...`);
+                            const results = await Promise.all(lockedRecords.map(r => api.fetchCalendarForRecord(r)));
+                            results.forEach((busyTimes, i) => {
+                                logBusyTimeSummary(`"${lockedRecords[i].fields.Name}"`, busyTimes);
+                            });
                             if (instance.config) {
                                 instance.redraw();
                             }

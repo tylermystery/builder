@@ -1665,36 +1665,35 @@ const pendingCalendarRequests = new Map();
 export async function fetchCalendarForRecord(record) {
     if (!record || !record.fields) return [];
     const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
-    if (!icalUrl) {
-         log('API', `No iCal URL for record ${record.id}`);
-        return [];
-    }
+    const recordName = record.fields.Name || record.id;
+    if (!icalUrl) return [];
 
     if (state.calendar.busyTimes.has(icalUrl)) {
-        log('API', `Cache hit for iCal URL: ${icalUrl}`);
         return state.calendar.busyTimes.get(icalUrl);
     }
 
     if (pendingCalendarRequests.has(icalUrl)) {
-        log('API', `Deduplicating calendar request for ${record.fields.Name}`);
         return pendingCalendarRequests.get(icalUrl);
     }
 
-     log('API', `Fetching calendar for ${record.fields.Name} from URL: ${icalUrl}`);
+    console.log(`[ICAL] Fetching calendar for "${recordName}"...`);
 
     const promise = (async () => {
         try {
             const proxyUrl = `/api/calendar?url=${encodeURIComponent(icalUrl)}`;
             const response = await fetch(proxyUrl);
             if (!response.ok) {
-                throw new Error(`Calendar proxy function error: ${response.status} ${response.statusText}`);
+                throw new Error(`Calendar proxy error: ${response.status} ${response.statusText}`);
             }
             const busyTimes = await response.json();
+            console.log(`[ICAL] "${recordName}" received ${busyTimes.length} busy times`);
+            if (busyTimes.length > 0) {
+                console.log(`[ICAL] "${recordName}" ALL busy times: ${JSON.stringify(busyTimes)}`);
+            }
             state.calendar.busyTimes.set(icalUrl, busyTimes);
-            log('API', `Successfully fetched and cached ${busyTimes.length} busy times for ${record.fields.Name}`);
             return busyTimes;
         } catch (error) {
-            console.error(`Failed to fetch/parse calendar for ${record.fields.Name} (${icalUrl}):`, error);
+            console.error(`[ICAL] "${recordName}" fetch error:`, error.message);
             state.calendar.busyTimes.set(icalUrl, []);
             return [];
         } finally {
