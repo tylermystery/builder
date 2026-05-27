@@ -57,7 +57,7 @@ const fsSource = `
 
         // 4. Create the "vortex"
         // The vortex movement still depends on time and the energy boost.
-        float vortex_speed = u_time * (0.2 + u_energy * 2.0);
+        float vortex_speed = u_time * (0.02 + u_energy * 2.0);
         float vortex_twist = u_energy * 5.0;
         float n = noise(vec2(angle * (3.0 + vortex_twist) + vortex_speed, radius * 2.0));
 

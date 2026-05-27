@@ -4,7 +4,7 @@
 
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
-const { DEFAULT_FROM } = require('./utils/email-config');
+const { buildFrom, fetchStoreName } = require('./utils/email-config');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -135,7 +135,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { eventRecordId, userId, rsvpType } = JSON.parse(event.body);
+    const { eventRecordId, userId, rsvpType, storeId } = JSON.parse(event.body);
 
     if (!eventRecordId || !userId || !rsvpType) {
       return { statusCode: 400, body: JSON.stringify({ error: 'eventRecordId, userId, and rsvpType are required.' }) };
@@ -351,10 +351,14 @@ exports.handler = async (event) => {
       </html>
     `;
 
+    // Resolve store name for dynamic sender
+    const storeName = await fetchStoreName(storeId);
+    const emailFrom = buildFrom(storeName);
+
     // Send the email
     const msg = {
       to: userEmail,
-      from: DEFAULT_FROM,
+      from: emailFrom,
       subject: `You're Invited: ${eventData.name}`,
       html: emailHtml
     };

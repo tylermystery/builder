@@ -43,7 +43,7 @@ const fsSource = `
         vec2 centered_st = st - vec2(0.5, 0.5);
         float angle = atan(centered_st.y, centered_st.x);
         float radius = length(centered_st);
-        float vortex_speed = u_time * (0.2 + u_energy * 2.0);
+        float vortex_speed = u_time * (0.02 + u_energy * 2.0);
         float vortex_twist = u_energy * 5.0;
         float n = noise(vec2(angle * (3.0 + vortex_twist) + vortex_speed, radius * 2.0));
         float base_wave = n * 1.5 + u_progress * 10.0;
@@ -64,6 +64,7 @@ let animationFrameId = null;
 let bgStartTime = 0;
 let bgEnergy = 0.0;
 const ENERGY_DECAY_RATE = 0.985;
+const AUTO_DRIFT_SPEED = 0.002;
 
 // Dependencies injected via init()
 let _getState = null;
@@ -133,12 +134,14 @@ export function startAnimation() {
         if (bgEnergy < 0.01) bgEnergy = 0.0;
 
         const currentProgress = _getState?.()?.ui?.currentProgress || 0.5;
+        const autoProgressDrift = elapsedTime * AUTO_DRIFT_SPEED;
+        const totalProgress = currentProgress + autoProgressDrift;
 
         shader.use();
         gl.uniform2f(shader.getUniformLocation("u_resolution"), bgCanvas.width, bgCanvas.height);
         gl.uniform1f(shader.getUniformLocation("u_time"), elapsedTime);
         gl.uniform1f(shader.getUniformLocation("u_energy"), bgEnergy);
-        gl.uniform1f(shader.getUniformLocation("u_progress"), currentProgress);
+        gl.uniform1f(shader.getUniformLocation("u_progress"), totalProgress);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
 
         animationFrameId = requestAnimationFrame(animate);

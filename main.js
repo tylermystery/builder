@@ -10,7 +10,7 @@ import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
-import { debounce, updateUrl, extractRecordIdFromPath, loadStripe } from './utils.js';
+import { debounce, updateUrl, extractRecordIdFromPath, loadStripe, findStoreBySlugOrId, storeSlug, getShopUrlParam } from './utils.js';
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js';
 import { initializeSessionChat } from './chat.js';
 import { setupCalendarEventListeners } from './components/calendarView.js';
@@ -850,6 +850,7 @@ async function initialize() {
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
     let shopId = urlParams.get('shopId');
+    const shopSlug = urlParams.get('shop');
     let activeShop = null;
 
     // CRITICAL FIX: Restore authentication state from JWT BEFORE loading session
@@ -888,6 +889,9 @@ async function initialize() {
     if (shopId) {
         activeShop = state.stores.all.find(s => s.id === shopId);
         log('Main', `Shop ID found in URL: ${shopId}. Found shop: ${!!activeShop}`);
+    } else if (shopSlug) {
+        activeShop = findStoreBySlugOrId(shopSlug, state.stores.all);
+        log('Main', `Shop slug found in URL: ${shopSlug}. Found shop: ${!!activeShop}`);
     }
 
     if (sessionId) {
@@ -1077,7 +1081,7 @@ async function initialize() {
             titleElement.addEventListener('click', (e) => {
                 if (e.target.id !== 'shop-switcher-trigger') {
                     // Navigate to top level catalog without reloading (avoids creating new session)
-                    const newUrl = `${window.location.pathname}?shopId=${activeShop.id}`;
+                    const newUrl = `${window.location.pathname}?${getShopUrlParam(activeShop.id, state.stores.all)}`;
                     history.pushState({}, '', newUrl);
                     syncUiWithUrl();
                     window.scrollTo({ top: 0, behavior: 'smooth' });

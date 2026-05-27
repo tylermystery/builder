@@ -2966,10 +2966,13 @@ html.presentation-active {
     }
 }
 
-/* Desktop: Hide mobile filter trigger */
+/* Desktop: Hide mobile filter trigger and filter toggle button (filters always visible in sidebar) */
 @media (min-width: 1000px) {
     #mobile-filter-trigger {
         display: none;
+    }
+    #header-search-wrapper #filter-toggle-btn {
+        display: none !important;
     }
 }
 
@@ -4986,7 +4989,7 @@ body.ucp-panel-open .unified-chat-panel {
             <!-- Center: Search Bar -->
             <div id="header-center">
                 <div id="header-search-wrapper">
-                    <input type="text" id="name-filter" placeholder="Search activities, venues, experiences..." autocomplete="off">
+                    <input type="search" id="name-filter" name="wtfun-search" placeholder="Search activities, venues, experiences..." autocomplete="off">
                     <button id="clear-search-btn" title="Clear Search">×</button>
                     <button id="filter-toggle-btn" aria-label="Toggle filters" aria-expanded="false">
                         <span class="filter-icon">☰</span>
@@ -5859,7 +5862,7 @@ body.ucp-panel-open .unified-chat-panel {
                 <!-- Search Input Area -->
                 <div class="presentation-search-input-area">
                     <div class="presentation-search-input-wrapper">
-                        <input type="text" id="presentation-search-input" placeholder="Search activities, venues, services..." autocomplete="off">
+                        <input type="search" id="presentation-search-input" name="wtfun-presentation-search" placeholder="Search activities, venues, services..." autocomplete="off">
                         <button id="presentation-search-clear" class="presentation-search-clear" title="Clear search" style="display: none;">×</button>
                     </div>
                     <!-- AI Refinement Chips -->

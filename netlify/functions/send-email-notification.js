@@ -1,6 +1,6 @@
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
-const { DEFAULT_FROM } = require('./utils/email-config');
+const { DEFAULT_FROM, buildFrom, fetchStoreName } = require('./utils/email-config');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -110,6 +110,11 @@ exports.handler = async (event) => {
     const session = await sessionResponse.json();
     sessionName = session.fields.Name || 'your event plan';
 
+    // Resolve store name for dynamic sender
+    const storeId = session.fields.Stores && session.fields.Stores[0];
+    const storeName = await fetchStoreName(storeId);
+    const emailFrom = buildFrom(storeName);
+
     const collaboratorIds = session.fields.Collaborators;
     if (!collaboratorIds || collaboratorIds.length === 0) {
       return { statusCode: 200, body: JSON.stringify({ message: 'No collaborators to notify.' }) };
@@ -147,7 +152,7 @@ exports.handler = async (event) => {
 
         return sgMail.send({
           to: user.fields.Email,
-          from: DEFAULT_FROM,
+          from: emailFrom,
           subject: template.subject(templateData),
           html: template.html(templateData)
         });

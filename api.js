@@ -2,7 +2,7 @@
 
 import { state, invalidateRecordsIndex, getRecordById } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
-import { parseOptions } from './utils.js';
+import { parseOptions, getShopUrlParam } from './utils.js';
 import { log } from './utils/debug.js';
 import { serializeIterations, deserializeIterations } from './components/refinementHandler.js';
 import {
@@ -1158,7 +1158,7 @@ export async function saveSessionToAirtable() {
 
             state.session.id = newSessionId;
             state.session.isOwned = true;
-            window.history.replaceState({}, document.title, `?session=${newSessionId}${window.location.search.includes('shopId') ? `&shopId=${state.ui.activeShopId}` : ''}`);
+            window.history.replaceState({}, document.title, `?session=${newSessionId}${state.ui.activeShopId ? `&${getShopUrlParam(state.ui.activeShopId, state.stores.all)}` : ''}`);
             log('API', `New session created with ID: ${newSessionId}`);
             console.log(`[SESSION-SAVE] New session created: ${newSessionId}. User authenticated: ${state.session.user.isAuthenticated}, userId: ${state.session.user.id}`);
             if(state.session.user.isAuthenticated && state.session.user.id) {
@@ -3623,7 +3623,7 @@ export async function updateRsvpForEvent(eventId, userId, rsvpType) {
             fetch('/api/send-rsvp-confirmation', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ eventRecordId: eventId, userId, rsvpType })
+                body: JSON.stringify({ eventRecordId: eventId, userId, rsvpType, storeId: state.session.storeId || '' })
             }).catch(err => console.error('RSVP confirmation email trigger failed:', err));
         }
 

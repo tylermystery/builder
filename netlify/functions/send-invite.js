@@ -4,7 +4,7 @@
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
 const crypto = require('crypto');
-const { DEFAULT_FROM } = require('./utils/email-config');
+const { buildFrom, fetchStoreName } = require('./utils/email-config');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL: NETLIFY_URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -15,7 +15,7 @@ exports.handler = async (event) => {
     }
 
     try {
-        const { email, sessionId, invitedBy, inviterName, role, sessionName } = JSON.parse(event.body);
+        const { email, sessionId, invitedBy, inviterName, role, sessionName, storeId } = JSON.parse(event.body);
 
         if (!email || !sessionId) {
             return {
@@ -61,10 +61,14 @@ exports.handler = async (event) => {
         const planName = sessionName || 'an event plan';
         const senderName = inviterName || 'Someone';
 
+        // Resolve store name for dynamic sender
+        const storeName = await fetchStoreName(storeId);
+        const emailFrom = buildFrom(storeName);
+
         // Send the invitation email
         const msg = {
             to: email,
-            from: DEFAULT_FROM,
+            from: emailFrom,
             subject: `${senderName} invited you to collaborate on "${planName}"`,
             html: `
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px;">

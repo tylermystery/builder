@@ -6,7 +6,7 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage } from '../config.js';
 import { getCurrentUser } from '../chat.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getDayStatus, AVAILABILITY_STATUS, logBusyTimeSummary } from '../availability.js';
 import { showReceiptModal } from './receipt.js';
@@ -5540,7 +5540,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     log('Modal', `Navigating to edit session ${linkedSessionId}`);
                     closeDetailModal();
                     // Redirect to session with sidebar open
-                    window.location.href = `${window.location.pathname}?session=${linkedSessionId}&shopId=${state.ui.activeShopId}`;
+                    window.location.href = `${window.location.pathname}?session=${linkedSessionId}&${getShopUrlParam(state.ui.activeShopId, state.stores.all)}`;
                 });
                 sessionComponentsSection.appendChild(editPlanBtn);
             }
@@ -5595,7 +5595,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                         log('Modal', `Navigating to edit session ${linkedSessionId}`);
                         closeDetailModal();
                         // Redirect to session with sidebar open
-                        window.location.href = `${window.location.pathname}?session=${linkedSessionId}&shopId=${state.ui.activeShopId}`;
+                        window.location.href = `${window.location.pathname}?session=${linkedSessionId}&${getShopUrlParam(state.ui.activeShopId, state.stores.all)}`;
                     });
                     editPlanSection.appendChild(editPlanBtn);
                 }
@@ -6522,13 +6522,23 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         // Generate slug for pretty URL
         const slug = generateSlug(record.fields.Name, record.id);
 
-        // Build share URL with shopId but WITHOUT session
+        // Build share URL with shop slug but WITHOUT session
         const shareUrl = new URL(`${window.location.origin}/item/${slug}`);
 
-        // Include shopId if available (from current state or URL)
-        const currentShopId = state.activeShop?.id || new URLSearchParams(window.location.search).get('shopId');
+        // Include shop slug if available (from current state or URL)
+        const currentShopId = state.activeShop?.id || state.ui?.activeShopId || new URLSearchParams(window.location.search).get('shopId');
         if (currentShopId) {
-            shareUrl.searchParams.set('shopId', currentShopId);
+            const shop = state.stores?.all?.find(s => s.id === currentShopId);
+            if (shop?.fields?.Name) {
+                shareUrl.searchParams.set('shop', storeSlug(shop.fields.Name));
+            } else {
+                shareUrl.searchParams.set('shopId', currentShopId);
+            }
+        } else {
+            const shopSlugParam = new URLSearchParams(window.location.search).get('shop');
+            if (shopSlugParam) {
+                shareUrl.searchParams.set('shop', shopSlugParam);
+            }
         }
 
         const shareData = {

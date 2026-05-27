@@ -488,6 +488,31 @@ export function extractRecordIdFromPath(path) {
     return null;
 }
 
+export function storeSlug(storeName) {
+    if (!storeName || typeof storeName !== 'string') return '';
+    return storeName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
+
+export function findStoreBySlugOrId(identifier, stores) {
+    if (!identifier || !stores || !stores.length) return null;
+    const direct = stores.find(s => s.id === identifier);
+    if (direct) return direct;
+    const slugMatch = identifier.toLowerCase();
+    return stores.find(s => s.fields?.Name && storeSlug(s.fields.Name) === slugMatch) || null;
+}
+
+export function getShopUrlParam(activeShopId, stores) {
+    if (!activeShopId) return '';
+    const shop = stores?.find(s => s.id === activeShopId);
+    if (shop?.fields?.Name) {
+        return `shop=${encodeURIComponent(storeSlug(shop.fields.Name))}`;
+    }
+    return `shopId=${activeShopId}`;
+}
+
 /**
  * Updates the browser's URL with new query parameters without reloading the page.
  * When setting openItem, generates a "pretty" URL like /item/event-name-recXYZ

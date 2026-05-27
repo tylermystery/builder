@@ -9,8 +9,17 @@ const REDIRECTS_OUTPUT_FILE = '_redirects'; // Netlify redirects file name
 const AIRTABLE_PAT = process.env.AIRTABLE_PAT;
 const BASE_ID = process.env.BASE_ID;
 const ITEMS_TABLE_ID = 'tblUA4uuS8IYlhKpD';
+const STORES_TABLE_ID = 'Stores';
 const SHORTCUT_FIELD_NAME = 'Unique Page Shortcut Name'; // The exact field name
 const STORES_FIELD_NAME = 'Stores'; // The exact field name for linked stores
+
+function buildStoreSlug(storeName) {
+    if (!storeName || typeof storeName !== 'string') return '';
+    return storeName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
 
 // --- Fetch Shortcuts Function ---
 async function fetchShortcutsFromAirtable() {
@@ -62,8 +71,29 @@ async function fetchShortcutsFromAirtable() {
 }
 
 
+async function fetchStoreNames() {
+    if (!AIRTABLE_PAT || !BASE_ID) return {};
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${STORES_TABLE_ID}?fields[]=Name`;
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` }
+        });
+        if (!response.ok) return {};
+        const data = await response.json();
+        const map = {};
+        for (const record of data.records) {
+            if (record.fields.Name) map[record.id] = record.fields.Name;
+        }
+        console.log(`✅ Fetched ${Object.keys(map).length} store names for slug generation.`);
+        return map;
+    } catch (e) {
+        console.warn('⚠️ Could not fetch store names:', e.message);
+        return {};
+    }
+}
+
 // --- Generate Redirects Function ---
-function generateAndWriteRedirects(shortcutItems) {
+function generateAndWriteRedirects(shortcutItems, storeNames) {
     console.log(`\n⚙️ Generating ${REDIRECTS_OUTPUT_FILE}...`);
     if (!shortcutItems || shortcutItems.length === 0) {
         console.log('⚠️ No shortcut items found, skipping redirects file generation.');
@@ -95,7 +125,9 @@ function generateAndWriteRedirects(shortcutItems) {
         const firstStoreId = storeIds[0];
         const itemId = item.id;
         const sourcePath = `/${shortcut.trim()}`;
-        const destinationPath = `/?shopId=${firstStoreId}&openItem=${itemId}`;
+        const storeName = storeNames[firstStoreId];
+        const shopParam = storeName ? `shop=${encodeURIComponent(buildStoreSlug(storeName))}` : `shopId=${firstStoreId}`;
+        const destinationPath = `/?${shopParam}&openItem=${itemId}`;
         const statusCode = 302;
 
         redirectLines.push(`${sourcePath} ${destinationPath} ${statusCode}`);
@@ -129,7 +161,8 @@ async function buildSourceFile() {
     console.log('============================================================');
 
     const shortcutItems = await fetchShortcutsFromAirtable();
-    generateAndWriteRedirects(shortcutItems);
+    const storeNames = await fetchStoreNames();
+    generateAndWriteRedirects(shortcutItems, storeNames);
 
     // Generate project_source.json snapshot
     console.log('\n📦 Generating project_source.json...');
