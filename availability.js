@@ -1,4 +1,3 @@
-// PASTE THIS ENTIRE CODE INTO: availability.js
 import { CONSTANTS } from './config.js';
 import { log } from './utils/debug.js';
 import * as api from './api.js';
@@ -26,6 +25,20 @@ function toBusyDate(val) {
     const d = new Date(val);
     if (!isNaN(d.getTime())) return d;
     return parseICalDate(val) || new Date(NaN);
+}
+
+export function logBusyTimeSummary(label, busyTimes) {
+    if (!busyTimes || busyTimes.length === 0) {
+        console.log(`[ICAL] ${label}: no busy times`);
+        return;
+    }
+    const dates = busyTimes.map(b => {
+        const s = new Date(b.start);
+        const e = new Date(b.end);
+        return `${s.toLocaleDateString()} ${s.toLocaleTimeString()} - ${e.toLocaleTimeString()}`;
+    });
+    console.log(`[ICAL] ${label}: ${busyTimes.length} busy times:`);
+    dates.forEach((d, i) => console.log(`[ICAL]   [${i}] ${d} (raw: ${busyTimes[i].start} -> ${busyTimes[i].end})`));
 }
 
 export function getDayStatus(day, busyTimes, record) {
@@ -168,18 +181,15 @@ export async function getCombinedPlanStatus(date, lockedItems, options = {}) {
         if (record && record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]) {
             const busyTimes = await api.fetchCalendarForRecord(record);
 
-            // Check if this item has a specific date assignment
             const itemInfo = lockedItemsMap?.get(record.id);
             const itemDate = itemInfo?.itemDate;
 
             if (itemDate) {
-                // Decision 5B: Check only the item's assigned date
                 const assignedDate = new Date(itemDate);
                 const status = getDayStatus(assignedDate, busyTimes, record).status;
                 if (status === AVAILABILITY_STATUS.NONE) return AVAILABILITY_STATUS.NONE;
                 if (status === AVAILABILITY_STATUS.PARTIAL) overallStatus = AVAILABILITY_STATUS.PARTIAL;
             } else if (dateEnd) {
-                // Decision 5A fallback: Unscheduled item in multi-day plan, check all dates
                 const start = new Date(date);
                 const end = new Date(dateEnd);
                 let anyAvailable = false;
@@ -192,7 +202,6 @@ export async function getCombinedPlanStatus(date, lockedItems, options = {}) {
                 if (!anyAvailable) return AVAILABILITY_STATUS.NONE;
                 if (!allAvailable) overallStatus = AVAILABILITY_STATUS.PARTIAL;
             } else {
-                // Single-date plan, check the plan date
                 const status = getDayStatus(date, busyTimes, record).status;
                 if (status === AVAILABILITY_STATUS.NONE) return AVAILABILITY_STATUS.NONE;
                 if (status === AVAILABILITY_STATUS.PARTIAL) overallStatus = AVAILABILITY_STATUS.PARTIAL;
