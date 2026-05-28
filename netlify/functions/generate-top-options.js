@@ -44,7 +44,7 @@ Option B [price: +X]
 Rules for the format:
 - Group names go in square brackets: [Size], [Duration], [Add-ons]
 - Optional modifier after group name in parentheses: (required) or (optional)
-- Price modifiers use: [price: +10] for additions, [price: -5] for discounts, [price: 25] for overrides
+- Price modifiers use: [price: +10] for additions, [price: -5] for discounts, [price: 25] for overrides, [price: +15%] or [price: -10%] for percentage adjustments of the base price
 - Keep option names concise but descriptive
 - Make price adjustments realistic and proportional to the base price
 - Only include options that make sense for this specific type of item

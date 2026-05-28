@@ -182,12 +182,14 @@ export async function loadSortable() {
  * Supports rich modifiers with bracket syntax:
  *   [Group Name] (optional_modifier) - Creates a new option group
  *   Option Name [price: +X] [img: tag] [desc: text] [time: +X] - Option with modifiers
+ *   Price modifiers support absolute amounts (+X / -X), overrides (X), and
+ *   percentages of the base price (+X% / -X%).
  *
  * Falls back to legacy comma-separated format for backward compatibility.
  *
  * @param {string} rawOptionsString The multi-line string from the Airtable field.
  * @returns {Array<Object>} An array of group objects, each with name and options array.
- *   Each option has: { name, priceModifier, priceOverride, imageTag, descriptionAppend, durationChange }
+ *   Each option has: { name, priceModifier, priceOverride, pricePercent, imageTag, descriptionAppend, durationChange }
  */
 export function parseOptions(rawOptionsString) {
     if (!rawOptionsString || typeof rawOptionsString !== 'string') {
@@ -252,6 +254,8 @@ function parseOptionsWithGroups(lines) {
 /**
  * Parses a single option line with bracket modifiers.
  * Format: Option Name [price: +10] [img: image_tag] [desc: description text] [time: +30]
+ * Price modifiers: [price: +10]/[price: -5] (absolute), [price: 25] (override),
+ * [price: +15%]/[price: -10%] (percentage of base price).
  *
  * @param {string} line - A single option line
  * @returns {Object} Parsed option with all modifier fields
@@ -260,6 +264,7 @@ function parseOptionLine(line) {
     let name = line;
     let priceModifier = null;  // +X or -X (adds/subtracts from base)
     let priceOverride = null;  // X (replaces base price)
+    let pricePercent = null;   // +X% or -X% (adjusts base price by a percentage)
     let imageTag = null;
     let descriptionAppend = null;
     let durationChange = null;
@@ -275,8 +280,10 @@ function parseOptionLine(line) {
 
         switch (key) {
             case 'price':
-                // Check if it's a modifier (+X or -X) or override (X)
-                if (value.startsWith('+') || value.startsWith('-')) {
+                // Check if it's a percentage (+X% / -X% / X%), a modifier (+X or -X) or override (X)
+                if (value.endsWith('%')) {
+                    pricePercent = parseFloat(value);
+                } else if (value.startsWith('+') || value.startsWith('-')) {
                     priceModifier = parseFloat(value);
                 } else {
                     priceOverride = parseFloat(value);
@@ -312,6 +319,7 @@ function parseOptionLine(line) {
         name: name || 'Unnamed Option',
         priceModifier: isNaN(priceModifier) ? null : priceModifier,
         priceOverride: isNaN(priceOverride) ? null : priceOverride,
+        pricePercent: isNaN(pricePercent) ? null : pricePercent,
         imageTag: imageTag,
         descriptionAppend: descriptionAppend,
         durationChange: isNaN(durationChange) ? null : durationChange,
@@ -334,6 +342,7 @@ function parseLegacyOptions(lines) {
         let name = option;
         let price = null;
         let priceChange = null;
+        let pricePercent = null;
         let durationChange = null;
         let description = null;
 
@@ -344,6 +353,8 @@ function parseLegacyOptions(lines) {
             let match;
             if (match = part.match(/price:\s*(\-?\d+(\.\d{1,2})?)/i)) {
                 price = parseFloat(match[1]);
+            } else if (match = part.match(/price change:\s*([+\-]?\d+(\.\d{1,2})?)%/i)) {
+                pricePercent = parseFloat(match[1]);
             } else if (match = part.match(/price change:\s*(\-?\d+(\.\d{1,2})?)/i)) {
                 priceChange = parseFloat(match[1]);
             } else if (match = part.match(/duration change:\s*(\-?\d+(\.\d{1,2})?)/i)) {
@@ -363,6 +374,7 @@ function parseLegacyOptions(lines) {
             name: name || 'Unnamed Option',
             priceModifier: priceChange,
             priceOverride: price,
+            pricePercent: isNaN(pricePercent) ? null : pricePercent,
             imageTag: null,
             descriptionAppend: description,
             durationChange: durationChange,
@@ -712,6 +724,10 @@ export function getRecordPrice(record, selectionsOrIndex = null) {
         return isNaN(price) ? 0 : price;
     }
 
+    // Capture the base price so percentage modifiers apply to it consistently
+    // (rather than compounding off the running total as multiple groups are applied).
+    const basePrice = isNaN(price) ? 0 : price;
+
     const groups = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
 
     // Handle legacy single index format
@@ -724,6 +740,9 @@ export function getRecordPrice(record, selectionsOrIndex = null) {
             }
             if (variation.priceModifier !== null && !isNaN(variation.priceModifier)) {
                 price += variation.priceModifier;
+            }
+            if (variation.pricePercent !== null && !isNaN(variation.pricePercent)) {
+                price += basePrice * (variation.pricePercent / 100);
             }
         }
         return isNaN(price) ? 0 : price;
@@ -752,8 +771,13 @@ export function getRecordPrice(record, selectionsOrIndex = null) {
                 // Apply price modifications - override takes precedence
                 if (option.priceOverride !== null && !isNaN(option.priceOverride)) {
                     price = option.priceOverride;
-                } else if (option.priceModifier !== null && !isNaN(option.priceModifier)) {
-                    price += option.priceModifier;
+                } else {
+                    if (option.priceModifier !== null && !isNaN(option.priceModifier)) {
+                        price += option.priceModifier;
+                    }
+                    if (option.pricePercent !== null && !isNaN(option.pricePercent)) {
+                        price += basePrice * (option.pricePercent / 100);
+                    }
                 }
             }
         }

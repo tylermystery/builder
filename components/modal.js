@@ -7036,6 +7036,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     priceModText = `$${opt.priceOverride.toFixed(2)}`;
                 } else if (opt.priceModifier !== null) {
                     priceModText = `${opt.priceModifier >= 0 ? '+' : ''}$${opt.priceModifier.toFixed(2)}`;
+                } else if (opt.pricePercent !== null && opt.pricePercent !== undefined) {
+                    priceModText = `${opt.pricePercent >= 0 ? '+' : ''}${opt.pricePercent}%`;
                 }
 
                 // Build button content with optional image tag indicator
