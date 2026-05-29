@@ -698,6 +698,56 @@
     font-style: italic;
 }
 
+/* Collapsible accordion sections in the item detail modal (Add Notes, Item Scheduling) */
+.modal-accordion {
+    margin: 12px 0;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+.modal-accordion-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    text-align: left;
+}
+.modal-accordion-icon {
+    flex-shrink: 0;
+    color: #999;
+}
+.modal-accordion-chevron {
+    margin-left: auto;
+    flex-shrink: 0;
+    color: #999;
+    transition: transform 0.25s ease;
+}
+.modal-accordion.expanded .modal-accordion-chevron {
+    transform: rotate(180deg);
+}
+.modal-accordion-body {
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.25s ease;
+}
+.modal-accordion.expanded .modal-accordion-body {
+    max-height: 600px;
+    opacity: 1;
+    margin-top: 10px;
+}
+
 /* Time component styles - detail modal */
 .modal-time-section {
     margin: 12px 0;

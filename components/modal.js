@@ -4581,6 +4581,26 @@ function applyTagChipStyle(chip, isSelected) {
 // Guard to prevent concurrent modal rendering
 let isModalRendering = false;
 
+/**
+ * Wire up a collapsible accordion section in the detail modal (Add Notes, Item Scheduling).
+ * Resets the section to collapsed and rebinds its toggle so listeners don't stack across opens.
+ */
+function setupModalAccordion(containerId, toggleId) {
+    const container = document.getElementById(containerId);
+    const toggle = document.getElementById(toggleId);
+    if (!container || !toggle) return;
+    // Start collapsed every time the modal opens.
+    container.classList.remove('expanded');
+    // Clone to drop any previously attached listeners.
+    const freshToggle = toggle.cloneNode(true);
+    toggle.parentNode.replaceChild(freshToggle, toggle);
+    freshToggle.setAttribute('aria-expanded', 'false');
+    freshToggle.addEventListener('click', () => {
+        const expanded = container.classList.toggle('expanded');
+        freshToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    });
+}
+
 export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = null) {
     // Prevent concurrent modal renders that could cause duplicate content
     if (isModalRendering) {
@@ -7972,6 +7992,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         // Hide notes container for events - not needed for published event viewing
         modalNotesContainer.style.display = isEvent ? 'none' : 'block';
         modalItemNote.value = itemState.note;
+        // Add Notes is a collapsible accordion, collapsed by default each open.
+        setupModalAccordion('modal-notes-container', 'modal-notes-toggle');
 
         // Calculate effective minimum and Airtable minimum
         const airtableMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
@@ -8189,6 +8211,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
             // Show time section
             modalTimeContainer.style.display = 'block';
+            // Item Scheduling is a collapsible accordion, collapsed by default each open.
+            setupModalAccordion('modal-item-time-container', 'modal-time-toggle');
 
             // Populate from saved item info
             const modalItemStartTimeInput = document.getElementById('modal-item-start-time');
