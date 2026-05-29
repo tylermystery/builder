@@ -1055,11 +1055,51 @@ function setupCheckoutChipIn(cartSubtotal) {
  * refreshes the checkout display (fees, payment intent, etc.).
  * @param {Object} scope - The checkout scope (item mode)
  */
+function buildItemOptionDetailsHtml(scope) {
+    if (!scope || !scope.record) return '';
+    const optionGroups = parseOptions(scope.record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    if (!optionGroups || optionGroups.length === 0) return '';
+
+    const optionLines = [];
+    // Prefer the full selections object (supports multiple groups / multi-select)
+    if (scope.selections && Object.keys(scope.selections).length > 0) {
+        const sortedKeys = Object.keys(scope.selections).sort((a, b) => {
+            return (parseInt(a.replace('group', ''), 10) || 0) - (parseInt(b.replace('group', ''), 10) || 0);
+        });
+        for (const groupKey of sortedKeys) {
+            const optionValue = scope.selections[groupKey];
+            const groupIndexMatch = groupKey.match(/^group(\d+)$/);
+            if (!groupIndexMatch) continue;
+            const groupIndex = parseInt(groupIndexMatch[1], 10);
+            const group = optionGroups[groupIndex];
+            if (!group || !group.options) continue;
+            const optionIndices = Array.isArray(optionValue) ? optionValue : [optionValue];
+            for (const optIdx of optionIndices) {
+                const option = group.options[optIdx];
+                if (!option || !option.name) continue;
+                const groupLabel = group.name && group.name !== 'Options' ? `${group.name}: ` : '';
+                optionLines.push(`${groupLabel}${option.name}`);
+            }
+        }
+    } else if (scope.selectedOptionIndex != null) {
+        // Legacy fallback: single flat option index
+        const flatOptions = flattenOptionGroups(optionGroups);
+        const option = flatOptions[scope.selectedOptionIndex];
+        if (option && option.name) {
+            optionLines.push(option.name);
+        }
+    }
+
+    if (optionLines.length === 0) return '';
+    return optionLines.map(l => `<small class="checkout-option-detail">› ${l}</small>`).join('');
+}
+
 function updateCheckoutItemQtyDisplay(scope) {
     const qty = currentCheckoutItemQty;
     const price = scope.price || 0;
     const itemTotal = price * qty;
     const itemName = scope.itemName || 'Item';
+    const itemOptionDetailsHtml = buildItemOptionDetailsHtml(scope);
 
     // Update qty value display
     const qtyValueEl = document.getElementById('checkout-item-qty');
@@ -1080,6 +1120,7 @@ function updateCheckoutItemQtyDisplay(scope) {
             scopeItem.innerHTML = `
                 <div class="summary-item-details">
                     <span class="summary-item-name">${itemName}</span>
+                    ${itemOptionDetailsHtml}
                     <small class="summary-item-donation-note">Chip in to crowdfund this item</small>
                 </div>
                 <span class="summary-item-price">—</span>
@@ -1088,6 +1129,7 @@ function updateCheckoutItemQtyDisplay(scope) {
             scopeItem.innerHTML = `
                 <div class="summary-item-details">
                     <span class="summary-item-name">${itemName} (x${qty})</span>
+                    ${itemOptionDetailsHtml}
                 </div>
                 <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
             `;
@@ -4678,6 +4720,47 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         // Show price action buttons
         if (priceActionsContainer) priceActionsContainer.classList.remove('hidden');
 
+        // Read the live option selections from the rendered option buttons in the
+        // detail modal. Mirrors the logic used by "Add to Plan" (see events.js) so
+        // Rapid Pay / Chip In reflect the same adjusted price and selected options.
+        // Returns a selections object like { group0: 1, group1: [0, 2] }.
+        const readLiveSelections = () => {
+            const selections = {};
+            const optionGroupEls = document.querySelectorAll('#modal-options-container .option-group');
+            if (optionGroupEls.length > 0) {
+                optionGroupEls.forEach((group) => {
+                    const groupIndex = group.dataset.groupIndex;
+                    const selectedBtns = group.querySelectorAll('.option-btn.selected');
+                    if (selectedBtns.length > 0 && groupIndex !== undefined) {
+                        if (selectedBtns.length === 1) {
+                            selections[`group${groupIndex}`] = parseInt(selectedBtns[0].dataset.optionIndex, 10) || 0;
+                        } else {
+                            selections[`group${groupIndex}`] = Array.from(selectedBtns)
+                                .map(btn => parseInt(btn.dataset.optionIndex, 10) || 0)
+                                .sort((a, b) => a - b);
+                        }
+                    }
+                });
+            } else {
+                const selectedBtn = document.querySelector('#modal-options-container .option-btn.selected');
+                if (selectedBtn) {
+                    selections['group0'] = parseInt(selectedBtn.dataset.optionIndex, 10) || 0;
+                }
+            }
+            return selections;
+        };
+
+        // Compute legacy selectedOptionIndex from a selections object for backward compatibility.
+        const legacyIndexFromSelections = (selections) => {
+            if (!selections || Object.keys(selections).length === 0) {
+                return itemState.selectedOptionIndex || 0;
+            }
+            const group0Selection = selections['group0'];
+            return Array.isArray(group0Selection)
+                ? (group0Selection[0] || 0)
+                : (group0Selection || 0);
+        };
+
         // Calculate initial amount for rapid pay
         const initialPrice = getRecordPrice(record, itemState.selectedOptionIndex);
         const initialQuantity = itemState.quantity || 1;
@@ -4721,13 +4804,12 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             newRapidPayBtn.addEventListener('click', () => {
                 const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
                 const quantity = quantityInput ? parseFloat(quantityInput.value) || 1 : 1;
-                const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
-                let selectedOptionIndex = itemState.selectedOptionIndex || 0;
-                if (optionRadios.length > 0) {
-                    const selectedValue = optionRadios[0].value;
-                    selectedOptionIndex = parseInt(selectedValue, 10) || 0;
-                }
-                const price = getRecordPrice(record, selectedOptionIndex);
+                const selections = readLiveSelections();
+                const priceParam = Object.keys(selections).length > 0
+                    ? selections
+                    : (itemState.selectedOptionIndex || 0);
+                const selectedOptionIndex = legacyIndexFromSelections(selections);
+                const price = getRecordPrice(record, priceParam);
                 const amount = price * quantity;
                 const itemName = record.fields.Name || 'Item';
                 const shopSettings = getShopSettings();
@@ -4739,6 +4821,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     price: price,
                     record: record,
                     selectedOptionIndex: selectedOptionIndex,
+                    selections: selections,
                     highlightChipIn: false
                 });
             });
@@ -4756,13 +4839,12 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             newChipInBtn.addEventListener('click', () => {
                 const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
                 const quantity = quantityInput ? parseFloat(quantityInput.value) || 1 : 1;
-                const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
-                let selectedOptionIndex = itemState.selectedOptionIndex || 0;
-                if (optionRadios.length > 0) {
-                    const selectedValue = optionRadios[0].value;
-                    selectedOptionIndex = parseInt(selectedValue, 10) || 0;
-                }
-                const price = getRecordPrice(record, selectedOptionIndex);
+                const selections = readLiveSelections();
+                const priceParam = Object.keys(selections).length > 0
+                    ? selections
+                    : (itemState.selectedOptionIndex || 0);
+                const selectedOptionIndex = legacyIndexFromSelections(selections);
+                const price = getRecordPrice(record, priceParam);
                 const itemName = record.fields.Name || 'Item';
                 const shopSettings = getShopSettings();
                 showCheckoutModal(shopSettings, {
@@ -4774,6 +4856,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     price: price,
                     record: record,
                     selectedOptionIndex: selectedOptionIndex,
+                    selections: selections,
                     highlightChipIn: true
                 });
             });
@@ -8805,7 +8888,7 @@ export function hideDetailModal() {
 
 export async function showCheckoutModal(shopSettings, scope = null) {
     currentShopSettings = shopSettings;
-    currentCheckoutScope = scope; // { mode: 'item', itemId, itemName, quantity, price, record, highlightChipIn } or null (plan mode)
+    currentCheckoutScope = scope; // { mode: 'item', itemId, itemName, quantity, price, record, selectedOptionIndex, selections, highlightChipIn } or null (plan mode)
     currentChipInAmount = 0; // Reset chip-in on each open
     log('Modal', `Showing checkout modal. Scope: ${scope ? scope.mode : 'plan'}`);
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
@@ -8871,18 +8954,8 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         const itemTotal = (scope.price || 0) * initialQty;
         finalTotal = itemTotal;
 
-        // Build option detail lines for item mode
-        let itemOptionDetailsHtml = '';
-        if (scope.record) {
-            const optionGroups = parseOptions(scope.record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-            if (optionGroups && optionGroups.length > 0 && scope.selectedOptionIndex != null) {
-                const flatOptions = flattenOptionGroups(optionGroups);
-                const option = flatOptions[scope.selectedOptionIndex];
-                if (option && option.name) {
-                    itemOptionDetailsHtml = `<small class="checkout-option-detail">› ${option.name}</small>`;
-                }
-            }
-        }
+        // Build option detail lines for item mode (supports multiple groups / multi-select)
+        const itemOptionDetailsHtml = buildItemOptionDetailsHtml(scope);
 
         const listItem = document.createElement('li');
         listItem.id = 'checkout-scope-item';
