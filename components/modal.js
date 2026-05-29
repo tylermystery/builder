@@ -7209,6 +7209,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                         if (rapidPayBtnRef && rapidPayBtnRef._updateText) {
                             rapidPayBtnRef._updateText();
                         }
+                        // Refresh the quantity total since the selected option may change price
+                        if (modalQuantitySelector && modalQuantitySelector._updateTotal) {
+                            modalQuantitySelector._updateTotal();
+                        }
                     });
                 }
 
@@ -7958,7 +7962,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         const airtableMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         const effectiveMin = getEffectiveMinQuantity(record);
 
-        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button type="button" class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${effectiveMin}" step="0.1"><button type="button" class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
+        modalQuantitySelector.innerHTML = `<div class="quantity-total-row"><div class="quantity-selector" data-record-id="${record.id}"><button type="button" class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${effectiveMin}" step="0.1"><button type="button" class="quantity-btn plus" aria-label="Increase quantity">+</button></div><span class="quantity-total-display" aria-live="polite"></span></div>`;
 
         // Remove any existing nudge/badge elements to prevent duplication
         const existingNudge = modalActionsContainer.querySelector('.umw-sales-nudge');
@@ -8012,7 +8016,32 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         const plusBtn = modalQuantitySelector.querySelector('.plus');
         const minusBtn = modalQuantitySelector.querySelector('.minus');
         const input = modalQuantitySelector.querySelector('input');
+        const totalDisplay = modalQuantitySelector.querySelector('.quantity-total-display');
+
+        // Keep a running total (unit price × quantity) shown beside the quantity selector
+        // so the user always sees the current cost with quantity and options accounted for.
+        const updateQuantityTotal = () => {
+            if (!totalDisplay) return;
+            const qty = input ? (parseFloat(input.value) || 1) : (itemState.quantity || 1);
+            const selections = readLiveSelections();
+            const priceParam = Object.keys(selections).length > 0
+                ? selections
+                : (itemState.selectedOptionIndex || 0);
+            const unitPrice = getRecordPrice(record, priceParam);
+            if (typeof unitPrice !== 'number') {
+                totalDisplay.textContent = '';
+                return;
+            }
+            const total = unitPrice * qty;
+            totalDisplay.textContent = total > 0 ? `Total: $${total.toFixed(2)}` : 'Total: Free';
+        };
+        // Expose so option-change handlers can refresh the total.
+        modalQuantitySelector._updateTotal = updateQuantityTotal;
+        updateQuantityTotal();
+
         if (plusBtn && minusBtn && input) {
+            input.addEventListener('change', updateQuantityTotal);
+            input.addEventListener('input', updateQuantityTotal);
             // Function to update pro-tip visibility based on current quantity
             const updateProTipVisibility = () => {
                 const currentQty = parseInt(input.value, 10) || 1;
@@ -8079,6 +8108,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                 input.value = currentValue + 1;
                 input.dispatchEvent(new Event('change', { bubbles: true }));
                 updateProTipVisibility();
+                updateQuantityTotal();
                 // Update Rapid Pay button text
                 const rapidPayBtnPlus = document.getElementById('modal-rapid-pay-btn');
                 if (rapidPayBtnPlus && rapidPayBtnPlus._updateText) {
@@ -8094,6 +8124,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     input.value = currentValue - 1;
                     input.dispatchEvent(new Event('change', { bubbles: true }));
                     updateProTipVisibility();
+                    updateQuantityTotal();
                     // Update Rapid Pay button text
                     const rapidPayBtnMinus = document.getElementById('modal-rapid-pay-btn');
                     if (rapidPayBtnMinus && rapidPayBtnMinus._updateText) {
