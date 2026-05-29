@@ -7255,7 +7255,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                               record.id?.startsWith('ai-child-') ||
                               record.id?.startsWith('ai-presentation-');
     const isCustomItem = record.id?.startsWith('custom-');
-    const showAiOptionsButton = userHasPublishPermissionForOptions || isManuallyCreatedItem || isAiDiscoveryItem || isCustomItem;
+    // Solution items are drilled-down results of a concept's "Find Solutions" flow.
+    // They are still custom/AI items, so all users should be able to estimate options on them.
+    const isSolutionItem = record.isSolution === true;
+    const showAiOptionsButton = userHasPublishPermissionForOptions || isManuallyCreatedItem || isAiDiscoveryItem || isCustomItem || isSolutionItem;
 
     // Create the AI top options button container
     const aiOptionsContainer = document.createElement('div');
@@ -7787,10 +7790,158 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         });
     }
 
+    // For concept items, the button above is "Find Solutions". Concept items are still
+    // custom/AI items, so users should also be able to estimate options directly on them.
+    // Build a separate, self-contained "Estimate Options" block (kept independent of the
+    // solutions flow above so neither affects the other) and append it alongside.
+    const buildConceptOptionsBlock = () => {
+        const container = document.createElement('div');
+        container.className = 'ai-top-options-container ai-estimate-options-container';
+        container.style.marginTop = '10px';
+
+        const estimateBtnText = hasExistingOptions ? '✨ Re-Estimate Options' : '✨ Estimate Options';
+        container.innerHTML = `
+            <button class="ai-top-options-btn" title="Use AI to estimate recommended options/variations">
+                ${estimateBtnText}
+            </button>
+            <div class="ai-options-result" style="display: none;">
+                <div class="ai-options-preview-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span style="font-weight: 600; color: #333;">AI Generated Options</span>
+                    <button class="ai-options-close-btn" style="background: none; border: none; cursor: pointer; font-size: 1.2em; color: #666;">×</button>
+                </div>
+                <textarea class="ai-options-editor" placeholder="Loading..." style="width: 100%; min-height: 120px; font-family: monospace; font-size: 0.9em; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;"></textarea>
+                <div class="ai-options-actions" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="ai-options-apply-btn" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Apply to Item</button>
+                    ${userIsAuthenticated && (isRealRecord && userHasPublishPermissionForOptions) ? '<button class="ai-options-save-catalog-btn" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save to Catalog</button>' : ''}
+                    <span class="ai-options-status" style="align-self: center; font-size: 0.85em; color: #666;"></span>
+                </div>
+            </div>
+        `;
+
+        const estBtn = container.querySelector('.ai-top-options-btn');
+        const estResult = container.querySelector('.ai-options-result');
+        const estEditor = container.querySelector('.ai-options-editor');
+        const estCloseBtn = container.querySelector('.ai-options-close-btn');
+        const estApplyBtn = container.querySelector('.ai-options-apply-btn');
+        const estSaveCatalogBtn = container.querySelector('.ai-options-save-catalog-btn');
+        const estStatus = container.querySelector('.ai-options-status');
+
+        // Generate options on click
+        estBtn.addEventListener('click', async () => {
+            estBtn.disabled = true;
+            estResult.style.display = 'block';
+            estStatus.textContent = '';
+            estBtn.textContent = '✨ Estimating...';
+            estEditor.value = 'Estimating AI recommendations...';
+
+            try {
+                const result = await api.generateTopOptions(record);
+                if (result.success && result.options) {
+                    estEditor.value = result.options;
+                    estStatus.textContent = 'Options estimated!';
+                    estStatus.style.color = '#28a745';
+                } else {
+                    throw new Error(result.error || 'Failed to estimate options');
+                }
+            } catch (error) {
+                estEditor.value = '';
+                estStatus.textContent = `Error: ${error.message}`;
+                estStatus.style.color = '#dc3545';
+                console.error('AI options generation failed:', error);
+            } finally {
+                estBtn.disabled = false;
+                estBtn.textContent = hasExistingOptions ? '✨ Re-Estimate Options' : '✨ Estimate Options';
+            }
+        });
+
+        // Close button
+        estCloseBtn.addEventListener('click', () => {
+            estResult.style.display = 'none';
+        });
+
+        // Apply to item (works for all users - updates locally for this session)
+        estApplyBtn.addEventListener('click', () => {
+            const optionsText = estEditor?.value;
+            if (!optionsText?.trim()) {
+                estStatus.textContent = 'No options to apply';
+                estStatus.style.color = '#dc3545';
+                return;
+            }
+
+            record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
+            record._locallyGeneratedOptions = optionsText;
+
+            const isLocked = state.cart.lockedItems.has(record.id);
+            const isIdea = state.cart.items.has(record.id);
+
+            if (isLocked) {
+                const itemInfo = state.cart.lockedItems.get(record.id);
+                itemInfo.generatedOptions = optionsText;
+                state.cart.lockedItems.set(record.id, itemInfo);
+                triggerSave();
+                log('Modal', `Saved generated options for locked item ${record.id}`);
+            } else if (isIdea) {
+                const itemInfo = state.cart.items.get(record.id);
+                itemInfo.generatedOptions = optionsText;
+                state.cart.items.set(record.id, itemInfo);
+                triggerSave();
+                log('Modal', `Saved generated options for idea item ${record.id}`);
+            }
+
+            estStatus.textContent = 'Applied! Refreshing...';
+            estStatus.style.color = '#28a745';
+            setTimeout(() => {
+                showDetailModal(record);
+            }, 500);
+        });
+
+        // Save to Catalog (only present for publish users on real records)
+        if (estSaveCatalogBtn) {
+            estSaveCatalogBtn.addEventListener('click', async () => {
+                const optionsText = estEditor?.value;
+                if (!optionsText?.trim()) {
+                    estStatus.textContent = 'No options to save';
+                    estStatus.style.color = '#dc3545';
+                    return;
+                }
+
+                estSaveCatalogBtn.disabled = true;
+                estStatus.textContent = 'Saving to catalog...';
+                estStatus.style.color = '#666';
+
+                try {
+                    const result = await api.updateItemOptions(record.id, optionsText);
+                    if (result) {
+                        record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
+                        estStatus.textContent = 'Saved to catalog!';
+                        estStatus.style.color = '#28a745';
+                        setTimeout(() => {
+                            showDetailModal(record);
+                        }, 1000);
+                    } else {
+                        throw new Error('Failed to save');
+                    }
+                } catch (error) {
+                    estStatus.textContent = 'Error saving. Try again.';
+                    estStatus.style.color = '#dc3545';
+                    console.error('Error saving options to catalog:', error);
+                } finally {
+                    estSaveCatalogBtn.disabled = false;
+                }
+            });
+        }
+
+        return container;
+    };
+
     // Only surface the edit/AI options button when the current user is allowed to use it
-    // (publish access on any item, or an AI discovery / custom / manually-created item for everyone else).
+    // (publish access on any item, or an AI discovery / custom / solution / manually-created item for everyone else).
     if (showAiOptionsButton) {
         modalOptionsContainer.appendChild(aiOptionsContainer);
+        // Concept items get both "Find Solutions" (above) and a separate "Estimate Options" block.
+        if (isConceptItem) {
+            modalOptionsContainer.appendChild(buildConceptOptionsBlock());
+        }
     }
 
     // --- THIS IS THE FIX ---\
