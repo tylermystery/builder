@@ -9124,6 +9124,31 @@ export function hideDetailModal() {
     }
 }
 
+/**
+ * Reorders the checkout modal's Community Fund and "Also purchase this item?" sections.
+ * In the Chip In flow we lead with the Community Fund, then show the also-purchase prompt
+ * beneath it. Other flows (plan checkout, Rapid Pay) keep the default layout where the
+ * Community Fund sits inside the totals block. The reordering is reversible and idempotent,
+ * so reopening the modal in any mode always lands in the correct layout.
+ */
+function applyChipInSectionOrder(chipInLead) {
+    const summaryEl = document.getElementById('checkout-summary-details');
+    const qtyToggle = document.getElementById('checkout-item-quantity-toggle');
+    const chipInSection = document.getElementById('checkout-chip-in-section');
+    if (!summaryEl || !qtyToggle || !chipInSection) return;
+
+    if (chipInLead) {
+        // Lead with the Community Fund, then the "Also purchase this item?" prompt.
+        summaryEl.insertAdjacentElement('afterend', chipInSection);
+        chipInSection.insertAdjacentElement('afterend', qtyToggle);
+    } else {
+        // Default layout: qty prompt directly after the summary, Community Fund inside totals.
+        summaryEl.insertAdjacentElement('afterend', qtyToggle);
+        const totalRow = document.querySelector('.checkout-total-deposit-section .checkout-total');
+        if (totalRow) totalRow.insertAdjacentElement('afterend', chipInSection);
+    }
+}
+
 export async function showCheckoutModal(shopSettings, scope = null) {
     currentShopSettings = shopSettings;
     currentCheckoutScope = scope; // { mode: 'item', itemId, itemName, quantity, price, record, selectedOptionIndex, selections, highlightChipIn } or null (plan mode)
@@ -9431,6 +9456,11 @@ export async function showCheckoutModal(shopSettings, scope = null) {
 
     // --- UNIFIED CHECKOUT: Setup Chip In Section ---
     setupCheckoutChipIn(finalTotal);
+
+    // Section ordering: the Chip In flow leads with the Community Fund and shows the
+    // "Also purchase this item?" prompt beneath it; other flows keep the default layout.
+    applyChipInSectionOrder(scope && scope.highlightChipIn);
+
     // If scope says to highlight chip-in, pre-expand it
     if (scope && scope.highlightChipIn) {
         const chipInSection = document.getElementById('checkout-chip-in-section');
