@@ -8023,7 +8023,30 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         const updateQuantityTotal = () => {
             if (!totalDisplay) return;
             const qty = input ? (parseFloat(input.value) || 1) : (itemState.quantity || 1);
-            const selections = readLiveSelections();
+            // Read the current option selections straight from the DOM so this stays
+            // self-contained (the earlier readLiveSelections helper is in a nested scope).
+            const selections = {};
+            const optionGroupEls = document.querySelectorAll('#modal-options-container .option-group');
+            if (optionGroupEls.length > 0) {
+                optionGroupEls.forEach((group) => {
+                    const groupIndex = group.dataset.groupIndex;
+                    const selectedBtns = group.querySelectorAll('.option-btn.selected');
+                    if (selectedBtns.length > 0 && groupIndex !== undefined) {
+                        if (selectedBtns.length === 1) {
+                            selections[`group${groupIndex}`] = parseInt(selectedBtns[0].dataset.optionIndex, 10) || 0;
+                        } else {
+                            selections[`group${groupIndex}`] = Array.from(selectedBtns)
+                                .map(btn => parseInt(btn.dataset.optionIndex, 10) || 0)
+                                .sort((a, b) => a - b);
+                        }
+                    }
+                });
+            } else {
+                const selectedBtn = document.querySelector('#modal-options-container .option-btn.selected');
+                if (selectedBtn) {
+                    selections['group0'] = parseInt(selectedBtn.dataset.optionIndex, 10) || 0;
+                }
+            }
             const priceParam = Object.keys(selections).length > 0
                 ? selections
                 : (itemState.selectedOptionIndex || 0);
