@@ -958,6 +958,10 @@ body.modal-open {
     #header-left {
         justify-content: center;
         gap: 10px;
+        /* Reserve space on both sides so the centered logo/title doesn't
+           slide underneath the absolutely-positioned hamburger button */
+        padding: 0 48px;
+        box-sizing: border-box;
     }
 
     #header-left #shop-logo-container {

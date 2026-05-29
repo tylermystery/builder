@@ -8387,6 +8387,9 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                         modalItemDatePicker = window.flatpickr(modalItemDateInput, {
                             mode: "single",
                             dateFormat: "M j, Y",
+                            // Force the custom calendar on mobile so availability shading (via onDayCreate) renders;
+                            // the native mobile date input bypasses onDayCreate and shows no availability colors.
+                            disableMobile: true,
                             onDayCreate: (dObj, dStr, fp, dayElem) => {
                                 const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
                                 if (!icalUrl) return;
