@@ -7257,7 +7257,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     const isCustomItem = record.id?.startsWith('custom-');
     // Solution items are drilled-down results of a concept's "Find Solutions" flow.
     // They are still custom/AI items, so all users should be able to estimate options on them.
-    const isSolutionItem = record.isSolution === true;
+    // (isSolutionItem is already computed earlier in this function for the "Dig Info" button.)
     const showAiOptionsButton = userHasPublishPermissionForOptions || isManuallyCreatedItem || isAiDiscoveryItem || isCustomItem || isSolutionItem;
 
     // Create the AI top options button container
