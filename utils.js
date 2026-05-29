@@ -413,6 +413,46 @@ export function flattenOptionGroups(groups) {
         return acc;
     }, []);
 }
+/**
+ * Build a compact, human-readable schedule string from a plan item's
+ * per-item scheduling fields (date / start time / end time / duration).
+ * Used by the plan panel and the checkout summaries so scheduling is shown
+ * consistently. Returns '' when no scheduling info is set.
+ */
+export function formatItemSchedule(itemInfo) {
+    if (!itemInfo) return '';
+    const parts = [];
+    const itemDate = itemInfo.itemDate || '';
+    const itemStartTime = itemInfo.itemStartTime || '';
+    const itemEndTime = itemInfo.itemEndTime || '';
+    const itemDuration = itemInfo.itemDuration || 0;
+
+    if (itemDate) {
+        try {
+            const d = new Date(itemDate);
+            if (!isNaN(d.getTime())) {
+                parts.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+            } else if (typeof itemDate === 'string') {
+                parts.push(itemDate);
+            }
+        } catch (e) {
+            if (typeof itemDate === 'string') parts.push(itemDate);
+        }
+    }
+    if (itemStartTime) {
+        let timePart = itemStartTime;
+        if (itemEndTime) timePart += ` – ${itemEndTime}`;
+        parts.push(timePart);
+    }
+    if (itemDuration && itemDuration > 0) {
+        const h = Math.floor(itemDuration / 60);
+        const m = itemDuration % 60;
+        const durStr = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+        parts.push(durStr);
+    }
+    return parts.join(' · ');
+}
+
 export function debounce(func, delay = 300) {
     if (typeof func !== 'function') {
         console.warn('[Utils] debounce called with non-function:', func);

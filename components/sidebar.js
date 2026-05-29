@@ -6,7 +6,7 @@ import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { calculateMissingCategories, buildGoalBucket } from '../availability.js';
 import { calculateRecommendationScore } from '../availability.js';
-import { parseOptions, getRecordPrice, getEffectiveMinQuantity, flattenOptionGroups, getShopUrlParam } from '../utils.js';
+import { parseOptions, getRecordPrice, getEffectiveMinQuantity, flattenOptionGroups, getShopUrlParam, formatItemSchedule } from '../utils.js';
 import { log } from '../utils/debug.js';
 import * as backgroundEngine from './backgroundEngine.js';
 import { showReceiptModal } from './receipt.js';
@@ -314,6 +314,9 @@ async function createLockedInItemElement(record, itemInfo) {
         // === DIG INFO DEBUG END ===
     }
 
+    // Build a compact schedule line (date / time / duration) for the plan panel
+    const scheduleStr = formatItemSchedule(itemInfo);
+
     itemElement.innerHTML = `
         <img class="locked-item-thumbnail lazy-load" data-src="${imageUrl}" width="60" height="60" alt="${fields.Name}" loading="lazy">
         <div class="locked-item-details">
@@ -321,6 +324,7 @@ async function createLockedInItemElement(record, itemInfo) {
             ${optionDetailsHtml ? `<div class="locked-item-options">${optionDetailsHtml}</div>` : ''}
             <p class="locked-item-pricing">${quantityDisplay} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
             ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
+            ${scheduleStr ? `<p class="locked-item-schedule"><span class="schedule-icon">🕐</span> ${scheduleStr}</p>` : ''}
         </div>
         <div class="locked-item-actions">
             <button class="demote-locked-item-btn" title="Remove from Plan">Unsave</button>

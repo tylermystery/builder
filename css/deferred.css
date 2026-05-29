@@ -1699,6 +1699,17 @@
     font-size: 0.8em;
     color: #6c757d;
 }
+.locked-item-schedule {
+    font-size: 0.8em;
+    color: #1a5276;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+}
+.locked-item-schedule .schedule-icon {
+    flex-shrink: 0;
+}
 .option-detail-line {
     display: inline;
 }
@@ -6254,6 +6265,19 @@ hr.total-divider {
     color: #6c757d;
     font-style: italic;
     margin-top: 4px;
+}
+
+.checkout-summary-schedule {
+    font-size: 0.8em;
+    color: #1a5276;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.checkout-summary-schedule .schedule-icon {
+    flex-shrink: 0;
 }
 
 .itinerary-item-controls {

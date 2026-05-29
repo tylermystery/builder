@@ -6,7 +6,7 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage } from '../config.js';
 import { getCurrentUser } from '../chat.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getDayStatus, AVAILABILITY_STATUS, logBusyTimeSummary } from '../availability.js';
 import { showReceiptModal } from './receipt.js';
@@ -4857,7 +4857,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     record: record,
                     selectedOptionIndex: selectedOptionIndex,
                     selections: selections,
-                    highlightChipIn: false
+                    highlightChipIn: false,
+                    ...captureModalNoteAndSchedule()
                 });
             });
         }
@@ -4892,7 +4893,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     record: record,
                     selectedOptionIndex: selectedOptionIndex,
                     selections: selections,
-                    highlightChipIn: true
+                    highlightChipIn: true,
+                    ...captureModalNoteAndSchedule()
                 });
             });
         }
@@ -9173,6 +9175,55 @@ function applyChipInSectionOrder(chipInLead) {
     }
 }
 
+/**
+ * Read the note and per-item scheduling fields straight from the detail modal
+ * DOM so they can be carried into the checkout (Rapid Pay / Chip In) scope.
+ * Mirrors the capture logic used when adding an item to the plan. Returns an
+ * object with only the fields that are actually set.
+ */
+function captureModalNoteAndSchedule() {
+    const result = {};
+    const note = document.getElementById('modal-item-note')?.value || '';
+    if (note && note.trim() !== '') result.note = note;
+
+    const startTime = document.getElementById('modal-item-start-time')?.value || '';
+    const durationRaw = document.getElementById('modal-item-duration')?.value || '';
+    if (startTime) result.itemStartTime = startTime;
+    if (durationRaw) {
+        const parsed = parseInt(durationRaw, 10);
+        if (parsed > 0) result.itemDuration = parsed;
+    }
+
+    // Compute end time from start time + duration
+    if (result.itemStartTime && result.itemDuration) {
+        const timeMatch = result.itemStartTime.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+        if (timeMatch) {
+            let h = parseInt(timeMatch[1], 10);
+            const m = parseInt(timeMatch[2], 10);
+            const mer = timeMatch[3] ? timeMatch[3].toUpperCase() : null;
+            if (mer === 'PM' && h !== 12) h += 12;
+            else if (mer === 'AM' && h === 12) h = 0;
+            const endMin = (h * 60 + m + result.itemDuration) % (24 * 60);
+            const eH = Math.floor(endMin / 60);
+            const eM = endMin % 60;
+            result.itemEndTime = eH === 0 ? `12:${String(eM).padStart(2, '0')} AM` :
+                eH < 12 ? `${eH}:${String(eM).padStart(2, '0')} AM` :
+                eH === 12 ? `12:${String(eM).padStart(2, '0')} PM` :
+                `${eH - 12}:${String(eM).padStart(2, '0')} PM`;
+        }
+    }
+
+    // Date: prefer the Flatpickr instance's selected date, else the raw input value
+    const dateEl = document.getElementById('modal-item-date');
+    if (dateEl?._flatpickr && dateEl._flatpickr.selectedDates.length >= 1) {
+        result.itemDate = dateEl._flatpickr.selectedDates[0].toISOString();
+    } else if (dateEl?.value?.trim()) {
+        result.itemDate = dateEl.value.trim();
+    }
+
+    return result;
+}
+
 export async function showCheckoutModal(shopSettings, scope = null) {
     currentShopSettings = shopSettings;
     currentCheckoutScope = scope; // { mode: 'item', itemId, itemName, quantity, price, record, selectedOptionIndex, selections, highlightChipIn } or null (plan mode)
@@ -9244,6 +9295,16 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         // Build option detail lines for item mode (supports multiple groups / multi-select)
         const itemOptionDetailsHtml = buildItemOptionDetailsHtml(scope);
 
+        // Note and per-item scheduling carried from the detail modal
+        let itemNoteHtml = '';
+        if (scope.note && scope.note.trim() !== '') {
+            itemNoteHtml = `<small class="checkout-summary-note">Note: ${scope.note}</small>`;
+        }
+        const itemScheduleStr = formatItemSchedule(scope);
+        const itemScheduleHtml = itemScheduleStr
+            ? `<small class="checkout-summary-schedule"><span class="schedule-icon">🕐</span> ${itemScheduleStr}</small>`
+            : '';
+
         const listItem = document.createElement('li');
         listItem.id = 'checkout-scope-item';
         if (initialQty === 0) {
@@ -9252,6 +9313,8 @@ export async function showCheckoutModal(shopSettings, scope = null) {
                 <div class="summary-item-details">
                     <span class="summary-item-name">${scope.itemName || 'Item'}</span>
                     ${itemOptionDetailsHtml}
+                    ${itemScheduleHtml}
+                    ${itemNoteHtml}
                     <small class="summary-item-donation-note">Chip in to crowdfund this item</small>
                 </div>
                 <span class="summary-item-price">—</span>
@@ -9261,6 +9324,8 @@ export async function showCheckoutModal(shopSettings, scope = null) {
                 <div class="summary-item-details">
                     <span class="summary-item-name">${scope.itemName || 'Item'} (x${initialQty})</span>
                     ${itemOptionDetailsHtml}
+                    ${itemScheduleHtml}
+                    ${itemNoteHtml}
                 </div>
                 <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
             `;
@@ -9357,6 +9422,12 @@ export async function showCheckoutModal(shopSettings, scope = null) {
             noteHtml = `<small class="checkout-summary-note">Note: ${itemInfo.note}</small>`;
         }
 
+        // Per-item scheduling line (date / time / duration)
+        const scheduleStr = formatItemSchedule(itemInfo);
+        const scheduleHtml = scheduleStr
+            ? `<small class="checkout-summary-schedule"><span class="schedule-icon">🕐</span> ${scheduleStr}</small>`
+            : '';
+
         // Build option detail lines
         let optionDetailsHtml = '';
         const optionGroups = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
@@ -9398,6 +9469,7 @@ export async function showCheckoutModal(shopSettings, scope = null) {
                 <span class="summary-item-name">${record.fields.Name} (x${itemInfo.quantity || 1})</span>
                 ${optionDetailsHtml}
                 ${edgeCaseNote}
+                ${scheduleHtml}
                 ${noteHtml}
             </div>
             <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
