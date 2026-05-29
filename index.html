@@ -5437,10 +5437,12 @@ body.ucp-panel-open .unified-chat-panel {
 
                 <!-- Chip In / Community Fund Section -->
                 <div id="checkout-chip-in-section" style="display: none;">
-                    <div class="checkout-chip-in-header">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                    <button type="button" class="checkout-chip-in-header" id="checkout-chip-in-toggle" aria-expanded="false" aria-controls="checkout-chip-in-body">
+                        <svg class="checkout-chip-in-header-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
                         <span>Community Fund</span>
-                    </div>
+                        <svg class="checkout-chip-in-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                    <div class="checkout-chip-in-body" id="checkout-chip-in-body">
                     <p class="checkout-chip-in-desc">Chip in to help make items available for free to those most in need.</p>
                     <!-- Crowdfunding Progress (populated by JS from Airtable) -->
                     <div id="checkout-crowdfund-progress" style="display: none;">
@@ -5493,6 +5495,7 @@ body.ucp-panel-open .unified-chat-panel {
                     <div class="checkout-chip-in-summary" id="checkout-chip-in-summary" style="display: none;">
                         <span>Community Contribution:</span>
                         <span id="checkout-chip-in-total">$0.00</span>
+                    </div>
                     </div>
                 </div>
 

@@ -17796,10 +17796,40 @@ body.presentation-active .rsb-layout-toggle-fab {
     font-size: 1em;
     color: #e74c3c;
     margin-bottom: 6px;
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: none;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
 }
 
 .checkout-chip-in-header svg {
     flex-shrink: 0;
+}
+
+/* Push the chevron to the far right of the accordion header */
+.checkout-chip-in-chevron {
+    margin-left: auto;
+    transition: transform 0.25s ease;
+}
+
+#checkout-chip-in-section.expanded .checkout-chip-in-chevron {
+    transform: rotate(180deg);
+}
+
+/* Collapsible body of the Community Fund accordion */
+.checkout-chip-in-body {
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.25s ease;
+}
+
+#checkout-chip-in-section.expanded .checkout-chip-in-body {
+    max-height: 1200px;
+    opacity: 1;
 }
 
 .checkout-chip-in-desc {

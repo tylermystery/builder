@@ -1047,6 +1047,21 @@ function setupCheckoutChipIn(cartSubtotal) {
     // Ensure default state: Skip is active, custom input hidden, amount = 0
     if (customInputContainer) customInputContainer.style.display = 'none';
     if (chipInSummary) chipInSummary.style.display = 'none';
+
+    // Accordion: collapse the Community Fund by default and wire up the toggle.
+    // Callers that want it open (e.g. the Chip In flow) expand it after setup.
+    chipInSection.classList.remove('expanded');
+    const toggleBtn = document.getElementById('checkout-chip-in-toggle');
+    if (toggleBtn) {
+        // Clone to remove old listeners
+        const newToggle = toggleBtn.cloneNode(true);
+        toggleBtn.parentNode.replaceChild(newToggle, toggleBtn);
+        newToggle.setAttribute('aria-expanded', 'false');
+        newToggle.addEventListener('click', () => {
+            const expanded = chipInSection.classList.toggle('expanded');
+            newToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        });
+    }
 }
 
 /**
@@ -9420,6 +9435,10 @@ export async function showCheckoutModal(shopSettings, scope = null) {
     if (scope && scope.highlightChipIn) {
         const chipInSection = document.getElementById('checkout-chip-in-section');
         if (chipInSection) {
+            // Open the accordion so the Community Fund options are visible immediately
+            chipInSection.classList.add('expanded');
+            const toggleBtn = document.getElementById('checkout-chip-in-toggle');
+            if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
             const customBtn = chipInSection.querySelector('[data-chip-in="custom"]');
             const skipBtn = chipInSection.querySelector('[data-chip-in="skip"]');
             if (customBtn && skipBtn) {
