@@ -3017,6 +3017,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     eventPlanDatePicker = window.flatpickr(eventDateInput, {
                         mode: "single",
                         dateFormat: "M j, Y",
+                        // Force the custom calendar on mobile so availability shading (via onDayCreate) renders;
+                        // the native mobile date input bypasses onDayCreate and shows no availability colors.
+                        disableMobile: true,
                         onDayCreate: (dObj, dStr, fp, dayElem) => {
                             const lockedRecords = Array.from(state.cart.lockedItems.keys())
                                 .map(id => state.records.all.find(r => r.id === id))
