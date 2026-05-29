@@ -5321,16 +5321,6 @@ body.ucp-panel-open .unified-chat-panel {
 
                 <div id="modal-price-action-row">
                     <p id="modal-item-price" class="price"></p>
-                    <div id="modal-price-actions">
-                        <button id="modal-rapid-pay-btn" class="price-action-btn rapid-pay-btn" title="Quick checkout">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-                            <span class="price-action-label">Rapid Pay</span>
-                        </button>
-                        <button id="modal-chip-in-btn" class="price-action-btn chip-in-btn" title="Chip in to help make this free for someone in need">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
-                            <span class="price-action-label">Chip In</span>
-                        </button>
-                    </div>
                 </div>
 
                 <div id="modal-donation-meter" style="display: none;">
@@ -5368,6 +5358,20 @@ body.ucp-panel-open .unified-chat-panel {
 
                 <div id="modal-quantity-selector"></div>
 
+                <div id="modal-actions-container">
+                    <button id="modal-add-to-plan-btn" class="primary-action-btn" data-tooltip="Select options to add to plan">Add to Plan</button>
+                    <div id="modal-price-actions">
+                        <button id="modal-rapid-pay-btn" class="price-action-btn rapid-pay-btn" title="Quick checkout">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                            <span class="price-action-label">Rapid Pay</span>
+                        </button>
+                        <button id="modal-chip-in-btn" class="price-action-btn chip-in-btn" title="Chip in to help make this free for someone in need">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                            <span class="price-action-label">Chip In</span>
+                        </button>
+                    </div>
+                </div>
+
                 <div id="modal-item-time-container" class="modal-time-section" style="display: none;">
                     <label class="modal-time-section-label">Item Scheduling</label>
                     <div class="modal-time-fields">
@@ -5395,10 +5399,6 @@ body.ucp-panel-open .unified-chat-panel {
 
                 <div id="modal-notes-container">
                     <textarea id="modal-item-note" placeholder="Add notes about customization, timing, or special requests..." autocomplete="off"></textarea>
-                </div>
-
-                <div id="modal-actions-container">
-                    <button id="modal-add-to-plan-btn" class="primary-action-btn" data-tooltip="Select options to add to plan">Add to Plan</button>
                 </div>
 
                 <div id="modal-additional-details" class="details-section">

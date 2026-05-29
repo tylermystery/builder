@@ -8154,6 +8154,17 @@ hr.total-divider {
     display: none;
 }
 
+/* When grouped with the Add to Plan button, let the two actions
+   share the row evenly to match the full-width primary button above. */
+#modal-actions-container #modal-price-actions {
+    width: 100%;
+}
+
+#modal-actions-container #modal-price-actions .price-action-btn {
+    flex: 1;
+    justify-content: center;
+}
+
 .price-action-btn {
     display: inline-flex;
     align-items: center;
