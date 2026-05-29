@@ -1680,13 +1680,30 @@ export async function fetchCalendarForRecord(record) {
 
     const promise = (async () => {
         try {
-            const proxyUrl = `/api/calendar?url=${encodeURIComponent(icalUrl)}`;
+            const proxyUrl = `/api/calendar?url=${encodeURIComponent(icalUrl)}&debug=1`;
             const response = await fetch(proxyUrl);
             if (!response.ok) {
                 throw new Error(`Calendar proxy error: ${response.status} ${response.statusText}`);
             }
-            const busyTimes = await response.json();
+            const data = await response.json();
+            // The calendar function returns a plain array by default, or
+            // { busyTimes, meta } when ?debug=1 is requested. Support both so a
+            // shape change can never break availability handling.
+            const busyTimes = Array.isArray(data) ? data : (data.busyTimes || []);
+            const meta = Array.isArray(data) ? null : data.meta;
             console.log(`[ICAL] "${recordName}" received ${busyTimes.length} busy times`);
+            if (meta) {
+                console.log(`[ICAL] "${recordName}" server classification:`, meta.counts, `(window ${meta.window?.start} .. ${meta.window?.end})`);
+                if (meta.standaloneIncluded?.length) {
+                    console.log(`[ICAL] "${recordName}" single events included:`, meta.standaloneIncluded);
+                }
+                if (meta.standaloneOutOfWindow?.length) {
+                    console.log(`[ICAL] "${recordName}" single events EXCLUDED by window:`, meta.standaloneOutOfWindow);
+                }
+                if (meta.dropped?.length) {
+                    console.warn(`[ICAL] "${recordName}" events DROPPED (unparseable):`, meta.dropped);
+                }
+            }
             if (busyTimes.length > 0) {
                 console.log(`[ICAL] "${recordName}" ALL busy times: ${JSON.stringify(busyTimes)}`);
             }

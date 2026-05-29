@@ -6,9 +6,9 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage } from '../config.js';
 import { getCurrentUser } from '../chat.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration } from '../utils.js';
 import { log } from '../utils/debug.js';
-import { getDayStatus, AVAILABILITY_STATUS, logBusyTimeSummary } from '../availability.js';
+import { getDayStatus, AVAILABILITY_STATUS, logBusyTimeSummary, describeSelectedAvailability } from '../availability.js';
 import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { resizeImageForUpload } from '../utils/imageResizer.js';
@@ -19,6 +19,7 @@ import { openUCPForItem } from './unifiedChatPanel.js';
 import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
 import { openActionMenu } from './actionMenu.js';
+import { syncPlanState as syncPlanStateAcrossViews } from '../utils/planStateSync.js';
 
 console.log('[MODULE DEBUG] modal.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -8363,6 +8364,84 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                 }
             };
 
+            // --- Persistent availability display for the selected date/time ---
+            const modalItemAvailabilityEl = document.getElementById('modal-item-availability');
+
+            /** Resolve the date currently selected in the modal, if any. */
+            const getSelectedModalDate = () => {
+                if (modalItemDatePicker?.selectedDates?.length >= 1) {
+                    return modalItemDatePicker.selectedDates[0];
+                }
+                if (lockedInfo?.itemDate) {
+                    const d = new Date(lockedInfo.itemDate);
+                    if (!isNaN(d.getTime())) return d;
+                }
+                return null;
+            };
+
+            /** Compute the current end-time string from start time + duration. */
+            const getCurrentEndTime = () => {
+                const startParsed = parseTime(modalItemStartTimeInput?.value);
+                const durVal = modalItemDurationInput?.value;
+                const durMin = (durVal ? parseInt(durVal, 10) : null) || (lockedInfo?.itemDuration) || catalogDurationMin;
+                if (startParsed && durMin && durMin > 0) {
+                    return fmtTime(startParsed.hours * 60 + startParsed.minutes + durMin);
+                }
+                return '';
+            };
+
+            /** Paint an availability descriptor into the modal line. */
+            const renderModalAvailability = (info) => {
+                if (!modalItemAvailabilityEl) return;
+                modalItemAvailabilityEl.className = 'modal-item-availability';
+                if (!info) {
+                    modalItemAvailabilityEl.style.display = 'none';
+                    return;
+                }
+                modalItemAvailabilityEl.style.display = 'flex';
+                let icon = '🟢';
+                if (info.status === AVAILABILITY_STATUS.PARTIAL) { modalItemAvailabilityEl.classList.add('available-partial'); icon = '🟠'; }
+                else if (info.status === AVAILABILITY_STATUS.NONE) { modalItemAvailabilityEl.classList.add('unavailable'); icon = '🔴'; }
+                else { modalItemAvailabilityEl.classList.add('available-full'); }
+                let text = info.label;
+                if (info.slots) {
+                    const slotText = info.slots.split('\n').filter(Boolean).join(', ');
+                    if (slotText) text += `: ${slotText}`;
+                }
+                modalItemAvailabilityEl.innerHTML = `<span class="avail-icon">${icon}</span> ${text}`;
+            };
+
+            /** Refresh the availability line from the current date/time selection. */
+            const updateModalItemAvailability = async () => {
+                if (!modalItemAvailabilityEl) return;
+                const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
+                if (!icalUrl || !getSelectedModalDate()) {
+                    modalItemAvailabilityEl.style.display = 'none';
+                    return;
+                }
+                modalItemAvailabilityEl.style.display = 'flex';
+                modalItemAvailabilityEl.className = 'modal-item-availability is-pending';
+                modalItemAvailabilityEl.textContent = 'Checking availability…';
+                let busyTimes;
+                try {
+                    busyTimes = await api.fetchCalendarForRecord(record);
+                } catch (e) {
+                    modalItemAvailabilityEl.style.display = 'none';
+                    return;
+                }
+                // Read the latest selection after the (possibly async) fetch.
+                const selectedDate = getSelectedModalDate();
+                if (!selectedDate) {
+                    modalItemAvailabilityEl.style.display = 'none';
+                    return;
+                }
+                renderModalAvailability(describeSelectedAvailability(record, busyTimes, {
+                    date: selectedDate,
+                    startTime: modalItemStartTimeInput?.value || '',
+                    endTime: getCurrentEndTime(),
+                }));
+            };
+
             // Initialize date field with Flatpickr single mode (lazy-loaded)
             let modalItemDatePicker = null;
             if (modalItemDateInput) {
@@ -8422,6 +8501,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                                     saveTimeField('itemDate', null);
                                     saveTimeField('itemDateEnd', null);
                                 }
+                                updateModalItemAvailability();
                             }
                         });
                         modalItemDateInput._flatpickr = modalItemDatePicker;
@@ -8451,6 +8531,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                 modalItemStartTimeInput.addEventListener('change', () => {
                     saveTimeField('itemStartTime', modalItemStartTimeInput.value || null);
                     computeItemEndTime();
+                    updateModalItemAvailability();
                 });
             }
             if (modalItemDurationInput) {
@@ -8462,11 +8543,148 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                         modalItemDurationSource.textContent = val ? 'custom override' : (catalogDurationMin > 0 ? `catalog: ${fmtDur(catalogDurationMin)}` : '');
                     }
                     computeItemEndTime();
+                    updateModalItemAvailability();
                 });
+            }
+
+            // --- "Update plan & all items" — push this item's date/time everywhere ---
+            const applyAllBtn = document.getElementById('modal-item-apply-all-btn');
+            const applyAllMsg = document.getElementById('modal-item-apply-all-msg');
+            const showApplyAllMsg = (text) => {
+                if (!applyAllMsg) return;
+                applyAllMsg.textContent = text;
+                clearTimeout(showApplyAllMsg._t);
+                showApplyAllMsg._t = setTimeout(() => { applyAllMsg.textContent = ''; }, 4000);
+            };
+
+            /** Resolve this item's effective duration in minutes from its current modal selection. */
+            const getModalEffectiveDuration = () => {
+                const unitMinutes = getTimeUnitMinutes(record);
+                if (unitMinutes) {
+                    const qtyVal = (typeof input !== 'undefined' && input) ? (parseFloat(input.value) || 1) : (lockedInfo?.quantity || 1);
+                    return Math.round(qtyVal * unitMinutes);
+                }
+                const durVal = modalItemDurationInput?.value;
+                return (durVal ? parseInt(durVal, 10) : null) || lockedInfo?.itemDuration || catalogDurationMin || 0;
+            };
+
+            if (applyAllBtn) {
+                applyAllBtn.onclick = () => {
+                    const selDate = getSelectedModalDate();
+                    if (!selDate || isNaN(selDate.getTime())) {
+                        showApplyAllMsg('Select a date first.');
+                        return;
+                    }
+                    const dateISO = selDate.toISOString();
+                    const startTime = modalItemStartTimeInput?.value || '';
+                    const durationMin = getModalEffectiveDuration();
+
+                    const itemCount = state.cart.lockedItems.size;
+                    if (!window.confirm(`Apply this date/time to the plan${itemCount ? ` and all ${itemCount} item${itemCount === 1 ? '' : 's'}` : ''}? This replaces the plan date and any dates set on individual items.`)) {
+                        return;
+                    }
+
+                    // 1) Write the plan-level date/time.
+                    const combined = state.eventDetails.combined;
+                    combined.set(CONSTANTS.DETAIL_TYPES.DATE, dateISO);
+                    if (startTime) combined.set(CONSTANTS.DETAIL_TYPES.START_TIME, startTime);
+                    else combined.delete(CONSTANTS.DETAIL_TYPES.START_TIME);
+                    if (durationMin > 0) combined.set(CONSTANTS.DETAIL_TYPES.DURATION, durationMin);
+                    else combined.delete(CONSTANTS.DETAIL_TYPES.DURATION);
+                    const planEnd = computeEndFromStartDuration(startTime, durationMin, dateISO);
+                    if (planEnd.endTime) combined.set(CONSTANTS.DETAIL_TYPES.END_TIME, planEnd.endTime);
+                    else combined.delete(CONSTANTS.DETAIL_TYPES.END_TIME);
+                    if (planEnd.dateEnd) combined.set(CONSTANTS.DETAIL_TYPES.DATE_END, planEnd.dateEnd);
+                    else combined.delete(CONSTANTS.DETAIL_TYPES.DATE_END);
+
+                    // 2) Write each locked item, keeping time-priced durations tied to quantity.
+                    for (const [recordId, info] of state.cart.lockedItems.entries()) {
+                        const itemRecord = state.records.all.find(r => r.id === recordId);
+                        info.itemDate = dateISO;
+                        if (startTime) info.itemStartTime = startTime; else delete info.itemStartTime;
+
+                        const unitMinutes = itemRecord ? getTimeUnitMinutes(itemRecord) : null;
+                        let effDuration;
+                        if (unitMinutes) {
+                            const qty = parseFloat(info.quantity) || 1;
+                            effDuration = Math.round(qty * unitMinutes);
+                            info.itemDuration = effDuration;
+                        } else if (durationMin > 0) {
+                            effDuration = durationMin;
+                            info.itemDuration = durationMin;
+                        } else {
+                            effDuration = info.itemDuration || 0;
+                        }
+                        const itemEnd = computeEndFromStartDuration(info.itemStartTime, effDuration, dateISO);
+                        if (itemEnd.endTime) info.itemEndTime = itemEnd.endTime; else delete info.itemEndTime;
+                        if (itemEnd.dateEnd) info.itemDateEnd = itemEnd.dateEnd; else delete info.itemDateEnd;
+                        state.cart.lockedItems.set(recordId, info);
+                    }
+
+                    // 3) Refresh the plan toolbar controls and both surfaces.
+                    const planStartSelect = document.getElementById('event-start-time');
+                    if (planStartSelect) planStartSelect.value = startTime || '';
+                    const planDurSelect = document.getElementById('event-duration-input');
+                    if (planDurSelect) planDurSelect.value = durationMin > 0 ? String(durationMin) : '';
+                    const planDurDisplay = document.getElementById('event-duration-display');
+                    if (planDurDisplay) planDurDisplay.textContent = planEnd.endTime ? `(ends ${planEnd.endTime})` : '';
+
+                    if (typeof triggerSave === 'function') triggerSave();
+                    if (typeof ui.updateEventPlanDateDisplay === 'function') ui.updateEventPlanDateDisplay();
+                    if (typeof ui.updateEventPlanSection === 'function') ui.updateEventPlanSection();
+                    syncPlanStateAcrossViews('modal', 'itemUpdated', { appliedToPlanAndItems: true });
+                    updateModalItemAvailability();
+                    showApplyAllMsg(`Applied to the plan${itemCount ? ` and all ${itemCount} item${itemCount === 1 ? '' : 's'}` : ''}.`);
+                };
+            }
+
+            // --- Time-priced items: quantity IS the duration (collapse the Duration control) ---
+            // Reset any prior time-priced adjustments first (the modal DOM is reused across opens).
+            const durationGroupEl = document.querySelector('#modal-item-time-container .modal-duration-group');
+            if (durationGroupEl) durationGroupEl.style.display = '';
+            const staleQtyHint = document.getElementById('modal-item-qty-duration-hint');
+            if (staleQtyHint) staleQtyHint.remove();
+            // Clear any quantity→duration sync handler left from a previous modal open
+            // (these are assigned, not addEventListener, so updateQuantityTotal is untouched).
+            if (typeof input !== 'undefined' && input) { input.onchange = null; input.oninput = null; }
+
+            const timeUnitMinutes = getTimeUnitMinutes(record);
+            if (timeUnitMinutes) {
+                if (durationGroupEl) durationGroupEl.style.display = 'none';
+
+                const unitLabel = timeUnitMinutes === 60 ? 'hours'
+                    : timeUnitMinutes === 24 * 60 ? 'days'
+                    : timeUnitMinutes === 7 * 24 * 60 ? 'weeks'
+                    : timeUnitMinutes === 30 * 24 * 60 ? 'months' : 'units';
+
+                const qtyHint = document.createElement('p');
+                qtyHint.id = 'modal-item-qty-duration-hint';
+                qtyHint.className = 'time-duration-source';
+                const fieldsEl = document.querySelector('#modal-item-time-container .modal-time-fields');
+                if (fieldsEl) fieldsEl.appendChild(qtyHint);
+
+                const syncDurationFromQuantity = () => {
+                    const qty = (typeof input !== 'undefined' && input) ? (parseFloat(input.value) || 1) : (lockedInfo?.quantity || 1);
+                    const durMin = Math.round(qty * timeUnitMinutes);
+                    // Mirror into the hidden duration input so downstream readers stay consistent.
+                    if (modalItemDurationInput) modalItemDurationInput.value = String(durMin);
+                    saveTimeField('itemDuration', durMin);
+                    qtyHint.textContent = `Duration follows quantity: ${qty} ${unitLabel} (${fmtDur(durMin)})`;
+                    computeItemEndTime();
+                    updateModalItemAvailability();
+                };
+
+                syncDurationFromQuantity();
+                if (typeof input !== 'undefined' && input) {
+                    input.onchange = syncDurationFromQuantity;
+                    input.oninput = syncDurationFromQuantity;
+                }
             }
 
             // Initialize computed end time hint
             computeItemEndTime();
+            // Show availability for any pre-selected date/time on open.
+            updateModalItemAvailability();
         }
     } else if (isPackage && packageContents) {
         // Package-specific UI: show headcount selector and package contents

@@ -3,7 +3,8 @@ require('temporal-polyfill/global');
 const { RRuleTemporal } = require('rrule-temporal');
 
 exports.handler = async function (event) {
-    const { url } = event.queryStringParameters;
+    const { url, debug } = event.queryStringParameters;
+    const debugMode = debug === '1' || debug === 'true';
 
     if (!url) {
         return {
@@ -29,7 +30,7 @@ exports.handler = async function (event) {
         const windowEnd = new Date(now);
         windowEnd.setFullYear(windowEnd.getFullYear() + 2);
 
-        const busyTimes = parseICalFeed(rawText, windowStart, windowEnd);
+        const { busyTimes, meta } = parseICalFeed(rawText, windowStart, windowEnd);
 
         console.log(`[CAL] Returning ${busyTimes.length} busy times`);
         if (busyTimes.length <= 100) {
@@ -38,10 +39,17 @@ exports.handler = async function (event) {
             console.log(`[CAL] First 20: ${JSON.stringify(busyTimes.slice(0, 20))}`);
         }
 
+        // Default contract is unchanged: a plain array of busy times. When the
+        // caller opts in with ?debug=1, return the same busy times alongside a
+        // `meta` object describing exactly how every VEVENT was classified, so
+        // the diagnosis (parsed / dropped / out-of-window) is visible wherever
+        // the response is inspected — including the browser console.
+        const payload = debugMode ? { busyTimes, meta } : busyTimes;
+
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(busyTimes),
+            body: JSON.stringify(payload),
         };
     } catch (error) {
         console.error('[CAL] Error:', error);
@@ -62,11 +70,26 @@ function parseICalFeed(rawText, windowStart, windowEnd) {
     const vevents = extractBlocks(text, 'VEVENT');
     console.log(`[CAL] Found ${vevents.length} VEVENT blocks`);
 
-    const parsed = vevents.map(parseVEvent).filter(Boolean);
+    // Parse every VEVENT, keeping an explicit account of any that are dropped so
+    // a silently-discarded event always leaves a visible trace in the logs.
+    const parsed = [];
+    const dropped = [];
+    for (const body of vevents) {
+        const ev = parseVEvent(body);
+        if (ev) {
+            parsed.push(ev);
+        } else {
+            dropped.push(summarizeVEvent(body));
+        }
+    }
+    if (dropped.length) {
+        console.warn(`[CAL] DROPPED ${dropped.length} of ${vevents.length} VEVENT(s) — could not parse:`);
+        dropped.forEach((d, i) => console.warn(`[CAL]   dropped[${i}] ${d}`));
+    }
 
     const byUid = new Map();
     const standalone = [];
-    let counts = { recurring: 0, override: 0, standalone: 0, skipped: 0 };
+    let counts = { recurring: 0, override: 0, standalone: 0, dropped: dropped.length };
 
     for (const ev of parsed) {
         if (ev.recurrenceId) {
@@ -89,13 +112,24 @@ function parseICalFeed(rawText, windowStart, windowEnd) {
     const busyTimes = [];
 
     // Process standalone events
+    const standaloneIncluded = [];
+    const standaloneOutOfWindowList = [];
+    let standaloneOutOfWindow = 0;
     for (const ev of standalone) {
         const start = ev.startUTC;
         const end = ev.endUTC;
         if (end >= windowStart && start <= windowEnd) {
             busyTimes.push({ start: start.toISOString(), end: end.toISOString() });
+            standaloneIncluded.push({ summary: ev.summary, start: start.toISOString(), end: end.toISOString() });
             console.log(`[CAL] Standalone: "${ev.summary}" ${start.toISOString()} -> ${end.toISOString()}`);
+        } else {
+            standaloneOutOfWindow++;
+            standaloneOutOfWindowList.push({ summary: ev.summary, start: start.toISOString(), end: end.toISOString() });
+            console.log(`[CAL] Standalone OUT OF WINDOW: "${ev.summary}" ${start.toISOString()} -> ${end.toISOString()} (window ${windowStart.toISOString()} .. ${windowEnd.toISOString()})`);
         }
+    }
+    if (standaloneOutOfWindow) {
+        console.log(`[CAL] ${standaloneOutOfWindow} standalone event(s) excluded by the look-back/look-ahead window`);
     }
 
     // Process recurring events
@@ -152,7 +186,18 @@ function parseICalFeed(rawText, windowStart, windowEnd) {
     });
 
     console.log(`[CAL] Total: ${deduped.length} busy times (${busyTimes.length - deduped.length} dupes removed)`);
-    return deduped;
+
+    const meta = {
+        veventBlocks: vevents.length,
+        counts,
+        window: { start: windowStart.toISOString(), end: windowEnd.toISOString() },
+        standaloneIncluded,
+        standaloneOutOfWindow: standaloneOutOfWindowList,
+        dropped,
+        totalBusyTimes: deduped.length,
+    };
+
+    return { busyTimes: deduped, meta };
 }
 
 // ---- iCal text processing ----
@@ -174,6 +219,20 @@ function extractBlocks(text, type) {
 }
 
 // ---- VEVENT parsing ----
+
+/**
+ * Build a short human-readable description of a VEVENT for diagnostic logging.
+ * Used when an event is dropped, so the offending raw values are never invisible.
+ */
+function summarizeVEvent(body) {
+    const summary = getPropValue(body, 'SUMMARY') || '(no summary)';
+    const dtstart = getPropFull(body, 'DTSTART');
+    const dtstartDesc = dtstart
+        ? `DTSTART${dtstart.params}:${dtstart.value}`
+        : 'MISSING DTSTART';
+    const rrule = getPropValue(body, 'RRULE');
+    return `"${summary}" [${dtstartDesc}]${rrule ? ' (recurring)' : ' (single)'}`;
+}
 
 function parseVEvent(body) {
     const dtstartRaw = getPropFull(body, 'DTSTART');
@@ -301,20 +360,27 @@ function toUTC(dateStr, tzid, isDateOnly) {
         ));
     }
 
-    // DateTime: 20260725T100000 or 20260725T100000Z
-    const dtMatch = dateStr.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/);
+    // DateTime: 20260725T100000 or 20260725T100000Z (seconds optional, e.g. 20260725T1000)
+    const dtMatch = dateStr.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?(Z)?$/);
     if (dtMatch) {
         const [, y, mo, d, h, mi, s, z] = dtMatch;
+        const sec = s ? +s : 0;
         if (z) {
             // Explicit UTC
-            return new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +s));
+            return new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, sec));
         }
         if (tzid) {
             // Convert from local timezone to UTC
-            return tzToUTC(`${y}-${mo}-${d}T${h}:${mi}:${s}`, tzid);
+            return tzToUTC(`${y}-${mo}-${d}T${h}:${mi}:${String(sec).padStart(2, '0')}`, tzid);
         }
         // No timezone specified — treat as UTC (common for floating times)
-        return new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +s));
+        return new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, sec));
+    }
+
+    // Date with separators, e.g. 2026-07-25 (some non-conformant feeds emit these)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        const [y, mo, d] = dateStr.split('-');
+        return new Date(Date.UTC(+y, +mo - 1, +d));
     }
 
     // Fallback: try native Date parsing

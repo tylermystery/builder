@@ -6,6 +6,7 @@ import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { calculateMissingCategories, buildGoalBucket } from '../availability.js';
 import { calculateRecommendationScore } from '../availability.js';
+import { describeSelectedAvailability, AVAILABILITY_STATUS } from '../availability.js';
 import { parseOptions, getRecordPrice, getEffectiveMinQuantity, flattenOptionGroups, getShopUrlParam, formatItemSchedule } from '../utils.js';
 import { log } from '../utils/debug.js';
 import * as backgroundEngine from './backgroundEngine.js';
@@ -325,6 +326,7 @@ async function createLockedInItemElement(record, itemInfo) {
             <p class="locked-item-pricing">${quantityDisplay} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
             ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
             ${scheduleStr ? `<p class="locked-item-schedule"><span class="schedule-icon">🕐</span> ${scheduleStr}</p>` : ''}
+            ${itemInfo.itemDate && record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL] ? `<p class="locked-item-availability is-pending" data-avail-line>Checking availability…</p>` : ''}
         </div>
         <div class="locked-item-actions">
             <button class="demote-locked-item-btn" title="Remove from Plan">Unsave</button>
@@ -404,11 +406,52 @@ async function createLockedInItemElement(record, itemInfo) {
         });
     }
 
+    // Fill the per-item availability line for its selected date/time. Done
+    // asynchronously (calendar data is cached) so it survives plan re-renders
+    // rather than being painted on by a separate pass that gets wiped.
+    const availEl = itemElement.querySelector('[data-avail-line]');
+    if (availEl) {
+        api.fetchCalendarForRecord(record).then(busyTimes => {
+            const info = describeSelectedAvailability(record, busyTimes, {
+                date: itemInfo.itemDate,
+                startTime: itemInfo.itemStartTime,
+                endTime: itemInfo.itemEndTime,
+            });
+            renderAvailabilityLine(availEl, info);
+        }).catch(() => {
+            availEl.style.display = 'none';
+        });
+    }
+
     // === DIG INFO DEBUG START ===
     console.log('[DIG-INFO DEBUG] createLockedInItemElement COMPLETE for:', record.id);
     // === DIG INFO DEBUG END ===
 
     return itemElement;
+}
+
+/**
+ * Render an availability descriptor (from describeSelectedAvailability) into a
+ * plan-panel line element, applying the shared status colors.
+ */
+function renderAvailabilityLine(el, info) {
+    if (!el) return;
+    el.classList.remove('is-pending', 'available-full', 'available-partial', 'unavailable');
+    if (!info) {
+        el.style.display = 'none';
+        return;
+    }
+    let icon = '🟢';
+    if (info.status === AVAILABILITY_STATUS.PARTIAL) { el.classList.add('available-partial'); icon = '🟠'; }
+    else if (info.status === AVAILABILITY_STATUS.NONE) { el.classList.add('unavailable'); icon = '🔴'; }
+    else { el.classList.add('available-full'); }
+
+    let text = info.label;
+    if (info.slots) {
+        const slotText = info.slots.split('\n').filter(Boolean).join(', ');
+        if (slotText) text += `: ${slotText}`;
+    }
+    el.innerHTML = `<span class="avail-icon">${icon}</span> ${text}`;
 }
 // --- END REPLACED FUNCTION ---\
 

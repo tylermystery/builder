@@ -1302,3 +1302,86 @@ export function buildPackageContentsFromSession(lockedItems, ideasItems, tierCon
 
     return contents;
 }
+
+// ─── Date/time scheduling helpers ────────────────────────────────────────────
+
+/**
+ * For a record priced by a time measurement, return the number of minutes in one
+ * pricing unit so that a quantity can be treated as a duration. Returns null for
+ * records that are not time-priced (the quantity and duration stay independent).
+ *
+ * Detection is generic so future time units (per day/week/month) work without
+ * rework even though only "per hour" exists in the catalog editor today.
+ *
+ * @param {Object} record - The Airtable record.
+ * @returns {number|null} Minutes per pricing unit, or null when not time-based.
+ */
+export function getTimeUnitMinutes(record) {
+    const pricingType = (record?.fields?.[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || '').toLowerCase();
+    if (!pricingType) return null;
+    if (pricingType.includes('per hour') || pricingType.includes('hourly')) return 60;
+    if (pricingType.includes('per day') || pricingType.includes('daily')) return 24 * 60;
+    if (pricingType.includes('per week') || pricingType.includes('weekly')) return 7 * 24 * 60;
+    if (pricingType.includes('per month') || pricingType.includes('monthly')) return 30 * 24 * 60;
+    return null;
+}
+
+/**
+ * Parse a time string like "7:00 PM" or "14:30" into { hours, minutes }, or null.
+ */
+function parseTimeStringToParts(timeStr) {
+    if (!timeStr) return null;
+    const match = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (!match) return null;
+    let hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    const meridiem = match[3] ? match[3].toUpperCase() : null;
+    if (meridiem === 'PM' && hours !== 12) hours += 12;
+    else if (meridiem === 'AM' && hours === 12) hours = 0;
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+    return { hours, minutes };
+}
+
+/**
+ * Format a total-minutes value into a 12-hour clock string like "7:00 PM".
+ */
+function formatMinutesToTime(totalMin) {
+    totalMin = ((totalMin % (24 * 60)) + 24 * 60) % (24 * 60);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    if (h === 0) return `12:${String(m).padStart(2, '0')} AM`;
+    if (h < 12) return `${h}:${String(m).padStart(2, '0')} AM`;
+    if (h === 12) return `12:${String(m).padStart(2, '0')} PM`;
+    return `${h - 12}:${String(m).padStart(2, '0')} PM`;
+}
+
+/**
+ * Compute an end time (and end date when the duration crosses midnight) from a
+ * start time, a duration in minutes, and an optional start date. Shared by the
+ * plan-level and item-level date/time flows so both stay consistent.
+ *
+ * @param {string} startTimeStr - Start time, e.g. "7:00 PM".
+ * @param {number} durationMin - Duration in minutes.
+ * @param {string|null} [startDateISO] - ISO start date (for the cross-midnight end date).
+ * @returns {{ endTime: string|null, dateEnd: string|null }}
+ */
+export function computeEndFromStartDuration(startTimeStr, durationMin, startDateISO = null) {
+    const result = { endTime: null, dateEnd: null };
+    const startParsed = parseTimeStringToParts(startTimeStr);
+    if (!startParsed || !durationMin || durationMin <= 0) return result;
+
+    const startTotalMin = startParsed.hours * 60 + startParsed.minutes;
+    const endTotalMin = startTotalMin + durationMin;
+    result.endTime = formatMinutesToTime(endTotalMin);
+
+    if (endTotalMin >= 24 * 60 && startDateISO) {
+        const daysOverflow = Math.floor(endTotalMin / (24 * 60));
+        const endDate = new Date(startDateISO);
+        if (!isNaN(endDate.getTime())) {
+            endDate.setDate(endDate.getDate() + daysOverflow);
+            endDate.setHours(23, 59, 59, 999);
+            result.dateEnd = endDate.toISOString();
+        }
+    }
+    return result;
+}
