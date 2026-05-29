@@ -8,7 +8,7 @@ import * as api from '../api.js';
 import { buildGoalBucket, calculateRecommendationScore } from '../availability.js';
 // ^^^ END FINAL IMPORT FIX ^^^
 import { CONSTANTS } from '../config.js';
-import { getRecordPrice, getTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
+import { getRecordPrice, getRecordPriceRange, getTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { log } from '../utils/debug.js';
 
 // Shared SVG constant - avoids re-creating the string for each card/icon update
@@ -636,8 +636,28 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex);
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
-    const priceHTML = displayPrice === 0 ? 'Free' : `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
+    // Show a price range ($X – $Y) when the item's options can yield more than one
+    // price; otherwise fall back to the single price exactly as before. Option
+    // selection happens in the detail modal, so catalog cards always show the
+    // full range while the modal continues to reflect the specific selection.
+    const priceRange = getRecordPriceRange(record);
+    const hasPriceRange = !!(priceRange && priceRange.min !== priceRange.max);
+    let priceHTML;
+    if (hasPriceRange) {
+        const minText = priceRange.min === 0 ? 'Free' : `$${priceRange.min.toFixed(2)}`;
+        priceHTML = `${minText} – $${priceRange.max.toFixed(2)} ${pricingTypeHTML}`;
+    } else {
+        priceHTML = displayPrice === 0 ? 'Free' : `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
+    }
+    // For items whose options yield a price range, adjusting quantity / adding to
+    // the plan from the catalog would silently use the default option, which is
+    // misleading. Instead, surface a "See options" button that opens the detail
+    // modal so the customer can make their selection. Single-price items keep the
+    // inline quantity stepper and add-to-plan button.
     const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'Update Plan' : 'Add to Plan'}</button>`;
+    const actionsHTML = hasPriceRange
+        ? `<button class="card-action-btn see-options-btn">See options</button>`
+        : `${quantitySelectorHTML}${addToPlanBtnHTML}`;
     const placeholder = getLowQualityPlaceholder(imageUrlToLoad);
 
     // Build image source indicator for AI items
@@ -682,7 +702,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         </div>
         <div class="card-footer">
             <div class="price-wrapper"><div class="valuation-meta"><div class="price">${priceHTML}</div>${vitalityBadgeHTML}</div></div>
-            <div class="actions-wrapper">${quantitySelectorHTML}${addToPlanBtnHTML}</div>
+            <div class="actions-wrapper">${actionsHTML}</div>
         </div>
     `;
 
