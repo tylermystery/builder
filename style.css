@@ -1857,6 +1857,11 @@ html.presentation-active {
     gap: 10px;
     align-items: center;
 }
+/* When an item has a price range, the actions row holds only a single
+   "See options" button — let it span the full width for visual balance. */
+.card-footer .actions-wrapper .see-options-btn {
+    flex: 1;
+}
 .card-footer .quantity-selector {
     display: flex;
     align-items: center;

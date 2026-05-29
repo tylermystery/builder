@@ -183,7 +183,8 @@ export async function loadSortable() {
  *   [Group Name] (optional_modifier) - Creates a new option group
  *   Option Name [price: +X] [img: tag] [desc: text] [time: +X] - Option with modifiers
  *   Price modifiers support absolute amounts (+X / -X), overrides (X), and
- *   percentages of the base price (+X% / -X%).
+ *   percentages (+X% / -X%) applied to the running subtotal (base price plus the
+ *   other selected options' absolute adjustments).
  *
  * Falls back to legacy comma-separated format for backward compatibility.
  *
@@ -255,7 +256,7 @@ function parseOptionsWithGroups(lines) {
  * Parses a single option line with bracket modifiers.
  * Format: Option Name [price: +10] [img: image_tag] [desc: description text] [time: +30]
  * Price modifiers: [price: +10]/[price: -5] (absolute), [price: 25] (override),
- * [price: +15%]/[price: -10%] (percentage of base price).
+ * [price: +15%]/[price: -10%] (percentage of the running subtotal).
  *
  * @param {string} line - A single option line
  * @returns {Object} Parsed option with all modifier fields
@@ -264,7 +265,7 @@ function parseOptionLine(line) {
     let name = line;
     let priceModifier = null;  // +X or -X (adds/subtracts from base)
     let priceOverride = null;  // X (replaces base price)
-    let pricePercent = null;   // +X% or -X% (adjusts base price by a percentage)
+    let pricePercent = null;   // +X% or -X% (adjusts the running subtotal by a percentage)
     let imageTag = null;
     let descriptionAppend = null;
     let durationChange = null;
@@ -741,6 +742,136 @@ export function getGroupPriceRange(record) {
     });
     return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };
 }
+
+/**
+ * Computes the min/max price an item can reach across its own option groups.
+ *
+ * Unlike getGroupPriceRange (which ranges across a parent's descendant items),
+ * this ranges across a single item's options. It uses a per-group min/max
+ * contribution model so the result stays accurate without enumerating every
+ * combination:
+ *   - A required group is single-select, so exactly one option must be chosen.
+ *     Its contribution is min(options)…max(options); the base price by itself
+ *     may not be reachable, so even its cheapest option raises the floor.
+ *   - An optional group is multi-select, so it can be skipped (min contribution
+ *     0, or the sum of any price-decreasing options) or have all of its
+ *     price-increasing options stacked (max contribution).
+ * Override options (which replace the price entirely) are treated as independent
+ * candidate endpoints, since they don't combine additively with other groups.
+ *
+ * Percentage options ("10% off") are applied multiplicatively to the subtotal,
+ * mirroring getRecordPrice: the floor uses the most-negative selectable percentage
+ * and the ceiling uses the most-positive one. Percentages are treated as
+ * independent optional adjustments, which yields an outer bound on the true range
+ * (it can be marginally wide only when a single required group mixes a percentage
+ * option with an absolute one); the displayed range therefore always contains
+ * every price the item can actually reach.
+ *
+ * Returns null when the item has no options (so callers keep showing a single
+ * price unchanged). When an item's options can only ever yield one price, min
+ * and max are equal, letting callers collapse to a single-price display.
+ *
+ * @param {Object} record - The Airtable record
+ * @returns {{min: number, max: number}|null} The reachable price range, or null
+ */
+export function getRecordPriceRange(record) {
+    if (!record || !record.fields) return null;
+
+    const priceField = record.fields[CONSTANTS.FIELD_NAMES.PRICE];
+    const basePrice = parseFloat(String(priceField || '0').replace(/[^0-9.-]+/g, "")) || 0;
+
+    const groups = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    if (!Array.isArray(groups) || groups.length === 0) {
+        return null; // No options -> single price, nothing to range over.
+    }
+
+    let floorDelta = 0;
+    let ceilDelta = 0;
+    let floorPercent = 0; // most-negative percentage adjustment reachable
+    let ceilPercent = 0;  // most-positive percentage adjustment reachable
+    const overrideCandidates = [];
+
+    for (const group of groups) {
+        if (!group || !Array.isArray(group.options) || group.options.length === 0) continue;
+
+        // Mirrors the modal's interpretation: required groups are single-select,
+        // everything else is optional/multi-select.
+        const isRequired = group.modifier && group.modifier.toLowerCase() === 'required';
+
+        // Additive contributions (delta vs base) for options that adjust the
+        // price absolutely, plus override values that replace it. Percentages are
+        // collected separately because they apply multiplicatively to the subtotal.
+        const contributions = [];
+        const percents = [];
+        let hasNonPercentOption = false;
+        for (const opt of group.options) {
+            if (opt.priceOverride !== null && !isNaN(opt.priceOverride)) {
+                overrideCandidates.push(opt.priceOverride);
+                hasNonPercentOption = true;
+                continue;
+            }
+            if (opt.pricePercent !== null && !isNaN(opt.pricePercent)) {
+                percents.push(opt.pricePercent);
+                continue;
+            }
+            let delta = 0;
+            if (opt.priceModifier !== null && !isNaN(opt.priceModifier)) delta += opt.priceModifier;
+            contributions.push(delta);
+            hasNonPercentOption = true;
+        }
+
+        if (percents.length > 0) {
+            // Percentages apply multiplicatively to the subtotal (see the function
+            // doc). Required groups are single-select, so the floor/ceiling take the
+            // single most-negative/positive percentage — with 0% also reachable when
+            // the group offers a non-percentage alternative. Optional groups are
+            // multi-select, so their price-decreasing percentages can stack for the
+            // floor and price-increasing ones for the ceiling, mirroring how
+            // getRecordPrice sums the selected percentages.
+            if (isRequired) {
+                floorPercent += hasNonPercentOption ? Math.min(0, ...percents) : Math.min(...percents);
+                ceilPercent += hasNonPercentOption ? Math.max(0, ...percents) : Math.max(...percents);
+            } else {
+                floorPercent += percents.filter(p => p < 0).reduce((a, b) => a + b, 0);
+                ceilPercent += percents.filter(p => p > 0).reduce((a, b) => a + b, 0);
+            }
+        }
+
+        if (contributions.length === 0) continue; // Only overrides/percents/no-price options here.
+
+        if (isRequired) {
+            // Must pick exactly one, so the base price alone is not reachable.
+            floorDelta += Math.min(...contributions);
+            ceilDelta += Math.max(...contributions);
+        } else {
+            // Can skip all (or take the price-decreasing ones) for the floor, and
+            // stack all price-increasing ones for the ceiling.
+            const negativeSum = contributions.filter(c => c < 0).reduce((a, b) => a + b, 0);
+            const positiveSum = contributions.filter(c => c > 0).reduce((a, b) => a + b, 0);
+            floorDelta += negativeSum;
+            ceilDelta += positiveSum;
+        }
+    }
+
+    // Apply the percentage adjustments multiplicatively to the absolute subtotals,
+    // consistent with getRecordPrice (final = subtotal * (1 + percent/100)).
+    let min = (basePrice + floorDelta) * (1 + floorPercent / 100);
+    let max = (basePrice + ceilDelta) * (1 + ceilPercent / 100);
+
+    for (const ov of overrideCandidates) {
+        const ovMin = ov * (1 + floorPercent / 100);
+        const ovMax = ov * (1 + ceilPercent / 100);
+        if (ovMin < min) min = ovMin;
+        if (ovMax > max) max = ovMax;
+    }
+
+    // A charge can't be below free; keep 0 as a legitimate floor ("Free – $X").
+    if (min < 0) min = 0;
+    if (max < 0) max = 0;
+
+    return { min, max };
+}
+
 /**
  * Calculates the final price for a record based on selected options.
  * Supports both legacy single optionIndex and new selections object format.
@@ -764,8 +895,8 @@ export function getRecordPrice(record, selectionsOrIndex = null) {
         return isNaN(price) ? 0 : price;
     }
 
-    // Capture the base price so percentage modifiers apply to it consistently
-    // (rather than compounding off the running total as multiple groups are applied).
+    // Capture the original base price for diagnostics; percentage modifiers are
+    // applied to the running subtotal (see the selections-object branch below).
     const basePrice = isNaN(price) ? 0 : price;
 
     const groups = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
@@ -782,7 +913,9 @@ export function getRecordPrice(record, selectionsOrIndex = null) {
                 price += variation.priceModifier;
             }
             if (variation.pricePercent !== null && !isNaN(variation.pricePercent)) {
-                price += basePrice * (variation.pricePercent / 100);
+                // Apply the percentage to the running subtotal (base + any modifier
+                // on this same option), consistent with the selections-object path.
+                price += price * (variation.pricePercent / 100);
             }
         }
         return isNaN(price) ? 0 : price;
@@ -791,8 +924,32 @@ export function getRecordPrice(record, selectionsOrIndex = null) {
     // Handle new selections object format: { group0: optionIndex, group1: optionIndex, ... }
     // Also supports multi-select arrays: { group0: [0, 2], group1: 1 }
     if (typeof selectionsOrIndex === 'object' && selectionsOrIndex !== null) {
-        // Iterate through each group selection
-        for (const [groupKey, optionValue] of Object.entries(selectionsOrIndex)) {
+        // Two passes so percentage modifiers ("10% off") apply to the running
+        // subtotal — the base price plus every absolute/override adjustment from
+        // the other selected options — rather than only the bare base price.
+        //
+        // Previously a percentage always multiplied the original base price, so a
+        // discount reflected the default price and never scaled with the other
+        // options a customer picked (e.g. "10% off" stayed $10 off a $100 base even
+        // after choosing a $50 upgrade). Accumulating the percentage and applying
+        // it to the subtotal fixes that, while summing percentages (instead of
+        // compounding them one at a time) keeps multiple discounts predictable.
+        //
+        // Pass 1: apply overrides and absolute (+/-) modifiers to build the
+        //         subtotal and accumulate the combined percentage.
+        // Pass 2: apply the accumulated percentage to that subtotal.
+
+        // Iterate groups in group-index order so the result is deterministic
+        // regardless of the order in which selections happened to be made.
+        const sortedGroupKeys = Object.keys(selectionsOrIndex).sort((a, b) => {
+            const ai = parseInt(a.replace('group', ''), 10) || 0;
+            const bi = parseInt(b.replace('group', ''), 10) || 0;
+            return ai - bi;
+        });
+
+        let percentSum = 0;
+
+        for (const groupKey of sortedGroupKeys) {
             // Extract group index from key like "group0", "group1", etc.
             const groupIndexMatch = groupKey.match(/^group(\d+)$/);
             if (!groupIndexMatch) continue;
@@ -802,25 +959,35 @@ export function getRecordPrice(record, selectionsOrIndex = null) {
             if (!group || !group.options) continue;
 
             // Handle both single index and array of indices (multi-select)
+            const optionValue = selectionsOrIndex[groupKey];
             const optionIndices = Array.isArray(optionValue) ? optionValue : [optionValue];
 
             for (const optionIndex of optionIndices) {
                 const option = group.options[optionIndex];
                 if (!option) continue;
 
-                // Apply price modifications - override takes precedence
+                // Apply price modifications - override takes precedence and
+                // replaces the subtotal entirely (ignoring this option's own
+                // modifier/percent, matching the legacy single-index behaviour).
                 if (option.priceOverride !== null && !isNaN(option.priceOverride)) {
                     price = option.priceOverride;
-                } else {
-                    if (option.priceModifier !== null && !isNaN(option.priceModifier)) {
-                        price += option.priceModifier;
-                    }
-                    if (option.pricePercent !== null && !isNaN(option.pricePercent)) {
-                        price += basePrice * (option.pricePercent / 100);
-                    }
+                    continue;
+                }
+                if (option.priceModifier !== null && !isNaN(option.priceModifier)) {
+                    price += option.priceModifier;
+                }
+                if (option.pricePercent !== null && !isNaN(option.pricePercent)) {
+                    percentSum += option.pricePercent;
                 }
             }
         }
+
+        const subtotalBeforePercent = price;
+        if (percentSum !== 0) {
+            price += price * (percentSum / 100);
+        }
+
+        log('Pricing', `getRecordPrice: base=${basePrice} subtotal=${subtotalBeforePercent} percent=${percentSum}% final=${isNaN(price) ? 0 : price}`);
     }
 
     return isNaN(price) ? 0 : price;
