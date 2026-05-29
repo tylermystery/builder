@@ -698,6 +698,56 @@
     font-style: italic;
 }
 
+/* Collapsible accordion sections in the item detail modal (Add Notes, Item Scheduling) */
+.modal-accordion {
+    margin: 12px 0;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+.modal-accordion-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    text-align: left;
+}
+.modal-accordion-icon {
+    flex-shrink: 0;
+    color: #999;
+}
+.modal-accordion-chevron {
+    margin-left: auto;
+    flex-shrink: 0;
+    color: #999;
+    transition: transform 0.25s ease;
+}
+.modal-accordion.expanded .modal-accordion-chevron {
+    transform: rotate(180deg);
+}
+.modal-accordion-body {
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.25s ease;
+}
+.modal-accordion.expanded .modal-accordion-body {
+    max-height: 600px;
+    opacity: 1;
+    margin-top: 10px;
+}
+
 /* Time component styles - detail modal */
 .modal-time-section {
     margin: 12px 0;
@@ -1649,6 +1699,17 @@
     font-size: 0.8em;
     color: #6c757d;
 }
+.locked-item-schedule {
+    font-size: 0.8em;
+    color: #1a5276;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+}
+.locked-item-schedule .schedule-icon {
+    flex-shrink: 0;
+}
 .option-detail-line {
     display: inline;
 }
@@ -1945,7 +2006,18 @@
     outline: none;
     background-color: #f8f9fa;
 }
-#modal-notes-container { 
+#modal-quantity-selector .quantity-total-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+}
+#modal-quantity-selector .quantity-total-display {
+    font-size: 16px;
+    font-weight: 700;
+    color: #212529;
+}
+#modal-notes-container {
     margin-bottom: 20px;
 }
 #modal-item-note {
@@ -6195,6 +6267,19 @@ hr.total-divider {
     margin-top: 4px;
 }
 
+.checkout-summary-schedule {
+    font-size: 0.8em;
+    color: #1a5276;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.checkout-summary-schedule .schedule-icon {
+    flex-shrink: 0;
+}
+
 .itinerary-item-controls {
     display: flex;
     align-items: center;
@@ -8152,6 +8237,17 @@ hr.total-divider {
 
 #modal-price-actions.hidden {
     display: none;
+}
+
+/* When grouped with the Add to Plan button, let the two actions
+   share the row evenly to match the full-width primary button above. */
+#modal-actions-container #modal-price-actions {
+    width: 100%;
+}
+
+#modal-actions-container #modal-price-actions .price-action-btn {
+    flex: 1;
+    justify-content: center;
 }
 
 .price-action-btn {
@@ -17774,10 +17870,40 @@ body.presentation-active .rsb-layout-toggle-fab {
     font-size: 1em;
     color: #e74c3c;
     margin-bottom: 6px;
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: none;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
 }
 
 .checkout-chip-in-header svg {
     flex-shrink: 0;
+}
+
+/* Push the chevron to the far right of the accordion header */
+.checkout-chip-in-chevron {
+    margin-left: auto;
+    transition: transform 0.25s ease;
+}
+
+#checkout-chip-in-section.expanded .checkout-chip-in-chevron {
+    transform: rotate(180deg);
+}
+
+/* Collapsible body of the Community Fund accordion */
+.checkout-chip-in-body {
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.25s ease;
+}
+
+#checkout-chip-in-section.expanded .checkout-chip-in-body {
+    max-height: 1200px;
+    opacity: 1;
 }
 
 .checkout-chip-in-desc {

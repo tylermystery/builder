@@ -6,7 +6,7 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage } from '../config.js';
 import { getCurrentUser } from '../chat.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getDayStatus, AVAILABILITY_STATUS, logBusyTimeSummary } from '../availability.js';
 import { showReceiptModal } from './receipt.js';
@@ -1047,6 +1047,21 @@ function setupCheckoutChipIn(cartSubtotal) {
     // Ensure default state: Skip is active, custom input hidden, amount = 0
     if (customInputContainer) customInputContainer.style.display = 'none';
     if (chipInSummary) chipInSummary.style.display = 'none';
+
+    // Accordion: collapse the Community Fund by default and wire up the toggle.
+    // Callers that want it open (e.g. the Chip In flow) expand it after setup.
+    chipInSection.classList.remove('expanded');
+    const toggleBtn = document.getElementById('checkout-chip-in-toggle');
+    if (toggleBtn) {
+        // Clone to remove old listeners
+        const newToggle = toggleBtn.cloneNode(true);
+        toggleBtn.parentNode.replaceChild(newToggle, toggleBtn);
+        newToggle.setAttribute('aria-expanded', 'false');
+        newToggle.addEventListener('click', () => {
+            const expanded = chipInSection.classList.toggle('expanded');
+            newToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        });
+    }
 }
 
 /**
@@ -1055,11 +1070,51 @@ function setupCheckoutChipIn(cartSubtotal) {
  * refreshes the checkout display (fees, payment intent, etc.).
  * @param {Object} scope - The checkout scope (item mode)
  */
+function buildItemOptionDetailsHtml(scope) {
+    if (!scope || !scope.record) return '';
+    const optionGroups = parseOptions(scope.record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    if (!optionGroups || optionGroups.length === 0) return '';
+
+    const optionLines = [];
+    // Prefer the full selections object (supports multiple groups / multi-select)
+    if (scope.selections && Object.keys(scope.selections).length > 0) {
+        const sortedKeys = Object.keys(scope.selections).sort((a, b) => {
+            return (parseInt(a.replace('group', ''), 10) || 0) - (parseInt(b.replace('group', ''), 10) || 0);
+        });
+        for (const groupKey of sortedKeys) {
+            const optionValue = scope.selections[groupKey];
+            const groupIndexMatch = groupKey.match(/^group(\d+)$/);
+            if (!groupIndexMatch) continue;
+            const groupIndex = parseInt(groupIndexMatch[1], 10);
+            const group = optionGroups[groupIndex];
+            if (!group || !group.options) continue;
+            const optionIndices = Array.isArray(optionValue) ? optionValue : [optionValue];
+            for (const optIdx of optionIndices) {
+                const option = group.options[optIdx];
+                if (!option || !option.name) continue;
+                const groupLabel = group.name && group.name !== 'Options' ? `${group.name}: ` : '';
+                optionLines.push(`${groupLabel}${option.name}`);
+            }
+        }
+    } else if (scope.selectedOptionIndex != null) {
+        // Legacy fallback: single flat option index
+        const flatOptions = flattenOptionGroups(optionGroups);
+        const option = flatOptions[scope.selectedOptionIndex];
+        if (option && option.name) {
+            optionLines.push(option.name);
+        }
+    }
+
+    if (optionLines.length === 0) return '';
+    return optionLines.map(l => `<small class="checkout-option-detail">› ${l}</small>`).join('');
+}
+
 function updateCheckoutItemQtyDisplay(scope) {
     const qty = currentCheckoutItemQty;
     const price = scope.price || 0;
     const itemTotal = price * qty;
     const itemName = scope.itemName || 'Item';
+    const itemOptionDetailsHtml = buildItemOptionDetailsHtml(scope);
 
     // Update qty value display
     const qtyValueEl = document.getElementById('checkout-item-qty');
@@ -1080,6 +1135,7 @@ function updateCheckoutItemQtyDisplay(scope) {
             scopeItem.innerHTML = `
                 <div class="summary-item-details">
                     <span class="summary-item-name">${itemName}</span>
+                    ${itemOptionDetailsHtml}
                     <small class="summary-item-donation-note">Chip in to crowdfund this item</small>
                 </div>
                 <span class="summary-item-price">—</span>
@@ -1088,6 +1144,7 @@ function updateCheckoutItemQtyDisplay(scope) {
             scopeItem.innerHTML = `
                 <div class="summary-item-details">
                     <span class="summary-item-name">${itemName} (x${qty})</span>
+                    ${itemOptionDetailsHtml}
                 </div>
                 <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
             `;
@@ -4524,6 +4581,26 @@ function applyTagChipStyle(chip, isSelected) {
 // Guard to prevent concurrent modal rendering
 let isModalRendering = false;
 
+/**
+ * Wire up a collapsible accordion section in the detail modal (Add Notes, Item Scheduling).
+ * Resets the section to collapsed and rebinds its toggle so listeners don't stack across opens.
+ */
+function setupModalAccordion(containerId, toggleId) {
+    const container = document.getElementById(containerId);
+    const toggle = document.getElementById(toggleId);
+    if (!container || !toggle) return;
+    // Start collapsed every time the modal opens.
+    container.classList.remove('expanded');
+    // Clone to drop any previously attached listeners.
+    const freshToggle = toggle.cloneNode(true);
+    toggle.parentNode.replaceChild(freshToggle, toggle);
+    freshToggle.setAttribute('aria-expanded', 'false');
+    freshToggle.addEventListener('click', () => {
+        const expanded = container.classList.toggle('expanded');
+        freshToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    });
+}
+
 export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = null) {
     // Prevent concurrent modal renders that could cause duplicate content
     if (isModalRendering) {
@@ -4678,6 +4755,47 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         // Show price action buttons
         if (priceActionsContainer) priceActionsContainer.classList.remove('hidden');
 
+        // Read the live option selections from the rendered option buttons in the
+        // detail modal. Mirrors the logic used by "Add to Plan" (see events.js) so
+        // Rapid Pay / Chip In reflect the same adjusted price and selected options.
+        // Returns a selections object like { group0: 1, group1: [0, 2] }.
+        const readLiveSelections = () => {
+            const selections = {};
+            const optionGroupEls = document.querySelectorAll('#modal-options-container .option-group');
+            if (optionGroupEls.length > 0) {
+                optionGroupEls.forEach((group) => {
+                    const groupIndex = group.dataset.groupIndex;
+                    const selectedBtns = group.querySelectorAll('.option-btn.selected');
+                    if (selectedBtns.length > 0 && groupIndex !== undefined) {
+                        if (selectedBtns.length === 1) {
+                            selections[`group${groupIndex}`] = parseInt(selectedBtns[0].dataset.optionIndex, 10) || 0;
+                        } else {
+                            selections[`group${groupIndex}`] = Array.from(selectedBtns)
+                                .map(btn => parseInt(btn.dataset.optionIndex, 10) || 0)
+                                .sort((a, b) => a - b);
+                        }
+                    }
+                });
+            } else {
+                const selectedBtn = document.querySelector('#modal-options-container .option-btn.selected');
+                if (selectedBtn) {
+                    selections['group0'] = parseInt(selectedBtn.dataset.optionIndex, 10) || 0;
+                }
+            }
+            return selections;
+        };
+
+        // Compute legacy selectedOptionIndex from a selections object for backward compatibility.
+        const legacyIndexFromSelections = (selections) => {
+            if (!selections || Object.keys(selections).length === 0) {
+                return itemState.selectedOptionIndex || 0;
+            }
+            const group0Selection = selections['group0'];
+            return Array.isArray(group0Selection)
+                ? (group0Selection[0] || 0)
+                : (group0Selection || 0);
+        };
+
         // Calculate initial amount for rapid pay
         const initialPrice = getRecordPrice(record, itemState.selectedOptionIndex);
         const initialQuantity = itemState.quantity || 1;
@@ -4721,13 +4839,12 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             newRapidPayBtn.addEventListener('click', () => {
                 const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
                 const quantity = quantityInput ? parseFloat(quantityInput.value) || 1 : 1;
-                const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
-                let selectedOptionIndex = itemState.selectedOptionIndex || 0;
-                if (optionRadios.length > 0) {
-                    const selectedValue = optionRadios[0].value;
-                    selectedOptionIndex = parseInt(selectedValue, 10) || 0;
-                }
-                const price = getRecordPrice(record, selectedOptionIndex);
+                const selections = readLiveSelections();
+                const priceParam = Object.keys(selections).length > 0
+                    ? selections
+                    : (itemState.selectedOptionIndex || 0);
+                const selectedOptionIndex = legacyIndexFromSelections(selections);
+                const price = getRecordPrice(record, priceParam);
                 const amount = price * quantity;
                 const itemName = record.fields.Name || 'Item';
                 const shopSettings = getShopSettings();
@@ -4739,7 +4856,9 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     price: price,
                     record: record,
                     selectedOptionIndex: selectedOptionIndex,
-                    highlightChipIn: false
+                    selections: selections,
+                    highlightChipIn: false,
+                    ...captureModalNoteAndSchedule()
                 });
             });
         }
@@ -4756,13 +4875,12 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             newChipInBtn.addEventListener('click', () => {
                 const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
                 const quantity = quantityInput ? parseFloat(quantityInput.value) || 1 : 1;
-                const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
-                let selectedOptionIndex = itemState.selectedOptionIndex || 0;
-                if (optionRadios.length > 0) {
-                    const selectedValue = optionRadios[0].value;
-                    selectedOptionIndex = parseInt(selectedValue, 10) || 0;
-                }
-                const price = getRecordPrice(record, selectedOptionIndex);
+                const selections = readLiveSelections();
+                const priceParam = Object.keys(selections).length > 0
+                    ? selections
+                    : (itemState.selectedOptionIndex || 0);
+                const selectedOptionIndex = legacyIndexFromSelections(selections);
+                const price = getRecordPrice(record, priceParam);
                 const itemName = record.fields.Name || 'Item';
                 const shopSettings = getShopSettings();
                 showCheckoutModal(shopSettings, {
@@ -4774,7 +4892,9 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     price: price,
                     record: record,
                     selectedOptionIndex: selectedOptionIndex,
-                    highlightChipIn: true
+                    selections: selections,
+                    highlightChipIn: true,
+                    ...captureModalNoteAndSchedule()
                 });
             });
         }
@@ -7036,6 +7156,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     priceModText = `$${opt.priceOverride.toFixed(2)}`;
                 } else if (opt.priceModifier !== null) {
                     priceModText = `${opt.priceModifier >= 0 ? '+' : ''}$${opt.priceModifier.toFixed(2)}`;
+                } else if (opt.pricePercent !== null && opt.pricePercent !== undefined) {
+                    priceModText = `${opt.pricePercent >= 0 ? '+' : ''}${opt.pricePercent}%`;
                 }
 
                 // Build button content with optional image tag indicator
@@ -7124,6 +7246,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                         if (rapidPayBtnRef && rapidPayBtnRef._updateText) {
                             rapidPayBtnRef._updateText();
                         }
+                        // Refresh the quantity total since the selected option may change price
+                        if (modalQuantitySelector && modalQuantitySelector._updateTotal) {
+                            modalQuantitySelector._updateTotal();
+                        }
                     });
                 }
 
@@ -7140,8 +7266,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         }
     }
 
-    // Add AI Top Options button for ALL users (sparkles button)
-    // This allows any user to generate AI-recommended options for the item
+    // Add AI Top Options / edit button (sparkles button)
+    // Availability rules:
+    //   - Users with publish access for the active store see it on ALL items.
+    //   - All users see it on AI discoveries, custom items, and items they manually created.
     const hasExistingOptions = optionGroups.length > 0 && optionGroups.some(g => g.options.length > 0);
     const isRealRecord = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-') && !record.id.startsWith('ai-presentation-');
     const userHasPublishPermissionForOptions = api.userHasPublishPermission();
@@ -7157,6 +7285,21 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     // Check if this item already has solutions stored
     const hasExistingSolutions = record._generatedSolutions && record._generatedSolutions.length > 0;
     const solutionsAreStale = record._solutionsStale === true;
+
+    // Decide whether to show the edit/AI options button.
+    // Publish-access users get it on every item; everyone else sees it on
+    // AI discoveries, custom items, and items they manually created.
+    const isManuallyCreatedItem = record.isManual === true ||
+                                  record.id?.startsWith('manual-add-') ||
+                                  record.id?.startsWith('manual-presentation-');
+    const isAiDiscoveryItem = record.id?.startsWith('ai-search-') ||
+                              record.id?.startsWith('ai-child-') ||
+                              record.id?.startsWith('ai-presentation-');
+    const isCustomItem = record.id?.startsWith('custom-');
+    // Solution items are drilled-down results of a concept's "Find Solutions" flow.
+    // They are still custom/AI items, so all users should be able to estimate options on them.
+    // (isSolutionItem is already computed earlier in this function for the "Dig Info" button.)
+    const showAiOptionsButton = userHasPublishPermissionForOptions || isManuallyCreatedItem || isAiDiscoveryItem || isCustomItem || isSolutionItem;
 
     // Create the AI top options button container
     const aiOptionsContainer = document.createElement('div');
@@ -7688,7 +7831,159 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         });
     }
 
-    modalOptionsContainer.appendChild(aiOptionsContainer);
+    // For concept items, the button above is "Find Solutions". Concept items are still
+    // custom/AI items, so users should also be able to estimate options directly on them.
+    // Build a separate, self-contained "Estimate Options" block (kept independent of the
+    // solutions flow above so neither affects the other) and append it alongside.
+    const buildConceptOptionsBlock = () => {
+        const container = document.createElement('div');
+        container.className = 'ai-top-options-container ai-estimate-options-container';
+        container.style.marginTop = '10px';
+
+        const estimateBtnText = hasExistingOptions ? '✨ Re-Estimate Options' : '✨ Estimate Options';
+        container.innerHTML = `
+            <button class="ai-top-options-btn" title="Use AI to estimate recommended options/variations">
+                ${estimateBtnText}
+            </button>
+            <div class="ai-options-result" style="display: none;">
+                <div class="ai-options-preview-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span style="font-weight: 600; color: #333;">AI Generated Options</span>
+                    <button class="ai-options-close-btn" style="background: none; border: none; cursor: pointer; font-size: 1.2em; color: #666;">×</button>
+                </div>
+                <textarea class="ai-options-editor" placeholder="Loading..." style="width: 100%; min-height: 120px; font-family: monospace; font-size: 0.9em; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;"></textarea>
+                <div class="ai-options-actions" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="ai-options-apply-btn" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Apply to Item</button>
+                    ${userIsAuthenticated && (isRealRecord && userHasPublishPermissionForOptions) ? '<button class="ai-options-save-catalog-btn" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save to Catalog</button>' : ''}
+                    <span class="ai-options-status" style="align-self: center; font-size: 0.85em; color: #666;"></span>
+                </div>
+            </div>
+        `;
+
+        const estBtn = container.querySelector('.ai-top-options-btn');
+        const estResult = container.querySelector('.ai-options-result');
+        const estEditor = container.querySelector('.ai-options-editor');
+        const estCloseBtn = container.querySelector('.ai-options-close-btn');
+        const estApplyBtn = container.querySelector('.ai-options-apply-btn');
+        const estSaveCatalogBtn = container.querySelector('.ai-options-save-catalog-btn');
+        const estStatus = container.querySelector('.ai-options-status');
+
+        // Generate options on click
+        estBtn.addEventListener('click', async () => {
+            estBtn.disabled = true;
+            estResult.style.display = 'block';
+            estStatus.textContent = '';
+            estBtn.textContent = '✨ Estimating...';
+            estEditor.value = 'Estimating AI recommendations...';
+
+            try {
+                const result = await api.generateTopOptions(record);
+                if (result.success && result.options) {
+                    estEditor.value = result.options;
+                    estStatus.textContent = 'Options estimated!';
+                    estStatus.style.color = '#28a745';
+                } else {
+                    throw new Error(result.error || 'Failed to estimate options');
+                }
+            } catch (error) {
+                estEditor.value = '';
+                estStatus.textContent = `Error: ${error.message}`;
+                estStatus.style.color = '#dc3545';
+                console.error('AI options generation failed:', error);
+            } finally {
+                estBtn.disabled = false;
+                estBtn.textContent = hasExistingOptions ? '✨ Re-Estimate Options' : '✨ Estimate Options';
+            }
+        });
+
+        // Close button
+        estCloseBtn.addEventListener('click', () => {
+            estResult.style.display = 'none';
+        });
+
+        // Apply to item (works for all users - updates locally for this session)
+        estApplyBtn.addEventListener('click', () => {
+            const optionsText = estEditor?.value;
+            if (!optionsText?.trim()) {
+                estStatus.textContent = 'No options to apply';
+                estStatus.style.color = '#dc3545';
+                return;
+            }
+
+            record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
+            record._locallyGeneratedOptions = optionsText;
+
+            const isLocked = state.cart.lockedItems.has(record.id);
+            const isIdea = state.cart.items.has(record.id);
+
+            if (isLocked) {
+                const itemInfo = state.cart.lockedItems.get(record.id);
+                itemInfo.generatedOptions = optionsText;
+                state.cart.lockedItems.set(record.id, itemInfo);
+                triggerSave();
+                log('Modal', `Saved generated options for locked item ${record.id}`);
+            } else if (isIdea) {
+                const itemInfo = state.cart.items.get(record.id);
+                itemInfo.generatedOptions = optionsText;
+                state.cart.items.set(record.id, itemInfo);
+                triggerSave();
+                log('Modal', `Saved generated options for idea item ${record.id}`);
+            }
+
+            estStatus.textContent = 'Applied! Refreshing...';
+            estStatus.style.color = '#28a745';
+            setTimeout(() => {
+                showDetailModal(record);
+            }, 500);
+        });
+
+        // Save to Catalog (only present for publish users on real records)
+        if (estSaveCatalogBtn) {
+            estSaveCatalogBtn.addEventListener('click', async () => {
+                const optionsText = estEditor?.value;
+                if (!optionsText?.trim()) {
+                    estStatus.textContent = 'No options to save';
+                    estStatus.style.color = '#dc3545';
+                    return;
+                }
+
+                estSaveCatalogBtn.disabled = true;
+                estStatus.textContent = 'Saving to catalog...';
+                estStatus.style.color = '#666';
+
+                try {
+                    const result = await api.updateItemOptions(record.id, optionsText);
+                    if (result) {
+                        record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
+                        estStatus.textContent = 'Saved to catalog!';
+                        estStatus.style.color = '#28a745';
+                        setTimeout(() => {
+                            showDetailModal(record);
+                        }, 1000);
+                    } else {
+                        throw new Error('Failed to save');
+                    }
+                } catch (error) {
+                    estStatus.textContent = 'Error saving. Try again.';
+                    estStatus.style.color = '#dc3545';
+                    console.error('Error saving options to catalog:', error);
+                } finally {
+                    estSaveCatalogBtn.disabled = false;
+                }
+            });
+        }
+
+        return container;
+    };
+
+    // Only surface the edit/AI options button when the current user is allowed to use it
+    // (publish access on any item, or an AI discovery / custom / solution / manually-created item for everyone else).
+    if (showAiOptionsButton) {
+        modalOptionsContainer.appendChild(aiOptionsContainer);
+        // Concept items get both "Find Solutions" (above) and a separate "Estimate Options" block.
+        if (isConceptItem) {
+            modalOptionsContainer.appendChild(buildConceptOptionsBlock());
+        }
+    }
 
     // --- THIS IS THE FIX ---\
     // The listeners are now MOVED INSIDE this `if` block
@@ -7699,12 +7994,14 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         // Hide notes container for events - not needed for published event viewing
         modalNotesContainer.style.display = isEvent ? 'none' : 'block';
         modalItemNote.value = itemState.note;
+        // Add Notes is a collapsible accordion, collapsed by default each open.
+        setupModalAccordion('modal-notes-container', 'modal-notes-toggle');
 
         // Calculate effective minimum and Airtable minimum
         const airtableMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         const effectiveMin = getEffectiveMinQuantity(record);
 
-        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button type="button" class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${effectiveMin}" step="0.1"><button type="button" class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
+        modalQuantitySelector.innerHTML = `<div class="quantity-total-row"><div class="quantity-selector" data-record-id="${record.id}"><button type="button" class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${effectiveMin}" step="0.1"><button type="button" class="quantity-btn plus" aria-label="Increase quantity">+</button></div><span class="quantity-total-display" aria-live="polite"></span></div>`;
 
         // Remove any existing nudge/badge elements to prevent duplication
         const existingNudge = modalActionsContainer.querySelector('.umw-sales-nudge');
@@ -7758,7 +8055,55 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         const plusBtn = modalQuantitySelector.querySelector('.plus');
         const minusBtn = modalQuantitySelector.querySelector('.minus');
         const input = modalQuantitySelector.querySelector('input');
+        const totalDisplay = modalQuantitySelector.querySelector('.quantity-total-display');
+
+        // Keep a running total (unit price × quantity) shown beside the quantity selector
+        // so the user always sees the current cost with quantity and options accounted for.
+        const updateQuantityTotal = () => {
+            if (!totalDisplay) return;
+            const qty = input ? (parseFloat(input.value) || 1) : (itemState.quantity || 1);
+            // Read the current option selections straight from the DOM so this stays
+            // self-contained (the earlier readLiveSelections helper is in a nested scope).
+            const selections = {};
+            const optionGroupEls = document.querySelectorAll('#modal-options-container .option-group');
+            if (optionGroupEls.length > 0) {
+                optionGroupEls.forEach((group) => {
+                    const groupIndex = group.dataset.groupIndex;
+                    const selectedBtns = group.querySelectorAll('.option-btn.selected');
+                    if (selectedBtns.length > 0 && groupIndex !== undefined) {
+                        if (selectedBtns.length === 1) {
+                            selections[`group${groupIndex}`] = parseInt(selectedBtns[0].dataset.optionIndex, 10) || 0;
+                        } else {
+                            selections[`group${groupIndex}`] = Array.from(selectedBtns)
+                                .map(btn => parseInt(btn.dataset.optionIndex, 10) || 0)
+                                .sort((a, b) => a - b);
+                        }
+                    }
+                });
+            } else {
+                const selectedBtn = document.querySelector('#modal-options-container .option-btn.selected');
+                if (selectedBtn) {
+                    selections['group0'] = parseInt(selectedBtn.dataset.optionIndex, 10) || 0;
+                }
+            }
+            const priceParam = Object.keys(selections).length > 0
+                ? selections
+                : (itemState.selectedOptionIndex || 0);
+            const unitPrice = getRecordPrice(record, priceParam);
+            if (typeof unitPrice !== 'number') {
+                totalDisplay.textContent = '';
+                return;
+            }
+            const total = unitPrice * qty;
+            totalDisplay.textContent = total > 0 ? `Total: $${total.toFixed(2)}` : 'Total: Free';
+        };
+        // Expose so option-change handlers can refresh the total.
+        modalQuantitySelector._updateTotal = updateQuantityTotal;
+        updateQuantityTotal();
+
         if (plusBtn && minusBtn && input) {
+            input.addEventListener('change', updateQuantityTotal);
+            input.addEventListener('input', updateQuantityTotal);
             // Function to update pro-tip visibility based on current quantity
             const updateProTipVisibility = () => {
                 const currentQty = parseInt(input.value, 10) || 1;
@@ -7825,6 +8170,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                 input.value = currentValue + 1;
                 input.dispatchEvent(new Event('change', { bubbles: true }));
                 updateProTipVisibility();
+                updateQuantityTotal();
                 // Update Rapid Pay button text
                 const rapidPayBtnPlus = document.getElementById('modal-rapid-pay-btn');
                 if (rapidPayBtnPlus && rapidPayBtnPlus._updateText) {
@@ -7840,6 +8186,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     input.value = currentValue - 1;
                     input.dispatchEvent(new Event('change', { bubbles: true }));
                     updateProTipVisibility();
+                    updateQuantityTotal();
                     // Update Rapid Pay button text
                     const rapidPayBtnMinus = document.getElementById('modal-rapid-pay-btn');
                     if (rapidPayBtnMinus && rapidPayBtnMinus._updateText) {
@@ -7866,6 +8213,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
             // Show time section
             modalTimeContainer.style.display = 'block';
+            // Item Scheduling is a collapsible accordion, collapsed by default each open.
+            setupModalAccordion('modal-item-time-container', 'modal-time-toggle');
 
             // Populate from saved item info
             const modalItemStartTimeInput = document.getElementById('modal-item-start-time');
@@ -8801,9 +9150,83 @@ export function hideDetailModal() {
     }
 }
 
+/**
+ * Reorders the checkout modal's Community Fund and "Also purchase this item?" sections.
+ * In the Chip In flow we lead with the Community Fund, then show the also-purchase prompt
+ * beneath it. Other flows (plan checkout, Rapid Pay) keep the default layout where the
+ * Community Fund sits inside the totals block. The reordering is reversible and idempotent,
+ * so reopening the modal in any mode always lands in the correct layout.
+ */
+function applyChipInSectionOrder(chipInLead) {
+    const summaryEl = document.getElementById('checkout-summary-details');
+    const qtyToggle = document.getElementById('checkout-item-quantity-toggle');
+    const chipInSection = document.getElementById('checkout-chip-in-section');
+    if (!summaryEl || !qtyToggle || !chipInSection) return;
+
+    if (chipInLead) {
+        // Lead with the Community Fund, then the "Also purchase this item?" prompt.
+        summaryEl.insertAdjacentElement('afterend', chipInSection);
+        chipInSection.insertAdjacentElement('afterend', qtyToggle);
+    } else {
+        // Default layout: qty prompt directly after the summary, Community Fund inside totals.
+        summaryEl.insertAdjacentElement('afterend', qtyToggle);
+        const totalRow = document.querySelector('.checkout-total-deposit-section .checkout-total');
+        if (totalRow) totalRow.insertAdjacentElement('afterend', chipInSection);
+    }
+}
+
+/**
+ * Read the note and per-item scheduling fields straight from the detail modal
+ * DOM so they can be carried into the checkout (Rapid Pay / Chip In) scope.
+ * Mirrors the capture logic used when adding an item to the plan. Returns an
+ * object with only the fields that are actually set.
+ */
+function captureModalNoteAndSchedule() {
+    const result = {};
+    const note = document.getElementById('modal-item-note')?.value || '';
+    if (note && note.trim() !== '') result.note = note;
+
+    const startTime = document.getElementById('modal-item-start-time')?.value || '';
+    const durationRaw = document.getElementById('modal-item-duration')?.value || '';
+    if (startTime) result.itemStartTime = startTime;
+    if (durationRaw) {
+        const parsed = parseInt(durationRaw, 10);
+        if (parsed > 0) result.itemDuration = parsed;
+    }
+
+    // Compute end time from start time + duration
+    if (result.itemStartTime && result.itemDuration) {
+        const timeMatch = result.itemStartTime.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+        if (timeMatch) {
+            let h = parseInt(timeMatch[1], 10);
+            const m = parseInt(timeMatch[2], 10);
+            const mer = timeMatch[3] ? timeMatch[3].toUpperCase() : null;
+            if (mer === 'PM' && h !== 12) h += 12;
+            else if (mer === 'AM' && h === 12) h = 0;
+            const endMin = (h * 60 + m + result.itemDuration) % (24 * 60);
+            const eH = Math.floor(endMin / 60);
+            const eM = endMin % 60;
+            result.itemEndTime = eH === 0 ? `12:${String(eM).padStart(2, '0')} AM` :
+                eH < 12 ? `${eH}:${String(eM).padStart(2, '0')} AM` :
+                eH === 12 ? `12:${String(eM).padStart(2, '0')} PM` :
+                `${eH - 12}:${String(eM).padStart(2, '0')} PM`;
+        }
+    }
+
+    // Date: prefer the Flatpickr instance's selected date, else the raw input value
+    const dateEl = document.getElementById('modal-item-date');
+    if (dateEl?._flatpickr && dateEl._flatpickr.selectedDates.length >= 1) {
+        result.itemDate = dateEl._flatpickr.selectedDates[0].toISOString();
+    } else if (dateEl?.value?.trim()) {
+        result.itemDate = dateEl.value.trim();
+    }
+
+    return result;
+}
+
 export async function showCheckoutModal(shopSettings, scope = null) {
     currentShopSettings = shopSettings;
-    currentCheckoutScope = scope; // { mode: 'item', itemId, itemName, quantity, price, record, highlightChipIn } or null (plan mode)
+    currentCheckoutScope = scope; // { mode: 'item', itemId, itemName, quantity, price, record, selectedOptionIndex, selections, highlightChipIn } or null (plan mode)
     currentChipInAmount = 0; // Reset chip-in on each open
     log('Modal', `Showing checkout modal. Scope: ${scope ? scope.mode : 'plan'}`);
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
@@ -8869,18 +9292,18 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         const itemTotal = (scope.price || 0) * initialQty;
         finalTotal = itemTotal;
 
-        // Build option detail lines for item mode
-        let itemOptionDetailsHtml = '';
-        if (scope.record) {
-            const optionGroups = parseOptions(scope.record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-            if (optionGroups && optionGroups.length > 0 && scope.selectedOptionIndex != null) {
-                const flatOptions = flattenOptionGroups(optionGroups);
-                const option = flatOptions[scope.selectedOptionIndex];
-                if (option && option.name) {
-                    itemOptionDetailsHtml = `<small class="checkout-option-detail">› ${option.name}</small>`;
-                }
-            }
+        // Build option detail lines for item mode (supports multiple groups / multi-select)
+        const itemOptionDetailsHtml = buildItemOptionDetailsHtml(scope);
+
+        // Note and per-item scheduling carried from the detail modal
+        let itemNoteHtml = '';
+        if (scope.note && scope.note.trim() !== '') {
+            itemNoteHtml = `<small class="checkout-summary-note">Note: ${scope.note}</small>`;
         }
+        const itemScheduleStr = formatItemSchedule(scope);
+        const itemScheduleHtml = itemScheduleStr
+            ? `<small class="checkout-summary-schedule"><span class="schedule-icon">🕐</span> ${itemScheduleStr}</small>`
+            : '';
 
         const listItem = document.createElement('li');
         listItem.id = 'checkout-scope-item';
@@ -8890,6 +9313,8 @@ export async function showCheckoutModal(shopSettings, scope = null) {
                 <div class="summary-item-details">
                     <span class="summary-item-name">${scope.itemName || 'Item'}</span>
                     ${itemOptionDetailsHtml}
+                    ${itemScheduleHtml}
+                    ${itemNoteHtml}
                     <small class="summary-item-donation-note">Chip in to crowdfund this item</small>
                 </div>
                 <span class="summary-item-price">—</span>
@@ -8899,6 +9324,8 @@ export async function showCheckoutModal(shopSettings, scope = null) {
                 <div class="summary-item-details">
                     <span class="summary-item-name">${scope.itemName || 'Item'} (x${initialQty})</span>
                     ${itemOptionDetailsHtml}
+                    ${itemScheduleHtml}
+                    ${itemNoteHtml}
                 </div>
                 <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
             `;
@@ -8995,6 +9422,12 @@ export async function showCheckoutModal(shopSettings, scope = null) {
             noteHtml = `<small class="checkout-summary-note">Note: ${itemInfo.note}</small>`;
         }
 
+        // Per-item scheduling line (date / time / duration)
+        const scheduleStr = formatItemSchedule(itemInfo);
+        const scheduleHtml = scheduleStr
+            ? `<small class="checkout-summary-schedule"><span class="schedule-icon">🕐</span> ${scheduleStr}</small>`
+            : '';
+
         // Build option detail lines
         let optionDetailsHtml = '';
         const optionGroups = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
@@ -9036,6 +9469,7 @@ export async function showCheckoutModal(shopSettings, scope = null) {
                 <span class="summary-item-name">${record.fields.Name} (x${itemInfo.quantity || 1})</span>
                 ${optionDetailsHtml}
                 ${edgeCaseNote}
+                ${scheduleHtml}
                 ${noteHtml}
             </div>
             <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
@@ -9118,10 +9552,19 @@ export async function showCheckoutModal(shopSettings, scope = null) {
 
     // --- UNIFIED CHECKOUT: Setup Chip In Section ---
     setupCheckoutChipIn(finalTotal);
+
+    // Section ordering: the Chip In flow leads with the Community Fund and shows the
+    // "Also purchase this item?" prompt beneath it; other flows keep the default layout.
+    applyChipInSectionOrder(scope && scope.highlightChipIn);
+
     // If scope says to highlight chip-in, pre-expand it
     if (scope && scope.highlightChipIn) {
         const chipInSection = document.getElementById('checkout-chip-in-section');
         if (chipInSection) {
+            // Open the accordion so the Community Fund options are visible immediately
+            chipInSection.classList.add('expanded');
+            const toggleBtn = document.getElementById('checkout-chip-in-toggle');
+            if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
             const customBtn = chipInSection.querySelector('[data-chip-in="custom"]');
             const skipBtn = chipInSection.querySelector('[data-chip-in="skip"]');
             if (customBtn && skipBtn) {

@@ -2785,7 +2785,18 @@ body.presentation-active #chat-widget {
     outline: none;
     background-color: #f8f9fa;
 }
-#modal-notes-container { 
+#modal-quantity-selector .quantity-total-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+}
+#modal-quantity-selector .quantity-total-display {
+    font-size: 16px;
+    font-weight: 700;
+    color: #212529;
+}
+#modal-notes-container {
     margin-bottom: 20px;
 }
 #modal-item-note {
