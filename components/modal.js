@@ -7225,8 +7225,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         }
     }
 
-    // Add AI Top Options button for ALL users (sparkles button)
-    // This allows any user to generate AI-recommended options for the item
+    // Add AI Top Options / edit button (sparkles button)
+    // Availability rules:
+    //   - Users with publish access for the active store see it on ALL items.
+    //   - Users without publish access only see it on items they manually created.
     const hasExistingOptions = optionGroups.length > 0 && optionGroups.some(g => g.options.length > 0);
     const isRealRecord = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-') && !record.id.startsWith('ai-presentation-');
     const userHasPublishPermissionForOptions = api.userHasPublishPermission();
@@ -7242,6 +7244,13 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     // Check if this item already has solutions stored
     const hasExistingSolutions = record._generatedSolutions && record._generatedSolutions.length > 0;
     const solutionsAreStale = record._solutionsStale === true;
+
+    // Decide whether to show the edit/AI options button.
+    // Publish-access users get it on every item; everyone else only on items they manually created.
+    const isManuallyCreatedItem = record.isManual === true ||
+                                  record.id?.startsWith('manual-add-') ||
+                                  record.id?.startsWith('manual-presentation-');
+    const showAiOptionsButton = userHasPublishPermissionForOptions || isManuallyCreatedItem;
 
     // Create the AI top options button container
     const aiOptionsContainer = document.createElement('div');
@@ -7773,7 +7782,11 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         });
     }
 
-    modalOptionsContainer.appendChild(aiOptionsContainer);
+    // Only surface the edit/AI options button when the current user is allowed to use it
+    // (publish access on any item, or the item was manually created by a non-publish user).
+    if (showAiOptionsButton) {
+        modalOptionsContainer.appendChild(aiOptionsContainer);
+    }
 
     // --- THIS IS THE FIX ---\
     // The listeners are now MOVED INSIDE this `if` block
