@@ -8,7 +8,7 @@ import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus, getPlanDayStatusSync, logBusyTimeSummary } from './availability.js';
-import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, preloadStripe, getShopUrlParam } from './utils.js';
+import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, preloadStripe, getShopUrlParam, getTimeUnitMinutes, computeEndFromStartDuration } from './utils.js';
 import { sendMessage, getCurrentUser, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName, toggleRecentChats, addPlanEventToHistory } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
@@ -2532,6 +2532,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     const parsed = parseInt(modalItemDurationRaw, 10);
                     if (parsed > 0) itemInfo.itemDuration = parsed;
                 }
+                // For time-priced items (e.g. per hour) the quantity is the duration,
+                // so derive itemDuration from quantity rather than the hidden dropdown.
+                const itemUnitMinutes = getTimeUnitMinutes(record);
+                if (itemUnitMinutes) {
+                    itemInfo.itemDuration = Math.round((parseFloat(quantity) || 1) * itemUnitMinutes);
+                }
                 // Compute end time from start time + duration
                 if (itemInfo.itemStartTime && itemInfo.itemDuration) {
                     const timeMatch = itemInfo.itemStartTime.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
@@ -3276,6 +3282,74 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
     // Initialize computed end from any restored session values
     computeAndStoreEndDateTime();
+
+    // --- "Update all items" — push the plan date/time onto every locked item ---
+    const applyToItemsBtn = document.getElementById('event-apply-to-items-btn');
+    const applyToItemsMsg = document.getElementById('event-apply-to-items-msg');
+
+    /** Briefly show a gentle inline message beside the apply button. */
+    function showApplyToItemsMsg(text) {
+        if (!applyToItemsMsg) return;
+        applyToItemsMsg.textContent = text;
+        clearTimeout(showApplyToItemsMsg._t);
+        showApplyToItemsMsg._t = setTimeout(() => { applyToItemsMsg.textContent = ''; }, 4000);
+    }
+
+    if (applyToItemsBtn) {
+        applyToItemsBtn.addEventListener('click', () => {
+            if (state.ui.isInitializing) return;
+
+            const planDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+            const planStart = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.START_TIME);
+            const planDuration = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DURATION);
+
+            if (!planDate) {
+                showApplyToItemsMsg('Set an event date first.');
+                return;
+            }
+            const itemCount = state.cart.lockedItems.size;
+            if (itemCount === 0) {
+                showApplyToItemsMsg('No items in the plan yet.');
+                return;
+            }
+            if (!window.confirm(`Apply this date/time to all ${itemCount} item${itemCount === 1 ? '' : 's'}? This replaces dates already set on individual items.`)) {
+                return;
+            }
+
+            for (const [recordId, info] of state.cart.lockedItems.entries()) {
+                const record = state.records.all.find(r => r.id === recordId);
+
+                info.itemDate = planDate;
+                if (planStart) info.itemStartTime = planStart; else delete info.itemStartTime;
+
+                // For time-priced items the duration is the quantity (e.g. hours), so keep
+                // their own duration rather than overwriting it with the plan duration.
+                const unitMinutes = record ? getTimeUnitMinutes(record) : null;
+                let effectiveDuration;
+                if (unitMinutes) {
+                    const qty = parseFloat(info.quantity) || 1;
+                    effectiveDuration = Math.round(qty * unitMinutes);
+                    info.itemDuration = effectiveDuration;
+                } else if (planDuration) {
+                    effectiveDuration = planDuration;
+                    info.itemDuration = planDuration;
+                } else {
+                    effectiveDuration = info.itemDuration || 0;
+                }
+
+                const { endTime, dateEnd } = computeEndFromStartDuration(info.itemStartTime, effectiveDuration, planDate);
+                if (endTime) info.itemEndTime = endTime; else delete info.itemEndTime;
+                if (dateEnd) info.itemDateEnd = dateEnd; else delete info.itemDateEnd;
+
+                state.cart.lockedItems.set(recordId, info);
+            }
+
+            triggerSave();
+            ui.updateEventPlanSection();
+            syncPlanState('eventDatePicker', 'itemUpdated', { appliedToAllItems: true });
+            showApplyToItemsMsg(`Applied to all ${itemCount} item${itemCount === 1 ? '' : 's'}.`);
+        });
+    }
 
     safeAddEventListener('itinerary-btn', 'click', () => {
         log('Events', 'Itinerary button clicked, showing modal.');

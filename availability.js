@@ -164,6 +164,88 @@ export function getAvailableSlotsForDay(day, busyTimes) {
         'No available slots';
 }
 
+/** Parse a clock string like "7:00 PM" or "14:30" into { hours, minutes }. */
+function parseClockTime(timeStr) {
+    if (!timeStr) return null;
+    const m = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (!m) return null;
+    let hours = parseInt(m[1], 10);
+    const minutes = parseInt(m[2], 10);
+    const mer = m[3] ? m[3].toUpperCase() : null;
+    if (mer === 'PM' && hours !== 12) hours += 12;
+    else if (mer === 'AM' && hours === 12) hours = 0;
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+    return { hours, minutes };
+}
+
+/** Apply a clock-time string to a given day, in local time. */
+function combineLocalDateTime(day, timeStr) {
+    const parsed = parseClockTime(timeStr);
+    if (!parsed) return null;
+    const d = new Date(day);
+    d.setHours(parsed.hours, parsed.minutes, 0, 0);
+    return d;
+}
+
+/**
+ * Build a persistent, human-readable availability description for a single
+ * item's selected date (and optional time window). Used by both the plan
+ * panel and the detail modal so the two stay consistent.
+ *
+ * Behavior follows the user's selection granularity:
+ *  - date only: report the day status and, when partially open, the free
+ *    time windows for that day.
+ *  - date + start/end time: evaluate that exact slot against the calendar
+ *    and report whether the chosen time is free or conflicts with a booking.
+ *
+ * @param {Object} record - The Airtable record (for lead time + iCal).
+ * @param {Array} busyTimes - Busy times for the record's calendar.
+ * @param {Object} selection - { date: Date|string, startTime?: string, endTime?: string }
+ * @returns {{ status: string, label: string, slots?: string } | null}
+ *          null when no usable date is provided.
+ */
+export function describeSelectedAvailability(record, busyTimes, selection = {}) {
+    const { date, startTime, endTime } = selection;
+    if (!date) return null;
+    const day = new Date(date);
+    if (isNaN(day.getTime())) return null;
+
+    const dayStatus = getDayStatus(day, busyTimes, record);
+
+    // Lead time blocks the whole day regardless of the chosen time.
+    if (dayStatus.status === AVAILABILITY_STATUS.NONE && /lead time/i.test(dayStatus.reason || '')) {
+        return { status: AVAILABILITY_STATUS.NONE, label: dayStatus.reason };
+    }
+
+    // A specific time was selected: evaluate that exact slot.
+    if (startTime) {
+        const startDate = combineLocalDateTime(day, startTime);
+        if (startDate) {
+            let endDate = endTime ? combineLocalDateTime(day, endTime) : null;
+            // End time before/equal start means it rolls into the next day.
+            if (endDate && endDate <= startDate) endDate.setDate(endDate.getDate() + 1);
+            // Assume a 1-hour window if only a start time is known.
+            const slotEnd = endDate || new Date(startDate.getTime() + 60 * 60 * 1000);
+            const timeLabel = endTime ? `${startTime} – ${endTime}` : startTime;
+            if (checkAvailability(startDate, slotEnd, busyTimes)) {
+                return { status: AVAILABILITY_STATUS.FULL, label: `Available at ${timeLabel}` };
+            }
+            return { status: AVAILABILITY_STATUS.NONE, label: `Booked during ${timeLabel} — try another time` };
+        }
+    }
+
+    // Date only: describe the day and surface open windows when partial.
+    if (dayStatus.status === AVAILABILITY_STATUS.NONE) {
+        return { status: AVAILABILITY_STATUS.NONE, label: 'Fully booked this day' };
+    }
+    if (dayStatus.status === AVAILABILITY_STATUS.FULL) {
+        return { status: AVAILABILITY_STATUS.FULL, label: 'Available all day' };
+    }
+    // Partial: list the free windows (copy the array so the cache isn't mutated).
+    const slots = getAvailableSlotsForDay(day, Array.isArray(busyTimes) ? busyTimes.slice() : busyTimes);
+    return { status: AVAILABILITY_STATUS.PARTIAL, label: 'Open', slots };
+}
+
 /**
  * Check combined availability for all locked items in a plan.
  * Supports per-item date overrides: if an item has an itemDate, only that date is checked.
