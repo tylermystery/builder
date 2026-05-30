@@ -2664,6 +2664,69 @@ html.presentation-active {
     padding-bottom: 0 !important;
 }
 
+/* ============================================================
+   DOCKED PANELS IN PLAN VIEW (presentation mode)
+   On wide screens, the hamburger (WTF Plans) panel and the
+   conversations (Forum) panel sit BESIDE the plan instead of
+   sliding over it. The plan view shrinks to make room, so the
+   user can see plans | plan + components | conversations at once
+   with no overlap. Catalog view and mobile keep the original
+   slide-over behavior (these rules are scoped to
+   body.presentation-active and min-width: 1100px).
+   ============================================================ */
+:root {
+    /* Docked panel widths in plan view. The plan view is inset by
+       the same amounts so the panels never overlap the plan.
+       --wtf-dock-width  -> left "hamburger" (WTF Plans) panel
+       --conv-dock-width -> right conversations rail (Forum + Chat) */
+    --wtf-dock-width: 360px;
+    --conv-dock-width: 380px;
+}
+
+@media (min-width: 1100px) {
+    /* Pin the side panels to deterministic widths when docked so the
+       plan view can reserve exactly the right amount of space. */
+    body.presentation-active #wtf-plans-panel {
+        width: var(--wtf-dock-width);
+    }
+    body.presentation-active #forum-panel {
+        width: var(--conv-dock-width);
+        min-width: var(--conv-dock-width);
+        max-width: var(--conv-dock-width);
+    }
+    body.presentation-active .unified-chat-panel {
+        width: var(--conv-dock-width);
+        min-width: var(--conv-dock-width);
+        max-width: var(--conv-dock-width);
+    }
+
+    /* The plan view becomes a center column between the panels.
+       It animates in step with the panels sliding in/out. */
+    body.presentation-active #presentation-modal-overlay {
+        left: 0;
+        right: 0;
+        width: auto;
+        transition: left 0.3s ease-in-out, right 0.3s ease-in-out;
+    }
+    /* Left inset when the hamburger (WTF Plans) panel is open */
+    body.presentation-active:has(#wtf-plans-panel.open) #presentation-modal-overlay {
+        left: var(--wtf-dock-width);
+    }
+    /* Right inset when a conversations panel is open (Forum discussion
+       or the unified Chat panel — both dock to the same right rail). */
+    body.presentation-active:has(#forum-panel.open) #presentation-modal-overlay,
+    body.presentation-active.ucp-panel-open #presentation-modal-overlay {
+        right: var(--conv-dock-width);
+    }
+
+    /* No dimming/backdrop overlays in docked mode — the plan stays
+       fully visible and interactive alongside the panels. */
+    body.presentation-active #wtf-plans-panel-overlay,
+    body.presentation-active #forum-panel-overlay {
+        display: none !important;
+    }
+}
+
 /* Search More Photos button styles */
 #modal-search-photos-container {
     text-align: center;
