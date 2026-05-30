@@ -4,7 +4,7 @@ import { state, getRecordById } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
-import { calculateMissingCategories, buildGoalBucket } from '../availability.js';
+import { calculateMissingCategories, buildGoalBucket, getActiveStorePillars } from '../availability.js';
 import { calculateRecommendationScore } from '../availability.js';
 import { describeSelectedAvailability, AVAILABILITY_STATUS } from '../availability.js';
 import { parseOptions, getRecordPrice, getEffectiveMinQuantity, flattenOptionGroups, getShopUrlParam, formatItemSchedule } from '../utils.js';
@@ -481,10 +481,22 @@ function calculateTotalPlanScore() {
 }
 
 
+/**
+ * Determines whether the active store has "Pillars" configured in the Stores table.
+ * The Plan Health section (score + missing-pillar suggestions) is only surfaced for
+ * stores that define pillars; stores without pillars never see the section.
+ * @returns {boolean}
+ */
+function activeStoreHasPillars() {
+    return getActiveStorePillars().length > 0;
+}
+
 function updateTotalPlanScoreDisplay(score) {
     const container = document.getElementById('event-health-score'); // Reuse the container
-    
+
     if (!container) return;
+    // Plan Health section is hidden for stores without Pillars; skip the score too.
+    if (!activeStoreHasPillars()) return;
 
     let scoreEl = container.querySelector('.plan-score-display');
     
@@ -2262,26 +2274,41 @@ export function updateHeader() {
 export function updateEventHealthScore() {
     const container = document.getElementById('event-health-score');
     if (!container) return;
-    
+
+    // Only stores that define "Pillars" in the Stores table get a Plan Health section.
+    if (!activeStoreHasPillars()) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+    }
+    container.style.display = '';
+
+    const pillars = getActiveStorePillars();
+    const totalPillars = pillars.length;
     const suggestions = calculateMissingCategories();
-    const score = 4 - suggestions.length; // Based on 4 pillars
+    const covered = Math.max(0, totalPillars - suggestions.length); // Pillars represented in the plan
+    const ratio = totalPillars > 0 ? covered / totalPillars : 0;
     let html = '';
 
-    // 1. The "Score"
+    // 1. The "Score" — graduated by the fraction of recommended pillars covered, so it
+    //    works for any store whether it defines 2 pillars or many.
     let scoreText = '🟠 Good Start!';
     let scoreColor = '#fd7e14';
-    if (score === 4) {
-        scoreText = '✅ Well-Rounded Event!';
-        scoreColor = '#28a745';
-    } else if (score === 1) {
-        scoreText = '🔴 Just Beginning!';
-        scoreColor = '#dc3545';
-    } else if (score === 0) { // New "Empty" state
+    if (covered === 0) { // Nothing covered yet
         scoreText = 'Start Your Plan!';
         scoreColor = '#6c757d'; // Neutral gray
-    } else if (score === 2) {
+    } else if (covered === totalPillars) { // Every pillar represented
+        scoreText = '✅ Well-Rounded Event!';
+        scoreColor = '#28a745';
+    } else if (ratio >= 0.75) {
+        scoreText = '🟠 Good Start!';
+        scoreColor = '#fd7e14';
+    } else if (ratio >= 0.5) {
         scoreText = '🟡 Growing!';
         scoreColor = '#ffc107';
+    } else {
+        scoreText = '🔴 Just Beginning!';
+        scoreColor = '#dc3545';
     }
 
     // --- THIS IS THE FIX (Removed \") ---

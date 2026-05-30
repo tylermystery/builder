@@ -309,15 +309,94 @@ export function getPlanDayStatusSync(day, lockedRecords) {
 }
 
 // In: availability.js
+
+/**
+ * Returns the list of "Pillar" category names configured for the active store in
+ * the Stores table. Pillars are the health "components" recommended for a store,
+ * and each pillar corresponds to a category. A store can define two or more.
+ *
+ * The column may arrive as an array (multi-select or linked records) or as a
+ * comma-separated text value, so both shapes are normalized here. Linked-record
+ * references are resolved to the linked category's display name. Returns an empty
+ * array when the store has no pillars configured.
+ *
+ * @returns {Array<string>} Pillar category display names (e.g., ["Activities", "Food & Drink"]).
+ */
+export function getActiveStorePillars() {
+    const activeStore = state.stores.all.find(s => s.id === state.ui.activeShopId);
+    const raw = activeStore?.fields?.Pillars;
+    if (!raw) return [];
+
+    let values;
+    if (Array.isArray(raw)) {
+        values = raw;
+    } else if (typeof raw === 'string') {
+        values = raw.split(',');
+    } else {
+        return [];
+    }
+
+    const RECORD_ID_PATTERN = /^rec[A-Za-z0-9]{14}$/;
+    return values
+        .map(value => {
+            if (typeof value !== 'string') return '';
+            // Linked-record references resolve to the linked category's name.
+            if (RECORD_ID_PATTERN.test(value)) {
+                const rec = state.records.all.find(r => r.id === value);
+                return rec?.fields?.Name?.trim() || '';
+            }
+            return value.trim();
+        })
+        .filter(Boolean);
+}
+
 // Action: REPLACE the entire `calculateMissingCategories` function
 
 /**
- * [Recommendation Engine v1.2]
- * Calculates the "health" of the event to find missing "Pillar" categories.
- * @returns {Array<string>} A list of missing categories (e.g., ["Venue", "Food/Drink"])
+ * [Recommendation Engine v2.0]
+ * Calculates the "health" of the event by finding which of the store's recommended
+ * "Pillar" categories are not yet represented in the locked plan. A plan is healthy
+ * when it contains at least one item from each pillar.
+ *
+ * Pillars are read from the active store's `Pillars` column (see getActiveStorePillars).
+ * Stores that do not define pillars fall back to the original default component set so
+ * recommendation sorting behaves exactly as it did before for them.
+ *
+ * @returns {Array<string>} A list of missing pillar categories (e.g., ["Venues", "Extras"])
  */
 export function calculateMissingCategories() {
-    // Your 4 Pillars (Using the exact, case-sensitive names the UI will display)
+    const pillars = getActiveStorePillars();
+
+    // No store-defined pillars: preserve the original default behavior.
+    if (pillars.length === 0) {
+        return calculateMissingDefaultCategories();
+    }
+
+    // A pillar is "covered" when at least one locked item belongs to that category.
+    // Matching mirrors the catalog's category filtering (comma-split + normalized).
+    const covered = new Set();
+    for (const recordId of state.cart.lockedItems.keys()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) continue;
+        const itemCategories = (record.fields.Categories || '')
+            .split(',')
+            .map(cat => cat.trim().toLowerCase().replace(/\s+/g, ' '));
+        pillars.forEach(pillar => {
+            const pillarNorm = pillar.toLowerCase().replace(/\s+/g, ' ');
+            if (itemCategories.includes(pillarNorm)) covered.add(pillar);
+        });
+    }
+
+    return pillars.filter(pillar => !covered.has(pillar));
+}
+
+/**
+ * Original default "4 Pillars" health calculation, retained for stores that have
+ * no pillars configured so their recommendation goal bucket is unchanged.
+ * @returns {Array<string>} A list of missing default categories.
+ */
+function calculateMissingDefaultCategories() {
+    // The default 4 Pillars (Using the exact, case-sensitive names the UI will display)
     const requiredCategories = {
         "Activities": false,
         "Food & Drink": false, // Key matches desired display
@@ -335,7 +414,7 @@ export function calculateMissingCategories() {
         if (itemCategories.includes('activities')) {
             requiredCategories["Activities"] = true;
         }
-        
+
         // --- FIXED: Robust check for all Food & Drink variations ---
         if (itemCategories.includes('food & drink') ||  // "Food & Drink"
             itemCategories.includes('food/drink') ||    // "Food/Drink" (from original data)
@@ -344,11 +423,11 @@ export function calculateMissingCategories() {
             requiredCategories["Food & Drink"] = true;
         }
         // --- ^^^ END FIXED ^^^
-        
+
         if (itemCategories.includes('venues') || itemCategories.includes('venue')) {
             requiredCategories["Venues"] = true;
         }
-        
+
         if (itemCategories.includes('extras')) {
             requiredCategories["Extras"] = true;
         }
@@ -357,7 +436,7 @@ export function calculateMissingCategories() {
     let suggestions = [];
     for (const category in requiredCategories) {
         if (!requiredCategories[category]) {
-            suggestions.push(category); 
+            suggestions.push(category);
         }
     }
     return suggestions;

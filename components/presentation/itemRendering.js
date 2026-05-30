@@ -5,6 +5,7 @@
  */
 
 import { log } from '../../utils/debug.js';
+import { getActiveStorePillars } from '../../availability.js';
 
 // Track loaded images for each item
 const itemImagesCache = new Map();
@@ -961,7 +962,12 @@ export async function renderAllItems() {
     updateStatusToggles(archivedCount, completedCount);
 
     if (combinedList.length === 0) {
-        const allCategories = ["Activities", "Food & Drink", "Venues", "Extras"];
+        // Surface the store's recommended pillars as browse suggestions when defined;
+        // otherwise fall back to the original default component set.
+        const storePillars = getActiveStorePillars();
+        const allCategories = storePillars.length > 0
+            ? storePillars
+            : ["Activities", "Food & Drink", "Venues", "Extras"];
         const categoryIcons = { "Activities": "🎯", "Food & Drink": "🍽️", "Venues": "📍", "Extras": "✨" };
         let emptyStateHTML = `
             <section class="itinerary-section itinerary-empty-section" data-section="empty" role="status" aria-label="Empty plan board">
