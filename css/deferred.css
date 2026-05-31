@@ -851,6 +851,10 @@
     flex-shrink: 0;
     font-size: 0.9em;
 }
+.modal-item-availability .avail-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
 .modal-item-availability.is-pending {
     color: #6c757d;
     font-style: italic;
@@ -1778,6 +1782,10 @@
 .locked-item-availability .avail-icon {
     flex-shrink: 0;
     font-size: 0.85em;
+}
+.locked-item-availability .avail-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 .locked-item-availability.is-pending {
     color: #6c757d;

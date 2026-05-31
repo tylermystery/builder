@@ -8408,7 +8408,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     const slotText = info.slots.split('\n').filter(Boolean).join(', ');
                     if (slotText) text += `: ${slotText}`;
                 }
-                modalItemAvailabilityEl.innerHTML = `<span class="avail-icon">${icon}</span> ${text}`;
+                modalItemAvailabilityEl.innerHTML = `<span class="avail-icon">${icon}</span> <span class="avail-text">${text}</span>`;
             };
 
             /** Refresh the availability line from the current date/time selection. */
