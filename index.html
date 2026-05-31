@@ -2727,6 +2727,21 @@ html.presentation-active {
     }
 }
 
+/* ============================================================
+   MODALS / POPUPS ABOVE SIDE PANELS IN PLAN VIEW
+   In the plan view the side panels are raised above the plan
+   itself (WTF Plans -> 2100, Forum -> 2000, Chat -> 1100). The
+   shared modal overlay normally sits at z-index 1000, so detail
+   modals and other popups opened from within a plan would appear
+   BEHIND the panels. Lift them above every docked panel so they
+   always surface in front. Applies at all widths (the panels
+   slide over the plan on narrow screens too). Scoped to plan view
+   so catalog behavior is unchanged.
+   ============================================================ */
+body.presentation-active .modal-overlay {
+    z-index: 2200;
+}
+
 /* Search More Photos button styles */
 #modal-search-photos-container {
     text-align: center;
