@@ -513,6 +513,19 @@ async function createGroupingCarouselSection(groupingRecord, childItems, allReco
     return section;
 }
 
+// Guards against overlapping catalog renders. Several unrelated triggers
+// (initial load, community/Pusher data arriving, sort/filter changes) can call
+// renderRecords nearly simultaneously, and because the render yields to the
+// browser between chunks (requestIdleCallback/setTimeout), two invocations can
+// interleave. When a carousel-mode render appends a `.grouping-carousel-section`
+// while a grid-mode render is appending flat cards directly to the container,
+// the CSS rule `#catalog-container:has(.grouping-carousel-section)` flips the
+// container to flex-column and the grid cards stretch to full width. Each render
+// claims the latest token; older in-flight renders detect they are stale at the
+// next yield point and bail before mutating the DOM further, so only the newest
+// render ever touches the container.
+let activeRenderToken = 0;
+
 export async function renderRecords(recordsToRender, imageCache, append = false) {
     console.log('[CATALOG DEBUG] renderRecords called.', {
         recordCount: recordsToRender?.length,
@@ -531,6 +544,12 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         console.error("UI ERROR: catalog-container element not found in the DOM!");
         return;
     }
+
+    // Claim this render. Any render that starts after this point makes the
+    // current one stale; we re-check at every yield point below and bail out
+    // before appending more nodes, so renders never interleave in the DOM.
+    const myRenderToken = ++activeRenderToken;
+    const isStaleRender = () => myRenderToken !== activeRenderToken;
 
     // Set up delegated event listeners once for quantity buttons (avoids per-card listeners)
     if (!catalogContainer._delegatedListenersAttached) {
@@ -695,6 +714,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                 const chunk = itemsToAppend.slice(i, i + CHUNK_SIZE);
                 const cardPromises = chunk.map(record => createInteractiveCard(record, state.records.all, imageCache));
                 const cards = await Promise.all(cardPromises);
+                if (isStaleRender()) return; // a newer render took over while awaiting
 
                 cards.forEach(card => {
                     if (card) fragment.appendChild(card);
@@ -714,6 +734,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                             setTimeout(resolve, 0);
                         }
                     });
+                    if (isStaleRender()) return;
                 }
             }
         }
@@ -726,6 +747,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
             const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
             const cardPromises = chunk.map(record => createInteractiveCard(record, state.records.all, imageCache));
             const cards = await Promise.all(cardPromises);
+            if (isStaleRender()) return; // a newer render took over while awaiting
 
             cards.forEach(card => {
                 if (card) fragment.appendChild(card);
@@ -745,6 +767,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                         setTimeout(resolve, 0);
                     }
                 });
+                if (isStaleRender()) return;
             }
         }
     } else {
@@ -785,6 +808,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
             if (sentimentActive) childItems = sortItemsBySentiment(childItems);
             if (childItems.length > 0) {
                 const carouselSection = await createGroupingCarouselSection(grouping, childItems, state.records.all, imageCache);
+                if (isStaleRender()) return; // a newer render took over while awaiting
                 catalogContainer.appendChild(carouselSection);
                 addEnergy();
                 updateProgress(0.00005);
@@ -797,6 +821,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                         setTimeout(resolve, 0);
                     }
                 });
+                if (isStaleRender()) return;
             }
         }
 
@@ -826,6 +851,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                 const chunk = ungroupedItems.slice(i, i + CHUNK_SIZE);
                 const cardPromises = chunk.map(record => createInteractiveCard(record, state.records.all, imageCache));
                 const cards = await Promise.all(cardPromises);
+                if (isStaleRender()) return; // a newer render took over while awaiting
 
                 cards.forEach(card => {
                     if (card) fragment.appendChild(card);
