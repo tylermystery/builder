@@ -15,7 +15,7 @@
 //   - Magnetic cursor tracking with large selection zones
 
 import { state, getRecordById, getAggregateReactions } from '../state.js';
-import { EMOJI_TIERS, REACTION_SCORES, getModalZIndex, computeDemocraticAverage } from '../config.js';
+import { EMOJI_TIERS, REACTION_SCORES, getModalZIndex, computeDemocraticAverage, scoreToAdjective } from '../config.js';
 import { requestVitalityRecalc, getNetEmoji } from '../vitality/vitalityEngine.js';
 import { REALM_META } from '../vitality/vitalityProfiles.js';
 import { isVitalityUIDormant } from '../vitality/vitalityUI.js';
@@ -441,7 +441,7 @@ function buildTopBar(recordId) {
     reactionInfo.className = 'vc2-top-reactions';
     reactionInfo.id = 'vc2-top-reactions';
     if (reactionSummary.count > 0) {
-        reactionInfo.innerHTML = `<span class="vc2-reaction-emoji">${reactionSummary.summaryEmoji}</span> <span class="vc2-reaction-count">${reactionSummary.count} reaction${reactionSummary.count !== 1 ? 's' : ''}</span> <span class="vc2-reaction-score">${reactionSummary.average >= 0 ? '+' : ''}${reactionSummary.average.toFixed(1)}</span>`;
+        reactionInfo.innerHTML = `<span class="vc2-reaction-emoji">${reactionSummary.summaryEmoji}</span> <span class="vc2-reaction-count">${reactionSummary.count} reaction${reactionSummary.count !== 1 ? 's' : ''}</span> <span class="vc2-reaction-word">${scoreToAdjective(reactionSummary.average)}</span> <span class="vc2-reaction-score">${reactionSummary.average >= 0 ? '+' : ''}${reactionSummary.average.toFixed(1)}</span>`;
     } else {
         reactionInfo.innerHTML = `<span class="vc2-reaction-count">No reactions yet</span>`;
     }
@@ -922,7 +922,7 @@ function buildEmojiStrip(recordId) {
         btn.className = `action-menu-emoji-btn vc2-emoji-btn${isSelected ? ' selected' : ''}`;
         btn.dataset.emoji = emoji;
         btn.dataset.score = score;
-        btn.title = `${emoji} ${scoreLabel} impact`;
+        btn.title = `${emoji} ${scoreLabel} · ${scoreToAdjective(score)} impact`;
         btn.style.width = `${itemSize}px`;
         btn.style.height = `${itemSize}px`;
         btn.style.animationDelay = `${i * 25}ms`;
@@ -1253,7 +1253,7 @@ function handleEmojiPreview(recordId, emoji) {
         centerScore.classList.add('previewing');
     }
     if (centerLabel) {
-        centerLabel.textContent = `Preview: ${emoji} ${emojiScore >= 0 ? '+' : ''}${emojiScore.toFixed(1)}`;
+        centerLabel.textContent = `Preview: ${emoji} ${emojiScore >= 0 ? '+' : ''}${emojiScore.toFixed(1)} · ${scoreToAdjective(emojiScore)}`;
         centerLabel.classList.add('previewing');
     }
 }
@@ -1366,7 +1366,7 @@ function updateTopBar(recordId) {
     const reactionInfo = document.getElementById('vc2-top-reactions');
     if (reactionInfo) {
         if (reactionSummary.count > 0) {
-            reactionInfo.innerHTML = `<span class="vc2-reaction-emoji">${reactionSummary.summaryEmoji}</span> <span class="vc2-reaction-count">${reactionSummary.count} reaction${reactionSummary.count !== 1 ? 's' : ''}</span> <span class="vc2-reaction-score">${reactionSummary.average >= 0 ? '+' : ''}${reactionSummary.average.toFixed(1)}</span>`;
+            reactionInfo.innerHTML = `<span class="vc2-reaction-emoji">${reactionSummary.summaryEmoji}</span> <span class="vc2-reaction-count">${reactionSummary.count} reaction${reactionSummary.count !== 1 ? 's' : ''}</span> <span class="vc2-reaction-word">${scoreToAdjective(reactionSummary.average)}</span> <span class="vc2-reaction-score">${reactionSummary.average >= 0 ? '+' : ''}${reactionSummary.average.toFixed(1)}</span>`;
         } else {
             reactionInfo.innerHTML = `<span class="vc2-reaction-count">No reactions yet</span>`;
         }

@@ -10,6 +10,7 @@ import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus, getPlanDayStatusSync, logBusyTimeSummary } from './availability.js';
 import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, preloadStripe, getShopUrlParam, getTimeUnitMinutes, computeEndFromStartDuration } from './utils.js';
 import { sendMessage, getCurrentUser, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName, toggleRecentChats, addPlanEventToHistory } from './chat.js';
+import { publishItemToPublicLayer } from './components/publicCatalog.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal } from './auth.js';
@@ -936,6 +937,10 @@ function attachAddToPlanHandler(card, record, searchTerm, imageCache) {
             ui.updateTotalCost();
             triggerSave();
 
+            // Publish-on-add: mirror this AI item into the public community layer
+            // so others can discover and react to it (signed-in users only).
+            publishItemToPublicLayer(record, 'ai');
+
             newBtn.textContent = 'Update Plan';
             newBtn.disabled = true;
         });
@@ -1035,6 +1040,10 @@ function createManualAddOption(searchTerm) {
         ui.updateEventPlanSection();
         ui.updateTotalCost();
         triggerSave();
+
+        // Publish-on-add: mirror this custom item into the public community layer
+        // so others can discover and react to it (signed-in users only).
+        publishItemToPublicLayer(manualRecord, 'custom');
 
         // Update button state
         addBtn.textContent = 'Added!';
@@ -2859,7 +2868,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             if (!record) return;
             
             ui.showDetailModal(record);
-        } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn, .availability-btn')) {
+        } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn, .availability-btn, .card-sentiment-chip')) {
             const recordId = card.dataset.recordId;
             console.log('[EVENTS DEBUG] Card clicked (detail modal trigger), recordId:', recordId);
 
@@ -3386,6 +3395,19 @@ export function initializeChatEventListeners() {
         chatToggleButton.addEventListener('click', (e) => {
             e.stopPropagation();
             // Initialize UCP on first open (lazy init) and inject dependencies
+            setUCPGetCurrentUser(getCurrentUser);
+            setUCPSendMessage(sendMessage);
+            initializeUnifiedChatPanel();
+            toggleUnifiedChatPanel();
+        });
+    }
+
+    // The Forum Panel is retired; its "Activity" trigger now opens the Unified
+    // Chat Panel (the single conversation view).
+    const activityTrigger = document.getElementById('forum-panel-trigger');
+    if (activityTrigger) {
+        activityTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
             setUCPGetCurrentUser(getCurrentUser);
             setUCPSendMessage(sendMessage);
             initializeUnifiedChatPanel();

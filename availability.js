@@ -133,13 +133,21 @@ export function getAvailableSlotsForDay(day, busyTimes) {
     const dayEnd = new Date(day);
     dayEnd.setHours(23, 59, 59, 999);
 
+    // Only consider busy events that actually overlap the requested day. Events
+    // on other days would otherwise produce bogus "gap" windows that span across
+    // days and render as nonsensical time ranges (e.g. "10:30 PM - 11:30 AM").
+    const dayBusy = busyTimes
+        .map(busy => ({ start: toBusyDate(busy.start), end: toBusyDate(busy.end) }))
+        .filter(busy => !isNaN(busy.start.getTime()) && !isNaN(busy.end.getTime())
+            && busy.start <= dayEnd && busy.end >= dayStart)
+        .sort((a, b) => a.start - b.start);
+
     const availableSlots = [];
     let lastEnd = dayStart;
 
-    busyTimes.sort((a, b) => toBusyDate(a.start) - toBusyDate(b.start));
-    busyTimes.forEach(busy => {
-        const start = new Date(Math.max(toBusyDate(busy.start), dayStart));
-        const end = new Date(Math.min(toBusyDate(busy.end), dayEnd));
+    dayBusy.forEach(busy => {
+        const start = new Date(Math.max(busy.start.getTime(), dayStart.getTime()));
+        const end = new Date(Math.min(busy.end.getTime(), dayEnd.getTime()));
 
         if (start > lastEnd) {
             availableSlots.push({
@@ -156,11 +164,14 @@ export function getAvailableSlotsForDay(day, busyTimes) {
         });
     }
 
-    return availableSlots.map(slot => {
-        const startTime = new Date(slot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const endTime = new Date(slot.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        return `${startTime} - ${endTime}`;
-    }).join('\n') ||
+    return availableSlots
+        // Drop sub-minute slivers so the window list stays meaningful.
+        .filter(slot => slot.end - slot.start >= 60 * 1000)
+        .map(slot => {
+            const startTime = new Date(slot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const endTime = new Date(slot.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return `${startTime} - ${endTime}`;
+        }).join('\n') ||
         'No available slots';
 }
 

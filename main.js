@@ -22,6 +22,7 @@ import { updateFooter } from './components/footer.js';
 import { initializeProjectsDashboard, updateProjectsData, showProjectsLoading } from './components/projectsDashboard.js';
 import { initializeWtfPlansPanel, syncWtfPlansPanelWithUrl, refreshWtfPlansData, isWtfPlansPanelOpen, trackRecentPlan } from './components/wtfPlansPanel.js';
 import { initializeForumPanel, syncForumPanelWithUrl } from './components/forumPanel.js';
+import { loadPublicIdeasForStore } from './components/publicCatalog.js';
 import { applyCloudinaryTransform } from './utils/imageOptimizer.js';
 import { loadTempIterations, loadTempReactions } from './components/refinementHandler.js';
 
@@ -1048,6 +1049,11 @@ async function initialize() {
         setState({ ui: uiUpdate });
         localStorage.setItem('lastVisitedShopId', activeShop.id);
         log('Main', `Active Shop set to: ${activeShop.fields.Name} (ID: ${activeShop.id})`);
+
+        // Load this store's public community ideas and merge them into the
+        // catalog as "Public Idea" status records. Fire-and-forget so it never
+        // blocks the main catalog from rendering.
+        loadPublicIdeasForStore(activeShop.id);
 
         document.title = `${activeShop.fields.Name} WTFun`;
 

@@ -6479,3 +6479,173 @@ export async function clearStreamMetadata(sessionId) {
         return false;
     }
 }
+
+// ============================================================================
+// PUBLIC COMMUNITY CATALOG ("Public Ideas")
+// ----------------------------------------------------------------------------
+// Client for the Postgres-backed public layer (netlify/functions/public-catalog.ts).
+// Reads are open to everyone; every write requires a logged-in user, so write
+// helpers attach the same Bearer JWT the rest of the app stores in localStorage.
+// These are intentionally separate from the Airtable-backed catalog: a public
+// item references its originating store by id but lives in its own data store.
+// ============================================================================
+
+const PUBLIC_CATALOG_BASE = '/api/public-catalog';
+
+// Build headers for an authenticated public-catalog write. Returns null when the
+// visitor is not signed in so callers can prompt sign-in instead of failing.
+function publicCatalogAuthHeaders() {
+    const token = localStorage.getItem('jwt');
+    if (!token) return null;
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+    };
+}
+
+// Fetch the full public catalog for a store: items bundled with their variations,
+// summarised reactions, and comment thread. Open to guests. Returns [] on error
+// so a failure here never blocks the main (Airtable) catalog from rendering.
+export async function getPublicCatalog(storeId) {
+    if (!storeId) return [];
+    try {
+        const response = await fetch(`${PUBLIC_CATALOG_BASE}?storeId=${encodeURIComponent(storeId)}`);
+        if (!response.ok) {
+            log('API', `getPublicCatalog non-OK status ${response.status}`);
+            return [];
+        }
+        const data = await response.json();
+        return Array.isArray(data.items) ? data.items : [];
+    } catch (error) {
+        console.error('[API] getPublicCatalog error:', error);
+        return [];
+    }
+}
+
+// Create a public item. `payload` mirrors the endpoint contract:
+// { storeId, source, name, description?, imageUrl?, price?, data?, originSessionId?, originItemId? }
+// Returns the created row, or null (logged-out, conflict, or error).
+export async function createPublicItem(payload) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers) return null;
+    try {
+        const response = await fetch(`${PUBLIC_CATALOG_BASE}/items`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            // A 500 here is most often the idempotent-backfill unique constraint
+            // firing because this (session,item) was already published — benign.
+            log('API', `createPublicItem non-OK status ${response.status}`);
+            return null;
+        }
+        const data = await response.json();
+        return data.item || null;
+    } catch (error) {
+        console.error('[API] createPublicItem error:', error);
+        return null;
+    }
+}
+
+// Add a user-authored variation of a public item.
+export async function addPublicVariation(payload) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers) return null;
+    try {
+        const response = await fetch(`${PUBLIC_CATALOG_BASE}/variations`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) return null;
+        const data = await response.json();
+        return data.variation || null;
+    } catch (error) {
+        console.error('[API] addPublicVariation error:', error);
+        return null;
+    }
+}
+
+// Build the "which target" portion of a reaction/comment write body. Either an
+// explicit publicItemId (a promoted idea or an already-created container) or, for
+// an ordinary catalog item with no container yet, a catalogItemId + storeId plus
+// light metadata the server uses to create the container on first interaction.
+function publicWriteTarget(publicItemId, opts = {}) {
+    if (publicItemId != null) return { publicItemId };
+    const t = { catalogItemId: opts.catalogItemId, storeId: opts.storeId };
+    if (opts.name != null) t.name = opts.name;
+    if (opts.description != null) t.description = opts.description;
+    if (opts.imageUrl != null) t.imageUrl = opts.imageUrl;
+    if (opts.price != null) t.price = opts.price;
+    if (opts.data != null) t.data = opts.data;
+    return t;
+}
+
+// Toggle one emoji reaction from the current user on an item (or variation, or a
+// single comment). Pass `opts.commentId` to react to a community comment — the
+// server resolves the owning item from the comment. `publicItemId` may be null
+// when reacting to a catalog item that has no community container yet — pass
+// `opts.catalogItemId` + `opts.storeId` and the server creates one. Returns
+// { reacted, publicItemId, commentId } on success, or null when logged out / on error.
+export async function togglePublicReaction(publicItemId, emoji, variationId = null, opts = {}) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers) return null;
+    try {
+        const body = { ...publicWriteTarget(publicItemId, opts), emoji, variationId };
+        if (opts.commentId != null) body.commentId = opts.commentId;
+        const response = await fetch(`${PUBLIC_CATALOG_BASE}/reactions`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body)
+        });
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (error) {
+        console.error('[API] togglePublicReaction error:', error);
+        return null;
+    }
+}
+
+// Add a comment to a public item (or variation), or a reply to another comment.
+// Pass `opts.parentCommentId` to post a reply — the server resolves the owning
+// item from the parent. `publicItemId` may be null for a catalog item with no
+// container yet (pass `opts.catalogItemId` + `opts.storeId`). Returns the created
+// comment (which carries its resolved publicItemId and parentCommentId).
+export async function addPublicComment(publicItemId, body, authorName = null, variationId = null, opts = {}) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers) return null;
+    try {
+        const payload = { ...publicWriteTarget(publicItemId, opts), body, authorName, variationId };
+        if (opts.parentCommentId != null) payload.parentCommentId = opts.parentCommentId;
+        const response = await fetch(`${PUBLIC_CATALOG_BASE}/comments`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) return null;
+        const data = await response.json();
+        return data.comment || null;
+    } catch (error) {
+        console.error('[API] addPublicComment error:', error);
+        return null;
+    }
+}
+
+// Delete a public resource the current user authored. `resource` is one of
+// 'comments' | 'variations' | 'items'. Returns true on success.
+export async function deletePublicResource(resource, id) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers) return false;
+    try {
+        const response = await fetch(`${PUBLIC_CATALOG_BASE}/${resource}`, {
+            method: 'DELETE',
+            headers,
+            body: JSON.stringify({ id })
+        });
+        return response.ok;
+    } catch (error) {
+        console.error('[API] deletePublicResource error:', error);
+        return false;
+    }
+}

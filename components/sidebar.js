@@ -451,7 +451,7 @@ function renderAvailabilityLine(el, info) {
         const slotText = info.slots.split('\n').filter(Boolean).join(', ');
         if (slotText) text += `: ${slotText}`;
     }
-    el.innerHTML = `<span class="avail-icon">${icon}</span> ${text}`;
+    el.innerHTML = `<span class="avail-icon">${icon}</span> <span class="avail-text">${text}</span>`;
 }
 // --- END REPLACED FUNCTION ---\
 

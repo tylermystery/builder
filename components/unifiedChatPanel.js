@@ -8,12 +8,13 @@ import { log } from '../utils/debug.js';
 import * as api from '../api.js';
 import { showToast } from '../ui.js';
 import { showTaskModal } from './taskManager.js';
+import { renderPublicReactions, renderAggregatedCommunityFeed } from './publicCatalog.js';
 
 // ===== MODULE STATE =====
 let getCurrentUserFn = null;
 let sendChatMessageFn = null; // Setter-injected from chat.js to avoid circular dep
 let panelOpen = false;
-let currentFilter = 'all'; // 'all' | 'comments' | 'ideas' | 'tasks'
+let currentFilter = 'all'; // 'all' | 'comments' | 'global' | 'tasks'
 let ucpMessages = [];
 let ucpPlanEvents = [];
 let replyingTo = null;
@@ -25,6 +26,10 @@ let initialized = false;
 let shouldScrollToBottom = true;
 let hideCompleted = false; // Toggle to hide/show completed tasks and their linked comments
 let isFullscreen = false; // v3.8: Full-screen mode state
+// Item context for the Global tab. When set (panel opened for a specific item),
+// the Global tab shows that item's community thread; otherwise it shows the
+// read-only aggregated community feed across the plan's items.
+let ucpFocusRecordId = null;
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '🔥', '🎉', '😮', '👀', '💯'];
 
@@ -82,6 +87,8 @@ export async function showUnifiedChatPanel() {
     document.body.classList.add('ucp-panel-active');
     panelOpen = true;
     shouldScrollToBottom = true;
+    // General open (not for a specific item): Global tab shows the plan-wide feed.
+    ucpFocusRecordId = null;
 
     populateAttachSelect();
     populateFocusSelect();
@@ -382,6 +389,12 @@ function renderContent() {
         return;
     }
 
+    // Global tab (community reactions + comments) has its own rendering path
+    if (currentFilter === 'global') {
+        renderGlobalTab(container);
+        return;
+    }
+
     // Ensure input area is visible when NOT in tasks tab
     const inputArea = document.getElementById('ucp-input-area');
     if (inputArea) inputArea.style.display = '';
@@ -396,9 +409,6 @@ function renderContent() {
             break;
         case 'comments':
             items = ucpMessages.filter(m => m.componentId);
-            break;
-        case 'ideas':
-            items = ucpMessages.filter(m => m.isIdea);
             break;
         default:
             items = ucpMessages;
@@ -472,7 +482,6 @@ function updateInputPlaceholder() {
 
     switch (currentFilter) {
         case 'comments': input.placeholder = 'Comment on a plan item...'; break;
-        case 'ideas': input.placeholder = 'Share an idea...'; break;
         case 'tasks': input.placeholder = 'Message the team...'; break;
         default: input.placeholder = 'Message the team...'; break;
     }
@@ -481,7 +490,6 @@ function updateInputPlaceholder() {
 function getEmptyMessage() {
     switch (currentFilter) {
         case 'comments': return 'No item comments yet. Discuss plan items!';
-        case 'ideas': return 'No ideas shared yet. Suggest something!';
         case 'tasks': return 'No tasks yet. Create one from any message or the Tasks panel.';
         default: return 'No conversations yet. Say hello!';
     }
@@ -1138,6 +1146,87 @@ function createTaskTabCard(task, statusDef) {
     return card;
 }
 
+// ===== GLOBAL TAB (Community reactions + comments) =====
+
+/**
+ * Render the Global tab — the community (everyone, everywhere) reactions and
+ * comments that travel with an item, sourced from the public catalog layer.
+ *
+ * Item-aware:
+ *   • When the panel was opened for a specific item (ucpFocusRecordId set), show
+ *     that item's community thread (reactions + comments), reusing the same
+ *     renderer as the detail modal's Community card.
+ *   • Plan-wide (no focus item), show a read-only aggregated feed of community
+ *     activity across the plan's items; tapping an entry drills into that item.
+ *
+ * @param {HTMLElement} container - The UCP content container
+ */
+function renderGlobalTab(container) {
+    container.innerHTML = '';
+
+    // Community posting happens inside the rendered thread, so hide the main
+    // plan-chat composer while the Global tab is active.
+    const inputArea = document.getElementById('ucp-input-area');
+    if (inputArea) inputArea.style.display = 'none';
+
+    const focusRecord = ucpFocusRecordId ? getRecordById(ucpFocusRecordId) : null;
+
+    if (focusRecord) {
+        // Single-item community thread, with a way back to the plan-wide feed.
+        const back = document.createElement('button');
+        back.type = 'button';
+        back.className = 'ucp-global-back';
+        back.innerHTML = '‹ All community activity';
+        back.addEventListener('click', () => {
+            ucpFocusRecordId = null;
+            renderGlobalTab(container);
+        });
+        container.appendChild(back);
+
+        const heading = document.createElement('div');
+        heading.className = 'ucp-global-item-heading';
+        heading.textContent = focusRecord.fields?.Name || 'Item';
+        container.appendChild(heading);
+
+        const host = document.createElement('div');
+        host.className = 'ucp-global-thread';
+        container.appendChild(host);
+        renderPublicReactions(host, focusRecord, { expanded: true, comments: true });
+        return;
+    }
+
+    // Plan-wide aggregated, read-only feed.
+    const records = getPlanItemRecords();
+    renderAggregatedCommunityFeed(container, records, (recordId) => {
+        ucpFocusRecordId = recordId;
+        renderGlobalTab(container);
+    });
+}
+
+/**
+ * Resolve the records for the plan's items (locked items + favorites), used to
+ * build the plan-wide community feed. Falls back to all loaded records.
+ * @returns {Array<object>}
+ */
+function getPlanItemRecords() {
+    const planItemIds = new Set();
+    if (state.cart?.lockedItems) {
+        state.cart.lockedItems.forEach((info, id) => planItemIds.add(id));
+    }
+    if (state.cart?.items) {
+        state.cart.items.forEach((info, id) => planItemIds.add(id));
+    }
+    if (planItemIds.size === 0 && state.records?.all) {
+        state.records.all.forEach(r => { if (r?.id) planItemIds.add(r.id); });
+    }
+    const records = [];
+    planItemIds.forEach(id => {
+        const record = getRecordById(id);
+        if (record) records.push(record);
+    });
+    return records;
+}
+
 // ===== SUB-THREAD (Replies) =====
 
 function createSubThread(message) {
@@ -1448,14 +1537,6 @@ async function handleMessageSubmit(e) {
                 cancelReply();
                 await loadPanelData();
             }
-        } else if (currentFilter === 'ideas') {
-            const ideaContent = `[IDEA] ${message}`;
-            if (sendChatMessageFn) {
-                await sendChatMessageFn(ideaContent, null);
-            } else {
-                await api.postChatMessage(sessionId, currentUser.id, currentUser.name, ideaContent, null);
-            }
-            await loadPanelData();
         } else {
             const attachSelect = document.getElementById('ucp-attach-select');
             let itemId = attachSelect?.value || null;
@@ -1566,10 +1647,19 @@ export async function openUCPForItem(recordId) {
     const panel = document.getElementById('unified-chat-panel');
     if (!panel) return;
 
+    // Ensure the panel's controls (close button, filter tabs, message form) are
+    // wired up. When the modal is opened from the storefront/catalog the lazy
+    // init from the chat bubble / presentation may not have run yet, leaving the
+    // tabs and close button inert. This is idempotent.
+    initializeUnifiedChatPanel();
+
     // Open the panel using the standard mechanism
     document.body.classList.add('ucp-panel-open');
     document.body.classList.add('ucp-panel-active');
     panelOpen = true;
+
+    // Remember the item so the Global tab, if opened, shows its community thread.
+    ucpFocusRecordId = recordId;
 
     // Switch to Comments filter
     currentFilter = 'comments';
@@ -1604,6 +1694,43 @@ export async function openUCPForItem(recordId) {
     if (input) {
         input.placeholder = 'Comment on this item...';
         setTimeout(() => input.focus(), 100);
+    }
+}
+
+/**
+ * Open the UCP on the Global tab for a specific item's community thread.
+ * Called from the detail modal's Community card "See conversation" button.
+ * @param {string} recordId - The item record ID
+ */
+export async function openUCPGlobalForItem(recordId) {
+    const panel = document.getElementById('unified-chat-panel');
+    if (!panel) return;
+
+    // Ensure the panel's controls (close button, filter tabs) are wired up — the
+    // lazy init may not have run when opened from the storefront/catalog modal.
+    // Idempotent.
+    initializeUnifiedChatPanel();
+
+    document.body.classList.add('ucp-panel-open');
+    document.body.classList.add('ucp-panel-active');
+    panelOpen = true;
+
+    ucpFocusRecordId = recordId;
+    currentFilter = 'global';
+    const filterBtns = document.querySelectorAll('.ucp-filter-btn');
+    filterBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === 'global');
+    });
+
+    // Render the community thread immediately — it does not need a plan session,
+    // so this works from the storefront as well as inside a plan.
+    renderContent();
+
+    // If a plan session exists, load its messages in the background so the other
+    // tabs (All / Comments) are ready when the user switches to them.
+    if (state.session?.id) {
+        shouldScrollToBottom = false;
+        loadPanelData();
     }
 }
 

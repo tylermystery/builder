@@ -851,6 +851,10 @@
     flex-shrink: 0;
     font-size: 0.9em;
 }
+.modal-item-availability .avail-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
 .modal-item-availability.is-pending {
     color: #6c757d;
     font-style: italic;
@@ -1767,17 +1771,27 @@
 .locked-item-schedule .schedule-icon {
     flex-shrink: 0;
 }
-.locked-item-availability {
+.locked-item-details p.locked-item-availability {
     font-size: 0.78em;
     margin-top: 2px;
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: 4px;
     line-height: 1.3;
+    /* Override the single-line truncation from `.locked-item-details p` so the
+       full list of open windows wraps instead of being clipped at the edge. */
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
 }
 .locked-item-availability .avail-icon {
     flex-shrink: 0;
     font-size: 0.85em;
+}
+.locked-item-availability .avail-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 .locked-item-availability.is-pending {
     color: #6c757d;
@@ -6452,6 +6466,304 @@ hr.total-divider {
 .modal-rsb-accordion-body.expanded {
     display: block;
 }
+
+/* ---- Two stacked layers in the detail modal: This Plan (elevated) over
+   Community (grounded). The plan layer reads as the contextual layer sitting on
+   top of the permanent community layer. ---------------------------------- */
+.modal-reactions-section.modal-reactions-layers {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+/* Elevated "This Plan" layer */
+.modal-plan-layer {
+    border: 1px solid rgba(37, 99, 235, 0.18);
+    border-left: 3px solid #2563eb;
+    border-radius: 10px;
+    padding: 6px;
+    background: rgba(239, 246, 255, 0.6);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+}
+.modal-plan-layer .rsb-panel--modal {
+    max-height: 55vh;
+}
+/* Grounded "Community" layer */
+.modal-community-layer {
+    border: 1px solid rgba(15, 23, 42, 0.07);
+    border-radius: 10px;
+    padding: 6px;
+    background: rgba(248, 250, 252, 0.55);
+}
+/* "This Plan" tag on the plan accordion header (blue, vs the community purple) */
+.plan-reactions-tag {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-size: 0.72em;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    color: #1d4ed8;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+/* ---- Public community ("Public Idea") layer ---------------------------- */
+
+/* Card badge marking a community-contributed public idea */
+.public-idea-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 2px 6px rgba(109, 40, 217, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.public-idea-badge::before {
+    content: '🌐';
+    font-size: 0.9em;
+}
+
+/* "Community" tag on the public reactions accordion header */
+.public-reactions-tag {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-size: 0.72em;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+    color: #6d28d9;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.public-reactions-body {
+    padding: 4px 2px 2px;
+}
+
+.public-reaction-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+.public-reaction-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 9px;
+    border: 1px solid rgba(109, 40, 217, 0.18);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    font-size: 1em;
+    line-height: 1;
+    transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+.public-reaction-btn:hover {
+    transform: translateY(-1px);
+    background: #faf5ff;
+}
+.public-reaction-btn.reacted {
+    background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+    border-color: #8b5cf6;
+}
+.public-reaction-btn .pr-count {
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #6d28d9;
+}
+.public-reaction-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.public-comments-block {
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+    padding-top: 8px;
+}
+.public-comments-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    margin-bottom: 8px;
+}
+.public-comments-empty {
+    font-size: 0.82em;
+    color: #94a3b8;
+    font-style: italic;
+    padding: 4px 0;
+}
+.public-comment {
+    position: relative;
+    background: rgba(248, 250, 252, 0.9);
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+.public-comment-author {
+    font-size: 0.74em;
+    font-weight: 700;
+    color: #6d28d9;
+    margin-bottom: 2px;
+}
+.public-comment-body {
+    font-size: 0.85em;
+    color: #334155;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.public-comment-delete {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    border: none;
+    background: transparent;
+    color: #cbd5e1;
+    cursor: pointer;
+    font-size: 0.85em;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+.public-comment-delete:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+}
+.public-comment-composer {
+    display: flex;
+    gap: 6px;
+    align-items: flex-end;
+}
+.public-comment-input {
+    flex: 1;
+    resize: vertical;
+    min-height: 34px;
+    border: 1px solid rgba(15, 23, 42, 0.15);
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 0.85em;
+    font-family: inherit;
+}
+.public-comment-input:focus {
+    outline: none;
+    border-color: #8b5cf6;
+}
+.public-comment-send {
+    flex-shrink: 0;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 14px;
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.82em;
+    cursor: pointer;
+}
+.public-comment-send:hover { filter: brightness(1.05); }
+.public-comment-send:disabled { opacity: 0.6; cursor: default; }
+
+/* Community comment reply + react controls (mirrors the plan chat affordances) */
+.public-comment-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+}
+.public-comment-action {
+    border: none;
+    background: transparent;
+    color: #7c3aed;
+    cursor: pointer;
+    font-size: 0.72em;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 6px;
+    line-height: 1.2;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+.public-comment-action:hover { background: rgba(124, 58, 237, 0.1); }
+.public-comment-action:disabled { opacity: 0.6; cursor: default; }
+.public-comment-action-delete { color: #cbd5e1; }
+.public-comment-action-delete:hover { color: #ef4444; background: rgba(239, 68, 68, 0.08); }
+
+.public-comment-reactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+}
+.public-comment-reaction {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 7px;
+    border: 1px solid rgba(109, 40, 217, 0.18);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    font-size: 0.82em;
+    line-height: 1.4;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+.public-comment-reaction:hover { background: #faf5ff; }
+.public-comment-reaction.reacted {
+    background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+    border-color: #8b5cf6;
+}
+.public-comment-reaction .pcr-count {
+    font-size: 0.8em;
+    font-weight: 600;
+    color: #6d28d9;
+}
+
+.public-comment-emoji-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    margin-top: 5px;
+    padding: 4px;
+    background: #faf5ff;
+    border: 1px solid rgba(109, 40, 217, 0.15);
+    border-radius: 8px;
+}
+.public-comment-emoji-pick {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 1.05em;
+    line-height: 1;
+    padding: 3px 4px;
+    border-radius: 6px;
+    transition: transform 0.1s ease, background 0.1s ease;
+}
+.public-comment-emoji-pick:hover {
+    transform: scale(1.15);
+    background: rgba(139, 92, 246, 0.12);
+}
+
+.public-comment-replies {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 6px 0 2px 16px;
+    padding-left: 10px;
+    border-left: 2px solid rgba(139, 92, 246, 0.22);
+}
+.public-comment-reply { background: rgba(241, 245, 249, 0.7); }
+.public-reply-composer { margin-top: 6px; }
 
 .modal-reactions-score-badge {
     font-size: 0.72em;
@@ -12240,6 +12552,34 @@ hr.total-divider {
     transform: none;
 }
 
+/* Delete button shown beneath Save while editing an item in the detail modal */
+.item-edit-delete-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 10px 20px;
+    background: transparent;
+    color: #c0392b;
+    border: 1px solid rgba(192, 57, 43, 0.5);
+    border-radius: 8px;
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.item-edit-delete-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 4px 12px rgba(192, 57, 43, 0.3);
+}
+
+.item-edit-delete-btn:disabled {
+    color: #95a5a6;
+    border-color: #d0d0d0;
+    cursor: not-allowed;
+}
+
 /* Mobile responsive for item edit mode */
 @media (max-width: 768px) {
     .item-edit-input {
@@ -17583,6 +17923,18 @@ hr.total-divider {
     color: rgba(147, 197, 253, 0.9);
 }
 
+.rsb-summary-avg-word {
+    font-size: 0.72em;
+    font-weight: 700;
+    color: rgba(147, 197, 253, 0.9);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.rsb-panel--modal .rsb-summary-avg-word {
+    color: #667eea;
+}
+
 .rsb-panel--modal .rsb-summary-avg-score {
     color: #667eea;
 }
@@ -17814,6 +18166,125 @@ hr.total-divider {
 
 .rsb-open-full-btn:hover {
     color: rgba(99, 102, 241, 1);
+}
+
+/* "See conversation" button — replaces the inline comments thread in the
+   reaction GUIs (compact-card RSB and modal RSB). Sends users to the unified
+   conversation view. */
+.rsb-see-conversation-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    margin-top: 6px;
+    padding: 8px 0;
+    font-size: 0.72em;
+    font-weight: 600;
+    color: rgba(99, 102, 241, 0.9);
+    background: rgba(99, 102, 241, 0.08);
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0 0 10px 10px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.rsb-panel--modal .rsb-see-conversation-btn {
+    border-top-color: rgba(0, 0, 0, 0.06);
+}
+.rsb-see-conversation-btn:hover {
+    color: #fff;
+    background: rgba(99, 102, 241, 0.9);
+}
+
+/* Community-card "See conversation" button (detail modal Community layer) */
+.public-see-conversation-wrap {
+    padding: 6px 2px 2px;
+}
+.public-see-conversation-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 9px 0;
+    font-size: 0.82em;
+    font-weight: 600;
+    color: rgba(99, 102, 241, 0.95);
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.public-see-conversation-btn:hover {
+    color: #fff;
+    background: rgba(99, 102, 241, 0.9);
+}
+
+/* Conversation view — Global tab (community feed) */
+.ucp-global-intro,
+.ucp-global-item-heading {
+    padding: 10px 14px;
+    font-size: 0.82em;
+    color: #6b7280;
+}
+.ucp-global-item-heading {
+    font-weight: 700;
+    color: #111827;
+    font-size: 0.95em;
+    padding-bottom: 4px;
+}
+.ucp-global-back {
+    display: inline-flex;
+    align-items: center;
+    margin: 8px 0 0 10px;
+    padding: 4px 8px;
+    font-size: 0.78em;
+    color: rgba(99, 102, 241, 0.95);
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+.ucp-global-back:hover { text-decoration: underline; }
+.ucp-global-thread { padding: 4px 10px 16px; }
+.ucp-global-empty {
+    text-align: center;
+    color: #9ca3af;
+    padding: 28px 16px;
+}
+.ucp-global-empty .ucp-empty-icon { font-size: 1.6em; display: block; margin-bottom: 6px; }
+.ucp-global-card {
+    display: block;
+    width: calc(100% - 20px);
+    margin: 8px 10px;
+    padding: 10px 12px;
+    text-align: left;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ucp-global-card:hover {
+    border-color: rgba(99, 102, 241, 0.5);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.12);
+}
+.ucp-global-card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+.ucp-global-card-name { font-weight: 600; color: #111827; font-size: 0.9em; }
+.ucp-global-card-meta { color: #6b7280; font-size: 0.82em; white-space: nowrap; }
+.ucp-global-card-snippet {
+    margin-top: 4px;
+    color: #4b5563;
+    font-size: 0.82em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Mobile adjustments */
@@ -18568,6 +19039,13 @@ body.presentation-active .rsb-layout-toggle-fab {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
+.vc2-reaction-word {
+    color: #fbbf24;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-size: 0.85em;
+}
 
 .vc2-tier-selector {
     display: flex;
@@ -19278,4 +19756,196 @@ body.presentation-active .rsb-layout-toggle-fab {
         padding: 8px 0;
         font-size: 0.9em;
     }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Item detail modal — sentiment chips after the name + their anchored popups,
+   and the "In your plan" summary block. (deferred.css is the stylesheet the
+   app actually loads; these rules previously lived only in the unloaded
+   style.css, which is why the popups rendered unstyled / invisible.)
+   ───────────────────────────────────────────────────────────────────────── */
+.modal-item-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.item-emoji-indicator.clickable {
+    cursor: pointer;
+    border: none;
+    font: inherit;
+}
+.item-emoji-indicator.clickable:hover {
+    box-shadow: 0 3px 12px rgba(255, 193, 7, 0.35);
+    transform: scale(1.05);
+}
+
+/* Two scoped sentiment chips after the item name: 🌐 global item & 👥 plan item */
+.item-sentiment-chip .sentiment-chip-scope {
+    font-size: 0.85em;
+    line-height: 1;
+    margin-right: 1px;
+    opacity: 0.85;
+}
+.item-sentiment-chip[data-scope="plan"] {
+    background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+}
+.item-sentiment-chip[data-scope="plan"].has-reactions {
+    background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.22);
+}
+.item-sentiment-chip[data-scope="global"] {
+    background: linear-gradient(135deg, #ecfeff 0%, #cffafe 100%);
+}
+.item-sentiment-chip[data-scope="global"].has-reactions {
+    background: linear-gradient(135deg, #cffafe 0%, #a5f3fc 100%);
+    box-shadow: 0 2px 8px rgba(6, 182, 212, 0.22);
+}
+
+/* Anchored sentiment popup (chat-message style), pinned next to the clicked chip */
+.item-sentiment-popup {
+    position: fixed;
+    z-index: 10001;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+    padding: 10px;
+    min-width: 220px;
+    max-width: 300px;
+    animation: emoji-pop 0.16s ease-out;
+}
+.sentiment-popup-head {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7280;
+    margin-bottom: 6px;
+}
+.sentiment-popup-summary {
+    background: #f9fafb;
+    border-radius: 10px;
+    padding: 7px 9px;
+    margin-bottom: 8px;
+}
+.sentiment-popup-avg {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 5px;
+}
+.sentiment-popup-avg-emoji { font-size: 1.15rem; line-height: 1; }
+.sentiment-popup-avg-score { font-weight: 700; color: #111827; font-size: 0.85rem; }
+.sentiment-popup-avg-word { font-weight: 600; color: #4338ca; font-size: 0.78rem; }
+.sentiment-popup-avg-label { font-size: 0.72rem; color: #6b7280; }
+.sentiment-popup-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.sentiment-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 1px 6px;
+    font-size: 0.85rem;
+}
+.sentiment-pill-count { font-size: 0.72rem; font-weight: 600; color: #6b7280; }
+.sentiment-popup-picker {
+    display: flex;
+    gap: 2px;
+    flex-wrap: wrap;
+}
+.sentiment-popup-emoji {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    line-height: 1;
+    padding: 4px 5px;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: transform 0.12s ease, background 0.12s ease;
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+}
+.sentiment-popup-emoji:hover { background: #f3f4f6; transform: scale(1.2); }
+.sentiment-popup-emoji.reacted { background: #fef3c7; box-shadow: inset 0 0 0 1.5px #f59e0b; }
+.sentiment-popup-convo {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    padding: 6px 8px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 9px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #374151;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.12s ease;
+}
+.sentiment-popup-convo:hover { background: #f3f4f6; }
+.modal-reactions-section.reactions-flash {
+    animation: reactions-flash 0.9s ease-out;
+}
+@keyframes reactions-flash {
+    0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.55); }
+    100% { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); }
+}
+
+/* "In your plan" confirmation block in the detail modal */
+.modal-in-plan-summary {
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+}
+.modal-in-plan-summary .in-plan-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.modal-in-plan-summary .in-plan-check {
+    color: #059669;
+    font-weight: 700;
+}
+.modal-in-plan-summary .in-plan-title {
+    font-weight: 600;
+    color: #065f46;
+}
+.modal-in-plan-summary .in-plan-react-btn {
+    margin-left: auto;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    background: #fff;
+    border-radius: 14px;
+    padding: 3px 10px;
+    font-size: 0.85em;
+    cursor: pointer;
+}
+.modal-in-plan-summary .in-plan-react-btn:hover {
+    background: #f0fdf4;
+}
+.modal-in-plan-summary .in-plan-react-btn.has-reactions {
+    background: #ecfdf5;
+    border-color: rgba(16, 185, 129, 0.6);
+    font-weight: 600;
+    color: #065f46;
+}
+.modal-in-plan-summary .in-plan-details {
+    margin-top: 4px;
+    color: #047857;
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.modal-in-plan-summary .in-plan-sep {
+    opacity: 0.5;
+}
+.modal-in-plan-summary .in-plan-note {
+    margin-top: 4px;
+    color: #065f46;
+    font-size: 0.85em;
+    font-style: italic;
 }

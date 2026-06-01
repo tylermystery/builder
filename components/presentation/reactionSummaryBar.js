@@ -5,6 +5,7 @@
  */
 
 import { log } from '../../utils/debug.js';
+import { scoreToAdjective } from '../../config.js';
 
 // Module state
 let activeRSBPanel = null;
@@ -144,7 +145,7 @@ export function initializeReactionZones() {
             commentsBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const rid = commentsBtn.dataset.recordId;
-                openRSBPanel(zone, rid, 'comments');
+                if (_deps.openConversationForItem) _deps.openConversationForItem(rid);
             });
         }
     });
@@ -207,13 +208,10 @@ function buildRSBPanelDOM(recordId, isModal) {
     tabs.className = 'rsb-tabs';
 
     const reactionCount = _deps.getItemReactionCount(recordId);
-    const commentCacheKey = `item:${recordId}`;
-    const comments = _deps.componentComments.getCache().get(commentCacheKey) || [];
 
     const tabConfigs = [
         { id: 'reactions', label: 'React', badge: '' },
-        { id: 'summary', label: 'Summary', badge: reactionCount > 0 ? reactionCount : '' },
-        { id: 'comments', label: 'Comments', badge: comments.length > 0 ? comments.length : '' }
+        { id: 'summary', label: 'Summary', badge: reactionCount > 0 ? reactionCount : '' }
     ];
 
     tabConfigs.forEach((tc, idx) => {
@@ -241,11 +239,17 @@ function buildRSBPanelDOM(recordId, isModal) {
     buildRSBSummaryContent(summaryContent, recordId);
     panel.appendChild(summaryContent);
 
-    const commentsContent = document.createElement('div');
-    commentsContent.className = 'rsb-tab-content';
-    commentsContent.dataset.tabContent = 'comments';
-    buildRSBCommentsContent(commentsContent, recordId);
-    panel.appendChild(commentsContent);
+    // Comments live in the conversation view now — offer a jump-in button instead
+    // of an inline thread.
+    const seeConvo = document.createElement('button');
+    seeConvo.type = 'button';
+    seeConvo.className = 'rsb-see-conversation-btn';
+    seeConvo.innerHTML = '💬 See conversation';
+    seeConvo.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (_deps.openConversationForItem) _deps.openConversationForItem(recordId);
+    });
+    panel.appendChild(seeConvo);
 
     return panel;
 }
@@ -370,7 +374,7 @@ function buildRSBEmojiButton(emoji, recordId, currentUserEmoji) {
     btn.dataset.emoji = emoji;
     btn.dataset.recordId = recordId;
     const score = _deps.REACTION_SCORES[emoji] || 0;
-    btn.dataset.scoreLabel = `${score >= 0 ? '+' : ''}${score.toFixed(1)}`;
+    btn.dataset.scoreLabel = `${score >= 0 ? '+' : ''}${score.toFixed(1)} · ${scoreToAdjective(score)}`;
 
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -399,6 +403,7 @@ function buildRSBRadialGrid(container, recordId, currentUserEmoji, isModal) {
         <span class="rsb-radial-center-emoji">${summaryEmoji}</span>
         <span class="rsb-radial-center-score">${avgScore !== 0 ? (avgScore >= 0 ? '+' : '') + avgScore.toFixed(1) : ''}</span>
     `;
+    if (avgScore !== 0) center.title = `${avgScore >= 0 ? '+' : ''}${avgScore.toFixed(1)} · ${scoreToAdjective(avgScore)}`;
     radial.appendChild(center);
 
     const tiers = _deps.EMOJI_TIERS;
@@ -576,6 +581,7 @@ function buildRSBSummaryContent(container, recordId) {
         const score = _deps.REACTION_SCORES[emoji] || 0;
         const pill = document.createElement('span');
         pill.className = 'rsb-summary-pill';
+        pill.title = `${emoji} ${score >= 0 ? '+' : ''}${score.toFixed(1)} · ${scoreToAdjective(score)}`;
         pill.innerHTML = `
             <span class="rsb-summary-pill-emoji">${emoji}</span>
             <span class="rsb-summary-pill-count">${count}</span>
@@ -605,6 +611,7 @@ function buildRSBSummaryContent(container, recordId) {
     avgDiv.innerHTML = `
         <span class="rsb-summary-avg-emoji">${democraticEmoji}</span>
         <span class="rsb-summary-avg-label">Average Sentiment</span>
+        <span class="rsb-summary-avg-word">${scoreToAdjective(avg)}</span>
         <span class="rsb-summary-avg-score">${avg >= 0 ? '+' : ''}${avg.toFixed(2)}</span>
     `;
     summaryDiv.appendChild(avgDiv);
@@ -921,11 +928,8 @@ export function updateReactionZoneSummary(recordId) {
 
 export function refreshRSBPanel(panel, recordId) {
     const reactionCount = _deps.getItemReactionCount(recordId);
-    const cacheKey = `item:${recordId}`;
-    const comments = _deps.componentComments.getCache().get(cacheKey) || [];
 
     const summaryTab = panel.querySelector('.rsb-tab[data-tab="summary"]');
-    const commentsTab = panel.querySelector('.rsb-tab[data-tab="comments"]');
     if (summaryTab) {
         let badge = summaryTab.querySelector('.rsb-tab-badge');
         if (reactionCount > 0) {
@@ -937,17 +941,6 @@ export function refreshRSBPanel(panel, recordId) {
             badge.textContent = reactionCount;
         } else if (badge) badge.remove();
     }
-    if (commentsTab) {
-        let badge = commentsTab.querySelector('.rsb-tab-badge');
-        if (comments.length > 0) {
-            if (!badge) {
-                badge = document.createElement('span');
-                badge.className = 'rsb-tab-badge';
-                commentsTab.appendChild(badge);
-            }
-            badge.textContent = comments.length;
-        } else if (badge) badge.remove();
-    }
 
     const activeContent = panel.querySelector('.rsb-tab-content.active');
     if (activeContent) {
@@ -956,7 +949,6 @@ export function refreshRSBPanel(panel, recordId) {
         switch (tabId) {
             case 'reactions': buildRSBReactionsContent(activeContent, recordId, isModal); break;
             case 'summary': buildRSBSummaryContent(activeContent, recordId); break;
-            case 'comments': buildRSBCommentsContent(activeContent, recordId); break;
         }
     }
 }

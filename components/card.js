@@ -14,6 +14,38 @@ import { log } from '../utils/debug.js';
 // Shared SVG constant - avoids re-creating the string for each card/icon update
 const HEART_SVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
 
+// The beta "Sort by: Sentiment" catalog mode adds the community sentiment chip
+// after each item's name (mirroring the detail modal). The chip only appears
+// while this sort is active, keeping every other browsing view visually unchanged.
+function isSentimentSortActive() {
+    const el = typeof document !== 'undefined' && document.getElementById('sort-by');
+    return !!(el && el.value === 'sentiment');
+}
+
+// Markup for the inline community sentiment chip placeholder, rendered next to a
+// catalog item's name only in sentiment-sort mode. ui.renderSentimentChip fills
+// and wires it after the card is in the DOM (see wireSentimentChip).
+function sentimentChipHTML() {
+    return isSentimentSortActive()
+        ? ` <span class="card-sentiment-chip item-emoji-indicator item-sentiment-chip" data-scope="global" role="button" tabindex="0" aria-label="Community sentiment — tap to react"></span>`
+        : '';
+}
+
+// Populate the card's sentiment chip with the global (community) sentiment, reusing
+// the exact chip the detail modal renders. Clicking it opens the same anchored
+// reaction popup; its handler stops propagation so the card's "open detail" click
+// is not triggered.
+function wireSentimentChip(card, record) {
+    const chip = card.querySelector('.card-sentiment-chip');
+    if (!chip) return;
+    try {
+        ui.renderSentimentChip(chip, record.id, 'global');
+    } catch (e) {
+        console.warn('[Card] Could not render sentiment chip for', record.id, e);
+        chip.style.display = 'none';
+    }
+}
+
 // Helper to generate optimized Cloudinary URLs with responsive sizing
 function getOptimizedImageUrl(url, width = 600, quality = 'auto') {
     if (!url || !url.includes('cloudinary')) return url;
@@ -253,6 +285,17 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     }
     // --- END AI-SOURCED CARD DETECTION ---
 
+    // --- PUBLIC IDEA (community layer) BADGE ---
+    // Items promoted into the public community catalog carry a "public-" id and
+    // the "Public Idea" status. Flag them visually so they read as community
+    // suggestions rather than curated catalog items.
+    const isPublicIdea = record.isPublicIdea === true ||
+                         (typeof record.id === 'string' && record.id.startsWith('public-'));
+    let publicIdeaBadge = '';
+    if (isPublicIdea) {
+        publicIdeaBadge = '<span class="public-idea-badge">Public Idea</span>';
+    }
+
     // --- VVV SCORE LOGIC REMOVED VVV ---
     // The scoreBanner variable is now always empty
     const scoreBanner = '';
@@ -373,6 +416,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 <button class="availability-btn" title="Select a date range to check availability" aria-label="Check availability">📅</button>
                 ${partnerBadge}
                 ${aiDiscoveryBadge}
+                ${publicIdeaBadge}
                 ${scoreBanner}
             </div>
             <div class="event-card-content">
@@ -382,7 +426,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                     ${eventTime ? `<span class="time">${eventTime}</span>` : ''}
                 </div>
                 <div class="event-details">
-                    <h3>${fields.Name || 'Untitled Event'}</h3>
+                    <h3>${fields.Name || 'Untitled Event'}${sentimentChipHTML()}</h3>
                     <p class="description">${fields.Description || ''}</p>
                 </div>
             </div>
@@ -390,6 +434,8 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 ${footerButtonsHTML}
             </div>
         `;
+
+        wireSentimentChip(eventCard, record);
 
         return eventCard;
     }
@@ -693,11 +739,12 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             <button class="availability-btn" title="Select a date range to check availability" aria-label="Check availability">📅</button>
             ${partnerBadge}
             ${aiDiscoveryBadge}
+            ${publicIdeaBadge}
             ${imageSourceIndicator}
             ${scoreBanner}
             </div>
         <div class="event-card-content">
-            <h3>${fields.Name || 'Untitled Event'}</h3>
+            <h3>${fields.Name || 'Untitled Event'}${sentimentChipHTML()}</h3>
             <p class="description">${fields.Description || ''}</p>
         </div>
         <div class="card-footer">
@@ -708,6 +755,8 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
 
     // Quantity buttons are handled via event delegation on the catalog container
     // in ui.js renderRecords() for better performance (avoids per-card listeners)
+
+    wireSentimentChip(eventCard, record);
 
     return eventCard;
 }

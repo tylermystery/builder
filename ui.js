@@ -13,6 +13,7 @@ import { showPresentationView, hidePresentationView, setupPresentationEventListe
 import { addEnergy, updateProgress } from './components/backgroundEngine.js';
 import { shouldUseNetlifyImageCDN, optimizeImageUrl, applyCloudinaryTransform, hasCloudinaryTransformations } from './utils/imageOptimizer.js';
 import { storeSlug } from './utils.js';
+import { getCommunitySentimentScore } from './components/publicCatalog.js';
 
 console.log('[MODULE DEBUG] ui.js imports resolved. Checking key imports...');
 console.log('[MODULE DEBUG] ui.js: createInteractiveCard:', typeof createInteractiveCard);
@@ -184,12 +185,63 @@ function createSkeletonCard() {
 }
 
 // Helper function to find child items for a grouping
+// Read the catalog's active status filter so carousel children can honor it.
+// Returns 'all' when the filter UI isn't present (e.g. presentation/viewer
+// contexts), which preserves the original "show everything" behavior there.
+function getActiveCatalogStatusFilter() {
+    const el = typeof document !== 'undefined' && document.getElementById('status-filter');
+    return (el && el.value) || 'all';
+}
+
+// Decide whether a child item matches the active status filter. Carousel
+// children are expanded from the UNFILTERED store catalog, so without this
+// gate every status filter would show the same items. We intentionally leave
+// 'all' (Show All) and 'Available' untouched — those keep the existing
+// landing-page behavior — and only restrict the more specific selections
+// (e.g. "Coming Soon", "Sold Out") to items that actually carry that status.
+function childItemMatchesStatusFilter(record, statusFilter) {
+    if (!statusFilter || statusFilter === 'all' || statusFilter === 'Available') return true;
+    if (!record || !record.fields) return false;
+    return record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusFilter;
+}
+
+// Is the catalog's beta "Sort by: Sentiment" mode active? Carousel ordering and
+// within-carousel item ordering only switch to sentiment when this is selected;
+// every other sort leaves the carousels exactly as they were.
+function isSentimentSortActive() {
+    const el = typeof document !== 'undefined' && document.getElementById('sort-by');
+    return !!(el && el.value === 'sentiment');
+}
+
+// Order items by community (global) sentiment, most-loved first, breaking ties
+// alphabetically by name — the same basis the catalog sort and the card chip use.
+function sortItemsBySentiment(items) {
+    const scoreById = new Map();
+    items.forEach(it => scoreById.set(it.id, getCommunitySentimentScore(it).score));
+    return [...items].sort((a, b) => {
+        const diff = (scoreById.get(b.id) || 0) - (scoreById.get(a.id) || 0);
+        if (diff !== 0) return diff;
+        return (a.fields.Name || '').toLowerCase().localeCompare((b.fields.Name || '').toLowerCase());
+    });
+}
+
+// A carousel's sentiment is the average community score of its child items, so the
+// most-loved category floats to the top. Categories with no items score a neutral 0.
+function getGroupingSentimentScore(grouping) {
+    const children = getChildItemsForGrouping(grouping, state.records.all);
+    if (!children.length) return 0;
+    const sum = children.reduce((acc, child) => acc + getCommunitySentimentScore(child).score, 0);
+    return sum / children.length;
+}
+
 function getChildItemsForGrouping(groupingRecord, allRecords) {
     const groupingNameForFilter = groupingRecord.fields.Name.toLowerCase().replace(/\s+/g, ' ');
+    const statusFilter = getActiveCatalogStatusFilter();
 
     const results = allRecords.filter(r => {
         const itemType = r.fields['Item Type'];
         if (itemType !== 'Bookable Item' && itemType !== 'Event' && itemType !== 'Package') return false;
+        if (!childItemMatchesStatusFilter(r, statusFilter)) return false;
         const itemCategories = (r.fields.Categories || '')
             .split(',')
             .map(cat => cat.trim().toLowerCase().replace(/\s+/g, ' '));
@@ -461,6 +513,19 @@ async function createGroupingCarouselSection(groupingRecord, childItems, allReco
     return section;
 }
 
+// Guards against overlapping catalog renders. Several unrelated triggers
+// (initial load, community/Pusher data arriving, sort/filter changes) can call
+// renderRecords nearly simultaneously, and because the render yields to the
+// browser between chunks (requestIdleCallback/setTimeout), two invocations can
+// interleave. When a carousel-mode render appends a `.grouping-carousel-section`
+// while a grid-mode render is appending flat cards directly to the container,
+// the CSS rule `#catalog-container:has(.grouping-carousel-section)` flips the
+// container to flex-column and the grid cards stretch to full width. Each render
+// claims the latest token; older in-flight renders detect they are stale at the
+// next yield point and bail before mutating the DOM further, so only the newest
+// render ever touches the container.
+let activeRenderToken = 0;
+
 export async function renderRecords(recordsToRender, imageCache, append = false) {
     console.log('[CATALOG DEBUG] renderRecords called.', {
         recordCount: recordsToRender?.length,
@@ -479,6 +544,12 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         console.error("UI ERROR: catalog-container element not found in the DOM!");
         return;
     }
+
+    // Claim this render. Any render that starts after this point makes the
+    // current one stale; we re-check at every yield point below and bail out
+    // before appending more nodes, so renders never interleave in the DOM.
+    const myRenderToken = ++activeRenderToken;
+    const isStaleRender = () => myRenderToken !== activeRenderToken;
 
     // Set up delegated event listeners once for quantity buttons (avoids per-card listeners)
     if (!catalogContainer._delegatedListenersAttached) {
@@ -587,6 +658,18 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         layoutMode = 'carousel-sections';
     }
 
+    // Diagnostic: a grouping reaching the renderer in carousel mode expands its
+    // children from the UNFILTERED state.records.all, which is the only way a
+    // non-matching item can appear under a status filter. Surface that here.
+    if (groupings.length > 0) {
+        console.log('[CATALOG DEBUG] renderRecords layout chosen.', {
+            layoutMode,
+            groupingCount: groupings.length,
+            groupingNames: groupings.map(g => g.fields && g.fields.Name),
+            nonGroupingCount: nonGroupingRecords.length
+        });
+    }
+
     // Clear container for fresh render
     if (!append) {
         catalogContainer.innerHTML = '';
@@ -631,6 +714,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                 const chunk = itemsToAppend.slice(i, i + CHUNK_SIZE);
                 const cardPromises = chunk.map(record => createInteractiveCard(record, state.records.all, imageCache));
                 const cards = await Promise.all(cardPromises);
+                if (isStaleRender()) return; // a newer render took over while awaiting
 
                 cards.forEach(card => {
                     if (card) fragment.appendChild(card);
@@ -650,6 +734,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                             setTimeout(resolve, 0);
                         }
                     });
+                    if (isStaleRender()) return;
                 }
             }
         }
@@ -662,6 +747,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
             const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
             const cardPromises = chunk.map(record => createInteractiveCard(record, state.records.all, imageCache));
             const cards = await Promise.all(cardPromises);
+            if (isStaleRender()) return; // a newer render took over while awaiting
 
             cards.forEach(card => {
                 if (card) fragment.appendChild(card);
@@ -681,14 +767,48 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                         setTimeout(resolve, 0);
                     }
                 });
+                if (isStaleRender()) return;
             }
         }
     } else {
-        // Render groupings as horizontal carousel sections
-        for (const grouping of groupings) {
-            const childItems = getChildItemsForGrouping(grouping, state.records.all);
+        // Render groupings as horizontal carousel sections.
+        // Carousel children honor the active status filter (see
+        // getChildItemsForGrouping); groupings with no matching children are
+        // skipped, so e.g. "Coming Soon"/"Sold Out" no longer surface every
+        // category. Log the decision so this stays easy to verify.
+        const activeStatusFilter = getActiveCatalogStatusFilter();
+        // In the beta "Sort by: Sentiment" mode, reorder the carousels themselves so
+        // the most-loved category floats to the top, and sort the items inside each
+        // carousel by sentiment too. Every other sort leaves carousel order and
+        // their item order exactly as before.
+        const sentimentActive = isSentimentSortActive();
+        // Precompute each carousel's aggregate sentiment once, so the comparator
+        // below isn't re-scoring (and re-expanding children) on every comparison.
+        const groupingScoreById = new Map();
+        if (sentimentActive) {
+            groupings.forEach(g => groupingScoreById.set(g.id, getGroupingSentimentScore(g)));
+        }
+        const orderedGroupings = sentimentActive
+            ? [...groupings].sort((a, b) => {
+                const diff = (groupingScoreById.get(b.id) || 0) - (groupingScoreById.get(a.id) || 0);
+                if (diff !== 0) return diff;
+                return (a.fields.Name || '').toLowerCase().localeCompare((b.fields.Name || '').toLowerCase());
+            })
+            : groupings;
+        console.log('[STATUS FILTER] Rendering carousels with status filter.', {
+            statusFilter: activeStatusFilter,
+            sentimentSort: sentimentActive,
+            groupingsBeforeSkip: groupings.length,
+            groupingsWithMatches: groupings.filter(
+                g => getChildItemsForGrouping(g, state.records.all).length > 0
+            ).length
+        });
+        for (const grouping of orderedGroupings) {
+            let childItems = getChildItemsForGrouping(grouping, state.records.all);
+            if (sentimentActive) childItems = sortItemsBySentiment(childItems);
             if (childItems.length > 0) {
                 const carouselSection = await createGroupingCarouselSection(grouping, childItems, state.records.all, imageCache);
+                if (isStaleRender()) return; // a newer render took over while awaiting
                 catalogContainer.appendChild(carouselSection);
                 addEnergy();
                 updateProgress(0.00005);
@@ -701,6 +821,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                         setTimeout(resolve, 0);
                     }
                 });
+                if (isStaleRender()) return;
             }
         }
 
@@ -730,6 +851,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                 const chunk = ungroupedItems.slice(i, i + CHUNK_SIZE);
                 const cardPromises = chunk.map(record => createInteractiveCard(record, state.records.all, imageCache));
                 const cards = await Promise.all(cardPromises);
+                if (isStaleRender()) return; // a newer render took over while awaiting
 
                 cards.forEach(card => {
                     if (card) fragment.appendChild(card);

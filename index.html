@@ -2664,6 +2664,84 @@ html.presentation-active {
     padding-bottom: 0 !important;
 }
 
+/* ============================================================
+   DOCKED PANELS IN PLAN VIEW (presentation mode)
+   On wide screens, the hamburger (WTF Plans) panel and the
+   conversations (Forum) panel sit BESIDE the plan instead of
+   sliding over it. The plan view shrinks to make room, so the
+   user can see plans | plan + components | conversations at once
+   with no overlap. Catalog view and mobile keep the original
+   slide-over behavior (these rules are scoped to
+   body.presentation-active and min-width: 1100px).
+   ============================================================ */
+:root {
+    /* Docked panel widths in plan view. The plan view is inset by
+       the same amounts so the panels never overlap the plan.
+       --wtf-dock-width  -> left "hamburger" (WTF Plans) panel
+       --conv-dock-width -> right conversations rail (Forum + Chat) */
+    --wtf-dock-width: 360px;
+    --conv-dock-width: 380px;
+}
+
+@media (min-width: 1100px) {
+    /* Pin the side panels to deterministic widths when docked so the
+       plan view can reserve exactly the right amount of space. */
+    body.presentation-active #wtf-plans-panel {
+        width: var(--wtf-dock-width);
+    }
+    body.presentation-active #forum-panel {
+        width: var(--conv-dock-width);
+        min-width: var(--conv-dock-width);
+        max-width: var(--conv-dock-width);
+    }
+    body.presentation-active .unified-chat-panel {
+        width: var(--conv-dock-width);
+        min-width: var(--conv-dock-width);
+        max-width: var(--conv-dock-width);
+    }
+
+    /* The plan view becomes a center column between the panels.
+       It animates in step with the panels sliding in/out. */
+    body.presentation-active #presentation-modal-overlay {
+        left: 0;
+        right: 0;
+        width: auto;
+        transition: left 0.3s ease-in-out, right 0.3s ease-in-out;
+    }
+    /* Left inset when the hamburger (WTF Plans) panel is open */
+    body.presentation-active:has(#wtf-plans-panel.open) #presentation-modal-overlay {
+        left: var(--wtf-dock-width);
+    }
+    /* Right inset when a conversations panel is open (Forum discussion
+       or the unified Chat panel — both dock to the same right rail). */
+    body.presentation-active:has(#forum-panel.open) #presentation-modal-overlay,
+    body.presentation-active.ucp-panel-open #presentation-modal-overlay {
+        right: var(--conv-dock-width);
+    }
+
+    /* No dimming/backdrop overlays in docked mode — the plan stays
+       fully visible and interactive alongside the panels. */
+    body.presentation-active #wtf-plans-panel-overlay,
+    body.presentation-active #forum-panel-overlay {
+        display: none !important;
+    }
+}
+
+/* ============================================================
+   MODALS / POPUPS ABOVE SIDE PANELS IN PLAN VIEW
+   In the plan view the side panels are raised above the plan
+   itself (WTF Plans -> 2100, Forum -> 2000, Chat -> 1100). The
+   shared modal overlay normally sits at z-index 1000, so detail
+   modals and other popups opened from within a plan would appear
+   BEHIND the panels. Lift them above every docked panel so they
+   always surface in front. Applies at all widths (the panels
+   slide over the plan on narrow screens too). Scoped to plan view
+   so catalog behavior is unchanged.
+   ============================================================ */
+body.presentation-active .modal-overlay {
+    z-index: 2200;
+}
+
 /* Search More Photos button styles */
 #modal-search-photos-container {
     text-align: center;
@@ -5241,6 +5319,7 @@ body.ucp-panel-open .unified-chat-panel {
                         <option value="all">Show All</option>
                         <option value="Coming Soon">Coming Soon</option>
                         <option value="Sold Out">Sold Out</option>
+                        <option value="Public Idea">Public Ideas</option>
                     </select>
                 </div>
                 <button id="reset-filters-btn">Reset All Filters</button>
@@ -5257,6 +5336,7 @@ body.ucp-panel-open .unified-chat-panel {
                             <option value="price-asc">Price (Low to High)</option>
                             <option value="price-desc">Price (High to Low)</option>
                             <option value="name-asc">Name (A-Z)</option>
+                            <option value="sentiment">Sort by: Sentiment (beta)</option>
                         </select>
                     </div>
                 </div>
@@ -5323,7 +5403,11 @@ body.ucp-panel-open .unified-chat-panel {
 
                 <div id="modal-breadcrumbs"></div>
 
-                <h2 id="modal-item-name"></h2>
+                <div class="modal-item-name-row">
+                    <h2 id="modal-item-name"></h2>
+                    <span id="modal-item-sentiment-chip" class="item-emoji-indicator item-sentiment-chip" data-scope="global" role="button" tabindex="0" aria-label="Global item sentiment — tap to react" style="display: none;"></span>
+                    <span id="modal-plan-sentiment-chip" class="item-emoji-indicator item-sentiment-chip" data-scope="plan" role="button" tabindex="0" aria-label="Plan item sentiment — tap to react" style="display: none;"></span>
+                </div>
 
                 <div id="modal-price-action-row">
                     <p id="modal-item-price" class="price"></p>
@@ -6272,7 +6356,7 @@ body.ucp-panel-open .unified-chat-panel {
         <div class="ucp-filters">
             <button class="ucp-filter-btn active" data-filter="all">All</button>
             <button class="ucp-filter-btn" data-filter="comments">Comments</button>
-            <button class="ucp-filter-btn" data-filter="ideas">Ideas</button>
+            <button class="ucp-filter-btn" data-filter="global">Global</button>
             <button class="ucp-filter-btn" data-filter="tasks">Tasks</button>
             <label class="ucp-hide-completed-toggle" id="ucp-hide-completed-toggle" title="Hide completed items">
                 <input type="checkbox" id="ucp-hide-completed-cb">
