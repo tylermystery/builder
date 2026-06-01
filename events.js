@@ -2868,7 +2868,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             if (!record) return;
             
             ui.showDetailModal(record);
-        } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn, .availability-btn')) {
+        } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn, .availability-btn, .card-sentiment-chip')) {
             const recordId = card.dataset.recordId;
             console.log('[EVENTS DEBUG] Card clicked (detail modal trigger), recordId:', recordId);
 

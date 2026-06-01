@@ -1910,7 +1910,7 @@ function modalIsInPlanContext() {
  * its scope marker, the scope's summary sentiment emoji and a count; clicking it
  * opens an anchored popup next to the chip (see openItemSentimentPopup).
  */
-function renderSentimentChip(chip, recordId, scope) {
+export function renderSentimentChip(chip, recordId, scope) {
     if (!chip) return;
     const s = getScopeSentiment(recordId, scope);
     const icon = scope === 'global' ? '🌐' : '👥';
@@ -2086,6 +2086,12 @@ async function toggleScopeReaction(recordId, scope, emoji, anchorEl) {
         if (!ok) return; // signed out (sign-in prompt shown) or errored
     }
     updateModalSentimentChips(recordId);
+    // If the popup was opened from a catalog card's sentiment chip (beta "Sort by:
+    // Sentiment" mode) rather than the modal, refresh that chip in place too so it
+    // reflects the new reaction without waiting for a catalog re-render.
+    if (anchorEl && anchorEl.classList && anchorEl.classList.contains('card-sentiment-chip')) {
+        renderSentimentChip(anchorEl, recordId, scope);
+    }
     if (scope === 'plan') refreshInPlanReactButton(recordId);
     // Re-open the popup in place to show the updated picker/summary.
     openItemSentimentPopup(anchorEl, recordId, scope);

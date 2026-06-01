@@ -13,6 +13,7 @@ import { showPresentationView, hidePresentationView, setupPresentationEventListe
 import { addEnergy, updateProgress } from './components/backgroundEngine.js';
 import { shouldUseNetlifyImageCDN, optimizeImageUrl, applyCloudinaryTransform, hasCloudinaryTransformations } from './utils/imageOptimizer.js';
 import { storeSlug } from './utils.js';
+import { getCommunitySentimentScore } from './components/publicCatalog.js';
 
 console.log('[MODULE DEBUG] ui.js imports resolved. Checking key imports...');
 console.log('[MODULE DEBUG] ui.js: createInteractiveCard:', typeof createInteractiveCard);
@@ -202,6 +203,35 @@ function childItemMatchesStatusFilter(record, statusFilter) {
     if (!statusFilter || statusFilter === 'all' || statusFilter === 'Available') return true;
     if (!record || !record.fields) return false;
     return record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusFilter;
+}
+
+// Is the catalog's beta "Sort by: Sentiment" mode active? Carousel ordering and
+// within-carousel item ordering only switch to sentiment when this is selected;
+// every other sort leaves the carousels exactly as they were.
+function isSentimentSortActive() {
+    const el = typeof document !== 'undefined' && document.getElementById('sort-by');
+    return !!(el && el.value === 'sentiment');
+}
+
+// Order items by community (global) sentiment, most-loved first, breaking ties
+// alphabetically by name — the same basis the catalog sort and the card chip use.
+function sortItemsBySentiment(items) {
+    const scoreById = new Map();
+    items.forEach(it => scoreById.set(it.id, getCommunitySentimentScore(it).score));
+    return [...items].sort((a, b) => {
+        const diff = (scoreById.get(b.id) || 0) - (scoreById.get(a.id) || 0);
+        if (diff !== 0) return diff;
+        return (a.fields.Name || '').toLowerCase().localeCompare((b.fields.Name || '').toLowerCase());
+    });
+}
+
+// A carousel's sentiment is the average community score of its child items, so the
+// most-loved category floats to the top. Categories with no items score a neutral 0.
+function getGroupingSentimentScore(grouping) {
+    const children = getChildItemsForGrouping(grouping, state.records.all);
+    if (!children.length) return 0;
+    const sum = children.reduce((acc, child) => acc + getCommunitySentimentScore(child).score, 0);
+    return sum / children.length;
 }
 
 function getChildItemsForGrouping(groupingRecord, allRecords) {
@@ -724,15 +754,35 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         // skipped, so e.g. "Coming Soon"/"Sold Out" no longer surface every
         // category. Log the decision so this stays easy to verify.
         const activeStatusFilter = getActiveCatalogStatusFilter();
+        // In the beta "Sort by: Sentiment" mode, reorder the carousels themselves so
+        // the most-loved category floats to the top, and sort the items inside each
+        // carousel by sentiment too. Every other sort leaves carousel order and
+        // their item order exactly as before.
+        const sentimentActive = isSentimentSortActive();
+        // Precompute each carousel's aggregate sentiment once, so the comparator
+        // below isn't re-scoring (and re-expanding children) on every comparison.
+        const groupingScoreById = new Map();
+        if (sentimentActive) {
+            groupings.forEach(g => groupingScoreById.set(g.id, getGroupingSentimentScore(g)));
+        }
+        const orderedGroupings = sentimentActive
+            ? [...groupings].sort((a, b) => {
+                const diff = (groupingScoreById.get(b.id) || 0) - (groupingScoreById.get(a.id) || 0);
+                if (diff !== 0) return diff;
+                return (a.fields.Name || '').toLowerCase().localeCompare((b.fields.Name || '').toLowerCase());
+            })
+            : groupings;
         console.log('[STATUS FILTER] Rendering carousels with status filter.', {
             statusFilter: activeStatusFilter,
+            sentimentSort: sentimentActive,
             groupingsBeforeSkip: groupings.length,
             groupingsWithMatches: groupings.filter(
                 g => getChildItemsForGrouping(g, state.records.all).length > 0
             ).length
         });
-        for (const grouping of groupings) {
-            const childItems = getChildItemsForGrouping(grouping, state.records.all);
+        for (const grouping of orderedGroupings) {
+            let childItems = getChildItemsForGrouping(grouping, state.records.all);
+            if (sentimentActive) childItems = sortItemsBySentiment(childItems);
             if (childItems.length > 0) {
                 const carouselSection = await createGroupingCarouselSection(grouping, childItems, state.records.all, imageCache);
                 catalogContainer.appendChild(carouselSection);

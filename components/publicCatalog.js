@@ -23,7 +23,7 @@
 
 import { state, getRecordById, invalidateRecordsIndex } from '../state.js';
 import * as api from '../api.js';
-import { EMOJI_REACTIONS } from '../config.js';
+import { EMOJI_REACTIONS, computeDemocraticAverage } from '../config.js';
 import { showUserModal } from '../auth.js';
 import { log } from '../utils/debug.js';
 
@@ -625,6 +625,41 @@ export function getCommunityRowForRecord(record) {
     if (!record) return null;
     if (isPublicIdeaRecord(record)) return publicIdeaIndex.get(record.id) || null;
     return communityRowByCatalogId.get(record.id) || null;
+}
+
+// Build a Map<userId, Set<emoji>> from a community row's reactions so the
+// democratic-average scorer can read it. Count-only entries (no user list) are
+// expanded into synthetic anonymous users so an aggregate count still scores.
+function communityRowToUserMap(row) {
+    const map = new Map();
+    const reactions = (row && row.reactions) || {};
+    let synthetic = 0;
+    for (const [emoji, data] of Object.entries(reactions)) {
+        const users = data && Array.isArray(data.users) ? data.users : [];
+        if (users.length) {
+            for (const uid of users) {
+                if (!map.has(uid)) map.set(uid, new Set());
+                map.get(uid).add(emoji);
+            }
+        } else {
+            const count = (data && data.count) || 0;
+            for (let i = 0; i < count; i++) map.set(`anon:${synthetic++}`, new Set([emoji]));
+        }
+    }
+    return map;
+}
+
+/**
+ * Community (global) sentiment for a record, derived from its cached community
+ * row — the same data behind the detail modal's 🌐 chip. Returns the democratic
+ * average `score`, the summary emoji, the reaction `total`, and `has` (whether
+ * any reactions exist). Items with no community reactions resolve to a neutral
+ * score of 0, which is how the catalog's "Sort by: Sentiment" mode treats them.
+ */
+export function getCommunitySentimentScore(record) {
+    const row = record ? getCommunityRowForRecord(record) : null;
+    const { democraticAverage, summaryEmoji, totalReactions } = computeDemocraticAverage(communityRowToUserMap(row));
+    return { score: democraticAverage, summaryEmoji, total: totalReactions, has: totalReactions > 0 };
 }
 
 /**

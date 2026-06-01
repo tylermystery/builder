@@ -6137,6 +6137,20 @@ body.presentation-active #chat-widget {
     box-shadow: 0 2px 8px rgba(6, 182, 212, 0.22);
 }
 
+/* The same global sentiment chip surfaced on catalog cards while the beta
+   "Sort by: Sentiment" mode is active — it sits inline right after the card's
+   item name. A fixed size keeps it from scaling up with the card's heading. */
+.card-sentiment-chip {
+    font-size: 0.7rem;
+    vertical-align: middle;
+    margin-left: 6px;
+    padding: 1px 7px;
+    animation: none;
+}
+.card-sentiment-chip .emoji-indicator-emoji {
+    font-size: 1em;
+}
+
 /* Anchored sentiment popup (chat-message style), pinned next to the clicked chip */
 .item-sentiment-popup {
     position: fixed;

@@ -6,7 +6,7 @@ import * as ui from './ui.js';
 import * as api from './api.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions, getTempLikes } from './utils.js';
 import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore } from './availability.js';
-import { PUBLIC_IDEA_STATUS, isPublicIdeaRecord } from './components/publicCatalog.js';
+import { PUBLIC_IDEA_STATUS, isPublicIdeaRecord, getCommunitySentimentScore } from './components/publicCatalog.js';
 
 // --- Performance: Cached record metadata to avoid re-parsing on every filter pass ---
 const _recordMetaCache = new WeakMap();
@@ -287,7 +287,25 @@ function sortRecords(records, sortBy, goalBucket) {
 
         return scoredRecords.map(item => item.record);
     }
-    
+
+    if (sortBy === 'sentiment') {
+        // Beta "Sort by: Sentiment" view: rank items by their community (global)
+        // democratic-average score, most-loved first. Un-reacted items count as a
+        // neutral 0 (so they sort in the middle and negatively-reacted items fall
+        // below them), and ties at ANY score — not just 0 — break alphabetically
+        // by name. The "Featured" pin is intentionally dropped here so the order is
+        // purely sentiment-driven. Grouping (carousel) records carry no reactions
+        // of their own; they're reordered by their child sentiment in the carousel
+        // renderer, so here they simply resolve to a neutral 0.
+        const scored = records.map(record => ({
+            record,
+            score: record.fields['Item Type'] === 'Grouping' ? 0 : getCommunitySentimentScore(record).score,
+            nameLower: getRecordMeta(record).nameLower
+        }));
+        scored.sort((a, b) => (b.score - a.score) || a.nameLower.localeCompare(b.nameLower));
+        return scored.map(item => item.record);
+    }
+
     return records.sort((a, b) => {
         const aIsFeatured = a.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured';
         const bIsFeatured = b.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured';
