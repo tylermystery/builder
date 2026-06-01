@@ -447,12 +447,8 @@ export function initializeForumPanel() {
         });
     });
 
-    // Trigger button handler (in chat header)
-    if (triggerBtn) {
-        triggerBtn.addEventListener('click', () => {
-            toggleForumPanel();
-        });
-    }
+    // Trigger button handler: the Forum Panel is retired; the "Activity" trigger
+    // now opens the Unified Chat Panel instead (wired in events.js). No binding here.
 
     // Close on escape key
     document.addEventListener('keydown', (e) => {

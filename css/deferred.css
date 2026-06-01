@@ -18038,6 +18038,125 @@ hr.total-divider {
     color: rgba(99, 102, 241, 1);
 }
 
+/* "See conversation" button — replaces the inline comments thread in the
+   reaction GUIs (compact-card RSB and modal RSB). Sends users to the unified
+   conversation view. */
+.rsb-see-conversation-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    margin-top: 6px;
+    padding: 8px 0;
+    font-size: 0.72em;
+    font-weight: 600;
+    color: rgba(99, 102, 241, 0.9);
+    background: rgba(99, 102, 241, 0.08);
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0 0 10px 10px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.rsb-panel--modal .rsb-see-conversation-btn {
+    border-top-color: rgba(0, 0, 0, 0.06);
+}
+.rsb-see-conversation-btn:hover {
+    color: #fff;
+    background: rgba(99, 102, 241, 0.9);
+}
+
+/* Community-card "See conversation" button (detail modal Community layer) */
+.public-see-conversation-wrap {
+    padding: 6px 2px 2px;
+}
+.public-see-conversation-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 9px 0;
+    font-size: 0.82em;
+    font-weight: 600;
+    color: rgba(99, 102, 241, 0.95);
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.public-see-conversation-btn:hover {
+    color: #fff;
+    background: rgba(99, 102, 241, 0.9);
+}
+
+/* Conversation view — Global tab (community feed) */
+.ucp-global-intro,
+.ucp-global-item-heading {
+    padding: 10px 14px;
+    font-size: 0.82em;
+    color: #6b7280;
+}
+.ucp-global-item-heading {
+    font-weight: 700;
+    color: #111827;
+    font-size: 0.95em;
+    padding-bottom: 4px;
+}
+.ucp-global-back {
+    display: inline-flex;
+    align-items: center;
+    margin: 8px 0 0 10px;
+    padding: 4px 8px;
+    font-size: 0.78em;
+    color: rgba(99, 102, 241, 0.95);
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+.ucp-global-back:hover { text-decoration: underline; }
+.ucp-global-thread { padding: 4px 10px 16px; }
+.ucp-global-empty {
+    text-align: center;
+    color: #9ca3af;
+    padding: 28px 16px;
+}
+.ucp-global-empty .ucp-empty-icon { font-size: 1.6em; display: block; margin-bottom: 6px; }
+.ucp-global-card {
+    display: block;
+    width: calc(100% - 20px);
+    margin: 8px 10px;
+    padding: 10px 12px;
+    text-align: left;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ucp-global-card:hover {
+    border-color: rgba(99, 102, 241, 0.5);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.12);
+}
+.ucp-global-card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+.ucp-global-card-name { font-weight: 600; color: #111827; font-size: 0.9em; }
+.ucp-global-card-meta { color: #6b7280; font-size: 0.82em; white-space: nowrap; }
+.ucp-global-card-snippet {
+    margin-top: 4px;
+    color: #4b5563;
+    font-size: 0.82em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Mobile adjustments */
 @media (max-width: 480px) {
     .rsb-emoji-btn {

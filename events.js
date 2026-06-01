@@ -3402,6 +3402,19 @@ export function initializeChatEventListeners() {
         });
     }
 
+    // The Forum Panel is retired; its "Activity" trigger now opens the Unified
+    // Chat Panel (the single conversation view).
+    const activityTrigger = document.getElementById('forum-panel-trigger');
+    if (activityTrigger) {
+        activityTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setUCPGetCurrentUser(getCurrentUser);
+            setUCPSendMessage(sendMessage);
+            initializeUnifiedChatPanel();
+            toggleUnifiedChatPanel();
+        });
+    }
+
     // Keep the old chat widget toggle code dormant
     // (old toggleChatWindow and document click-outside handler are no longer active)
 

@@ -13,9 +13,8 @@ import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { resizeImageForUpload } from '../utils/imageResizer.js';
 import { triggerSave } from '../events.js';
-import { showForumPanel } from './forumPanel.js';
 import { createCalendarExportButtons, initializeCalendarExportListeners } from '../utils/calendarExport.js';
-import { openUCPForItem } from './unifiedChatPanel.js';
+import { openUCPForItem, openUCPGlobalForItem } from './unifiedChatPanel.js';
 import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
 import { openActionMenu } from './actionMenu.js';
@@ -1836,7 +1835,13 @@ function initModalReactions(recordId) {
         const communityCard = document.createElement('div');
         communityCard.className = 'modal-community-layer';
         section.appendChild(communityCard);
-        renderPublicReactions(communityCard, record, { expanded: !inPlan });
+        // Comments are removed from this reaction GUI; the community thread is read
+        // and written from the conversation view's Global tab via "See conversation".
+        renderPublicReactions(communityCard, record, {
+            expanded: !inPlan,
+            comments: false,
+            onSeeConversation: () => openUCPGlobalForItem(recordId)
+        });
     }
 
     // Nothing to show at all — hide the host.
@@ -1945,8 +1950,7 @@ function buildModalRSBPanelDOM(recordId) {
 
     const tabConfigs = [
         { id: 'reactions', label: 'React', badge: '' },
-        { id: 'summary', label: 'Summary', badge: reactionCount > 0 ? reactionCount : '' },
-        { id: 'comments', label: 'Comments', badge: commentCount > 0 ? commentCount : '' }
+        { id: 'summary', label: 'Summary', badge: reactionCount > 0 ? reactionCount : '' }
     ];
 
     tabConfigs.forEach((tc, idx) => {
@@ -1976,12 +1980,17 @@ function buildModalRSBPanelDOM(recordId) {
     buildModalRSBSummaryContent(summaryContent, recordId);
     panel.appendChild(summaryContent);
 
-    // Tab: Comments
-    const commentsContent = document.createElement('div');
-    commentsContent.className = 'rsb-tab-content';
-    commentsContent.dataset.tabContent = 'comments';
-    buildModalRSBCommentsContent(commentsContent, recordId);
-    panel.appendChild(commentsContent);
+    // Comments live in the conversation view's Comments tab now — jump in instead
+    // of an inline thread.
+    const seeConvo = document.createElement('button');
+    seeConvo.type = 'button';
+    seeConvo.className = 'rsb-see-conversation-btn';
+    seeConvo.innerHTML = '💬 See conversation';
+    seeConvo.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openUCPForItem(recordId);
+    });
+    panel.appendChild(seeConvo);
 
     return panel;
 }
@@ -2513,12 +2522,7 @@ async function loadModalRSBComments(section, recordId) {
     openFullBtn.textContent = 'Open Full Conversation →';
     openFullBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const isPresentationActive = document.body.classList.contains('presentation-active');
-        if (isPresentationActive) {
-            openUCPForItem(recordId);
-        } else {
-            showForumPanel({ filter: 'comments', componentId: recordId });
-        }
+        openUCPForItem(recordId);
     });
     section.appendChild(openFullBtn);
 }
@@ -2606,13 +2610,9 @@ async function initModalComments(recordId) {
     // Load comment count for this item (non-blocking)
     loadModalCommentCount(recordId, countEl);
 
-    // Attach click handler - use UCP in presentation mode, forum panel otherwise
+    // Open the unified conversation view filtered to this item's comments.
     discussionBtn.onclick = () => {
-        if (isPresentationActive) {
-            openUCPForItem(recordId);
-        } else {
-            showForumPanel({ filter: 'comments', componentId: recordId });
-        }
+        openUCPForItem(recordId);
     };
 }
 

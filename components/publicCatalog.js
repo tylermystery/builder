@@ -265,13 +265,20 @@ function getOrInitCommunityRow(record) {
  * section. Works for every item; backed entirely by the public API.
  * @param {HTMLElement} section
  * @param {object} record
- * @param {{expanded?: boolean}} [opts] - start expanded? (default true)
+ * @param {{expanded?: boolean, comments?: boolean, onSeeConversation?: function}} [opts]
+ *   - expanded: start expanded? (default true)
+ *   - comments: render the inline comments thread + composer? (default true). When
+ *     false, the comments are replaced by a "See conversation" button so the
+ *     community thread is read/written from the conversation view instead.
+ *   - onSeeConversation: click handler for the "See conversation" button (used when
+ *     comments === false). Receives no arguments.
  */
 export function renderPublicReactions(section, record, opts = {}) {
     const row = getOrInitCommunityRow(record);
     if (!row) { section.style.display = 'none'; return; }
 
     const expanded = opts.expanded !== false;
+    const showComments = opts.comments !== false;
 
     section.style.display = 'block';
     // Additive so a host wrapper class (e.g. modal-community-layer) is preserved.
@@ -311,19 +318,41 @@ export function renderPublicReactions(section, record, opts = {}) {
         header.querySelector('.modal-rsb-accordion-chevron').textContent = isOpen ? '▾' : '▸';
     });
 
-    body.appendChild(buildReactionRow(section, record, row));
-    body.appendChild(buildCommentsBlock(section, record, row));
+    body.appendChild(buildReactionRow(section, record, row, opts));
+    if (showComments) {
+        body.appendChild(buildCommentsBlock(section, record, row, opts));
+    } else {
+        body.appendChild(buildSeeConversationButton(opts));
+    }
 
     section.appendChild(header);
     section.appendChild(body);
 }
 
-// Re-render the community panel keeping it open (the user just interacted).
-function rerenderOpen(section, record) {
-    renderPublicReactions(section, record, { expanded: true });
+// A "See conversation" button shown in place of the inline comments thread. The
+// community comments themselves live in the conversation view's Global tab.
+function buildSeeConversationButton(opts) {
+    const wrap = document.createElement('div');
+    wrap.className = 'public-see-conversation-wrap';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'public-see-conversation-btn';
+    btn.innerHTML = '💬 See conversation';
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (typeof opts.onSeeConversation === 'function') opts.onSeeConversation();
+    });
+    wrap.appendChild(btn);
+    return wrap;
 }
 
-function buildReactionRow(section, record, row) {
+// Re-render the community panel keeping it open (the user just interacted),
+// preserving the caller's options (comments visibility, See-conversation handler).
+function rerenderOpen(section, record, opts = {}) {
+    renderPublicReactions(section, record, { ...opts, expanded: true });
+}
+
+function buildReactionRow(section, record, row, opts = {}) {
     const wrap = document.createElement('div');
     wrap.className = 'public-reaction-row';
 
@@ -346,7 +375,7 @@ function buildReactionRow(section, record, row) {
             if (!result) return;
             if (row.id == null && result.publicItemId != null) row.id = result.publicItemId;
             applyReactionToggle(row, emoji, me.id, result.reacted);
-            rerenderOpen(section, record);
+            rerenderOpen(section, record, opts);
         });
         wrap.appendChild(btn);
     });
@@ -368,7 +397,7 @@ function applyReactionToggle(row, emoji, userId, reacted) {
     else delete row.reactions[emoji];
 }
 
-function buildCommentsBlock(section, record, row) {
+function buildCommentsBlock(section, record, row, opts = {}) {
     const wrap = document.createElement('div');
     wrap.className = 'public-comments-block';
 
@@ -384,7 +413,7 @@ function buildCommentsBlock(section, record, row) {
         empty.textContent = 'No comments yet — start the conversation.';
         list.appendChild(empty);
     } else {
-        comments.forEach(c => list.appendChild(buildCommentEl(section, record, row, c, me)));
+        comments.forEach(c => list.appendChild(buildCommentEl(section, record, row, c, me, opts)));
     }
     wrap.appendChild(list);
 
@@ -413,7 +442,7 @@ function buildCommentsBlock(section, record, row) {
         row.comments = row.comments || [];
         row.comments.push(created);
         ta.value = '';
-        rerenderOpen(section, record);
+        rerenderOpen(section, record, opts);
     });
     composer.appendChild(ta);
     composer.appendChild(sendBtn);
@@ -422,7 +451,7 @@ function buildCommentsBlock(section, record, row) {
     return wrap;
 }
 
-function buildCommentEl(section, record, row, comment, me) {
+function buildCommentEl(section, record, row, comment, me, opts = {}) {
     const el = document.createElement('div');
     el.className = 'public-comment';
     const author = comment.authorName || 'Someone';
@@ -442,9 +471,102 @@ function buildCommentEl(section, record, row, comment, me) {
             const ok = await api.deletePublicResource('comments', comment.id);
             if (!ok) { del.disabled = false; return; }
             row.comments = (row.comments || []).filter(c => c.id !== comment.id);
-            rerenderOpen(section, record);
+            rerenderOpen(section, record, opts);
         });
         el.appendChild(del);
     }
     return el;
+}
+
+// --- Read-only aggregated community feed (conversation view "Global" tab, plan-wide) -
+
+/**
+ * Return the community row backing a record WITHOUT creating one. Promoted ideas
+ * are their own row; ordinary catalog items use the lazily-loaded container.
+ * Returns null when no community data has been loaded for the record.
+ */
+export function getCommunityRowForRecord(record) {
+    if (!record) return null;
+    if (isPublicIdeaRecord(record)) return publicIdeaIndex.get(record.id) || null;
+    return communityRowByCatalogId.get(record.id) || null;
+}
+
+function communityRowActivity(row) {
+    const reactionTotal = Object.values(row?.reactions || {}).reduce((s, r) => s + (r.count || 0), 0);
+    const commentCount = (row?.comments || []).length;
+    return { reactionTotal, commentCount };
+}
+
+/**
+ * Render a read-only feed of the community threads across a set of records (the
+ * plan's items), one entry per item that has any community reactions or comments.
+ * Each entry links into that item via onOpenItem(recordId). Posting happens from
+ * within an item's own community thread, not here.
+ * @param {HTMLElement} container
+ * @param {Array<object>} records
+ * @param {(recordId: string) => void} onOpenItem
+ */
+export function renderAggregatedCommunityFeed(container, records, onOpenItem) {
+    container.innerHTML = '';
+
+    const entries = [];
+    (records || []).forEach(record => {
+        if (!record) return;
+        const row = getCommunityRowForRecord(record);
+        if (!row) return;
+        const { reactionTotal, commentCount } = communityRowActivity(row);
+        if (reactionTotal === 0 && commentCount === 0) return;
+        entries.push({ record, row, reactionTotal, commentCount });
+    });
+
+    const intro = document.createElement('div');
+    intro.className = 'ucp-global-intro';
+    intro.textContent = 'Community reactions & comments across this plan’s items. Open an item to join in.';
+    container.appendChild(intro);
+
+    if (entries.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'ucp-global-empty';
+        empty.innerHTML = '<span class="ucp-empty-icon">🌐</span><div>No community activity on this plan’s items yet.</div>';
+        container.appendChild(empty);
+        return;
+    }
+
+    // Most-active first.
+    entries.sort((a, b) =>
+        (b.reactionTotal + b.commentCount) - (a.reactionTotal + a.commentCount));
+
+    entries.forEach(({ record, row, reactionTotal, commentCount }) => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'ucp-global-card';
+
+        const name = record.fields?.Name || 'Item';
+        const topReactions = Object.entries(row.reactions || {})
+            .sort((a, b) => (b[1].count || 0) - (a[1].count || 0))
+            .slice(0, 3).map(([e]) => e).join('');
+
+        const metaParts = [];
+        if (reactionTotal > 0) metaParts.push(`${topReactions} ${reactionTotal}`);
+        if (commentCount > 0) metaParts.push(`💬 ${commentCount}`);
+
+        const latest = (row.comments || []).slice().sort((a, b) =>
+            new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0];
+        const snippet = latest
+            ? `<div class="ucp-global-card-snippet"><strong>${escapeHtml(latest.authorName || 'Someone')}:</strong> ${escapeHtml(latest.body)}</div>`
+            : '';
+
+        card.innerHTML = `
+            <div class="ucp-global-card-head">
+                <span class="ucp-global-card-name">${escapeHtml(name)}</span>
+                <span class="ucp-global-card-meta">${metaParts.join(' · ')}</span>
+            </div>
+            ${snippet}
+        `;
+        card.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (typeof onOpenItem === 'function') onOpenItem(record.id);
+        });
+        container.appendChild(card);
+    });
 }
