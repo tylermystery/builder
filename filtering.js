@@ -6,6 +6,7 @@ import * as ui from './ui.js';
 import * as api from './api.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions, getTempLikes } from './utils.js';
 import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore } from './availability.js';
+import { PUBLIC_IDEA_STATUS } from './components/publicCatalog.js';
 
 // --- Performance: Cached record metadata to avoid re-parsing on every filter pass ---
 const _recordMetaCache = new WeakMap();
@@ -533,7 +534,10 @@ export async function applyFiltersAndSort(imageCache) {
          // Standard filters apply to ALL views except 'My Plan'/'My Likes'
          // On the landing page (no category, no search), preserve Grouping records through filters
          // so they always appear as carousels. Otherwise, filter them normally.
-         const isLandingPage = selectedCategory === 'all' && !searchTerm;
+         // Exception: the "Public Ideas" status filter is meant to surface community
+         // ideas only, so we do NOT preserve category/grouping carousels — letting the
+         // groupings flow through filterByStatus removes them, leaving a clean grid of ideas.
+         const isLandingPage = selectedCategory === 'all' && !searchTerm && statusFilter !== PUBLIC_IDEA_STATUS;
          let groupingRecords = [];
          let filteredItems;
 
