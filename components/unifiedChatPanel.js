@@ -1647,6 +1647,12 @@ export async function openUCPForItem(recordId) {
     const panel = document.getElementById('unified-chat-panel');
     if (!panel) return;
 
+    // Ensure the panel's controls (close button, filter tabs, message form) are
+    // wired up. When the modal is opened from the storefront/catalog the lazy
+    // init from the chat bubble / presentation may not have run yet, leaving the
+    // tabs and close button inert. This is idempotent.
+    initializeUnifiedChatPanel();
+
     // Open the panel using the standard mechanism
     document.body.classList.add('ucp-panel-open');
     document.body.classList.add('ucp-panel-active');
@@ -1699,6 +1705,11 @@ export async function openUCPForItem(recordId) {
 export async function openUCPGlobalForItem(recordId) {
     const panel = document.getElementById('unified-chat-panel');
     if (!panel) return;
+
+    // Ensure the panel's controls (close button, filter tabs) are wired up — the
+    // lazy init may not have run when opened from the storefront/catalog modal.
+    // Idempotent.
+    initializeUnifiedChatPanel();
 
     document.body.classList.add('ucp-panel-open');
     document.body.classList.add('ucp-panel-active');
