@@ -19710,3 +19710,188 @@ body.presentation-active .rsb-layout-toggle-fab {
         font-size: 0.9em;
     }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Item detail modal — sentiment chips after the name + their anchored popups,
+   and the "In your plan" summary block. (deferred.css is the stylesheet the
+   app actually loads; these rules previously lived only in the unloaded
+   style.css, which is why the popups rendered unstyled / invisible.)
+   ───────────────────────────────────────────────────────────────────────── */
+.modal-item-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.item-emoji-indicator.clickable {
+    cursor: pointer;
+    border: none;
+    font: inherit;
+}
+.item-emoji-indicator.clickable:hover {
+    box-shadow: 0 3px 12px rgba(255, 193, 7, 0.35);
+    transform: scale(1.05);
+}
+
+/* Two scoped sentiment chips after the item name: 🌐 global item & 👥 plan item */
+.item-sentiment-chip .sentiment-chip-scope {
+    font-size: 0.85em;
+    line-height: 1;
+    margin-right: 1px;
+    opacity: 0.85;
+}
+.item-sentiment-chip[data-scope="plan"] {
+    background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+}
+.item-sentiment-chip[data-scope="plan"].has-reactions {
+    background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.22);
+}
+.item-sentiment-chip[data-scope="global"] {
+    background: linear-gradient(135deg, #ecfeff 0%, #cffafe 100%);
+}
+.item-sentiment-chip[data-scope="global"].has-reactions {
+    background: linear-gradient(135deg, #cffafe 0%, #a5f3fc 100%);
+    box-shadow: 0 2px 8px rgba(6, 182, 212, 0.22);
+}
+
+/* Anchored sentiment popup (chat-message style), pinned next to the clicked chip */
+.item-sentiment-popup {
+    position: fixed;
+    z-index: 10001;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+    padding: 10px;
+    min-width: 220px;
+    max-width: 300px;
+    animation: emoji-pop 0.16s ease-out;
+}
+.sentiment-popup-head {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7280;
+    margin-bottom: 6px;
+}
+.sentiment-popup-summary {
+    background: #f9fafb;
+    border-radius: 10px;
+    padding: 7px 9px;
+    margin-bottom: 8px;
+}
+.sentiment-popup-avg {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 5px;
+}
+.sentiment-popup-avg-emoji { font-size: 1.15rem; line-height: 1; }
+.sentiment-popup-avg-score { font-weight: 700; color: #111827; font-size: 0.85rem; }
+.sentiment-popup-avg-label { font-size: 0.72rem; color: #6b7280; }
+.sentiment-popup-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.sentiment-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 1px 6px;
+    font-size: 0.85rem;
+}
+.sentiment-pill-count { font-size: 0.72rem; font-weight: 600; color: #6b7280; }
+.sentiment-popup-picker {
+    display: flex;
+    gap: 2px;
+    flex-wrap: wrap;
+}
+.sentiment-popup-emoji {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    line-height: 1;
+    padding: 4px 5px;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: transform 0.12s ease, background 0.12s ease;
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+}
+.sentiment-popup-emoji:hover { background: #f3f4f6; transform: scale(1.2); }
+.sentiment-popup-emoji.reacted { background: #fef3c7; box-shadow: inset 0 0 0 1.5px #f59e0b; }
+.sentiment-popup-convo {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    padding: 6px 8px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 9px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #374151;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.12s ease;
+}
+.sentiment-popup-convo:hover { background: #f3f4f6; }
+.modal-reactions-section.reactions-flash {
+    animation: reactions-flash 0.9s ease-out;
+}
+@keyframes reactions-flash {
+    0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.55); }
+    100% { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); }
+}
+
+/* "In your plan" confirmation block in the detail modal */
+.modal-in-plan-summary {
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+}
+.modal-in-plan-summary .in-plan-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.modal-in-plan-summary .in-plan-check {
+    color: #059669;
+    font-weight: 700;
+}
+.modal-in-plan-summary .in-plan-title {
+    font-weight: 600;
+    color: #065f46;
+}
+.modal-in-plan-summary .in-plan-react-btn {
+    margin-left: auto;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    background: #fff;
+    border-radius: 14px;
+    padding: 3px 10px;
+    font-size: 0.85em;
+    cursor: pointer;
+}
+.modal-in-plan-summary .in-plan-react-btn:hover {
+    background: #f0fdf4;
+}
+.modal-in-plan-summary .in-plan-details {
+    margin-top: 4px;
+    color: #047857;
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.modal-in-plan-summary .in-plan-sep {
+    opacity: 0.5;
+}
+.modal-in-plan-summary .in-plan-note {
+    margin-top: 4px;
+    color: #065f46;
+    font-size: 0.85em;
+    font-style: italic;
+}
