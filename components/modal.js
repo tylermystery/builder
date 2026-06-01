@@ -4,7 +4,7 @@ console.log('[MODULE DEBUG] modal.js module starting to load...', performance.no
 import { state, getRecordById, getAggregateReactions, invalidateRecordsIndex } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
-import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage } from '../config.js';
+import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage, scoreToAdjective } from '../config.js';
 import { getCurrentUser } from '../chat.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration } from '../utils.js';
 import { log } from '../utils/debug.js';
@@ -1924,7 +1924,7 @@ export function renderSentimentChip(chip, recordId, scope) {
         chip.classList.add('has-reactions');
         chip.classList.remove('no-reactions');
         const sign = s.democraticAverage >= 0 ? '+' : '';
-        chip.title = `${label} sentiment ${s.summaryEmoji} (${sign}${s.democraticAverage.toFixed(1)}) · ${s.total} reaction${s.total !== 1 ? 's' : ''} — tap to weigh in`;
+        chip.title = `${label} sentiment ${s.summaryEmoji} ${scoreToAdjective(s.democraticAverage)} (${sign}${s.democraticAverage.toFixed(1)}) · ${s.total} reaction${s.total !== 1 ? 's' : ''} — tap to weigh in`;
     } else {
         chip.innerHTML = `<span class="sentiment-chip-scope">${icon}</span><span class="emoji-indicator-prompt">React</span>`;
         chip.classList.remove('has-reactions');
@@ -2010,12 +2010,17 @@ function openItemSentimentPopup(anchorEl, recordId, scope) {
         const sign = s.democraticAverage >= 0 ? '+' : '';
         const pills = Object.entries(s.emojiCounts)
             .sort((a, b) => b[1] - a[1])
-            .map(([e, c]) => `<span class="sentiment-pill">${e}<span class="sentiment-pill-count">${c}</span></span>`)
+            .map(([e, c]) => {
+                const eScore = REACTION_SCORES[e] || 0;
+                const title = `${e} ${eScore >= 0 ? '+' : ''}${eScore.toFixed(1)} · ${scoreToAdjective(eScore)}`;
+                return `<span class="sentiment-pill" title="${title}">${e}<span class="sentiment-pill-count">${c}</span></span>`;
+            })
             .join('');
         summary.innerHTML = `
             <div class="sentiment-popup-avg">
                 <span class="sentiment-popup-avg-emoji">${s.summaryEmoji}</span>
                 <span class="sentiment-popup-avg-score">${sign}${s.democraticAverage.toFixed(1)}</span>
+                <span class="sentiment-popup-avg-word">${scoreToAdjective(s.democraticAverage)}</span>
                 <span class="sentiment-popup-avg-label">avg · ${s.total} reaction${s.total !== 1 ? 's' : ''}</span>
             </div>
             <div class="sentiment-popup-pills">${pills}</div>
@@ -2031,7 +2036,7 @@ function openItemSentimentPopup(anchorEl, recordId, scope) {
         btn.className = 'sentiment-popup-emoji' + (s.mine.has(emoji) ? ' reacted' : '');
         btn.textContent = emoji;
         const score = REACTION_SCORES[emoji] || 0;
-        btn.title = `${emoji} ${score >= 0 ? '+' : ''}${score.toFixed(1)}`;
+        btn.title = `${emoji} ${score >= 0 ? '+' : ''}${score.toFixed(1)} · ${scoreToAdjective(score)}`;
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             toggleScopeReaction(recordId, scope, emoji, anchorEl);
@@ -2109,7 +2114,7 @@ function refreshInPlanReactButton(recordId) {
     if (planS.has) {
         btn.innerHTML = `👥 ${planS.summaryEmoji}${planS.total > 1 ? ` ${planS.total}` : ''}`;
         const sign = planS.democraticAverage >= 0 ? '+' : '';
-        btn.title = `Plan sentiment ${planS.summaryEmoji} (${sign}${planS.democraticAverage.toFixed(1)}) · ${planS.total} reaction${planS.total !== 1 ? 's' : ''} — tap to weigh in`;
+        btn.title = `Plan sentiment ${planS.summaryEmoji} ${scoreToAdjective(planS.democraticAverage)} (${sign}${planS.democraticAverage.toFixed(1)}) · ${planS.total} reaction${planS.total !== 1 ? 's' : ''} — tap to weigh in`;
         btn.classList.add('has-reactions');
     } else {
         btn.innerHTML = '👥 React';
@@ -2155,7 +2160,7 @@ function renderInPlanSummary(record, itemState, isLocked) {
     if (planS.has) {
         reactLabel = `👥 ${planS.summaryEmoji}${planS.total > 1 ? ` ${planS.total}` : ''}`;
         const sign = planS.democraticAverage >= 0 ? '+' : '';
-        reactTitle = `Plan sentiment ${planS.summaryEmoji} (${sign}${planS.democraticAverage.toFixed(1)}) · ${planS.total} reaction${planS.total !== 1 ? 's' : ''} — tap to weigh in`;
+        reactTitle = `Plan sentiment ${planS.summaryEmoji} ${scoreToAdjective(planS.democraticAverage)} (${sign}${planS.democraticAverage.toFixed(1)}) · ${planS.total} reaction${planS.total !== 1 ? 's' : ''} — tap to weigh in`;
     } else {
         reactLabel = '👥 React';
         reactTitle = 'Plan sentiment — no reactions yet, tap to react';
@@ -2393,7 +2398,7 @@ function buildModalRSBEmojiButton(emoji, recordId, currentUserEmoji) {
     btn.dataset.emoji = emoji;
     btn.dataset.recordId = recordId;
     const score = REACTION_SCORES[emoji] || 0;
-    btn.dataset.scoreLabel = `${score >= 0 ? '+' : ''}${score.toFixed(1)}`;
+    btn.dataset.scoreLabel = `${score >= 0 ? '+' : ''}${score.toFixed(1)} · ${scoreToAdjective(score)}`;
 
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -2476,6 +2481,7 @@ function buildModalRSBRadialGrid(container, recordId, currentUserEmoji, parentCo
         <span class="rsb-radial-center-emoji">${summaryEmoji}</span>
         <span class="rsb-radial-center-score">${avgScore !== 0 ? (avgScore >= 0 ? '+' : '') + avgScore.toFixed(1) : ''}</span>
     `;
+    if (avgScore !== 0) center.title = `${avgScore >= 0 ? '+' : ''}${avgScore.toFixed(1)} · ${scoreToAdjective(avgScore)}`;
     radial.appendChild(center);
 
     const tiers = EMOJI_TIERS;
@@ -2690,6 +2696,7 @@ function buildModalRSBSummaryContent(container, recordId) {
         const score = REACTION_SCORES[emoji] || 0;
         const pill = document.createElement('span');
         pill.className = 'rsb-summary-pill';
+        pill.title = `${emoji} ${score >= 0 ? '+' : ''}${score.toFixed(1)} · ${scoreToAdjective(score)}`;
         pill.innerHTML = `
             <span class="rsb-summary-pill-emoji">${emoji}</span>
             <span class="rsb-summary-pill-count">${count}</span>
@@ -2718,6 +2725,7 @@ function buildModalRSBSummaryContent(container, recordId) {
     avgDiv.innerHTML = `
         <span class="rsb-summary-avg-emoji">${closestEmoji}</span>
         <span class="rsb-summary-avg-label">Average Sentiment</span>
+        <span class="rsb-summary-avg-word">${scoreToAdjective(democraticAverage)}</span>
         <span class="rsb-summary-avg-score">${democraticAverage >= 0 ? '+' : ''}${democraticAverage.toFixed(2)}</span>
     `;
     summaryDiv.appendChild(avgDiv);

@@ -143,6 +143,44 @@ export const REACTION_SCORES = {
     '🪤': -2.88, '🪃': 1.32, '🪙': 1.78, '⚱️': -1.44
 };
 
+// ─── Score → Adjective Mapping ───────────────────────────────────────────────
+// A single shared vocabulary so that every place a sentiment score is shown — the
+// aggregate community average (chips, popups, summaries) and the fixed score of an
+// individual emoji (picker tooltips) — can pair the number with a plain-language
+// word. The bands are symmetric across the −4.9…+4.9 scale used by REACTION_SCORES
+// and the feeling-based wording reads naturally for both an aggregate ("the
+// community is Loved on this") and a single emoji ("🚀 +4.9 · Ecstatic").
+//
+// Note: this maps a numeric score only. The "no reactions yet" state has no score
+// and is intentionally left wordless by its callers — an untouched item is never
+// labelled "Neutral".
+export const SCORE_ADJECTIVE_BANDS = [
+    { min: 4.0, label: 'Ecstatic' },
+    { min: 3.0, label: 'Adored' },
+    { min: 2.0, label: 'Loved' },
+    { min: 1.0, label: 'Liked' },
+    { min: -1.0, label: 'Neutral' },
+    { min: -2.0, label: 'Lukewarm' },
+    { min: -3.0, label: 'Disliked' },
+    { min: -4.0, label: 'Rough' },
+    { min: -Infinity, label: 'Panned' },
+];
+
+/**
+ * Map a sentiment score to its plain-language adjective. Used everywhere a score
+ * is displayed so a number is never shown alone.
+ * @param {number} score - A value on the REACTION_SCORES scale (~ −4.9…+4.9).
+ * @returns {string} The matching adjective (e.g. "Loved").
+ */
+export function scoreToAdjective(score) {
+    const n = Number(score);
+    if (!Number.isFinite(n)) return 'Neutral';
+    for (const band of SCORE_ADJECTIVE_BANDS) {
+        if (n >= band.min) return band.label;
+    }
+    return 'Neutral';
+}
+
 // Tiered emoji picker for the detail modal - begins standard, scrolls to obscure
 // Each tier has a label, description, and the emojis get progressively more unusual
 export const EMOJI_TIERS = [

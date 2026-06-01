@@ -5,6 +5,7 @@
  */
 
 import { log } from '../../utils/debug.js';
+import { scoreToAdjective } from '../../config.js';
 
 // Module state
 let activeRSBPanel = null;
@@ -373,7 +374,7 @@ function buildRSBEmojiButton(emoji, recordId, currentUserEmoji) {
     btn.dataset.emoji = emoji;
     btn.dataset.recordId = recordId;
     const score = _deps.REACTION_SCORES[emoji] || 0;
-    btn.dataset.scoreLabel = `${score >= 0 ? '+' : ''}${score.toFixed(1)}`;
+    btn.dataset.scoreLabel = `${score >= 0 ? '+' : ''}${score.toFixed(1)} · ${scoreToAdjective(score)}`;
 
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -402,6 +403,7 @@ function buildRSBRadialGrid(container, recordId, currentUserEmoji, isModal) {
         <span class="rsb-radial-center-emoji">${summaryEmoji}</span>
         <span class="rsb-radial-center-score">${avgScore !== 0 ? (avgScore >= 0 ? '+' : '') + avgScore.toFixed(1) : ''}</span>
     `;
+    if (avgScore !== 0) center.title = `${avgScore >= 0 ? '+' : ''}${avgScore.toFixed(1)} · ${scoreToAdjective(avgScore)}`;
     radial.appendChild(center);
 
     const tiers = _deps.EMOJI_TIERS;
@@ -579,6 +581,7 @@ function buildRSBSummaryContent(container, recordId) {
         const score = _deps.REACTION_SCORES[emoji] || 0;
         const pill = document.createElement('span');
         pill.className = 'rsb-summary-pill';
+        pill.title = `${emoji} ${score >= 0 ? '+' : ''}${score.toFixed(1)} · ${scoreToAdjective(score)}`;
         pill.innerHTML = `
             <span class="rsb-summary-pill-emoji">${emoji}</span>
             <span class="rsb-summary-pill-count">${count}</span>
@@ -608,6 +611,7 @@ function buildRSBSummaryContent(container, recordId) {
     avgDiv.innerHTML = `
         <span class="rsb-summary-avg-emoji">${democraticEmoji}</span>
         <span class="rsb-summary-avg-label">Average Sentiment</span>
+        <span class="rsb-summary-avg-word">${scoreToAdjective(avg)}</span>
         <span class="rsb-summary-avg-score">${avg >= 0 ? '+' : ''}${avg.toFixed(2)}</span>
     `;
     summaryDiv.appendChild(avgDiv);

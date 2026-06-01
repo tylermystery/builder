@@ -6186,6 +6186,7 @@ body.presentation-active #chat-widget {
 }
 .sentiment-popup-avg-emoji { font-size: 1.15rem; line-height: 1; }
 .sentiment-popup-avg-score { font-weight: 700; color: #111827; font-size: 0.85rem; }
+.sentiment-popup-avg-word { font-weight: 600; color: #4338ca; font-size: 0.78rem; }
 .sentiment-popup-avg-label { font-size: 0.72rem; color: #6b7280; }
 .sentiment-popup-pills { display: flex; flex-wrap: wrap; gap: 4px; }
 .sentiment-pill {
