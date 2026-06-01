@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "dependencies": {
     "@netlify/blobs": "^8.1.0",
+    "@netlify/database": "^1.0.0",
     "@sendgrid/mail": "^8.1.3",
     "agora-token": "^2.0.5",
     "bcryptjs": "^2.4.3",
+    "drizzle-orm": "^1.0.0-beta.22",
     "jsonwebtoken": "^9.0.2",
     "node-fetch": "^2.6.7",
     "node-ical": "^0.26.1",
@@ -17,6 +19,7 @@
     "build": "node build.js"
   },
   "devDependencies": {
-    "@netlify/edge-functions": "^3.0.3"
+    "@netlify/edge-functions": "^3.0.3",
+    "drizzle-kit": "^1.0.0-beta.22"
   }
 }
