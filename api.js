@@ -6567,16 +6567,34 @@ export async function addPublicVariation(payload) {
     }
 }
 
+// Build the "which target" portion of a reaction/comment write body. Either an
+// explicit publicItemId (a promoted idea or an already-created container) or, for
+// an ordinary catalog item with no container yet, a catalogItemId + storeId plus
+// light metadata the server uses to create the container on first interaction.
+function publicWriteTarget(publicItemId, opts = {}) {
+    if (publicItemId != null) return { publicItemId };
+    const t = { catalogItemId: opts.catalogItemId, storeId: opts.storeId };
+    if (opts.name != null) t.name = opts.name;
+    if (opts.description != null) t.description = opts.description;
+    if (opts.imageUrl != null) t.imageUrl = opts.imageUrl;
+    if (opts.price != null) t.price = opts.price;
+    if (opts.data != null) t.data = opts.data;
+    return t;
+}
+
 // Toggle one emoji reaction from the current user on an item (or variation).
-// Returns { reacted: boolean } on success, or null when logged out / on error.
-export async function togglePublicReaction(publicItemId, emoji, variationId = null) {
+// `publicItemId` may be null when reacting to a catalog item that has no
+// community container yet — pass `opts.catalogItemId` + `opts.storeId` and the
+// server creates one. Returns { reacted, publicItemId } on success, or null when
+// logged out / on error.
+export async function togglePublicReaction(publicItemId, emoji, variationId = null, opts = {}) {
     const headers = publicCatalogAuthHeaders();
     if (!headers) return null;
     try {
         const response = await fetch(`${PUBLIC_CATALOG_BASE}/reactions`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ publicItemId, emoji, variationId })
+            body: JSON.stringify({ ...publicWriteTarget(publicItemId, opts), emoji, variationId })
         });
         if (!response.ok) return null;
         return await response.json();
@@ -6586,15 +6604,17 @@ export async function togglePublicReaction(publicItemId, emoji, variationId = nu
     }
 }
 
-// Add a comment to a public item (or variation). Returns the created comment.
-export async function addPublicComment(publicItemId, body, authorName = null, variationId = null) {
+// Add a comment to a public item (or variation). `publicItemId` may be null for a
+// catalog item with no container yet (pass `opts.catalogItemId` + `opts.storeId`).
+// Returns the created comment (which carries its resolved publicItemId).
+export async function addPublicComment(publicItemId, body, authorName = null, variationId = null, opts = {}) {
     const headers = publicCatalogAuthHeaders();
     if (!headers) return null;
     try {
         const response = await fetch(`${PUBLIC_CATALOG_BASE}/comments`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ publicItemId, body, authorName, variationId })
+            body: JSON.stringify({ ...publicWriteTarget(publicItemId, opts), body, authorName, variationId })
         });
         if (!response.ok) return null;
         const data = await response.json();

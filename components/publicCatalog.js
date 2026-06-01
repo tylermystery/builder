@@ -34,6 +34,12 @@ export const PUBLIC_IDEA_STATUS = 'Public Idea';
 // and comments so the modal can re-render without a full refetch.
 const publicIdeaIndex = new Map();
 
+// catalogItemId (an ordinary catalog item's stable id) -> its community container
+// row. These rows back the "Community" card on existing curated catalog items.
+// A row may have a null `id` until the first interaction lazily creates it server
+// side; from then on `id` is the public_items id used for subsequent writes.
+const communityRowByCatalogId = new Map();
+
 // True for a catalog record that originated from the public layer.
 export function isPublicIdeaRecord(record) {
     return !!(record && (record.isPublicIdea || (typeof record.id === 'string' && record.id.startsWith('public-'))));
@@ -80,9 +86,20 @@ function transformPublicRowToRecord(row, storeId) {
 }
 
 // Replace any previously injected public-idea records for this store with `rows`,
-// keeping the rest of state.records.all untouched.
+// keeping the rest of state.records.all untouched. Rows that are community
+// containers for existing catalog items (they carry a `catalogItemId`) are NOT
+// injected as catalog records — they would duplicate the curated item. They are
+// stashed in `communityRowByCatalogId` so the item's Community card can use them.
 function injectPublicRecords(rows, storeId) {
-    const fresh = new Set(rows.map(publicRecordId));
+    // Refresh the catalog-item community containers for this store.
+    communityRowByCatalogId.clear();
+    const ideaRows = [];
+    for (const row of rows) {
+        if (row.catalogItemId) communityRowByCatalogId.set(row.catalogItemId, row);
+        else ideaRows.push(row);
+    }
+
+    const fresh = new Set(ideaRows.map(publicRecordId));
 
     // Drop stale public records that belonged to this store (by store match) and
     // are no longer present, so re-loads don't accumulate duplicates.
@@ -94,7 +111,7 @@ function injectPublicRecords(rows, storeId) {
     });
 
     publicIdeaIndex.clear();
-    for (const row of rows) {
+    for (const row of ideaRows) {
         const record = transformPublicRowToRecord(row, storeId);
         publicIdeaIndex.set(record.id, row);
         const existingIdx = state.records.all.findIndex(r => r.id === record.id);
@@ -180,7 +197,14 @@ export async function publishItemToPublicLayer(record, source = 'custom') {
     }
 }
 
-// --- Detail-modal reactions & comments for public-idea items ---------------
+// --- Detail-modal reactions & comments (the "Community" layer) --------------
+//
+// This panel renders the GLOBAL community reactions/comments for ANY catalog
+// item — promoted "Public Idea" items (which are their own public row) and
+// ordinary curated catalog items alike. For an ordinary item the community
+// container is created lazily on the first reaction/comment, so the catalog is
+// never pre-seeded. The per-plan ("This Plan") layer is rendered separately by
+// the modal and is untouched here.
 
 function currentUser() {
     const u = state.session?.user || {};
@@ -200,17 +224,58 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+function storeIdForRecord(record) {
+    if (state.ui?.activeShopId) return state.ui.activeShopId;
+    const stores = record?.fields?.Stores;
+    return Array.isArray(stores) && stores.length ? stores[0] : null;
+}
+
+// The metadata the server uses to create a catalog item's community container on
+// first interaction. Kept lightweight — the curated item itself still renders
+// from Airtable, so the container only needs enough to identify itself.
+function communityWriteOpts(record) {
+    const f = record.fields || {};
+    return {
+        catalogItemId: record.id,
+        storeId: storeIdForRecord(record),
+        name: f.Name || 'Catalog item',
+        description: f.Description || '',
+        imageUrl: f.imageUrl || record.publicImageUrl || null,
+        price: f.Price != null ? String(f.Price) : null
+    };
+}
+
+// Resolve the community row backing a record. Promoted ideas are their own row
+// (in publicIdeaIndex). Ordinary items get a synthetic, initially-empty row whose
+// `id` stays null until the first interaction creates it server side.
+function getOrInitCommunityRow(record) {
+    if (isPublicIdeaRecord(record)) {
+        return publicIdeaIndex.get(record.id) || null;
+    }
+    let row = communityRowByCatalogId.get(record.id);
+    if (!row) {
+        row = { id: null, catalogItemId: record.id, reactions: {}, comments: [] };
+        communityRowByCatalogId.set(record.id, row);
+    }
+    return row;
+}
+
 /**
- * Render the public reactions + comments accordion for a public-idea record into
- * the modal's reactions section. Mirrors the look of the normal modal reaction
- * accordion but is backed entirely by the public API.
+ * Render the Community reactions + comments accordion for a record into the given
+ * section. Works for every item; backed entirely by the public API.
+ * @param {HTMLElement} section
+ * @param {object} record
+ * @param {{expanded?: boolean}} [opts] - start expanded? (default true)
  */
-export function renderPublicReactions(section, record) {
-    const row = publicIdeaIndex.get(record.id);
+export function renderPublicReactions(section, record, opts = {}) {
+    const row = getOrInitCommunityRow(record);
     if (!row) { section.style.display = 'none'; return; }
 
+    const expanded = opts.expanded !== false;
+
     section.style.display = 'block';
-    section.className = 'modal-reactions-section modal-rsb-host public-reactions-host';
+    // Additive so a host wrapper class (e.g. modal-community-layer) is preserved.
+    section.classList.add('modal-rsb-host', 'public-reactions-host');
 
     const reactionTotal = Object.values(row.reactions || {}).reduce((sum, r) => sum + (r.count || 0), 0);
     const commentCount = (row.comments || []).length;
@@ -223,27 +288,27 @@ export function renderPublicReactions(section, record) {
         summaryParts.push(`${top} ${reactionTotal} reaction${reactionTotal !== 1 ? 's' : ''}`);
     }
     if (commentCount > 0) summaryParts.push(`💬 ${commentCount} comment${commentCount !== 1 ? 's' : ''}`);
-    const summaryText = summaryParts.length ? summaryParts.join(' · ') : 'React & Comment on this community idea';
+    const summaryText = summaryParts.length ? summaryParts.join(' · ') : 'React & comment with the community';
 
     section.innerHTML = '';
 
     const header = document.createElement('button');
     header.type = 'button';
-    header.className = 'modal-rsb-accordion-header expanded';
+    header.className = 'modal-rsb-accordion-header' + (expanded ? ' expanded' : '');
     header.innerHTML = `
-        <span class="modal-rsb-accordion-chevron">▾</span>
+        <span class="modal-rsb-accordion-chevron">${expanded ? '▾' : '▸'}</span>
         <span class="modal-rsb-accordion-summary">${escapeHtml(summaryText)}</span>
-        <span class="public-reactions-tag">Community</span>
+        <span class="public-reactions-tag">🌐 Community</span>
     `;
 
     const body = document.createElement('div');
-    body.className = 'modal-rsb-accordion-body expanded public-reactions-body';
+    body.className = 'modal-rsb-accordion-body public-reactions-body' + (expanded ? ' expanded' : '');
 
     header.addEventListener('click', (e) => {
         e.stopPropagation();
-        const expanded = body.classList.toggle('expanded');
-        header.classList.toggle('expanded', expanded);
-        header.querySelector('.modal-rsb-accordion-chevron').textContent = expanded ? '▾' : '▸';
+        const isOpen = body.classList.toggle('expanded');
+        header.classList.toggle('expanded', isOpen);
+        header.querySelector('.modal-rsb-accordion-chevron').textContent = isOpen ? '▾' : '▸';
     });
 
     body.appendChild(buildReactionRow(section, record, row));
@@ -251,6 +316,11 @@ export function renderPublicReactions(section, record) {
 
     section.appendChild(header);
     section.appendChild(body);
+}
+
+// Re-render the community panel keeping it open (the user just interacted).
+function rerenderOpen(section, record) {
+    renderPublicReactions(section, record, { expanded: true });
 }
 
 function buildReactionRow(section, record, row) {
@@ -269,11 +339,14 @@ function buildReactionRow(section, record, row) {
             e.stopPropagation();
             if (!requireSignIn()) return;
             btn.disabled = true;
-            const result = await api.togglePublicReaction(row.id, emoji, null);
+            // No container yet -> send catalog identity so the server creates one.
+            const result = await api.togglePublicReaction(
+                row.id, emoji, null, row.id == null ? communityWriteOpts(record) : {});
             btn.disabled = false;
             if (!result) return;
+            if (row.id == null && result.publicItemId != null) row.id = result.publicItemId;
             applyReactionToggle(row, emoji, me.id, result.reacted);
-            renderPublicReactions(section, record); // re-render with fresh counts
+            rerenderOpen(section, record);
         });
         wrap.appendChild(btn);
     });
@@ -332,13 +405,15 @@ function buildCommentsBlock(section, record, row) {
         const text = ta.value.trim();
         if (!text) { ta.focus(); return; }
         sendBtn.disabled = true;
-        const created = await api.addPublicComment(row.id, text, me.name, null);
+        const created = await api.addPublicComment(
+            row.id, text, me.name, null, row.id == null ? communityWriteOpts(record) : {});
         sendBtn.disabled = false;
         if (!created) return;
+        if (row.id == null && created.publicItemId != null) row.id = created.publicItemId;
         row.comments = row.comments || [];
         row.comments.push(created);
         ta.value = '';
-        renderPublicReactions(section, record);
+        rerenderOpen(section, record);
     });
     composer.appendChild(ta);
     composer.appendChild(sendBtn);
@@ -367,7 +442,7 @@ function buildCommentEl(section, record, row, comment, me) {
             const ok = await api.deletePublicResource('comments', comment.id);
             if (!ok) { del.disabled = false; return; }
             row.comments = (row.comments || []).filter(c => c.id !== comment.id);
-            renderPublicReactions(section, record);
+            rerenderOpen(section, record);
         });
         el.appendChild(del);
     }

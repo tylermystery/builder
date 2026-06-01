@@ -6467,6 +6467,47 @@ hr.total-divider {
     display: block;
 }
 
+/* ---- Two stacked layers in the detail modal: This Plan (elevated) over
+   Community (grounded). The plan layer reads as the contextual layer sitting on
+   top of the permanent community layer. ---------------------------------- */
+.modal-reactions-section.modal-reactions-layers {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+/* Elevated "This Plan" layer */
+.modal-plan-layer {
+    border: 1px solid rgba(37, 99, 235, 0.18);
+    border-left: 3px solid #2563eb;
+    border-radius: 10px;
+    padding: 6px;
+    background: rgba(239, 246, 255, 0.6);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+}
+.modal-plan-layer .rsb-panel--modal {
+    max-height: 55vh;
+}
+/* Grounded "Community" layer */
+.modal-community-layer {
+    border: 1px solid rgba(15, 23, 42, 0.07);
+    border-radius: 10px;
+    padding: 6px;
+    background: rgba(248, 250, 252, 0.55);
+}
+/* "This Plan" tag on the plan accordion header (blue, vs the community purple) */
+.plan-reactions-tag {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-size: 0.72em;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    color: #1d4ed8;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
 /* ---- Public community ("Public Idea") layer ---------------------------- */
 
 /* Card badge marking a community-contributed public idea */

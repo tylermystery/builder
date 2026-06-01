@@ -39,8 +39,16 @@ export const publicItems = pgTable(
     id: serial().primaryKey(),
     // Airtable store record id — enforces "public within the originating store".
     storeId: text("store_id").notNull(),
-    // 'ai' | 'custom' | 'solution'
+    // 'ai' | 'custom' | 'solution' | 'catalog'
+    // 'catalog' marks a lightweight community container created lazily the first
+    // time someone reacts to / comments on an EXISTING curated catalog item. Such
+    // a row is not a promoted idea in its own right — it only holds the shared
+    // (community) reactions and comments for that catalog item, keyed below.
     source: text("source").notNull(),
+    // For source='catalog': the stable Airtable id of the curated catalog item
+    // this row carries community reactions/comments for. Null for promoted
+    // AI/custom/solution ideas (which are items in their own right).
+    catalogItemId: text("catalog_item_id"),
     // Provenance back into the legacy session JSON (used for idempotent backfill).
     originSessionId: text("origin_session_id"),
     originItemId: text("origin_item_id"),
@@ -64,6 +72,13 @@ export const publicItems = pgTable(
     originUnique: uniqueIndex("public_items_origin_unique").on(
       t.originSessionId,
       t.originItemId,
+    ),
+    // At most one community container per (store, catalog item). catalog_item_id
+    // is null for promoted ideas, and Postgres treats those nulls as distinct, so
+    // promoted ideas never collide here — only catalog containers are deduped.
+    catalogItemUnique: uniqueIndex("public_items_catalog_item_unique").on(
+      t.storeId,
+      t.catalogItemId,
     ),
   }),
 );

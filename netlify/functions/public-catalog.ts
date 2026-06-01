@@ -9,8 +9,13 @@
 //   GET    /api/public-catalog?storeId=<airtableStoreId>
 //   POST   /api/public-catalog/items        { storeId, source, name, description?, imageUrl?, price?, data?, originSessionId?, originItemId? }
 //   POST   /api/public-catalog/variations   { publicItemId, name?, description?, imageUrl?, price?, data? }
-//   POST   /api/public-catalog/reactions    { publicItemId, variationId?, emoji }   (toggles)
-//   POST   /api/public-catalog/comments     { publicItemId, variationId?, body, authorName? }
+//   POST   /api/public-catalog/reactions    { publicItemId | (catalogItemId + storeId), variationId?, emoji }   (toggles)
+//   POST   /api/public-catalog/comments     { publicItemId | (catalogItemId + storeId), variationId?, body, authorName? }
+//
+// For reactions/comments, passing a `catalogItemId` (+ `storeId`) instead of a
+// `publicItemId` lazily creates a community container (source='catalog') for that
+// existing curated catalog item on first interaction, so any catalog item can
+// gather shared reactions and comments without pre-seeding the whole catalog.
 //   DELETE /api/public-catalog/comments     { id }      (author removes own)
 //   DELETE /api/public-catalog/variations   { id }      (author removes own)
 //   DELETE /api/public-catalog/items        { id }      (author removes own)
@@ -118,6 +123,62 @@ async function getCatalog(storeId: string) {
   });
 }
 
+// Resolve the public item the current write targets. Two modes:
+//   1. An explicit `publicItemId` (a promoted idea, or an already-created
+//      catalog container) — returned as-is.
+//   2. A `catalogItemId` (+ `storeId`) for an existing curated catalog item that
+//      has no community container yet — lazily get-or-create one keyed by
+//      (storeId, catalogItemId) and return its id. The unique index makes this
+//      race-safe: a concurrent insert loses, and we re-read the winner's row.
+// Returns null when neither identifier is usable.
+async function resolvePublicItemId(
+  body: Record<string, unknown>,
+  userId: string,
+): Promise<number | null> {
+  if (body.publicItemId != null) return Number(body.publicItemId);
+
+  const catalogItemId = body.catalogItemId == null ? null : String(body.catalogItemId);
+  const storeId = body.storeId == null ? null : String(body.storeId);
+  if (!catalogItemId || !storeId) return null;
+
+  const find = () =>
+    db
+      .select()
+      .from(publicItems)
+      .where(
+        and(
+          eq(publicItems.storeId, storeId),
+          eq(publicItems.catalogItemId, catalogItemId),
+        ),
+      );
+
+  const existing = await find();
+  if (existing.length > 0) return existing[0].id;
+
+  try {
+    const [row] = await db
+      .insert(publicItems)
+      .values({
+        storeId,
+        source: "catalog",
+        catalogItemId,
+        authorId: userId,
+        name: body.name ? String(body.name) : "Catalog item",
+        description: body.description ? String(body.description) : "",
+        imageUrl: (body.imageUrl as string) ?? null,
+        price: (body.price as string) ?? null,
+        data: body.data ?? null,
+      })
+      .returning();
+    return row.id;
+  } catch {
+    // Most likely the unique guard firing on a concurrent first-interaction.
+    const again = await find();
+    if (again.length > 0) return again[0].id;
+    return null;
+  }
+}
+
 export default async (req: Request) => {
   const url = new URL(req.url);
   // Last path segment is the resource (items|variations|reactions|comments).
@@ -178,9 +239,12 @@ export default async (req: Request) => {
       }
 
       if (resource === "reactions") {
-        if (!body.publicItemId || !body.emoji)
-          return json(400, { error: "publicItemId and emoji are required" });
-        const itemId = Number(body.publicItemId);
+        if (!body.emoji) return json(400, { error: "emoji is required" });
+        const itemId = await resolvePublicItemId(body, userId);
+        if (itemId == null)
+          return json(400, {
+            error: "publicItemId or (catalogItemId + storeId) is required",
+          });
         const variationId =
           body.variationId == null ? null : Number(body.variationId);
         const emoji = String(body.emoji);
@@ -202,21 +266,25 @@ export default async (req: Request) => {
 
         if (existing.length > 0) {
           await db.delete(reactions).where(eq(reactions.id, existing[0].id));
-          return json(200, { reacted: false });
+          return json(200, { reacted: false, publicItemId: itemId });
         }
         await db
           .insert(reactions)
           .values({ publicItemId: itemId, variationId, userId, emoji });
-        return json(201, { reacted: true });
+        return json(201, { reacted: true, publicItemId: itemId });
       }
 
       if (resource === "comments") {
-        if (!body.publicItemId || !body.body)
-          return json(400, { error: "publicItemId and body are required" });
+        if (!body.body) return json(400, { error: "body is required" });
+        const itemId = await resolvePublicItemId(body, userId);
+        if (itemId == null)
+          return json(400, {
+            error: "publicItemId or (catalogItemId + storeId) is required",
+          });
         const [row] = await db
           .insert(comments)
           .values({
-            publicItemId: Number(body.publicItemId),
+            publicItemId: itemId,
             variationId:
               body.variationId == null ? null : Number(body.variationId),
             userId,

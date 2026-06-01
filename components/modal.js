@@ -20,7 +20,7 @@ import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
 import { openActionMenu } from './actionMenu.js';
 import { syncPlanState as syncPlanStateAcrossViews } from '../utils/planStateSync.js';
-import { isPublicIdeaRecord, renderPublicReactions } from './publicCatalog.js';
+import { renderPublicReactions } from './publicCatalog.js';
 
 console.log('[MODULE DEBUG] modal.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -1798,38 +1798,62 @@ function getModalRSBLayout() {
 }
 
 /**
- * Initialize the reactions section in the detail modal.
- * Replaces the old quick bar + tiered picker with the consolidated RSB panel.
+ * Initialize the reactions section in the detail modal as two stacked layers:
+ *
+ *   • "This Plan" (top, elevated) — the per-plan reactions/comments for this item,
+ *     rendered only when the modal is opened inside a plan or presentation.
+ *     Expanded by default (the viewer's current focus).
+ *   • "Community" (bottom, grounded) — the GLOBAL reactions/comments shared by
+ *     everyone, backed by the public catalog API. Always present, for every item.
+ *     Collapsed when a plan layer sits above it; expanded when it stands alone in
+ *     the catalog view.
+ *
  * @param {string} recordId - The item record ID
  */
 function initModalReactions(recordId) {
     const section = document.getElementById('modal-reactions-section');
     if (!section) return;
 
-    // Public-idea items show GLOBAL community reactions/comments (backed by the
-    // public catalog API) rather than the per-plan session reactions used for
-    // ordinary items. The plan view keeps its own per-plan thread untouched.
     const record = getRecordById(recordId);
-    if (record && isPublicIdeaRecord(record)) {
-        renderPublicReactions(section, record);
-        return;
-    }
 
     const hasSession = state.session.id && state.session.id.startsWith('rec');
     const isPresentationActive = document.body.classList.contains('presentation-active');
+    const inPlan = hasSession || isPresentationActive;
 
-    if (!hasSession && !isPresentationActive) {
-        section.style.display = 'none';
-        return;
+    // Reset the host into a two-layer container.
+    section.style.display = 'block';
+    section.innerHTML = '';
+    section.className = 'modal-reactions-section modal-reactions-layers';
+
+    // Top layer — "This Plan" (elevated), only inside a plan / presentation.
+    if (inPlan) {
+        const planCard = buildPlanReactionsCard(recordId, true);
+        if (planCard) section.appendChild(planCard);
     }
 
-    section.style.display = 'block';
+    // Bottom layer — "Community" (always). Expanded only when it stands alone.
+    if (record) {
+        const communityCard = document.createElement('div');
+        communityCard.className = 'modal-community-layer';
+        section.appendChild(communityCard);
+        renderPublicReactions(communityCard, record, { expanded: !inPlan });
+    }
 
-    // Clear old content and replace with consolidated RSB inside an accordion
-    section.innerHTML = '';
-    section.className = 'modal-reactions-section modal-rsb-host';
+    // Nothing to show at all — hide the host.
+    if (!section.children.length) {
+        section.style.display = 'none';
+    }
+}
 
-    // Build summary text for collapsed state
+/**
+ * Build the "This Plan" reactions card (the existing per-plan RSB accordion),
+ * labelled and ready to sit above the Community layer. Returns the card element.
+ */
+function buildPlanReactionsCard(recordId, startExpanded) {
+    const card = document.createElement('div');
+    card.className = 'modal-plan-layer modal-rsb-host';
+
+    // Build summary text for the collapsed state.
     const allReactions = getAggregateReactions(recordId);
     let reactionCount = 0;
     if (allReactions instanceof Map) {
@@ -1863,11 +1887,8 @@ function initModalReactions(recordId) {
         }
         summaryText = parts.join(' · ');
     } else {
-        summaryText = 'React & Comment';
+        summaryText = 'React & comment within this plan';
     }
-
-    // Accordion: expanded in presentation, collapsed in catalog
-    const startExpanded = isPresentationActive;
 
     // Accordion header
     const header = document.createElement('button');
@@ -1876,14 +1897,13 @@ function initModalReactions(recordId) {
     header.innerHTML = `
         <span class="modal-rsb-accordion-chevron">${startExpanded ? '▾' : '▸'}</span>
         <span class="modal-rsb-accordion-summary">${summaryText}</span>
+        <span class="plan-reactions-tag">👥 This Plan</span>
     `;
 
     // Accordion body
     const body = document.createElement('div');
     body.className = 'modal-rsb-accordion-body' + (startExpanded ? ' expanded' : '');
-
-    const panel = buildModalRSBPanelDOM(recordId);
-    body.appendChild(panel);
+    body.appendChild(buildModalRSBPanelDOM(recordId));
 
     header.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1892,8 +1912,9 @@ function initModalReactions(recordId) {
         header.querySelector('.modal-rsb-accordion-chevron').textContent = isExpanded ? '▾' : '▸';
     });
 
-    section.appendChild(header);
-    section.appendChild(body);
+    card.appendChild(header);
+    card.appendChild(body);
+    return card;
 }
 
 /**
