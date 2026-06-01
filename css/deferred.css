@@ -19878,6 +19878,12 @@ body.presentation-active .rsb-layout-toggle-fab {
 .modal-in-plan-summary .in-plan-react-btn:hover {
     background: #f0fdf4;
 }
+.modal-in-plan-summary .in-plan-react-btn.has-reactions {
+    background: #ecfdf5;
+    border-color: rgba(16, 185, 129, 0.6);
+    font-weight: 600;
+    color: #065f46;
+}
 .modal-in-plan-summary .in-plan-details {
     margin-top: 4px;
     color: #047857;

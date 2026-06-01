@@ -1939,23 +1939,21 @@ function renderSentimentChip(chip, recordId, scope) {
 }
 
 /**
- * Refresh both sentiment chips after the item name: the global-item chip (always)
- * and the plan-item chip (only inside a plan / presentation). Two distinct, local
- * controls — one per store — so the modal reads cleanly.
+ * Refresh the sentiment chip after the item name. Only the global-item chip lives
+ * here now — the plan-item sentiment is surfaced by the button inside the "In your
+ * plan" block instead, so the item name carries just the one glanceable marker.
  */
 function updateModalSentimentChips(recordId) {
     const globalChip = document.getElementById('modal-item-sentiment-chip');
     const planChip = document.getElementById('modal-plan-sentiment-chip');
+    // The plan-item chip is retired from the name row; the "In your plan" button
+    // is now the plan sentiment control (see renderInPlanSummary).
+    if (planChip) planChip.style.display = 'none';
     if (!recordId) {
         if (globalChip) globalChip.style.display = 'none';
-        if (planChip) planChip.style.display = 'none';
         return;
     }
     if (globalChip) renderSentimentChip(globalChip, recordId, 'global');
-    if (planChip) {
-        if (modalIsInPlanContext()) renderSentimentChip(planChip, recordId, 'plan');
-        else planChip.style.display = 'none';
-    }
 }
 
 // ── Anchored sentiment popup (chat-message style) ───────────────────────────
@@ -2088,8 +2086,30 @@ async function toggleScopeReaction(recordId, scope, emoji, anchorEl) {
         if (!ok) return; // signed out (sign-in prompt shown) or errored
     }
     updateModalSentimentChips(recordId);
+    if (scope === 'plan') refreshInPlanReactButton(recordId);
     // Re-open the popup in place to show the updated picker/summary.
     openItemSentimentPopup(anchorEl, recordId, scope);
+}
+
+/**
+ * Re-render just the label/title of the "In your plan" sentiment button so it
+ * reflects the latest plan-item summary after a reaction is toggled, without
+ * rebuilding the whole block.
+ */
+function refreshInPlanReactButton(recordId) {
+    const btn = document.querySelector('#modal-in-plan-summary .in-plan-react-btn');
+    if (!btn) return;
+    const planS = getScopeSentiment(recordId, 'plan');
+    if (planS.has) {
+        btn.innerHTML = `👥 ${planS.summaryEmoji}${planS.total > 1 ? ` ${planS.total}` : ''}`;
+        const sign = planS.democraticAverage >= 0 ? '+' : '';
+        btn.title = `Plan sentiment ${planS.summaryEmoji} (${sign}${planS.democraticAverage.toFixed(1)}) · ${planS.total} reaction${planS.total !== 1 ? 's' : ''} — tap to weigh in`;
+        btn.classList.add('has-reactions');
+    } else {
+        btn.innerHTML = '👥 React';
+        btn.title = 'Plan sentiment — no reactions yet, tap to react';
+        btn.classList.remove('has-reactions');
+    }
 }
 
 /**
@@ -2121,11 +2141,24 @@ function renderInPlanSummary(record, itemState, isLocked) {
     const block = document.createElement('div');
     block.id = 'modal-in-plan-summary';
     block.className = 'modal-in-plan-summary';
+    // The plan sentiment control now lives here, as the block's button: it shows
+    // the plan-item summary emoji and count (or a "React" prompt) and opens the
+    // anchored plan sentiment popup. The name row keeps only the global chip.
+    const planS = getScopeSentiment(record.id, 'plan');
+    let reactLabel, reactTitle;
+    if (planS.has) {
+        reactLabel = `👥 ${planS.summaryEmoji}${planS.total > 1 ? ` ${planS.total}` : ''}`;
+        const sign = planS.democraticAverage >= 0 ? '+' : '';
+        reactTitle = `Plan sentiment ${planS.summaryEmoji} (${sign}${planS.democraticAverage.toFixed(1)}) · ${planS.total} reaction${planS.total !== 1 ? 's' : ''} — tap to weigh in`;
+    } else {
+        reactLabel = '👥 React';
+        reactTitle = 'Plan sentiment — no reactions yet, tap to react';
+    }
     block.innerHTML = `
         <div class="in-plan-head">
             <span class="in-plan-check">✓</span>
             <span class="in-plan-title">In your plan</span>
-            <button type="button" class="in-plan-react-btn" title="Plan sentiment & react">👥 Reactions</button>
+            <button type="button" class="in-plan-react-btn${planS.has ? ' has-reactions' : ''}" title="${escapeHtml(reactTitle)}">${reactLabel}</button>
         </div>
         <div class="in-plan-details">${details.join('<span class="in-plan-sep">·</span>')}</div>
         ${note ? `<div class="in-plan-note">${escapeHtml(note)}</div>` : ''}
