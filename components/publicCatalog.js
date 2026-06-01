@@ -104,6 +104,20 @@ function injectPublicRecords(rows, storeId) {
     invalidateRecordsIndex();
 }
 
+// Inject (or refresh) a single public-layer row into the live catalog without
+// clearing the rest of the index. Used by publish-on-add so a freshly created
+// public idea appears immediately under the "Public Ideas" filter and its
+// reactions/comments panel can render right away — no page reload required.
+function injectOnePublicRow(row, storeId) {
+    const record = transformPublicRowToRecord(row, storeId);
+    publicIdeaIndex.set(record.id, row);
+    const existingIdx = state.records.all.findIndex(r => r.id === record.id);
+    if (existingIdx >= 0) state.records.all[existingIdx] = record;
+    else state.records.all.push(record);
+    invalidateRecordsIndex();
+    return record;
+}
+
 /**
  * Fetch the public ideas for a store and inject them into the catalog, then
  * re-run the filter/render pipeline. Fire-and-forget safe: never throws, and a
@@ -138,8 +152,9 @@ export async function publishItemToPublicLayer(record, source = 'custom') {
     if (!state.session?.user?.isAuthenticated) return;
     try {
         const fields = record.fields || {};
+        const storeId = state.ui.activeShopId;
         const created = await api.createPublicItem({
-            storeId: state.ui.activeShopId,
+            storeId,
             source,
             name: fields.Name || 'Untitled item',
             description: fields.Description || '',
@@ -149,7 +164,17 @@ export async function publishItemToPublicLayer(record, source = 'custom') {
             originSessionId: state.session?.id || null,
             originItemId: record.id || null
         });
-        if (created) log('PublicCatalog', `Published item to public layer: ${record.id}`);
+        if (created) {
+            log('PublicCatalog', `Published item to public layer: ${record.id}`);
+            // Surface it in the catalog immediately (as a "Public Idea" record) and
+            // register it in the reactions index so its detail-modal panel works,
+            // then re-run the filter/render pipeline. Without this the new idea only
+            // appeared after a full page reload.
+            injectOnePublicRow(created, created.storeId || storeId);
+            if (typeof window.applyFiltersAndSort === 'function') {
+                window.applyFiltersAndSort(window.imageCache);
+            }
+        }
     } catch (error) {
         console.error('[PublicCatalog] publishItemToPublicLayer error:', error);
     }
