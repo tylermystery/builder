@@ -587,6 +587,18 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         layoutMode = 'carousel-sections';
     }
 
+    // Diagnostic: a grouping reaching the renderer in carousel mode expands its
+    // children from the UNFILTERED state.records.all, which is the only way a
+    // non-matching item can appear under a status filter. Surface that here.
+    if (groupings.length > 0) {
+        console.log('[CATALOG DEBUG] renderRecords layout chosen.', {
+            layoutMode,
+            groupingCount: groupings.length,
+            groupingNames: groupings.map(g => g.fields && g.fields.Name),
+            nonGroupingCount: nonGroupingRecords.length
+        });
+    }
+
     // Clear container for fresh render
     if (!append) {
         catalogContainer.innerHTML = '';

@@ -6,7 +6,7 @@ import * as ui from './ui.js';
 import * as api from './api.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions, getTempLikes } from './utils.js';
 import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore } from './availability.js';
-import { PUBLIC_IDEA_STATUS } from './components/publicCatalog.js';
+import { PUBLIC_IDEA_STATUS, isPublicIdeaRecord } from './components/publicCatalog.js';
 
 // --- Performance: Cached record metadata to avoid re-parsing on every filter pass ---
 const _recordMetaCache = new WeakMap();
@@ -563,6 +563,29 @@ export async function applyFiltersAndSort(imageCache) {
 
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy, goalBucket);
 
+    // Hard guarantee for the "Public Ideas" filter, applied globally across every
+    // view branch above (landing, categories, packages, …): only genuine public
+    // ideas may survive. This is a deliberate backstop on top of filterByStatus.
+    // The catalog re-introduces non-idea content in several places — most notably
+    // category "Grouping" records, which render as carousels whose child items are
+    // pulled straight from the UNFILTERED state.records.all (see ui.renderRecords /
+    // getChildItemsForGrouping) and would otherwise bypass the status filter. By
+    // stripping everything that is not a public idea here, no grouping can reach
+    // the renderer, so no carousel (and no unfiltered child item) can appear.
+    if (statusFilter === PUBLIC_IDEA_STATUS && !['plan', 'likes', 'my-sessions', 'rsvp-events'].includes(view)) {
+        const beforeGuard = recordsToDisplay.length;
+        recordsToDisplay = recordsToDisplay.filter(r =>
+            isPublicIdeaRecord(r) ||
+            (r.fields && r.fields[CONSTANTS.FIELD_NAMES.STATUS] === PUBLIC_IDEA_STATUS)
+        );
+        console.log('[PUBLIC IDEAS FILTER] Final guard applied before render.', {
+            view: view || '(landing)',
+            beforeGuard,
+            afterGuard: recordsToDisplay.length,
+            removed: beforeGuard - recordsToDisplay.length
+        });
+    }
+
     state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
     console.log('[FILTER DEBUG] Filtering complete.', {
@@ -576,10 +599,22 @@ export async function applyFiltersAndSort(imageCache) {
     if (catalogContainer) catalogContainer.innerHTML = '';
 
     // Determine if we're on the carousel landing page (no category/subcategory/view filters active)
-    // Search switches to grid mode, but other filters (status, headcount, etc.) keep carousels
-    const isCarouselLandingPage = selectedCategory === 'all' && !params.get('subcategory') && !view && !searchTerm;
+    // Search switches to grid mode, but other filters (status, headcount, etc.) keep carousels.
+    // The "Public Ideas" filter is an explicit exception: it must render a clean grid of ideas
+    // only, never carousels — building a carousel here would re-expand a grouping's children from
+    // the unfiltered store catalog and surface non-idea items.
+    const isCarouselLandingPage = selectedCategory === 'all' && !params.get('subcategory') && !view && !searchTerm && statusFilter !== PUBLIC_IDEA_STATUS;
     const groupingsInResults = recordsToDisplay.filter(r => r.fields['Item Type'] === 'Grouping');
     const nonGroupingsInResults = recordsToDisplay.filter(r => r.fields['Item Type'] !== 'Grouping');
+
+    if (statusFilter === PUBLIC_IDEA_STATUS) {
+        console.log('[PUBLIC IDEAS FILTER] Render decision.', {
+            totalToRender: recordsToDisplay.length,
+            groupingsInResults: groupingsInResults.length,
+            nonGroupingsInResults: nonGroupingsInResults.length,
+            isCarouselLandingPage
+        });
+    }
 
     if (isCarouselLandingPage && groupingsInResults.length > 0) {
         // On the carousel landing page, render ALL groupings upfront (no pagination limit for groupings).
