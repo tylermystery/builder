@@ -253,6 +253,17 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     }
     // --- END AI-SOURCED CARD DETECTION ---
 
+    // --- PUBLIC IDEA (community layer) BADGE ---
+    // Items promoted into the public community catalog carry a "public-" id and
+    // the "Public Idea" status. Flag them visually so they read as community
+    // suggestions rather than curated catalog items.
+    const isPublicIdea = record.isPublicIdea === true ||
+                         (typeof record.id === 'string' && record.id.startsWith('public-'));
+    let publicIdeaBadge = '';
+    if (isPublicIdea) {
+        publicIdeaBadge = '<span class="public-idea-badge">Public Idea</span>';
+    }
+
     // --- VVV SCORE LOGIC REMOVED VVV ---
     // The scoreBanner variable is now always empty
     const scoreBanner = '';
@@ -373,6 +384,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 <button class="availability-btn" title="Select a date range to check availability" aria-label="Check availability">📅</button>
                 ${partnerBadge}
                 ${aiDiscoveryBadge}
+                ${publicIdeaBadge}
                 ${scoreBanner}
             </div>
             <div class="event-card-content">
@@ -693,6 +705,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             <button class="availability-btn" title="Select a date range to check availability" aria-label="Check availability">📅</button>
             ${partnerBadge}
             ${aiDiscoveryBadge}
+            ${publicIdeaBadge}
             ${imageSourceIndicator}
             ${scoreBanner}
             </div>

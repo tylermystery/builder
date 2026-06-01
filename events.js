@@ -10,6 +10,7 @@ import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus, getPlanDayStatusSync, logBusyTimeSummary } from './availability.js';
 import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, preloadStripe, getShopUrlParam, getTimeUnitMinutes, computeEndFromStartDuration } from './utils.js';
 import { sendMessage, getCurrentUser, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName, toggleRecentChats, addPlanEventToHistory } from './chat.js';
+import { publishItemToPublicLayer } from './components/publicCatalog.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal } from './auth.js';
@@ -936,6 +937,10 @@ function attachAddToPlanHandler(card, record, searchTerm, imageCache) {
             ui.updateTotalCost();
             triggerSave();
 
+            // Publish-on-add: mirror this AI item into the public community layer
+            // so others can discover and react to it (signed-in users only).
+            publishItemToPublicLayer(record, 'ai');
+
             newBtn.textContent = 'Update Plan';
             newBtn.disabled = true;
         });
@@ -1035,6 +1040,10 @@ function createManualAddOption(searchTerm) {
         ui.updateEventPlanSection();
         ui.updateTotalCost();
         triggerSave();
+
+        // Publish-on-add: mirror this custom item into the public community layer
+        // so others can discover and react to it (signed-in users only).
+        publishItemToPublicLayer(manualRecord, 'custom');
 
         // Update button state
         addBtn.textContent = 'Added!';

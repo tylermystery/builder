@@ -20,6 +20,7 @@ import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
 import { openActionMenu } from './actionMenu.js';
 import { syncPlanState as syncPlanStateAcrossViews } from '../utils/planStateSync.js';
+import { isPublicIdeaRecord, renderPublicReactions } from './publicCatalog.js';
 
 console.log('[MODULE DEBUG] modal.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -1804,6 +1805,15 @@ function getModalRSBLayout() {
 function initModalReactions(recordId) {
     const section = document.getElementById('modal-reactions-section');
     if (!section) return;
+
+    // Public-idea items show GLOBAL community reactions/comments (backed by the
+    // public catalog API) rather than the per-plan session reactions used for
+    // ordinary items. The plan view keeps its own per-plan thread untouched.
+    const record = getRecordById(recordId);
+    if (record && isPublicIdeaRecord(record)) {
+        renderPublicReactions(section, record);
+        return;
+    }
 
     const hasSession = state.session.id && state.session.id.startsWith('rec');
     const isPresentationActive = document.body.classList.contains('presentation-active');

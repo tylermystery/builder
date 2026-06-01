@@ -6467,6 +6467,173 @@ hr.total-divider {
     display: block;
 }
 
+/* ---- Public community ("Public Idea") layer ---------------------------- */
+
+/* Card badge marking a community-contributed public idea */
+.public-idea-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 2px 6px rgba(109, 40, 217, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.public-idea-badge::before {
+    content: '🌐';
+    font-size: 0.9em;
+}
+
+/* "Community" tag on the public reactions accordion header */
+.public-reactions-tag {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-size: 0.72em;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+    color: #6d28d9;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.public-reactions-body {
+    padding: 4px 2px 2px;
+}
+
+.public-reaction-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+.public-reaction-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 9px;
+    border: 1px solid rgba(109, 40, 217, 0.18);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    font-size: 1em;
+    line-height: 1;
+    transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+.public-reaction-btn:hover {
+    transform: translateY(-1px);
+    background: #faf5ff;
+}
+.public-reaction-btn.reacted {
+    background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+    border-color: #8b5cf6;
+}
+.public-reaction-btn .pr-count {
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #6d28d9;
+}
+.public-reaction-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.public-comments-block {
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+    padding-top: 8px;
+}
+.public-comments-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    margin-bottom: 8px;
+}
+.public-comments-empty {
+    font-size: 0.82em;
+    color: #94a3b8;
+    font-style: italic;
+    padding: 4px 0;
+}
+.public-comment {
+    position: relative;
+    background: rgba(248, 250, 252, 0.9);
+    border-radius: 8px;
+    padding: 6px 28px 6px 10px;
+}
+.public-comment-author {
+    font-size: 0.74em;
+    font-weight: 700;
+    color: #6d28d9;
+    margin-bottom: 2px;
+}
+.public-comment-body {
+    font-size: 0.85em;
+    color: #334155;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.public-comment-delete {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    border: none;
+    background: transparent;
+    color: #cbd5e1;
+    cursor: pointer;
+    font-size: 0.85em;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+.public-comment-delete:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+}
+.public-comment-composer {
+    display: flex;
+    gap: 6px;
+    align-items: flex-end;
+}
+.public-comment-input {
+    flex: 1;
+    resize: vertical;
+    min-height: 34px;
+    border: 1px solid rgba(15, 23, 42, 0.15);
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 0.85em;
+    font-family: inherit;
+}
+.public-comment-input:focus {
+    outline: none;
+    border-color: #8b5cf6;
+}
+.public-comment-send {
+    flex-shrink: 0;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 14px;
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.82em;
+    cursor: pointer;
+}
+.public-comment-send:hover { filter: brightness(1.05); }
+.public-comment-send:disabled { opacity: 0.6; cursor: default; }
+
 .modal-reactions-score-badge {
     font-size: 0.72em;
     font-weight: 600;

@@ -15,6 +15,7 @@ import { syncPlanState } from '../../utils/planStateSync.js';
 import { triggerSave } from '../../events.js';
 import { applyCloudinaryTransform } from '../../utils/imageOptimizer.js';
 import { showToast } from '../../ui.js';
+import { publishItemToPublicLayer } from '../publicCatalog.js';
 
 // Module-level DOM element references
 let presentationAddBtn = null;
@@ -637,6 +638,10 @@ function createPresentationManualAddOption(searchTerm) {
             // Trigger save to persist changes
             await triggerSave();
 
+            // Publish-on-add: mirror this custom item into the public community
+            // layer so others can discover and react to it (signed-in users only).
+            publishItemToPublicLayer(manualRecord, 'custom');
+
             // Update the presentation view items list
             await _renderAllItems();
 
@@ -1236,6 +1241,10 @@ async function handleQuickAdd(record, button, isAI) {
 
         // Sync plan state across all views
         syncPlanState('presentation', 'itemAdded', { recordId: record.id, itemName: record.fields.Name });
+
+        // Publish-on-add: mirror AI quick-add items into the public community
+        // layer so others can discover and react to them (signed-in users only).
+        if (isAI) publishItemToPublicLayer(record, 'ai');
 
         // Update button state
         button.classList.add('added');
