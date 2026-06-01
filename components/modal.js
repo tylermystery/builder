@@ -1,7 +1,7 @@
 // REPLACE THE ENTIRE CONTENTS of components/modal.js
 console.log('[MODULE DEBUG] modal.js module starting to load...', performance.now().toFixed(2) + 'ms');
 
-import { state, getRecordById, getAggregateReactions } from '../state.js';
+import { state, getRecordById, getAggregateReactions, invalidateRecordsIndex } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage } from '../config.js';
@@ -19,7 +19,7 @@ import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
 import { openActionMenu } from './actionMenu.js';
 import { syncPlanState as syncPlanStateAcrossViews } from '../utils/planStateSync.js';
-import { getCommunityRowForRecord, toggleCommunityReactionForRecord } from './publicCatalog.js';
+import { getCommunityRowForRecord, toggleCommunityReactionForRecord, isPublicIdeaRecord } from './publicCatalog.js';
 
 console.log('[MODULE DEBUG] modal.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -3492,6 +3492,7 @@ function enableItemEditMode(record, nameEl, descEl) {
     saveContainer.className = 'item-edit-save-container';
     saveContainer.innerHTML = `
         <button class="item-edit-save-btn">💾 Save Changes</button>
+        <button class="item-edit-delete-btn" type="button">🗑️ Delete ${isPublicIdeaRecord(record) ? 'Public Idea' : 'Item'}</button>
     `;
 
     // Insert save button before the Add to Plan button
@@ -3502,6 +3503,18 @@ function enableItemEditMode(record, nameEl, descEl) {
 
     // Save button handler
     const saveBtn = saveContainer.querySelector('.item-edit-save-btn');
+
+    // Delete button handler — removes the item from the bottom of edit mode. Public
+    // ideas are deleted from the community layer (authors and publish-access users);
+    // any other editable item is removed from the current plan and the local catalog.
+    const deleteBtn = saveContainer.querySelector('.item-edit-delete-btn');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleItemDelete(record, deleteBtn);
+        });
+    }
+
     saveBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
 
@@ -4075,7 +4088,83 @@ function disableItemEditMode(record, nameEl, descEl) {
 }
 
 /**
- * Build plan component cards with media collage
+ * Delete the item currently shown in the detail modal, invoked from the Delete
+ * button in edit mode. Behaviour depends on what the record actually is:
+ *   - A community "Public Idea" is deleted from the public layer. The endpoint
+ *     authorises the idea's author and any user with publish permission on the
+ *     owning store, so this is the moderation path for publish-access users.
+ *   - Any other editable item (a manual/AI/solution plan item, or a curated
+ *     catalog item a publish user opened) is removed from the plan and from the
+ *     local catalog view.
+ * In every case the record is dropped from local state, the modal is closed, and
+ * the catalog is re-rendered so the item disappears immediately.
+ * @param {object} record
+ * @param {HTMLElement} [btn] - the Delete button, disabled while the request runs
+ */
+async function handleItemDelete(record, btn) {
+    if (!record) return;
+    const isPublicIdea = isPublicIdeaRecord(record);
+    const name = record.fields?.Name || 'this item';
+    const confirmMsg = isPublicIdea
+        ? `Delete the public idea "${name}"? This removes it for everyone — including its reactions and comments — and cannot be undone.`
+        : `Delete "${name}"? This removes it from your plan and cannot be undone.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    const restoreBtn = () => {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = `🗑️ Delete ${isPublicIdea ? 'Public Idea' : 'Item'}`;
+        }
+    };
+    if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+
+    try {
+        // Public ideas live in the community (Postgres) layer; delete there first so a
+        // failed/forbidden request leaves everything untouched.
+        if (isPublicIdea) {
+            const ok = await api.deletePublicResource('items', record.publicItemId);
+            if (!ok) {
+                const msg = 'Could not delete this idea — you may not have permission.';
+                if (typeof ui !== 'undefined' && ui.showToast) ui.showToast(msg, 'error');
+                else alert(msg);
+                restoreBtn();
+                return;
+            }
+        }
+
+        // Drop the item from any plan membership (no-op if it was never added) and
+        // from the local catalog so it disappears from every view immediately.
+        try { state.cart?.lockedItems?.delete?.(record.id); } catch (_) {}
+        try { state.cart?.items?.delete?.(record.id); } catch (_) {}
+        try { state.cart?.customItems?.delete?.(record.id); } catch (_) {}
+        state.records.all = state.records.all.filter(r => r.id !== record.id);
+        invalidateRecordsIndex();
+
+        // Persist plan changes for ordinary (non-public) items; public-idea deletion
+        // is already persisted server-side above.
+        if (!isPublicIdea && typeof triggerSave === 'function') {
+            try { await triggerSave(); } catch (_) {}
+        }
+        try { syncPlanStateAcrossViews('modal', 'itemDeleted', { recordId: record.id, itemName: name }); } catch (_) {}
+
+        closeDetailModal();
+
+        if (typeof window.applyFiltersAndSort === 'function') {
+            window.applyFiltersAndSort(window.imageCache);
+        }
+        if (typeof renderAllItems === 'function') {
+            try { await renderAllItems(); } catch (_) {}
+        }
+
+        const okMsg = isPublicIdea ? 'Public idea deleted.' : 'Item deleted.';
+        if (typeof ui !== 'undefined' && ui.showToast) ui.showToast(okMsg, 'success');
+        log('Modal', `Deleted ${isPublicIdea ? 'public idea' : 'item'}: ${record.id}`);
+    } catch (error) {
+        console.error('[Modal] handleItemDelete error:', error);
+        restoreBtn();
+        alert('Failed to delete. Please try again.');
+    }
+}
  * @param {HTMLElement} container - Container element to append cards to
  * @param {Array} componentRecords - Array of component data objects
  * @param {string} sessionId - ID of the linked session
@@ -7283,7 +7372,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     // See the Categories & Tags section in enableItemEditMode()
 
     // Add Edit Item button for manual/custom items, AI discovery items, and AI-generated solutions
-    const isEditableItem = record.isManual === true ||
+    const isManuallyEditableItem = record.isManual === true ||
                          record.id?.startsWith('manual-add-') ||
                          record.id?.startsWith('manual-presentation-') ||
                          record.id?.startsWith('ai-search-') ||
@@ -7291,6 +7380,14 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                          record.id?.startsWith('ai-presentation-') ||
                          record.isSolution === true ||
                          record.id?.startsWith('solution-');
+
+    // Publish-access users can edit (and, via the in-edit Delete button, remove) ANY
+    // non-event item — including curated catalog items and community "Public Idea"
+    // records. Events keep their dedicated Edit Event / Open to Edit flow below, so
+    // they are excluded here to avoid two competing edit controls.
+    const isEventItemForEdit = record.fields?.['Item Type'] === 'Event';
+    const userCanPublishForEdit = api.userHasPublishPermission();
+    const isEditableItem = isManuallyEditableItem || (userCanPublishForEdit && !isEventItemForEdit);
 
     if (isEditableItem) {
         const editItemBtn = document.createElement('button');

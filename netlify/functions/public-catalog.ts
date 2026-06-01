@@ -18,7 +18,7 @@
 // gather shared reactions and comments without pre-seeding the whole catalog.
 //   DELETE /api/public-catalog/comments     { id }      (author removes own)
 //   DELETE /api/public-catalog/variations   { id }      (author removes own)
-//   DELETE /api/public-catalog/items        { id }      (author removes own)
+//   DELETE /api/public-catalog/items         { id }      (author OR a store's publish-permission user removes it)
 
 import jwt from "jsonwebtoken";
 import { and, eq, inArray, isNull } from "drizzle-orm";
@@ -48,6 +48,32 @@ function getUserId(req: Request): string | null {
     return decoded && decoded.userId ? decoded.userId : null;
   } catch {
     return null;
+  }
+}
+
+// Whether `userId` is allowed to moderate (e.g. delete) community content for the
+// store `storeId`. True when the store's Airtable record lists the user in its
+// PublishPermission field — the same list the front-end uses to gate publish-only
+// controls. Fails closed (returns false) on any missing config or error so a
+// misconfiguration can never silently widen who may delete other people's content.
+async function userHasPublishPermissionForStore(
+  storeId: string | null | undefined,
+  userId: string,
+): Promise<boolean> {
+  const pat = process.env.AIRTABLE_PAT;
+  const baseId = process.env.BASE_ID;
+  if (!pat || !baseId || !storeId || !userId) return false;
+  try {
+    const res = await fetch(
+      `https://api.airtable.com/v0/${baseId}/Stores/${encodeURIComponent(storeId)}`,
+      { headers: { Authorization: `Bearer ${pat}` } },
+    );
+    if (!res.ok) return false;
+    const data = (await res.json()) as { fields?: { PublishPermission?: unknown } };
+    const allowed = data?.fields?.PublishPermission;
+    return Array.isArray(allowed) && allowed.includes(userId);
+  } catch {
+    return false;
   }
 }
 
@@ -396,7 +422,12 @@ export default async (req: Request) => {
           .from(publicItems)
           .where(eq(publicItems.id, id));
         if (!row) return json(404, { error: "Not found" });
-        if (row.authorId !== userId) return json(403, { error: "Forbidden" });
+        // The author may always remove their own idea; in addition, anyone with
+        // publish permission on the owning store may remove it (moderation).
+        const canModerate =
+          row.authorId === userId ||
+          (await userHasPublishPermissionForStore(row.storeId, userId));
+        if (!canModerate) return json(403, { error: "Forbidden" });
         await db.delete(publicItems).where(eq(publicItems.id, id));
         return json(200, { deleted: true });
       }

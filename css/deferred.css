@@ -12552,6 +12552,34 @@ hr.total-divider {
     transform: none;
 }
 
+/* Delete button shown beneath Save while editing an item in the detail modal */
+.item-edit-delete-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 10px 20px;
+    background: transparent;
+    color: #c0392b;
+    border: 1px solid rgba(192, 57, 43, 0.5);
+    border-radius: 8px;
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.item-edit-delete-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 4px 12px rgba(192, 57, 43, 0.3);
+}
+
+.item-edit-delete-btn:disabled {
+    color: #95a5a6;
+    border-color: #d0d0d0;
+    cursor: not-allowed;
+}
+
 /* Mobile responsive for item edit mode */
 @media (max-width: 768px) {
     .item-edit-input {
