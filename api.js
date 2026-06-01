@@ -6582,19 +6582,22 @@ function publicWriteTarget(publicItemId, opts = {}) {
     return t;
 }
 
-// Toggle one emoji reaction from the current user on an item (or variation).
-// `publicItemId` may be null when reacting to a catalog item that has no
-// community container yet — pass `opts.catalogItemId` + `opts.storeId` and the
-// server creates one. Returns { reacted, publicItemId } on success, or null when
-// logged out / on error.
+// Toggle one emoji reaction from the current user on an item (or variation, or a
+// single comment). Pass `opts.commentId` to react to a community comment — the
+// server resolves the owning item from the comment. `publicItemId` may be null
+// when reacting to a catalog item that has no community container yet — pass
+// `opts.catalogItemId` + `opts.storeId` and the server creates one. Returns
+// { reacted, publicItemId, commentId } on success, or null when logged out / on error.
 export async function togglePublicReaction(publicItemId, emoji, variationId = null, opts = {}) {
     const headers = publicCatalogAuthHeaders();
     if (!headers) return null;
     try {
+        const body = { ...publicWriteTarget(publicItemId, opts), emoji, variationId };
+        if (opts.commentId != null) body.commentId = opts.commentId;
         const response = await fetch(`${PUBLIC_CATALOG_BASE}/reactions`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ ...publicWriteTarget(publicItemId, opts), emoji, variationId })
+            body: JSON.stringify(body)
         });
         if (!response.ok) return null;
         return await response.json();
@@ -6604,17 +6607,21 @@ export async function togglePublicReaction(publicItemId, emoji, variationId = nu
     }
 }
 
-// Add a comment to a public item (or variation). `publicItemId` may be null for a
-// catalog item with no container yet (pass `opts.catalogItemId` + `opts.storeId`).
-// Returns the created comment (which carries its resolved publicItemId).
+// Add a comment to a public item (or variation), or a reply to another comment.
+// Pass `opts.parentCommentId` to post a reply — the server resolves the owning
+// item from the parent. `publicItemId` may be null for a catalog item with no
+// container yet (pass `opts.catalogItemId` + `opts.storeId`). Returns the created
+// comment (which carries its resolved publicItemId and parentCommentId).
 export async function addPublicComment(publicItemId, body, authorName = null, variationId = null, opts = {}) {
     const headers = publicCatalogAuthHeaders();
     if (!headers) return null;
     try {
+        const payload = { ...publicWriteTarget(publicItemId, opts), body, authorName, variationId };
+        if (opts.parentCommentId != null) payload.parentCommentId = opts.parentCommentId;
         const response = await fetch(`${PUBLIC_CATALOG_BASE}/comments`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ ...publicWriteTarget(publicItemId, opts), body, authorName, variationId })
+            body: JSON.stringify(payload)
         });
         if (!response.ok) return null;
         const data = await response.json();

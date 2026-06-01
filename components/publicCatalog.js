@@ -404,38 +404,70 @@ function buildCommentsBlock(section, record, row, opts = {}) {
     const list = document.createElement('div');
     list.className = 'public-comments-list';
     const me = currentUser();
-    const comments = (row.comments || []).slice().sort((a, b) =>
-        new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
 
-    if (comments.length === 0) {
+    const all = (row.comments || []).slice();
+    // Group replies under their parent; top-level comments carry no parentCommentId.
+    const repliesByParent = new Map();
+    all.forEach(c => {
+        if (c.parentCommentId != null) {
+            const key = String(c.parentCommentId);
+            if (!repliesByParent.has(key)) repliesByParent.set(key, []);
+            repliesByParent.get(key).push(c);
+        }
+    });
+    const byCreated = (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+    const topLevel = all.filter(c => c.parentCommentId == null).sort(byCreated);
+
+    if (topLevel.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'public-comments-empty';
         empty.textContent = 'No comments yet — start the conversation.';
         list.appendChild(empty);
     } else {
-        comments.forEach(c => list.appendChild(buildCommentEl(section, record, row, c, me, opts)));
+        topLevel.forEach(c => {
+            list.appendChild(buildCommentEl(section, record, row, c, me, opts, false));
+            const replies = (repliesByParent.get(String(c.id)) || []).sort(byCreated);
+            if (replies.length > 0) {
+                const repliesWrap = document.createElement('div');
+                repliesWrap.className = 'public-comment-replies';
+                replies.forEach(r =>
+                    repliesWrap.appendChild(buildCommentEl(section, record, row, r, me, opts, true)));
+                list.appendChild(repliesWrap);
+            }
+        });
     }
     wrap.appendChild(list);
 
-    // Composer
+    // Composer for a new top-level comment.
+    wrap.appendChild(buildComposer(section, record, row, me, opts, null));
+
+    return wrap;
+}
+
+// A comment/reply composer. `parentCommentId` null posts a top-level comment; set
+// it to reply to a comment. Returns the composer element.
+function buildComposer(section, record, row, me, opts, parentCommentId) {
     const composer = document.createElement('div');
-    composer.className = 'public-comment-composer';
+    composer.className = 'public-comment-composer' + (parentCommentId != null ? ' public-reply-composer' : '');
     const ta = document.createElement('textarea');
     ta.className = 'public-comment-input';
-    ta.rows = 2;
-    ta.placeholder = me.isAuthenticated ? 'Add a comment…' : 'Sign in to comment…';
+    ta.rows = parentCommentId != null ? 1 : 2;
+    ta.placeholder = me.isAuthenticated
+        ? (parentCommentId != null ? 'Write a reply…' : 'Add a comment…')
+        : (parentCommentId != null ? 'Sign in to reply…' : 'Sign in to comment…');
     const sendBtn = document.createElement('button');
     sendBtn.type = 'button';
     sendBtn.className = 'public-comment-send';
-    sendBtn.textContent = 'Post';
+    sendBtn.textContent = parentCommentId != null ? 'Reply' : 'Post';
     sendBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (!requireSignIn()) return;
         const text = ta.value.trim();
         if (!text) { ta.focus(); return; }
         sendBtn.disabled = true;
-        const created = await api.addPublicComment(
-            row.id, text, me.name, null, row.id == null ? communityWriteOpts(record) : {});
+        const writeOpts = row.id == null ? communityWriteOpts(record) : {};
+        if (parentCommentId != null) writeOpts.parentCommentId = parentCommentId;
+        const created = await api.addPublicComment(row.id, text, me.name, null, writeOpts);
         sendBtn.disabled = false;
         if (!created) return;
         if (row.id == null && created.publicItemId != null) row.id = created.publicItemId;
@@ -446,36 +478,140 @@ function buildCommentsBlock(section, record, row, opts = {}) {
     });
     composer.appendChild(ta);
     composer.appendChild(sendBtn);
-    wrap.appendChild(composer);
-
-    return wrap;
+    return composer;
 }
 
-function buildCommentEl(section, record, row, comment, me, opts = {}) {
+function buildCommentEl(section, record, row, comment, me, opts = {}, isReply = false) {
     const el = document.createElement('div');
-    el.className = 'public-comment';
+    el.className = 'public-comment' + (isReply ? ' public-comment-reply' : '');
     const author = comment.authorName || 'Someone';
-    el.innerHTML = `
+
+    const head = document.createElement('div');
+    head.innerHTML = `
         <div class="public-comment-author">${escapeHtml(author)}</div>
         <div class="public-comment-body">${escapeHtml(comment.body)}</div>
     `;
+    el.appendChild(head);
+
+    // Reaction chips (only emoji that have at least one reaction).
+    const chips = buildCommentReactionChips(section, record, row, comment, me, opts);
+    if (chips) el.appendChild(chips);
+
+    // Actions: React (everywhere) and Reply (top-level only — one level of nesting).
+    const actions = document.createElement('div');
+    actions.className = 'public-comment-actions';
+
+    const reactBtn = document.createElement('button');
+    reactBtn.type = 'button';
+    reactBtn.className = 'public-comment-action';
+    reactBtn.innerHTML = '😊 React';
+    actions.appendChild(reactBtn);
+
+    const picker = buildCommentEmojiPicker(section, record, row, comment, me, opts);
+    picker.style.display = 'none';
+    reactBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        picker.style.display = picker.style.display === 'none' ? 'flex' : 'none';
+    });
+
+    let replyComposer = null;
+    if (!isReply) {
+        const replyBtn = document.createElement('button');
+        replyBtn.type = 'button';
+        replyBtn.className = 'public-comment-action';
+        replyBtn.innerHTML = '↩ Reply';
+        replyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!requireSignIn()) return;
+            if (!replyComposer) {
+                replyComposer = buildComposer(section, record, row, me, opts, comment.id);
+                el.appendChild(replyComposer);
+                const input = replyComposer.querySelector('.public-comment-input');
+                if (input) input.focus();
+            } else {
+                replyComposer.remove();
+                replyComposer = null;
+            }
+        });
+        actions.appendChild(replyBtn);
+    }
+
     if (me.id && comment.userId === me.id) {
         const del = document.createElement('button');
         del.type = 'button';
-        del.className = 'public-comment-delete';
-        del.title = 'Delete your comment';
-        del.textContent = '✕';
+        del.className = 'public-comment-action public-comment-action-delete';
+        del.innerHTML = '✕ Delete';
         del.addEventListener('click', async (e) => {
             e.stopPropagation();
             del.disabled = true;
             const ok = await api.deletePublicResource('comments', comment.id);
             if (!ok) { del.disabled = false; return; }
-            row.comments = (row.comments || []).filter(c => c.id !== comment.id);
+            // Drop the comment and any of its replies (the server cascades; mirror it locally).
+            row.comments = (row.comments || []).filter(
+                c => c.id !== comment.id && c.parentCommentId !== comment.id);
             rerenderOpen(section, record, opts);
         });
-        el.appendChild(del);
+        actions.appendChild(del);
     }
+
+    el.appendChild(actions);
+    el.appendChild(picker);
     return el;
+}
+
+// Reaction chips summarising a comment's reactions, each toggling the user's own.
+// Returns null when the comment has no reactions yet.
+function buildCommentReactionChips(section, record, row, comment, me, opts) {
+    const reactions = comment.reactions || {};
+    const entries = Object.entries(reactions).filter(([, d]) => (d.count || 0) > 0);
+    if (entries.length === 0) return null;
+
+    const chipsRow = document.createElement('div');
+    chipsRow.className = 'public-comment-reactions';
+    entries.forEach(([emoji, data]) => {
+        const mine = me.id && Array.isArray(data.users) && data.users.includes(me.id);
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'public-comment-reaction' + (mine ? ' reacted' : '');
+        chip.innerHTML = `${emoji} <span class="pcr-count">${data.count}</span>`;
+        chip.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleCommentReaction(section, record, row, comment, emoji, me, opts, chip);
+        });
+        chipsRow.appendChild(chip);
+    });
+    return chipsRow;
+}
+
+// The "React" emoji picker for a comment (the full community emoji set).
+function buildCommentEmojiPicker(section, record, row, comment, me, opts) {
+    const picker = document.createElement('div');
+    picker.className = 'public-comment-emoji-picker';
+    EMOJI_REACTIONS.forEach(emoji => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'public-comment-emoji-pick';
+        btn.textContent = emoji;
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleCommentReaction(section, record, row, comment, emoji, me, opts, btn);
+        });
+        picker.appendChild(btn);
+    });
+    return picker;
+}
+
+// Toggle the current user's `emoji` reaction on a single comment, optimistically
+// updating the cached summary and re-rendering the open panel.
+async function toggleCommentReaction(section, record, row, comment, emoji, me, opts, btn) {
+    if (!requireSignIn()) return;
+    if (btn) btn.disabled = true;
+    const result = await api.togglePublicReaction(row.id, emoji, null, { commentId: comment.id });
+    if (btn) btn.disabled = false;
+    if (!result) return;
+    comment.reactions = comment.reactions || {};
+    applyReactionToggle(comment, emoji, me.id, result.reacted);
+    rerenderOpen(section, record, opts);
 }
 
 // --- Read-only aggregated community feed (conversation view "Global" tab, plan-wide) -

@@ -29,6 +29,7 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 // A public item: a promoted AI / custom / solution item, visible to everyone
@@ -109,7 +110,9 @@ export const itemVariations = pgTable(
 
 // A reaction (one emoji from one user). The multi-emoji democratic model means a
 // user can have several reaction rows on the same target. `variationId` is null
-// for item-level reactions and set for per-variation reactions.
+// for item-level reactions and set for per-variation reactions. `commentId` is
+// null for item/variation reactions and set when the reaction targets a single
+// comment (so community comments can be reacted to like plan chat messages).
 export const reactions = pgTable(
   "reactions",
   {
@@ -120,17 +123,23 @@ export const reactions = pgTable(
     variationId: integer("variation_id").references(() => itemVariations.id, {
       onDelete: "cascade",
     }),
+    commentId: integer("comment_id").references((): AnyPgColumn => comments.id, {
+      onDelete: "cascade",
+    }),
     userId: text("user_id").notNull(),
     emoji: text("emoji").notNull(),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (t) => ({
     itemIdx: index("reactions_item_idx").on(t.publicItemId),
+    commentIdx: index("reactions_comment_idx").on(t.commentId),
   }),
 );
 
 // A comment, aggregated onto the public item. `variationId` is null for
 // item-level comments and set for per-variation comments (future UI).
+// `parentCommentId` is null for top-level comments and set for replies, giving
+// community comments the same one-level threaded replies as plan chat messages.
 export const comments = pgTable(
   "comments",
   {
@@ -141,6 +150,10 @@ export const comments = pgTable(
     variationId: integer("variation_id").references(() => itemVariations.id, {
       onDelete: "cascade",
     }),
+    parentCommentId: integer("parent_comment_id").references(
+      (): AnyPgColumn => comments.id,
+      { onDelete: "cascade" },
+    ),
     userId: text("user_id").notNull(),
     authorName: text("author_name"),
     body: text("body").notNull(),
@@ -149,5 +162,6 @@ export const comments = pgTable(
   },
   (t) => ({
     itemIdx: index("comments_item_idx").on(t.publicItemId),
+    parentIdx: index("comments_parent_idx").on(t.parentCommentId),
   }),
 );

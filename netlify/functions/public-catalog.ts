@@ -9,8 +9,8 @@
 //   GET    /api/public-catalog?storeId=<airtableStoreId>
 //   POST   /api/public-catalog/items        { storeId, source, name, description?, imageUrl?, price?, data?, originSessionId?, originItemId? }
 //   POST   /api/public-catalog/variations   { publicItemId, name?, description?, imageUrl?, price?, data? }
-//   POST   /api/public-catalog/reactions    { publicItemId | (catalogItemId + storeId), variationId?, emoji }   (toggles)
-//   POST   /api/public-catalog/comments     { publicItemId | (catalogItemId + storeId), variationId?, body, authorName? }
+//   POST   /api/public-catalog/reactions    { publicItemId | (catalogItemId + storeId) | commentId, variationId?, emoji }   (toggles)
+//   POST   /api/public-catalog/comments     { publicItemId | (catalogItemId + storeId) | parentCommentId, variationId?, body, authorName? }
 //
 // For reactions/comments, passing a `catalogItemId` (+ `storeId`) instead of a
 // `publicItemId` lazily creates a community container (source='catalog') for that
@@ -91,13 +91,18 @@ async function getCatalog(storeId: string) {
   });
 
   // Summarise reactions into per-emoji counts and the list of users per emoji,
-  // optionally scoped to a variation (variationId === null => item-level).
+  // optionally scoped to a variation (variationId === null => item-level). Comment
+  // reactions (commentId set) are excluded here — they are summarised per comment.
   const summariseReactions = (
     rows: typeof reacts,
     variationId: number | null,
   ) => {
-    const scoped = rows.filter((r) =>
-      variationId === null ? r.variationId == null : r.variationId === variationId,
+    const scoped = rows.filter(
+      (r) =>
+        r.commentId == null &&
+        (variationId === null
+          ? r.variationId == null
+          : r.variationId === variationId),
     );
     const counts: Record<string, { count: number; users: string[] }> = {};
     for (const r of scoped) {
@@ -108,16 +113,36 @@ async function getCatalog(storeId: string) {
     return counts;
   };
 
+  // Summarise the reactions attached to one comment, same shape as above.
+  const summariseCommentReactions = (rows: typeof reacts, commentId: number) => {
+    const counts: Record<string, { count: number; users: string[] }> = {};
+    for (const r of rows) {
+      if (r.commentId !== commentId) continue;
+      if (!counts[r.emoji]) counts[r.emoji] = { count: 0, users: [] };
+      counts[r.emoji].count += 1;
+      counts[r.emoji].users.push(r.userId);
+    }
+    return counts;
+  };
+
+  // Attach a reactions summary to each comment so the UI can render reaction
+  // chips per comment, exactly like the per-item reaction summary.
+  const withCommentReactions = (rows: typeof cmts) =>
+    rows.map((c) => ({
+      ...c,
+      reactions: summariseCommentReactions(reacts, c.id),
+    }));
+
   return items.map((item) => {
     const { variations, reactions: r, comments: c } = byItem(item.id);
     return {
       ...item,
       reactions: summariseReactions(r, null),
-      comments: c.filter((x) => x.variationId == null),
+      comments: withCommentReactions(c.filter((x) => x.variationId == null)),
       variations: variations.map((v) => ({
         ...v,
         reactions: summariseReactions(r, v.id),
-        comments: c.filter((x) => x.variationId === v.id),
+        comments: withCommentReactions(c.filter((x) => x.variationId === v.id)),
       })),
     };
   });
@@ -240,14 +265,31 @@ export default async (req: Request) => {
 
       if (resource === "reactions") {
         if (!body.emoji) return json(400, { error: "emoji is required" });
-        const itemId = await resolvePublicItemId(body, userId);
-        if (itemId == null)
-          return json(400, {
-            error: "publicItemId or (catalogItemId + storeId) is required",
-          });
-        const variationId =
-          body.variationId == null ? null : Number(body.variationId);
         const emoji = String(body.emoji);
+
+        // A reaction can target a comment (commentId) or an item/variation. For a
+        // comment reaction we resolve the owning item from the comment itself, so
+        // the caller only needs to pass commentId + emoji.
+        const commentId =
+          body.commentId == null ? null : Number(body.commentId);
+        let itemId: number | null;
+        let variationId: number | null;
+        if (commentId != null) {
+          const [parent] = await db
+            .select()
+            .from(comments)
+            .where(eq(comments.id, commentId));
+          if (!parent) return json(404, { error: "Comment not found" });
+          itemId = parent.publicItemId;
+          variationId = null;
+        } else {
+          itemId = await resolvePublicItemId(body, userId);
+          if (itemId == null)
+            return json(400, {
+              error: "publicItemId or (catalogItemId + storeId) is required",
+            });
+          variationId = body.variationId == null ? null : Number(body.variationId);
+        }
 
         // Toggle: remove this user's matching reaction if present, else add it.
         const existing = await db
@@ -256,6 +298,9 @@ export default async (req: Request) => {
           .where(
             and(
               eq(reactions.publicItemId, itemId),
+              commentId == null
+                ? isNull(reactions.commentId)
+                : eq(reactions.commentId, commentId),
               variationId == null
                 ? isNull(reactions.variationId)
                 : eq(reactions.variationId, variationId),
@@ -266,33 +311,57 @@ export default async (req: Request) => {
 
         if (existing.length > 0) {
           await db.delete(reactions).where(eq(reactions.id, existing[0].id));
-          return json(200, { reacted: false, publicItemId: itemId });
+          return json(200, {
+            reacted: false,
+            publicItemId: itemId,
+            commentId,
+          });
         }
         await db
           .insert(reactions)
-          .values({ publicItemId: itemId, variationId, userId, emoji });
-        return json(201, { reacted: true, publicItemId: itemId });
+          .values({ publicItemId: itemId, variationId, commentId, userId, emoji });
+        return json(201, { reacted: true, publicItemId: itemId, commentId });
       }
 
       if (resource === "comments") {
         if (!body.body) return json(400, { error: "body is required" });
-        const itemId = await resolvePublicItemId(body, userId);
-        if (itemId == null)
-          return json(400, {
-            error: "publicItemId or (catalogItemId + storeId) is required",
-          });
+
+        // A reply carries parentCommentId; we resolve its owning item from the
+        // parent so a reply only needs parentCommentId + body. A top-level comment
+        // resolves the item the usual way (publicItemId or catalogItemId+storeId).
+        const parentCommentId =
+          body.parentCommentId == null ? null : Number(body.parentCommentId);
+        let itemId: number | null;
+        let variationId: number | null;
+        if (parentCommentId != null) {
+          const [parent] = await db
+            .select()
+            .from(comments)
+            .where(eq(comments.id, parentCommentId));
+          if (!parent) return json(404, { error: "Parent comment not found" });
+          itemId = parent.publicItemId;
+          variationId = parent.variationId;
+        } else {
+          itemId = await resolvePublicItemId(body, userId);
+          if (itemId == null)
+            return json(400, {
+              error: "publicItemId or (catalogItemId + storeId) is required",
+            });
+          variationId = body.variationId == null ? null : Number(body.variationId);
+        }
+
         const [row] = await db
           .insert(comments)
           .values({
             publicItemId: itemId,
-            variationId:
-              body.variationId == null ? null : Number(body.variationId),
+            variationId,
+            parentCommentId,
             userId,
             authorName: body.authorName ?? null,
             body: String(body.body),
           })
           .returning();
-        return json(201, { comment: row });
+        return json(201, { comment: { ...row, reactions: {} } });
       }
 
       return json(404, { error: "Unknown resource" });
