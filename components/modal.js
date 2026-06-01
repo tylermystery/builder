@@ -19,7 +19,7 @@ import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
 import { openActionMenu } from './actionMenu.js';
 import { syncPlanState as syncPlanStateAcrossViews } from '../utils/planStateSync.js';
-import { renderPublicReactions } from './publicCatalog.js';
+import { getCommunityRowForRecord, toggleCommunityReactionForRecord } from './publicCatalog.js';
 
 console.log('[MODULE DEBUG] modal.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -1809,114 +1809,287 @@ function getModalRSBLayout() {
  *
  * @param {string} recordId - The item record ID
  */
+/**
+ * The per-item reaction surfaces now live in two compact, anchored popups opened
+ * from the global / plan sentiment chips placed immediately after the item name
+ * (see updateModalSentimentChips / openItemSentimentPopup). The older stacked
+ * "This Plan" / "Community" accordion section is retired so the detail modal stays
+ * clean; this simply ensures that host section is emptied and hidden on each open.
+ *
+ * @param {string} recordId - The item record ID
+ */
 function initModalReactions(recordId) {
     const section = document.getElementById('modal-reactions-section');
     if (!section) return;
-
-    const record = getRecordById(recordId);
-
-    const hasSession = state.session.id && state.session.id.startsWith('rec');
-    const isPresentationActive = document.body.classList.contains('presentation-active');
-    const inPlan = hasSession || isPresentationActive;
-
-    // Reset the host into a two-layer container.
-    section.style.display = 'block';
     section.innerHTML = '';
-    section.className = 'modal-reactions-section modal-reactions-layers';
-
-    // Top layer — "This Plan" (elevated), only inside a plan / presentation.
-    if (inPlan) {
-        const planCard = buildPlanReactionsCard(recordId, true);
-        if (planCard) section.appendChild(planCard);
-    }
-
-    // Bottom layer — "Community" (always). Expanded only when it stands alone.
-    if (record) {
-        const communityCard = document.createElement('div');
-        communityCard.className = 'modal-community-layer';
-        section.appendChild(communityCard);
-        // Comments are removed from this reaction GUI; the community thread is read
-        // and written from the conversation view's Global tab via "See conversation".
-        renderPublicReactions(communityCard, record, {
-            expanded: !inPlan,
-            comments: false,
-            onSeeConversation: () => openUCPGlobalForItem(recordId)
-        });
-    }
-
-    // Nothing to show at all — hide the host.
-    if (!section.children.length) {
-        section.style.display = 'none';
-    }
+    section.style.display = 'none';
 }
 
 /**
- * Open the modal's reaction surface (the stacked "This Plan" / "Community"
- * layers) and bring it into view. A single consistent entry point used by the
- * sentiment chip after the item name and by the "In your plan" summary block,
- * so every "weigh in" affordance lands in the same place.
+ * Build a Map<userId, Set<emoji>> from a community row's reaction summary
+ * ({ emoji: { count, users } }) so the democratic-average helper can score the
+ * global (community) layer the same way it scores the per-plan layer. When a row
+ * carries counts but no per-user lists (older/aggregate data), synthesize one
+ * placeholder user per reaction so the count still contributes to the average.
  */
-function openModalReactionsSurface() {
-    const section = document.getElementById('modal-reactions-section');
-    if (!section) return;
-    if (section.style.display === 'none') section.style.display = 'block';
-    // Ensure the top accordion layer is expanded so the picker is visible.
-    const firstHeader = section.querySelector('.modal-rsb-accordion-header');
-    const firstBody = section.querySelector('.modal-rsb-accordion-body');
-    if (firstHeader && firstBody && !firstBody.classList.contains('expanded')) {
-        firstBody.classList.add('expanded');
-        firstHeader.classList.add('expanded');
-        const chev = firstHeader.querySelector('.modal-rsb-accordion-chevron');
-        if (chev) chev.textContent = '▾';
+function communityReactionsToUserMap(row) {
+    const map = new Map();
+    const reactions = (row && row.reactions) || {};
+    let synthetic = 0;
+    for (const [emoji, data] of Object.entries(reactions)) {
+        const users = data && Array.isArray(data.users) ? data.users : [];
+        if (users.length) {
+            for (const uid of users) {
+                if (!map.has(uid)) map.set(uid, new Set());
+                map.get(uid).add(emoji);
+            }
+        } else {
+            const count = (data && data.count) || 0;
+            for (let i = 0; i < count; i++) map.set(`anon:${synthetic++}`, new Set([emoji]));
+        }
     }
-    try { section.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
-    catch (_) { section.scrollIntoView(); }
-    section.classList.add('reactions-flash');
-    setTimeout(() => section.classList.remove('reactions-flash'), 900);
+    return map;
 }
 
 /**
- * Populate and wire the sentiment chip shown immediately after the item name in
- * the detail modal. It renders the item's current summary sentiment emoji plus a
- * reaction count (the hierarchical plan/community aggregate the modal already
- * surfaces). Hover shows a breakdown; click opens the standard reaction surface
- * so the viewer can weigh in — the same control everywhere something is reactable.
+ * Resolve the sentiment for one scope of an item:
+ *   - 'plan'   → the per-plan reactions store (state.session.reactions), saved to
+ *                the plan. This is the PLAN ITEM's sentiment.
+ *   - 'global' → the community store shared by everyone. This is the GLOBAL
+ *                ITEM's sentiment.
+ * Returns per-emoji counts, the viewer's own reactions, and a summary
+ * (summaryEmoji / democraticAverage / total). Keeping the two stores strictly
+ * separate here is the "mend": a reaction in one scope never bleeds into the other.
  */
-function updateModalSentimentChip(recordId) {
-    const chip = document.getElementById('modal-item-sentiment-chip');
+function getScopeSentiment(recordId, scope) {
+    const emojiCounts = {};
+    const mine = new Set();
+    let userMap = new Map();
+    let me = null;
+    try { me = getCurrentUser(); } catch (_) { me = null; }
+
+    if (scope === 'global') {
+        const record = getRecordById(recordId);
+        const row = record ? getCommunityRowForRecord(record) : null;
+        const reactions = (row && row.reactions) || {};
+        for (const [emoji, data] of Object.entries(reactions)) {
+            const count = (data && data.count) || 0;
+            if (count > 0) emojiCounts[emoji] = count;
+            const users = data && Array.isArray(data.users) ? data.users : [];
+            if (me && me.id && users.includes(me.id)) mine.add(emoji);
+        }
+        userMap = communityReactionsToUserMap(row);
+    } else {
+        const agg = getAggregateReactions(recordId); // Map<userId, Set<emoji>>
+        if (agg instanceof Map) {
+            agg.forEach((set) => {
+                const emojis = set instanceof Set ? set : new Set([set]);
+                for (const e of emojis) emojiCounts[e] = (emojiCounts[e] || 0) + 1;
+            });
+            userMap = agg;
+            const mySet = me && me.id ? agg.get(me.id) : null;
+            if (mySet instanceof Set) mySet.forEach(e => mine.add(e));
+            else if (typeof mySet === 'string') mine.add(mySet);
+        }
+    }
+
+    const { democraticAverage, summaryEmoji, totalReactions } = computeDemocraticAverage(userMap);
+    const total = totalReactions || Object.values(emojiCounts).reduce((s, c) => s + c, 0);
+    return { emojiCounts, mine, summaryEmoji, democraticAverage, total, has: total > 0 };
+}
+
+// True when the modal is open inside a plan / presentation (so a plan-item
+// sentiment exists to show).
+function modalIsInPlanContext() {
+    const hasSession = state.session.id && state.session.id.startsWith('rec');
+    return hasSession || document.body.classList.contains('presentation-active');
+}
+
+/**
+ * Populate and wire one scoped sentiment chip (global or plan). The chip renders
+ * its scope marker, the scope's summary sentiment emoji and a count; clicking it
+ * opens an anchored popup next to the chip (see openItemSentimentPopup).
+ */
+function renderSentimentChip(chip, recordId, scope) {
     if (!chip) return;
-    if (!recordId) { chip.style.display = 'none'; return; }
-
-    const aggregate = getAggregateReactions(recordId);
-    let totalReactions = 0;
-    let summaryEmoji = '';
-    let democraticAverage = 0;
-    if (aggregate instanceof Map && aggregate.size > 0) {
-        const res = computeDemocraticAverage(aggregate);
-        totalReactions = res.totalReactions || 0;
-        summaryEmoji = res.summaryEmoji || '';
-        democraticAverage = res.democraticAverage || 0;
-    }
+    const s = getScopeSentiment(recordId, scope);
+    const icon = scope === 'global' ? '🌐' : '👥';
+    const label = scope === 'global' ? 'Global item' : 'This plan';
 
     chip.style.display = 'inline-flex';
     chip.classList.add('clickable');
-    if (summaryEmoji && totalReactions > 0) {
-        chip.innerHTML = `<span class="emoji-indicator-emoji">${summaryEmoji}</span>${totalReactions > 1 ? `<span class="emoji-indicator-count">${totalReactions}</span>` : ''}`;
+
+    if (s.has) {
+        chip.innerHTML = `<span class="sentiment-chip-scope">${icon}</span><span class="emoji-indicator-emoji">${s.summaryEmoji}</span>${s.total > 1 ? `<span class="emoji-indicator-count">${s.total}</span>` : ''}`;
         chip.classList.add('has-reactions');
         chip.classList.remove('no-reactions');
-        const sign = democraticAverage >= 0 ? '+' : '';
-        chip.title = `Sentiment ${summaryEmoji} (${sign}${democraticAverage.toFixed(1)}) · ${totalReactions} reaction${totalReactions !== 1 ? 's' : ''} — tap to weigh in`;
+        const sign = s.democraticAverage >= 0 ? '+' : '';
+        chip.title = `${label} sentiment ${s.summaryEmoji} (${sign}${s.democraticAverage.toFixed(1)}) · ${s.total} reaction${s.total !== 1 ? 's' : ''} — tap to weigh in`;
     } else {
-        chip.innerHTML = '<span class="emoji-indicator-emoji">\u{1F60A}</span><span class="emoji-indicator-prompt">React</span>';
+        chip.innerHTML = `<span class="sentiment-chip-scope">${icon}</span><span class="emoji-indicator-prompt">React</span>`;
         chip.classList.remove('has-reactions');
         chip.classList.add('no-reactions');
-        chip.title = 'No reactions yet — tap to react';
+        chip.title = `${label} — no reactions yet, tap to react`;
     }
 
-    chip.onclick = (e) => { e.stopPropagation(); openModalReactionsSurface(); };
+    chip.onclick = (e) => { e.stopPropagation(); openItemSentimentPopup(chip, recordId, scope); };
     chip.onkeydown = (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModalReactionsSurface(); }
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openItemSentimentPopup(chip, recordId, scope); }
     };
+}
+
+/**
+ * Refresh both sentiment chips after the item name: the global-item chip (always)
+ * and the plan-item chip (only inside a plan / presentation). Two distinct, local
+ * controls — one per store — so the modal reads cleanly.
+ */
+function updateModalSentimentChips(recordId) {
+    const globalChip = document.getElementById('modal-item-sentiment-chip');
+    const planChip = document.getElementById('modal-plan-sentiment-chip');
+    if (!recordId) {
+        if (globalChip) globalChip.style.display = 'none';
+        if (planChip) planChip.style.display = 'none';
+        return;
+    }
+    if (globalChip) renderSentimentChip(globalChip, recordId, 'global');
+    if (planChip) {
+        if (modalIsInPlanContext()) renderSentimentChip(planChip, recordId, 'plan');
+        else planChip.style.display = 'none';
+    }
+}
+
+// ── Anchored sentiment popup (chat-message style) ───────────────────────────
+let _sentimentPopupCleanup = null;
+
+function closeItemSentimentPopup() {
+    document.querySelectorAll('.item-sentiment-popup').forEach(el => el.remove());
+    if (_sentimentPopupCleanup) { _sentimentPopupCleanup(); _sentimentPopupCleanup = null; }
+}
+
+// Pin the popup just below (or above, if no room) the chip that opened it, kept
+// within the viewport — the same approach the chat-message reaction picker uses.
+function positionSentimentPopup(popup, anchorEl) {
+    const rect = anchorEl.getBoundingClientRect();
+    popup.style.position = 'fixed';
+    const pw = popup.offsetWidth || 240;
+    const ph = popup.offsetHeight || 130;
+    let top = rect.bottom + 8;
+    if (top + ph > window.innerHeight - 8) top = Math.max(8, rect.top - ph - 8);
+    let left = rect.left;
+    if (left + pw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - pw - 8);
+    popup.style.top = `${Math.max(8, top)}px`;
+    popup.style.left = `${Math.max(8, left)}px`;
+}
+
+/**
+ * Open the anchored reaction popup for one scope (global / plan) next to the chip
+ * that was clicked. The popup shows a compact summary (only when reactions exist)
+ * above the standard eight-emoji picker, plus a "See conversation" link into the
+ * matching thread. Replaces the old behavior of expanding a large GUI inside the
+ * modal — this is local to the clicked emoji, like a chat-message emoji menu.
+ */
+function openItemSentimentPopup(anchorEl, recordId, scope) {
+    closeItemSentimentPopup();
+    if (!recordId || !anchorEl) return;
+    if (scope === 'plan' && !modalIsInPlanContext()) return;
+
+    const s = getScopeSentiment(recordId, scope);
+
+    const popup = document.createElement('div');
+    popup.className = 'item-sentiment-popup';
+    popup.dataset.scope = scope;
+    popup.dataset.recordId = recordId;
+
+    const head = document.createElement('div');
+    head.className = 'sentiment-popup-head';
+    head.textContent = scope === 'global' ? '🌐 Global item' : '👥 This plan';
+    popup.appendChild(head);
+
+    // Summary — only when this scope already has reactions.
+    if (s.has) {
+        const summary = document.createElement('div');
+        summary.className = 'sentiment-popup-summary';
+        const sign = s.democraticAverage >= 0 ? '+' : '';
+        const pills = Object.entries(s.emojiCounts)
+            .sort((a, b) => b[1] - a[1])
+            .map(([e, c]) => `<span class="sentiment-pill">${e}<span class="sentiment-pill-count">${c}</span></span>`)
+            .join('');
+        summary.innerHTML = `
+            <div class="sentiment-popup-avg">
+                <span class="sentiment-popup-avg-emoji">${s.summaryEmoji}</span>
+                <span class="sentiment-popup-avg-score">${sign}${s.democraticAverage.toFixed(1)}</span>
+                <span class="sentiment-popup-avg-label">avg · ${s.total} reaction${s.total !== 1 ? 's' : ''}</span>
+            </div>
+            <div class="sentiment-popup-pills">${pills}</div>
+        `;
+        popup.appendChild(summary);
+    }
+
+    const picker = document.createElement('div');
+    picker.className = 'sentiment-popup-picker';
+    EMOJI_REACTIONS.forEach(emoji => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sentiment-popup-emoji' + (s.mine.has(emoji) ? ' reacted' : '');
+        btn.textContent = emoji;
+        const score = REACTION_SCORES[emoji] || 0;
+        btn.title = `${emoji} ${score >= 0 ? '+' : ''}${score.toFixed(1)}`;
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleScopeReaction(recordId, scope, emoji, anchorEl);
+        });
+        picker.appendChild(btn);
+    });
+    popup.appendChild(picker);
+
+    const convo = document.createElement('button');
+    convo.type = 'button';
+    convo.className = 'sentiment-popup-convo';
+    convo.innerHTML = '💬 See conversation';
+    convo.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeItemSentimentPopup();
+        if (scope === 'global') openUCPGlobalForItem(recordId);
+        else openUCPForItem(recordId);
+    });
+    popup.appendChild(convo);
+
+    document.body.appendChild(popup);
+    positionSentimentPopup(popup, anchorEl);
+
+    const onDocClick = (e) => {
+        if (!popup.contains(e.target) && e.target !== anchorEl && !anchorEl.contains(e.target)) {
+            closeItemSentimentPopup();
+        }
+    };
+    const onKey = (e) => { if (e.key === 'Escape') closeItemSentimentPopup(); };
+    setTimeout(() => {
+        document.addEventListener('click', onDocClick);
+        document.addEventListener('keydown', onKey);
+    }, 0);
+    _sentimentPopupCleanup = () => {
+        document.removeEventListener('click', onDocClick);
+        document.removeEventListener('keydown', onKey);
+    };
+}
+
+/**
+ * Toggle the viewer's reaction within a single scope, then refresh the chips and
+ * re-open the popup so it reflects the new state. Plan reactions go to the plan
+ * store; global reactions go to the community store — never crossing over.
+ */
+async function toggleScopeReaction(recordId, scope, emoji, anchorEl) {
+    if (scope === 'plan') {
+        handleModalRSBEmojiSelect(recordId, emoji);
+    } else {
+        const record = getRecordById(recordId);
+        if (!record) return;
+        const ok = await toggleCommunityReactionForRecord(record, emoji);
+        if (!ok) return; // signed out (sign-in prompt shown) or errored
+    }
+    updateModalSentimentChips(recordId);
+    // Re-open the popup in place to show the updated picker/summary.
+    openItemSentimentPopup(anchorEl, recordId, scope);
 }
 
 /**
@@ -1952,13 +2125,16 @@ function renderInPlanSummary(record, itemState, isLocked) {
         <div class="in-plan-head">
             <span class="in-plan-check">✓</span>
             <span class="in-plan-title">In your plan</span>
-            <button type="button" class="in-plan-react-btn" title="See sentiment & react">😊 Reactions</button>
+            <button type="button" class="in-plan-react-btn" title="Plan sentiment & react">👥 Reactions</button>
         </div>
         <div class="in-plan-details">${details.join('<span class="in-plan-sep">·</span>')}</div>
         ${note ? `<div class="in-plan-note">${escapeHtml(note)}</div>` : ''}
     `;
     const reactBtn = block.querySelector('.in-plan-react-btn');
-    if (reactBtn) reactBtn.addEventListener('click', (e) => { e.stopPropagation(); openModalReactionsSurface(); });
+    if (reactBtn) reactBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openItemSentimentPopup(reactBtn, record.id, 'plan');
+    });
 
     container.insertBefore(block, container.firstChild);
 }
@@ -2417,8 +2593,8 @@ function handleModalRSBEmojiSelect(recordId, emoji) {
     // Re-render the modal RSB
     initModalReactions(recordId);
 
-    // Keep the after-name sentiment chip in sync with the new reaction.
-    updateModalSentimentChip(recordId);
+    // Keep the after-name sentiment chips in sync with the new reaction.
+    updateModalSentimentChips(recordId);
 
     // Update presentation view if active
     const emojiIndicator = document.querySelector(`.item-emoji-indicator[data-record-id="${recordId}"]`);
@@ -9097,7 +9273,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     if (modalRecordId) {
         initModalReactions(modalRecordId);
         initModalComments(modalRecordId);
-        updateModalSentimentChip(modalRecordId);
+        updateModalSentimentChips(modalRecordId);
     }
 
     } catch (error) {
@@ -9436,6 +9612,9 @@ export function hideDetailModal() {
     });
     // Reset the rendering guard when modal is closed
     isModalRendering = false;
+
+    // Dismiss any open sentiment popup so it never lingers over the page.
+    closeItemSentimentPopup();
 
     // Refresh presentation carousel if images may have been updated
     const recordId = modalOverlay?.dataset?.recordId;

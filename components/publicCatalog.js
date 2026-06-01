@@ -627,6 +627,29 @@ export function getCommunityRowForRecord(record) {
     return communityRowByCatalogId.get(record.id) || null;
 }
 
+/**
+ * Toggle the current user's community (global) reaction for a record's item and
+ * update the locally cached community row in place. Centralizes the community
+ * toggle (sign-in gate + API call + optimistic local update) so callers outside
+ * this module — e.g. the detail modal's global sentiment popup — reuse the exact
+ * same path the inline community picker uses.
+ * @returns {Promise<boolean>} true if applied, false if blocked (signed out) or errored.
+ */
+export async function toggleCommunityReactionForRecord(record, emoji) {
+    if (!record) return false;
+    if (!requireSignIn()) return false;
+    const row = getOrInitCommunityRow(record);
+    if (!row) return false;
+    const me = currentUser();
+    // No container yet -> send catalog identity so the server creates one.
+    const result = await api.togglePublicReaction(
+        row.id, emoji, null, row.id == null ? communityWriteOpts(record) : {});
+    if (!result) return false;
+    if (row.id == null && result.publicItemId != null) row.id = result.publicItemId;
+    applyReactionToggle(row, emoji, me.id, result.reacted);
+    return true;
+}
+
 function communityRowActivity(row) {
     const reactionTotal = Object.values(row?.reactions || {}).reduce((s, r) => s + (r.count || 0), 0);
     const commentCount = (row?.comments || []).length;
