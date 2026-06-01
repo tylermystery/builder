@@ -1851,6 +1851,119 @@ function initModalReactions(recordId) {
 }
 
 /**
+ * Open the modal's reaction surface (the stacked "This Plan" / "Community"
+ * layers) and bring it into view. A single consistent entry point used by the
+ * sentiment chip after the item name and by the "In your plan" summary block,
+ * so every "weigh in" affordance lands in the same place.
+ */
+function openModalReactionsSurface() {
+    const section = document.getElementById('modal-reactions-section');
+    if (!section) return;
+    if (section.style.display === 'none') section.style.display = 'block';
+    // Ensure the top accordion layer is expanded so the picker is visible.
+    const firstHeader = section.querySelector('.modal-rsb-accordion-header');
+    const firstBody = section.querySelector('.modal-rsb-accordion-body');
+    if (firstHeader && firstBody && !firstBody.classList.contains('expanded')) {
+        firstBody.classList.add('expanded');
+        firstHeader.classList.add('expanded');
+        const chev = firstHeader.querySelector('.modal-rsb-accordion-chevron');
+        if (chev) chev.textContent = '▾';
+    }
+    try { section.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+    catch (_) { section.scrollIntoView(); }
+    section.classList.add('reactions-flash');
+    setTimeout(() => section.classList.remove('reactions-flash'), 900);
+}
+
+/**
+ * Populate and wire the sentiment chip shown immediately after the item name in
+ * the detail modal. It renders the item's current summary sentiment emoji plus a
+ * reaction count (the hierarchical plan/community aggregate the modal already
+ * surfaces). Hover shows a breakdown; click opens the standard reaction surface
+ * so the viewer can weigh in — the same control everywhere something is reactable.
+ */
+function updateModalSentimentChip(recordId) {
+    const chip = document.getElementById('modal-item-sentiment-chip');
+    if (!chip) return;
+    if (!recordId) { chip.style.display = 'none'; return; }
+
+    const aggregate = getAggregateReactions(recordId);
+    let totalReactions = 0;
+    let summaryEmoji = '';
+    let democraticAverage = 0;
+    if (aggregate instanceof Map && aggregate.size > 0) {
+        const res = computeDemocraticAverage(aggregate);
+        totalReactions = res.totalReactions || 0;
+        summaryEmoji = res.summaryEmoji || '';
+        democraticAverage = res.democraticAverage || 0;
+    }
+
+    chip.style.display = 'inline-flex';
+    chip.classList.add('clickable');
+    if (summaryEmoji && totalReactions > 0) {
+        chip.innerHTML = `<span class="emoji-indicator-emoji">${summaryEmoji}</span>${totalReactions > 1 ? `<span class="emoji-indicator-count">${totalReactions}</span>` : ''}`;
+        chip.classList.add('has-reactions');
+        chip.classList.remove('no-reactions');
+        const sign = democraticAverage >= 0 ? '+' : '';
+        chip.title = `Sentiment ${summaryEmoji} (${sign}${democraticAverage.toFixed(1)}) · ${totalReactions} reaction${totalReactions !== 1 ? 's' : ''} — tap to weigh in`;
+    } else {
+        chip.innerHTML = '<span class="emoji-indicator-emoji">\u{1F60A}</span><span class="emoji-indicator-prompt">React</span>';
+        chip.classList.remove('has-reactions');
+        chip.classList.add('no-reactions');
+        chip.title = 'No reactions yet — tap to react';
+    }
+
+    chip.onclick = (e) => { e.stopPropagation(); openModalReactionsSurface(); };
+    chip.onkeydown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModalReactionsSurface(); }
+    };
+}
+
+/**
+ * Render the "In your plan" summary block shown in the detail modal when the
+ * item is already part of the plan. It replaces the bare "Update Plan" call to
+ * action with a confirmation of what was specifically added (quantity, adjusted
+ * total, and any note) and carries a reactions affordance that opens the same
+ * standard sentiment surface. The "Update plan" button is preserved beneath it
+ * so editing options stays possible. Pass isLocked=false to clear the block.
+ */
+function renderInPlanSummary(record, itemState, isLocked) {
+    const container = document.getElementById('modal-actions-container');
+    if (!container) return;
+    // The modal DOM is reused across opens — always clear any prior instance.
+    const existing = document.getElementById('modal-in-plan-summary');
+    if (existing) existing.remove();
+    if (!isLocked || !record) return;
+
+    const qty = (itemState && itemState.quantity) ? itemState.quantity : 1;
+    const optIndex = (itemState && itemState.selectedOptionIndex) || 0;
+    let unitPrice = 0;
+    try { unitPrice = getRecordPrice(record, optIndex) || 0; } catch (_) {}
+    const total = unitPrice * qty;
+    const note = (itemState && itemState.note) ? String(itemState.note) : '';
+
+    const details = [`<span class="in-plan-qty">Qty ${qty}</span>`];
+    if (total > 0) details.push(`<span class="in-plan-price">$${total.toFixed(2)}</span>`);
+
+    const block = document.createElement('div');
+    block.id = 'modal-in-plan-summary';
+    block.className = 'modal-in-plan-summary';
+    block.innerHTML = `
+        <div class="in-plan-head">
+            <span class="in-plan-check">✓</span>
+            <span class="in-plan-title">In your plan</span>
+            <button type="button" class="in-plan-react-btn" title="See sentiment & react">😊 Reactions</button>
+        </div>
+        <div class="in-plan-details">${details.join('<span class="in-plan-sep">·</span>')}</div>
+        ${note ? `<div class="in-plan-note">${escapeHtml(note)}</div>` : ''}
+    `;
+    const reactBtn = block.querySelector('.in-plan-react-btn');
+    if (reactBtn) reactBtn.addEventListener('click', (e) => { e.stopPropagation(); openModalReactionsSurface(); });
+
+    container.insertBefore(block, container.firstChild);
+}
+
+/**
  * Build the "This Plan" reactions card (the existing per-plan RSB accordion),
  * labelled and ready to sit above the Community layer. Returns the card element.
  */
@@ -2005,33 +2118,19 @@ function switchModalRSBTab(panel, tabId) {
  */
 function buildModalRSBReactionsContent(container, recordId) {
     container.innerHTML = '';
-    const layout = getModalRSBLayout();
 
-    // Layout toggle
-    const toggleRow = document.createElement('div');
-    toggleRow.className = 'rsb-layout-toggle';
-    MODAL_RSB_LAYOUTS.forEach(l => {
-        const btn = document.createElement('button');
-        btn.className = `rsb-layout-btn${l.id === layout ? ' active' : ''}`;
-        btn.title = l.label;
-        btn.textContent = l.icon;
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            document.body.dataset.rsbLayout = l.id;
-            try { localStorage.setItem('rsb-layout', l.id); } catch (_) {}
-            buildModalRSBReactionsContent(container, recordId);
-        });
-        toggleRow.appendChild(btn);
-    });
-    container.appendChild(toggleRow);
-
-    let currentUserEmoji = null;
+    // Standardized reaction picker: a single row of the eight quick reactions,
+    // visually and behaviourally identical to the Community layer's picker so
+    // "This Plan" and "Community" read as the same control (differing only in
+    // which store they write to). The earlier multi-layout tiered picker has
+    // been retired from this surface to keep every reaction menu consistent.
+    let currentUserEmoji = new Set();
     try {
         const user = getCurrentUser();
         const reactions = state.session.reactions?.get(recordId);
         if (reactions instanceof Map) {
             const emojiData = reactions.get(user.id);
-            // Multi-emoji model: convert to Set for checking
+            // Multi-emoji model: normalize to a Set for membership checks.
             if (emojiData instanceof Set) {
                 currentUserEmoji = emojiData;
             } else if (typeof emojiData === 'string') {
@@ -2040,25 +2139,34 @@ function buildModalRSBReactionsContent(container, recordId) {
         }
     } catch (_) {}
 
-    const emojiLayout = document.createElement('div');
-    emojiLayout.className = 'rsb-emoji-layout';
-
-    switch (layout) {
-        case 'radial-grid':
-            buildModalRSBRadialGrid(emojiLayout, recordId, currentUserEmoji, container);
-            break;
-        case 'orbit':
-            buildModalRSBOrbit(emojiLayout, recordId, currentUserEmoji);
-            break;
-        case 'minimal':
-            buildModalRSBMinimal(emojiLayout, recordId, currentUserEmoji);
-            break;
-        default:
-            buildModalRSBTieredRows(emojiLayout, recordId, currentUserEmoji);
-            break;
+    // Per-emoji counts across the hierarchical aggregate (matches the Summary tab).
+    const aggregate = getAggregateReactions(recordId);
+    const emojiCounts = {};
+    if (aggregate instanceof Map) {
+        aggregate.forEach((emojiData) => {
+            const emojis = emojiData instanceof Set ? emojiData : new Set([emojiData]);
+            for (const emoji of emojis) emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
+        });
     }
 
-    container.appendChild(emojiLayout);
+    const row = document.createElement('div');
+    row.className = 'public-reaction-row rsb-standard-reaction-row';
+    EMOJI_REACTIONS.forEach(emoji => {
+        const count = emojiCounts[emoji] || 0;
+        const mine = currentUserEmoji.has(emoji);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'public-reaction-btn' + (mine ? ' reacted' : '');
+        btn.dataset.emoji = emoji;
+        btn.dataset.recordId = recordId;
+        btn.innerHTML = `<span class="pr-emoji">${emoji}</span>${count ? `<span class="pr-count">${count}</span>` : ''}`;
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleModalRSBEmojiSelect(recordId, emoji);
+        });
+        row.appendChild(btn);
+    });
+    container.appendChild(row);
 }
 
 function buildModalRSBEmojiButton(emoji, recordId, currentUserEmoji) {
@@ -2308,6 +2416,9 @@ function handleModalRSBEmojiSelect(recordId, emoji) {
 
     // Re-render the modal RSB
     initModalReactions(recordId);
+
+    // Keep the after-name sentiment chip in sync with the new reaction.
+    updateModalSentimentChip(recordId);
 
     // Update presentation view if active
     const emojiIndicator = document.querySelector(`.item-emoji-indicator[data-record-id="${recordId}"]`);
@@ -4770,9 +4881,15 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     if (addToPlanBtn) {
         // Show Add to Plan / Update Plan button for all items including free ones
         addToPlanBtn.style.display = '';
-        addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
+        addToPlanBtn.textContent = isLocked ? 'Update plan' : 'Add to Plan';
         addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
     }
+
+    // When the item is already in the plan, surface what specifically was added
+    // (quantity, total, note) plus a reactions affordance, above the update button.
+    // Always called so any stale block from a prior modal open is cleared; only
+    // renders for non-package locked items (packages have their own button flow).
+    renderInPlanSummary(record, itemState, isLocked && !isPackageItem);
 
     // Setup Price Action Row buttons (Rapid Pay + Chip In) next to price
     const rapidPayBtn = document.getElementById('modal-rapid-pay-btn');
@@ -8980,6 +9097,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     if (modalRecordId) {
         initModalReactions(modalRecordId);
         initModalComments(modalRecordId);
+        updateModalSentimentChip(modalRecordId);
     }
 
     } catch (error) {
