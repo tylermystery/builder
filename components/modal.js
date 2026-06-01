@@ -4165,6 +4165,9 @@ async function handleItemDelete(record, btn) {
         alert('Failed to delete. Please try again.');
     }
 }
+
+/**
+ * Build cards for the components that make up a saved plan.
  * @param {HTMLElement} container - Container element to append cards to
  * @param {Array} componentRecords - Array of component data objects
  * @param {string} sessionId - ID of the linked session
