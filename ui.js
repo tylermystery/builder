@@ -184,12 +184,34 @@ function createSkeletonCard() {
 }
 
 // Helper function to find child items for a grouping
+// Read the catalog's active status filter so carousel children can honor it.
+// Returns 'all' when the filter UI isn't present (e.g. presentation/viewer
+// contexts), which preserves the original "show everything" behavior there.
+function getActiveCatalogStatusFilter() {
+    const el = typeof document !== 'undefined' && document.getElementById('status-filter');
+    return (el && el.value) || 'all';
+}
+
+// Decide whether a child item matches the active status filter. Carousel
+// children are expanded from the UNFILTERED store catalog, so without this
+// gate every status filter would show the same items. We intentionally leave
+// 'all' (Show All) and 'Available' untouched — those keep the existing
+// landing-page behavior — and only restrict the more specific selections
+// (e.g. "Coming Soon", "Sold Out") to items that actually carry that status.
+function childItemMatchesStatusFilter(record, statusFilter) {
+    if (!statusFilter || statusFilter === 'all' || statusFilter === 'Available') return true;
+    if (!record || !record.fields) return false;
+    return record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusFilter;
+}
+
 function getChildItemsForGrouping(groupingRecord, allRecords) {
     const groupingNameForFilter = groupingRecord.fields.Name.toLowerCase().replace(/\s+/g, ' ');
+    const statusFilter = getActiveCatalogStatusFilter();
 
     const results = allRecords.filter(r => {
         const itemType = r.fields['Item Type'];
         if (itemType !== 'Bookable Item' && itemType !== 'Event' && itemType !== 'Package') return false;
+        if (!childItemMatchesStatusFilter(r, statusFilter)) return false;
         const itemCategories = (r.fields.Categories || '')
             .split(',')
             .map(cat => cat.trim().toLowerCase().replace(/\s+/g, ' '));
@@ -696,7 +718,19 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
             }
         }
     } else {
-        // Render groupings as horizontal carousel sections
+        // Render groupings as horizontal carousel sections.
+        // Carousel children honor the active status filter (see
+        // getChildItemsForGrouping); groupings with no matching children are
+        // skipped, so e.g. "Coming Soon"/"Sold Out" no longer surface every
+        // category. Log the decision so this stays easy to verify.
+        const activeStatusFilter = getActiveCatalogStatusFilter();
+        console.log('[STATUS FILTER] Rendering carousels with status filter.', {
+            statusFilter: activeStatusFilter,
+            groupingsBeforeSkip: groupings.length,
+            groupingsWithMatches: groupings.filter(
+                g => getChildItemsForGrouping(g, state.records.all).length > 0
+            ).length
+        });
         for (const grouping of groupings) {
             const childItems = getChildItemsForGrouping(grouping, state.records.all);
             if (childItems.length > 0) {
