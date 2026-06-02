@@ -10,6 +10,56 @@ import { buildGoalBucket, calculateRecommendationScore } from '../availability.j
 import { CONSTANTS } from '../config.js';
 import { getRecordPrice, getRecordPriceRange, getTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { log } from '../utils/debug.js';
+import { ensureStorePromotionsLoaded, bestDisplayPromoForItem, rewardLabel, promoTimingHint } from '../utils/promotions-client.js';
+
+// Build the bits of card UI a live promotion adds: a corner badge and a
+// struck-through original price next to the discounted one. Returns empty
+// strings when no deal applies, so a card with no promotion renders exactly as
+// before. `record` is the catalog record; `displayPriceText` is the normal
+// price markup the card would otherwise show.
+async function buildPromoCardUI(record, basePriceCents, displayPriceText) {
+    const empty = { badge: '', priceHTML: displayPriceText };
+    try {
+        const fields = record.fields || {};
+        const storeIds = Array.isArray(fields.Stores) ? fields.Stores : (fields.Stores ? [fields.Stores] : []);
+        if (storeIds.length === 0) return empty;
+        // Make sure each owning store's deals are loaded before we look up a match.
+        await Promise.all(storeIds.map(s => ensureStorePromotionsLoaded(s)));
+
+        const catRaw = fields[CONSTANTS.FIELD_NAMES.CATEGORIES];
+        const categories = Array.isArray(catRaw)
+            ? catRaw
+            : (typeof catRaw === 'string' ? catRaw.split(',') : []);
+
+        const best = bestDisplayPromoForItem({
+            itemId: record.id,
+            storeIds,
+            categories,
+            basePriceCents,
+        });
+        if (!best) return empty;
+
+        const label = rewardLabel(best.promo);
+        const hint = promoTimingHint(best.promo);
+        const left = (best.remaining !== null && best.remaining !== undefined)
+            ? `<span class="promo-stock">${best.remaining} left</span>` : '';
+        const badge = `<span class="promo-badge" title="${(best.promo.name || label)}${hint ? ' — ' + hint : ''}">${label}</span>`;
+
+        // Only swap in a struck-through price when the deal is live right now and
+        // actually lowers this item's price; otherwise advertise with the badge
+        // alone (e.g. a last-minute deal on a card that has no event date yet).
+        let priceHTML = displayPriceText;
+        if (best.eligible && best.discountCents > 0 && typeof basePriceCents === 'number' && basePriceCents > 0) {
+            const orig = `$${(basePriceCents / 100).toFixed(2)}`;
+            const now = `$${(best.discountedCents / 100).toFixed(2)}`;
+            priceHTML = `<span class="price-original">${orig}</span> <span class="price-discounted">${now}</span>`;
+        }
+        const sub = (hint || left) ? `<div class="promo-subline">${[label, hint].filter(Boolean).join(' · ')} ${left}</div>` : '';
+        return { badge, priceHTML, sub };
+    } catch (e) {
+        return empty;
+    }
+}
 
 // Shared SVG constant - avoids re-creating the string for each card/icon update
 const HEART_SVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
@@ -695,6 +745,13 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     } else {
         priceHTML = displayPrice === 0 ? 'Free' : `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
     }
+    // Promotion overlay (badge + struck-through price). Additive: no active deal
+    // for this item leaves priceHTML and the badges exactly as before.
+    const promoBaseCents = hasPriceRange ? null : (typeof displayPrice === 'number' ? Math.round(displayPrice * 100) : null);
+    const promoUI = await buildPromoCardUI(record, promoBaseCents, priceHTML);
+    priceHTML = promoUI.priceHTML;
+    const promoBadge = promoUI.badge || '';
+    const promoSubline = promoUI.sub || '';
     // For items whose options yield a price range, adjusting quantity / adding to
     // the plan from the catalog would silently use the default option, which is
     // misleading. Instead, surface a "See options" button that opens the detail
@@ -742,13 +799,14 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             ${publicIdeaBadge}
             ${imageSourceIndicator}
             ${scoreBanner}
+            ${promoBadge}
             </div>
         <div class="event-card-content">
             <h3>${fields.Name || 'Untitled Event'}${sentimentChipHTML()}</h3>
             <p class="description">${fields.Description || ''}</p>
         </div>
         <div class="card-footer">
-            <div class="price-wrapper"><div class="valuation-meta"><div class="price">${priceHTML}</div>${vitalityBadgeHTML}</div></div>
+            <div class="price-wrapper"><div class="valuation-meta"><div class="price">${priceHTML}</div>${vitalityBadgeHTML}</div>${promoSubline}</div>
             <div class="actions-wrapper">${actionsHTML}</div>
         </div>
     `;

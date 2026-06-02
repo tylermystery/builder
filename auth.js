@@ -169,8 +169,24 @@ export function showUserModal(options = {}) {
         if (biometricSetupPrompt) biometricSetupPrompt.style.display = 'none';
 
         const adminProfileBtn = document.getElementById('admin-bulk-profile-btn');
-        if (user.isOwner && user.ownerDashboardId) {
-            ownerDashboardLink.href = `/store-dashboard.html?id=${user.ownerDashboardId}`;
+
+        // Surface the Store Dashboard link for the store the user is currently
+        // viewing whenever they have publish permission for it — not only for the
+        // single store recorded on their OwnedStore field. This means every
+        // publisher on a store sees that store's dashboard, and the link follows
+        // the active store as the user moves between shops they can publish to.
+        // Falls back to the user's owned-store dashboard when the active store
+        // isn't one they can publish to (preserving the prior behavior).
+        let dashboardId = null;
+        const activeStore = state.stores.all.find(s => s.id === state.ui.activeShopId);
+        if (activeStore && api.userHasPublishPermission() && activeStore.fields.OwnerDashboardID) {
+            dashboardId = activeStore.fields.OwnerDashboardID;
+        } else if (user.isOwner && user.ownerDashboardId) {
+            dashboardId = user.ownerDashboardId;
+        }
+
+        if (dashboardId) {
+            ownerDashboardLink.href = `/store-dashboard.html?id=${dashboardId}`;
             ownerDashboardLink.style.display = 'block';
         } else {
             ownerDashboardLink.style.display = 'none';

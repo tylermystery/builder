@@ -2,6 +2,7 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
 const { SENDER_EMAIL, SENDER_NAME, buildFrom } = require('./utils/email-config');
+const { recordPromotionRedemption } = require('./utils/promotions-redeem');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, STRIPE_WEBHOOK_SECRET, SITE_URL, URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -285,6 +286,27 @@ async function handlePaymentIntentUpdate(paymentIntent, status) {
   });
 
   console.log(`[stripe-webhook] Updated session ${session.id} for intent ${paymentIntent.id}, status=${status}`);
+
+  // Burn a promotion redemption slot, if this payment applied one. Only on a
+  // real success (not ACH 'processing'), and idempotently — a webhook retry
+  // must not consume a second slot. Never let a promo failure break the webhook.
+  if (status === 'succeeded') {
+    const promotionId = paymentIntent.metadata?.promotionId;
+    if (promotionId) {
+      try {
+        const result = await recordPromotionRedemption({
+          promotionId,
+          sessionId: session.id,
+          userId: null,
+          paymentIntentId: paymentIntent.id,
+          amountCents: paymentIntent.amount,
+        });
+        console.log(`[stripe-webhook] Promotion ${promotionId} redemption:`, JSON.stringify(result));
+      } catch (promoErr) {
+        console.error('[stripe-webhook] Failed to record promotion redemption:', promoErr.message);
+      }
+    }
+  }
 
   const baseUrl = SITE_URL || URL || 'https://whatthefun.wtf';
   let store = null;

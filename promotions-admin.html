@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <title>Promotions · WhatTheFun</title>
+  <style>
+    :root {
+      --ink: #1a1a2e;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --brand: #b71c1c;
+      --brand2: #e53935;
+      --bg: #f7f7fb;
+      --ok: #2e7d32;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.45;
+    }
+    header {
+      background: linear-gradient(135deg, #e53935 0%, #b71c1c 100%);
+      color: #fff; padding: 22px 24px;
+    }
+    header h1 { margin: 0; font-size: 20px; letter-spacing: .3px; }
+    header p { margin: 4px 0 0; opacity: .9; font-size: 13px; }
+    main { max-width: 920px; margin: 0 auto; padding: 24px 16px 64px; }
+    .card {
+      background: #fff; border: 1px solid var(--line); border-radius: 12px;
+      padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .card h2 { margin: 0 0 14px; font-size: 16px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .4px; }
+    input, select, textarea {
+      width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px;
+      font-size: 14px; font-family: inherit; background: #fff;
+    }
+    textarea { resize: vertical; min-height: 56px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .btn {
+      appearance: none; border: 0; border-radius: 9px; padding: 10px 18px;
+      font-size: 14px; font-weight: 700; cursor: pointer; color: #fff;
+      background: linear-gradient(135deg, #e53935 0%, #b71c1c 100%);
+    }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn.secondary { background: #f1f1f4; color: var(--ink); }
+    .btn.tiny { padding: 6px 12px; font-size: 12px; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .promo {
+      border: 1px solid var(--line); border-radius: 10px; padding: 14px;
+      margin-bottom: 12px; display: flex; justify-content: space-between; gap: 12px; align-items: flex-start;
+    }
+    .promo .meta { font-size: 13px; color: var(--muted); margin-top: 4px; }
+    .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+    .pill.on { background: #e8f5e9; color: var(--ok); }
+    .pill.off { background: #fdecea; color: var(--brand); }
+    .pill.deal { background: #fff3e0; color: #e65100; margin-left: 6px; }
+    .promo-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    #msg { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; display: none; font-size: 14px; }
+    #msg.err { background: #fdecea; color: var(--brand); display: block; }
+    #msg.ok { background: #e8f5e9; color: var(--ok); display: block; }
+    .gated { display: none; }
+    @media (max-width: 640px) { .row, .row-3 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Promotions</h1>
+    <p>Create and manage deals for your store. You must have publish permission for the store.</p>
+  </header>
+  <main>
+    <div id="msg"></div>
+
+    <div class="card">
+      <h2>Store</h2>
+      <label for="storeId">Store record ID</label>
+      <input id="storeId" placeholder="rec…" autocomplete="off" />
+      <div class="hint">This is your Airtable Store record id. Promotions you create belong to this store, and only its publish-permission users can edit them.</div>
+      <div style="margin-top:12px"><button class="btn secondary" id="loadBtn">Load promotions</button></div>
+    </div>
+
+    <div class="card gated" id="formCard">
+      <h2>New promotion</h2>
+      <label for="name">Name</label>
+      <input id="name" placeholder="25% off — Last-minute" />
+
+      <label for="description">Description (optional)</label>
+      <textarea id="description" placeholder="Shown to your team; helps you remember the campaign."></textarea>
+
+      <div class="row">
+        <div>
+          <label for="rewardType">Reward type</label>
+          <select id="rewardType">
+            <option value="percent">Percent off</option>
+            <option value="amount">Amount off ($)</option>
+          </select>
+        </div>
+        <div>
+          <label for="rewardValue"><span id="rewardValueLabel">Percent (e.g. 25)</span></label>
+          <input id="rewardValue" type="number" min="1" placeholder="25" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="scopeType">Applies to</label>
+          <select id="scopeType">
+            <option value="store">Every item in this store</option>
+            <option value="item">A specific item</option>
+            <option value="category">A category in this store</option>
+          </select>
+        </div>
+        <div id="targetWrap" style="display:none">
+          <label for="target"><span id="targetLabel">Target</span></label>
+          <input id="target" placeholder="" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="eligibilityMode">Date rule</label>
+          <select id="eligibilityMode">
+            <option value="fixed_end">Ends on a date (shared deadline)</option>
+            <option value="rolling">Last-minute (event within N days)</option>
+          </select>
+        </div>
+        <div id="fixedWrap">
+          <label for="endsAt">Ends at</label>
+          <input id="endsAt" type="datetime-local" />
+        </div>
+        <div id="rollingWrap" style="display:none">
+          <label for="windowDays">Window (days before event)</label>
+          <input id="windowDays" type="number" min="1" placeholder="14" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="startsAt">Starts at (optional)</label>
+          <input id="startsAt" type="datetime-local" />
+        </div>
+        <div>
+          <label for="maxRedemptions">Max redemptions (blank = unlimited)</label>
+          <input id="maxRedemptions" type="number" min="1" placeholder="3" />
+        </div>
+      </div>
+
+      <div style="margin-top:16px"><button class="btn" id="createBtn">Create promotion</button></div>
+    </div>
+
+    <div class="card gated" id="listCard">
+      <h2>Your promotions</h2>
+      <div id="list"></div>
+    </div>
+  </main>
+
+  <script src="/promotions-admin.js" type="module"></script>
+</body>
+</html>

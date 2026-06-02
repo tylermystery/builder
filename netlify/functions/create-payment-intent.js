@@ -1,4 +1,27 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const jwt = require('jsonwebtoken');
+
+// Verify the short-lived discount token issued by /api/promotions/quote. The
+// discount the customer is charged is therefore the one the promotions engine
+// computed server-side, never a number the browser supplied. An absent or
+// invalid token simply means "no discount" — checkout proceeds at full price
+// rather than failing, so a promo hiccup never blocks a sale.
+function verifyDiscountToken(token, sessionId) {
+  if (!token || !process.env.JWT_SECRET) return { discountInCents: 0, promotionId: null };
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!decoded || decoded.kind !== 'promo-discount') return { discountInCents: 0, promotionId: null };
+    // If the token was bound to a session, it must match this request's session.
+    if (decoded.sessionId && sessionId && decoded.sessionId !== sessionId) {
+      return { discountInCents: 0, promotionId: null };
+    }
+    const cents = Math.max(0, Math.round(Number(decoded.discountCents) || 0));
+    return { discountInCents: cents, promotionId: decoded.promotionId != null ? String(decoded.promotionId) : null };
+  } catch (e) {
+    console.warn('[create-payment-intent] discount token rejected:', e.message);
+    return { discountInCents: 0, promotionId: null };
+  }
+}
 
 // Define a simplified fee structure for demonstration (adjust these rates)
 // Standard Card: 2.9% + $0.30
@@ -64,12 +87,13 @@ exports.handler = async (event) => {
     }
 
     const body = JSON.parse(event.body);
-    baseAmountInCents = body.amount; // This is the subtotal + tip (excluding fee)
+    baseAmountInCents = body.amount; // This is the subtotal + tip (excluding fee AND before any promotion discount)
     // Client must send the selected payment type for accurate fee calculation
     paymentMethodType = body.paymentMethodType || 'card';
     var sessionId = body.sessionId || null;
     var customerEmail = body.customerEmail || null;
     existingPaymentIntentId = body.paymentIntentId || null;
+    var discountToken = body.discountToken || null;
   } catch (error) {
     console.error('[create-payment-intent] Error parsing request body:', error);
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid request body.' }) };
@@ -103,9 +127,28 @@ exports.handler = async (event) => {
   }
 
   try {
+    // Apply any server-authorised promotion discount. Clamp so the discounted
+    // base never drops below Stripe's 50-cent floor.
+    const promo = verifyDiscountToken(discountToken, sessionId);
+    let discountInCents = promo.discountInCents;
+    if (discountInCents > 0) {
+      discountInCents = Math.min(discountInCents, Math.max(0, baseAmountInCents - 50));
+    }
+    const effectiveBaseInCents = baseAmountInCents - discountInCents;
+    if (discountInCents > 0) {
+      console.log(`[create-payment-intent] Applying promotion ${promo.promotionId}: -${discountInCents}c (base ${baseAmountInCents}c -> ${effectiveBaseInCents}c)`);
+    }
+
     // Calculate the fee and the new total amount (including fee)
-    const processingFeeInCents = calculateProcessingFee(baseAmountInCents, paymentMethodType);
-    const finalAmountInCents = baseAmountInCents + processingFeeInCents;
+    const processingFeeInCents = calculateProcessingFee(effectiveBaseInCents, paymentMethodType);
+    const finalAmountInCents = effectiveBaseInCents + processingFeeInCents;
+
+    const promoMetadata = {
+      baseAmountInCents: String(effectiveBaseInCents),
+      processingFeeInCents: String(processingFeeInCents),
+      promotionId: discountInCents > 0 && promo.promotionId ? String(promo.promotionId) : '',
+      discountInCents: String(discountInCents),
+    };
 
     let paymentIntent;
 
@@ -113,20 +156,19 @@ exports.handler = async (event) => {
       // Update existing PaymentIntent — keeps the same client_secret so the
       // Stripe PaymentElement doesn't need to be rebuilt (preserves user's
       // payment-method selection and avoids the "double-click" bug).
-      console.log(`[create-payment-intent] Updating PaymentIntent ${existingPaymentIntentId}: base=${baseAmountInCents}c + fee=${processingFeeInCents}c = total=${finalAmountInCents}c, type=${paymentMethodType}`);
+      console.log(`[create-payment-intent] Updating PaymentIntent ${existingPaymentIntentId}: base=${effectiveBaseInCents}c + fee=${processingFeeInCents}c = total=${finalAmountInCents}c, type=${paymentMethodType}`);
       paymentIntent = await stripe.paymentIntents.update(existingPaymentIntentId, {
         amount: finalAmountInCents,
         metadata: {
           sessionId: sessionId || '',
           customerEmail: customerEmail || '',
-          baseAmountInCents: String(baseAmountInCents),
-          processingFeeInCents: String(processingFeeInCents),
+          ...promoMetadata,
         },
       });
       console.log(`[create-payment-intent] PaymentIntent updated: id=${paymentIntent.id}, status=${paymentIntent.status}, amount=${paymentIntent.amount}c`);
     } else {
       // Create a new PaymentIntent
-      console.log(`[create-payment-intent] Creating PaymentIntent: base=${baseAmountInCents}c + fee=${processingFeeInCents}c = total=${finalAmountInCents}c, type=${paymentMethodType}`);
+      console.log(`[create-payment-intent] Creating PaymentIntent: base=${effectiveBaseInCents}c + fee=${processingFeeInCents}c = total=${finalAmountInCents}c, type=${paymentMethodType}`);
       paymentIntent = await stripe.paymentIntents.create({
         amount: finalAmountInCents,
         currency: 'usd',
@@ -134,8 +176,7 @@ exports.handler = async (event) => {
         metadata: {
           sessionId: sessionId || '',
           customerEmail: customerEmail || '',
-          baseAmountInCents: String(baseAmountInCents),
-          processingFeeInCents: String(processingFeeInCents),
+          ...promoMetadata,
         },
       });
       console.log(`[create-payment-intent] PaymentIntent created: id=${paymentIntent.id}, status=${paymentIntent.status}, amount=${paymentIntent.amount}c`);
@@ -146,7 +187,9 @@ exports.handler = async (event) => {
       body: JSON.stringify({
           clientSecret: paymentIntent.client_secret,
           paymentIntentId: paymentIntent.id,
-          processingFeeInCents: processingFeeInCents
+          processingFeeInCents: processingFeeInCents,
+          discountInCents: discountInCents,
+          promotionId: discountInCents > 0 && promo.promotionId ? promo.promotionId : null,
       }),
     };
   } catch (error) {
