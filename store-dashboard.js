@@ -240,6 +240,13 @@ async function initializeDashboard() {
 
         document.getElementById('store-name-header').textContent = `${store.fields.Name} Dashboard`;
 
+        // Point the promotions tool at this store, with its record id pre-filled
+        // so the publisher never has to copy/paste it by hand.
+        const promoLink = document.getElementById('promotions-admin-link');
+        if (promoLink) {
+            promoLink.href = `promotions-admin.html?storeId=${encodeURIComponent(store.id)}`;
+        }
+
         let itemsHtml = items.map(item => `<div>${item.fields.Name}</div>`).join('');
         document.getElementById('item-list-container').innerHTML = `<ul>${itemsHtml}</ul>`;
 
