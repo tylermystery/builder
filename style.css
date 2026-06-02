@@ -15415,3 +15415,61 @@ hr.total-divider {
 /* ==========================================================================
    END UNIFIED ACTION MENU
    ========================================================================== */
+
+/* ==========================================================================
+   PROMOTIONS (deals / discounts) — badges, struck-through pricing, stock
+   Additive styling; only renders when an item has an active promotion.
+   ========================================================================== */
+.promo-badge {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    z-index: 4;
+    background: linear-gradient(135deg, #e53935 0%, #b71c1c 100%);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(183, 28, 28, 0.35);
+    text-transform: uppercase;
+}
+.price-original {
+    text-decoration: line-through;
+    color: #9aa0a6;
+    font-weight: 500;
+    margin-right: 4px;
+}
+.price-discounted {
+    color: #c62828;
+    font-weight: 800;
+}
+.promo-subline {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #b71c1c;
+    font-weight: 600;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.promo-stock {
+    background: #fff3e0;
+    color: #e65100;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-weight: 700;
+}
+/* Detail modal + checkout discount line */
+.modal-promo-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #c62828;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 6px 0;
+}
+.checkout-discount-row span:last-child { color: #c62828; font-weight: 700; }

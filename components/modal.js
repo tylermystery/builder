@@ -20,6 +20,40 @@ import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } fro
 import { openActionMenu } from './actionMenu.js';
 import { syncPlanState as syncPlanStateAcrossViews } from '../utils/planStateSync.js';
 import { getCommunityRowForRecord, toggleCommunityReactionForRecord, isPublicIdeaRecord } from './publicCatalog.js';
+import { ensureStorePromotionsLoaded, bestDisplayPromoForItem, rewardLabel, promoTimingHint, quoteCart } from '../utils/promotions-client.js';
+
+// Decorate the detail-modal price with an active promotion (struck-through
+// original + discounted price + a small deal line). Best-effort and async: if
+// no deal applies, or anything fails, the price is left exactly as rendered.
+async function decorateModalPriceWithPromo(record, basePriceCents) {
+    try {
+        const el = document.getElementById('modal-item-price');
+        if (!el || typeof basePriceCents !== 'number' || basePriceCents <= 0) return;
+        const fields = record.fields || {};
+        const storeIds = Array.isArray(fields.Stores) ? fields.Stores : (fields.Stores ? [fields.Stores] : []);
+        if (storeIds.length === 0) return;
+        await Promise.all(storeIds.map(s => ensureStorePromotionsLoaded(s)));
+        const catRaw = fields[CONSTANTS.FIELD_NAMES.CATEGORIES];
+        const categories = Array.isArray(catRaw) ? catRaw : (typeof catRaw === 'string' ? catRaw.split(',') : []);
+        const best = bestDisplayPromoForItem({ itemId: record.id, storeIds, categories, basePriceCents });
+        if (!best) return;
+        // Remove a stale promo line from a previous open.
+        document.getElementById('modal-promo-line')?.remove();
+        const label = rewardLabel(best.promo);
+        const hint = promoTimingHint(best.promo);
+        const left = (best.remaining !== null && best.remaining !== undefined) ? ` · ${best.remaining} left` : '';
+        if (best.eligible && best.discountCents > 0) {
+            const orig = `$${(basePriceCents / 100).toFixed(2)}`;
+            const now = `$${(best.discountedCents / 100).toFixed(2)}`;
+            el.innerHTML = `<span class="price-original">${orig}</span> <span class="price-discounted">${now}</span>`;
+        }
+        const line = document.createElement('div');
+        line.id = 'modal-promo-line';
+        line.className = 'modal-promo-line';
+        line.innerHTML = `<span class="promo-badge" style="position:static">${label}</span><span>${best.promo.name || ''}${hint ? ' — ' + hint : ''}${left}</span>`;
+        el.insertAdjacentElement('afterend', line);
+    } catch (e) { /* leave price untouched on any error */ }
+}
 
 console.log('[MODULE DEBUG] modal.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -352,6 +386,82 @@ let currentProcessingFee = 0; // To store the current fee
 let currentShopSettings = {};
 let currentChipInAmount = 0; // Chip-in community contribution amount
 let currentCheckoutScope = null; // { mode: 'plan' | 'item', itemId, itemName, quantity, price, record, highlightChipIn }
+
+// --- Promotion / discount checkout state -----------------------------------
+// The server is authoritative for the discount: /api/promotions/quote returns a
+// signed token, create-payment-intent applies it. These just carry the current
+// token + amount so a payment-method switch keeps the same deal, and the UI can
+// show the discount line. Zero/null here means "no deal" and checkout behaves
+// exactly as it did before promotions existed.
+let currentDiscountToken = null;
+let currentDiscountInCents = 0;
+let currentDiscountName = 'Discount';
+
+// Build the cart lines a promotion can be quoted against. Only used when the
+// full item subtotal is being charged (item purchases / full upfront payment) —
+// deposits and remaining-balance payments are intentionally left untouched.
+// Best-effort: returns [] on anything unexpected so checkout never breaks.
+function buildPromotableCartLines(quoteStoreId) {
+    try {
+        const lines = [];
+        const toLine = (record, unitPrice, qty, itemDate) => {
+            if (!record) return null;
+            const fields = record.fields || {};
+            const storeIds = Array.isArray(fields.Stores) ? fields.Stores : (fields.Stores ? [fields.Stores] : []);
+            const primaryStore = storeIds.includes(quoteStoreId) ? quoteStoreId : (storeIds[0] || quoteStoreId || null);
+            const catRaw = fields[CONSTANTS.FIELD_NAMES.CATEGORIES];
+            const categories = Array.isArray(catRaw) ? catRaw : (typeof catRaw === 'string' ? catRaw.split(',') : []);
+            return {
+                itemId: record.id,
+                storeId: primaryStore,
+                categories,
+                unitPriceCents: Math.round((Number(unitPrice) || 0) * 100),
+                quantity: Number(qty) || 1,
+                eventDate: itemDate || null,
+            };
+        };
+
+        if (currentCheckoutScope && currentCheckoutScope.mode === 'item') {
+            const s = currentCheckoutScope;
+            const l = toLine(s.record, s.price, s.quantity, s.itemDate || s.eventDate);
+            if (l) lines.push(l);
+        } else {
+            const locked = state.cart && state.cart.lockedItems;
+            if (locked && typeof locked.forEach === 'function') {
+                locked.forEach((info, recordId) => {
+                    const record = getRecordById(recordId);
+                    if (!record) return;
+                    const priceParam = (info.selections && Object.keys(info.selections).length > 0)
+                        ? info.selections : info.selectedOptionIndex;
+                    const unit = (info.overridePrice != null) ? info.overridePrice : getRecordPrice(record, priceParam);
+                    const l = toLine(record, unit, info.quantity, info.itemDate);
+                    if (l) lines.push(l);
+                });
+            }
+        }
+        return lines;
+    } catch (e) {
+        return [];
+    }
+}
+
+// Insert/update/remove the "discount" line in the checkout summary, just above
+// the processing-fee row. No-op-safe if the expected layout isn't found.
+function renderCheckoutDiscountRow(discountInCents, name) {
+    const existing = document.getElementById('checkout-discount-row');
+    if (!(discountInCents > 0)) { if (existing) existing.remove(); return; }
+    const html = `<span>${name || 'Discount'}</span><span>-$${(discountInCents / 100).toFixed(2)}</span>`;
+    if (existing) { existing.innerHTML = html; return; }
+    const feeEl = document.getElementById('processing-fee-price');
+    const feeRow = feeEl ? feeEl.closest('div') : null;
+    if (!feeRow || !feeRow.parentElement) return;
+    const row = document.createElement('div');
+    row.id = 'checkout-discount-row';
+    row.className = 'checkout-discount-row';
+    row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:4px 0;';
+    row.innerHTML = html;
+    feeRow.parentElement.insertBefore(row, feeRow);
+}
 let currentCheckoutItemQty = 0; // Tracks quantity in chip-in checkout (0 = donation only)
 const modalOverlay = document.getElementById('detail-modal-overlay');
 console.log('[MODAL DEBUG] modalOverlay initialized at module load:', !!modalOverlay);
@@ -1553,10 +1663,33 @@ async function updateCheckoutDisplay() {
         if (finalChargeEl) finalChargeEl.textContent = 'Calculating...';
 
         try {
+            // 0. Ask the promotions engine for an authoritative discount, but
+            //    only when the full item subtotal is being charged (not a 35%
+            //    deposit or a remaining balance, where a deal discount is
+            //    ambiguous). The server re-validates the token and does the
+            //    actual subtraction, so this can never undercharge.
+            currentDiscountToken = null;
+            currentDiscountInCents = 0;
+            const chargingFullSubtotal = isItemMode || (amountReceived === 0 && Math.abs(baseAmountToCharge - finalTotal) < 0.01);
+            if (chargingFullSubtotal) {
+                const quoteStoreId = state.session?.storeId || state.ui?.activeShopId || null;
+                const lines = quoteStoreId ? buildPromotableCartLines(quoteStoreId) : [];
+                if (quoteStoreId && lines.length) {
+                    try {
+                        const q = await quoteCart(quoteStoreId, lines, state.session?.id || null);
+                        if (q && q.discountCents > 0 && q.token) {
+                            currentDiscountToken = q.token;
+                            currentDiscountName = q.promotionName || 'Discount';
+                        }
+                    } catch (e) { /* no discount on quote failure */ }
+                }
+            }
+
             // 1. Call create-payment-intent with the *current* payment type
             console.log('[PAY-TAB DEBUG] updateCheckoutDisplay: Creating PaymentIntent.', {
                 amount: Math.round(currentBaseAmount * 100),
-                paymentMethodType: currentPaymentType
+                paymentMethodType: currentPaymentType,
+                hasDiscountToken: !!currentDiscountToken
             });
             const intentResponse = await fetch('/api/create-payment-intent', {
                 method: 'POST',
@@ -1565,7 +1698,8 @@ async function updateCheckoutDisplay() {
                     amount: Math.round(currentBaseAmount * 100),
                     paymentMethodType: currentPaymentType,
                     sessionId: state.session?.id || null,
-                    customerEmail: document.getElementById('customer-email')?.value || null
+                    customerEmail: document.getElementById('customer-email')?.value || null,
+                    discountToken: currentDiscountToken || undefined
                 }),
             });
             if (!intentResponse.ok) throw new Error('Could not update payment intent.');
@@ -1573,6 +1707,7 @@ async function updateCheckoutDisplay() {
             const intentData = await intentResponse.json();
             const newClientSecret = intentData.clientSecret;
             const newProcessingFee = intentData.processingFeeInCents / 100;
+            currentDiscountInCents = intentData.discountInCents || 0;
 
             // Capture the PaymentIntent ID for future updates (avoids creating
             // new PIs when the user switches payment methods)
@@ -1591,7 +1726,8 @@ async function updateCheckoutDisplay() {
             // 2. Update UI with new fees
             currentProcessingFee = newProcessingFee;
             if (processingFeeEl) processingFeeEl.textContent = `$${newProcessingFee.toFixed(2)}`;
-            if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount + newProcessingFee).toFixed(2)}`;
+            renderCheckoutDiscountRow(currentDiscountInCents, currentDiscountName);
+            if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount - currentDiscountInCents / 100 + newProcessingFee).toFixed(2)}`;
 
             // 3. Destroy old element and create/mount a new one
             if (paymentElement) {
@@ -1622,7 +1758,8 @@ async function updateCheckoutDisplay() {
          // in case the processing fee was updated by the new listener.
          log('Modal', 'Price did not change, just updating fee display.');
          if (processingFeeEl) processingFeeEl.textContent = `$${currentProcessingFee.toFixed(2)}`;
-         if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount + currentProcessingFee).toFixed(2)}`;
+         renderCheckoutDiscountRow(currentDiscountInCents, currentDiscountName);
+         if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount - currentDiscountInCents / 100 + currentProcessingFee).toFixed(2)}`;
          // --- END ADDED BLOCK ---\
     }
 }
@@ -1673,7 +1810,8 @@ async function handlePaymentTypeChange(event) {
             amount: Math.round(currentBaseAmount * 100),
             paymentMethodType: currentPaymentType,
             sessionId: state.session?.id || null,
-            customerEmail: document.getElementById('customer-email')?.value || null
+            customerEmail: document.getElementById('customer-email')?.value || null,
+            discountToken: currentDiscountToken || undefined
         };
         if (currentPaymentIntentId) {
             requestBody.paymentIntentId = currentPaymentIntentId;
@@ -1711,8 +1849,10 @@ async function handlePaymentTypeChange(event) {
 
         // Update fee display
         currentProcessingFee = newProcessingFee;
+        currentDiscountInCents = intentData.discountInCents || 0;
         if (processingFeeEl) processingFeeEl.textContent = `$${newProcessingFee.toFixed(2)}`;
-        if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount + newProcessingFee).toFixed(2)}`;
+        renderCheckoutDiscountRow(currentDiscountInCents, currentDiscountName);
+        if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount - currentDiscountInCents / 100 + newProcessingFee).toFixed(2)}`;
 
         // When we successfully updated the existing PI, the clientSecret is
         // unchanged. No element rebuild is needed — the user stays on their
@@ -6357,6 +6497,9 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             priceText += ' (Est.)';
         }
         modalItemPrice.innerHTML = priceText + pricingTypeHTML;
+        if (typeof price === 'number' && price > 0) {
+            decorateModalPriceWithPromo(record, Math.round(price * 100));
+        }
     }
 
     // Inject vitality/goodness badge next to the price (skip when vitality UI is dormant)

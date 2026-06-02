@@ -2,6 +2,15 @@
   functions = "netlify/functions"
   edge_functions = "netlify/edge-functions"
 
+# stripe-webhook (CommonJS) pulls in @netlify/database for the promotion
+# redemption counter. That package exposes its drivers through a modern
+# "exports" map (waddler/neon-http, waddler/node-postgres, pg, …) that the
+# default zisi bundler cannot trace — it fails with EISDIR while walking the
+# dependency tree. esbuild resolves the exports map natively, the same way the
+# TypeScript functions that already talk to this database are bundled.
+[functions."stripe-webhook"]
+  node_bundler = "esbuild"
+
 # Scheduled function: Daily Digest emails at 9 AM UTC
 [functions."send-daily-digest"]
   schedule = "0 9 * * *"

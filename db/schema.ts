@@ -165,3 +165,84 @@ export const comments = pgTable(
     parentIdx: index("comments_parent_idx").on(t.parentCommentId),
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Promotions (deals / discounts)
+//
+// A promotion is one configurable record — a reward + a scope + a date gate +
+// an optional scarcity limit — that the pricing engine evaluates against a
+// cart. The three originally requested deals (a deadline percentage off, a
+// "three then gone" item deal, and a last-minute rolling-window deal) are all
+// rows of this one table rather than bespoke features.
+//
+// The definition lives here in Postgres (one place, fully under code control,
+// and — critically — the redemption counter below needs Postgres' transactional
+// guarantees, which Airtable cannot provide). All external identifiers (the
+// owning Airtable store id, the targeted item/store id, the author user id) are
+// stored as text, matching the no-cross-FK convention used by the tables above.
+export const promotions = pgTable(
+  "promotions",
+  {
+    id: serial().primaryKey(),
+    // Airtable store record id that owns the deal. Also the permission anchor:
+    // only that store's PublishPermission holders may author/edit it.
+    storeId: text("store_id").notNull(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    // Reward: 'percent' (reward_value is a whole-number percent, e.g. 25) or
+    // 'amount' (reward_value is a discount in cents).
+    rewardType: text("reward_type").notNull().default("percent"),
+    rewardValue: integer("reward_value").notNull(),
+    // What the deal applies to: 'item' (target = item record id), 'store'
+    // (every item in this store; target ignored), or 'category' (target = a
+    // base-category label, matched case/space-insensitively, store-scoped).
+    scopeType: text("scope_type").notNull().default("store"),
+    target: text("target"),
+    // Date gate — exactly one mode is read. 'fixed_end': live between
+    // starts_at (optional) and ends_at (a shared deadline for everyone).
+    // 'rolling': true last-minute behaviour — eligible only while the cart
+    // line's event date is within window_days of today.
+    eligibilityMode: text("eligibility_mode").notNull().default("fixed_end"),
+    startsAt: timestamp("starts_at"),
+    endsAt: timestamp("ends_at"),
+    windowDays: integer("window_days"),
+    // Scarcity: max redemptions across all customers (null = unlimited). One
+    // checkout consumes one redemption regardless of how many lines matched.
+    maxRedemptions: integer("max_redemptions"),
+    active: boolean("active").notNull().default(true),
+    // Author (Airtable user record id) for audit.
+    createdBy: text("created_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    storeIdx: index("promotions_store_idx").on(t.storeId),
+  }),
+);
+
+// One row per redemption (one successful checkout that applied a promotion).
+// Written from the payment-confirmation path under a transaction that locks the
+// promotion row, so the "three then gone" limit can never be oversold by
+// concurrent checkouts. Idempotent on (promotion, payment intent) so a webhook
+// retry does not double-count.
+export const promotionRedemptions = pgTable(
+  "promotion_redemptions",
+  {
+    id: serial().primaryKey(),
+    promotionId: integer("promotion_id")
+      .notNull()
+      .references(() => promotions.id, { onDelete: "cascade" }),
+    userId: text("user_id"),
+    sessionId: text("session_id"),
+    paymentIntentId: text("payment_intent_id"),
+    amountCents: integer("amount_cents"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    promoIdx: index("promotion_redemptions_promo_idx").on(t.promotionId),
+    // A given payment intent redeems a given promotion at most once.
+    piUnique: uniqueIndex("promotion_redemptions_pi_unique").on(
+      t.promotionId,
+      t.paymentIntentId,
+    ),
+  }),
+);
