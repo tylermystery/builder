@@ -106,6 +106,25 @@ function buildICalContent(event) {
     return `${y}${m}${day}T${h}${min}${s}Z`;
   };
 
+  // Floating local time (no Z): preserves the wall-clock time the host set so the
+  // invitee sees the same time whatever timezone they import the file in. The
+  // function runs in UTC, where the schedule's hours were set, so the UTC
+  // components are exactly the intended wall-clock values.
+  const fmtFloating = (d) => fmtUtc(d).slice(0, -1);
+
+  // Fold content lines to 75 octets (RFC 5545) so the description/location — which
+  // include the "View & RSVP" link and a full address — are not dropped on import.
+  const fold = (line) => {
+    if (line.length <= 75) return line;
+    let out = line.slice(0, 75);
+    let rest = line.slice(75);
+    while (rest.length > 74) {
+      out += `\r\n ${rest.slice(0, 74)}`;
+      rest = rest.slice(74);
+    }
+    return `${out}\r\n ${rest}`;
+  };
+
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -115,8 +134,8 @@ function buildICalContent(event) {
     'BEGIN:VEVENT',
     `UID:${Date.now()}@whatthefun.com`,
     `DTSTAMP:${fmtUtc(new Date())}`,
-    `DTSTART:${fmtUtc(startDate)}`,
-    `DTEND:${fmtUtc(endDate)}`,
+    `DTSTART:${fmtFloating(startDate)}`,
+    `DTEND:${fmtFloating(endDate)}`,
     `SUMMARY:${esc(event.name)}`,
     `DESCRIPTION:${esc(withWtfLink(event.description, event.wtfLink))}`,
     `LOCATION:${esc(event.location)}`,
@@ -125,7 +144,7 @@ function buildICalContent(event) {
     'SEQUENCE:0',
     'END:VEVENT',
     'END:VCALENDAR'
-  ].join('\r\n');
+  ].map(fold).join('\r\n');
 }
 
 /**

@@ -3898,6 +3898,13 @@ export async function publishSessionAsEvent(sessionId, eventData) {
         itemFields['Time'] = planEndTime ? `${planStartTime} - ${planEndTime}` : planStartTime;
     }
 
+    // Sync the plan's venue address onto the event record so the calendar exports
+    // (and the RSVP confirmation email) carry a real location/address. The caller
+    // resolves this from the locked venue record in the plan.
+    if (eventData.VenueAddress) {
+        itemFields['Location Details'] = eventData.VenueAddress;
+    }
+
     let itemRecord;
 
     if (linkedItemId) {

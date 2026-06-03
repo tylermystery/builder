@@ -13,7 +13,7 @@ import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { resizeImageForUpload } from '../utils/imageResizer.js';
 import { triggerSave } from '../events.js';
-import { createCalendarExportButtons, initializeCalendarExportListeners } from '../utils/calendarExport.js';
+import { createCalendarExportButtons, initializeCalendarExportListeners, resolvePlanVenueAddress } from '../utils/calendarExport.js';
 import { openUCPForItem, openUCPGlobalForItem } from './unifiedChatPanel.js';
 import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
@@ -6018,6 +6018,18 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         if (record.fields.Date) {
             const existingCalendarExport = document.querySelector('.modal-calendar-export');
             if (existingCalendarExport) existingCalendarExport.remove();
+
+            // When this event belongs to the plan currently loaded and carries no
+            // synced location, backfill the venue address from live plan state so
+            // the calendar export includes the address (matches the plan view).
+            if (!record.fields['Location Details'] && state.session.id
+                && Array.isArray(record.fields.LinkedSession)
+                && record.fields.LinkedSession.includes(state.session.id)) {
+                const venueAddress = resolvePlanVenueAddress(state.records?.all, state.cart?.lockedItems);
+                if (venueAddress) {
+                    record.fields['Location Details'] = venueAddress;
+                }
+            }
 
             const calendarContainer = document.createElement('div');
             calendarContainer.className = 'modal-calendar-export calendar-export-compact';

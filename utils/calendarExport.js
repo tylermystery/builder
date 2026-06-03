@@ -138,7 +138,7 @@ function appendWtfLink(description, wtfLink) {
 
 /**
  * Format a Date object as a UTC iCal timestamp (YYYYMMDDTHHMMSSZ).
- * Unlike formatICalDate, this preserves the Date's existing time of day.
+ * Used for DTSTAMP (the moment the entry was generated), which is always UTC.
  * @param {Date} dateObj - Date to format
  * @returns {string} Formatted iCal date string
  */
@@ -150,6 +150,94 @@ function formatICalDateUTC(dateObj) {
   const minutes = String(dateObj.getUTCMinutes()).padStart(2, '0');
   const seconds = String(dateObj.getUTCSeconds()).padStart(2, '0');
   return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
+}
+
+/**
+ * Format a Date object as a "floating" local iCal date-time (YYYYMMDDTHHMMSS,
+ * with no trailing Z). Floating times carry no timezone, so a calendar client
+ * shows the exact wall-clock time the host set (e.g. 7:00 PM) regardless of the
+ * viewer's timezone. This is what we want for a local event: previously the
+ * start was converted to UTC, so anyone importing in a different timezone than
+ * the one that generated the file saw a shifted ("slightly off") time.
+ * @param {Date} dateObj - Date to format (its local components are used as-is)
+ * @returns {string} Formatted floating iCal date-time string
+ */
+function formatICalDateFloating(dateObj) {
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const hours = String(dateObj.getHours()).padStart(2, '0');
+  const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+  const seconds = String(dateObj.getSeconds()).padStart(2, '0');
+  return `${year}${month}${day}T${hours}${minutes}${seconds}`;
+}
+
+/**
+ * Fold a single iCal content line to the 75-octet limit required by RFC 5545.
+ * Long lines (the DESCRIPTION carries the event text plus a "View & RSVP" link,
+ * and LOCATION can be a full address) must be split with a CRLF followed by a
+ * single space, or stricter calendar clients silently drop the property — which
+ * is why the event description was going missing from the downloaded file.
+ * @param {string} line - A complete "NAME:value" content line
+ * @returns {string} The line, folded as needed
+ */
+function foldICalLine(line) {
+  if (line.length <= 75) return line;
+  let result = line.slice(0, 75);
+  let rest = line.slice(75);
+  while (rest.length > 74) {
+    result += `\r\n ${rest.slice(0, 74)}`;
+    rest = rest.slice(74);
+  }
+  result += `\r\n ${rest}`;
+  return result;
+}
+
+/**
+ * Resolve the calendar LOCATION for an event from its record fields.
+ * The published plan syncs the chosen venue's address into "Location Details",
+ * so that is preferred; "Location" is honored as a fallback for older data.
+ * @param {Object} fields - Event record fields
+ * @returns {string} Location string (may be '')
+ */
+function resolveCalendarLocation(fields) {
+  return fields['Location Details'] || fields.Location || '';
+}
+
+/**
+ * Resolve the address of the venue currently locked into a plan, for use as a
+ * calendar entry's address. Pure helper so it can be shared by the publish flow
+ * and the live plan/detail views.
+ *
+ * A venue is a locked record whose Categories include "venue". Its address lives
+ * in "Location Details" (built as "address\n\nHours: …\n\nPhone: …"), so only the
+ * first block — the address — is used, prefixed with the venue name when present.
+ *
+ * @param {Array<Object>} records - All plan records (e.g. state.records.all)
+ * @param {Set<string>|Array<string>} lockedItemIds - Locked record ids
+ * @returns {string} "Venue Name, address" (or '' when no venue is locked)
+ */
+function resolvePlanVenueAddress(records, lockedItemIds) {
+  if (!Array.isArray(records) || !lockedItemIds) return '';
+  const isLocked = (id) => (typeof lockedItemIds.has === 'function')
+    ? lockedItemIds.has(id)
+    : Array.isArray(lockedItemIds) && lockedItemIds.includes(id);
+
+  const venue = records.find(r =>
+    r && r.id && isLocked(r.id) &&
+    String(r.fields?.Categories || '').toLowerCase().includes('venue')
+  );
+  if (!venue) return '';
+
+  const name = (venue.fields?.Name || '').trim();
+  const details = venue.fields?.['Location Details'] || venue.fields?.Location || '';
+  // Keep only the address (the first block before "Hours:"/"Phone:" sections).
+  const address = String(details).split('\n\n')[0].trim();
+
+  if (address && name && !address.toLowerCase().includes(name.toLowerCase())) {
+    return `${name}, ${address}`;
+  }
+  return address || name;
 }
 
 /**
@@ -179,14 +267,16 @@ function generateICalFile(event) {
   // Include the shareable WTF link in the notes so invitees can view the plan and RSVP
   const wtfLink = resolveWtfLink(fields);
   const description = escapeICalText(appendWtfLink(fields.Description || '', wtfLink));
-  const location = escapeICalText(fields['Location Details'] || '');
+  const location = escapeICalText(resolveCalendarLocation(fields));
 
   // Resolve start/end from the plan-synced schedule fields (Start_time / Duration / End_time)
   const { startDate, endDate } = resolveEventSchedule(fields);
 
-  // Format dates for iCal (UTC, preserving the resolved time of day)
-  const dtStart = formatICalDateUTC(startDate);
-  const dtEnd = formatICalDateUTC(endDate);
+  // Format start/end as floating local times (no Z) so the wall-clock time the
+  // host set is preserved exactly in the invitee's calendar, whatever timezone
+  // they import it in. DTSTAMP stays UTC, as required.
+  const dtStart = formatICalDateFloating(startDate);
+  const dtEnd = formatICalDateFloating(endDate);
   const dtStamp = formatICalDateUTC(new Date());
 
   // Generate unique ID
@@ -214,7 +304,8 @@ function generateICalFile(event) {
   }
   icalLines.push('STATUS:CONFIRMED', 'SEQUENCE:0', 'END:VEVENT', 'END:VCALENDAR');
 
-  return icalLines.join('\r\n');
+  // Fold long content lines (RFC 5545) so the description/location survive import
+  return icalLines.map(foldICalLine).join('\r\n');
 }
 
 /**
@@ -247,7 +338,7 @@ function generateGoogleCalendarUrl(event) {
 
   const title = encodeURIComponent(fields.Name || 'Event');
   const description = encodeURIComponent(appendWtfLink(fields.Description || '', resolveWtfLink(fields)));
-  const location = encodeURIComponent(fields['Location Details'] || '');
+  const location = encodeURIComponent(resolveCalendarLocation(fields));
 
   // Resolve start/end from the plan-synced schedule fields (Start_time / Duration / End_time)
   const { startDate, endDate } = resolveEventSchedule(fields);
@@ -278,7 +369,7 @@ function generateOutlookCalendarUrl(event) {
 
   const title = encodeURIComponent(fields.Name || 'Event');
   const description = encodeURIComponent(appendWtfLink(fields.Description || '', resolveWtfLink(fields)));
-  const location = encodeURIComponent(fields['Location Details'] || '');
+  const location = encodeURIComponent(resolveCalendarLocation(fields));
 
   // Resolve start/end from the plan-synced schedule fields (Start_time / Duration / End_time)
   const { startDate, endDate } = resolveEventSchedule(fields);
@@ -300,7 +391,7 @@ function generateYahooCalendarUrl(event) {
 
   const title = encodeURIComponent(fields.Name || 'Event');
   const description = encodeURIComponent(appendWtfLink(fields.Description || '', resolveWtfLink(fields)));
-  const location = encodeURIComponent(fields['Location Details'] || '');
+  const location = encodeURIComponent(resolveCalendarLocation(fields));
 
   // Resolve start/end from the plan-synced schedule fields (Start_time / Duration / End_time)
   const { startDate, endDate } = resolveEventSchedule(fields);
@@ -434,7 +525,8 @@ export {
   generateYahooCalendarUrl,
   openCalendarUrl,
   createCalendarExportButtons,
-  initializeCalendarExportListeners
+  initializeCalendarExportListeners,
+  resolvePlanVenueAddress
 };
 
 // CommonJS Export (for Node.js compatibility)
@@ -447,7 +539,8 @@ if (typeof module !== 'undefined' && module.exports) {
     generateYahooCalendarUrl,
     openCalendarUrl,
     createCalendarExportButtons,
-    initializeCalendarExportListeners
+    initializeCalendarExportListeners,
+    resolvePlanVenueAddress
   };
 }
 
@@ -461,6 +554,7 @@ if (typeof window !== 'undefined') {
     generateYahooCalendarUrl,
     openCalendarUrl,
     createCalendarExportButtons,
-    initializeCalendarExportListeners
+    initializeCalendarExportListeners,
+    resolvePlanVenueAddress
   };
 }
