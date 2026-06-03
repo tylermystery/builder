@@ -191,11 +191,30 @@ export function showUserModal(options = {}) {
         } else {
             ownerDashboardLink.style.display = 'none';
         }
+
+        // Groups discovery: link to the active store's groups directory. Shown
+        // to any signed-in user for whatever store they're currently viewing;
+        // the directory itself decides what's visible (public groups for
+        // everyone, plus create/manage tools for that store's publishers).
+        const groupsLink = document.getElementById('groups-link');
+        if (groupsLink) {
+            const shopId = state.ui.activeShopId
+                || localStorage.getItem('lastVisitedShopId')
+                || '';
+            if (shopId) {
+                groupsLink.href = `/groups.html?storeId=${encodeURIComponent(shopId)}`;
+                groupsLink.style.display = 'block';
+            } else {
+                groupsLink.style.display = 'none';
+            }
+        }
     } else {
         signinEmailInput.value = localStorage.getItem('lastSignInEmail') || '';
         signinView.style.display = 'block';
         profileView.style.display = 'none';
         ownerDashboardLink.style.display = 'none';
+        const groupsLinkHide = document.getElementById('groups-link');
+        if (groupsLinkHide) groupsLinkHide.style.display = 'none';
 
         // Refresh biometric section visibility when showing signin view
         // This ensures passkey login option appears if user has created one

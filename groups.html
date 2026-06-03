@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Groups · WhatTheFun</title>
+  <style>
+    :root {
+      --ink: #1a1a2e;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --brand: #b71c1c;
+      --brand2: #e53935;
+      --bg: #f7f7fb;
+      --ok: #2e7d32;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.45;
+    }
+    header.page {
+      background: linear-gradient(135deg, #e53935 0%, #b71c1c 100%);
+      color: #fff; padding: 22px 24px;
+    }
+    header.page h1 { margin: 0; font-size: 20px; letter-spacing: .3px; }
+    header.page p { margin: 4px 0 0; opacity: .9; font-size: 13px; }
+    main { max-width: 920px; margin: 0 auto; padding: 24px 16px 64px; }
+    .card {
+      background: #fff; border: 1px solid var(--line); border-radius: 12px;
+      padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .card h2 { margin: 0 0 14px; font-size: 16px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .4px; }
+    input, select, textarea {
+      width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px;
+      font-size: 14px; font-family: inherit; background: #fff;
+    }
+    textarea { resize: vertical; min-height: 56px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btn {
+      appearance: none; border: 0; border-radius: 9px; padding: 10px 18px;
+      font-size: 14px; font-weight: 700; cursor: pointer; color: #fff;
+      background: linear-gradient(135deg, #e53935 0%, #b71c1c 100%);
+    }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn.secondary { background: #f1f1f4; color: var(--ink); }
+    .btn.tiny { padding: 6px 12px; font-size: 12px; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .group-item {
+      border: 1px solid var(--line); border-radius: 10px; padding: 14px;
+      margin-bottom: 12px; display: flex; justify-content: space-between; gap: 12px; align-items: center;
+    }
+    .group-item .gi-pic {
+      width: 46px; height: 46px; border-radius: 12px; object-fit: cover; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800;
+    }
+    .group-item .gi-main { flex: 1; }
+    .group-item .gi-name { font-weight: 700; font-size: 15px; }
+    .group-item .meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
+    .pill.pub { background: #e3f2fd; color: #1565c0; }
+    .pill.priv { background: #f3e5f5; color: #6a1b9a; }
+    #msg { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; display: none; font-size: 14px; }
+    #msg.err { background: #fdecea; color: var(--brand); display: block; }
+    #msg.ok { background: #e8f5e9; color: var(--ok); display: block; }
+    .gated { display: none; }
+    @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header class="page">
+    <h1>Groups</h1>
+    <p id="subhead">Member groups for this store.</p>
+  </header>
+  <main>
+    <div id="msg"></div>
+
+    <!-- Create (publishers only) -->
+    <div class="card gated" id="createCard">
+      <h2>Create a group</h2>
+      <label for="name">Name</label>
+      <input id="name" placeholder="Membership" />
+      <div class="row">
+        <div>
+          <label for="kind">Kind / label (optional)</label>
+          <input id="kind" placeholder="membership" />
+        </div>
+        <div>
+          <label for="visibility">Page visibility</label>
+          <select id="visibility">
+            <option value="public">Public — anyone with the link</option>
+            <option value="private">Private — store team & members only</option>
+          </select>
+        </div>
+      </div>
+      <label for="description">Description (optional)</label>
+      <textarea id="description" placeholder="What this group is for."></textarea>
+      <div style="margin-top:14px"><button class="btn" id="createBtn">Create group</button></div>
+      <div class="hint">You can add members from the group's page after it's created.</div>
+    </div>
+
+    <div class="card">
+      <h2 id="listTitle">Groups</h2>
+      <div id="list">Loading…</div>
+    </div>
+  </main>
+
+  <script src="/groups.js" type="module"></script>
+</body>
+</html>

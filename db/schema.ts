@@ -246,3 +246,73 @@ export const promotionRedemptions = pgTable(
     ),
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Member groups (store-defined collections of people)
+//
+// A group is a named collection of people that belongs to exactly one store —
+// for example a "Membership" group under the "Union Machine Works" store. The
+// definition lives here in Postgres (the no-cross-FK convention again: the
+// owning store and every member are Airtable record ids stored as text). This
+// keeps membership integrity — uniqueness, counts, cascade cleanup — in the
+// system best suited for it while still anchoring each group to its Airtable
+// store and each membership to an Airtable user.
+//
+// Permissioning mirrors promotions exactly: the store's PublishPermission
+// holders are the only people who may create a group, edit it, or change who
+// belongs to it. A person may belong to many groups.
+export const groups = pgTable(
+  "groups",
+  {
+    id: serial().primaryKey(),
+    // Airtable store record id that owns the group. Also the permission anchor:
+    // only that store's PublishPermission holders may author/edit it.
+    storeId: text("store_id").notNull(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    // Optional short kind/label so a group can be tagged, e.g. "membership" or
+    // "crew". Free text; null when unset.
+    kind: text("kind"),
+    // Optional group picture (a Cloudinary URL, consistent with the app's other
+    // image handling). Null when unset.
+    imageUrl: text("image_url"),
+    // Stable, globally-unique slug used to address the group's public page.
+    slug: text("slug").notNull(),
+    // 'public'  — the group page is viewable by anyone with the link.
+    // 'private' — only the store's publishers and the group's own members may
+    //             view the page; everyone else gets a "this group is private"
+    //             response.
+    visibility: text("visibility").notNull().default("public"),
+    // Author (Airtable user record id) for audit.
+    createdBy: text("created_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    storeIdx: index("groups_store_idx").on(t.storeId),
+    slugUnique: uniqueIndex("groups_slug_unique").on(t.slug),
+  }),
+);
+
+// One row per membership (one person in one group). Cascade-deleted with the
+// group. Unique on (group, user) so a person cannot be added to the same group
+// twice; the same person can still belong to many different groups.
+export const groupMembers = pgTable(
+  "group_members",
+  {
+    id: serial().primaryKey(),
+    groupId: integer("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    // Airtable user record id.
+    userId: text("user_id").notNull(),
+    // 'member' (default) or 'admin' (a member with elevated standing within the
+    // group). Store-level publish permission, not this role, governs who can
+    // edit the group itself.
+    role: text("role").notNull().default("member"),
+    joinedAt: timestamp("joined_at").defaultNow(),
+  },
+  (t) => ({
+    groupIdx: index("group_members_group_idx").on(t.groupId),
+    memberUnique: uniqueIndex("group_members_unique").on(t.groupId, t.userId),
+  }),
+);

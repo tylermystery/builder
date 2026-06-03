@@ -1108,6 +1108,21 @@ async function initialize() {
                     ui.showShopSwitcher();
                 });
             }
+
+            // Groups button in hamburger menu — opens this store's groups
+            // directory (public groups for everyone; publishers also get the
+            // create/manage tools there). Scoped to the active shop.
+            const menuGroupsBtn = document.getElementById('menu-groups-btn');
+            if (menuGroupsBtn) {
+                menuGroupsBtn.addEventListener('click', () => {
+                    if (hamburgerMenuDropdown) hamburgerMenuDropdown.style.display = 'none';
+                    const shopId = (activeShop && activeShop.id)
+                        || state.ui.activeShopId
+                        || localStorage.getItem('lastVisitedShopId')
+                        || '';
+                    window.location.href = `/groups.html?storeId=${encodeURIComponent(shopId)}`;
+                });
+            }
         }
         
         const existingFavicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
