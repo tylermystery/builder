@@ -9,7 +9,7 @@
 
 import { state, getRecordById } from '../../state.js';
 import { CONSTANTS } from '../../config.js';
-import { getRecordPrice } from '../../utils.js';
+import { getRecordPrice, formatEventTimeRange } from '../../utils.js';
 import { getCurrentUser } from '../../chat.js';
 import { log } from '../../utils/debug.js';
 import { triggerSave } from '../../events.js';
@@ -59,7 +59,7 @@ export function renderEventHeader() {
         }
     }
 
-    // Render date with task status button
+    // Render date (with the plan's start/end time) and task status button
     if (summaryEventDateEl) {
         if (dateValue) {
             const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);
@@ -69,11 +69,16 @@ export function renderEventHeader() {
                 day: 'numeric',
                 year: 'numeric'
             });
+            // Append the published plan's start/end time so the plan view reflects
+            // the same schedule shown in the detail modal and exported to calendars.
+            const startTime = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.START_TIME);
+            const endTime = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.END_TIME);
+            const timeStr = formatEventTimeRange(startTime, endTime);
             const dateStatusBtn = _deps.renderTaskStatusButton('detail', 'date');
             summaryEventDateEl.innerHTML = `
                 <div class="event-detail-with-status">
                     ${dateStatusBtn}
-                    <span class="detail-content">${dateStr}</span>
+                    <span class="detail-content">${dateStr}${timeStr ? ` · ${timeStr}` : ''}</span>
                 </div>
             `;
         } else {
@@ -221,6 +226,12 @@ export function generateHeaderSummary() {
     if (dateValue) {
         const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);
         datePart = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        // Include the plan's start/end time alongside the date in the summary
+        const timeStr = formatEventTimeRange(
+            state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.START_TIME),
+            state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.END_TIME)
+        );
+        if (timeStr) datePart += ` · ${timeStr}`;
     }
 
     let summaryParts = [];
