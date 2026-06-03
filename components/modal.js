@@ -5972,8 +5972,20 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         const eventDateStr = record.fields.Date;
         // Show the published plan's start/end time (the same Start_time/End_time
         // the "Add to Calendar" buttons use), falling back to the legacy Time range.
-        const eventTime = formatEventTimeRange(record.fields.Start_time, record.fields.End_time)
+        let eventTime = formatEventTimeRange(record.fields.Start_time, record.fields.End_time)
             || record.fields.Time || '';
+        // If the record carries no synced time (it predates schedule syncing, or the
+        // cached copy is stale) but this event belongs to the plan currently loaded,
+        // fall back to the live plan times — the same source the presentation/plan
+        // view reads — so the detail modal matches what's shown there.
+        if (!eventTime && state.session.id
+            && Array.isArray(record.fields.LinkedSession)
+            && record.fields.LinkedSession.includes(state.session.id)) {
+            eventTime = formatEventTimeRange(
+                state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.START_TIME),
+                state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.END_TIME)
+            );
+        }
         const eventLocation = record.fields.Location || '';
 
         if (eventDateStr) {
