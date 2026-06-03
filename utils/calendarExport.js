@@ -4,79 +4,152 @@
  */
 
 /**
- * Formats a date for iCal format (YYYYMMDDTHHMMSSZ)
- * @param {string|Date} date - Date to format
- * @param {string} time - Time string (e.g., "7:00 PM")
+ * Parse a time string to hours and minutes.
+ * Tolerant of the various shapes stored in Airtable: "7:00 PM", "14:30",
+ * "11 am", "11am", and ranges like "5 - 8 pm" / "11am - 9pm" (the first time
+ * is used, inheriting a trailing AM/PM from later in the range when needed).
+ * @param {string} timeStr - Time string
+ * @returns {Object|null} Object with hours and minutes, or null if invalid
+ */
+function parseTime(timeStr) {
+  if (!timeStr) return null;
+
+  // Collect every time token in order (digits, optional :minutes, optional am/pm)
+  const tokenRe = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/gi;
+  const tokens = [];
+  let m;
+  while ((m = tokenRe.exec(timeStr)) !== null) {
+    tokens.push({
+      hours: parseInt(m[1], 10),
+      minutes: m[2] ? parseInt(m[2], 10) : 0,
+      meridiem: m[3] ? m[3].toUpperCase() : null
+    });
+  }
+  if (tokens.length === 0) return null;
+
+  const first = tokens[0];
+  // A start time without AM/PM (e.g. the "5" in "5 - 8 pm") inherits it from
+  // a later token in the range.
+  if (!first.meridiem) {
+    const withMeridiem = tokens.find(t => t.meridiem);
+    if (withMeridiem) first.meridiem = withMeridiem.meridiem;
+  }
+
+  let hours = first.hours;
+  if (first.meridiem === 'PM' && hours !== 12) {
+    hours += 12;
+  } else if (first.meridiem === 'AM' && hours === 12) {
+    hours = 0;
+  }
+
+  if (hours < 0 || hours > 23 || first.minutes < 0 || first.minutes > 59) return null;
+  return { hours, minutes: first.minutes };
+}
+
+/**
+ * Resolve an event's start and end Date objects from its Airtable fields.
+ *
+ * The published plan syncs clean machine-readable values onto the event record:
+ *   - Start_time : the plan start time (e.g. "7:00 PM")
+ *   - Duration   : the plan duration in hours (e.g. "2")
+ *   - End_time   : the computed end time (e.g. "9:00 PM")
+ *   - Time       : a human-readable range used for display
+ *
+ * Priority: Start_time (falling back to Time) for the start; Duration (falling
+ * back to End_time, then a sensible default) for the length. The legacy
+ * "Duration (hours)" field is still honored if present.
+ *
+ * @param {Object} fields - Event record fields (must include Date)
+ * @returns {{ startDate: Date, endDate: Date }}
+ */
+function resolveEventSchedule(fields) {
+  const date = fields.Date;
+  const startStr = fields.Start_time || fields.Time;
+  const startParts = parseTime(startStr);
+
+  // Build start date in local timezone to avoid date shifting
+  const startDate = new Date(date + 'T00:00:00');
+  if (startParts) {
+    startDate.setHours(startParts.hours, startParts.minutes, 0, 0);
+  } else {
+    // Default to 11:00 AM when no start time is known
+    startDate.setHours(11, 0, 0, 0);
+  }
+
+  // Duration in hours — prefer the real "Duration" field, fall back to legacy "Duration (hours)"
+  const rawDuration = (fields.Duration != null && fields.Duration !== '')
+    ? fields.Duration
+    : fields['Duration (hours)'];
+  const durationHours = (rawDuration != null && rawDuration !== '') ? parseFloat(rawDuration) : NaN;
+
+  let endDate;
+  if (!isNaN(durationHours) && durationHours > 0) {
+    endDate = new Date(startDate.getTime() + durationHours * 60 * 60 * 1000);
+  } else {
+    const endParts = parseTime(fields.End_time);
+    if (endParts) {
+      endDate = new Date(startDate);
+      endDate.setHours(endParts.hours, endParts.minutes, 0, 0);
+      // End earlier than start means the event crosses midnight
+      if (endDate <= startDate) endDate.setDate(endDate.getDate() + 1);
+    } else {
+      // No duration or end time: 2h when a start time is known, otherwise an all-day-feel 8h
+      const fallbackHours = startParts ? 2 : 8;
+      endDate = new Date(startDate.getTime() + fallbackHours * 60 * 60 * 1000);
+    }
+  }
+
+  return { startDate, endDate };
+}
+
+/**
+ * Resolve the shareable "WTF link" for an event — the link back to the plan's
+ * presentation view, where calendar invitees can view the plan and RSVP.
+ *
+ * Built from the event's LinkedSession (the session the published plan lives in).
+ * Uses the current site origin in the browser, falling back to the production
+ * URL when no window is available. Returns '' when the event has no linked
+ * session (e.g. a catalog item that was never published from a plan).
+ *
+ * @param {Object} fields - Event record fields
+ * @returns {string} Absolute WTF link, or '' if unavailable
+ */
+function resolveWtfLink(fields) {
+  const sessionId = Array.isArray(fields.LinkedSession) ? fields.LinkedSession[0] : null;
+  if (!sessionId) return '';
+  const origin = (typeof window !== 'undefined' && window.location && window.location.origin)
+    ? window.location.origin
+    : 'https://whatthefunfinder.netlify.app';
+  return `${origin}/?session=${sessionId}&view=present`;
+}
+
+/**
+ * Append the WTF link to an event description so it travels into the calendar
+ * entry's notes. No-op when there is no link.
+ * @param {string} description - Raw event description
+ * @param {string} wtfLink - Resolved WTF link (may be '')
+ * @returns {string} Description with the link appended
+ */
+function appendWtfLink(description, wtfLink) {
+  const desc = description || '';
+  if (!wtfLink) return desc;
+  return desc ? `${desc}\n\nView & RSVP: ${wtfLink}` : `View & RSVP: ${wtfLink}`;
+}
+
+/**
+ * Format a Date object as a UTC iCal timestamp (YYYYMMDDTHHMMSSZ).
+ * Unlike formatICalDate, this preserves the Date's existing time of day.
+ * @param {Date} dateObj - Date to format
  * @returns {string} Formatted iCal date string
  */
-function formatICalDate(date, time = null) {
-  let dateObj;
-
-  if (typeof date === 'string') {
-    // Parse date in local timezone to avoid timezone conversion issues
-    dateObj = new Date(date + 'T00:00:00');
-  } else {
-    dateObj = new Date(date);
-  }
-
-  // If time is provided, parse and set it
-  if (time) {
-    const timeParts = parseTime(time);
-    if (timeParts) {
-      dateObj.setHours(timeParts.hours, timeParts.minutes, 0, 0);
-    }
-  } else {
-    // Default to 11:00 AM if no time is provided
-    dateObj.setHours(11, 0, 0, 0);
-  }
-
-  // Format as iCal date: YYYYMMDDTHHMMSSZ
+function formatICalDateUTC(dateObj) {
   const year = dateObj.getUTCFullYear();
   const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
   const day = String(dateObj.getUTCDate()).padStart(2, '0');
   const hours = String(dateObj.getUTCHours()).padStart(2, '0');
   const minutes = String(dateObj.getUTCMinutes()).padStart(2, '0');
   const seconds = String(dateObj.getUTCSeconds()).padStart(2, '0');
-
   return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
-}
-
-/**
- * Parse time string to hours and minutes
- * @param {string} timeStr - Time string (e.g., "7:00 PM", "14:30")
- * @returns {Object|null} Object with hours and minutes, or null if invalid
- */
-function parseTime(timeStr) {
-  if (!timeStr) return null;
-
-  // Handle formats like "7:00 PM" or "14:30"
-  const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-  if (!match) return null;
-
-  let hours = parseInt(match[1], 10);
-  const minutes = parseInt(match[2], 10);
-  const meridiem = match[3] ? match[3].toUpperCase() : null;
-
-  // Convert to 24-hour format if PM
-  if (meridiem === 'PM' && hours !== 12) {
-    hours += 12;
-  } else if (meridiem === 'AM' && hours === 12) {
-    hours = 0;
-  }
-
-  return { hours, minutes };
-}
-
-/**
- * Calculate end date based on duration
- * @param {Date} startDate - Start date
- * @param {number} durationHours - Duration in hours (defaults to 8 hours: 11 AM to 7 PM)
- * @returns {Date} End date
- */
-function calculateEndDate(startDate, durationHours = 8) {
-  const endDate = new Date(startDate);
-  endDate.setHours(endDate.getHours() + durationHours);
-  return endDate;
 }
 
 /**
@@ -103,38 +176,24 @@ function generateICalFile(event) {
   const fields = event.fields || event;
 
   const title = escapeICalText(fields.Name || 'Event');
-  const description = escapeICalText(fields.Description || '');
+  // Include the shareable WTF link in the notes so invitees can view the plan and RSVP
+  const wtfLink = resolveWtfLink(fields);
+  const description = escapeICalText(appendWtfLink(fields.Description || '', wtfLink));
   const location = escapeICalText(fields['Location Details'] || '');
-  const date = fields.Date;
-  const time = fields.Time;
-  // If no time provided, use 8 hours (11 AM to 7 PM); otherwise use Duration field or 2 hours default
-  const duration = time ? (fields['Duration (hours)'] || 2) : 8;
 
-  // Create start date in local timezone
-  const startDate = new Date(date + 'T00:00:00');
-  if (time) {
-    const timeParts = parseTime(time);
-    if (timeParts) {
-      startDate.setHours(timeParts.hours, timeParts.minutes, 0, 0);
-    }
-  } else {
-    // Default to 11:00 AM if no time is provided
-    startDate.setHours(11, 0, 0, 0);
-  }
+  // Resolve start/end from the plan-synced schedule fields (Start_time / Duration / End_time)
+  const { startDate, endDate } = resolveEventSchedule(fields);
 
-  // Calculate end date
-  const endDate = calculateEndDate(startDate, duration);
-
-  // Format dates for iCal
-  const dtStart = formatICalDate(startDate);
-  const dtEnd = formatICalDate(endDate);
-  const dtStamp = formatICalDate(new Date());
+  // Format dates for iCal (UTC, preserving the resolved time of day)
+  const dtStart = formatICalDateUTC(startDate);
+  const dtEnd = formatICalDateUTC(endDate);
+  const dtStamp = formatICalDateUTC(new Date());
 
   // Generate unique ID
   const uid = `${event.id || Date.now()}@whatthefun.com`;
 
   // Build iCal content
-  const icalContent = [
+  const icalLines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//What The Fun//Event Calendar//EN',
@@ -147,14 +206,15 @@ function generateICalFile(event) {
     `DTEND:${dtEnd}`,
     `SUMMARY:${title}`,
     `DESCRIPTION:${description}`,
-    `LOCATION:${location}`,
-    'STATUS:CONFIRMED',
-    'SEQUENCE:0',
-    'END:VEVENT',
-    'END:VCALENDAR'
-  ].join('\r\n');
+    `LOCATION:${location}`
+  ];
+  // Standard URL property so calendar clients that surface it link back to the plan
+  if (wtfLink) {
+    icalLines.push(`URL:${wtfLink}`);
+  }
+  icalLines.push('STATUS:CONFIRMED', 'SEQUENCE:0', 'END:VEVENT', 'END:VCALENDAR');
 
-  return icalContent;
+  return icalLines.join('\r\n');
 }
 
 /**
@@ -186,27 +246,11 @@ function generateGoogleCalendarUrl(event) {
   const fields = event.fields || event;
 
   const title = encodeURIComponent(fields.Name || 'Event');
-  const description = encodeURIComponent(fields.Description || '');
+  const description = encodeURIComponent(appendWtfLink(fields.Description || '', resolveWtfLink(fields)));
   const location = encodeURIComponent(fields['Location Details'] || '');
-  const date = fields.Date;
-  const time = fields.Time;
-  // If no time provided, use 8 hours (11 AM to 7 PM); otherwise use Duration field or 2 hours default
-  const duration = time ? (fields['Duration (hours)'] || 2) : 8;
 
-  // Create start date in local timezone
-  const startDate = new Date(date + 'T00:00:00');
-  if (time) {
-    const timeParts = parseTime(time);
-    if (timeParts) {
-      startDate.setHours(timeParts.hours, timeParts.minutes, 0, 0);
-    }
-  } else {
-    // Default to 11:00 AM if no time is provided
-    startDate.setHours(11, 0, 0, 0);
-  }
-
-  // Calculate end date
-  const endDate = calculateEndDate(startDate, duration);
+  // Resolve start/end from the plan-synced schedule fields (Start_time / Duration / End_time)
+  const { startDate, endDate } = resolveEventSchedule(fields);
 
   // Format dates for Google Calendar (YYYYMMDDTHHmmss)
   const formatGoogleDate = (d) => {
@@ -233,27 +277,11 @@ function generateOutlookCalendarUrl(event) {
   const fields = event.fields || event;
 
   const title = encodeURIComponent(fields.Name || 'Event');
-  const description = encodeURIComponent(fields.Description || '');
+  const description = encodeURIComponent(appendWtfLink(fields.Description || '', resolveWtfLink(fields)));
   const location = encodeURIComponent(fields['Location Details'] || '');
-  const date = fields.Date;
-  const time = fields.Time;
-  // If no time provided, use 8 hours (11 AM to 7 PM); otherwise use Duration field or 2 hours default
-  const duration = time ? (fields['Duration (hours)'] || 2) : 8;
 
-  // Create start date in local timezone
-  const startDate = new Date(date + 'T00:00:00');
-  if (time) {
-    const timeParts = parseTime(time);
-    if (timeParts) {
-      startDate.setHours(timeParts.hours, timeParts.minutes, 0, 0);
-    }
-  } else {
-    // Default to 11:00 AM if no time is provided
-    startDate.setHours(11, 0, 0, 0);
-  }
-
-  // Calculate end date
-  const endDate = calculateEndDate(startDate, duration);
+  // Resolve start/end from the plan-synced schedule fields (Start_time / Duration / End_time)
+  const { startDate, endDate } = resolveEventSchedule(fields);
 
   // Format dates for Outlook (ISO 8601)
   const startTime = startDate.toISOString();
@@ -271,27 +299,11 @@ function generateYahooCalendarUrl(event) {
   const fields = event.fields || event;
 
   const title = encodeURIComponent(fields.Name || 'Event');
-  const description = encodeURIComponent(fields.Description || '');
+  const description = encodeURIComponent(appendWtfLink(fields.Description || '', resolveWtfLink(fields)));
   const location = encodeURIComponent(fields['Location Details'] || '');
-  const date = fields.Date;
-  const time = fields.Time;
-  // If no time provided, use 8 hours (11 AM to 7 PM); otherwise use Duration field or 2 hours default
-  const duration = time ? (fields['Duration (hours)'] || 2) : 8;
 
-  // Create start date in local timezone
-  const startDate = new Date(date + 'T00:00:00');
-  if (time) {
-    const timeParts = parseTime(time);
-    if (timeParts) {
-      startDate.setHours(timeParts.hours, timeParts.minutes, 0, 0);
-    }
-  } else {
-    // Default to 11:00 AM if no time is provided
-    startDate.setHours(11, 0, 0, 0);
-  }
-
-  // Calculate end date
-  const endDate = calculateEndDate(startDate, duration);
+  // Resolve start/end from the plan-synced schedule fields (Start_time / Duration / End_time)
+  const { startDate, endDate } = resolveEventSchedule(fields);
 
   // Format dates for Yahoo (YYYYMMDDTHHmmss)
   const formatYahooDate = (d) => {

@@ -1212,7 +1212,11 @@ async function handlePublishEvent() {
             Name: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Untitled Event',
             Date: rawDate,
             Goals: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS),
-            GuestCount: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT)
+            GuestCount: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT),
+            // Plan schedule — synced onto the event record so calendar exports use the published time
+            StartTime: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.START_TIME),
+            EndTime: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.END_TIME),
+            Duration: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DURATION)
         };
 
         console.log('[PUBLISH DEBUG - Sidebar] Complete eventData object:', eventData);

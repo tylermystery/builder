@@ -3870,6 +3870,34 @@ export async function publishSessionAsEvent(sessionId, eventData) {
         itemFields['Date'] = formattedDateOnly;
     }
 
+    // Sync the plan's schedule onto the event record so the catalog/detail view and
+    // the "Add to Calendar" buttons use the published start time and duration.
+    //   - Start_time : plan start time (e.g. "7:00 PM")
+    //   - End_time   : plan end time (computed from start + duration)
+    //   - Duration   : plan duration in hours (Airtable stores this as text)
+    //   - Time       : human-readable range for display (e.g. "7:00 PM - 9:00 PM")
+    const planStartTime = eventData.StartTime || session.fields.Start_time || null;
+    const planEndTime = eventData.EndTime || null;
+    // The plan stores duration in minutes; the Airtable Duration field is in hours.
+    const planDurationMin = (eventData.Duration != null && eventData.Duration !== '')
+        ? parseInt(eventData.Duration, 10)
+        : null;
+
+    if (planStartTime) {
+        itemFields['Start_time'] = planStartTime;
+    }
+    if (planEndTime) {
+        itemFields['End_time'] = planEndTime;
+    }
+    if (planDurationMin && planDurationMin > 0) {
+        const hours = planDurationMin / 60;
+        // Keep whole hours clean ("2"), allow fractional ("1.5")
+        itemFields['Duration'] = String(Number.isInteger(hours) ? hours : Number(hours.toFixed(2)));
+    }
+    if (planStartTime) {
+        itemFields['Time'] = planEndTime ? `${planStartTime} - ${planEndTime}` : planStartTime;
+    }
+
     let itemRecord;
 
     if (linkedItemId) {

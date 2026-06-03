@@ -82,6 +82,11 @@ export async function renderRsvpSection() {
     // Render calendar export buttons
     const calendarExportContainer = document.getElementById('presentation-calendar-export');
     if (calendarExportContainer && eventRecord.fields.Date) {
+        // Ensure the WTF link can be built: in plan view the current session is
+        // always known, so backfill LinkedSession for legacy events that predate it.
+        if ((!eventRecord.fields.LinkedSession || eventRecord.fields.LinkedSession.length === 0) && state.session.id) {
+            eventRecord.fields.LinkedSession = [state.session.id];
+        }
         calendarExportContainer.innerHTML = createCalendarExportButtons(eventRecord);
         initializeCalendarExportListeners(eventRecord, calendarExportContainer);
     }
