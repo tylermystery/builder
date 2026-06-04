@@ -799,6 +799,31 @@ async function initialize() {
             }
         });
 
+        // Overlay saved Visual Scene Builder photos onto published events so the
+        // scene a planner built becomes the event's main image everywhere it renders
+        // (catalog cards, detail modal, RSVP lists). fetchImagesForRecord treats
+        // _customImages as the highest-priority source. Best-effort: a failure here
+        // must never block the catalog from loading.
+        try {
+            const eventCovers = await api.fetchEventCoverImages();
+            if (eventCovers && Object.keys(eventCovers).length > 0) {
+                let applied = 0;
+                records.forEach(record => {
+                    if (record.fields?.['Item Type'] !== 'Event') return;
+                    const coverUrl = eventCovers[record.id];
+                    // Don't clobber an event that already carries custom images.
+                    const hasCustom = Array.isArray(record.fields._customImages) && record.fields._customImages.length > 0;
+                    if (coverUrl && !hasCustom) {
+                        record.fields._customImages = [{ url: coverUrl, isSceneImage: true }];
+                        applied++;
+                    }
+                });
+                log('Main', `Applied scene main photos to ${applied} published event(s).`);
+            }
+        } catch (coverErr) {
+            console.warn('[INIT DEBUG] Could not apply event scene photos:', coverErr);
+        }
+
         setState({
             stores: { all: stores },
             records: { all: records }

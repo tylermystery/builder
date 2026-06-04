@@ -502,9 +502,247 @@ function addCutoutToScene(imageUrl, promptText) {
             
     state.session.itemPositions.set(uniqueId, newPosition);
     triggerSave();
-    
+
     renderSingleCutout(uniqueId, newPosition);
     hideCutoutPicker();
+}
+
+// ============================================================
+// SET AS EVENT MAIN PHOTO
+// ------------------------------------------------------------
+// Rasterizes the composed scene (background + positioned cutouts) into a single
+// image, uploads it to Cloudinary, and saves it as the published event's main
+// photo. The saved photo then surfaces on the event's catalog card, detail modal
+// and RSVP lists for everyone (see api.setEventCoverImage / fetchEventCoverImages).
+// ============================================================
+
+const SCENE_CAPTURE_SCALE = 2; // Render at 2x the on-screen size for a crisp photo.
+
+/**
+ * Loads an image with CORS enabled so it can be drawn to a canvas without
+ * tainting it (Cloudinary serves the required CORS headers).
+ * @param {string} url
+ * @returns {Promise<HTMLImageElement>}
+ */
+function loadSceneImage(url) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+        img.src = url;
+    });
+}
+
+/**
+ * Reads the background image URL currently applied to the scene canvas.
+ * @returns {string|null}
+ */
+function getSceneBackgroundUrl() {
+    const bg = sceneCanvas?.style.backgroundImage || '';
+    const match = bg.match(/url\(["']?(.*?)["']?\)/);
+    return match ? match[1] : null;
+}
+
+/**
+ * Renders the current scene to a JPEG data URL by drawing the background and
+ * every cutout (honoring position, z-order, scale, rotation and flip) onto a
+ * canvas — mirroring how renderSingleCutout() paints them in the DOM.
+ * @returns {Promise<string|null>} A data URL, or null if nothing could be drawn.
+ */
+async function captureSceneImage() {
+    if (!sceneCanvas) return null;
+
+    const cssWidth = sceneCanvas.clientWidth;
+    const cssHeight = sceneCanvas.clientHeight;
+    if (!cssWidth || !cssHeight) {
+        log('Itinerary', 'Scene canvas has no dimensions; cannot capture.');
+        return null;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = cssWidth * SCENE_CAPTURE_SCALE;
+    canvas.height = cssHeight * SCENE_CAPTURE_SCALE;
+    const ctx = canvas.getContext('2d');
+    // Work in on-screen (CSS) pixels; the backing store is 2x for resolution.
+    ctx.setTransform(SCENE_CAPTURE_SCALE, 0, 0, SCENE_CAPTURE_SCALE, 0, 0);
+
+    // Base fill matches the canvas background color so transparent areas read well.
+    ctx.fillStyle = '#e9ecef';
+    ctx.fillRect(0, 0, cssWidth, cssHeight);
+
+    // 1. Background (venue image), drawn cover-fit like CSS background-size: cover.
+    const bgUrl = getSceneBackgroundUrl();
+    if (bgUrl) {
+        try {
+            const bgImg = await loadSceneImage(bgUrl);
+            const imgRatio = bgImg.width / bgImg.height;
+            const canvasRatio = cssWidth / cssHeight;
+            let sx, sy, sw, sh;
+            if (imgRatio > canvasRatio) {
+                sh = bgImg.height;
+                sw = sh * canvasRatio;
+                sx = (bgImg.width - sw) / 2;
+                sy = 0;
+            } else {
+                sw = bgImg.width;
+                sh = sw / canvasRatio;
+                sx = 0;
+                sy = (bgImg.height - sh) / 2;
+            }
+            ctx.drawImage(bgImg, sx, sy, sw, sh, 0, 0, cssWidth, cssHeight);
+        } catch (e) {
+            log('Itinerary', `Background image failed to load for capture: ${e.message}`);
+        }
+    }
+
+    // 2. Cutouts, drawn in ascending z-order so layering matches the DOM.
+    const BASE_WIDTH = 250; // Matches .scene-item-wrapper .scene-cutout { width: 250px }
+    const ordered = Array.from(state.session.itemPositions.entries())
+        .sort((a, b) => (a[1].z || 0) - (b[1].z || 0));
+
+    for (const [, pos] of ordered) {
+        if (!pos.imageUrl) continue;
+
+        // Recreate the exact background-removed cutout URL used when rendering.
+        let transform;
+        if (pos.prompt && pos.prompt.trim() !== '') {
+            transform = `e_gen_remove:prompt_${encodeURIComponent(pos.prompt.trim())},w_250,a_ignore,f_png`;
+        } else {
+            transform = 'e_background_removal,w_250,f_png';
+        }
+        const cutoutUrl = replaceCloudinaryTransform(pos.imageUrl, transform);
+
+        let img;
+        try {
+            img = await loadSceneImage(cutoutUrl);
+        } catch (e) {
+            log('Itinerary', `Skipping cutout that failed to load: ${e.message}`);
+            continue;
+        }
+
+        const displayW = BASE_WIDTH;
+        const displayH = img.naturalHeight && img.naturalWidth
+            ? BASE_WIDTH * (img.naturalHeight / img.naturalWidth)
+            : BASE_WIDTH;
+
+        // The DOM wrapper sits at (x, y) and transforms around its center.
+        const centerX = pos.x + displayW / 2;
+        const centerY = pos.y + displayH / 2;
+        const scale = pos.scale || 1;
+        const rotationRad = ((pos.rotation || 0) * Math.PI) / 180;
+
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.scale(scale, scale);
+        ctx.rotate(rotationRad);
+        if (pos.flipped) ctx.scale(-1, 1);
+        ctx.drawImage(img, -displayW / 2, -displayH / 2, displayW, displayH);
+        ctx.restore();
+    }
+
+    try {
+        return canvas.toDataURL('image/jpeg', 0.9);
+    } catch (e) {
+        // Most likely a tainted canvas (an image without CORS). Surface clearly.
+        log('Itinerary', `Could not export scene canvas: ${e.message}`);
+        return null;
+    }
+}
+
+/**
+ * Resolves the published event id linked to the current plan session, if any.
+ * @returns {Promise<string|null>}
+ */
+async function getLinkedEventId() {
+    if (!state.session.id) return null;
+    try {
+        const session = await api.fetchSessionById(state.session.id);
+        const linked = session?.fields?.LinkedItem;
+        return Array.isArray(linked) && linked.length > 0 ? linked[0] : null;
+    } catch (e) {
+        log('Itinerary', `Could not resolve linked event: ${e.message}`);
+        return null;
+    }
+}
+
+/**
+ * Captures the scene, uploads it, and saves it as the linked event's main photo.
+ */
+async function handleSetEventPhoto() {
+    const btn = document.getElementById('scene-set-photo-btn');
+
+    if (!state.session.id) {
+        updateSceneStatus('Save your plan before setting an event photo.');
+        return;
+    }
+
+    if (state.session.itemPositions.size === 0) {
+        updateSceneStatus('Add items to the scene before setting it as the event photo.');
+        return;
+    }
+
+    // This only applies to a published event — the scene becomes its main photo.
+    const eventId = await getLinkedEventId();
+    if (!eventId) {
+        updateSceneStatus('Publish this plan as an event first, then set its main photo.');
+        alert('Publish this plan as a public event first. Once published, you can set this scene as the event\'s main photo.');
+        return;
+    }
+
+    const originalLabel = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Creating photo…'; }
+    updateSceneStatus('⚙️ Creating event main photo…', true);
+
+    try {
+        const dataUrl = await captureSceneImage();
+        if (!dataUrl) {
+            updateSceneStatus('❌ Could not create the scene image. Try again.');
+            return;
+        }
+
+        // Upload via the existing Cloudinary endpoint.
+        const uploadResponse = await fetch('/.netlify/functions/cloudinary-upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                imageData: dataUrl,
+                sessionId: state.session.id || 'unsaved',
+                itemId: `scene-${eventId}`
+            })
+        });
+
+        if (!uploadResponse.ok) {
+            const errText = await uploadResponse.text();
+            throw new Error(`Upload failed: ${errText}`);
+        }
+
+        const uploadResult = await uploadResponse.json();
+        if (!uploadResult.success || !uploadResult.secure_url) {
+            throw new Error('Upload did not return an image URL.');
+        }
+
+        const imageUrl = uploadResult.secure_url;
+
+        // Persist it so the event shows this photo for everyone, on every load.
+        await api.setEventCoverImage(eventId, imageUrl);
+
+        // Reflect it immediately on the in-memory event record.
+        const eventRecord = state.records.all.find(r => r.id === eventId);
+        if (eventRecord) {
+            eventRecord.fields._customImages = [{ url: imageUrl, isSceneImage: true }];
+        }
+
+        updateSceneStatus('✅ Saved as the event\'s main photo!');
+        alert('This scene is now the event\'s main photo. It will appear on the event card and details.');
+        log('Itinerary', `Scene set as main photo for event ${eventId}: ${imageUrl}`);
+    } catch (error) {
+        console.error('Error setting event main photo:', error);
+        updateSceneStatus('❌ Could not save the event photo.');
+        alert(`Could not set the event main photo: ${error.message}`);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = originalLabel || '📸 Set as event main photo'; }
+    }
 }
 
 /**
@@ -539,6 +777,12 @@ export function setupItineraryEventListeners() {
             updateSceneStatus("Please select an image first.");
         }
     });
+
+    // 2b. "Set as event main photo" button
+    const setPhotoBtn = document.getElementById('scene-set-photo-btn');
+    if (setPhotoBtn) {
+        setPhotoBtn.addEventListener('click', handleSetEventPhoto);
+    }
 
     // 3. Scene Canvas drag-and-drop listeners
     if (sceneCanvas) {
