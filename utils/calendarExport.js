@@ -103,24 +103,52 @@ function resolveEventSchedule(fields) {
 }
 
 /**
- * Resolve the shareable "WTF link" for an event — the link back to the plan's
- * presentation view, where calendar invitees can view the plan and RSVP.
+ * Build the "pretty" item slug used by the public detail-modal URLs
+ * (/item/event-name-recXYZ). Mirrors generateSlug() in utils.js, but is inlined
+ * here so this utility stays dependency-free and usable outside the browser.
+ * @param {string} name - The event name
+ * @param {string} recordId - The event's record id
+ * @returns {string} A slug ending in the record id
+ */
+function buildItemSlug(name, recordId) {
+  if (!name || typeof name !== 'string') return recordId;
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .substring(0, 60);
+  return slug ? `${slug}-${recordId}` : recordId;
+}
+
+/**
+ * Resolve the shareable "WTF link" for an event — the link back to the published
+ * event's detail modal, shown over the catalog. This is the public-facing view
+ * any calendar invitee can open to see the event and RSVP; the plan's
+ * presentation ("present") view is reserved for collaborators, so it is no
+ * longer linked here.
  *
- * Built from the event's LinkedSession (the session the published plan lives in).
- * Uses the current site origin in the browser, falling back to the production
- * URL when no window is available. Returns '' when the event has no linked
- * session (e.g. a catalog item that was never published from a plan).
+ * Built as a pretty /item/<slug> URL (the same format the in-app "Share" button
+ * produces), which opens the detail modal with the catalog behind and avoids
+ * spinning up a guest session. The event's store is carried along as ?shopId so
+ * the correct catalog loads for a fresh visitor. Uses the current site origin in
+ * the browser, falling back to the production URL when no window is available.
+ * Returns '' when no record id is available to link to.
  *
  * @param {Object} fields - Event record fields
- * @returns {string} Absolute WTF link, or '' if unavailable
+ * @param {string} [recordId] - The event's record id (the catalog item to open)
+ * @returns {string} Absolute link to the event's detail modal, or '' if unavailable
  */
-function resolveWtfLink(fields) {
-  const sessionId = Array.isArray(fields.LinkedSession) ? fields.LinkedSession[0] : null;
-  if (!sessionId) return '';
+function resolveWtfLink(fields, recordId) {
+  if (!recordId) return '';
   const origin = (typeof window !== 'undefined' && window.location && window.location.origin)
     ? window.location.origin
     : 'https://whatthefunfinder.netlify.app';
-  return `${origin}/?session=${sessionId}&view=present`;
+  const slug = buildItemSlug(fields.Name, recordId);
+  let link = `${origin}/item/${slug}`;
+  // Carry the event's store so a fresh invitee loads the catalog that contains it
+  const storeId = Array.isArray(fields.Stores) && fields.Stores.length ? fields.Stores[0] : null;
+  if (storeId) link += `?shopId=${storeId}`;
+  return link;
 }
 
 /**
@@ -144,7 +172,7 @@ function appendWtfLink(description, wtfLink) {
  * description, the components that make up the plan ("What's Included"), the
  * extra detail specs surfaced in the detail modal (Capacity and the
  * "Good to Know" / Additional Information notes), and the shareable link back
- * to the plan for viewing and RSVP'ing.
+ * to the published event's detail modal for viewing and RSVP'ing.
  *
  * Components are passed in by the detail modal as `fields._calendarComponents`
  * (an array of resolved item names) because resolving them needs live plan
@@ -152,9 +180,10 @@ function appendWtfLink(description, wtfLink) {
  * the event record, so the notes stay populated even without the modal.
  *
  * @param {Object} fields - Event record fields
+ * @param {string} [recordId] - The event's record id (the catalog item to open)
  * @returns {string} Assembled description text
  */
-function buildCalendarDescription(fields) {
+function buildCalendarDescription(fields, recordId) {
   const parts = [];
 
   const desc = (fields.Description || '').trim();
@@ -174,8 +203,8 @@ function buildCalendarDescription(fields) {
   const goodToKnow = (fields['Additional Information'] || '').trim();
   if (goodToKnow) parts.push(`Good to Know:\n${goodToKnow}`);
 
-  // Shareable link back to the plan so invitees can view it and RSVP
-  const wtfLink = resolveWtfLink(fields);
+  // Shareable link back to the published event's detail modal so invitees can view it and RSVP
+  const wtfLink = resolveWtfLink(fields, recordId);
   if (wtfLink) parts.push(`View & RSVP: ${wtfLink}`);
 
   return parts.join('\n\n');
@@ -309,9 +338,9 @@ function generateICalFile(event) {
   const fields = event.fields || event;
 
   const title = escapeICalText(fields.Name || 'Event');
-  // Include the shareable WTF link in the notes so invitees can view the plan and RSVP
-  const wtfLink = resolveWtfLink(fields);
-  const description = escapeICalText(buildCalendarDescription(fields));
+  // Include the shareable link to the published event's detail modal so invitees can view and RSVP
+  const wtfLink = resolveWtfLink(fields, event.id);
+  const description = escapeICalText(buildCalendarDescription(fields, event.id));
   const location = escapeICalText(resolveCalendarLocation(fields));
 
   // Resolve start/end from the plan-synced schedule fields (Start_time / Duration / End_time)
@@ -343,7 +372,7 @@ function generateICalFile(event) {
     `DESCRIPTION:${description}`,
     `LOCATION:${location}`
   ];
-  // Standard URL property so calendar clients that surface it link back to the plan
+  // Standard URL property so calendar clients that surface it link back to the event's detail modal
   if (wtfLink) {
     icalLines.push(`URL:${wtfLink}`);
   }
@@ -382,7 +411,7 @@ function generateGoogleCalendarUrl(event) {
   const fields = event.fields || event;
 
   const title = encodeURIComponent(fields.Name || 'Event');
-  const description = encodeURIComponent(buildCalendarDescription(fields));
+  const description = encodeURIComponent(buildCalendarDescription(fields, event.id));
   const location = encodeURIComponent(resolveCalendarLocation(fields));
 
   // Resolve start/end from the plan-synced schedule fields (Start_time / Duration / End_time)
@@ -413,7 +442,7 @@ function generateOutlookCalendarUrl(event) {
   const fields = event.fields || event;
 
   const title = encodeURIComponent(fields.Name || 'Event');
-  const description = encodeURIComponent(buildCalendarDescription(fields));
+  const description = encodeURIComponent(buildCalendarDescription(fields, event.id));
   const location = encodeURIComponent(resolveCalendarLocation(fields));
 
   // Resolve start/end from the plan-synced schedule fields (Start_time / Duration / End_time)
@@ -435,7 +464,7 @@ function generateYahooCalendarUrl(event) {
   const fields = event.fields || event;
 
   const title = encodeURIComponent(fields.Name || 'Event');
-  const description = encodeURIComponent(buildCalendarDescription(fields));
+  const description = encodeURIComponent(buildCalendarDescription(fields, event.id));
   const location = encodeURIComponent(resolveCalendarLocation(fields));
 
   // Resolve start/end from the plan-synced schedule fields (Start_time / Duration / End_time)

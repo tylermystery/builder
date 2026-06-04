@@ -6176,12 +6176,18 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         // Parse session data to get locked items (components) and ideas
         let lockedInHistory = [];
         let ideasHistory = [];
+        // Custom items (ai-*, manual-*, solution-*) live only inside the session's
+        // saved data, not in Airtable. Capture them here so the components carousel
+        // can render them even if they haven't been restored into state.records.all
+        // yet (avoids a race where custom items appear only on some page loads).
+        let sessionCustomRecords = {};
         if (linkedSession.fields['Items with Variations']) {
             try {
                 const sessionData = JSON.parse(linkedSession.fields['Items with Variations']);
 
                 const lockedInItems = sessionData.lockedInItems || {};
                 const ideasItems = sessionData.ideasItems || {};
+                sessionCustomRecords = sessionData.aiRecords || {};
 
                 // Convert locked items to history format
                 lockedInHistory = Object.entries(lockedInItems).map(([id, itemInfo]) => ({
@@ -6248,9 +6254,26 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             const allComponentRecords = [];
             const componentHistoryMap = new Map();
 
+            // Resolve a component id to a record. Real Airtable items come from
+            // state (live or archived); custom items (ai-*, manual-*, solution-*)
+            // fall back to the records saved inside the session's own data so they
+            // render consistently regardless of session-restore timing.
+            const resolveComponentRecord = (componentId) => {
+                let resolved = recordMap.get(componentId) || (archiveMap && archiveMap.get(componentId));
+                if (!resolved) {
+                    const saved = sessionCustomRecords[componentId];
+                    if (saved && saved.fields) {
+                        resolved = { id: saved.id || componentId, fields: saved.fields };
+                        if (saved.isManual) resolved.isManual = true;
+                        if (saved.isSolution) resolved.isSolution = true;
+                    }
+                }
+                return resolved;
+            };
+
             // Process locked items
             for (const componentId of lockedComponentIds) {
-                const componentRecord = recordMap.get(componentId) || (archiveMap && archiveMap.get(componentId));
+                const componentRecord = resolveComponentRecord(componentId);
                 if (componentRecord) {
                     const history = lockedHistoryMap.get(componentId);
                     allComponentRecords.push({
@@ -6264,7 +6287,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
             // Process idea items
             for (const ideaId of ideaComponentIds) {
-                const ideaRecord = recordMap.get(ideaId) || (archiveMap && archiveMap.get(ideaId));
+                const ideaRecord = resolveComponentRecord(ideaId);
                 if (ideaRecord) {
                     const history = ideasHistoryMap.get(ideaId);
                     allComponentRecords.push({

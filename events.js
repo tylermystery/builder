@@ -98,23 +98,119 @@ function handleUmwRemoval() {
     }
 }
 
-function loadMoreRecords(imageCache) {
-    if (state.ui.isLoadingMore) return;
-    const start = state.ui.recordsCurrentlyDisplayed;
-    const end = start + RECORDS_PER_LOAD;
-    let recordsToLoad = state.records.filtered.slice(start, end);
-    // Skip any Grouping records in load-more batches — they are rendered as carousels in the initial render
-    recordsToLoad = recordsToLoad.filter(r => r.fields['Item Type'] !== 'Grouping');
-    if (recordsToLoad.length > 0) {
-        state.ui.isLoadingMore = true;
-        ui.renderRecords(recordsToLoad, imageCache, true).then(() => {
-            state.ui.recordsCurrentlyDisplayed = end;
-            state.ui.isLoadingMore = false;
-        });
-    } else {
-        // If only groupings were in this batch, advance the counter and try next batch
-        state.ui.recordsCurrentlyDisplayed = end;
+// Image cache captured at init so the pagination observer and "Load more"
+// fallback button can request additional batches without threading the
+// reference through every call site.
+let catalogImageCache = null;
+let catalogPaginationWired = false;
+
+function hasMoreCatalogRecords() {
+    return state.ui.recordsCurrentlyDisplayed < state.records.filtered.length;
+}
+
+// True when the bottom sentinel is within ~300px of the viewport, i.e. the
+// current batch did not fill the screen and more should be loaded.
+function isCatalogSentinelNear() {
+    const sentinel = document.getElementById('catalog-sentinel');
+    if (!sentinel) return false;
+    const rect = sentinel.getBoundingClientRect();
+    return rect.top <= window.innerHeight + 300;
+}
+
+// Keep the visible "Load more" fallback button in sync with pagination state.
+function updateLoadMoreUI() {
+    const btn = document.getElementById('load-more-btn');
+    if (!btn) return;
+    if (!hasMoreCatalogRecords()) {
+        btn.style.display = 'none';
+        return;
     }
+    btn.style.display = '';
+    btn.disabled = state.ui.isLoadingMore;
+    btn.textContent = state.ui.isLoadingMore ? 'Loading…' : 'Load more';
+}
+
+function loadMoreRecords(imageCache) {
+    imageCache = imageCache || catalogImageCache;
+    if (state.ui.isLoadingMore) return;
+    if (!hasMoreCatalogRecords()) {
+        updateLoadMoreUI();
+        return;
+    }
+
+    // Skip past any batch that contains only Grouping records — they are
+    // rendered as carousels in the initial pass, not in load-more batches.
+    // Previously a grouping-only batch advanced the counter but never armed
+    // the next batch, stalling pagination; here we keep advancing until we
+    // find a batch with real items to render (or reach the end).
+    let start = state.ui.recordsCurrentlyDisplayed;
+    let end = start;
+    let recordsToLoad = [];
+    while (end < state.records.filtered.length && recordsToLoad.length === 0) {
+        end = Math.min(start + RECORDS_PER_LOAD, state.records.filtered.length);
+        recordsToLoad = state.records.filtered
+            .slice(start, end)
+            .filter(r => r.fields['Item Type'] !== 'Grouping');
+        if (recordsToLoad.length === 0) start = end;
+    }
+
+    if (recordsToLoad.length === 0) {
+        state.ui.recordsCurrentlyDisplayed = end;
+        updateLoadMoreUI();
+        return;
+    }
+
+    state.ui.isLoadingMore = true;
+    updateLoadMoreUI();
+    ui.renderRecords(recordsToLoad, imageCache, true).then(() => {
+        state.ui.recordsCurrentlyDisplayed = end;
+        state.ui.isLoadingMore = false;
+        updateLoadMoreUI();
+        // Top-up: if the sentinel is still near the viewport (the batch did
+        // not fill the screen), keep loading until it does or records run out.
+        if (hasMoreCatalogRecords() && isCatalogSentinelNear()) {
+            loadMoreRecords(imageCache);
+        }
+    });
+}
+
+// Wire up reliable catalog pagination: an IntersectionObserver sentinel that
+// loads the next batch as it nears the viewport (and tops up when the first
+// batch underfills the screen), plus a visible "Load more" fallback button for
+// accessibility and cases where no scroll occurs.
+function setupCatalogPagination(imageCache) {
+    catalogImageCache = imageCache;
+
+    const loadMoreBtn = document.getElementById('load-more-btn');
+    if (loadMoreBtn && !loadMoreBtn._wired) {
+        loadMoreBtn._wired = true;
+        loadMoreBtn.addEventListener('click', () => loadMoreRecords(catalogImageCache));
+    }
+
+    // Only attach the observer and global listener once per page, even if
+    // listener initialization runs again.
+    if (catalogPaginationWired) return;
+    catalogPaginationWired = true;
+
+    const sentinel = document.getElementById('catalog-sentinel');
+    if (sentinel && 'IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+            if (entries.some(e => e.isIntersecting)) {
+                loadMoreRecords(catalogImageCache);
+            }
+        }, { rootMargin: '300px 0px' });
+        observer.observe(sentinel);
+    }
+
+    // After each (re)filter render completes, refresh the button and top up if
+    // the initial batch did not fill the viewport. filtering.js dispatches this
+    // once recordsCurrentlyDisplayed reflects the initial render.
+    window.addEventListener('catalog:rendered', () => {
+        updateLoadMoreUI();
+        if (hasMoreCatalogRecords() && isCatalogSentinelNear() && !state.ui.isLoadingMore) {
+            loadMoreRecords(catalogImageCache);
+        }
+    });
 }
 
 export function updateSaveShareButton() {
@@ -1211,18 +1307,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         });
     }
 
-    let scrollTimeout;
-    // Passive event listener for better scroll performance
-    window.addEventListener('scroll', () => {
-        if (scrollTimeout) return;
-        scrollTimeout = setTimeout(() => {
-            const buffer = 300;
-            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - buffer && !state.ui.isLoadingMore) {
-                loadMoreRecords(imageCache);
-            }
-            scrollTimeout = null;
-        }, 100);
-    }, { passive: true });
+    // Reliable catalog pagination via an IntersectionObserver sentinel plus a
+    // visible "Load more" fallback. Replaces the previous fragile scroll-math
+    // trigger that could miss when the first batch did not fill the viewport.
+    setupCatalogPagination(imageCache);
 
     // --- START CONSOLIDATED BUTTON GENERATION --
     const categoryFiltersRoot = document.getElementById('category-filters');

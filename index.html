@@ -5346,6 +5346,10 @@ body.ucp-panel-open .unified-chat-panel {
             <!-- Phase 3a: Task Manager Container (hidden by default) -->
             <div id="task-manager-container" style="display: none;"></div>
             <div id="catalog-container"></div>
+            <!-- Pagination fallback: visible button for keyboard/no-scroll cases -->
+            <button id="load-more-btn" type="button" style="display: none;">Load more</button>
+            <!-- Sentinel observed by IntersectionObserver to trigger the next batch -->
+            <div id="catalog-sentinel" aria-hidden="true" style="width: 100%; height: 1px;"></div>
         </div>
     </div>
 
