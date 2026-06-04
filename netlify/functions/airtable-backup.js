@@ -7,9 +7,10 @@
 
 // Lazy-load @netlify/blobs to prevent module-level crash if not installed
 let _getStore = null;
+let _connectLambda = null;
 let _blobsLoadError = null;
 try {
-    _getStore = require('@netlify/blobs').getStore;
+    ({ getStore: _getStore, connectLambda: _connectLambda } = require('@netlify/blobs'));
 } catch (err) {
     _blobsLoadError = err.message;
     console.error('[airtable-backup] Failed to load @netlify/blobs:', err.message);
@@ -33,12 +34,17 @@ const ITEM_FIELDS = [
  * Safely initialize the Netlify Blobs store.
  * Returns null if Blobs context is not available (e.g., missing env vars).
  */
-function getBackupStore() {
+function getBackupStore(event) {
     if (!_getStore) {
         console.error('[airtable-backup] @netlify/blobs not available:', _blobsLoadError || 'unknown reason');
         return null;
     }
     try {
+        // Legacy V1 (Lambda) function: connect the Blobs context from the event
+        // before getStore(), or getStore throws MissingBlobsEnvironmentError.
+        if (_connectLambda && event) {
+            _connectLambda(event);
+        }
         const store = _getStore({ name: 'airtable-backup', consistency: 'strong' });
         return store;
     } catch (err) {
@@ -142,7 +148,7 @@ exports.handler = async (event) => {
         console.log(`[airtable-backup] ${event.httpMethod || 'SCHEDULED'} request received`);
 
         // Safely initialize the Blobs store — this can fail if context is missing
-        const store = getBackupStore();
+        const store = getBackupStore(event);
         if (!store) {
             const errorMsg = 'Netlify Blobs store could not be initialized (missing context or environment)';
             console.error('[airtable-backup]', errorMsg);

@@ -11313,6 +11313,27 @@ hr.total-divider {
     border-color: #007bff;
 }
 
+/* Scene Builder toolbar (Set as event main photo) */
+.scene-builder-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 10px 0;
+    flex-shrink: 0;
+}
+#scene-set-photo-btn {
+    margin-top: 0;
+    width: auto;
+    padding: 8px 16px;
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+#scene-set-photo-btn:disabled {
+    opacity: 0.6;
+    cursor: progress;
+}
+
 /* --- ADD TO END of style.css --- */
 
 /* New status text overlay */

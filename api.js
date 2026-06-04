@@ -4058,6 +4058,87 @@ export async function publishSessionAsEvent(sessionId, eventData) {
     return itemRecord;
 }
 
+// ============================================================
+// EVENT MAIN PHOTO (Visual Scene Builder)
+// ------------------------------------------------------------
+// Published events have no native image field; their card/detail image is
+// resolved by fetchImagesForRecord(). To let a planner use the scene they built
+// in the Visual Scene Builder as the event's main photo, the rendered scene is
+// uploaded to Cloudinary and its URL is persisted (keyed by event id) via the
+// event-cover-image function. The saved URLs are overlaid onto event records at
+// startup as _customImages, which fetchImagesForRecord treats as highest priority.
+// ============================================================
+
+// Memoized so the whole map is fetched once per page load.
+let _eventCoverImagesPromise = null;
+
+/**
+ * Fetch the { eventId: imageUrl } map of saved scene main-photos.
+ * Result is cached for the lifetime of the page.
+ * @param {boolean} [forceRefresh=false] - Re-fetch instead of using the cache.
+ * @returns {Promise<Object>} Map of event record id -> Cloudinary image URL.
+ */
+export async function fetchEventCoverImages(forceRefresh = false) {
+    if (_eventCoverImagesPromise && !forceRefresh) {
+        return _eventCoverImagesPromise;
+    }
+
+    _eventCoverImagesPromise = (async () => {
+        try {
+            // Bound the request so a cold start can never stall catalog load.
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 4000);
+            const response = await fetch('/.netlify/functions/event-cover-image', {
+                method: 'GET',
+                signal: controller.signal
+            }).finally(() => clearTimeout(timeout));
+            if (!response.ok) {
+                log('API', `fetchEventCoverImages failed: ${response.status}`);
+                return {};
+            }
+            const data = await response.json();
+            return data.covers || {};
+        } catch (error) {
+            console.error('Error fetching event cover images:', error);
+            return {};
+        }
+    })();
+
+    return _eventCoverImagesPromise;
+}
+
+/**
+ * Persist a scene image as the main photo for a published event.
+ * @param {string} eventId - The event's Airtable record id.
+ * @param {string} imageUrl - The uploaded Cloudinary image URL.
+ * @returns {Promise<boolean>} True when the save succeeded.
+ */
+export async function setEventCoverImage(eventId, imageUrl) {
+    if (!eventId || !imageUrl) {
+        throw new Error('eventId and imageUrl are required to set an event main photo');
+    }
+
+    const response = await fetch('/.netlify/functions/event-cover-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId, imageUrl })
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to save event main photo: ${errorText}`);
+    }
+
+    // Keep the in-memory map in sync so a subsequent hydrate reflects the change.
+    try {
+        const map = await fetchEventCoverImages();
+        map[eventId] = imageUrl;
+    } catch (_e) { /* non-fatal */ }
+
+    log('API', `Saved scene main photo for event ${eventId}`);
+    return true;
+}
+
 /**
  * Publishes a Session as a reusable Package item (Decision 5 - Option B).
  * Creates a new Package item in the catalog with the session's locked items as included items
