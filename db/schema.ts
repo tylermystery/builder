@@ -293,6 +293,43 @@ export const groups = pgTable(
   }),
 );
 
+// ---------------------------------------------------------------------------
+// Event RSVPs (party size per guest)
+//
+// The yes / maybe / no MEMBERSHIP of an event RSVP continues to live in Airtable
+// (the event record's RSVPs / RSVPMaybe / RSVPNo link fields) — that storage is
+// untouched. This table is purely additive: it records the PARTY SIZE — the
+// "number of RSVPs" a single guest is reserving — alongside their response, so a
+// guest can RSVP for more than one spot. One row per (event, guest); the same
+// no-cross-FK convention applies (the Airtable event id and user id are text).
+//
+// Guests who responded before this feature simply have no row and are counted as
+// a party of one, so totals stay correct without a backfill.
+export const eventRsvps = pgTable(
+  "event_rsvps",
+  {
+    id: serial().primaryKey(),
+    // Airtable event (catalog item) record id.
+    eventId: text("event_id").notNull(),
+    // Airtable user record id of the guest.
+    userId: text("user_id").notNull(),
+    // Mirrors the guest's Airtable response: 'yes' | 'maybe' | 'no'. Kept here so
+    // headcount totals can be summed per response without a second lookup.
+    rsvpType: text("rsvp_type").notNull().default("yes"),
+    // Party size — how many spots this guest is reserving. Always >= 1.
+    quantity: integer("quantity").notNull().default(1),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (t) => ({
+    eventIdx: index("event_rsvps_event_idx").on(t.eventId),
+    // A guest holds at most one party-size row per event (upserted on response).
+    eventUserUnique: uniqueIndex("event_rsvps_event_user_unique").on(
+      t.eventId,
+      t.userId,
+    ),
+  }),
+);
+
 // One row per membership (one person in one group). Cascade-deleted with the
 // group. Unique on (group, user) so a person cannot be added to the same group
 // twice; the same person can still belong to many different groups.

@@ -2304,16 +2304,25 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const rsvpType = rsvpBtn.dataset.rsvpType || 'yes';
             const wasActive = rsvpBtn.classList.contains('active');
 
+            // Party size ("number of RSVPs") from the detail modal, when present.
+            // RSVP buttons on cards have no such control and stay at one spot.
+            const partyQtyInput = document.getElementById('rsvp-quantity-input');
+            const partyQty = partyQtyInput ? (parseInt(partyQtyInput.value, 10) || 1) : 1;
+
             rsvpBtn.disabled = true;
             const originalText = rsvpBtn.innerHTML;
             rsvpBtn.textContent = 'Saving...';
-            
+
             try {
                 let updatedRecord;
                 if (wasActive) {
                     updatedRecord = await api.updateRsvpForEvent(recordId, state.session.user.id, null);
+                    // Clearing the RSVP also clears the stored party size.
+                    await api.clearEventRsvpQuantity(recordId);
                 } else {
                     updatedRecord = await api.updateRsvpForEvent(recordId, state.session.user.id, rsvpType);
+                    // Persist the party size alongside the response (best-effort).
+                    await api.saveEventRsvpQuantity(recordId, rsvpType, partyQty);
                 }
                 
                 if (updatedRecord) {

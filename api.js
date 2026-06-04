@@ -3660,6 +3660,78 @@ export async function addRsvpToEvent(eventId, userId) {
     return updateRsvpForEvent(eventId, userId, 'yes');
 }
 
+// --- Event RSVP party size (the "number of RSVPs" a single guest reserves) ---
+//
+// The yes/maybe/no membership stays in Airtable (updateRsvpForEvent above). These
+// helpers talk to /api/event-rsvp, which keeps only the per-guest party size in
+// Netlify Postgres. All three are best-effort: a failure here never blocks the
+// underlying RSVP, it just means the guest is counted as a party of one.
+
+/**
+ * Read headcount totals (party sizes summed per response) for an event, plus the
+ * signed-in guest's own saved party size when available.
+ * @returns {Promise<{ totals: {yes:number,maybe:number,no:number}, mine: {quantity:number, rsvpType:string}|null }|null>}
+ */
+export async function fetchEventRsvpData(eventId) {
+    if (!eventId) return null;
+    try {
+        const token = localStorage.getItem('jwt');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const res = await fetch(`/api/event-rsvp?eventId=${encodeURIComponent(eventId)}`, { headers });
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (error) {
+        console.error('[API] fetchEventRsvpData failed:', error);
+        return null;
+    }
+}
+
+/**
+ * Save (upsert) the signed-in guest's party size and response for an event.
+ * @param {string} eventId
+ * @param {'yes'|'maybe'|'no'} rsvpType
+ * @param {number} quantity party size (>= 1)
+ */
+export async function saveEventRsvpQuantity(eventId, rsvpType, quantity) {
+    if (!eventId) return null;
+    try {
+        const token = localStorage.getItem('jwt');
+        if (!token) return null;
+        const res = await fetch('/api/event-rsvp', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ eventId, rsvpType, quantity })
+        });
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (error) {
+        console.error('[API] saveEventRsvpQuantity failed:', error);
+        return null;
+    }
+}
+
+/**
+ * Remove the signed-in guest's party-size row for an event (used when they clear
+ * their RSVP). The Airtable membership removal is handled separately.
+ */
+export async function clearEventRsvpQuantity(eventId) {
+    if (!eventId) return null;
+    try {
+        const token = localStorage.getItem('jwt');
+        if (!token) return null;
+        const res = await fetch('/api/event-rsvp', {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ eventId })
+        });
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (error) {
+        console.error('[API] clearEventRsvpQuantity failed:', error);
+        return null;
+    }
+}
+
 /**
  * Fetches user names for a list of user IDs from the Users table
  * @param {string[]} userIds - Array of user record IDs
