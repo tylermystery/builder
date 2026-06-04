@@ -16,10 +16,11 @@ function formatICalDate(dateStr, timeStr = null) {
   const dateObj = new Date(dateStr + 'T00:00:00');
 
   if (timeStr) {
-    const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    // Tolerates "7:00 PM", "11 am", "11am", and the first time in a range like "5 - 8 pm"
+    const match = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
     if (match) {
       let hours = parseInt(match[1], 10);
-      const minutes = parseInt(match[2], 10);
+      const minutes = match[2] ? parseInt(match[2], 10) : 0;
       const meridiem = match[3] ? match[3].toUpperCase() : null;
       if (meridiem === 'PM' && hours !== 12) hours += 12;
       else if (meridiem === 'AM' && hours === 12) hours = 0;
@@ -33,11 +34,21 @@ function formatICalDate(dateStr, timeStr = null) {
 }
 
 /**
+ * Append the shareable WTF link to a calendar entry's notes so invitees can
+ * open the plan and RSVP from their calendar. No-op when there is no link.
+ */
+function withWtfLink(description, wtfLink) {
+  const desc = description || '';
+  if (!wtfLink) return desc;
+  return desc ? `${desc}\n\nView & RSVP: ${wtfLink}` : `View & RSVP: ${wtfLink}`;
+}
+
+/**
  * Build Google Calendar URL
  */
 function buildGoogleCalendarUrl(event) {
   const title = encodeURIComponent(event.name || 'Event');
-  const description = encodeURIComponent(event.description || '');
+  const description = encodeURIComponent(withWtfLink(event.description, event.wtfLink));
   const location = encodeURIComponent(event.location || '');
 
   const startDate = formatICalDate(event.date, event.time);
@@ -63,7 +74,7 @@ function buildGoogleCalendarUrl(event) {
  */
 function buildOutlookCalendarUrl(event) {
   const title = encodeURIComponent(event.name || 'Event');
-  const description = encodeURIComponent(event.description || '');
+  const description = encodeURIComponent(withWtfLink(event.description, event.wtfLink));
   const location = encodeURIComponent(event.location || '');
 
   const startDate = formatICalDate(event.date, event.time);
@@ -95,6 +106,25 @@ function buildICalContent(event) {
     return `${y}${m}${day}T${h}${min}${s}Z`;
   };
 
+  // Floating local time (no Z): preserves the wall-clock time the host set so the
+  // invitee sees the same time whatever timezone they import the file in. The
+  // function runs in UTC, where the schedule's hours were set, so the UTC
+  // components are exactly the intended wall-clock values.
+  const fmtFloating = (d) => fmtUtc(d).slice(0, -1);
+
+  // Fold content lines to 75 octets (RFC 5545) so the description/location — which
+  // include the "View & RSVP" link and a full address — are not dropped on import.
+  const fold = (line) => {
+    if (line.length <= 75) return line;
+    let out = line.slice(0, 75);
+    let rest = line.slice(75);
+    while (rest.length > 74) {
+      out += `\r\n ${rest.slice(0, 74)}`;
+      rest = rest.slice(74);
+    }
+    return `${out}\r\n ${rest}`;
+  };
+
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -104,16 +134,17 @@ function buildICalContent(event) {
     'BEGIN:VEVENT',
     `UID:${Date.now()}@whatthefun.com`,
     `DTSTAMP:${fmtUtc(new Date())}`,
-    `DTSTART:${fmtUtc(startDate)}`,
-    `DTEND:${fmtUtc(endDate)}`,
+    `DTSTART:${fmtFloating(startDate)}`,
+    `DTEND:${fmtFloating(endDate)}`,
     `SUMMARY:${esc(event.name)}`,
-    `DESCRIPTION:${esc(event.description)}`,
+    `DESCRIPTION:${esc(withWtfLink(event.description, event.wtfLink))}`,
     `LOCATION:${esc(event.location)}`,
+    ...(event.wtfLink ? [`URL:${event.wtfLink}`] : []),
     'STATUS:CONFIRMED',
     'SEQUENCE:0',
     'END:VEVENT',
     'END:VCALENDAR'
-  ].join('\r\n');
+  ].map(fold).join('\r\n');
 }
 
 /**
@@ -174,11 +205,18 @@ exports.handler = async (event) => {
       description: eventRecord.fields.Description || '',
       location: eventRecord.fields['Location Details'] || eventRecord.fields.Location || '',
       date: eventRecord.fields.Date,
-      time: eventRecord.fields.Time || '',
-      duration: eventRecord.fields['Duration (hours)'] || 2
+      time: eventRecord.fields.Start_time || eventRecord.fields.Time || '',
+      duration: parseFloat(eventRecord.fields.Duration || eventRecord.fields['Duration (hours)']) || 2
     };
 
     const baseUrl = SITE_URL || URL;
+    // Shareable "WTF link" back to the plan's presentation view, built from the
+    // event's linked session. Included in the calendar entries so invitees can
+    // open the plan and RSVP from their calendar.
+    const linkedSessionId = Array.isArray(eventRecord.fields.LinkedSession)
+      ? eventRecord.fields.LinkedSession[0]
+      : null;
+    eventData.wtfLink = linkedSessionId ? `${baseUrl}/?session=${linkedSessionId}&view=present` : '';
     const eventLink = `${baseUrl}/?openItem=${encodeURIComponent(eventData.name)}`;
     const rsvpLabel = rsvpType === 'yes' ? "You're Going!" : "You're a Maybe!";
     const rsvpSubLabel = rsvpType === 'yes'

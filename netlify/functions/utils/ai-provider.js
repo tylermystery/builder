@@ -3,11 +3,11 @@
  * Centralized AI text/image generation with automatic fallback across providers.
  *
  * Supported text providers:  Google Gemini, OpenAI, Anthropic
- * Supported image providers: Google Imagen, OpenAI (DALL-E 3)
+ * Supported image providers: Google Imagen, OpenAI (gpt-image-1)
  *
  * Environment variables:
  *   GEMINI_API_KEY     - Google AI (Gemini + Imagen)
- *   OPENAI_API_KEY     - OpenAI (GPT-4o-mini + DALL-E 3)
+ *   OPENAI_API_KEY     - OpenAI (GPT-4o-mini + gpt-image-1)
  *   ANTHROPIC_API_KEY  - Anthropic (Claude Haiku)
  *   AI_TEXT_PROVIDER   - Preferred text provider: "auto" | "gemini" | "openai" | "anthropic" (default: "auto")
  *   AI_IMAGE_PROVIDER  - Preferred image provider: "auto" | "gemini" | "openai" (default: "auto")
@@ -59,8 +59,8 @@ const IMAGE_PROVIDERS = {
         available: () => !!GEMINI_API_KEY,
     },
     openai: {
-        name: 'OpenAI DALL-E',
-        model: 'dall-e-3',
+        name: 'OpenAI gpt-image',
+        model: 'gpt-image-1-mini',
         available: () => !!OPENAI_API_KEY,
     },
 };
@@ -428,18 +428,20 @@ async function callGeminiImage(prompt, config) {
 async function callOpenAIImage(prompt, config) {
     const url = 'https://api.openai.com/v1/images/generations';
 
-    console.log('[ai-provider] [callOpenAIImage] Making request to DALL-E 3 API');
+    console.log('[ai-provider] [callOpenAIImage] Making request to gpt-image-1-mini API');
     console.log('[ai-provider] [callOpenAIImage] Prompt length:', prompt.length);
     console.log('[ai-provider] [callOpenAIImage] Config size:', config.size || '1024x1024');
     console.log('[ai-provider] [callOpenAIImage] API key present:', !!OPENAI_API_KEY);
 
+    // NOTE: gpt-image-1 models always return base64 and reject `response_format`.
+    // Valid `quality` values are low | medium | high | auto (NOT dall-e's "standard").
+    // "low" keeps generation fast enough to fit inside the function's execution window.
     const body = {
-        model: 'dall-e-3',
+        model: 'gpt-image-1-mini',
         prompt: prompt,
         n: 1,
         size: config.size || '1024x1024',
-        response_format: 'b64_json',
-        quality: 'standard',
+        quality: config.quality || 'low',
     };
 
     const _start = Date.now();
@@ -469,7 +471,7 @@ async function callOpenAIImage(prompt, config) {
 
     if (!b64) {
         console.error('[ai-provider] [callOpenAIImage] No image data in response. Full response keys:', Object.keys(result || {}));
-        return { ok: false, status: 500, errorText: 'No image data in DALL-E response' };
+        return { ok: false, status: 500, errorText: 'No image data in gpt-image response' };
     }
     return { ok: true, base64: b64, format: 'png' };
 }

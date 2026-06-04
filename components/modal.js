@@ -6,14 +6,14 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage, scoreToAdjective } from '../config.js';
 import { getCurrentUser } from '../chat.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration, formatEventTimeRange } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getDayStatus, AVAILABILITY_STATUS, logBusyTimeSummary, describeSelectedAvailability } from '../availability.js';
 import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { resizeImageForUpload } from '../utils/imageResizer.js';
 import { triggerSave } from '../events.js';
-import { createCalendarExportButtons, initializeCalendarExportListeners } from '../utils/calendarExport.js';
+import { createCalendarExportButtons, initializeCalendarExportListeners, resolvePlanVenueAddress } from '../utils/calendarExport.js';
 import { openUCPForItem, openUCPGlobalForItem } from './unifiedChatPanel.js';
 import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
@@ -3162,6 +3162,20 @@ function resetModalState() {
     const dynamicSections = document.querySelectorAll('.event-info-section, .rsvp-list-section, .calendar-export-section, .session-components-section, .edit-plan-section');
     dynamicSections.forEach(section => section.remove());
 
+    // Undo the published-event RSVP restructure (the primary RSVP block and the
+    // "…" overflow menu) so a subsequently opened non-event item is never left
+    // with event-only controls. The relocated Add to Plan button is rescued back
+    // into the action zone first, and the item-quantity stepper that events hide
+    // is made visible again.
+    const actionsContainerReset = document.getElementById('modal-actions-container');
+    if (actionsContainerReset) {
+        const stowedAddBtn = actionsContainerReset.querySelector('.modal-secondary-menu #modal-add-to-plan-btn');
+        if (stowedAddBtn) actionsContainerReset.appendChild(stowedAddBtn);
+        actionsContainerReset.querySelectorAll('.modal-rsvp-primary, .modal-secondary-menu').forEach(el => el.remove());
+    }
+    const quantitySelectorReset = document.getElementById('modal-quantity-selector');
+    if (quantitySelectorReset) quantitySelectorReset.style.display = '';
+
     // Also remove edit mode UI elements
     const editModeElements = document.querySelectorAll('.item-edit-container, .item-edit-save-container');
     editModeElements.forEach(el => el.remove());
@@ -5199,6 +5213,42 @@ function setupModalAccordion(containerId, toggleId) {
     });
 }
 
+/**
+ * Resolve the display names of the items that make up a published plan, for use
+ * in a calendar entry's "What's Included" notes. Reads the linked session's
+ * locked-in items and resolves each id against the loaded records (and the
+ * ghost-item archive), appending a quantity hint when more than one. Returns []
+ * when there is no linked session or its component data can't be parsed.
+ *
+ * @param {Object|null} linkedSession - The event's linked session record
+ * @returns {string[]} Component item names (possibly empty)
+ */
+function resolvePlanComponentNames(linkedSession) {
+    if (!linkedSession || !linkedSession.fields || !linkedSession.fields['Items with Variations']) return [];
+
+    let lockedInItems = {};
+    try {
+        const data = JSON.parse(linkedSession.fields['Items with Variations']);
+        lockedInItems = data.lockedInItems || {};
+    } catch (e) {
+        return [];
+    }
+
+    const recordMap = new Map((state.records.all || []).map(r => [r.id, r]));
+    const archiveMap = state.records.archive ? new Map(state.records.archive.map(r => [r.id, r])) : null;
+
+    const names = [];
+    for (const [id, info] of Object.entries(lockedInItems)) {
+        const rec = recordMap.get(id) || (archiveMap && archiveMap.get(id));
+        const name = rec?.fields?.Name;
+        if (name) {
+            const qty = info && info.quantity > 1 ? ` (x${info.quantity})` : '';
+            names.push(`${name}${qty}`);
+        }
+    }
+    return names;
+}
+
 export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = null) {
     // Prevent concurrent modal renders that could cause duplicate content
     if (isModalRendering) {
@@ -5970,7 +6020,22 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         const userIsAuthenticatedForRsvp = state.session.user.isAuthenticated;
         if (!hasChildEventOptions) {
         const eventDateStr = record.fields.Date;
-        const eventTime = record.fields.Time || '';
+        // Show the published plan's start/end time (the same Start_time/End_time
+        // the "Add to Calendar" buttons use), falling back to the legacy Time range.
+        let eventTime = formatEventTimeRange(record.fields.Start_time, record.fields.End_time)
+            || record.fields.Time || '';
+        // If the record carries no synced time (it predates schedule syncing, or the
+        // cached copy is stale) but this event belongs to the plan currently loaded,
+        // fall back to the live plan times — the same source the presentation/plan
+        // view reads — so the detail modal matches what's shown there.
+        if (!eventTime && state.session.id
+            && Array.isArray(record.fields.LinkedSession)
+            && record.fields.LinkedSession.includes(state.session.id)) {
+            eventTime = formatEventTimeRange(
+                state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.START_TIME),
+                state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.END_TIME)
+            );
+        }
         const eventLocation = record.fields.Location || '';
 
         if (eventDateStr) {
@@ -6004,8 +6069,26 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             const existingCalendarExport = document.querySelector('.modal-calendar-export');
             if (existingCalendarExport) existingCalendarExport.remove();
 
+            // When this event belongs to the plan currently loaded and carries no
+            // synced location, backfill the venue address from live plan state so
+            // the calendar export includes the address (matches the plan view).
+            if (!record.fields['Location Details'] && state.session.id
+                && Array.isArray(record.fields.LinkedSession)
+                && record.fields.LinkedSession.includes(state.session.id)) {
+                const venueAddress = resolvePlanVenueAddress(state.records?.all, state.cart?.lockedItems);
+                if (venueAddress) {
+                    record.fields['Location Details'] = venueAddress;
+                }
+            }
+
             const calendarContainer = document.createElement('div');
             calendarContainer.className = 'modal-calendar-export calendar-export-compact';
+            // Attach the plan's component names so the calendar entry's notes can
+            // list "What's Included" alongside the description and "Good to Know"
+            // details. Resolved here where live plan state is available; the
+            // calendar utility reads it off the record at export time.
+            const planComponentNames = resolvePlanComponentNames(linkedSession);
+            record.fields._calendarComponents = planComponentNames;
             calendarContainer.innerHTML = createCalendarExportButtons(record);
             modalItemDescription.parentElement.insertBefore(calendarContainer, modalItemDescription);
             initializeCalendarExportListeners(record, calendarContainer);
@@ -6026,21 +6109,21 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
             if (rsvpYes.length > 0) {
                 rsvpHTML += `<div class="rsvp-list-group">
-                    <div class="rsvp-list-label">Going (${rsvpYes.length})</div>
+                    <div class="rsvp-list-label" data-rsvp-type="yes">Going (${rsvpYes.length})</div>
                     <div class="rsvp-list-items" data-rsvp-type="yes">Loading...</div>
                 </div>`;
             }
 
             if (rsvpMaybe.length > 0) {
                 rsvpHTML += `<div class="rsvp-list-group">
-                    <div class="rsvp-list-label">Maybe (${rsvpMaybe.length})</div>
+                    <div class="rsvp-list-label" data-rsvp-type="maybe">Maybe (${rsvpMaybe.length})</div>
                     <div class="rsvp-list-items" data-rsvp-type="maybe">Loading...</div>
                 </div>`;
             }
 
             if (rsvpNo.length > 0) {
                 rsvpHTML += `<div class="rsvp-list-group">
-                    <div class="rsvp-list-label">Can't Go (${rsvpNo.length})</div>
+                    <div class="rsvp-list-label" data-rsvp-type="no">Can't Go (${rsvpNo.length})</div>
                     <div class="rsvp-list-items" data-rsvp-type="no">Loading...</div>
                 </div>`;
             }
@@ -7618,43 +7701,37 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             }
         }
 
-        // Add Present button for events with linked sessions - allows viewing in presentation mode
+        // Add Present button for events with a linked plan. Presentation mode is a
+        // host/collaborator tool, so it is shown only to the plan's collaborators,
+        // the owner of the plan's store, and users with publish access — not to
+        // every guest.
         if (hasLinkedSession) {
-            const presentBtn = document.createElement('button');
-            presentBtn.className = 'card-action-btn present-event-btn';
-            presentBtn.dataset.eventId = record.id;
-            presentBtn.dataset.sessionId = record.fields.LinkedSession[0];
-            presentBtn.innerHTML = '▶️ Present';
-            presentBtn.title = 'View in presentation mode';
-            presentBtn.style.marginRight = '10px';
-            modalHeaderActions.appendChild(presentBtn);
+            const gateCollaborator = linkedSession?.fields?.Collaborators &&
+                linkedSession.fields.Collaborators.includes(state.session.user.id);
+            const gateSessionStoreId = linkedSession?.fields?.Stores && linkedSession.fields.Stores.length > 0
+                ? linkedSession.fields.Stores[0]
+                : null;
+            const gateIsOwner = state.session.user.isOwner &&
+                state.session.user.ownedStoreId &&
+                gateSessionStoreId === state.session.user.ownedStoreId;
+            const canPresent = gateCollaborator || gateIsOwner || userHasPublishAccess;
+
+            if (canPresent) {
+                const presentBtn = document.createElement('button');
+                presentBtn.className = 'card-action-btn present-event-btn';
+                presentBtn.dataset.eventId = record.id;
+                presentBtn.dataset.sessionId = record.fields.LinkedSession[0];
+                presentBtn.innerHTML = '▶️ Present';
+                presentBtn.title = 'View in presentation mode';
+                presentBtn.style.marginRight = '10px';
+                modalHeaderActions.appendChild(presentBtn);
+            }
         }
 
-        const rsvpContainer = document.createElement('div');
-        rsvpContainer.className = 'rsvp-button-group';
-
-        const yesBtn = document.createElement('button');
-        yesBtn.className = `rsvp-btn rsvp-yes ${hasRsvpdYes ? 'active' : ''}`;
-        yesBtn.dataset.recordId = record.id;
-        yesBtn.dataset.rsvpType = 'yes';
-        yesBtn.innerHTML = hasRsvpdYes ? "Going ✅" : 'Yes';
-
-        const maybeBtn = document.createElement('button');
-        maybeBtn.className = `rsvp-btn rsvp-maybe ${hasRsvpdMaybe ? 'active' : ''}`;
-        maybeBtn.dataset.recordId = record.id;
-        maybeBtn.dataset.rsvpType = 'maybe';
-        maybeBtn.innerHTML = hasRsvpdMaybe ? "Maybe ❓" : 'Maybe';
-
-        const noBtn = document.createElement('button');
-        noBtn.className = `rsvp-btn rsvp-no ${hasRsvpdNo ? 'active' : ''}`;
-        noBtn.dataset.recordId = record.id;
-        noBtn.dataset.rsvpType = 'no';
-        noBtn.innerHTML = hasRsvpdNo ? "Can't Go ❌" : 'No';
-
-        rsvpContainer.appendChild(yesBtn);
-        rsvpContainer.appendChild(maybeBtn);
-        rsvpContainer.appendChild(noBtn);
-        modalHeaderActions.appendChild(rsvpContainer);
+        // NOTE: the Yes / Maybe / No RSVP buttons used to live here in the header
+        // strip. They now render as the modal's PRIMARY action — together with a
+        // party-size ("number of RSVPs") stepper — down in the action zone. See
+        // setupEventRsvpActionZone(), called once the action zone is built.
     }
 
     modalOptionsContainer.innerHTML = '';
@@ -9442,6 +9519,13 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         modalNotesContainer.style.display = 'none';
         modalQuantitySelector.innerHTML = '';
     }
+
+    // Published events with RSVP options: make RSVP the primary action (with a
+    // party-size "number of RSVPs" stepper), tuck Add to Plan into a "…" menu,
+    // and remove item scheduling. Scoped to events; all other items are untouched.
+    if (record.fields['Item Type'] === 'Event') {
+        setupEventRsvpActionZone(record, linkedSession);
+    }
     // --- END THE FIX ---\
 
     ui.updateCardIcon(record.id);
@@ -10020,6 +10104,165 @@ function applyChipInSectionOrder(chipInLead) {
  * Mirrors the capture logic used when adding an item to the plan. Returns an
  * object with only the fields that are actually set.
  */
+// Holds the single outside-click handler that closes the event "…" menu, so we
+// can swap it on each modal open without leaking listeners across opens.
+let _eventMenuOutsideHandler = null;
+
+// Streamline a published event's action zone:
+//   • RSVP (a party-size "number of RSVPs" stepper + Yes / Maybe / No) becomes
+//     the prominent primary action.
+//   • Add to Plan collapses into a secondary "…" overflow menu (its id and data
+//     attributes are preserved, so its existing click handler is unaffected).
+//   • Item scheduling is removed and the item-quantity stepper is hidden — for an
+//     event the meaningful quantity IS the party size.
+// Scoped to events and safe to call on every modal open (it tears down anything a
+// previous open left behind before rebuilding).
+function setupEventRsvpActionZone(record, linkedSession) {
+    const actions = document.getElementById('modal-actions-container');
+    if (!actions) return;
+
+    const userId = state.session.user.id;
+    const rsvpYes = record.fields.RSVPs || [];
+    const rsvpMaybe = record.fields.RSVPMaybe || [];
+    const rsvpNo = record.fields.RSVPNo || [];
+    const hasYes = rsvpYes.includes(userId);
+    const hasMaybe = rsvpMaybe.includes(userId);
+    const hasNo = rsvpNo.includes(userId);
+
+    // Hide the item-quantity stepper for events (party size replaces it).
+    const qtySel = document.getElementById('modal-quantity-selector');
+    if (qtySel) qtySel.style.display = 'none';
+
+    // Remove item scheduling entirely, and clear any stale schedule the shared
+    // inputs may carry from a prior (non-event) modal open so Add to Plan never
+    // picks up a phantom time for the event.
+    const timeContainer = document.getElementById('modal-item-time-container');
+    if (timeContainer) {
+        timeContainer.style.display = 'none';
+        const st = document.getElementById('modal-item-start-time');
+        const du = document.getElementById('modal-item-duration');
+        const dt = document.getElementById('modal-item-date');
+        if (st) st.value = '';
+        if (du) du.value = '';
+        if (dt && dt._flatpickr) dt._flatpickr.clear();
+        else if (dt) dt.value = '';
+    }
+
+    actions.style.display = 'block';
+
+    // Tear down anything from a previous open. The Add to Plan button is rescued
+    // back to the actions container first so it is never lost across reopens.
+    const priorMenu = actions.querySelector('.modal-secondary-menu');
+    if (priorMenu) {
+        const moved = priorMenu.querySelector('#modal-add-to-plan-btn');
+        if (moved) actions.appendChild(moved);
+        priorMenu.remove();
+    }
+    const priorRsvp = actions.querySelector('.modal-rsvp-primary');
+    if (priorRsvp) priorRsvp.remove();
+
+    // --- Secondary "…" menu holding Add to Plan ----------------------------
+    const addBtn = document.getElementById('modal-add-to-plan-btn');
+    const menu = document.createElement('div');
+    menu.className = 'modal-secondary-menu';
+    const menuToggle = document.createElement('button');
+    menuToggle.type = 'button';
+    menuToggle.className = 'modal-secondary-menu-toggle';
+    menuToggle.setAttribute('aria-label', 'More actions');
+    menuToggle.setAttribute('aria-haspopup', 'true');
+    menuToggle.setAttribute('aria-expanded', 'false');
+    menuToggle.textContent = '⋯';
+    const menuDropdown = document.createElement('div');
+    menuDropdown.className = 'modal-secondary-menu-dropdown';
+    menuDropdown.hidden = true;
+    if (addBtn) {
+        addBtn.style.display = '';
+        menuDropdown.appendChild(addBtn); // relocate the existing button as-is
+    }
+    menu.appendChild(menuToggle);
+    menu.appendChild(menuDropdown);
+    menuToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const willOpen = menuDropdown.hidden;
+        menuDropdown.hidden = !willOpen;
+        menuToggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    });
+    // Single, de-duplicated outside-click close (no per-open listener leak).
+    if (_eventMenuOutsideHandler) document.removeEventListener('click', _eventMenuOutsideHandler);
+    _eventMenuOutsideHandler = (e) => {
+        if (!menu.isConnected) return;
+        if (!menu.contains(e.target)) {
+            menuDropdown.hidden = true;
+            menuToggle.setAttribute('aria-expanded', 'false');
+        }
+    };
+    document.addEventListener('click', _eventMenuOutsideHandler);
+
+    // --- RSVP primary block ------------------------------------------------
+    const block = document.createElement('div');
+    block.className = 'modal-rsvp-primary';
+    block.innerHTML = `
+        <div class="rsvp-party-row">
+            <label class="rsvp-party-label" for="rsvp-quantity-input">Number of RSVPs</label>
+            <div class="quantity-selector rsvp-quantity-selector">
+                <button type="button" class="quantity-btn minus" aria-label="Fewer RSVPs">-</button>
+                <input type="number" id="rsvp-quantity-input" class="quantity-input" value="1" min="1" step="1" inputmode="numeric">
+                <button type="button" class="quantity-btn plus" aria-label="More RSVPs">+</button>
+            </div>
+        </div>
+        <div class="rsvp-button-group rsvp-primary-group">
+            <button class="rsvp-btn rsvp-yes ${hasYes ? 'active' : ''}" data-record-id="${record.id}" data-rsvp-type="yes">${hasYes ? 'Going ✅' : 'Yes'}</button>
+            <button class="rsvp-btn rsvp-maybe ${hasMaybe ? 'active' : ''}" data-record-id="${record.id}" data-rsvp-type="maybe">${hasMaybe ? 'Maybe ❓' : 'Maybe'}</button>
+            <button class="rsvp-btn rsvp-no ${hasNo ? 'active' : ''}" data-record-id="${record.id}" data-rsvp-type="no">${hasNo ? "Can't Go ❌" : 'No'}</button>
+        </div>`;
+
+    // Primary block first, then the "…" menu — both at the top of the zone.
+    actions.insertBefore(menu, actions.firstChild);
+    actions.insertBefore(block, actions.firstChild);
+
+    // Party-size stepper wiring (always clamped to >= 1).
+    const qtyInput = block.querySelector('#rsvp-quantity-input');
+    const minusBtn = block.querySelector('.minus');
+    const plusBtn = block.querySelector('.plus');
+    const clampQty = () => {
+        let v = parseInt(qtyInput.value, 10);
+        if (!Number.isFinite(v) || v < 1) v = 1;
+        if (v > 999) v = 999;
+        qtyInput.value = String(v);
+    };
+    if (plusBtn) plusBtn.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        qtyInput.value = String((parseInt(qtyInput.value, 10) || 1) + 1); clampQty();
+    });
+    if (minusBtn) minusBtn.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        qtyInput.value = String((parseInt(qtyInput.value, 10) || 1) - 1); clampQty();
+    });
+    if (qtyInput) qtyInput.addEventListener('change', clampQty);
+
+    // Prefill the guest's saved party size, and reflect summed headcount totals
+    // in the RSVP list. Totals are computed here against the authoritative
+    // Airtable RSVP lists, folding in each guest's stored party size (guests with
+    // no stored size — e.g. anyone who responded before this feature — count as a
+    // single spot). Best-effort: on any failure the people-count labels stand.
+    api.fetchEventRsvpData(record.id).then((data) => {
+        if (!data) return;
+        if (data.mine && data.mine.quantity && qtyInput) qtyInput.value = String(data.mine.quantity);
+        const quantities = data.quantities || {};
+        const section = document.querySelector('.rsvp-list-section');
+        if (section) {
+            const sumSpots = (ids) => ids.reduce((acc, id) => acc + (Number(quantities[id]) || 1), 0);
+            const setLabel = (type, word, ids) => {
+                const el = section.querySelector(`.rsvp-list-label[data-rsvp-type="${type}"]`);
+                if (el && ids.length > 0) el.textContent = `${word} (${sumSpots(ids)})`;
+            };
+            setLabel('yes', 'Going', rsvpYes);
+            setLabel('maybe', 'Maybe', rsvpMaybe);
+            setLabel('no', "Can't Go", rsvpNo);
+        }
+    }).catch(() => { /* defaults stand */ });
+}
+
 function captureModalNoteAndSchedule() {
     const result = {};
     const note = document.getElementById('modal-item-note')?.value || '';

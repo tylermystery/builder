@@ -1,7 +1,7 @@
 /**
  * AI Image Generation Function
  * Generates an AI-approximated image for manually added items based on their name, description, and metadata.
- * Uses multi-provider AI with automatic fallback (Imagen → DALL-E 3)
+ * Uses multi-provider AI with automatic fallback (Imagen → gpt-image-1)
  * Uploads the result to Cloudinary for persistent storage.
  */
 
@@ -207,7 +207,7 @@ exports.handler = async function(event, context) {
         console.log('[AI IMAGE FUNC] Generated prompt:', prompt.substring(0, 300));
         console.log('[AI IMAGE FUNC] Prompt length:', prompt.length);
 
-        // Generate the image using multi-provider AI (Imagen → DALL-E 3)
+        // Generate the image using multi-provider AI (Imagen → gpt-image-1)
         console.log('[AI IMAGE FUNC] Calling generateImage()...');
         const _genStartTime = Date.now();
         const imageResult = await generateImage(prompt, {

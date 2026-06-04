@@ -14,7 +14,7 @@ import { renderPublicReactions, renderAggregatedCommunityFeed } from './publicCa
 let getCurrentUserFn = null;
 let sendChatMessageFn = null; // Setter-injected from chat.js to avoid circular dep
 let panelOpen = false;
-let currentFilter = 'all'; // 'all' | 'comments' | 'global' | 'tasks'
+let currentFilter = 'all'; // 'all' (the plan conversation) | 'global' | 'tasks'
 let ucpMessages = [];
 let ucpPlanEvents = [];
 let replyingTo = null;
@@ -379,9 +379,30 @@ function buildThreads() {
 
 // ===== RENDERING =====
 
+/**
+ * Keep the tab labels in sync with the current context:
+ *   • the plan tab (data-filter="all") shows the current plan's name, falling
+ *     back to "Current Plan" when the plan is unnamed — this is the single,
+ *     unified plan conversation.
+ *   • the community tab (data-filter="global") shows the store name, falling
+ *     back to "Global" when no store is active.
+ */
+function updateUCPTabLabels() {
+    const planName = (state.eventDetails?.combined?.get?.('eventName') || '').trim();
+    const planBtn = document.querySelector('.ucp-filter-btn[data-filter="all"]');
+    if (planBtn) planBtn.textContent = planName || 'Current Plan';
+
+    const activeShop = state.stores?.all?.find?.(s => s.id === state.ui?.activeShopId);
+    const storeName = (activeShop?.fields?.Name || '').trim();
+    const globalBtn = document.querySelector('.ucp-filter-btn[data-filter="global"]');
+    if (globalBtn) globalBtn.textContent = storeName || 'Global';
+}
+
 function renderContent() {
     const container = document.getElementById('ucp-content');
     if (!container) return;
+
+    updateUCPTabLabels();
 
     // Tasks tab has its own rendering path
     if (currentFilter === 'tasks') {
@@ -406,9 +427,6 @@ function renderContent() {
     switch (currentFilter) {
         case 'all':
             items = ucpMessages;
-            break;
-        case 'comments':
-            items = ucpMessages.filter(m => m.componentId);
             break;
         default:
             items = ucpMessages;
@@ -481,7 +499,6 @@ function updateInputPlaceholder() {
     }
 
     switch (currentFilter) {
-        case 'comments': input.placeholder = 'Comment on a plan item...'; break;
         case 'tasks': input.placeholder = 'Message the team...'; break;
         default: input.placeholder = 'Message the team...'; break;
     }
@@ -489,7 +506,6 @@ function updateInputPlaceholder() {
 
 function getEmptyMessage() {
     switch (currentFilter) {
-        case 'comments': return 'No item comments yet. Discuss plan items!';
         case 'tasks': return 'No tasks yet. Create one from any message or the Tasks panel.';
         default: return 'No conversations yet. Say hello!';
     }
@@ -1661,11 +1677,12 @@ export async function openUCPForItem(recordId) {
     // Remember the item so the Global tab, if opened, shows its community thread.
     ucpFocusRecordId = recordId;
 
-    // Switch to Comments filter
-    currentFilter = 'comments';
+    // Open the single, unified plan conversation (the plan tab). The item stays
+    // pre-selected in the attach dropdown below so a new message is attached to it.
+    currentFilter = 'all';
     const filterBtns = document.querySelectorAll('.ucp-filter-btn');
     filterBtns.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.filter === 'comments');
+        btn.classList.toggle('active', btn.dataset.filter === 'all');
     });
 
     // Pre-select the item in the attach dropdown

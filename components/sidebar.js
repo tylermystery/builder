@@ -13,6 +13,7 @@ import * as backgroundEngine from './backgroundEngine.js';
 import { showReceiptModal } from './receipt.js';
 import { syncPlanState, registerSyncCallback, updateMobileSummaryBar } from '../utils/planStateSync.js';
 import { applyCloudinaryTransform, hasCloudinaryTransformations } from '../utils/imageOptimizer.js';
+import { resolvePlanVenueAddress } from '../utils/calendarExport.js';
 
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
@@ -1212,7 +1213,14 @@ async function handlePublishEvent() {
             Name: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Untitled Event',
             Date: rawDate,
             Goals: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS),
-            GuestCount: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT)
+            GuestCount: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT),
+            // Plan schedule — synced onto the event record so calendar exports use the published time
+            StartTime: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.START_TIME),
+            EndTime: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.END_TIME),
+            Duration: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DURATION),
+            // Venue address — when the plan has a locked-in venue, its address becomes
+            // the calendar entry's location across every export and the RSVP email.
+            VenueAddress: resolvePlanVenueAddress(state.records.all, state.cart.lockedItems)
         };
 
         console.log('[PUBLISH DEBUG - Sidebar] Complete eventData object:', eventData);

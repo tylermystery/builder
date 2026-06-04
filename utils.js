@@ -454,6 +454,26 @@ export function formatItemSchedule(itemInfo) {
     return parts.join(' · ');
 }
 
+/**
+ * Format an event's start/end time strings into a friendly display range.
+ *
+ * Both values are the human-readable times set on the published plan
+ * (e.g. "7:00 PM") — the same Start_time/End_time that drive the "Add to
+ * Calendar" buttons. Used by the detail modal and the plan view so the time
+ * shown on screen always matches the time exported to calendars.
+ *
+ * @param {string} startTime - Start time (e.g. "7:00 PM")
+ * @param {string} endTime - End time (e.g. "9:00 PM"), optional
+ * @returns {string} "7:00 PM – 9:00 PM", just the start when no end is known,
+ *                   or '' when there is no start time.
+ */
+export function formatEventTimeRange(startTime, endTime) {
+    const start = (startTime == null ? '' : String(startTime)).trim();
+    if (!start) return '';
+    const end = (endTime == null ? '' : String(endTime)).trim();
+    return end && end !== start ? `${start} – ${end}` : start;
+}
+
 export function debounce(func, delay = 300) {
     if (typeof func !== 'function') {
         console.warn('[Utils] debounce called with non-function:', func);

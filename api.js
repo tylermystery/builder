@@ -3660,6 +3660,78 @@ export async function addRsvpToEvent(eventId, userId) {
     return updateRsvpForEvent(eventId, userId, 'yes');
 }
 
+// --- Event RSVP party size (the "number of RSVPs" a single guest reserves) ---
+//
+// The yes/maybe/no membership stays in Airtable (updateRsvpForEvent above). These
+// helpers talk to /api/event-rsvp, which keeps only the per-guest party size in
+// Netlify Postgres. All three are best-effort: a failure here never blocks the
+// underlying RSVP, it just means the guest is counted as a party of one.
+
+/**
+ * Read headcount totals (party sizes summed per response) for an event, plus the
+ * signed-in guest's own saved party size when available.
+ * @returns {Promise<{ totals: {yes:number,maybe:number,no:number}, mine: {quantity:number, rsvpType:string}|null }|null>}
+ */
+export async function fetchEventRsvpData(eventId) {
+    if (!eventId) return null;
+    try {
+        const token = localStorage.getItem('jwt');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const res = await fetch(`/api/event-rsvp?eventId=${encodeURIComponent(eventId)}`, { headers });
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (error) {
+        console.error('[API] fetchEventRsvpData failed:', error);
+        return null;
+    }
+}
+
+/**
+ * Save (upsert) the signed-in guest's party size and response for an event.
+ * @param {string} eventId
+ * @param {'yes'|'maybe'|'no'} rsvpType
+ * @param {number} quantity party size (>= 1)
+ */
+export async function saveEventRsvpQuantity(eventId, rsvpType, quantity) {
+    if (!eventId) return null;
+    try {
+        const token = localStorage.getItem('jwt');
+        if (!token) return null;
+        const res = await fetch('/api/event-rsvp', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ eventId, rsvpType, quantity })
+        });
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (error) {
+        console.error('[API] saveEventRsvpQuantity failed:', error);
+        return null;
+    }
+}
+
+/**
+ * Remove the signed-in guest's party-size row for an event (used when they clear
+ * their RSVP). The Airtable membership removal is handled separately.
+ */
+export async function clearEventRsvpQuantity(eventId) {
+    if (!eventId) return null;
+    try {
+        const token = localStorage.getItem('jwt');
+        if (!token) return null;
+        const res = await fetch('/api/event-rsvp', {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ eventId })
+        });
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (error) {
+        console.error('[API] clearEventRsvpQuantity failed:', error);
+        return null;
+    }
+}
+
 /**
  * Fetches user names for a list of user IDs from the Users table
  * @param {string[]} userIds - Array of user record IDs
@@ -3868,6 +3940,41 @@ export async function publishSessionAsEvent(sessionId, eventData) {
     // Airtable Date fields (not DateTime fields) require YYYY-MM-DD format only
     if (formattedDateOnly) {
         itemFields['Date'] = formattedDateOnly;
+    }
+
+    // Sync the plan's schedule onto the event record so the catalog/detail view and
+    // the "Add to Calendar" buttons use the published start time and duration.
+    //   - Start_time : plan start time (e.g. "7:00 PM")
+    //   - End_time   : plan end time (computed from start + duration)
+    //   - Duration   : plan duration in hours (Airtable stores this as text)
+    //   - Time       : human-readable range for display (e.g. "7:00 PM - 9:00 PM")
+    const planStartTime = eventData.StartTime || session.fields.Start_time || null;
+    const planEndTime = eventData.EndTime || null;
+    // The plan stores duration in minutes; the Airtable Duration field is in hours.
+    const planDurationMin = (eventData.Duration != null && eventData.Duration !== '')
+        ? parseInt(eventData.Duration, 10)
+        : null;
+
+    if (planStartTime) {
+        itemFields['Start_time'] = planStartTime;
+    }
+    if (planEndTime) {
+        itemFields['End_time'] = planEndTime;
+    }
+    if (planDurationMin && planDurationMin > 0) {
+        const hours = planDurationMin / 60;
+        // Keep whole hours clean ("2"), allow fractional ("1.5")
+        itemFields['Duration'] = String(Number.isInteger(hours) ? hours : Number(hours.toFixed(2)));
+    }
+    if (planStartTime) {
+        itemFields['Time'] = planEndTime ? `${planStartTime} - ${planEndTime}` : planStartTime;
+    }
+
+    // Sync the plan's venue address onto the event record so the calendar exports
+    // (and the RSVP confirmation email) carry a real location/address. The caller
+    // resolves this from the locked venue record in the plan.
+    if (eventData.VenueAddress) {
+        itemFields['Location Details'] = eventData.VenueAddress;
     }
 
     let itemRecord;

@@ -9,7 +9,7 @@ import * as api from '../../api.js';
 import { log } from '../../utils/debug.js';
 import { showToast } from '../../ui.js';
 import { showUserModal } from '../../auth.js';
-import { createCalendarExportButtons, initializeCalendarExportListeners } from '../../utils/calendarExport.js';
+import { createCalendarExportButtons, initializeCalendarExportListeners, resolvePlanVenueAddress } from '../../utils/calendarExport.js';
 
 // Cache for the linked event record
 let linkedEventRecord = null;
@@ -82,6 +82,20 @@ export async function renderRsvpSection() {
     // Render calendar export buttons
     const calendarExportContainer = document.getElementById('presentation-calendar-export');
     if (calendarExportContainer && eventRecord.fields.Date) {
+        // Ensure the WTF link can be built: in plan view the current session is
+        // always known, so backfill LinkedSession for legacy events that predate it.
+        if ((!eventRecord.fields.LinkedSession || eventRecord.fields.LinkedSession.length === 0) && state.session.id) {
+            eventRecord.fields.LinkedSession = [state.session.id];
+        }
+        // Backfill the venue address from the live plan when the record has no
+        // synced location (e.g. an event published before venue syncing), so the
+        // calendar export carries the address for the plan currently loaded.
+        if (!eventRecord.fields['Location Details']) {
+            const venueAddress = resolvePlanVenueAddress(state.records?.all, state.cart?.lockedItems);
+            if (venueAddress) {
+                eventRecord.fields['Location Details'] = venueAddress;
+            }
+        }
         calendarExportContainer.innerHTML = createCalendarExportButtons(eventRecord);
         initializeCalendarExportListeners(eventRecord, calendarExportContainer);
     }

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Group · WhatTheFun</title>
+  <style>
+    :root {
+      --ink: #1a1a2e;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --brand: #b71c1c;
+      --brand2: #e53935;
+      --bg: #f7f7fb;
+      --ok: #2e7d32;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.45;
+    }
+    main { max-width: 920px; margin: 0 auto; padding: 0 16px 64px; }
+    .group-hero {
+      background: linear-gradient(135deg, #e53935 0%, #b71c1c 100%);
+      color: #fff; padding: 28px 24px; border-radius: 0 0 18px 18px;
+      display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
+    }
+    .group-hero .hero-pic {
+      width: 84px; height: 84px; border-radius: 18px; object-fit: cover;
+      background: rgba(255,255,255,.2); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 34px; font-weight: 800; color: #fff;
+    }
+    .group-hero h1 { margin: 0; font-size: 24px; letter-spacing: .2px; }
+    .group-hero .kind {
+      display: inline-block; margin-top: 6px; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .6px;
+      background: rgba(255,255,255,.22); padding: 3px 10px; border-radius: 999px;
+    }
+    .group-hero .vis {
+      display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 700;
+      background: rgba(0,0,0,.18); padding: 3px 10px; border-radius: 999px;
+    }
+    .group-hero .desc { margin: 10px 0 0; opacity: .95; font-size: 14px; max-width: 620px; }
+    .group-hero .count { margin: 8px 0 0; font-size: 13px; opacity: .9; }
+    .card {
+      background: #fff; border: 1px solid var(--line); border-radius: 12px;
+      padding: 20px; margin-top: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .card h2 { margin: 0 0 14px; font-size: 16px; }
+    .roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+    .member { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
+    .avatar {
+      width: 60px; height: 60px; border-radius: 50%; object-fit: cover;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 700; font-size: 22px; flex-shrink: 0;
+    }
+    .member .name { font-size: 13px; font-weight: 600; }
+    .member .role { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+    .member .badge-admin { color: var(--brand); }
+    .empty { color: var(--muted); font-size: 14px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .4px; }
+    input, select, textarea {
+      width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px;
+      font-size: 14px; font-family: inherit; background: #fff;
+    }
+    textarea { resize: vertical; min-height: 56px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btn {
+      appearance: none; border: 0; border-radius: 9px; padding: 10px 18px;
+      font-size: 14px; font-weight: 700; cursor: pointer; color: #fff;
+      background: linear-gradient(135deg, #e53935 0%, #b71c1c 100%);
+    }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn.secondary { background: #f1f1f4; color: var(--ink); }
+    .btn.tiny { padding: 5px 11px; font-size: 12px; }
+    .btn.danger { background: #9aa0a6; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .picker-row {
+      display: flex; align-items: center; gap: 10px; padding: 8px 4px;
+      border-bottom: 1px solid var(--line);
+    }
+    .picker-row:last-child { border-bottom: 0; }
+    .picker-row .name { flex: 1; font-size: 14px; }
+    .picker-row .avatar { width: 38px; height: 38px; font-size: 15px; }
+    #msg { padding: 10px 14px; border-radius: 8px; margin-top: 16px; display: none; font-size: 14px; }
+    #msg.err { background: #fdecea; color: var(--brand); display: block; }
+    #msg.ok { background: #e8f5e9; color: var(--ok); display: block; }
+    .gated { display: none; }
+    .center-note { text-align: center; color: var(--muted); padding: 60px 20px; }
+    details.manage > summary {
+      cursor: pointer; font-weight: 700; font-size: 15px; list-style: none;
+    }
+    details.manage > summary::-webkit-details-marker { display: none; }
+    @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div id="loading" class="center-note">Loading group…</div>
+
+  <main id="content" style="display:none">
+    <header class="group-hero">
+      <div class="hero-pic" id="heroPic"></div>
+      <div>
+        <h1 id="groupName"></h1>
+        <div>
+          <span class="kind" id="groupKind" style="display:none"></span>
+          <span class="vis" id="groupVis" style="display:none"></span>
+        </div>
+        <p class="desc" id="groupDesc" style="display:none"></p>
+        <p class="count" id="groupCount"></p>
+      </div>
+    </header>
+
+    <div class="card">
+      <h2>Members</h2>
+      <div class="roster" id="roster"></div>
+      <p class="empty" id="rosterEmpty" style="display:none">No members yet.</p>
+    </div>
+
+    <!-- Management (only rendered for store publishers) -->
+    <div class="card gated" id="manageCard">
+      <details class="manage">
+        <summary>Manage group</summary>
+        <div style="margin-top:16px">
+          <label for="editName">Name</label>
+          <input id="editName" />
+          <label for="editKind">Kind / label (optional)</label>
+          <input id="editKind" placeholder="membership" />
+          <label for="editDesc">Description (optional)</label>
+          <textarea id="editDesc"></textarea>
+          <div class="row">
+            <div>
+              <label for="editVis">Page visibility</label>
+              <select id="editVis">
+                <option value="public">Public — anyone with the link</option>
+                <option value="private">Private — store team & members only</option>
+              </select>
+            </div>
+            <div>
+              <label for="editImage">Group picture URL (optional)</label>
+              <input id="editImage" placeholder="https://…" />
+            </div>
+          </div>
+          <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap">
+            <button class="btn" id="saveBtn">Save changes</button>
+            <button class="btn danger" id="deleteBtn">Delete group</button>
+          </div>
+
+          <h2 style="margin-top:26px">Add or remove members</h2>
+          <div class="hint">People linked to this store. Toggle to add or remove them from the group.</div>
+          <div id="picker" style="margin-top:12px">Loading store members…</div>
+        </div>
+      </details>
+    </div>
+
+    <div id="msg"></div>
+  </main>
+
+  <div id="private-note" class="center-note" style="display:none">
+    <h2>This group is private</h2>
+    <p>Only the store's team and the group's members can view this page.<br>
+       If that's you, open the main app and sign in, then return to this link.</p>
+  </div>
+
+  <script src="/group.js" type="module"></script>
+</body>
+</html>
