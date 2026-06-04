@@ -1752,6 +1752,17 @@ html.presentation-active {
     pointer-events: none;
     background: rgba(240, 255, 240, 0.9);
 }
+/* In the detail-modal header row the heart button (#modal-heart-btn) receives
+   the .heart-icon class, but here it must sit inline next to the Share/Edit
+   buttons. The absolute positioning used to float hearts over card images made
+   it overlap those buttons, so keep it in the normal flex flow inside the modal. */
+#modal-heart-btn.heart-icon,
+#modal-heart-btn {
+    position: static;
+    top: auto;
+    right: auto;
+    flex: 0 0 auto;
+}
 
 @keyframes heartPulse {
     0% {

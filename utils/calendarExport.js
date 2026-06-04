@@ -137,6 +137,51 @@ function appendWtfLink(description, wtfLink) {
 }
 
 /**
+ * Build the full plain-text notes for a calendar entry from an event's fields.
+ *
+ * Calendar clients (Google, Outlook, Yahoo, Apple) only ever see this single
+ * notes/description blob, so everything a guest needs lives here: the
+ * description, the components that make up the plan ("What's Included"), the
+ * extra detail specs surfaced in the detail modal (Capacity and the
+ * "Good to Know" / Additional Information notes), and the shareable link back
+ * to the plan for viewing and RSVP'ing.
+ *
+ * Components are passed in by the detail modal as `fields._calendarComponents`
+ * (an array of resolved item names) because resolving them needs live plan
+ * state the calendar utility doesn't have; everything else reads straight off
+ * the event record, so the notes stay populated even without the modal.
+ *
+ * @param {Object} fields - Event record fields
+ * @returns {string} Assembled description text
+ */
+function buildCalendarDescription(fields) {
+  const parts = [];
+
+  const desc = (fields.Description || '').trim();
+  if (desc) parts.push(desc);
+
+  // Components included — the items that make up the plan, resolved by the modal
+  const components = fields._calendarComponents;
+  if (Array.isArray(components) && components.length) {
+    parts.push(`What's Included:\n${components.map(c => `• ${c}`).join('\n')}`);
+  }
+
+  // Capacity, when set on the event
+  const capacity = (fields.Capacity != null && fields.Capacity !== '') ? String(fields.Capacity).trim() : '';
+  if (capacity) parts.push(`Capacity: ${capacity}`);
+
+  // "Good to Know" — the Additional Information notes shown in the detail modal
+  const goodToKnow = (fields['Additional Information'] || '').trim();
+  if (goodToKnow) parts.push(`Good to Know:\n${goodToKnow}`);
+
+  // Shareable link back to the plan so invitees can view it and RSVP
+  const wtfLink = resolveWtfLink(fields);
+  if (wtfLink) parts.push(`View & RSVP: ${wtfLink}`);
+
+  return parts.join('\n\n');
+}
+
+/**
  * Format a Date object as a UTC iCal timestamp (YYYYMMDDTHHMMSSZ).
  * Used for DTSTAMP (the moment the entry was generated), which is always UTC.
  * @param {Date} dateObj - Date to format
@@ -266,7 +311,7 @@ function generateICalFile(event) {
   const title = escapeICalText(fields.Name || 'Event');
   // Include the shareable WTF link in the notes so invitees can view the plan and RSVP
   const wtfLink = resolveWtfLink(fields);
-  const description = escapeICalText(appendWtfLink(fields.Description || '', wtfLink));
+  const description = escapeICalText(buildCalendarDescription(fields));
   const location = escapeICalText(resolveCalendarLocation(fields));
 
   // Resolve start/end from the plan-synced schedule fields (Start_time / Duration / End_time)
@@ -337,7 +382,7 @@ function generateGoogleCalendarUrl(event) {
   const fields = event.fields || event;
 
   const title = encodeURIComponent(fields.Name || 'Event');
-  const description = encodeURIComponent(appendWtfLink(fields.Description || '', resolveWtfLink(fields)));
+  const description = encodeURIComponent(buildCalendarDescription(fields));
   const location = encodeURIComponent(resolveCalendarLocation(fields));
 
   // Resolve start/end from the plan-synced schedule fields (Start_time / Duration / End_time)
@@ -368,7 +413,7 @@ function generateOutlookCalendarUrl(event) {
   const fields = event.fields || event;
 
   const title = encodeURIComponent(fields.Name || 'Event');
-  const description = encodeURIComponent(appendWtfLink(fields.Description || '', resolveWtfLink(fields)));
+  const description = encodeURIComponent(buildCalendarDescription(fields));
   const location = encodeURIComponent(resolveCalendarLocation(fields));
 
   // Resolve start/end from the plan-synced schedule fields (Start_time / Duration / End_time)
@@ -390,7 +435,7 @@ function generateYahooCalendarUrl(event) {
   const fields = event.fields || event;
 
   const title = encodeURIComponent(fields.Name || 'Event');
-  const description = encodeURIComponent(appendWtfLink(fields.Description || '', resolveWtfLink(fields)));
+  const description = encodeURIComponent(buildCalendarDescription(fields));
   const location = encodeURIComponent(resolveCalendarLocation(fields));
 
   // Resolve start/end from the plan-synced schedule fields (Start_time / Duration / End_time)

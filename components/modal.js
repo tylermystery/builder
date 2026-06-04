@@ -5213,6 +5213,42 @@ function setupModalAccordion(containerId, toggleId) {
     });
 }
 
+/**
+ * Resolve the display names of the items that make up a published plan, for use
+ * in a calendar entry's "What's Included" notes. Reads the linked session's
+ * locked-in items and resolves each id against the loaded records (and the
+ * ghost-item archive), appending a quantity hint when more than one. Returns []
+ * when there is no linked session or its component data can't be parsed.
+ *
+ * @param {Object|null} linkedSession - The event's linked session record
+ * @returns {string[]} Component item names (possibly empty)
+ */
+function resolvePlanComponentNames(linkedSession) {
+    if (!linkedSession || !linkedSession.fields || !linkedSession.fields['Items with Variations']) return [];
+
+    let lockedInItems = {};
+    try {
+        const data = JSON.parse(linkedSession.fields['Items with Variations']);
+        lockedInItems = data.lockedInItems || {};
+    } catch (e) {
+        return [];
+    }
+
+    const recordMap = new Map((state.records.all || []).map(r => [r.id, r]));
+    const archiveMap = state.records.archive ? new Map(state.records.archive.map(r => [r.id, r])) : null;
+
+    const names = [];
+    for (const [id, info] of Object.entries(lockedInItems)) {
+        const rec = recordMap.get(id) || (archiveMap && archiveMap.get(id));
+        const name = rec?.fields?.Name;
+        if (name) {
+            const qty = info && info.quantity > 1 ? ` (x${info.quantity})` : '';
+            names.push(`${name}${qty}`);
+        }
+    }
+    return names;
+}
+
 export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = null) {
     // Prevent concurrent modal renders that could cause duplicate content
     if (isModalRendering) {
@@ -6047,6 +6083,12 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
             const calendarContainer = document.createElement('div');
             calendarContainer.className = 'modal-calendar-export calendar-export-compact';
+            // Attach the plan's component names so the calendar entry's notes can
+            // list "What's Included" alongside the description and "Good to Know"
+            // details. Resolved here where live plan state is available; the
+            // calendar utility reads it off the record at export time.
+            const planComponentNames = resolvePlanComponentNames(linkedSession);
+            record.fields._calendarComponents = planComponentNames;
             calendarContainer.innerHTML = createCalendarExportButtons(record);
             modalItemDescription.parentElement.insertBefore(calendarContainer, modalItemDescription);
             initializeCalendarExportListeners(record, calendarContainer);
