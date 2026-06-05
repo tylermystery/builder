@@ -386,6 +386,7 @@ let currentProcessingFee = 0; // To store the current fee
 let currentShopSettings = {};
 let currentChipInAmount = 0; // Chip-in community contribution amount
 let currentCheckoutScope = null; // { mode: 'plan' | 'item', itemId, itemName, quantity, price, record, highlightChipIn }
+let currentCheckoutIsFree = false; // True when the plan total is $0 — checkout becomes a no-payment registration
 
 // --- Promotion / discount checkout state -----------------------------------
 // The server is authoritative for the discount: /api/promotions/quote returns a
@@ -1591,6 +1592,46 @@ async function updateCheckoutDisplay() {
     const processingFeeEl = document.getElementById('processing-fee-price');
     const finalChargeEl = document.getElementById('final-charge-price');
     const paymentForm = document.getElementById('payment-form'); // Get form
+    const paymentDetailsRow = document.getElementById('checkout-payment-details-row');
+
+    // --- FREE REGISTRATION MODE ---
+    // A plan whose total is $0 (free events, nothing previously paid) should still
+    // be checkout-able: the visitor provides name + email to register for the
+    // events included in their plan. There is nothing to charge, so the Stripe
+    // payment UI is hidden and the form's submit becomes a "Complete Registration"
+    // action (handled in events.js handlePaymentFormSubmit -> handleFreeRegistration).
+    // This is distinct from "receipt mode" below, which is for a plan already paid
+    // off (amountReceived > 0).
+    const isFreeRegistration = !isItemMode && amountReceived === 0 && finalTotal <= 0.009 && finalBaseAmount <= 0.009;
+    currentCheckoutIsFree = isFreeRegistration;
+    if (isFreeRegistration) {
+        log('Modal', 'Free-registration mode: $0 plan, collecting name/email only.');
+        if (paymentForm) paymentForm.style.display = 'block';
+        // Hide everything payment-related; keep name/email/account inputs.
+        if (paymentDetailsRow) paymentDetailsRow.style.display = 'none';
+        if (tipRow) tipRow.style.display = 'none';
+        const paymentMethodToggle = document.getElementById('checkout-payment-method-toggle');
+        if (paymentMethodToggle) paymentMethodToggle.style.display = 'none';
+        const p2pSection = document.getElementById('checkout-p2p-section');
+        if (p2pSection) p2pSection.style.display = 'none';
+        const paymentChoiceContainer = document.getElementById('payment-choice-container');
+        if (paymentChoiceContainer) paymentChoiceContainer.style.display = 'none';
+        const depositLabel = document.getElementById('deposit-label');
+        if (depositLabel) depositLabel.textContent = 'Amount Due:';
+        const submitBtn = document.getElementById('payment-submit-btn');
+        if (submitBtn) {
+            const btnText = submitBtn.querySelector('.button-text');
+            if (btnText) btnText.textContent = 'Complete Registration';
+        }
+        return; // Nothing to charge — skip the payment intent entirely.
+    }
+    // Leaving free mode (e.g. a tip / chip-in was added): restore the payment UI.
+    if (paymentDetailsRow) paymentDetailsRow.style.display = '';
+    if (!isItemMode) {
+        const submitBtn = document.getElementById('payment-submit-btn');
+        const btnText = submitBtn && submitBtn.querySelector('.button-text');
+        if (btnText && btnText.textContent === 'Complete Registration') btnText.textContent = 'Pay Now';
+    }
 
     // --- NEW LOGIC FOR "RECEIPT" MODE ---
     if (isFullyPaid && finalBaseAmount <= 0) {
@@ -10417,6 +10458,16 @@ export async function showCheckoutModal(shopSettings, scope = null) {
     if (checkoutCloseBtn) checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
 
     // --- 1. Calculate Base Total ---\
+    // Reset any leftover "success/receipt" state from a previous checkout in this
+    // session (the success path hides these and, for a free registration, the page
+    // is not reloaded — so reopening the modal must restore the form view).
+    const successMsgEl = document.getElementById('payment-success-message');
+    if (successMsgEl) successMsgEl.style.display = 'none';
+    if (summaryDetailsEl) summaryDetailsEl.style.display = '';
+    const depositSectionEl = document.querySelector('.checkout-total-deposit-section');
+    if (depositSectionEl) depositSectionEl.style.display = '';
+    const termsSectionEl = document.querySelector('.terms-and-conditions');
+    if (termsSectionEl) termsSectionEl.style.display = '';
     summaryDetailsEl.innerHTML = '';
     tipAmountInput.value = '';
     let finalTotal = 0; // This is the plan subtotal
@@ -10842,6 +10893,7 @@ export function hideCheckoutModal() {
         currentChipInAmount = 0;
         currentCheckoutScope = null;
         currentCheckoutItemQty = 0;
+        currentCheckoutIsFree = false;
         currentPaymentType = 'card'; // Reset to default
         suppressPaymentTypeChange = false; // Clear any pending suppression
         // Reset quantity toggle and crowdfund progress
@@ -10880,4 +10932,10 @@ export function getCheckoutChipInContext() {
         scope: currentCheckoutScope,
         itemQty: currentCheckoutItemQty
     };
+}
+
+// True when the checkout is a $0 plan registration (no payment). events.js reads
+// this on form submit to branch into the no-payment registration flow.
+export function getCheckoutIsFreeRegistration() {
+    return currentCheckoutIsFree;
 }

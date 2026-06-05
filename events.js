@@ -371,6 +371,12 @@ async function handlePaymentFormSubmit(event) {
     const cardErrors = document.getElementById('card-errors');
     cardErrors.textContent = '';
 
+    // Free-registration checkout: a $0 plan has nothing to charge. Skip Stripe
+    // entirely and register the visitor for the events in their plan.
+    if (ui.getCheckoutIsFreeRegistration && ui.getCheckoutIsFreeRegistration()) {
+        return handleFreeRegistration(submitBtn, buttonText, spinner);
+    }
+
     submitBtn.disabled = true;
     buttonText.style.display = 'none';
     spinner.style.display = 'inline';
@@ -618,6 +624,115 @@ async function handlePaymentFormSubmit(event) {
         submitBtn.disabled = false;
         buttonText.style.display = 'inline';
         spinner.style.display = 'none';
+    }
+}
+
+/**
+ * Completes a $0 (free) plan checkout. There is nothing to charge, so instead of
+ * going through Stripe the visitor's name + email are collected and they are
+ * registered (RSVP "yes") for every event included in their plan.
+ *
+ * - Signed-in users: each plan event is committed as their RSVP immediately.
+ * - Guests: each plan event RSVP is held locally (the same store used by the
+ *   normal guest RSVP flow) and committed when they create an account / sign in.
+ *   If they tick "create an account (or sign in)", a magic sign-in link is sent;
+ *   clicking it flushes the held RSVPs and saves the plan (see auth.js).
+ */
+async function handleFreeRegistration(submitBtn, buttonText, spinner) {
+    const cardErrors = document.getElementById('card-errors');
+    if (cardErrors) cardErrors.textContent = '';
+
+    const customerName = (document.getElementById('customer-name')?.value || '').trim();
+    const customerEmail = (document.getElementById('customer-email')?.value || '').trim();
+
+    submitBtn.disabled = true;
+    if (buttonText) buttonText.style.display = 'none';
+    if (spinner) spinner.style.display = 'inline';
+
+    try {
+        // The events to register for are the "Event" records in the plan.
+        const eventEntries = [];
+        for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record && record.fields['Item Type'] === 'Event') {
+                eventEntries.push({ recordId, record, quantity: itemInfo.quantity || 1 });
+            }
+        }
+
+        const isAuthed = state.session.user.isAuthenticated;
+
+        if (isAuthed) {
+            // Commit each RSVP directly. Best-effort per event so one failure
+            // does not block the rest.
+            await Promise.allSettled(eventEntries.map(async ({ recordId, quantity }) => {
+                const updated = await api.updateRsvpForEvent(recordId, state.session.user.id, 'yes');
+                if (updated) {
+                    const idx = state.records.all.findIndex(r => r.id === recordId);
+                    if (idx > -1) state.records.all[idx] = updated;
+                }
+                try { await api.saveEventRsvpQuantity(recordId, 'yes', quantity); } catch (e) { /* party size best-effort */ }
+            }));
+        } else {
+            // Hold the RSVPs locally; they commit on sign-in (see auth.js).
+            const tempRsvps = getTempRsvps();
+            eventEntries.forEach(({ recordId, quantity }) => {
+                tempRsvps[recordId] = { rsvpType: 'yes', quantity };
+            });
+            setTempRsvps(tempRsvps);
+            // Remember the email so a returning guest is recognized at sign-in.
+            if (customerEmail) {
+                try { localStorage.setItem('lastSignInEmail', customerEmail); } catch (e) { /* ignore */ }
+            }
+        }
+
+        // Reflect RSVP state on any visible cards.
+        try { eventEntries.forEach(({ recordId }) => ui.updateCardIcon(recordId)); } catch (e) { /* non-fatal */ }
+
+        // If a guest opted in, create an account / sign in so the plan and these
+        // RSVPs are saved to it (mirrors the paid checkout path).
+        const acctCheckbox = document.getElementById('checkout-create-account');
+        if (acctCheckbox && acctCheckbox.checked && !isAuthed && customerEmail) {
+            try {
+                await startEmailSignIn(customerEmail);
+                ui.showToast(`Check ${customerEmail} for a link to finish saving your plan and RSVPs.`);
+            } catch (err) {
+                log('Events', `Free-checkout account sign-in failed: ${err.message}`);
+            }
+        }
+
+        // Swap the form for the success message.
+        const paymentForm = document.getElementById('payment-form');
+        if (paymentForm) paymentForm.style.display = 'none';
+        const summaryDetails = document.getElementById('checkout-summary-details');
+        if (summaryDetails) summaryDetails.style.display = 'none';
+        const depositSection = document.querySelector('.checkout-total-deposit-section');
+        if (depositSection) depositSection.style.display = 'none';
+        const termsEl = document.querySelector('.terms-and-conditions');
+        if (termsEl) termsEl.style.display = 'none';
+
+        const successMsg = document.getElementById('payment-success-message');
+        if (successMsg) {
+            const count = eventEntries.length;
+            const heading = count > 0 ? "You're registered!" : 'All set!';
+            const sub = count > 0
+                ? `You're on the list for ${count === 1 ? 'this event' : `${count} events`} in your plan.`
+                : 'Your details have been saved.';
+            successMsg.innerHTML = `
+                <div style="font-size: 64px; margin-bottom: 20px;">✅</div>
+                <h3 style="color: #28a745; margin-bottom: 15px;">${heading}</h3>
+                <p style="color: #6c757d;">${sub}</p>`;
+            successMsg.style.display = 'block';
+        }
+
+        log('Events', `Free registration completed for ${eventEntries.length} event(s).`);
+        setTimeout(() => { ui.hideCheckoutModal(); }, 4000);
+    } catch (err) {
+        log('Events', `Free registration error: ${err.message}`);
+        // card-errors lives in the hidden payment row here, so surface via toast.
+        ui.showToast(err.message || 'Could not complete registration. Please try again.');
+        submitBtn.disabled = false;
+        if (buttonText) buttonText.style.display = 'inline';
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
