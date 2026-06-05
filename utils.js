@@ -61,6 +61,41 @@ export function invalidateTempLikesCache() {
 }
 
 /**
+ * Pending guest RSVPs.
+ *
+ * A guest can RSVP without signing in. Because the authoritative RSVP membership
+ * keys on Airtable user records (which a guest does not have yet), the guest's
+ * choice is held here in localStorage — mirroring the tempLikes pattern — until
+ * they create an account or sign in (at checkout). At that point the pending
+ * RSVPs are flushed to Airtable under their new user id (see auth.js).
+ *
+ * Shape: { [eventRecordId]: { rsvpType: 'yes'|'maybe'|'no', quantity: number } }
+ * @returns {Object<string, {rsvpType: string, quantity: number}>}
+ */
+export function getTempRsvps() {
+    try {
+        const stored = localStorage.getItem('tempRsvps');
+        const parsed = stored ? JSON.parse(stored) : {};
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch (e) {
+        console.error('[Utils] Error reading tempRsvps:', e);
+        return {};
+    }
+}
+
+/**
+ * Persist the pending guest RSVP map.
+ * @param {Object<string, {rsvpType: string, quantity: number}>} rsvps
+ */
+export function setTempRsvps(rsvps) {
+    try {
+        localStorage.setItem('tempRsvps', JSON.stringify(rsvps && typeof rsvps === 'object' ? rsvps : {}));
+    } catch (e) {
+        console.error('[Utils] Error setting tempRsvps:', e);
+    }
+}
+
+/**
  * Dynamically loads a script from a URL and returns a promise
  * @param {string} src - The script URL to load
  * @param {string} name - Identifier for the library being loaded

@@ -6,7 +6,7 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage, scoreToAdjective } from '../config.js';
 import { getCurrentUser } from '../chat.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration, formatEventTimeRange } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration, formatEventTimeRange, getTempRsvps } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getDayStatus, AVAILABILITY_STATUS, logBusyTimeSummary, describeSelectedAvailability } from '../availability.js';
 import { showReceiptModal } from './receipt.js';
@@ -10148,9 +10148,22 @@ function setupEventRsvpActionZone(record, linkedSession) {
     const rsvpYes = record.fields.RSVPs || [];
     const rsvpMaybe = record.fields.RSVPMaybe || [];
     const rsvpNo = record.fields.RSVPNo || [];
-    const hasYes = rsvpYes.includes(userId);
-    const hasMaybe = rsvpMaybe.includes(userId);
-    const hasNo = rsvpNo.includes(userId);
+    let hasYes = rsvpYes.includes(userId);
+    let hasMaybe = rsvpMaybe.includes(userId);
+    let hasNo = rsvpNo.includes(userId);
+
+    // Guests have no user id in the Airtable lists, so reflect their pending RSVP
+    // (held in localStorage until they sign in at checkout) as the active state.
+    let guestPartyQty = null;
+    if (!state.session.user.isAuthenticated) {
+        const pending = getTempRsvps()[record.id];
+        if (pending) {
+            hasYes = pending.rsvpType === 'yes';
+            hasMaybe = pending.rsvpType === 'maybe';
+            hasNo = pending.rsvpType === 'no';
+            guestPartyQty = pending.quantity;
+        }
+    }
 
     // Hide the item-quantity stepper for events (party size replaces it).
     const qtySel = document.getElementById('modal-quantity-selector');
@@ -10245,6 +10258,8 @@ function setupEventRsvpActionZone(record, linkedSession) {
 
     // Party-size stepper wiring (always clamped to >= 1).
     const qtyInput = block.querySelector('#rsvp-quantity-input');
+    // Prefill a guest's pending party size (signed-in users are filled below from the server).
+    if (guestPartyQty && qtyInput) qtyInput.value = String(guestPartyQty);
     const minusBtn = block.querySelector('.minus');
     const plusBtn = block.querySelector('.plus');
     const clampQty = () => {
@@ -10370,6 +10385,23 @@ export async function showCheckoutModal(shopSettings, scope = null) {
     }
 
     if (!checkoutModalOverlay) return;
+
+    // Guest "create an account / sign in" option vs. signed-in prefill.
+    const accountRow = document.getElementById('checkout-account-row');
+    const accountCheckbox = document.getElementById('checkout-create-account');
+    const nameInput = document.getElementById('customer-name');
+    const emailInput = document.getElementById('customer-email');
+    const isAuthed = state.session.user.isAuthenticated;
+    if (accountCheckbox) accountCheckbox.checked = false;
+    if (accountRow) accountRow.style.display = isAuthed ? 'none' : '';
+    if (isAuthed) {
+        if (nameInput && !nameInput.value) nameInput.value = state.session.user.name || '';
+        if (emailInput && !emailInput.value) emailInput.value = state.session.user.email || '';
+    } else {
+        // Returning guests recognize their email; prefill from the last sign-in attempt.
+        const lastEmail = localStorage.getItem('lastSignInEmail');
+        if (emailInput && !emailInput.value && lastEmail) emailInput.value = lastEmail;
+    }
 
     const handleOverlayClick = (e) => {
         if (e.target === checkoutModalOverlay) {

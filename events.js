@@ -8,12 +8,12 @@ import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus, getPlanDayStatusSync, logBusyTimeSummary } from './availability.js';
-import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, preloadStripe, getShopUrlParam, getTimeUnitMinutes, computeEndFromStartDuration } from './utils.js';
+import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getTempRsvps, setTempRsvps, getEffectiveMinQuantity, calculateDynamicPackagePrice, preloadStripe, getShopUrlParam, getTimeUnitMinutes, computeEndFromStartDuration } from './utils.js';
 import { sendMessage, getCurrentUser, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName, toggleRecentChats, addPlanEventToHistory } from './chat.js';
 import { publishItemToPublicLayer } from './components/publicCatalog.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
-import { showUserModal } from './auth.js';
+import { showUserModal, startEmailSignIn } from './auth.js';
 import { addEnergy, updateProgress } from './components/backgroundEngine.js';
 import { showReceiptModal } from './components/receipt.js';
 import { showProjectsPanel, hideProjectsPanel } from './components/projectsDashboard.js';
@@ -249,6 +249,55 @@ export function triggerSave() {
             updateSaveShareButton();
         }
     }, 1500);
+}
+
+// Reflect a single RSVP selection across a Yes / Maybe / No button group without
+// a full re-render. Used for the guest path, where there is no server-returned
+// record to rebuild the modal from. Passing a null type clears every button.
+function applyRsvpButtonState(clickedBtn, activeType) {
+    const labels = {
+        yes:   { on: 'Going ✅',    off: 'Yes' },
+        maybe: { on: 'Maybe ❓',    off: 'Maybe' },
+        no:    { on: "Can't Go ❌", off: 'No' },
+    };
+    const group = clickedBtn.closest('.rsvp-button-group');
+    const buttons = group ? group.querySelectorAll('.rsvp-btn') : [clickedBtn];
+    buttons.forEach(btn => {
+        const type = btn.dataset.rsvpType;
+        const isActive = !!activeType && type === activeType;
+        btn.classList.toggle('active', isActive);
+        if (labels[type]) btn.textContent = isActive ? labels[type].on : labels[type].off;
+        btn.disabled = false;
+    });
+}
+
+// Add an event to the plan (the "Event Plan", i.e. state.cart.lockedItems) as a
+// lightweight side effect of an RSVP. This intentionally uses a minimal itemInfo
+// rather than the full Add-to-Plan modal extraction (options/scheduling), which
+// does not apply to a quick RSVP. No-op if the event is already in the plan.
+export async function autoAddEventToPlan(record, partyQty = 1) {
+    if (!record || !record.id) return;
+    const recordId = record.id;
+    if (state.cart.lockedItems.has(recordId)) return;
+
+    const qty = (Number.isFinite(partyQty) && partyQty > 0) ? partyQty : 1;
+    const itemInfo = { quantity: qty, selectedOptionIndex: 0, selections: {}, note: '', lastAttemptedQuantity: qty };
+    state.cart.lockedItems.set(recordId, itemInfo);
+    state.cart.items.delete(recordId);
+
+    try {
+        ui.updateCardIcon(recordId);
+        ui.updateCardButtonText(recordId, true);
+        await ui.updateIdeasCarousel();
+        await ui.updateEventPlanSection();
+        ui.updateTotalCost();
+        await ui.updateLockedItemStatusIcons();
+    } catch (err) {
+        log('Events', `autoAddEventToPlan UI sync issue: ${err.message}`);
+    }
+
+    syncPlanState('catalog', 'itemAdded', { recordId, itemName: record.fields?.Name || 'Event' });
+    triggerSave();
 }
 
 export async function updateAllCardAvailabilityIcons() {
@@ -533,6 +582,20 @@ async function handlePaymentFormSubmit(event) {
                     successMsg.textContent = '✅ Payment Successful!';
                 }
                 successMsg.style.display = 'block';
+            }
+
+            // If the guest opted in, create an account / sign in so this plan and
+            // their RSVPs are saved to it. Uses the existing magic-link flow: a
+            // confirmation email is sent; clicking it signs this tab in (Pusher),
+            // which associates the session and flushes pending RSVPs (see auth.js).
+            const acctCheckbox = document.getElementById('checkout-create-account');
+            if (acctCheckbox && acctCheckbox.checked && !state.session.user.isAuthenticated && customerEmail) {
+                try {
+                    await startEmailSignIn(customerEmail);
+                    ui.showToast(`Check ${customerEmail} for a link to finish saving your plan and RSVPs.`);
+                } catch (err) {
+                    log('Events', `Checkout account sign-in failed: ${err.message}`);
+                }
             }
 
             setTimeout(() => { ui.hideCheckoutModal(); }, isACHProcessing ? 6000 : 4000);
@@ -2381,10 +2444,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             ui.showCheckoutModal(shopSettings);
         } else if (rsvpBtn) {
             e.stopPropagation();
-            if (!state.session.user.isAuthenticated) {
-                showUserModal();
-                return;
-            }
             const cardEl = rsvpBtn.closest('.event-card') || rsvpBtn.closest('[data-record-id]');
             const recordId = cardEl?.dataset.recordId;
             if (!recordId) return;
@@ -2397,6 +2456,46 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const partyQtyInput = document.getElementById('rsvp-quantity-input');
             const partyQty = partyQtyInput ? (parseInt(partyQtyInput.value, 10) || 1) : 1;
 
+            let record = state.records.all.find(r => r.id === recordId);
+
+            // --- Guest path: no sign-in wall. Hold the RSVP locally and add the
+            // event to the plan; it is committed to Airtable when the guest creates
+            // an account or signs in at checkout (see auth.js flush-on-login). ---
+            if (!state.session.user.isAuthenticated) {
+                const tempRsvps = getTempRsvps();
+                if (wasActive) {
+                    delete tempRsvps[recordId];
+                    setTempRsvps(tempRsvps);
+                    applyRsvpButtonState(rsvpBtn, null);
+                    ui.showToast('RSVP removed.');
+                } else {
+                    tempRsvps[recordId] = { rsvpType, quantity: partyQty };
+                    setTempRsvps(tempRsvps);
+                    applyRsvpButtonState(rsvpBtn, rsvpType);
+
+                    if (rsvpType === 'yes' || rsvpType === 'maybe') {
+                        // Resolve the record if this is a deep-linked event not yet in memory.
+                        if (!record) {
+                            try {
+                                const fetched = await api.fetchGhostItems([recordId]);
+                                if (fetched && fetched.length) record = fetched[0];
+                            } catch (err) {
+                                log('Events', `Guest RSVP could not resolve event ${recordId}: ${err.message}`);
+                            }
+                        }
+                        if (record) await autoAddEventToPlan(record, partyQty);
+                    }
+
+                    const labels = { yes: "You're going!", maybe: "Marked as maybe.", no: "Marked as can't go." };
+                    const confirmMsg = labels[rsvpType] || 'RSVP updated!';
+                    ui.showToast(rsvpType === 'no'
+                        ? confirmMsg
+                        : `${confirmMsg} Sign in at checkout to save it to your account.`);
+                }
+                return;
+            }
+
+            // --- Authenticated path: commit to Airtable / Postgres. ---
             rsvpBtn.disabled = true;
             const originalText = rsvpBtn.innerHTML;
             rsvpBtn.textContent = 'Saving...';
@@ -2412,10 +2511,15 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     // Persist the party size alongside the response (best-effort).
                     await api.saveEventRsvpQuantity(recordId, rsvpType, partyQty);
                 }
-                
+
                 if (updatedRecord) {
                     const recordIndex = state.records.all.findIndex(r => r.id === recordId);
                     if (recordIndex > -1) state.records.all[recordIndex] = updatedRecord;
+
+                    // RSVPing yes / maybe also adds the event to the plan.
+                    if (!wasActive && (rsvpType === 'yes' || rsvpType === 'maybe')) {
+                        await autoAddEventToPlan(updatedRecord, partyQty);
+                    }
 
                     if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
                         ui.showDetailModal(updatedRecord);

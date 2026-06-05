@@ -9,6 +9,7 @@ import * as api from '../../api.js';
 import { log } from '../../utils/debug.js';
 import { showToast } from '../../ui.js';
 import { showUserModal } from '../../auth.js';
+import { getTempRsvps, setTempRsvps } from '../../utils.js';
 import { createCalendarExportButtons, initializeCalendarExportListeners, resolvePlanVenueAddress } from '../../utils/calendarExport.js';
 
 // Cache for the linked event record
@@ -110,9 +111,19 @@ function renderRsvpButtons(container, eventRecord) {
     const rsvpNo = eventRecord.fields.RSVPNo || [];
     const userId = state.session.user.id;
 
-    const hasRsvpdYes = rsvpYes.includes(userId);
-    const hasRsvpdMaybe = rsvpMaybe.includes(userId);
-    const hasRsvpdNo = rsvpNo.includes(userId);
+    let hasRsvpdYes = rsvpYes.includes(userId);
+    let hasRsvpdMaybe = rsvpMaybe.includes(userId);
+    let hasRsvpdNo = rsvpNo.includes(userId);
+
+    // Guests are not in the Airtable lists; reflect their pending (localStorage) RSVP.
+    if (!state.session.user.isAuthenticated) {
+        const pending = getTempRsvps()[eventRecord.id];
+        if (pending) {
+            hasRsvpdYes = pending.rsvpType === 'yes';
+            hasRsvpdMaybe = pending.rsvpType === 'maybe';
+            hasRsvpdNo = pending.rsvpType === 'no';
+        }
+    }
 
     container.innerHTML = `
         <div class="presentation-rsvp-label">Are you going?</div>
@@ -217,12 +228,6 @@ export function handleRsvpClick(e, modal) {
 
     if (!modal || !modal.classList.contains('active')) return;
 
-    if (!state.session.user.isAuthenticated) {
-        showToast('Please sign in to RSVP');
-        showUserModal();
-        return;
-    }
-
     const recordId = rsvpBtn.dataset.recordId;
     const rsvpType = rsvpBtn.dataset.rsvpType;
     const userId = state.session.user.id;
@@ -232,13 +237,34 @@ export function handleRsvpClick(e, modal) {
         return;
     }
 
+    const currentlyActive = rsvpBtn.classList.contains('active');
+
+    // Guest path: no sign-in wall. Hold the RSVP locally (committed to Airtable
+    // when they sign in at checkout) and re-render the buttons to reflect it.
+    if (!state.session.user.isAuthenticated) {
+        const tempRsvps = getTempRsvps();
+        if (currentlyActive) {
+            delete tempRsvps[recordId];
+            showToast('RSVP removed.');
+        } else {
+            tempRsvps[recordId] = { rsvpType, quantity: 1 };
+            const labels = { yes: "You're going!", maybe: 'Marked as maybe.', no: "Marked as can't go." };
+            showToast(rsvpType === 'no'
+                ? (labels[rsvpType] || 'RSVP updated!')
+                : `${labels[rsvpType] || 'RSVP updated!'} Sign in at checkout to save it.`);
+        }
+        setTempRsvps(tempRsvps);
+        const rsvpButtonsContainer = document.getElementById('presentation-rsvp-buttons');
+        if (rsvpButtonsContainer) renderRsvpButtons(rsvpButtonsContainer, linkedEventRecord);
+        return;
+    }
+
     const originalText = rsvpBtn.innerHTML;
     rsvpBtn.disabled = true;
     rsvpBtn.innerHTML = '...';
 
     (async () => {
         try {
-            const currentlyActive = rsvpBtn.classList.contains('active');
             const newRsvpType = currentlyActive ? null : rsvpType;
 
             const result = await api.updateRsvpForEvent(recordId, userId, newRsvpType);

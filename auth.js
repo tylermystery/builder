@@ -2,6 +2,7 @@
 
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
+import { getTempRsvps, setTempRsvps } from './utils.js';
 import * as api from './api.js';
 import * as backgroundEngine from './components/backgroundEngine.js';
 
@@ -106,6 +107,27 @@ async function _handleSuccessfulLogin(payload) {
     }
 
     await Promise.allSettled(syncPromises);
+
+    // Flush any RSVPs the user made as a guest (held in localStorage) to Airtable
+    // now that they have a user id. Each pending event is committed as their RSVP
+    // (membership + party size) and ensured present in the plan. Best-effort: a
+    // failure on one event does not block login or the others.
+    try {
+        const tempRsvps = getTempRsvps();
+        const eventIds = Object.keys(tempRsvps);
+        if (eventIds.length > 0) {
+            log('Auth', `Flushing ${eventIds.length} pending guest RSVP(s)`);
+            const flushPromises = eventIds.map(async (eventId) => {
+                const { rsvpType = 'yes', quantity = 1 } = tempRsvps[eventId] || {};
+                await api.updateRsvpForEvent(eventId, state.session.user.id, rsvpType);
+                try { await api.saveEventRsvpQuantity(eventId, rsvpType, quantity); } catch (e) { /* party size is best-effort */ }
+            });
+            await Promise.allSettled(flushPromises);
+            setTempRsvps({});
+        }
+    } catch (e) {
+        console.error('[Auth] Error flushing pending guest RSVPs:', e);
+    }
 
     // Trigger events and update UI
     console.log(`[LOGIN-ASSOC] Dispatching 'userLoggedIn' event. Session: ${state.session.id}, User: ${state.session.user.id}`);
@@ -274,57 +296,77 @@ async function handleSignIn(e) {
     e.preventDefault();
     const email = signinEmailInput.value;
     log('Auth', `Sign-in initiated for: ${email}`);
-    localStorage.setItem('lastSignInEmail', email);
     signinMessage.style.color = '#333';
-    signinMessage.textContent = `Sending confirmation email...`;
     try {
-        log('Auth', 'Calling /api/auth-start endpoint');
-        const response = await fetch('/api/auth-start', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email, siteUrl: window.location.origin }),
+        await startEmailSignIn(email, {
+            onStatus: (msg, kind) => {
+                signinMessage.style.color = kind === 'error' ? '#dc3545' : (kind === 'success' ? '#28a745' : '#333');
+                signinMessage.textContent = msg;
+            },
+            onSent: () => { signinEmailInput.value = ''; },
         });
-
-        log('Auth', `auth-start response status: ${response.status}`);
-        const data = await response.json();
-        log('Auth', `auth-start response data:`, data);
-
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to send confirmation email.');
-        }
-
-        signinMessage.style.color = '#28a745';
-        signinMessage.textContent = `A confirmation link has been sent to ${email}. Please check your inbox. Waiting for confirmation...`;
-        signinEmailInput.value = '';
-        const pusher = new Pusher('236f480714e5001590b5', {
-            cluster: 'us3',
-            authEndpoint: '/api/pusher-auth'
-        });
-        const channelName = `private-auth-${data.channelId}`;
-        const channel = pusher.subscribe(channelName);
-
-        const loginTimeout = setTimeout(() => {
-            channel.unbind('auth-success');
-            pusher.unsubscribe(channelName);
-            signinMessage.style.color = '#dc3545';
-            signinMessage.textContent = 'Login attempt timed out. Please try again.';
-        }, 5 * 60 * 1000);
-
-        channel.bind('pusher:subscription_succeeded', () => {
-            log('Auth', `Successfully subscribed to Pusher channel: ${channelName}`);
-            channel.bind('auth-success', async (payload) => {
-                clearTimeout(loginTimeout);
-                pusher.unsubscribe(channelName);
-                await _handleSuccessfulLogin(payload);
-            });
-        });
-
     } catch (error) {
         console.error('[Auth] Sign-in error:', error);
         log('Auth', `Sign-in failed: ${error.message}`);
         signinMessage.style.color = '#dc3545';
         signinMessage.textContent = error.message || 'Unable to sign in. Please try again.';
     }
+}
+
+// Core magic-link sign-in, decoupled from the sign-in form so other surfaces
+// (e.g. the checkout "create an account / sign in" option) can reuse it. Sends
+// the confirmation email, then subscribes to the per-attempt Pusher channel and
+// completes the login in THIS tab once the emailed link is clicked. Works for
+// both new accounts (created on verify) and existing-but-not-logged-in users.
+// @param {string} email
+// @param {{ onStatus?: (msg: string, kind?: 'info'|'success'|'error') => void, onSent?: () => void }} [opts]
+export async function startEmailSignIn(email, opts = {}) {
+    const onStatus = opts.onStatus || (() => {});
+    if (!email) throw new Error('Email is required.');
+
+    log('Auth', `startEmailSignIn for: ${email}`);
+    localStorage.setItem('lastSignInEmail', email);
+    onStatus('Sending confirmation email...', 'info');
+
+    log('Auth', 'Calling /api/auth-start endpoint');
+    const response = await fetch('/api/auth-start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, siteUrl: window.location.origin }),
+    });
+
+    log('Auth', `auth-start response status: ${response.status}`);
+    const data = await response.json();
+    log('Auth', `auth-start response data:`, data);
+
+    if (!response.ok) {
+        throw new Error(data.error || 'Failed to send confirmation email.');
+    }
+
+    onStatus(`A confirmation link has been sent to ${email}. Please check your inbox. Waiting for confirmation...`, 'success');
+    if (opts.onSent) opts.onSent();
+
+    const pusher = new Pusher('236f480714e5001590b5', {
+        cluster: 'us3',
+        authEndpoint: '/api/pusher-auth'
+    });
+    const channelName = `private-auth-${data.channelId}`;
+    const channel = pusher.subscribe(channelName);
+
+    const loginTimeout = setTimeout(() => {
+        channel.unbind('auth-success');
+        pusher.unsubscribe(channelName);
+        onStatus('Login attempt timed out. Please try again.', 'error');
+    }, 5 * 60 * 1000);
+
+    channel.bind('pusher:subscription_succeeded', () => {
+        log('Auth', `Successfully subscribed to Pusher channel: ${channelName}`);
+        channel.bind('auth-success', async (payload) => {
+            clearTimeout(loginTimeout);
+            pusher.unsubscribe(channelName);
+            await _handleSuccessfulLogin(payload);
+        });
+    });
 }
 
 // SMS Authentication Handlers
@@ -542,6 +584,7 @@ export function handleSignOut() {
     log('Auth', 'User signed out.');
     localStorage.removeItem('jwt');
     localStorage.removeItem('tempLikes'); // Clear any temporary likes on sign out
+    localStorage.removeItem('tempRsvps'); // Clear any pending guest RSVPs on sign out
 
     // Reset user state, including clearing likedItemIds
     setState({
