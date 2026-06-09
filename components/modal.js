@@ -969,7 +969,9 @@ function renderCheckoutP2POptions(paymentOptions, amount, itemName) {
     if (!p2pContainer) return;
 
     p2pContainer.innerHTML = '';
-
+    // New checkout session for these options — allow registration to run once
+    // when the visitor proceeds with a direct-pay option (see events.js).
+    delete p2pContainer.dataset.registered;
     if (!paymentOptions || Object.keys(paymentOptions).length === 0) {
         return;
     }
@@ -1343,12 +1345,46 @@ async function loadCrowdfundProgress(itemRecordId, goalAmount) {
 }
 
 /**
+ * Returns the currently selected checkout payment method ('stripe' or 'p2p').
+ * Defaults to 'stripe' when no toggle/active tab is present.
+ */
+function getActivePaymentMethod() {
+    const activeTab = document.querySelector('#checkout-payment-method-toggle .payment-method-tab.active');
+    return activeTab ? activeTab.dataset.method : 'stripe';
+}
+
+/**
+ * Applies visibility for the chosen payment method WITHOUT hiding the name/email
+ * (and guest account) inputs — those are always collected, including for the
+ * "Pay Direct" (P2P) option. Only the pay mechanism toggles: Stripe shows the
+ * card entry + "Pay Now"; P2P hides those and shows the direct-pay options.
+ * @param {'stripe'|'p2p'} method
+ */
+function applyPaymentMethodVisibility(method) {
+    const paymentForm = document.getElementById('payment-form');
+    const paymentDetailsRow = document.getElementById('checkout-payment-details-row');
+    const submitBtn = document.getElementById('payment-submit-btn');
+    const p2pSection = document.getElementById('checkout-p2p-section');
+
+    // Name/email/account row live inside the form and must stay visible for both.
+    if (paymentForm) paymentForm.style.display = 'block';
+
+    if (method === 'p2p') {
+        if (paymentDetailsRow) paymentDetailsRow.style.display = 'none';
+        if (submitBtn) submitBtn.style.display = 'none';
+        if (p2pSection) p2pSection.style.display = 'block';
+    } else {
+        if (paymentDetailsRow) paymentDetailsRow.style.display = '';
+        if (submitBtn) submitBtn.style.display = '';
+        if (p2pSection) p2pSection.style.display = 'none';
+    }
+}
+
+/**
  * Sets up the payment method toggle (Stripe vs P2P) in the checkout modal.
  */
 function setupPaymentMethodToggle() {
     const toggleContainer = document.getElementById('checkout-payment-method-toggle');
-    const paymentForm = document.getElementById('payment-form');
-    const p2pSection = document.getElementById('checkout-p2p-section');
 
     if (!toggleContainer) return;
 
@@ -1361,15 +1397,7 @@ function setupPaymentMethodToggle() {
         newTab.addEventListener('click', () => {
             toggleContainer.querySelectorAll('.payment-method-tab').forEach(t => t.classList.remove('active'));
             newTab.classList.add('active');
-
-            const method = newTab.dataset.method;
-            if (method === 'stripe') {
-                if (paymentForm) paymentForm.style.display = 'block';
-                if (p2pSection) p2pSection.style.display = 'none';
-            } else if (method === 'p2p') {
-                if (paymentForm) paymentForm.style.display = 'none';
-                if (p2pSection) p2pSection.style.display = 'block';
-            }
+            applyPaymentMethodVisibility(newTab.dataset.method);
         });
     });
 }
@@ -1666,8 +1694,11 @@ async function updateCheckoutDisplay() {
     }
     // --- END DONATION-ONLY MODE ---
 
-    // If we're here, we need to pay. Show the form.
+    // If we're here, we need to pay. Show the form — but respect the currently
+    // selected payment method so re-renders (e.g. a tip change) don't snap a
+    // "Pay Direct" view back to the Stripe card entry.
     if (paymentForm) paymentForm.style.display = 'block';
+    applyPaymentMethodVisibility(getActivePaymentMethod());
 
     // Re-show payment method toggle if P2P options exist (may have been hidden in donation-only pending state)
     if (isItemMode && currentCheckoutScope && currentCheckoutScope.highlightChipIn) {

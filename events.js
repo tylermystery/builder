@@ -638,6 +638,111 @@ async function handlePaymentFormSubmit(event) {
  *   If they tick "create an account (or sign in)", a magic sign-in link is sent;
  *   clicking it flushes the held RSVPs and saves the plan (see auth.js).
  */
+/**
+ * Registers the visitor for every Event in their plan (RSVP "yes") and — for a
+ * guest who ticked the account box — emails a secure sign-in link so the plan
+ * and RSVPs are saved to the account. Shared by the free ($0) checkout and the
+ * "Pay Direct" (P2P) checkout, so the name/email collected at checkout always
+ * results in a registration regardless of the payment path.
+ * @param {string} customerEmail - The email entered at checkout (already trimmed)
+ * @returns {Promise<number>} the number of events the visitor was registered for
+ */
+async function registerPlanEventsForCheckout(customerEmail) {
+    // The events to register for are the "Event" records in the plan.
+    const eventEntries = [];
+    for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (record && record.fields['Item Type'] === 'Event') {
+            eventEntries.push({ recordId, record, quantity: itemInfo.quantity || 1 });
+        }
+    }
+
+    const isAuthed = state.session.user.isAuthenticated;
+
+    if (isAuthed) {
+        // Commit each RSVP directly. Best-effort per event so one failure
+        // does not block the rest.
+        await Promise.allSettled(eventEntries.map(async ({ recordId, quantity }) => {
+            const updated = await api.updateRsvpForEvent(recordId, state.session.user.id, 'yes');
+            if (updated) {
+                const idx = state.records.all.findIndex(r => r.id === recordId);
+                if (idx > -1) state.records.all[idx] = updated;
+            }
+            try { await api.saveEventRsvpQuantity(recordId, 'yes', quantity); } catch (e) { /* party size best-effort */ }
+        }));
+    } else {
+        // Hold the RSVPs locally; they commit on sign-in (see auth.js).
+        const tempRsvps = getTempRsvps();
+        eventEntries.forEach(({ recordId, quantity }) => {
+            tempRsvps[recordId] = { rsvpType: 'yes', quantity };
+        });
+        setTempRsvps(tempRsvps);
+        // Remember the email so a returning guest is recognized at sign-in.
+        if (customerEmail) {
+            try { localStorage.setItem('lastSignInEmail', customerEmail); } catch (e) { /* ignore */ }
+        }
+    }
+
+    // Reflect RSVP state on any visible cards.
+    try { eventEntries.forEach(({ recordId }) => ui.updateCardIcon(recordId)); } catch (e) { /* non-fatal */ }
+
+    // If a guest opted in, create an account / sign in so the plan and these
+    // RSVPs are saved to it (mirrors the paid checkout path).
+    const acctCheckbox = document.getElementById('checkout-create-account');
+    if (acctCheckbox && acctCheckbox.checked && !isAuthed && customerEmail) {
+        try {
+            await startEmailSignIn(customerEmail);
+            ui.showToast(`Check ${customerEmail} for a link to finish saving your plan and RSVPs.`);
+        } catch (err) {
+            log('Events', `Checkout account sign-in failed: ${err.message}`);
+        }
+    }
+
+    return eventEntries.length;
+}
+
+/**
+ * Handles a "Pay Direct" (P2P) option click during checkout. Enforces that a
+ * name and email were entered (always collected, even for direct pay) and, the
+ * first time the visitor proceeds, registers them for the events in their plan.
+ * Runs in the capture phase so it can block the external payment link when the
+ * required details are missing.
+ */
+async function handleP2PCheckoutClick(event) {
+    const optionBtn = event.target.closest('.quick-pay-option-btn');
+    if (!optionBtn) return;
+
+    const nameEl = document.getElementById('customer-name');
+    const emailEl = document.getElementById('customer-email');
+    const customerName = (nameEl?.value || '').trim();
+    const customerEmail = (emailEl?.value || '').trim();
+
+    if (!customerName || !customerEmail) {
+        event.preventDefault();
+        event.stopPropagation();
+        ui.showToast('Please enter your name and email before paying directly.');
+        (!customerName ? nameEl : emailEl)?.focus();
+        return;
+    }
+
+    // Register the visitor for their plan's events once per checkout. The flag
+    // lives on the container and is cleared each time the options re-render
+    // (renderCheckoutP2POptions). Fire-and-forget so the payment app still opens.
+    const container = event.currentTarget;
+    if (container.dataset.registered !== 'true') {
+        container.dataset.registered = 'true';
+        registerPlanEventsForCheckout(customerEmail)
+            .then(count => {
+                const acct = document.getElementById('checkout-create-account');
+                const creatingAccount = acct && acct.checked && !state.session.user.isAuthenticated;
+                if (count > 0 && !creatingAccount) {
+                    ui.showToast(`You're registered for ${count === 1 ? 'the event' : `${count} events`} in your plan.`);
+                }
+            })
+            .catch(err => log('Events', `P2P registration error: ${err.message}`));
+    }
+}
+
 async function handleFreeRegistration(submitBtn, buttonText, spinner) {
     const cardErrors = document.getElementById('card-errors');
     if (cardErrors) cardErrors.textContent = '';
@@ -645,60 +750,22 @@ async function handleFreeRegistration(submitBtn, buttonText, spinner) {
     const customerName = (document.getElementById('customer-name')?.value || '').trim();
     const customerEmail = (document.getElementById('customer-email')?.value || '').trim();
 
+    // Always collect a name + email before registering.
+    if (!customerName || !customerEmail) {
+        ui.showToast('Please enter your name and email to complete registration.');
+        const emptyEl = !customerName
+            ? document.getElementById('customer-name')
+            : document.getElementById('customer-email');
+        if (emptyEl) emptyEl.focus();
+        return;
+    }
+
     submitBtn.disabled = true;
     if (buttonText) buttonText.style.display = 'none';
     if (spinner) spinner.style.display = 'inline';
 
     try {
-        // The events to register for are the "Event" records in the plan.
-        const eventEntries = [];
-        for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
-            const record = state.records.all.find(r => r.id === recordId);
-            if (record && record.fields['Item Type'] === 'Event') {
-                eventEntries.push({ recordId, record, quantity: itemInfo.quantity || 1 });
-            }
-        }
-
-        const isAuthed = state.session.user.isAuthenticated;
-
-        if (isAuthed) {
-            // Commit each RSVP directly. Best-effort per event so one failure
-            // does not block the rest.
-            await Promise.allSettled(eventEntries.map(async ({ recordId, quantity }) => {
-                const updated = await api.updateRsvpForEvent(recordId, state.session.user.id, 'yes');
-                if (updated) {
-                    const idx = state.records.all.findIndex(r => r.id === recordId);
-                    if (idx > -1) state.records.all[idx] = updated;
-                }
-                try { await api.saveEventRsvpQuantity(recordId, 'yes', quantity); } catch (e) { /* party size best-effort */ }
-            }));
-        } else {
-            // Hold the RSVPs locally; they commit on sign-in (see auth.js).
-            const tempRsvps = getTempRsvps();
-            eventEntries.forEach(({ recordId, quantity }) => {
-                tempRsvps[recordId] = { rsvpType: 'yes', quantity };
-            });
-            setTempRsvps(tempRsvps);
-            // Remember the email so a returning guest is recognized at sign-in.
-            if (customerEmail) {
-                try { localStorage.setItem('lastSignInEmail', customerEmail); } catch (e) { /* ignore */ }
-            }
-        }
-
-        // Reflect RSVP state on any visible cards.
-        try { eventEntries.forEach(({ recordId }) => ui.updateCardIcon(recordId)); } catch (e) { /* non-fatal */ }
-
-        // If a guest opted in, create an account / sign in so the plan and these
-        // RSVPs are saved to it (mirrors the paid checkout path).
-        const acctCheckbox = document.getElementById('checkout-create-account');
-        if (acctCheckbox && acctCheckbox.checked && !isAuthed && customerEmail) {
-            try {
-                await startEmailSignIn(customerEmail);
-                ui.showToast(`Check ${customerEmail} for a link to finish saving your plan and RSVPs.`);
-            } catch (err) {
-                log('Events', `Free-checkout account sign-in failed: ${err.message}`);
-            }
-        }
+        const count = await registerPlanEventsForCheckout(customerEmail);
 
         // Swap the form for the success message.
         const paymentForm = document.getElementById('payment-form');
@@ -712,7 +779,6 @@ async function handleFreeRegistration(submitBtn, buttonText, spinner) {
 
         const successMsg = document.getElementById('payment-success-message');
         if (successMsg) {
-            const count = eventEntries.length;
             const heading = count > 0 ? "You're registered!" : 'All set!';
             const sub = count > 0
                 ? `You're on the list for ${count === 1 ? 'this event' : `${count} events`} in your plan.`
@@ -724,7 +790,7 @@ async function handleFreeRegistration(submitBtn, buttonText, spinner) {
             successMsg.style.display = 'block';
         }
 
-        log('Events', `Free registration completed for ${eventEntries.length} event(s).`);
+        log('Events', `Free registration completed for ${count} event(s).`);
         setTimeout(() => { ui.hideCheckoutModal(); }, 4000);
     } catch (err) {
         log('Events', `Free registration error: ${err.message}`);
@@ -3683,6 +3749,13 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     
     ui.setupPresentationEventListeners();
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
+
+    // "Pay Direct" (P2P) options: gate on name/email and register plan events.
+    // Capture phase so a missing name/email can block the external payment link.
+    const p2pOptionsContainer = document.getElementById('checkout-p2p-options');
+    if (p2pOptionsContainer) {
+        p2pOptionsContainer.addEventListener('click', handleP2PCheckoutClick, true);
+    }
 
     setupItineraryEventListeners();
 
