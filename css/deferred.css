@@ -968,6 +968,27 @@
     box-sizing: border-box;
 }
 
+/* "Load more" pagination fallback button */
+#load-more-btn {
+    display: block;
+    margin: 20px auto 8px;
+    padding: 10px 28px;
+    font-size: 0.95em;
+    font-weight: bold;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid #ccc;
+    background-color: #f0f0f0;
+    transition: background-color 0.15s ease;
+}
+#load-more-btn:hover:not(:disabled) {
+    background-color: #e4e4e4;
+}
+#load-more-btn:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+
 /* When catalog has grouping carousels, switch to flex column layout */
 #catalog-container:has(.grouping-carousel-section) {
     display: flex;

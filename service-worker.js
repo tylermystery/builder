@@ -1,7 +1,7 @@
 // Optimized Service Worker for cache management
 // This ensures users always see the latest version of the site
 
-const CACHE_VERSION = 'v-1765920707016'; // Auto-updated during build
+const CACHE_VERSION = 'v-1780601400000'; // Auto-updated during build (bumped to purge stale JS/CSS caches)
 const STATIC_CACHE = 'wtfun-static-' + CACHE_VERSION;
 const DYNAMIC_CACHE = 'wtfun-dynamic-' + CACHE_VERSION;
 const IMAGE_CACHE = 'wtfun-images-' + CACHE_VERSION;
@@ -31,8 +31,8 @@ const BACKGROUND_PRELOAD = [
 const CACHE_STRATEGIES = {
   // HTML - Network first (always try to get fresh content)
   html: 'network-first',
-  // JS/CSS - Stale-while-revalidate (serve cached, update in background)
-  scripts: 'stale-while-revalidate',
+  // JS/CSS - Network-first (always run the latest deployed code)
+  scripts: 'network-first',
   // Images - Cache first with expiration
   images: 'cache-first',
   // Fonts - Cache first (long-lived)
@@ -176,20 +176,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // JS/CSS caching strategy: Stale-while-revalidate
+  // JS/CSS caching strategy: Network-first.
+  // The app ships un-hashed filenames (events.js, main.js, …) that change every
+  // deploy, so the cache must NOT be served first — otherwise users keep running
+  // a previous deploy's code. Fetch fresh from the network, update the cache, and
+  // fall back to the cached copy only when the network is unavailable (offline).
   if (isScript || isStyle) {
     event.respondWith(
       caches.open(STATIC_CACHE).then((cache) => {
-        return cache.match(request).then((cached) => {
-          const fetchPromise = fetch(request).then((response) => {
-            if (response.ok) {
-              cache.put(request, response.clone());
-            }
-            return response;
-          }).catch(() => cached);
-
-          // Return cached immediately if available, fetch in background
-          return cached || fetchPromise;
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            cache.put(request, response.clone());
+          }
+          return response;
+        }).catch(() => {
+          // Offline (or fetch failed): serve whatever we last cached, if anything.
+          return cache.match(request);
         });
       })
     );

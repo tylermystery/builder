@@ -5346,6 +5346,10 @@ body.ucp-panel-open .unified-chat-panel {
             <!-- Phase 3a: Task Manager Container (hidden by default) -->
             <div id="task-manager-container" style="display: none;"></div>
             <div id="catalog-container"></div>
+            <!-- Pagination fallback: visible button for keyboard/no-scroll cases -->
+            <button id="load-more-btn" type="button" style="display: none;">Load more</button>
+            <!-- Sentinel observed by IntersectionObserver to trigger the next batch -->
+            <div id="catalog-sentinel" aria-hidden="true" style="width: 100%; height: 1px;"></div>
         </div>
     </div>
 
@@ -5643,13 +5647,20 @@ body.ucp-panel-open .unified-chat-panel {
             <form id="payment-form">
                 <div class="form-row">
                     <label for="customer-name">Full Name</label>
-                    <input type="text" id="customer-name" required autocomplete="cc-name" aria-label="Full name for payment" aria-required="true">
+                    <input type="text" id="customer-name" required autocomplete="name" aria-label="Full name for payment" aria-required="true">
                 </div>
                 <div class="form-row">
                     <label for="customer-email">Email Address</label>
                     <input type="email" id="customer-email" required autocomplete="email" aria-label="Email address for receipt" aria-required="true">
                 </div>
-                <div class="form-row">
+                <div class="form-row" id="checkout-account-row">
+                    <label class="checkout-account-option" for="checkout-create-account" style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-weight: normal;">
+                        <input type="checkbox" id="checkout-create-account" style="margin-top: 3px;">
+                        <span>Create an account (or sign in) to save this plan and your RSVPs.</span>
+                    </label>
+                    <small style="display: block; margin-top: 4px; color: #6c757d;">We'll email you a secure sign-in link. Already registered? This signs you in too.</small>
+                </div>
+                <div class="form-row" id="checkout-payment-details-row">
                     <label for="card-element">Payment Details</label>
                     <div id="payment-element" role="group" aria-label="Payment details"></div> <div id="card-errors" role="alert" aria-live="polite"></div>
 
@@ -5666,6 +5677,10 @@ body.ucp-panel-open .unified-chat-panel {
                 <button id="payment-submit-btn" class="primary-action-btn" type="submit">
                     <span class="button-text">Pay Now</span>
                     <span class="spinner" style="display: none;">Processing...</span>
+                </button>
+                <button id="save-plan-checkout-btn" type="button" style="margin-top: 12px; width: 100%; background: transparent; border: 1px solid #667eea; color: #667eea; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    <span class="button-text">💾 Save plan &amp; email me a link (no payment now)</span>
+                    <span class="spinner" style="display: none;">Saving...</span>
                 </button>
         </form>
 

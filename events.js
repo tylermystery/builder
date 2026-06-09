@@ -8,12 +8,12 @@ import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus, getPlanDayStatusSync, logBusyTimeSummary } from './availability.js';
-import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, preloadStripe, getShopUrlParam, getTimeUnitMinutes, computeEndFromStartDuration } from './utils.js';
+import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getTempRsvps, setTempRsvps, getEffectiveMinQuantity, calculateDynamicPackagePrice, preloadStripe, getShopUrlParam, getTimeUnitMinutes, computeEndFromStartDuration } from './utils.js';
 import { sendMessage, getCurrentUser, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName, toggleRecentChats, addPlanEventToHistory } from './chat.js';
 import { publishItemToPublicLayer } from './components/publicCatalog.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
-import { showUserModal } from './auth.js';
+import { showUserModal, startEmailSignIn } from './auth.js';
 import { addEnergy, updateProgress } from './components/backgroundEngine.js';
 import { showReceiptModal } from './components/receipt.js';
 import { showProjectsPanel, hideProjectsPanel } from './components/projectsDashboard.js';
@@ -98,23 +98,119 @@ function handleUmwRemoval() {
     }
 }
 
-function loadMoreRecords(imageCache) {
-    if (state.ui.isLoadingMore) return;
-    const start = state.ui.recordsCurrentlyDisplayed;
-    const end = start + RECORDS_PER_LOAD;
-    let recordsToLoad = state.records.filtered.slice(start, end);
-    // Skip any Grouping records in load-more batches — they are rendered as carousels in the initial render
-    recordsToLoad = recordsToLoad.filter(r => r.fields['Item Type'] !== 'Grouping');
-    if (recordsToLoad.length > 0) {
-        state.ui.isLoadingMore = true;
-        ui.renderRecords(recordsToLoad, imageCache, true).then(() => {
-            state.ui.recordsCurrentlyDisplayed = end;
-            state.ui.isLoadingMore = false;
-        });
-    } else {
-        // If only groupings were in this batch, advance the counter and try next batch
-        state.ui.recordsCurrentlyDisplayed = end;
+// Image cache captured at init so the pagination observer and "Load more"
+// fallback button can request additional batches without threading the
+// reference through every call site.
+let catalogImageCache = null;
+let catalogPaginationWired = false;
+
+function hasMoreCatalogRecords() {
+    return state.ui.recordsCurrentlyDisplayed < state.records.filtered.length;
+}
+
+// True when the bottom sentinel is within ~300px of the viewport, i.e. the
+// current batch did not fill the screen and more should be loaded.
+function isCatalogSentinelNear() {
+    const sentinel = document.getElementById('catalog-sentinel');
+    if (!sentinel) return false;
+    const rect = sentinel.getBoundingClientRect();
+    return rect.top <= window.innerHeight + 300;
+}
+
+// Keep the visible "Load more" fallback button in sync with pagination state.
+function updateLoadMoreUI() {
+    const btn = document.getElementById('load-more-btn');
+    if (!btn) return;
+    if (!hasMoreCatalogRecords()) {
+        btn.style.display = 'none';
+        return;
     }
+    btn.style.display = '';
+    btn.disabled = state.ui.isLoadingMore;
+    btn.textContent = state.ui.isLoadingMore ? 'Loading…' : 'Load more';
+}
+
+function loadMoreRecords(imageCache) {
+    imageCache = imageCache || catalogImageCache;
+    if (state.ui.isLoadingMore) return;
+    if (!hasMoreCatalogRecords()) {
+        updateLoadMoreUI();
+        return;
+    }
+
+    // Skip past any batch that contains only Grouping records — they are
+    // rendered as carousels in the initial pass, not in load-more batches.
+    // Previously a grouping-only batch advanced the counter but never armed
+    // the next batch, stalling pagination; here we keep advancing until we
+    // find a batch with real items to render (or reach the end).
+    let start = state.ui.recordsCurrentlyDisplayed;
+    let end = start;
+    let recordsToLoad = [];
+    while (end < state.records.filtered.length && recordsToLoad.length === 0) {
+        end = Math.min(start + RECORDS_PER_LOAD, state.records.filtered.length);
+        recordsToLoad = state.records.filtered
+            .slice(start, end)
+            .filter(r => r.fields['Item Type'] !== 'Grouping');
+        if (recordsToLoad.length === 0) start = end;
+    }
+
+    if (recordsToLoad.length === 0) {
+        state.ui.recordsCurrentlyDisplayed = end;
+        updateLoadMoreUI();
+        return;
+    }
+
+    state.ui.isLoadingMore = true;
+    updateLoadMoreUI();
+    ui.renderRecords(recordsToLoad, imageCache, true).then(() => {
+        state.ui.recordsCurrentlyDisplayed = end;
+        state.ui.isLoadingMore = false;
+        updateLoadMoreUI();
+        // Top-up: if the sentinel is still near the viewport (the batch did
+        // not fill the screen), keep loading until it does or records run out.
+        if (hasMoreCatalogRecords() && isCatalogSentinelNear()) {
+            loadMoreRecords(imageCache);
+        }
+    });
+}
+
+// Wire up reliable catalog pagination: an IntersectionObserver sentinel that
+// loads the next batch as it nears the viewport (and tops up when the first
+// batch underfills the screen), plus a visible "Load more" fallback button for
+// accessibility and cases where no scroll occurs.
+function setupCatalogPagination(imageCache) {
+    catalogImageCache = imageCache;
+
+    const loadMoreBtn = document.getElementById('load-more-btn');
+    if (loadMoreBtn && !loadMoreBtn._wired) {
+        loadMoreBtn._wired = true;
+        loadMoreBtn.addEventListener('click', () => loadMoreRecords(catalogImageCache));
+    }
+
+    // Only attach the observer and global listener once per page, even if
+    // listener initialization runs again.
+    if (catalogPaginationWired) return;
+    catalogPaginationWired = true;
+
+    const sentinel = document.getElementById('catalog-sentinel');
+    if (sentinel && 'IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+            if (entries.some(e => e.isIntersecting)) {
+                loadMoreRecords(catalogImageCache);
+            }
+        }, { rootMargin: '300px 0px' });
+        observer.observe(sentinel);
+    }
+
+    // After each (re)filter render completes, refresh the button and top up if
+    // the initial batch did not fill the viewport. filtering.js dispatches this
+    // once recordsCurrentlyDisplayed reflects the initial render.
+    window.addEventListener('catalog:rendered', () => {
+        updateLoadMoreUI();
+        if (hasMoreCatalogRecords() && isCatalogSentinelNear() && !state.ui.isLoadingMore) {
+            loadMoreRecords(catalogImageCache);
+        }
+    });
 }
 
 export function updateSaveShareButton() {
@@ -153,6 +249,55 @@ export function triggerSave() {
             updateSaveShareButton();
         }
     }, 1500);
+}
+
+// Reflect a single RSVP selection across a Yes / Maybe / No button group without
+// a full re-render. Used for the guest path, where there is no server-returned
+// record to rebuild the modal from. Passing a null type clears every button.
+function applyRsvpButtonState(clickedBtn, activeType) {
+    const labels = {
+        yes:   { on: 'Going ✅',    off: 'Yes' },
+        maybe: { on: 'Maybe ❓',    off: 'Maybe' },
+        no:    { on: "Can't Go ❌", off: 'No' },
+    };
+    const group = clickedBtn.closest('.rsvp-button-group');
+    const buttons = group ? group.querySelectorAll('.rsvp-btn') : [clickedBtn];
+    buttons.forEach(btn => {
+        const type = btn.dataset.rsvpType;
+        const isActive = !!activeType && type === activeType;
+        btn.classList.toggle('active', isActive);
+        if (labels[type]) btn.textContent = isActive ? labels[type].on : labels[type].off;
+        btn.disabled = false;
+    });
+}
+
+// Add an event to the plan (the "Event Plan", i.e. state.cart.lockedItems) as a
+// lightweight side effect of an RSVP. This intentionally uses a minimal itemInfo
+// rather than the full Add-to-Plan modal extraction (options/scheduling), which
+// does not apply to a quick RSVP. No-op if the event is already in the plan.
+export async function autoAddEventToPlan(record, partyQty = 1) {
+    if (!record || !record.id) return;
+    const recordId = record.id;
+    if (state.cart.lockedItems.has(recordId)) return;
+
+    const qty = (Number.isFinite(partyQty) && partyQty > 0) ? partyQty : 1;
+    const itemInfo = { quantity: qty, selectedOptionIndex: 0, selections: {}, note: '', lastAttemptedQuantity: qty };
+    state.cart.lockedItems.set(recordId, itemInfo);
+    state.cart.items.delete(recordId);
+
+    try {
+        ui.updateCardIcon(recordId);
+        ui.updateCardButtonText(recordId, true);
+        await ui.updateIdeasCarousel();
+        await ui.updateEventPlanSection();
+        ui.updateTotalCost();
+        await ui.updateLockedItemStatusIcons();
+    } catch (err) {
+        log('Events', `autoAddEventToPlan UI sync issue: ${err.message}`);
+    }
+
+    syncPlanState('catalog', 'itemAdded', { recordId, itemName: record.fields?.Name || 'Event' });
+    triggerSave();
 }
 
 export async function updateAllCardAvailabilityIcons() {
@@ -225,6 +370,12 @@ async function handlePaymentFormSubmit(event) {
     const spinner = submitBtn.querySelector('.spinner');
     const cardErrors = document.getElementById('card-errors');
     cardErrors.textContent = '';
+
+    // Free-registration checkout: a $0 plan has nothing to charge. Skip Stripe
+    // entirely and register the visitor for the events in their plan.
+    if (ui.getCheckoutIsFreeRegistration && ui.getCheckoutIsFreeRegistration()) {
+        return handleFreeRegistration(submitBtn, buttonText, spinner);
+    }
 
     submitBtn.disabled = true;
     buttonText.style.display = 'none';
@@ -439,6 +590,20 @@ async function handlePaymentFormSubmit(event) {
                 successMsg.style.display = 'block';
             }
 
+            // If the guest opted in, create an account / sign in so this plan and
+            // their RSVPs are saved to it. Uses the existing magic-link flow: a
+            // confirmation email is sent; clicking it signs this tab in (Pusher),
+            // which associates the session and flushes pending RSVPs (see auth.js).
+            const acctCheckbox = document.getElementById('checkout-create-account');
+            if (acctCheckbox && acctCheckbox.checked && !state.session.user.isAuthenticated && customerEmail) {
+                try {
+                    await startEmailSignIn(customerEmail);
+                    ui.showToast(`Check ${customerEmail} for a link to finish saving your plan and RSVPs.`);
+                } catch (err) {
+                    log('Events', `Checkout account sign-in failed: ${err.message}`);
+                }
+            }
+
             setTimeout(() => { ui.hideCheckoutModal(); }, isACHProcessing ? 6000 : 4000);
         } else if (paymentIntent.status === 'requires_action' || paymentIntent.status === 'requires_confirmation') {
             // ACH may require additional verification steps (e.g., micro-deposits)
@@ -459,6 +624,313 @@ async function handlePaymentFormSubmit(event) {
         submitBtn.disabled = false;
         buttonText.style.display = 'inline';
         spinner.style.display = 'none';
+    }
+}
+
+/**
+ * Completes a $0 (free) plan checkout. There is nothing to charge, so instead of
+ * going through Stripe the visitor's name + email are collected and they are
+ * registered (RSVP "yes") for every event included in their plan.
+ *
+ * - Signed-in users: each plan event is committed as their RSVP immediately.
+ * - Guests: each plan event RSVP is held locally (the same store used by the
+ *   normal guest RSVP flow) and committed when they create an account / sign in.
+ *   If they tick "create an account (or sign in)", a magic sign-in link is sent;
+ *   clicking it flushes the held RSVPs and saves the plan (see auth.js).
+ */
+/**
+ * Registers the visitor for every Event in their plan (RSVP "yes") and — for a
+ * guest who ticked the account box — emails a secure sign-in link so the plan
+ * and RSVPs are saved to the account. Shared by the free ($0) checkout and the
+ * "Pay Direct" (P2P) checkout, so the name/email collected at checkout always
+ * results in a registration regardless of the payment path.
+ * @param {string} customerEmail - The email entered at checkout (already trimmed)
+ * @returns {Promise<number>} the number of events the visitor was registered for
+ */
+async function registerPlanEventsForCheckout(customerEmail) {
+    // The events to register for are the "Event" records in the plan.
+    const eventEntries = [];
+    for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (record && record.fields['Item Type'] === 'Event') {
+            eventEntries.push({ recordId, record, quantity: itemInfo.quantity || 1 });
+        }
+    }
+
+    const isAuthed = state.session.user.isAuthenticated;
+
+    if (isAuthed) {
+        // Commit each RSVP directly. Best-effort per event so one failure
+        // does not block the rest.
+        await Promise.allSettled(eventEntries.map(async ({ recordId, quantity }) => {
+            const updated = await api.updateRsvpForEvent(recordId, state.session.user.id, 'yes');
+            if (updated) {
+                const idx = state.records.all.findIndex(r => r.id === recordId);
+                if (idx > -1) state.records.all[idx] = updated;
+            }
+            try { await api.saveEventRsvpQuantity(recordId, 'yes', quantity); } catch (e) { /* party size best-effort */ }
+        }));
+    } else {
+        // Hold the RSVPs locally; they commit on sign-in (see auth.js).
+        const tempRsvps = getTempRsvps();
+        eventEntries.forEach(({ recordId, quantity }) => {
+            tempRsvps[recordId] = { rsvpType: 'yes', quantity };
+        });
+        setTempRsvps(tempRsvps);
+        // Remember the email so a returning guest is recognized at sign-in.
+        if (customerEmail) {
+            try { localStorage.setItem('lastSignInEmail', customerEmail); } catch (e) { /* ignore */ }
+        }
+    }
+
+    // Reflect RSVP state on any visible cards.
+    try { eventEntries.forEach(({ recordId }) => ui.updateCardIcon(recordId)); } catch (e) { /* non-fatal */ }
+
+    // If a guest opted in, create an account / sign in so the plan and these
+    // RSVPs are saved to it (mirrors the paid checkout path).
+    const acctCheckbox = document.getElementById('checkout-create-account');
+    if (acctCheckbox && acctCheckbox.checked && !isAuthed && customerEmail) {
+        try {
+            await startEmailSignIn(customerEmail);
+            ui.showToast(`Check ${customerEmail} for a link to finish saving your plan and RSVPs.`);
+        } catch (err) {
+            log('Events', `Checkout account sign-in failed: ${err.message}`);
+        }
+    }
+
+    return eventEntries.length;
+}
+
+/**
+ * Handles a "Pay Direct" (P2P) option click during checkout. Enforces that a
+ * name and email were entered (always collected, even for direct pay) and, the
+ * first time the visitor proceeds, registers them for the events in their plan.
+ * Runs in the capture phase so it can block the external payment link when the
+ * required details are missing.
+ */
+async function handleP2PCheckoutClick(event) {
+    const optionBtn = event.target.closest('.quick-pay-option-btn');
+    if (!optionBtn) return;
+
+    const nameEl = document.getElementById('customer-name');
+    const emailEl = document.getElementById('customer-email');
+    const customerName = (nameEl?.value || '').trim();
+    const customerEmail = (emailEl?.value || '').trim();
+
+    if (!customerName || !customerEmail) {
+        event.preventDefault();
+        event.stopPropagation();
+        ui.showToast('Please enter your name and email before paying directly.');
+        (!customerName ? nameEl : emailEl)?.focus();
+        return;
+    }
+
+    // Register the visitor for their plan's events once per checkout. The flag
+    // lives on the container and is cleared each time the options re-render
+    // (renderCheckoutP2POptions). Fire-and-forget so the payment app still opens.
+    const container = event.currentTarget;
+    if (container.dataset.registered !== 'true') {
+        container.dataset.registered = 'true';
+        registerPlanEventsForCheckout(customerEmail)
+            .then(count => {
+                const acct = document.getElementById('checkout-create-account');
+                const creatingAccount = acct && acct.checked && !state.session.user.isAuthenticated;
+                if (count > 0 && !creatingAccount) {
+                    ui.showToast(`You're registered for ${count === 1 ? 'the event' : `${count} events`} in your plan.`);
+                }
+            })
+            .catch(err => log('Events', `P2P registration error: ${err.message}`));
+    }
+}
+
+async function handleFreeRegistration(submitBtn, buttonText, spinner) {
+    const cardErrors = document.getElementById('card-errors');
+    if (cardErrors) cardErrors.textContent = '';
+
+    const customerName = (document.getElementById('customer-name')?.value || '').trim();
+    const customerEmail = (document.getElementById('customer-email')?.value || '').trim();
+
+    // Always collect a name + email before registering.
+    if (!customerName || !customerEmail) {
+        ui.showToast('Please enter your name and email to complete registration.');
+        const emptyEl = !customerName
+            ? document.getElementById('customer-name')
+            : document.getElementById('customer-email');
+        if (emptyEl) emptyEl.focus();
+        return;
+    }
+
+    submitBtn.disabled = true;
+    if (buttonText) buttonText.style.display = 'none';
+    if (spinner) spinner.style.display = 'inline';
+
+    try {
+        const count = await registerPlanEventsForCheckout(customerEmail);
+
+        // Ensure the plan is persisted, then email both the purchaser and the
+        // store a confirmation (with an "Open Plan & Pay" link). Non-fatal: the
+        // registration above stands even if email delivery fails.
+        try {
+            if (!state.session.id) {
+                console.log('[FREE-REG] No session id yet — saving plan to Airtable first.');
+                await api.saveSessionToAirtable();
+                console.log('[FREE-REG] Plan saved. session.id =', state.session.id);
+            }
+            const amountDue = getCheckoutAmountDue();
+            console.log('[FREE-REG] Sending confirmation emails. amountDue =', amountDue);
+            const emailResult = await sendCheckoutConfirmation({ customerEmail, customerName, amountDue, unpaid: true });
+            console.log('[FREE-REG] Confirmation email result:', emailResult);
+        } catch (emailErr) {
+            console.error('[FREE-REG] Confirmation email step failed (non-fatal):', emailErr.message);
+        }
+
+        // Swap the form for the success message.
+        const paymentForm = document.getElementById('payment-form');
+        if (paymentForm) paymentForm.style.display = 'none';
+        const summaryDetails = document.getElementById('checkout-summary-details');
+        if (summaryDetails) summaryDetails.style.display = 'none';
+        const depositSection = document.querySelector('.checkout-total-deposit-section');
+        if (depositSection) depositSection.style.display = 'none';
+        const termsEl = document.querySelector('.terms-and-conditions');
+        if (termsEl) termsEl.style.display = 'none';
+
+        const successMsg = document.getElementById('payment-success-message');
+        if (successMsg) {
+            const heading = count > 0 ? "You're registered!" : 'All set!';
+            const sub = count > 0
+                ? `You're on the list for ${count === 1 ? 'this event' : `${count} events`} in your plan.`
+                : 'Your details have been saved.';
+            successMsg.innerHTML = `
+                <div style="font-size: 64px; margin-bottom: 20px;">✅</div>
+                <h3 style="color: #28a745; margin-bottom: 15px;">${heading}</h3>
+                <p style="color: #6c757d;">${sub}</p>`;
+            successMsg.style.display = 'block';
+        }
+
+        log('Events', `Free registration completed for ${count} event(s).`);
+        setTimeout(() => { ui.hideCheckoutModal(); }, 4000);
+    } catch (err) {
+        log('Events', `Free registration error: ${err.message}`);
+        // card-errors lives in the hidden payment row here, so surface via toast.
+        ui.showToast(err.message || 'Could not complete registration. Please try again.');
+        submitBtn.disabled = false;
+        if (buttonText) buttonText.style.display = 'inline';
+        if (spinner) spinner.style.display = 'none';
+    }
+}
+
+/**
+ * Reads the amount still owed from the live checkout display. Mirrors the
+ * computation in updateCheckoutDisplay (modal.js): full total minus anything
+ * already paid. Returns 0 if the elements aren't present.
+ */
+function getCheckoutAmountDue() {
+    const totalEl = document.getElementById('full-total-price');
+    const finalTotal = totalEl ? parseFloat(totalEl.dataset.total || '0') : 0;
+    const amountReceived = (state.session.user && state.session.user.amountReceived) || 0;
+    const due = finalTotal - amountReceived;
+    return due > 0 ? due : 0;
+}
+
+/**
+ * Sends the checkout confirmation emails (purchaser + store owner) via the
+ * send-checkout-confirmation function. Non-fatal: a failure here is logged and
+ * surfaced to the console but does not block the registration that already
+ * happened. Requires a persisted session id so the server can resolve the plan.
+ */
+async function sendCheckoutConfirmation({ customerEmail, customerName, amountDue, unpaid = true }) {
+    if (!state.session.id) {
+        console.warn('[CHECKOUT-EMAIL] No session id — cannot send confirmation emails.');
+        return { ok: false, reason: 'no-session-id' };
+    }
+    const payload = { sessionId: state.session.id, customerEmail, customerName, amountDue, unpaid };
+    console.log('[CHECKOUT-EMAIL] POST /.netlify/functions/send-checkout-confirmation', payload);
+    try {
+        const res = await fetch('/.netlify/functions/send-checkout-confirmation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        console.log('[CHECKOUT-EMAIL] Response', res.status, data);
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        return data;
+    } catch (err) {
+        console.error('[CHECKOUT-EMAIL] Failed to send confirmation:', err.message);
+        return { ok: false, reason: err.message };
+    }
+}
+
+/**
+ * "Save plan for later" checkout: persists the plan (if needed), registers the
+ * visitor for the plan's events, and emails both the purchaser and the store a
+ * confirmation containing an "Open Plan & Pay" link — all without taking a
+ * payment. Doubles as a way to test that the confirmation emails fire.
+ */
+async function handleSavePlanForLater() {
+    const btn = document.getElementById('save-plan-checkout-btn');
+    const buttonText = btn && btn.querySelector('.button-text');
+    const spinner = btn && btn.querySelector('.spinner');
+
+    const customerName = (document.getElementById('customer-name')?.value || '').trim();
+    const customerEmail = (document.getElementById('customer-email')?.value || '').trim();
+
+    console.log('[SAVE-PLAN] Clicked.', { customerName, customerEmail, sessionId: state.session.id });
+
+    if (!customerName || !customerEmail) {
+        ui.showToast('Please enter your name and email to save your plan.');
+        const emptyEl = !customerName
+            ? document.getElementById('customer-name')
+            : document.getElementById('customer-email');
+        if (emptyEl) emptyEl.focus();
+        return;
+    }
+
+    if (btn) btn.disabled = true;
+    if (buttonText) buttonText.style.display = 'none';
+    if (spinner) spinner.style.display = 'inline';
+
+    try {
+        // The server resolves the plan (and its store) by session id, and the
+        // "Open Plan & Pay" email link is /?session=<id> — so the plan must be
+        // persisted to Airtable first.
+        if (!state.session.id) {
+            console.log('[SAVE-PLAN] No session id yet — saving plan to Airtable first.');
+            await api.saveSessionToAirtable();
+            console.log('[SAVE-PLAN] Plan saved. session.id =', state.session.id);
+        }
+
+        // Register for the plan's events (honors the "create an account" checkbox).
+        const count = await registerPlanEventsForCheckout(customerEmail);
+        console.log('[SAVE-PLAN] Registered for', count, 'event(s).');
+
+        const amountDue = getCheckoutAmountDue();
+        console.log('[SAVE-PLAN] amountDue =', amountDue);
+
+        const result = await sendCheckoutConfirmation({ customerEmail, customerName, amountDue, unpaid: true });
+        console.log('[SAVE-PLAN] Confirmation email result:', result);
+
+        // Swap the form for a success message (same pattern as free registration).
+        const paymentForm = document.getElementById('payment-form');
+        if (paymentForm) paymentForm.style.display = 'none';
+        const summaryDetails = document.getElementById('checkout-summary-details');
+        if (summaryDetails) summaryDetails.style.display = 'none';
+        const successMsg = document.getElementById('payment-success-message');
+        if (successMsg) {
+            successMsg.innerHTML = `
+                <div style="font-size: 64px; margin-bottom: 20px;">📧</div>
+                <h3 style="color: #28a745; margin-bottom: 15px;">Plan saved!</h3>
+                <p style="color: #6c757d;">We emailed <strong>${customerEmail}</strong> a link to open your plan and pay whenever you're ready.</p>`;
+            successMsg.style.display = 'block';
+        }
+        ui.showToast(`Check ${customerEmail} for a link to open your plan and pay.`);
+        setTimeout(() => { ui.hideCheckoutModal(); }, 4000);
+    } catch (err) {
+        console.error('[SAVE-PLAN] Error:', err);
+        ui.showToast(err.message || 'Could not save your plan. Please try again.');
+        if (btn) btn.disabled = false;
+        if (buttonText) buttonText.style.display = 'inline';
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
@@ -1211,18 +1683,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         });
     }
 
-    let scrollTimeout;
-    // Passive event listener for better scroll performance
-    window.addEventListener('scroll', () => {
-        if (scrollTimeout) return;
-        scrollTimeout = setTimeout(() => {
-            const buffer = 300;
-            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - buffer && !state.ui.isLoadingMore) {
-                loadMoreRecords(imageCache);
-            }
-            scrollTimeout = null;
-        }, 100);
-    }, { passive: true });
+    // Reliable catalog pagination via an IntersectionObserver sentinel plus a
+    // visible "Load more" fallback. Replaces the previous fragile scroll-math
+    // trigger that could miss when the first batch did not fill the viewport.
+    setupCatalogPagination(imageCache);
 
     // --- START CONSOLIDATED BUTTON GENERATION --
     const categoryFiltersRoot = document.getElementById('category-filters');
@@ -2293,10 +2757,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             ui.showCheckoutModal(shopSettings);
         } else if (rsvpBtn) {
             e.stopPropagation();
-            if (!state.session.user.isAuthenticated) {
-                showUserModal();
-                return;
-            }
             const cardEl = rsvpBtn.closest('.event-card') || rsvpBtn.closest('[data-record-id]');
             const recordId = cardEl?.dataset.recordId;
             if (!recordId) return;
@@ -2309,6 +2769,46 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const partyQtyInput = document.getElementById('rsvp-quantity-input');
             const partyQty = partyQtyInput ? (parseInt(partyQtyInput.value, 10) || 1) : 1;
 
+            let record = state.records.all.find(r => r.id === recordId);
+
+            // --- Guest path: no sign-in wall. Hold the RSVP locally and add the
+            // event to the plan; it is committed to Airtable when the guest creates
+            // an account or signs in at checkout (see auth.js flush-on-login). ---
+            if (!state.session.user.isAuthenticated) {
+                const tempRsvps = getTempRsvps();
+                if (wasActive) {
+                    delete tempRsvps[recordId];
+                    setTempRsvps(tempRsvps);
+                    applyRsvpButtonState(rsvpBtn, null);
+                    ui.showToast('RSVP removed.');
+                } else {
+                    tempRsvps[recordId] = { rsvpType, quantity: partyQty };
+                    setTempRsvps(tempRsvps);
+                    applyRsvpButtonState(rsvpBtn, rsvpType);
+
+                    if (rsvpType === 'yes' || rsvpType === 'maybe') {
+                        // Resolve the record if this is a deep-linked event not yet in memory.
+                        if (!record) {
+                            try {
+                                const fetched = await api.fetchGhostItems([recordId]);
+                                if (fetched && fetched.length) record = fetched[0];
+                            } catch (err) {
+                                log('Events', `Guest RSVP could not resolve event ${recordId}: ${err.message}`);
+                            }
+                        }
+                        if (record) await autoAddEventToPlan(record, partyQty);
+                    }
+
+                    const labels = { yes: "You're going!", maybe: "Marked as maybe.", no: "Marked as can't go." };
+                    const confirmMsg = labels[rsvpType] || 'RSVP updated!';
+                    ui.showToast(rsvpType === 'no'
+                        ? confirmMsg
+                        : `${confirmMsg} Sign in at checkout to save it to your account.`);
+                }
+                return;
+            }
+
+            // --- Authenticated path: commit to Airtable / Postgres. ---
             rsvpBtn.disabled = true;
             const originalText = rsvpBtn.innerHTML;
             rsvpBtn.textContent = 'Saving...';
@@ -2324,10 +2824,15 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     // Persist the party size alongside the response (best-effort).
                     await api.saveEventRsvpQuantity(recordId, rsvpType, partyQty);
                 }
-                
+
                 if (updatedRecord) {
                     const recordIndex = state.records.all.findIndex(r => r.id === recordId);
                     if (recordIndex > -1) state.records.all[recordIndex] = updatedRecord;
+
+                    // RSVPing yes / maybe also adds the event to the plan.
+                    if (!wasActive && (rsvpType === 'yes' || rsvpType === 'maybe')) {
+                        await autoAddEventToPlan(updatedRecord, partyQty);
+                    }
 
                     if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
                         ui.showDetailModal(updatedRecord);
@@ -3376,6 +3881,17 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     
     ui.setupPresentationEventListeners();
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
+
+    // "Save plan for later" — persist the cart and email a pay-later link to the
+    // purchaser and the store, with no payment taken.
+    safeAddEventListener('save-plan-checkout-btn', 'click', handleSavePlanForLater);
+
+    // "Pay Direct" (P2P) options: gate on name/email and register plan events.
+    // Capture phase so a missing name/email can block the external payment link.
+    const p2pOptionsContainer = document.getElementById('checkout-p2p-options');
+    if (p2pOptionsContainer) {
+        p2pOptionsContainer.addEventListener('click', handleP2PCheckoutClick, true);
+    }
 
     setupItineraryEventListeners();
 

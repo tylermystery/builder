@@ -678,14 +678,22 @@ export async function applyFiltersAndSort(imageCache) {
         const initialNonGroupings = nonGroupingsInResults.slice(0, RECORDS_PER_LOAD);
         const initialRecords = [...allGroupings, ...initialNonGroupings];
 
+        // Block pagination while the initial batch renders so the sentinel
+        // observer can't double-load before the counter is set.
+        state.ui.isLoadingMore = true;
         ui.renderRecords(initialRecords, imageCache, false).then(() => {
             state.ui.recordsCurrentlyDisplayed = allGroupings.length + initialNonGroupings.length;
+            state.ui.isLoadingMore = false;
+            window.dispatchEvent(new CustomEvent('catalog:rendered'));
         });
     } else {
         const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
 
+        state.ui.isLoadingMore = true;
         ui.renderRecords(initialRecords, imageCache, false).then(() => {
             state.ui.recordsCurrentlyDisplayed = initialRecords.length;
+            state.ui.isLoadingMore = false;
+            window.dispatchEvent(new CustomEvent('catalog:rendered'));
         });
     }
 

@@ -210,14 +210,22 @@ exports.handler = async (event) => {
     };
 
     const baseUrl = SITE_URL || URL;
-    // Shareable "WTF link" back to the plan's presentation view, built from the
-    // event's linked session. Included in the calendar entries so invitees can
-    // open the plan and RSVP from their calendar.
-    const linkedSessionId = Array.isArray(eventRecord.fields.LinkedSession)
-      ? eventRecord.fields.LinkedSession[0]
+    // Shareable link back to the published event's detail modal, shown over the
+    // catalog. Included in the calendar entries so invitees can open the event
+    // and RSVP from their calendar. Built as a pretty /item/<slug> URL (the
+    // public detail-modal view); the plan's "present" view is reserved for
+    // collaborators, so it is no longer linked here. The event's store rides
+    // along as ?shopId so the correct catalog loads for a fresh visitor.
+    const eventSlug = eventData.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .substring(0, 60);
+    const eventStoreId = Array.isArray(eventRecord.fields.Stores) && eventRecord.fields.Stores.length
+      ? eventRecord.fields.Stores[0]
       : null;
-    eventData.wtfLink = linkedSessionId ? `${baseUrl}/?session=${linkedSessionId}&view=present` : '';
-    const eventLink = `${baseUrl}/?openItem=${encodeURIComponent(eventData.name)}`;
+    eventData.wtfLink = `${baseUrl}/item/${eventSlug ? `${eventSlug}-` : ''}${eventRecordId}${eventStoreId ? `?shopId=${eventStoreId}` : ''}`;
+    const eventLink = eventData.wtfLink;
     const rsvpLabel = rsvpType === 'yes' ? "You're Going!" : "You're a Maybe!";
     const rsvpSubLabel = rsvpType === 'yes'
       ? "We're excited to have you join us."

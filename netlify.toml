@@ -19,21 +19,26 @@
 [functions."airtable-backup"]
   schedule = "0 */6 * * *"
 
-# Cache headers for static assets - improves repeat visit performance
+# Cache headers for static assets.
+# The app ships UN-hashed JS/CSS filenames (events.js, main.js, …) that change on
+# every deploy, so they must be revalidated on each load — otherwise the browser
+# serves a stale copy for up to max-age and users run code one deploy behind.
+# "max-age=0, must-revalidate" keeps requests cheap (304 via ETag when unchanged)
+# while guaranteeing the latest code is always executed.
 [[headers]]
   for = "/*.js"
   [headers.values]
-    Cache-Control = "public, max-age=3600, stale-while-revalidate=86400"
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 [[headers]]
   for = "/css/*"
   [headers.values]
-    Cache-Control = "public, max-age=3600, stale-while-revalidate=86400"
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 [[headers]]
   for = "/*.css"
   [headers.values]
-    Cache-Control = "public, max-age=3600, stale-while-revalidate=86400"
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 # Allow remote images from Cloudinary for Netlify Image CDN
 [images]

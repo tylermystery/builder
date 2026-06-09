@@ -6,7 +6,7 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage, scoreToAdjective } from '../config.js';
 import { getCurrentUser } from '../chat.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration, formatEventTimeRange } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration, formatEventTimeRange, getTempRsvps } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getDayStatus, AVAILABILITY_STATUS, logBusyTimeSummary, describeSelectedAvailability } from '../availability.js';
 import { showReceiptModal } from './receipt.js';
@@ -386,6 +386,7 @@ let currentProcessingFee = 0; // To store the current fee
 let currentShopSettings = {};
 let currentChipInAmount = 0; // Chip-in community contribution amount
 let currentCheckoutScope = null; // { mode: 'plan' | 'item', itemId, itemName, quantity, price, record, highlightChipIn }
+let currentCheckoutIsFree = false; // True when the plan total is $0 — checkout becomes a no-payment registration
 
 // --- Promotion / discount checkout state -----------------------------------
 // The server is authoritative for the discount: /api/promotions/quote returns a
@@ -968,7 +969,9 @@ function renderCheckoutP2POptions(paymentOptions, amount, itemName) {
     if (!p2pContainer) return;
 
     p2pContainer.innerHTML = '';
-
+    // New checkout session for these options — allow registration to run once
+    // when the visitor proceeds with a direct-pay option (see events.js).
+    delete p2pContainer.dataset.registered;
     if (!paymentOptions || Object.keys(paymentOptions).length === 0) {
         return;
     }
@@ -1342,12 +1345,46 @@ async function loadCrowdfundProgress(itemRecordId, goalAmount) {
 }
 
 /**
+ * Returns the currently selected checkout payment method ('stripe' or 'p2p').
+ * Defaults to 'stripe' when no toggle/active tab is present.
+ */
+function getActivePaymentMethod() {
+    const activeTab = document.querySelector('#checkout-payment-method-toggle .payment-method-tab.active');
+    return activeTab ? activeTab.dataset.method : 'stripe';
+}
+
+/**
+ * Applies visibility for the chosen payment method WITHOUT hiding the name/email
+ * (and guest account) inputs — those are always collected, including for the
+ * "Pay Direct" (P2P) option. Only the pay mechanism toggles: Stripe shows the
+ * card entry + "Pay Now"; P2P hides those and shows the direct-pay options.
+ * @param {'stripe'|'p2p'} method
+ */
+function applyPaymentMethodVisibility(method) {
+    const paymentForm = document.getElementById('payment-form');
+    const paymentDetailsRow = document.getElementById('checkout-payment-details-row');
+    const submitBtn = document.getElementById('payment-submit-btn');
+    const p2pSection = document.getElementById('checkout-p2p-section');
+
+    // Name/email/account row live inside the form and must stay visible for both.
+    if (paymentForm) paymentForm.style.display = 'block';
+
+    if (method === 'p2p') {
+        if (paymentDetailsRow) paymentDetailsRow.style.display = 'none';
+        if (submitBtn) submitBtn.style.display = 'none';
+        if (p2pSection) p2pSection.style.display = 'block';
+    } else {
+        if (paymentDetailsRow) paymentDetailsRow.style.display = '';
+        if (submitBtn) submitBtn.style.display = '';
+        if (p2pSection) p2pSection.style.display = 'none';
+    }
+}
+
+/**
  * Sets up the payment method toggle (Stripe vs P2P) in the checkout modal.
  */
 function setupPaymentMethodToggle() {
     const toggleContainer = document.getElementById('checkout-payment-method-toggle');
-    const paymentForm = document.getElementById('payment-form');
-    const p2pSection = document.getElementById('checkout-p2p-section');
 
     if (!toggleContainer) return;
 
@@ -1360,15 +1397,7 @@ function setupPaymentMethodToggle() {
         newTab.addEventListener('click', () => {
             toggleContainer.querySelectorAll('.payment-method-tab').forEach(t => t.classList.remove('active'));
             newTab.classList.add('active');
-
-            const method = newTab.dataset.method;
-            if (method === 'stripe') {
-                if (paymentForm) paymentForm.style.display = 'block';
-                if (p2pSection) p2pSection.style.display = 'none';
-            } else if (method === 'p2p') {
-                if (paymentForm) paymentForm.style.display = 'none';
-                if (p2pSection) p2pSection.style.display = 'block';
-            }
+            applyPaymentMethodVisibility(newTab.dataset.method);
         });
     });
 }
@@ -1591,6 +1620,46 @@ async function updateCheckoutDisplay() {
     const processingFeeEl = document.getElementById('processing-fee-price');
     const finalChargeEl = document.getElementById('final-charge-price');
     const paymentForm = document.getElementById('payment-form'); // Get form
+    const paymentDetailsRow = document.getElementById('checkout-payment-details-row');
+
+    // --- FREE REGISTRATION MODE ---
+    // A plan whose total is $0 (free events, nothing previously paid) should still
+    // be checkout-able: the visitor provides name + email to register for the
+    // events included in their plan. There is nothing to charge, so the Stripe
+    // payment UI is hidden and the form's submit becomes a "Complete Registration"
+    // action (handled in events.js handlePaymentFormSubmit -> handleFreeRegistration).
+    // This is distinct from "receipt mode" below, which is for a plan already paid
+    // off (amountReceived > 0).
+    const isFreeRegistration = !isItemMode && amountReceived === 0 && finalTotal <= 0.009 && finalBaseAmount <= 0.009;
+    currentCheckoutIsFree = isFreeRegistration;
+    if (isFreeRegistration) {
+        log('Modal', 'Free-registration mode: $0 plan, collecting name/email only.');
+        if (paymentForm) paymentForm.style.display = 'block';
+        // Hide everything payment-related; keep name/email/account inputs.
+        if (paymentDetailsRow) paymentDetailsRow.style.display = 'none';
+        if (tipRow) tipRow.style.display = 'none';
+        const paymentMethodToggle = document.getElementById('checkout-payment-method-toggle');
+        if (paymentMethodToggle) paymentMethodToggle.style.display = 'none';
+        const p2pSection = document.getElementById('checkout-p2p-section');
+        if (p2pSection) p2pSection.style.display = 'none';
+        const paymentChoiceContainer = document.getElementById('payment-choice-container');
+        if (paymentChoiceContainer) paymentChoiceContainer.style.display = 'none';
+        const depositLabel = document.getElementById('deposit-label');
+        if (depositLabel) depositLabel.textContent = 'Amount Due:';
+        const submitBtn = document.getElementById('payment-submit-btn');
+        if (submitBtn) {
+            const btnText = submitBtn.querySelector('.button-text');
+            if (btnText) btnText.textContent = 'Complete Registration';
+        }
+        return; // Nothing to charge — skip the payment intent entirely.
+    }
+    // Leaving free mode (e.g. a tip / chip-in was added): restore the payment UI.
+    if (paymentDetailsRow) paymentDetailsRow.style.display = '';
+    if (!isItemMode) {
+        const submitBtn = document.getElementById('payment-submit-btn');
+        const btnText = submitBtn && submitBtn.querySelector('.button-text');
+        if (btnText && btnText.textContent === 'Complete Registration') btnText.textContent = 'Pay Now';
+    }
 
     // --- NEW LOGIC FOR "RECEIPT" MODE ---
     if (isFullyPaid && finalBaseAmount <= 0) {
@@ -1625,8 +1694,11 @@ async function updateCheckoutDisplay() {
     }
     // --- END DONATION-ONLY MODE ---
 
-    // If we're here, we need to pay. Show the form.
+    // If we're here, we need to pay. Show the form — but respect the currently
+    // selected payment method so re-renders (e.g. a tip change) don't snap a
+    // "Pay Direct" view back to the Stripe card entry.
     if (paymentForm) paymentForm.style.display = 'block';
+    applyPaymentMethodVisibility(getActivePaymentMethod());
 
     // Re-show payment method toggle if P2P options exist (may have been hidden in donation-only pending state)
     if (isItemMode && currentCheckoutScope && currentCheckoutScope.highlightChipIn) {
@@ -6176,12 +6248,18 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         // Parse session data to get locked items (components) and ideas
         let lockedInHistory = [];
         let ideasHistory = [];
+        // Custom items (ai-*, manual-*, solution-*) live only inside the session's
+        // saved data, not in Airtable. Capture them here so the components carousel
+        // can render them even if they haven't been restored into state.records.all
+        // yet (avoids a race where custom items appear only on some page loads).
+        let sessionCustomRecords = {};
         if (linkedSession.fields['Items with Variations']) {
             try {
                 const sessionData = JSON.parse(linkedSession.fields['Items with Variations']);
 
                 const lockedInItems = sessionData.lockedInItems || {};
                 const ideasItems = sessionData.ideasItems || {};
+                sessionCustomRecords = sessionData.aiRecords || {};
 
                 // Convert locked items to history format
                 lockedInHistory = Object.entries(lockedInItems).map(([id, itemInfo]) => ({
@@ -6248,9 +6326,26 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             const allComponentRecords = [];
             const componentHistoryMap = new Map();
 
+            // Resolve a component id to a record. Real Airtable items come from
+            // state (live or archived); custom items (ai-*, manual-*, solution-*)
+            // fall back to the records saved inside the session's own data so they
+            // render consistently regardless of session-restore timing.
+            const resolveComponentRecord = (componentId) => {
+                let resolved = recordMap.get(componentId) || (archiveMap && archiveMap.get(componentId));
+                if (!resolved) {
+                    const saved = sessionCustomRecords[componentId];
+                    if (saved && saved.fields) {
+                        resolved = { id: saved.id || componentId, fields: saved.fields };
+                        if (saved.isManual) resolved.isManual = true;
+                        if (saved.isSolution) resolved.isSolution = true;
+                    }
+                }
+                return resolved;
+            };
+
             // Process locked items
             for (const componentId of lockedComponentIds) {
-                const componentRecord = recordMap.get(componentId) || (archiveMap && archiveMap.get(componentId));
+                const componentRecord = resolveComponentRecord(componentId);
                 if (componentRecord) {
                     const history = lockedHistoryMap.get(componentId);
                     allComponentRecords.push({
@@ -6264,7 +6359,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
             // Process idea items
             for (const ideaId of ideaComponentIds) {
-                const ideaRecord = recordMap.get(ideaId) || (archiveMap && archiveMap.get(ideaId));
+                const ideaRecord = resolveComponentRecord(ideaId);
                 if (ideaRecord) {
                     const history = ideasHistoryMap.get(ideaId);
                     allComponentRecords.push({
@@ -10125,9 +10220,22 @@ function setupEventRsvpActionZone(record, linkedSession) {
     const rsvpYes = record.fields.RSVPs || [];
     const rsvpMaybe = record.fields.RSVPMaybe || [];
     const rsvpNo = record.fields.RSVPNo || [];
-    const hasYes = rsvpYes.includes(userId);
-    const hasMaybe = rsvpMaybe.includes(userId);
-    const hasNo = rsvpNo.includes(userId);
+    let hasYes = rsvpYes.includes(userId);
+    let hasMaybe = rsvpMaybe.includes(userId);
+    let hasNo = rsvpNo.includes(userId);
+
+    // Guests have no user id in the Airtable lists, so reflect their pending RSVP
+    // (held in localStorage until they sign in at checkout) as the active state.
+    let guestPartyQty = null;
+    if (!state.session.user.isAuthenticated) {
+        const pending = getTempRsvps()[record.id];
+        if (pending) {
+            hasYes = pending.rsvpType === 'yes';
+            hasMaybe = pending.rsvpType === 'maybe';
+            hasNo = pending.rsvpType === 'no';
+            guestPartyQty = pending.quantity;
+        }
+    }
 
     // Hide the item-quantity stepper for events (party size replaces it).
     const qtySel = document.getElementById('modal-quantity-selector');
@@ -10222,6 +10330,8 @@ function setupEventRsvpActionZone(record, linkedSession) {
 
     // Party-size stepper wiring (always clamped to >= 1).
     const qtyInput = block.querySelector('#rsvp-quantity-input');
+    // Prefill a guest's pending party size (signed-in users are filled below from the server).
+    if (guestPartyQty && qtyInput) qtyInput.value = String(guestPartyQty);
     const minusBtn = block.querySelector('.minus');
     const plusBtn = block.querySelector('.plus');
     const clampQty = () => {
@@ -10348,6 +10458,23 @@ export async function showCheckoutModal(shopSettings, scope = null) {
 
     if (!checkoutModalOverlay) return;
 
+    // Guest "create an account / sign in" option vs. signed-in prefill.
+    const accountRow = document.getElementById('checkout-account-row');
+    const accountCheckbox = document.getElementById('checkout-create-account');
+    const nameInput = document.getElementById('customer-name');
+    const emailInput = document.getElementById('customer-email');
+    const isAuthed = state.session.user.isAuthenticated;
+    if (accountCheckbox) accountCheckbox.checked = false;
+    if (accountRow) accountRow.style.display = isAuthed ? 'none' : '';
+    if (isAuthed) {
+        if (nameInput && !nameInput.value) nameInput.value = state.session.user.name || '';
+        if (emailInput && !emailInput.value) emailInput.value = state.session.user.email || '';
+    } else {
+        // Returning guests recognize their email; prefill from the last sign-in attempt.
+        const lastEmail = localStorage.getItem('lastSignInEmail');
+        if (emailInput && !emailInput.value && lastEmail) emailInput.value = lastEmail;
+    }
+
     const handleOverlayClick = (e) => {
         if (e.target === checkoutModalOverlay) {
             hideCheckoutModal();
@@ -10362,6 +10489,16 @@ export async function showCheckoutModal(shopSettings, scope = null) {
     if (checkoutCloseBtn) checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
 
     // --- 1. Calculate Base Total ---\
+    // Reset any leftover "success/receipt" state from a previous checkout in this
+    // session (the success path hides these and, for a free registration, the page
+    // is not reloaded — so reopening the modal must restore the form view).
+    const successMsgEl = document.getElementById('payment-success-message');
+    if (successMsgEl) successMsgEl.style.display = 'none';
+    if (summaryDetailsEl) summaryDetailsEl.style.display = '';
+    const depositSectionEl = document.querySelector('.checkout-total-deposit-section');
+    if (depositSectionEl) depositSectionEl.style.display = '';
+    const termsSectionEl = document.querySelector('.terms-and-conditions');
+    if (termsSectionEl) termsSectionEl.style.display = '';
     summaryDetailsEl.innerHTML = '';
     tipAmountInput.value = '';
     let finalTotal = 0; // This is the plan subtotal
@@ -10787,6 +10924,7 @@ export function hideCheckoutModal() {
         currentChipInAmount = 0;
         currentCheckoutScope = null;
         currentCheckoutItemQty = 0;
+        currentCheckoutIsFree = false;
         currentPaymentType = 'card'; // Reset to default
         suppressPaymentTypeChange = false; // Clear any pending suppression
         // Reset quantity toggle and crowdfund progress
@@ -10825,4 +10963,10 @@ export function getCheckoutChipInContext() {
         scope: currentCheckoutScope,
         itemQty: currentCheckoutItemQty
     };
+}
+
+// True when the checkout is a $0 plan registration (no payment). events.js reads
+// this on form submit to branch into the no-payment registration flow.
+export function getCheckoutIsFreeRegistration() {
+    return currentCheckoutIsFree;
 }
