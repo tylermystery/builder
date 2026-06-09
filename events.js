@@ -767,6 +767,23 @@ async function handleFreeRegistration(submitBtn, buttonText, spinner) {
     try {
         const count = await registerPlanEventsForCheckout(customerEmail);
 
+        // Ensure the plan is persisted, then email both the purchaser and the
+        // store a confirmation (with an "Open Plan & Pay" link). Non-fatal: the
+        // registration above stands even if email delivery fails.
+        try {
+            if (!state.session.id) {
+                console.log('[FREE-REG] No session id yet — saving plan to Airtable first.');
+                await api.saveSessionToAirtable();
+                console.log('[FREE-REG] Plan saved. session.id =', state.session.id);
+            }
+            const amountDue = getCheckoutAmountDue();
+            console.log('[FREE-REG] Sending confirmation emails. amountDue =', amountDue);
+            const emailResult = await sendCheckoutConfirmation({ customerEmail, customerName, amountDue, unpaid: true });
+            console.log('[FREE-REG] Confirmation email result:', emailResult);
+        } catch (emailErr) {
+            console.error('[FREE-REG] Confirmation email step failed (non-fatal):', emailErr.message);
+        }
+
         // Swap the form for the success message.
         const paymentForm = document.getElementById('payment-form');
         if (paymentForm) paymentForm.style.display = 'none';
@@ -797,6 +814,121 @@ async function handleFreeRegistration(submitBtn, buttonText, spinner) {
         // card-errors lives in the hidden payment row here, so surface via toast.
         ui.showToast(err.message || 'Could not complete registration. Please try again.');
         submitBtn.disabled = false;
+        if (buttonText) buttonText.style.display = 'inline';
+        if (spinner) spinner.style.display = 'none';
+    }
+}
+
+/**
+ * Reads the amount still owed from the live checkout display. Mirrors the
+ * computation in updateCheckoutDisplay (modal.js): full total minus anything
+ * already paid. Returns 0 if the elements aren't present.
+ */
+function getCheckoutAmountDue() {
+    const totalEl = document.getElementById('full-total-price');
+    const finalTotal = totalEl ? parseFloat(totalEl.dataset.total || '0') : 0;
+    const amountReceived = (state.session.user && state.session.user.amountReceived) || 0;
+    const due = finalTotal - amountReceived;
+    return due > 0 ? due : 0;
+}
+
+/**
+ * Sends the checkout confirmation emails (purchaser + store owner) via the
+ * send-checkout-confirmation function. Non-fatal: a failure here is logged and
+ * surfaced to the console but does not block the registration that already
+ * happened. Requires a persisted session id so the server can resolve the plan.
+ */
+async function sendCheckoutConfirmation({ customerEmail, customerName, amountDue, unpaid = true }) {
+    if (!state.session.id) {
+        console.warn('[CHECKOUT-EMAIL] No session id — cannot send confirmation emails.');
+        return { ok: false, reason: 'no-session-id' };
+    }
+    const payload = { sessionId: state.session.id, customerEmail, customerName, amountDue, unpaid };
+    console.log('[CHECKOUT-EMAIL] POST /.netlify/functions/send-checkout-confirmation', payload);
+    try {
+        const res = await fetch('/.netlify/functions/send-checkout-confirmation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        console.log('[CHECKOUT-EMAIL] Response', res.status, data);
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        return data;
+    } catch (err) {
+        console.error('[CHECKOUT-EMAIL] Failed to send confirmation:', err.message);
+        return { ok: false, reason: err.message };
+    }
+}
+
+/**
+ * "Save plan for later" checkout: persists the plan (if needed), registers the
+ * visitor for the plan's events, and emails both the purchaser and the store a
+ * confirmation containing an "Open Plan & Pay" link — all without taking a
+ * payment. Doubles as a way to test that the confirmation emails fire.
+ */
+async function handleSavePlanForLater() {
+    const btn = document.getElementById('save-plan-checkout-btn');
+    const buttonText = btn && btn.querySelector('.button-text');
+    const spinner = btn && btn.querySelector('.spinner');
+
+    const customerName = (document.getElementById('customer-name')?.value || '').trim();
+    const customerEmail = (document.getElementById('customer-email')?.value || '').trim();
+
+    console.log('[SAVE-PLAN] Clicked.', { customerName, customerEmail, sessionId: state.session.id });
+
+    if (!customerName || !customerEmail) {
+        ui.showToast('Please enter your name and email to save your plan.');
+        const emptyEl = !customerName
+            ? document.getElementById('customer-name')
+            : document.getElementById('customer-email');
+        if (emptyEl) emptyEl.focus();
+        return;
+    }
+
+    if (btn) btn.disabled = true;
+    if (buttonText) buttonText.style.display = 'none';
+    if (spinner) spinner.style.display = 'inline';
+
+    try {
+        // The server resolves the plan (and its store) by session id, and the
+        // "Open Plan & Pay" email link is /?session=<id> — so the plan must be
+        // persisted to Airtable first.
+        if (!state.session.id) {
+            console.log('[SAVE-PLAN] No session id yet — saving plan to Airtable first.');
+            await api.saveSessionToAirtable();
+            console.log('[SAVE-PLAN] Plan saved. session.id =', state.session.id);
+        }
+
+        // Register for the plan's events (honors the "create an account" checkbox).
+        const count = await registerPlanEventsForCheckout(customerEmail);
+        console.log('[SAVE-PLAN] Registered for', count, 'event(s).');
+
+        const amountDue = getCheckoutAmountDue();
+        console.log('[SAVE-PLAN] amountDue =', amountDue);
+
+        const result = await sendCheckoutConfirmation({ customerEmail, customerName, amountDue, unpaid: true });
+        console.log('[SAVE-PLAN] Confirmation email result:', result);
+
+        // Swap the form for a success message (same pattern as free registration).
+        const paymentForm = document.getElementById('payment-form');
+        if (paymentForm) paymentForm.style.display = 'none';
+        const summaryDetails = document.getElementById('checkout-summary-details');
+        if (summaryDetails) summaryDetails.style.display = 'none';
+        const successMsg = document.getElementById('payment-success-message');
+        if (successMsg) {
+            successMsg.innerHTML = `
+                <div style="font-size: 64px; margin-bottom: 20px;">📧</div>
+                <h3 style="color: #28a745; margin-bottom: 15px;">Plan saved!</h3>
+                <p style="color: #6c757d;">We emailed <strong>${customerEmail}</strong> a link to open your plan and pay whenever you're ready.</p>`;
+            successMsg.style.display = 'block';
+        }
+        ui.showToast(`Check ${customerEmail} for a link to open your plan and pay.`);
+        setTimeout(() => { ui.hideCheckoutModal(); }, 4000);
+    } catch (err) {
+        console.error('[SAVE-PLAN] Error:', err);
+        ui.showToast(err.message || 'Could not save your plan. Please try again.');
+        if (btn) btn.disabled = false;
         if (buttonText) buttonText.style.display = 'inline';
         if (spinner) spinner.style.display = 'none';
     }
@@ -3749,6 +3881,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     
     ui.setupPresentationEventListeners();
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
+
+    // "Save plan for later" — persist the cart and email a pay-later link to the
+    // purchaser and the store, with no payment taken.
+    safeAddEventListener('save-plan-checkout-btn', 'click', handleSavePlanForLater);
 
     // "Pay Direct" (P2P) options: gate on name/email and register plan events.
     // Capture phase so a missing name/email can block the external payment link.
