@@ -1,7 +1,7 @@
 // Optimized Service Worker for cache management
 // This ensures users always see the latest version of the site
 
-const CACHE_VERSION = 'v-1780601400000'; // Auto-updated during build (bumped to purge stale JS/CSS caches)
+const CACHE_VERSION = 'v-1780780000000'; // Bumped to purge stale JS/CSS caches (fixes stale api.js SyntaxError at line 479)
 const STATIC_CACHE = 'wtfun-static-' + CACHE_VERSION;
 const DYNAMIC_CACHE = 'wtfun-dynamic-' + CACHE_VERSION;
 const IMAGE_CACHE = 'wtfun-images-' + CACHE_VERSION;
