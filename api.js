@@ -588,13 +588,23 @@ export async function loadSessionFromAirtable(sessionId) {
             log('API', `Unauthenticated user. Access level (isOwned): false`);
         }
 
-        state.session.user.amountReceived = record.fields['Amount Received'] || 0;
         try {
             state.session.user.paymentHistory = JSON.parse(record.fields.PaymentHistory || '[]');
         } catch (e) {
             state.session.user.paymentHistory = [];
              console.warn(`Could not parse PaymentHistory for session ${sessionId}:`, record.fields.PaymentHistory);
         }
+        // Derive the amount received from the payment history rather than trusting
+        // the stored "Amount Received" field. Every writer (Stripe webhook,
+        // direct-payment, updatePaymentHistory) keeps the field equal to the sum
+        // of history entries, so this matches existing behaviour — but it also
+        // means a payment added/edited directly in Airtable's PaymentHistory now
+        // correctly affects the remaining balance shown on the plan. Fall back to
+        // the stored field only when there is no usable history.
+        const history = state.session.user.paymentHistory;
+        state.session.user.amountReceived = Array.isArray(history) && history.length
+            ? history.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+            : (record.fields['Amount Received'] || 0);
         log('API', `Loaded Amount Received: ${state.session.user.amountReceived}`);
 
         const sessionDataString = record.fields['Items with Variations'];

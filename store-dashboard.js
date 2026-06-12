@@ -28,13 +28,21 @@ async function fetchItemsForProfiling() {
 }
 
 async function fetchStoreSessions(storeRecordId) {
-    const formula = `({Store} = '${storeRecordId}')`;
-    const url = `https://api.airtable.com/v0/${BASE_ID}/Sessions?filterByFormula=${encodeURIComponent(formula)}&sort%5B0%5D%5Bfield%5D=Created&sort%5B0%5D%5Bdirection%5D=desc&maxRecords=50`;
+    // Sessions link to a store through the multi-record "Stores" field. Airtable
+    // formulas can't reliably match a linked field by record id (the formula sees
+    // the linked record's primary-field text, not its id), which is why the old
+    // `({Store} = 'rec…')` filter always came back empty. Instead we pull the most
+    // recent sessions and filter client-side on the Stores link array. This is a
+    // best-effort convenience list for the autocomplete only — the store owner can
+    // always type/paste any session id by hand.
+    const url = `https://api.airtable.com/v0/${BASE_ID}/Sessions?pageSize=100&maxRecords=100`;
     try {
         const res = await fetch(url, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
         if (!res.ok) return [];
         const data = await res.json();
-        return data.records || [];
+        return (data.records || []).filter(r =>
+            Array.isArray(r.fields.Stores) && r.fields.Stores.includes(storeRecordId)
+        );
     } catch (e) {
         console.error('Failed to fetch sessions:', e);
         return [];
@@ -43,7 +51,8 @@ async function fetchStoreSessions(storeRecordId) {
 
 function setupDirectPayment(storeRecord) {
     const section = document.getElementById('direct-payment-section');
-    const sessionSelect = document.getElementById('dp-session-select');
+    const sessionInput = document.getElementById('dp-session-id');
+    const sessionList = document.getElementById('dp-session-list');
     const submitBtn = document.getElementById('dp-submit-btn');
     const statusEl = document.getElementById('dp-status');
     const confirmOverlay = document.getElementById('dp-confirm-overlay');
@@ -51,35 +60,44 @@ function setupDirectPayment(storeRecord) {
     const confirmOk = document.getElementById('dp-confirm-ok');
     const confirmCancel = document.getElementById('dp-confirm-cancel');
 
-    if (!section || !sessionSelect || !submitBtn) return;
+    if (!section || !sessionInput || !submitBtn) return;
 
+    section.style.display = 'block';
+
+    // Populate the autocomplete with this store's recent sessions, if any can be
+    // resolved. Failure here is non-fatal: manual entry still works without it.
     fetchStoreSessions(storeRecord.id).then(sessions => {
         currentStoreSessions = sessions;
+        if (!sessionList) return;
+        sessionList.innerHTML = '';
         sessions.forEach(s => {
             const name = s.fields.Name || 'Untitled';
             const received = s.fields['Amount Received'] || 0;
             const opt = document.createElement('option');
             opt.value = s.id;
-            opt.textContent = `${name} ($${received.toFixed(2)} received)`;
-            sessionSelect.appendChild(opt);
+            opt.label = `${name} ($${received.toFixed(2)} received)`;
+            sessionList.appendChild(opt);
         });
-        section.style.display = 'block';
     });
 
     submitBtn.addEventListener('click', () => {
-        const sessionId = sessionSelect.value;
+        const sessionId = sessionInput.value.trim();
         const amount = parseFloat(document.getElementById('dp-amount').value);
         const method = document.getElementById('dp-method').value;
 
-        if (!sessionId) { setStatus('Please select a session.', 'error'); return; }
+        if (!sessionId) { setStatus('Please enter a session ID.', 'error'); return; }
         if (!amount || amount <= 0) { setStatus('Please enter a valid amount.', 'error'); return; }
 
         const methodLabels = { 'direct-cash': 'Cash', 'direct-check': 'Check', 'direct-etransfer': 'E-Transfer', 'direct-other': 'Other' };
         const session = currentStoreSessions.find(s => s.id === sessionId);
         const sessionName = session?.fields?.Name || 'this session';
-        const currentTotal = session?.fields?.['Amount Received'] || 0;
+        // Only show a projected running total when we actually know the current
+        // amount received for the session (i.e. it came from the suggestion list).
+        const runningTotalLine = session
+            ? `<br><small style="color: #888;">New running total: $${((session.fields['Amount Received'] || 0) + amount).toFixed(2)}</small>`
+            : '';
 
-        confirmText.innerHTML = `Record a <strong>${methodLabels[method]}</strong> payment of <strong>$${amount.toFixed(2)}</strong> for <strong>${sessionName}</strong>?<br><small style="color: #888;">New running total: $${(currentTotal + amount).toFixed(2)}</small>`;
+        confirmText.innerHTML = `Record a <strong>${methodLabels[method]}</strong> payment of <strong>$${amount.toFixed(2)}</strong> for <strong>${sessionName}</strong>?${runningTotalLine}`;
         confirmOverlay.classList.add('active');
 
         confirmOk.onclick = async () => {
@@ -133,11 +151,16 @@ function setupDirectPayment(storeRecord) {
             document.getElementById('dp-amount').value = '';
             document.getElementById('dp-note').value = '';
 
-            const opt = sessionSelect.querySelector(`option[value="${sessionId}"]`);
-            if (opt) {
-                const session = currentStoreSessions.find(s => s.id === sessionId);
-                const name = session?.fields?.Name || 'Untitled';
-                opt.textContent = `${name} ($${result.newTotal.toFixed(2)} received)`;
+            // Keep the cached session + its autocomplete label in sync so a second
+            // payment for the same session shows the correct running total.
+            const session = currentStoreSessions.find(s => s.id === sessionId);
+            if (session) {
+                session.fields['Amount Received'] = result.newTotal;
+                const opt = sessionList && sessionList.querySelector(`option[value="${sessionId}"]`);
+                if (opt) {
+                    const name = session.fields.Name || 'Untitled';
+                    opt.label = `${name} ($${result.newTotal.toFixed(2)} received)`;
+                }
             }
         } catch (err) {
             setStatus(`Error: ${err.message}`, 'error');
@@ -230,7 +253,11 @@ async function initializeDashboard() {
     }
 
     try {
-        const response = await fetch(`/api/get-store-data-by-owner-id?id=${ownerId}`);
+        // Encode the owner id: dashboard IDs can contain URL-unsafe characters
+        // (e.g. '$', '^', '%'). Without encoding, a raw '%' produces an invalid
+        // percent sequence that the function runtime fails to parse, yielding a
+        // "Missing dashboard ID" 400.
+        const response = await fetch(`/api/get-store-data-by-owner-id?id=${encodeURIComponent(ownerId)}`);
         if (!response.ok) {
             const errorData = await response.text();
             console.error("Failed to load store data:", errorData);

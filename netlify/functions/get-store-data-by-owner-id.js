@@ -8,20 +8,30 @@ const STORES_TABLE = 'Stores';
 const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD';
 
 exports.handler = async (event) => {
-    const { id } = event.queryStringParameters;
+    // queryStringParameters can be null when no query string is present, and a
+    // malformed percent-encoded value (e.g. an OwnerDashboardID containing a raw
+    // '%') can cause the runtime to drop the parameter entirely. Guard for both
+    // so we fail with a clear message instead of throwing on a null destructure.
+    const id = event.queryStringParameters && event.queryStringParameters.id;
+    console.log('get-store-data-by-owner-id invoked. Raw query:', event.rawQuery || event.queryStringParameters, '| Parsed id:', id);
+
     if (!id) {
+        console.warn('get-store-data-by-owner-id: missing or unparseable dashboard ID.');
         return { statusCode: 400, body: JSON.stringify({ error: 'Missing dashboard ID.' }) };
     }
 
     try {
-        // 1. Find the Store record using the OwnerDashboardID
-        const storeFormula = `({OwnerDashboardID} = '${id}')`;
+        // 1. Find the Store record using the OwnerDashboardID.
+        // Escape single quotes so IDs containing them don't break the formula.
+        const safeId = String(id).replace(/'/g, "\\'");
+        const storeFormula = `({OwnerDashboardID} = '${safeId}')`;
         const storeUrl = `https://api.airtable.com/v0/${BASE_ID}/${STORES_TABLE}?filterByFormula=${encodeURIComponent(storeFormula)}`;
         
         const storeResponse = await fetch(storeUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
         const storeData = await storeResponse.json();
 
         if (!storeData.records || storeData.records.length === 0) {
+            console.warn(`get-store-data-by-owner-id: no store matched OwnerDashboardID '${id}'.`);
             return { statusCode: 404, body: JSON.stringify({ error: 'Store not found for this ID.' }) };
         }
         

@@ -208,7 +208,7 @@ export function showUserModal(options = {}) {
         }
 
         if (dashboardId) {
-            ownerDashboardLink.href = `/store-dashboard.html?id=${dashboardId}`;
+            ownerDashboardLink.href = `/store-dashboard.html?id=${encodeURIComponent(dashboardId)}`;
             ownerDashboardLink.style.display = 'block';
         } else {
             ownerDashboardLink.style.display = 'none';

@@ -143,7 +143,7 @@ function buildMerchantNotificationEmail(session, payment, store, baseUrl) {
   const amountStr = `$${(payment.amount || 0).toFixed(2)}`;
   const customerEmail = payment.customerEmail || 'Unknown';
   const dashboardUrl = store?.fields?.OwnerDashboardID
-    ? `${baseUrl}/store-dashboard.html?id=${store.fields.OwnerDashboardID}`
+    ? `${baseUrl}/store-dashboard.html?id=${encodeURIComponent(store.fields.OwnerDashboardID)}`
     : baseUrl;
 
   const html = `

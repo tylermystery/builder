@@ -11,6 +11,24 @@ let debugPanel = null;
 let startTime = 0;
 let currentEnergy = 0.0;
 
+// Directional vortex state.
+// `spin` is an accumulator fed into the shader's swirl. It only advances while there is
+// energy, and in the direction of the most recent plan movement (+1 forward / clockwise,
+// -1 backward / counter-clockwise). When energy decays to 0 the background sits still.
+let spin = 0.0;
+let spinDirection = 1;
+let lastFrameTime = 0;
+
+// How quickly the vortex rotates per unit of energy, per second. Kept low so progression
+// reads as a slow, healthy shift rather than a strobe.
+const SPIN_RATE = 1.2;
+
+// Respect users who have asked the OS to minimize motion — keep the background fully static.
+const prefersReducedMotion =
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 let progressMultiplier = 1.0;
 let energyDecayRate = 0.985;
 
@@ -21,8 +39,6 @@ let settings = {};
 let loopIterations = 0;
 let lastProgressLog = 0;
 let isPageVisible = true;
-
-const AUTO_DRIFT_SPEED = 0.002;
 
 function animationLoop(timestamp) {
     if (!currentEffect) {
@@ -48,6 +64,9 @@ function animationLoop(timestamp) {
              return;
         }
         const elapsedTime = (timestamp - startTime) / 1000.0;
+        const dt = lastFrameTime ? Math.min(0.05, (timestamp - lastFrameTime) / 1000.0) : 0.016;
+        lastFrameTime = timestamp;
+
         currentEnergy *= energyDecayRate;
         if (currentEnergy < 0.01) currentEnergy = 0.0;
 
@@ -55,9 +74,13 @@ function animationLoop(timestamp) {
             lastProgressLog = currentProgress;
         }
 
-        const autoProgressDrift = elapsedTime * AUTO_DRIFT_SPEED;
-        const totalProgress = currentProgress + autoProgressDrift;
-        currentEffect.draw(gl, canvas.width, canvas.height, elapsedTime, currentEnergy, totalProgress);
+        // Advance the vortex only while there is leftover energy from a recent plan
+        // movement, in the direction of that movement. Idle => spin holds => static.
+        if (!prefersReducedMotion && currentEnergy > 0) {
+            spin += spinDirection * currentEnergy * SPIN_RATE * dt;
+        }
+
+        currentEffect.draw(gl, canvas.width, canvas.height, elapsedTime, currentEnergy, currentProgress, spin);
 
     } else if (currentEffect.type === 'canvas') {
         if (!ctx_2d) {
@@ -72,9 +95,12 @@ function animationLoop(timestamp) {
     animationFrameId = requestAnimationFrame(animationLoop);
 }
 
-export function addEnergy() {
+export function addEnergy(direction = spinDirection) {
     log('BG-Engine', 'Adding energy boost!');
-    currentEnergy = 1.0;
+    // Gentle, additive pulse (was a hard reset to 1.0). The vortex spins in the supplied
+    // direction so callers tied to a forward/backward action read correctly.
+    spinDirection = direction >= 0 ? 1 : -1;
+    currentEnergy = Math.min(1.0, currentEnergy + 0.5);
 }
 
 export function updateProgress(weight) {
@@ -89,10 +115,12 @@ export function updateProgress(weight) {
                 currentProgress: newProgress
             }
         });
-        
-        if (weight > 0) {
-            currentEnergy = Math.min(1.0, currentEnergy + adjustedWeight * 5);
-        }
+
+        // Forward progress spins clockwise; regression spins counter-clockwise.
+        spinDirection = weight >= 0 ? 1 : -1;
+        // A small pulse so both proceeding and receding produce a brief, slow swirl
+        // that then settles. Idle stays calm because energy decays back to zero.
+        currentEnergy = Math.min(1.0, currentEnergy + 0.15);
     }
 }
 

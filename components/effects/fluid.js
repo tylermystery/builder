@@ -25,8 +25,11 @@ const fsSource = `
     precision mediump float;
     uniform vec2 u_resolution;
     uniform float u_time;
-    uniform float u_energy; 
+    uniform float u_energy;
     uniform float u_progress; // NEW: Controls the base color of the spectrum (0.0 to 1.0)
+    uniform float u_spin;     // Directional vortex rotation. Advances ONLY while the plan
+                              // progresses (clockwise) or regresses (counter-clockwise),
+                              // and holds steady when idle so the background is calm.
 
     // This is a function that creates organic-looking "noise"
     float random(vec2 st) {
@@ -56,9 +59,11 @@ const fsSource = `
         float radius = length(centered_st);
 
         // 4. Create the "vortex"
-        // The vortex movement still depends on time and the energy boost.
-        float vortex_speed = u_time * (0.02 + u_energy * 2.0);
-        float vortex_twist = u_energy * 5.0;
+        // The swirl no longer drifts on its own. It is driven entirely by u_spin, which the
+        // engine advances only when the user moves forward/backward in their plan. When idle,
+        // u_spin holds its value, so the pattern is steady (no perpetual churn on load).
+        float vortex_speed = u_spin;
+        float vortex_twist = u_energy * 1.5;
         float n = noise(vec2(angle * (3.0 + vortex_twist) + vortex_speed, radius * 2.0));
 
         // 5. Calculate Color from Progress
@@ -95,8 +100,8 @@ const fluidEffect = {
         shader = new Shader(gl, vsSource, fsSource);
     }, 
 
-    // MODIFIED: Added 'progress' to the draw function
-    draw: (gl, width, height, time, energy, progress) => { 
+    // MODIFIED: Added 'progress' and 'spin' to the draw function
+    draw: (gl, width, height, time, energy, progress, spin) => {
         if (!shader) return;
 
         shader.use();
@@ -106,7 +111,8 @@ const fluidEffect = {
         gl.uniform1f(shader.getUniformLocation("u_time"), time);
         gl.uniform1f(shader.getUniformLocation("u_energy"), energy);
         gl.uniform1f(shader.getUniformLocation("u_progress"), progress); // NEW: Pass progress
-        
+        gl.uniform1f(shader.getUniformLocation("u_spin"), spin || 0.0);   // NEW: Pass directional spin
+
         // Draw the full-screen rectangle
         gl.drawArrays(gl.TRIANGLES, 0, 6);
     },

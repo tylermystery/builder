@@ -126,7 +126,7 @@ function buildMerchantNotificationEmail(session, payment, store, baseUrl, option
   const customerEmail = payment.customerEmail || 'Unknown';
   const customerName = payment.customerName ? `${payment.customerName} (${customerEmail})` : customerEmail;
   const dashboardUrl = store?.fields?.OwnerDashboardID
-    ? `${baseUrl}/store-dashboard.html?id=${store.fields.OwnerDashboardID}`
+    ? `${baseUrl}/store-dashboard.html?id=${encodeURIComponent(store.fields.OwnerDashboardID)}`
     : baseUrl;
 
   const bannerColor = unpaid ? '#667eea' : '#28a745';

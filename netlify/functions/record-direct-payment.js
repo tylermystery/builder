@@ -28,7 +28,9 @@ exports.handler = async (event) => {
     const validMethods = ['direct-cash', 'direct-check', 'direct-etransfer', 'direct-other'];
     const paymentMethod = validMethods.includes(method) ? method : 'direct-other';
 
-    const storeFormula = `({OwnerDashboardID} = '${storeOwnerId}')`;
+    // Escape single quotes so IDs containing them don't break the formula.
+    const safeStoreOwnerId = String(storeOwnerId).replace(/'/g, "\\'");
+    const storeFormula = `({OwnerDashboardID} = '${safeStoreOwnerId}')`;
     const storeUrl = `https://api.airtable.com/v0/${BASE_ID}/${STORES_TABLE}?filterByFormula=${encodeURIComponent(storeFormula)}&maxRecords=1`;
     const storeRes = await fetch(storeUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
     const storeData = await storeRes.json();
