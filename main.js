@@ -23,7 +23,7 @@ import { initializeProjectsDashboard, updateProjectsData, showProjectsLoading } 
 import { initializeWtfPlansPanel, syncWtfPlansPanelWithUrl, refreshWtfPlansData, isWtfPlansPanelOpen, trackRecentPlan } from './components/wtfPlansPanel.js';
 import { initializeForumPanel, syncForumPanelWithUrl } from './components/forumPanel.js';
 import { loadPublicIdeasForStore } from './components/publicCatalog.js';
-import { applyCloudinaryTransform } from './utils/imageOptimizer.js';
+import { applyCloudinaryTransform, getBaseCloudinaryUrl } from './utils/imageOptimizer.js';
 import { loadTempIterations, loadTempReactions } from './components/refinementHandler.js';
 
 console.log('[MODULE DEBUG] main.js all imports resolved successfully.', performance.now().toFixed(2) + 'ms');
@@ -1157,13 +1157,35 @@ async function initialize() {
         if (logoTag) {
             const imageUrls = await api.fetchImagesByTags(logoTag);
             if (imageUrls && imageUrls.length > 0) {
-                const logoUrl = imageUrls[0];
+                // Logos get a dedicated render path (separate from event imagery):
+                // start from the base Cloudinary asset so we are not stuck with the
+                // shared c_fill/f_jpg transform (which crops and flattens transparency),
+                // then render with c_limit (preserve aspect ratio) + f_png (preserve alpha).
+                // e_background_removal standardizes every store's logo onto a transparent
+                // background. A store can opt out by setting a truthy LogoKeepBackground
+                // field in Airtable (e.g. for an already-clean logo or one mis-cut by the AI).
+                const baseLogoUrl = getBaseCloudinaryUrl(imageUrls[0]);
+                const keepBackground = !!activeShop.fields.LogoKeepBackground;
+                const removeBg = keepBackground ? '' : 'e_background_removal/';
+
+                const faviconTransform = `${removeBg}c_limit,w_64,f_png`;
+                const headerTransform = `${removeBg}c_limit,h_100,f_png,q_auto`;
+                // Fallbacks (no background removal) so a logo never disappears if the
+                // e_background_removal transform fails for a particular asset.
+                const headerFallback = applyCloudinaryTransform(baseLogoUrl, 'c_limit,h_100,f_png,q_auto');
+
                 const favicon = document.createElement('link');
                 favicon.rel = 'icon';
-                favicon.href = applyCloudinaryTransform(logoUrl, 'c_scale,w_32');
+                favicon.href = applyCloudinaryTransform(baseLogoUrl, faviconTransform);
                 document.head.appendChild(favicon);
                 const headerLogo = document.createElement('img');
-                headerLogo.src = applyCloudinaryTransform(logoUrl, 'h_50,c_scale,f_auto,q_auto');
+                headerLogo.src = applyCloudinaryTransform(baseLogoUrl, headerTransform);
+                if (!keepBackground) {
+                    headerLogo.addEventListener('error', function onLogoError() {
+                        headerLogo.removeEventListener('error', onLogoError);
+                        headerLogo.src = headerFallback;
+                    });
+                }
                 headerLogo.alt = `${activeShop.fields.Name} Logo`;
                 headerLogo.loading = 'eager'; // Logo should load immediately
                 headerLogo.fetchPriority = 'high'; // Prioritize logo loading
