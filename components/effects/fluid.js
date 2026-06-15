@@ -69,7 +69,7 @@ const fsSource = `
         // 5. Calculate Color from Progress
         // We use the progress variable to define the base hue.
         // The noise still creates the fluid bands, but they shift based on u_progress.
-        float base_wave = n * 1.5 + u_progress * 10.0; // Use progress for base hue offset
+        float base_wave = n * 1.5 + u_progress * 14.0; // Use progress for base hue offset
         
         // Define the standard 120-degree phase shift for full spectrum HSL cycling
         const float PI_2_OVER_3 = 2.0943951; 

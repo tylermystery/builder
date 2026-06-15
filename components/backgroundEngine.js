@@ -32,6 +32,18 @@ const prefersReducedMotion =
 let progressMultiplier = 1.0;
 let energyDecayRate = 0.985;
 
+// Color progression sensitivity. The raw per-action weights elsewhere in the app (browsing
+// the catalog, locking items, editing the plan) are intentionally tiny — small enough that
+// `currentProgress` barely moved from its starting value, leaving the background hue
+// effectively frozen as a user built their plan. We scale those weights up here, at the one
+// central chokepoint, so every plan movement reads as a visible shift along the spectrum.
+// This is deliberately isolated from the direction/energy logic below, so the calm,
+// forward/backward vortex behaviour is unchanged — only how far the colour travels changes.
+// A per-call cap keeps a single large burst (e.g. a big package add) reading as a smooth
+// shift rather than a jarring jump.
+const PROGRESS_SENSITIVITY = 50;
+const MAX_PROGRESS_STEP = 0.025;
+
 let lastTimestamp_2d = 0;
 let currentColors = [];
 let settings = {};
@@ -104,7 +116,9 @@ export function addEnergy(direction = spinDirection) {
 }
 
 export function updateProgress(weight) {
-    const adjustedWeight = weight * progressMultiplier;
+    let adjustedWeight = weight * progressMultiplier * PROGRESS_SENSITIVITY;
+    // Cap any single step so even a large burst shifts the colour smoothly rather than jumping.
+    adjustedWeight = Math.max(-MAX_PROGRESS_STEP, Math.min(MAX_PROGRESS_STEP, adjustedWeight));
     let newProgress = state.ui.currentProgress + adjustedWeight;
     newProgress = Math.min(1.0, Math.max(0.0, newProgress));
 
