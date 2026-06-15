@@ -2280,8 +2280,8 @@ body:not(.presentation-active) .forum-panel-trigger-btn {
 /* ===== Toast Notification Styles ===== */
 .collab-toast-container {
     position: fixed;
-    top: 16px;
-    right: 16px;
+    bottom: 16px;
+    left: 16px;
     z-index: 10000;
     display: flex;
     flex-direction: column;
@@ -2301,7 +2301,7 @@ body:not(.presentation-active) .forum-panel-trigger-btn {
     align-items: flex-start;
     gap: 10px;
     pointer-events: auto;
-    transform: translateX(120%);
+    transform: translateX(-120%);
     transition: transform 0.3s ease, opacity 0.3s ease;
     border-left: 3px solid #667eea;
     cursor: pointer;
@@ -2312,7 +2312,7 @@ body:not(.presentation-active) .forum-panel-trigger-btn {
 }
 
 .collab-toast.removing {
-    transform: translateX(120%);
+    transform: translateX(-120%);
     opacity: 0;
 }
 
@@ -2590,8 +2590,8 @@ body:not(.presentation-active) .forum-panel-trigger-btn {
     .collab-toast-container {
         top: auto;
         bottom: 16px;
-        right: 8px;
         left: 8px;
+        right: 8px;
         max-width: none;
     }
 
@@ -5656,9 +5656,8 @@ body.ucp-panel-open .unified-chat-panel {
                 <div class="form-row" id="checkout-account-row">
                     <label class="checkout-account-option" for="checkout-create-account" style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-weight: normal;">
                         <input type="checkbox" id="checkout-create-account" style="margin-top: 3px;">
-                        <span>Create an account (or sign in) to save this plan and your RSVPs.</span>
+                        <span>Save this plan to an account (or sign in). We'll email a secure sign-in link — no password needed.</span>
                     </label>
-                    <small style="display: block; margin-top: 4px; color: #6c757d;">We'll email you a secure sign-in link. Already registered? This signs you in too.</small>
                 </div>
                 <div class="form-row" id="checkout-payment-details-row">
                     <label for="card-element">Payment Details</label>

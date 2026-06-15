@@ -142,8 +142,9 @@ function buildMerchantNotificationEmail(session, payment, store, baseUrl) {
   const contactEmail = store?.fields?.ContactEmail || SENDER_EMAIL;
   const amountStr = `$${(payment.amount || 0).toFixed(2)}`;
   const customerEmail = payment.customerEmail || 'Unknown';
+  const customerDisplay = payment.customerName ? `${payment.customerName} (${customerEmail})` : customerEmail;
   const dashboardUrl = store?.fields?.OwnerDashboardID
-    ? `${baseUrl}/store-dashboard.html?id=${store.fields.OwnerDashboardID}`
+    ? `${baseUrl}/store-dashboard.html?id=${encodeURIComponent(store.fields.OwnerDashboardID)}`
     : baseUrl;
 
   const html = `
@@ -154,7 +155,7 @@ function buildMerchantNotificationEmail(session, payment, store, baseUrl) {
       <div style="padding: 24px 28px; background: white; border: 1px solid #eee; border-top: none; border-radius: 0 0 10px 10px;">
         <p style="font-size: 16px; color: #333; margin: 0 0 16px;">A payment of <strong>${amountStr}</strong> was received for <strong>${sessionName}</strong>.</p>
         <div style="background: #f8f9fb; padding: 14px; border-radius: 8px; font-size: 14px; color: #555; margin-bottom: 16px;">
-          <div><strong>Customer:</strong> ${customerEmail}</div>
+          <div><strong>Customer:</strong> ${customerDisplay}</div>
           <div><strong>Method:</strong> ${payment.method || 'Card'}</div>
           <div><strong>Status:</strong> ${payment.status === 'processing' ? 'Processing (ACH)' : 'Succeeded'}</div>
         </div>
@@ -273,6 +274,7 @@ async function handlePaymentIntentUpdate(paymentIntent, status) {
     method: methodLabel,
     status,
     customerEmail: paymentIntent.metadata?.customerEmail || null,
+    customerName: paymentIntent.metadata?.customerName || null,
   };
 
   if (existingIdx >= 0) {

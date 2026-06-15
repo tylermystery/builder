@@ -1,6 +1,7 @@
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
 const { SENDER_EMAIL, SENDER_NAME, buildFrom } = require('./utils/email-config');
+const { buildReceiptEmail } = require('./utils/checkout-emails');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -15,7 +16,7 @@ exports.handler = async (event) => {
 
   try {
     const body = JSON.parse(event.body);
-    const { sessionId, amount, method, note, storeOwnerId, sendReceipt } = body;
+    const { sessionId, amount, method, note, storeOwnerId, sendReceipt, customerName, customerEmail } = body;
 
     if (!sessionId || !amount || !storeOwnerId) {
       return { statusCode: 400, body: JSON.stringify({ error: 'sessionId, amount, and storeOwnerId are required.' }) };
@@ -28,7 +29,9 @@ exports.handler = async (event) => {
     const validMethods = ['direct-cash', 'direct-check', 'direct-etransfer', 'direct-other'];
     const paymentMethod = validMethods.includes(method) ? method : 'direct-other';
 
-    const storeFormula = `({OwnerDashboardID} = '${storeOwnerId}')`;
+    // Escape single quotes so IDs containing them don't break the formula.
+    const safeStoreOwnerId = String(storeOwnerId).replace(/'/g, "\\'");
+    const storeFormula = `({OwnerDashboardID} = '${safeStoreOwnerId}')`;
     const storeUrl = `https://api.airtable.com/v0/${BASE_ID}/${STORES_TABLE}?filterByFormula=${encodeURIComponent(storeFormula)}&maxRecords=1`;
     const storeRes = await fetch(storeUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
     const storeData = await storeRes.json();
@@ -95,6 +98,25 @@ exports.handler = async (event) => {
 
     if (sendReceipt) {
       const baseUrl = SITE_URL || URL || 'https://whatthefun.wtf';
+
+      // The full payment record drives the shared receipt template (the same one
+      // online card payments use), so a manually-recorded payment produces an
+      // identical, branded receipt.
+      const receiptPayment = {
+        amount,
+        method: methodLabels[paymentMethod],
+        status: 'succeeded',
+        date: newEntry.date,
+        customerEmail: customerEmail || null,
+        customerName: customerName || null,
+      };
+
+      // Collect every address that should receive the receipt: the customer's
+      // email entered at the dashboard (if any), plus any collaborator accounts
+      // already linked to the session — de-duplicated so nobody is emailed twice.
+      const recipients = new Map(); // lower-cased email -> display name
+      if (customerEmail) recipients.set(customerEmail.toLowerCase(), customerName || '');
+
       const collaboratorIds = session.fields.Collaborators || [];
       if (collaboratorIds.length > 0) {
         try {
@@ -103,44 +125,36 @@ exports.handler = async (event) => {
           const usersRes = await fetch(usersUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
           if (usersRes.ok) {
             const { records: users } = await usersRes.json();
-            const sessionName = session.fields.Name || 'Your Booking';
-            const storeName = store.fields.Name || SENDER_NAME;
-            const contactEmail = store.fields.ContactEmail || SENDER_EMAIL;
-            const emailFrom = buildFrom(storeName, contactEmail);
-            const planUrl = `${baseUrl}/?session=${sessionId}`;
-
             for (const user of users) {
-              if (!user.fields.Email) continue;
-              try {
-                await sgMail.send({
-                  to: user.fields.Email,
-                  from: emailFrom,
-                  subject: `Payment Recorded — ${sessionName}`,
-                  html: `
-                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
-                      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 24px 28px; border-radius: 12px 12px 0 0; text-align: center;">
-                        <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: rgba(255,255,255,0.8); margin-bottom: 6px;">Payment Recorded</div>
-                        <div style="font-size: 20px; font-weight: 700; color: white;">${storeName}</div>
-                      </div>
-                      <div style="padding: 24px 28px; background: white; border: 1px solid #eee; border-top: none; border-radius: 0 0 12px 12px;">
-                        <p style="color: #555; font-size: 15px;">Hi ${user.fields.Name || 'there'},</p>
-                        <p style="color: #555; font-size: 15px;">${storeName} has recorded a <strong>${methodLabels[paymentMethod]}</strong> payment of <strong>$${amount.toFixed(2)}</strong> for your booking <strong>${sessionName}</strong>.</p>
-                        ${note ? `<p style="color: #888; font-size: 14px; font-style: italic;">Note: ${note}</p>` : ''}
-                        <div style="text-align: center; margin: 20px 0;">
-                          <a href="${planUrl}" style="display: inline-block; padding: 10px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px;">View Your Plan</a>
-                        </div>
-                        <p style="color: #888; font-size: 13px; text-align: center;">Questions? Contact <a href="mailto:${contactEmail}" style="color: #667eea;">${contactEmail}</a></p>
-                      </div>
-                    </div>
-                  `,
-                });
-              } catch (emailErr) {
-                console.error(`[record-direct-payment] Failed to email ${user.fields.Email}:`, emailErr.message);
+              const email = user.fields.Email;
+              if (email && !recipients.has(email.toLowerCase())) {
+                recipients.set(email.toLowerCase(), user.fields.Name || '');
               }
             }
           }
+        } catch (lookupErr) {
+          console.error('[record-direct-payment] Failed to look up collaborators:', lookupErr.message);
+        }
+      }
+
+      if (recipients.size === 0) {
+        console.warn('[record-direct-payment] Receipt requested but no recipient email available.');
+      }
+
+      const emailFrom = buildFrom(store.fields.Name || SENDER_NAME, store.fields.ContactEmail || SENDER_EMAIL);
+      for (const [email, name] of recipients) {
+        try {
+          const receipt = buildReceiptEmail(
+            session,
+            { ...receiptPayment, customerEmail: email, customerName: name || customerName || null },
+            store,
+            baseUrl,
+            { unpaid: false, amountDue: amount }
+          );
+          await sgMail.send({ to: email, from: receipt.from || emailFrom, subject: receipt.subject, html: receipt.html });
+          console.log(`[record-direct-payment] Receipt sent to ${email}`);
         } catch (emailErr) {
-          console.error('[record-direct-payment] Failed to send receipt emails:', emailErr.message);
+          console.error(`[record-direct-payment] Failed to email ${email}:`, emailErr.message);
         }
       }
     }

@@ -208,7 +208,7 @@ export function showUserModal(options = {}) {
         }
 
         if (dashboardId) {
-            ownerDashboardLink.href = `/store-dashboard.html?id=${dashboardId}`;
+            ownerDashboardLink.href = `/store-dashboard.html?id=${encodeURIComponent(dashboardId)}`;
             ownerDashboardLink.style.display = 'block';
         } else {
             ownerDashboardLink.style.display = 'none';
@@ -365,6 +365,45 @@ export async function startEmailSignIn(email, opts = {}) {
             clearTimeout(loginTimeout);
             pusher.unsubscribe(channelName);
             await _handleSuccessfulLogin(payload);
+        });
+    });
+}
+
+// Generate a client-side channel id for a magic-link sign-in attempt. Matches
+// the 24-hex-char format auth-start uses server-side, so the same Magic Links /
+// auth-confirm / Pusher flow applies. Used when the sign-in link is delivered
+// inside another email (e.g. the checkout confirmation) rather than by auth-start.
+export function generateAuthChannelId() {
+    const bytes = new Uint8Array(12);
+    (window.crypto || window.msCrypto).getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Subscribe THIS tab to a magic-link sign-in channel and complete login here when
+// the emailed confirmation link is clicked. Mirrors startEmailSignIn's listener
+// but sends no email of its own — the caller has arranged for the sign-in link to
+// be delivered inside another email (the checkout confirmation / receipt). The
+// 15-minute window matches the token's server-side expiry.
+export function listenForEmailSignIn(channelId, opts = {}) {
+    if (!channelId) return;
+    const onStatus = opts.onStatus || (() => {});
+    const pusher = new Pusher('236f480714e5001590b5', {
+        cluster: 'us3',
+        authEndpoint: '/api/pusher-auth'
+    });
+    const channelName = `private-auth-${channelId}`;
+    const channel = pusher.subscribe(channelName);
+    const loginTimeout = setTimeout(() => {
+        channel.unbind('auth-success');
+        pusher.unsubscribe(channelName);
+    }, 15 * 60 * 1000);
+    channel.bind('pusher:subscription_succeeded', () => {
+        log('Auth', `Listening for emailed sign-in on channel: ${channelName}`);
+        channel.bind('auth-success', async (payload) => {
+            clearTimeout(loginTimeout);
+            pusher.unsubscribe(channelName);
+            await _handleSuccessfulLogin(payload);
+            onStatus('Signed in.', 'success');
         });
     });
 }

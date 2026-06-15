@@ -21,7 +21,7 @@ const { SENDER_NAME, SENDER_EMAIL, buildFrom } = require('./email-config');
  * @param {object} [options] { unpaid:boolean, amountDue:number }
  */
 function buildReceiptEmail(session, payment, store, baseUrl, options = {}) {
-  const { unpaid = false, amountDue = payment.amount || 0 } = options;
+  const { unpaid = false, amountDue = payment.amount || 0, signInUrl = null } = options;
   const sessionName = session.fields.Name || 'Your Booking';
   const storeName = store?.fields?.Name || SENDER_NAME;
   const contactEmail = store?.fields?.ContactEmail || SENDER_EMAIL;
@@ -50,6 +50,17 @@ function buildReceiptEmail(session, payment, store, baseUrl, options = {}) {
 
   const feeStr = payment.processingFee ? `$${payment.processingFee.toFixed(2)}` : null;
   const baseAmountStr = payment.baseAmount ? `$${payment.baseAmount.toFixed(2)}` : null;
+
+  // For a guest who isn't signed in, offer a one-click sign-in so this plan and
+  // their RSVPs are saved to an account. Clicking signs them in on the tab they
+  // started checkout from.
+  const signInBlock = signInUrl ? `
+        <div style="margin: 4px 0 8px; padding: 16px; background: #f4f6ff; border: 1px solid #dfe3ff; border-radius: 10px; text-align: center;">
+          <div style="font-size: 14px; color: #444; margin-bottom: 10px;">Want to keep this plan and manage it later?</div>
+          <a href="${signInUrl}" style="display: inline-block; padding: 10px 24px; background: #ffffff; border: 1px solid #667eea; color: #667eea; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px;">🔑 Sign in to save &amp; manage your plan</a>
+          <div style="font-size: 12px; color: #999; margin-top: 8px;">Open this from the tab you started checkout in. Link expires in 15 minutes.</div>
+        </div>
+  ` : '';
 
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 0;">
@@ -90,6 +101,8 @@ function buildReceiptEmail(session, payment, store, baseUrl, options = {}) {
           <a href="${planUrl}" style="display: inline-block; padding: 12px 28px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">${ctaLabel}</a>
         </div>
 
+        ${signInBlock}
+
         <p style="color: #888; font-size: 13px; line-height: 1.6; margin: 20px 0 0; text-align: center;">
           Need help with your order? Contact us at
           <a href="mailto:${contactEmail}" style="color: #667eea;">${contactEmail}</a>
@@ -126,7 +139,7 @@ function buildMerchantNotificationEmail(session, payment, store, baseUrl, option
   const customerEmail = payment.customerEmail || 'Unknown';
   const customerName = payment.customerName ? `${payment.customerName} (${customerEmail})` : customerEmail;
   const dashboardUrl = store?.fields?.OwnerDashboardID
-    ? `${baseUrl}/store-dashboard.html?id=${store.fields.OwnerDashboardID}`
+    ? `${baseUrl}/store-dashboard.html?id=${encodeURIComponent(store.fields.OwnerDashboardID)}`
     : baseUrl;
 
   const bannerColor = unpaid ? '#667eea' : '#28a745';

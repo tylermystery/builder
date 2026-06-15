@@ -1282,11 +1282,6 @@ export function updateCatalogHeader() {
     const categoryFilter = params.get('category');
     const subcategoryFilters = params.get('subcategory')?.split(',').filter(Boolean) || [];
 
-    const sortByEl = document.getElementById('sort-by');
-    const sortBy = sortByEl?.value;
-    const isRecommendedSort = sortBy === 'recommended';
-    const goalsInput = document.getElementById('header-goals')?.value?.trim();
-
     if (view === 'plan' || view === 'likes' || view === 'my-sessions') {
         const filterControlsEl = document.getElementById('filter-controls');
         if (filterControlsEl) { filterControlsEl.dataset.activeFilters = 0; }
@@ -1393,23 +1388,10 @@ export function updateCatalogHeader() {
         path.push(`<span>${subcatName}</span>`);
     });
 
-    if (isRecommendedSort && goalsInput && goalsInput.length > 0) {
-        const STOP_WORDS = new Set([
-            'a', 'an', 'the', 'for', 'with', 'and', 'is', 'of', 'to', 'in', 'on', 
-            'at', 'my', 'it', 'big', 'small', 'all', 'new', 'old', 'about', 'want'
-        ]);
+    // Goals / Notes from the plan panel are intentionally no longer surfaced as
+    // active-filter chips under "Recommended" sort. The mapping of goal words to
+    // item rankings was never fully polished, so the chips were removed for now.
 
-        const goalWords = goalsInput.split(/[\s,]+/).filter(word => 
-            word.length > 2 && !STOP_WORDS.has(word.toLowerCase())
-        );
-
-        goalWords.forEach(goal => {
-            if (goal.toLowerCase() !== searchTerm.toLowerCase()) {
-                activeFiltersHtml.push(createFilterChip(`Goal: ${goal}`, 'goal-filter', goal));
-            }
-        });
-    }
-    
     const pathContainer = document.createElement('div');
     pathContainer.id = 'breadcrumb-path-container';
     if (path.length > 1 || isSearchActive) { 

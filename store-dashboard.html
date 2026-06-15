@@ -59,10 +59,10 @@
                 <h3>Record a Direct Payment</h3>
                 <div class="direct-payment-form">
                     <div>
-                        <label for="dp-session-select">Session / Booking</label>
-                        <select id="dp-session-select">
-                            <option value="">Select a session...</option>
-                        </select>
+                        <label for="dp-session-id">Session / Booking ID</label>
+                        <input type="text" id="dp-session-id" list="dp-session-list" placeholder="Paste a session ID (rec…)" autocomplete="off">
+                        <datalist id="dp-session-list"></datalist>
+                        <small id="dp-session-hint" style="display:block; margin-top:4px; color:#888;">Find the ID in the plan link (<code>?session=rec…</code>) or in Airtable. Recent sessions for this store will suggest as you type.</small>
                     </div>
                     <div class="form-row">
                         <div>
@@ -83,9 +83,19 @@
                         <label for="dp-note">Note (optional)</label>
                         <textarea id="dp-note" placeholder="e.g., Cash payment at pickup"></textarea>
                     </div>
+                    <div class="form-row">
+                        <div>
+                            <label for="dp-customer-name">Customer Name</label>
+                            <input type="text" id="dp-customer-name" placeholder="e.g., Jamie Lee" autocomplete="off">
+                        </div>
+                        <div>
+                            <label for="dp-customer-email">Customer Email</label>
+                            <input type="email" id="dp-customer-email" placeholder="name@example.com" autocomplete="off">
+                        </div>
+                    </div>
                     <div class="checkbox-row">
                         <input type="checkbox" id="dp-send-receipt" checked>
-                        <label for="dp-send-receipt">Send receipt email to customer</label>
+                        <label for="dp-send-receipt">Email a receipt to the customer</label>
                     </div>
                     <div>
                         <button class="btn-primary" id="dp-submit-btn">Record Payment</button>
