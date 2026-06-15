@@ -13,7 +13,7 @@ import { sendMessage, getCurrentUser, initializeSessionChat, initializeRecentCha
 import { publishItemToPublicLayer } from './components/publicCatalog.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
-import { showUserModal, startEmailSignIn } from './auth.js';
+import { showUserModal, startEmailSignIn, generateAuthChannelId, listenForEmailSignIn } from './auth.js';
 import { addEnergy, updateProgress } from './components/backgroundEngine.js';
 import { showReceiptModal } from './components/receipt.js';
 import { showProjectsPanel, hideProjectsPanel } from './components/projectsDashboard.js';
@@ -398,8 +398,29 @@ async function handlePaymentFormSubmit(event) {
     }
 
     try {
-        const customerName = document.getElementById('customer-name').value;
-        const customerEmail = document.getElementById('customer-email').value;
+        const customerName = document.getElementById('customer-name').value.trim();
+        const customerEmail = document.getElementById('customer-email').value.trim();
+
+        // Always collect a name + email so a receipt can be sent (and the merchant
+        // knows who paid). The fields are marked required, but guard explicitly in
+        // case the form is submitted programmatically.
+        if (!customerName || !customerEmail) {
+            cardErrors.textContent = 'Please enter your name and email so we can send your receipt.';
+            (!customerName
+                ? document.getElementById('customer-name')
+                : document.getElementById('customer-email'))?.focus();
+            submitBtn.disabled = false;
+            buttonText.style.display = 'inline';
+            spinner.style.display = 'none';
+            return;
+        }
+
+        // Make sure the email/name the customer just typed are on the PaymentIntent
+        // before it is confirmed — the webhook reads them from the intent's metadata
+        // to send the receipt. Best-effort and amount-preserving; a failure here
+        // never blocks the charge.
+        try { await ui.syncCheckoutCustomerDetails(customerName, customerEmail); }
+        catch (e) { console.warn('[CHECKOUT] customer-detail sync skipped:', e.message); }
 
         // Build return_url preserving the session param so the app reloads correctly after redirect
         const returnUrl = new URL(window.location.href);
@@ -647,7 +668,8 @@ async function handlePaymentFormSubmit(event) {
  * @param {string} customerEmail - The email entered at checkout (already trimmed)
  * @returns {Promise<number>} the number of events the visitor was registered for
  */
-async function registerPlanEventsForCheckout(customerEmail) {
+async function registerPlanEventsForCheckout(customerEmail, opts = {}) {
+    const { suppressSignInEmail = false } = opts;
     // The events to register for are the "Event" records in the plan.
     const eventEntries = [];
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
@@ -687,9 +709,11 @@ async function registerPlanEventsForCheckout(customerEmail) {
     try { eventEntries.forEach(({ recordId }) => ui.updateCardIcon(recordId)); } catch (e) { /* non-fatal */ }
 
     // If a guest opted in, create an account / sign in so the plan and these
-    // RSVPs are saved to it (mirrors the paid checkout path).
+    // RSVPs are saved to it (mirrors the paid checkout path). Skipped when the
+    // caller delivers the sign-in link inside the confirmation email instead, so
+    // the guest never receives two separate emails.
     const acctCheckbox = document.getElementById('checkout-create-account');
-    if (acctCheckbox && acctCheckbox.checked && !isAuthed && customerEmail) {
+    if (!suppressSignInEmail && acctCheckbox && acctCheckbox.checked && !isAuthed && customerEmail) {
         try {
             await startEmailSignIn(customerEmail);
             ui.showToast(`Check ${customerEmail} for a link to finish saving your plan and RSVPs.`);
@@ -765,7 +789,10 @@ async function handleFreeRegistration(submitBtn, buttonText, spinner) {
     if (spinner) spinner.style.display = 'inline';
 
     try {
-        const count = await registerPlanEventsForCheckout(customerEmail);
+        // For a guest, set up the sign-in channel first so the confirmation email
+        // can carry a working sign-in link (instead of a separate magic-link email).
+        const signInChannelId = setupGuestSignInChannel();
+        const count = await registerPlanEventsForCheckout(customerEmail, { suppressSignInEmail: true });
 
         // Ensure the plan is persisted, then email both the purchaser and the
         // store a confirmation (with an "Open Plan & Pay" link). Non-fatal: the
@@ -778,7 +805,7 @@ async function handleFreeRegistration(submitBtn, buttonText, spinner) {
             }
             const amountDue = getCheckoutAmountDue();
             console.log('[FREE-REG] Sending confirmation emails. amountDue =', amountDue);
-            const emailResult = await sendCheckoutConfirmation({ customerEmail, customerName, amountDue, unpaid: true });
+            const emailResult = await sendCheckoutConfirmation({ customerEmail, customerName, amountDue, unpaid: true, signInChannelId });
             console.log('[FREE-REG] Confirmation email result:', emailResult);
         } catch (emailErr) {
             console.error('[FREE-REG] Confirmation email step failed (non-fatal):', emailErr.message);
@@ -838,12 +865,12 @@ function getCheckoutAmountDue() {
  * surfaced to the console but does not block the registration that already
  * happened. Requires a persisted session id so the server can resolve the plan.
  */
-async function sendCheckoutConfirmation({ customerEmail, customerName, amountDue, unpaid = true }) {
+async function sendCheckoutConfirmation({ customerEmail, customerName, amountDue, unpaid = true, signInChannelId = null }) {
     if (!state.session.id) {
         console.warn('[CHECKOUT-EMAIL] No session id — cannot send confirmation emails.');
         return { ok: false, reason: 'no-session-id' };
     }
-    const payload = { sessionId: state.session.id, customerEmail, customerName, amountDue, unpaid };
+    const payload = { sessionId: state.session.id, customerEmail, customerName, amountDue, unpaid, signInChannelId };
     console.log('[CHECKOUT-EMAIL] POST /.netlify/functions/send-checkout-confirmation', payload);
     try {
         const res = await fetch('/.netlify/functions/send-checkout-confirmation', {
@@ -858,6 +885,26 @@ async function sendCheckoutConfirmation({ customerEmail, customerName, amountDue
     } catch (err) {
         console.error('[CHECKOUT-EMAIL] Failed to send confirmation:', err.message);
         return { ok: false, reason: err.message };
+    }
+}
+
+/**
+ * For an un-signed-in guest, mint a magic-link channel id and start listening on
+ * it in THIS tab, so a sign-in link embedded in the checkout confirmation email
+ * signs them in here when clicked. Returns the channel id to hand to
+ * sendCheckoutConfirmation (or null for signed-in users / on failure). This
+ * replaces the separate magic-link email — one email now carries both the
+ * quote/receipt and the sign-in link.
+ */
+function setupGuestSignInChannel() {
+    if (state.session.user.isAuthenticated) return null;
+    try {
+        const channelId = generateAuthChannelId();
+        listenForEmailSignIn(channelId);
+        return channelId;
+    } catch (e) {
+        log('Events', `Could not set up guest sign-in channel: ${e.message}`);
+        return null;
     }
 }
 
@@ -901,13 +948,16 @@ async function handleSavePlanForLater() {
         }
 
         // Register for the plan's events (honors the "create an account" checkbox).
-        const count = await registerPlanEventsForCheckout(customerEmail);
+        // The sign-in link rides along in the confirmation email below, so suppress
+        // the separate magic-link email here.
+        const signInChannelId = setupGuestSignInChannel();
+        const count = await registerPlanEventsForCheckout(customerEmail, { suppressSignInEmail: true });
         console.log('[SAVE-PLAN] Registered for', count, 'event(s).');
 
         const amountDue = getCheckoutAmountDue();
         console.log('[SAVE-PLAN] amountDue =', amountDue);
 
-        const result = await sendCheckoutConfirmation({ customerEmail, customerName, amountDue, unpaid: true });
+        const result = await sendCheckoutConfirmation({ customerEmail, customerName, amountDue, unpaid: true, signInChannelId });
         console.log('[SAVE-PLAN] Confirmation email result:', result);
 
         // Swap the form for a success message (same pattern as free registration).

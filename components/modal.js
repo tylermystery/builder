@@ -10970,3 +10970,33 @@ export function getCheckoutChipInContext() {
 export function getCheckoutIsFreeRegistration() {
     return currentCheckoutIsFree;
 }
+
+// Refresh the live PaymentIntent's metadata with the name + email the customer
+// typed, WITHOUT changing the amount (it re-sends the same base amount and
+// payment type). The Stripe webhook reads customerEmail/customerName from this
+// metadata to send the receipt, so this guarantees a receipt address is on the
+// intent before it is confirmed — the email field is usually still empty when
+// the intent is first created. Best-effort: returns false on any failure so the
+// caller can proceed with the charge regardless.
+export async function syncCheckoutCustomerDetails(customerName, customerEmail) {
+    if (!currentPaymentIntentId) return false;
+    try {
+        const res = await fetch('/api/create-payment-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                amount: Math.round(currentBaseAmount * 100),
+                paymentMethodType: currentPaymentType,
+                sessionId: state.session?.id || null,
+                customerEmail: customerEmail || null,
+                customerName: customerName || null,
+                paymentIntentId: currentPaymentIntentId,
+                discountToken: currentDiscountToken || undefined,
+            }),
+        });
+        return res.ok;
+    } catch (e) {
+        console.warn('[checkout] Could not sync customer details to PaymentIntent:', e.message);
+        return false;
+    }
+}

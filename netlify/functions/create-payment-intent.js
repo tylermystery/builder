@@ -92,6 +92,7 @@ exports.handler = async (event) => {
     paymentMethodType = body.paymentMethodType || 'card';
     var sessionId = body.sessionId || null;
     var customerEmail = body.customerEmail || null;
+    var customerName = body.customerName || null;
     existingPaymentIntentId = body.paymentIntentId || null;
     var discountToken = body.discountToken || null;
   } catch (error) {
@@ -162,6 +163,7 @@ exports.handler = async (event) => {
         metadata: {
           sessionId: sessionId || '',
           customerEmail: customerEmail || '',
+          customerName: customerName || '',
           ...promoMetadata,
         },
       });
@@ -176,6 +178,7 @@ exports.handler = async (event) => {
         metadata: {
           sessionId: sessionId || '',
           customerEmail: customerEmail || '',
+          customerName: customerName || '',
           ...promoMetadata,
         },
       });

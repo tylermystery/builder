@@ -84,9 +84,18 @@ function setupDirectPayment(storeRecord) {
         const sessionId = sessionInput.value.trim();
         const amount = parseFloat(document.getElementById('dp-amount').value);
         const method = document.getElementById('dp-method').value;
+        const sendReceipt = document.getElementById('dp-send-receipt').checked;
+        const customerEmail = document.getElementById('dp-customer-email').value.trim();
 
         if (!sessionId) { setStatus('Please enter a session ID.', 'error'); return; }
         if (!amount || amount <= 0) { setStatus('Please enter a valid amount.', 'error'); return; }
+        // A receipt needs somewhere to go. Require the customer's email when the
+        // "email a receipt" box is ticked (the session may have no linked account).
+        if (sendReceipt && !customerEmail) {
+            setStatus("Enter the customer's email to send a receipt, or untick the receipt box.", 'error');
+            document.getElementById('dp-customer-email').focus();
+            return;
+        }
 
         const methodLabels = { 'direct-cash': 'Cash', 'direct-check': 'Check', 'direct-etransfer': 'E-Transfer', 'direct-other': 'Other' };
         const session = currentStoreSessions.find(s => s.id === sessionId);
@@ -126,6 +135,8 @@ function setupDirectPayment(storeRecord) {
         try {
             const note = document.getElementById('dp-note').value.trim();
             const sendReceipt = document.getElementById('dp-send-receipt').checked;
+            const customerName = document.getElementById('dp-customer-name').value.trim();
+            const customerEmail = document.getElementById('dp-customer-email').value.trim();
 
             const res = await fetch('/api/record-direct-payment', {
                 method: 'POST',
@@ -137,6 +148,8 @@ function setupDirectPayment(storeRecord) {
                     note: note || undefined,
                     storeOwnerId: currentStoreOwnerId,
                     sendReceipt,
+                    customerName: customerName || undefined,
+                    customerEmail: customerEmail || undefined,
                 }),
             });
 
