@@ -10,7 +10,7 @@ import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
-import { debounce, updateUrl, extractRecordIdFromPath, loadStripe, findStoreBySlugOrId, storeSlug, getShopUrlParam } from './utils.js';
+import { debounce, updateUrl, extractRecordIdFromPath, loadStripe, findStoreBySlugOrId, storeSlug, getShopUrlParam, decodeSelections } from './utils.js';
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js';
 import { initializeSessionChat } from './chat.js';
 import { setupCalendarEventListeners } from './components/calendarView.js';
@@ -23,7 +23,7 @@ import { initializeProjectsDashboard, updateProjectsData, showProjectsLoading } 
 import { initializeWtfPlansPanel, syncWtfPlansPanelWithUrl, refreshWtfPlansData, isWtfPlansPanelOpen, trackRecentPlan } from './components/wtfPlansPanel.js';
 import { initializeForumPanel, syncForumPanelWithUrl } from './components/forumPanel.js';
 import { loadPublicIdeasForStore } from './components/publicCatalog.js';
-import { applyCloudinaryTransform } from './utils/imageOptimizer.js';
+import { applyCloudinaryTransform, getBaseCloudinaryUrl } from './utils/imageOptimizer.js';
 import { loadTempIterations, loadTempReactions } from './components/refinementHandler.js';
 
 console.log('[MODULE DEBUG] main.js all imports resolved successfully.', performance.now().toFixed(2) + 'ms');
@@ -427,6 +427,14 @@ function syncUiWithUrl() {
     const view = params.get('view');
     let categoryFilter = params.get('category');
 
+    // Shareable checkout deep-link params (see writeCheckoutUrlState in modal.js):
+    //   action=rapidpay|chipin  → open that flow on the item, with...
+    //   qty / opts              → ...the sharer's quantity and option selections.
+    //   action=checkout         → open the plan checkout for the loaded session.
+    const checkoutAction = params.get('action');
+    const checkoutQty = params.get('qty');
+    const checkoutOpts = params.get('opts');
+
     // --- Auto-select first category when store has categories and no category is selected ---
     // This applies only when:
     // 1. No category is selected (categoryFilter is null/undefined)
@@ -572,9 +580,37 @@ function syncUiWithUrl() {
                     // Give a bit more time for CSS to settle before showing modal
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }
-                ui.showDetailModal(recordToOpen);
+                await ui.showDetailModal(recordToOpen);
+
+                // Shared Rapid Pay / Chip In deep link: restore the sharer's
+                // selections + quantity, then open the matching checkout flow.
+                if (checkoutAction === 'rapidpay' || checkoutAction === 'chipin') {
+                    try {
+                        await ui.applyCheckoutDeepLink({
+                            action: checkoutAction,
+                            qty: checkoutQty,
+                            selections: decodeSelections(checkoutOpts),
+                        });
+                    } catch (e) {
+                        console.warn('[SYNC-URL] Failed to apply checkout deep link:', e?.message);
+                    }
+                }
             } else {
                 console.warn(`Record ID ${openItemId} not found in state.records.all (${state.records.all.length} records loaded)`);
+            }
+        } else if (checkoutAction === 'checkout') {
+            // Shared plan-checkout deep link: open the plan checkout once the
+            // session has loaded and the plan actually has items. An empty plan
+            // just lands on the plan (no forced modal).
+            if (state.cart.lockedItems.size > 0) {
+                try {
+                    const shopSettings = ui.getShopSettings();
+                    ui.showCheckoutModal(shopSettings);
+                } catch (e) {
+                    console.warn('[SYNC-URL] Failed to open plan checkout from deep link:', e?.message);
+                }
+            } else {
+                log('Main', 'action=checkout deep link, but plan has no items — skipping checkout modal.');
             }
         }
     };
@@ -1157,13 +1193,35 @@ async function initialize() {
         if (logoTag) {
             const imageUrls = await api.fetchImagesByTags(logoTag);
             if (imageUrls && imageUrls.length > 0) {
-                const logoUrl = imageUrls[0];
+                // Logos get a dedicated render path (separate from event imagery):
+                // start from the base Cloudinary asset so we are not stuck with the
+                // shared c_fill/f_jpg transform (which crops and flattens transparency),
+                // then render with c_limit (preserve aspect ratio) + f_png (preserve alpha).
+                // e_background_removal standardizes every store's logo onto a transparent
+                // background. A store can opt out by setting a truthy LogoKeepBackground
+                // field in Airtable (e.g. for an already-clean logo or one mis-cut by the AI).
+                const baseLogoUrl = getBaseCloudinaryUrl(imageUrls[0]);
+                const keepBackground = !!activeShop.fields.LogoKeepBackground;
+                const removeBg = keepBackground ? '' : 'e_background_removal/';
+
+                const faviconTransform = `${removeBg}c_limit,w_64,f_png`;
+                const headerTransform = `${removeBg}c_limit,h_100,f_png,q_auto`;
+                // Fallbacks (no background removal) so a logo never disappears if the
+                // e_background_removal transform fails for a particular asset.
+                const headerFallback = applyCloudinaryTransform(baseLogoUrl, 'c_limit,h_100,f_png,q_auto');
+
                 const favicon = document.createElement('link');
                 favicon.rel = 'icon';
-                favicon.href = applyCloudinaryTransform(logoUrl, 'c_scale,w_32');
+                favicon.href = applyCloudinaryTransform(baseLogoUrl, faviconTransform);
                 document.head.appendChild(favicon);
                 const headerLogo = document.createElement('img');
-                headerLogo.src = applyCloudinaryTransform(logoUrl, 'h_50,c_scale,f_auto,q_auto');
+                headerLogo.src = applyCloudinaryTransform(baseLogoUrl, headerTransform);
+                if (!keepBackground) {
+                    headerLogo.addEventListener('error', function onLogoError() {
+                        headerLogo.removeEventListener('error', onLogoError);
+                        headerLogo.src = headerFallback;
+                    });
+                }
                 headerLogo.alt = `${activeShop.fields.Name} Logo`;
                 headerLogo.loading = 'eager'; // Logo should load immediately
                 headerLogo.fetchPriority = 'high'; // Prioritize logo loading
