@@ -3239,16 +3239,16 @@ function resetModalState() {
     const dynamicSections = document.querySelectorAll('.event-info-section, .rsvp-list-section, .calendar-export-section, .session-components-section, .edit-plan-section');
     dynamicSections.forEach(section => section.remove());
 
-    // Undo the published-event RSVP restructure (the primary RSVP block and the
-    // "…" overflow menu) so a subsequently opened non-event item is never left
-    // with event-only controls. The relocated Add to Plan button is rescued back
-    // into the action zone first, and the item-quantity stepper that events hide
-    // is made visible again.
+    // Undo the published-event RSVP restructure and the Donation chip-in
+    // restructure (their primary blocks and the "…" overflow menu) so a
+    // subsequently opened ordinary item is never left with type-specific controls.
+    // The relocated Add to Plan button is rescued back into the action zone first,
+    // and the item-quantity stepper those layouts hide is made visible again.
     const actionsContainerReset = document.getElementById('modal-actions-container');
     if (actionsContainerReset) {
         const stowedAddBtn = actionsContainerReset.querySelector('.modal-secondary-menu #modal-add-to-plan-btn');
         if (stowedAddBtn) actionsContainerReset.appendChild(stowedAddBtn);
-        actionsContainerReset.querySelectorAll('.modal-rsvp-primary, .modal-secondary-menu').forEach(el => el.remove());
+        actionsContainerReset.querySelectorAll('.modal-rsvp-primary, .modal-donation-primary, .modal-secondary-menu').forEach(el => el.remove());
     }
     const quantitySelectorReset = document.getElementById('modal-quantity-selector');
     if (quantitySelectorReset) quantitySelectorReset.style.display = '';
@@ -3264,6 +3264,12 @@ function resetModalState() {
     if (chipInBtn) chipInBtn.classList.remove('active');
     const priceActions = document.getElementById('modal-price-actions');
     if (priceActions) priceActions.classList.add('hidden');
+
+    // Remove the Donation goal/progress bar so non-donation items never inherit
+    // it. The "goal" suffix on the price clears automatically when the price
+    // innerHTML is rebuilt on the next open.
+    const donationProgress = document.getElementById('modal-donation-progress');
+    if (donationProgress) donationProgress.remove();
 
     // Reset reactions & comments sections
     const reactionsSection = document.getElementById('modal-reactions-section');
@@ -9626,6 +9632,19 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     if (record.fields['Item Type'] === 'Event') {
         setupEventRsvpActionZone(record, linkedSession);
     }
+    // Donation items: make Chip In the prominent primary action (opening the
+    // chip-in checkout with $20 preselected), tuck Add to Plan into a "…" menu,
+    // and hide the quantity stepper / scheduling / Rapid Pay. Scoped to Donations;
+    // all other items are untouched.
+    if (record.fields['Item Type'] === 'Donation') {
+        setupDonationActionZone(record);
+        // Reframe the listed price as a fundraising goal and show a live
+        // crowdfunding progress bar beneath it (independent of the action-zone
+        // restructure, so the goal framing shows even without payment options).
+        // Pass itemState so the goal matches the exact price shown at the top
+        // (which is computed with the same selected option/variation).
+        setupDonationGoalProgress(record, itemState);
+    }
     // --- END THE FIX ---\
 
     ui.updateCardIcon(record.id);
@@ -10379,6 +10398,214 @@ function setupEventRsvpActionZone(record, linkedSession) {
     }).catch(() => { /* defaults stand */ });
 }
 
+// Streamline a Donation item's action zone:
+//   • A prominent "Chip In" button (opening the chip-in checkout with $20
+//     preselected) becomes the primary action, replacing Add to Plan.
+//   • Add to Plan collapses into a secondary "…" overflow menu (matching events).
+//   • The item-quantity stepper, item scheduling, and the Rapid Pay button are
+//     hidden — a donation has no fixed price or quantity; the contribution amount
+//     is driven entirely by the chip-in presets / custom field.
+// Scoped to Donation items; all other items are untouched. If the store has no
+// payment options wired (so no chip-in checkout exists), this is a no-op and the
+// default Add to Plan layout stands.
+function setupDonationActionZone(record) {
+    const actions = document.getElementById('modal-actions-container');
+    if (!actions) return;
+
+    // The chip-in checkout only exists when the store has payment options. Without
+    // one there is nothing to make primary, so leave the default layout in place.
+    const paymentOptions = getStorePaymentOptions();
+    const hasPaymentOptions = paymentOptions && Object.keys(paymentOptions).length > 0;
+    const chipInBtn = document.getElementById('modal-chip-in-btn');
+    if (!hasPaymentOptions || !chipInBtn) return;
+
+    // Hide the item-quantity stepper (donations have no fixed quantity) and the
+    // whole price-action row, including its inline Rapid Pay button — this zone
+    // provides its own primary Chip In. Hiding the row via the same `hidden` class
+    // the reset/setup toggles avoids leaking inline styles to later modal opens.
+    const qtySel = document.getElementById('modal-quantity-selector');
+    if (qtySel) qtySel.style.display = 'none';
+    const priceActions = document.getElementById('modal-price-actions');
+    if (priceActions) priceActions.classList.add('hidden');
+
+    // Remove item scheduling and clear any stale schedule the shared inputs may
+    // carry from a prior (non-donation) modal open.
+    const timeContainer = document.getElementById('modal-item-time-container');
+    if (timeContainer) {
+        timeContainer.style.display = 'none';
+        const st = document.getElementById('modal-item-start-time');
+        const du = document.getElementById('modal-item-duration');
+        const dt = document.getElementById('modal-item-date');
+        if (st) st.value = '';
+        if (du) du.value = '';
+        if (dt && dt._flatpickr) dt._flatpickr.clear();
+        else if (dt) dt.value = '';
+    }
+
+    actions.style.display = 'block';
+
+    // Tear down anything from a previous open. The Add to Plan button is rescued
+    // back to the actions container first so it is never lost across reopens.
+    const priorMenu = actions.querySelector('.modal-secondary-menu');
+    if (priorMenu) {
+        const moved = priorMenu.querySelector('#modal-add-to-plan-btn');
+        if (moved) actions.appendChild(moved);
+        priorMenu.remove();
+    }
+    const priorPrimary = actions.querySelector('.modal-donation-primary');
+    if (priorPrimary) priorPrimary.remove();
+
+    // --- Secondary "…" menu holding Add to Plan ----------------------------
+    const addBtn = document.getElementById('modal-add-to-plan-btn');
+    const menu = document.createElement('div');
+    menu.className = 'modal-secondary-menu';
+    const menuToggle = document.createElement('button');
+    menuToggle.type = 'button';
+    menuToggle.className = 'modal-secondary-menu-toggle';
+    menuToggle.setAttribute('aria-label', 'More actions');
+    menuToggle.setAttribute('aria-haspopup', 'true');
+    menuToggle.setAttribute('aria-expanded', 'false');
+    menuToggle.textContent = '⋯';
+    const menuDropdown = document.createElement('div');
+    menuDropdown.className = 'modal-secondary-menu-dropdown';
+    menuDropdown.hidden = true;
+    if (addBtn) {
+        addBtn.style.display = '';
+        menuDropdown.appendChild(addBtn); // relocate the existing button as-is
+    }
+    menu.appendChild(menuToggle);
+    menu.appendChild(menuDropdown);
+    menuToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const willOpen = menuDropdown.hidden;
+        menuDropdown.hidden = !willOpen;
+        menuToggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    });
+    // Single, de-duplicated outside-click close (shares the event-menu handler slot
+    // so no per-open listener leaks; only one type-specific menu is ever open).
+    if (_eventMenuOutsideHandler) document.removeEventListener('click', _eventMenuOutsideHandler);
+    _eventMenuOutsideHandler = (e) => {
+        if (!menu.isConnected) return;
+        if (!menu.contains(e.target)) {
+            menuDropdown.hidden = true;
+            menuToggle.setAttribute('aria-expanded', 'false');
+        }
+    };
+    document.addEventListener('click', _eventMenuOutsideHandler);
+
+    // --- Primary "Chip In" block -------------------------------------------
+    const block = document.createElement('div');
+    block.className = 'modal-donation-primary';
+    const chipInPrimary = document.createElement('button');
+    chipInPrimary.type = 'button';
+    chipInPrimary.className = 'primary-action-btn donation-chip-in-btn';
+    chipInPrimary.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+        <span>Chip In</span>`;
+    // Reuse the fully-wired chip-in checkout flow: clicking the (now hidden) inline
+    // chip-in button opens checkout with chip-in highlighted and $20 preselected.
+    chipInPrimary.addEventListener('mouseenter', preloadStripe, { once: true });
+    chipInPrimary.addEventListener('touchstart', preloadStripe, { once: true });
+    chipInPrimary.addEventListener('click', () => chipInBtn.click());
+    block.appendChild(chipInPrimary);
+
+    // Primary block first, then the "…" menu — both at the top of the zone.
+    actions.insertBefore(menu, actions.firstChild);
+    actions.insertBefore(block, actions.firstChild);
+}
+
+/**
+ * For a Donation item's detail view, reframe the listed price as a fundraising
+ * goal and render a live crowdfunding progress bar directly beneath it. The
+ * "goal" wording is appended to the existing price, and the bar mirrors the
+ * checkout chip-in progress display (reusing its `.crowdfund-progress-*`
+ * styles). Funding data comes from the community fund (Airtable) with a
+ * localStorage fallback, exactly like the checkout flow's loadCrowdfundProgress.
+ * Both pieces are torn down in resetModalState so other item types are unaffected.
+ */
+async function setupDonationGoalProgress(record, itemState) {
+    const priceEl = document.getElementById('modal-item-price');
+    const priceRow = document.getElementById('modal-price-action-row');
+    if (!priceEl || !priceRow) return;
+
+    // 1) Append "goal" framing to the listed price. Idempotent: the price's
+    // innerHTML is rebuilt on every modal open, so this never compounds, and we
+    // only add it when a real dollar amount is shown (not "Free"/"Price Varies").
+    if (!priceEl.querySelector('.donation-goal-suffix') && /\$\s?\d/.test(priceEl.textContent)) {
+        const suffix = document.createElement('span');
+        suffix.className = 'donation-goal-suffix';
+        suffix.textContent = ' goal';
+        priceEl.appendChild(suffix);
+    }
+
+    // 2) Build the progress element directly under the price row. resetModalState
+    // removes any prior one, so each open starts fresh.
+    let progress = document.getElementById('modal-donation-progress');
+    if (!progress) {
+        progress = document.createElement('div');
+        progress.id = 'modal-donation-progress';
+        progress.innerHTML = `
+            <div class="crowdfund-progress-bar-container">
+                <div class="crowdfund-progress-bar-bg">
+                    <div class="crowdfund-progress-bar-fill" id="modal-donation-bar-fill"></div>
+                </div>
+            </div>
+            <div class="crowdfund-progress-stats">
+                <span id="modal-donation-raised">$0.00</span> raised of <span id="modal-donation-goal">$0.00</span> goal<span class="crowdfund-contributor-count" id="modal-donation-contributors"></span>
+            </div>`;
+        priceRow.insertAdjacentElement('afterend', progress);
+    }
+
+    // Goal is the item price (to fund one free giveaway), minimum $5 for free
+    // items — consistent with the checkout chip-in / donation-meter goal logic.
+    // Use the same selected option/variation as the price rendered at the top of
+    // the modal (getRecordPrice(record, itemState.selectedOptionIndex)), so the
+    // "$Y goal" target always matches the listed "$Y goal" price the user sees.
+    const price = getRecordPrice(record, itemState?.selectedOptionIndex) || 0;
+    const goalAmount = price > 0 ? price : 5;
+
+    // Load funding totals: Airtable first, localStorage as a fallback.
+    let raised = 0;
+    let contributors = 0;
+    try {
+        const fundRecord = await api.fetchCommunityFund(record.id);
+        if (fundRecord) {
+            raised = fundRecord.fields.Total_Raised || 0;
+            contributors = fundRecord.fields.Contributor_Count || 0;
+        }
+    } catch (e) {
+        console.warn('[Donation] Failed to load fund from Airtable, falling back to localStorage', e);
+    }
+    if (raised === 0) {
+        try {
+            const stored = localStorage.getItem(`donation_fund_${record.id}`);
+            if (stored) {
+                const local = JSON.parse(stored);
+                raised = local.raised || 0;
+                contributors = local.contributors || 0;
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    // The user may have opened a different item while the fetch was in flight;
+    // if so, this progress element is no longer the live one — bail out.
+    if (document.getElementById('modal-donation-progress') !== progress) return;
+
+    const percent = Math.min(100, (raised / goalAmount) * 100);
+    const barFill = document.getElementById('modal-donation-bar-fill');
+    const raisedEl = document.getElementById('modal-donation-raised');
+    const goalEl = document.getElementById('modal-donation-goal');
+    const contribEl = document.getElementById('modal-donation-contributors');
+    if (barFill) requestAnimationFrame(() => { barFill.style.width = `${percent}%`; });
+    if (raisedEl) raisedEl.textContent = `$${raised.toFixed(2)}`;
+    if (goalEl) goalEl.textContent = `$${goalAmount.toFixed(2)}`;
+    if (contribEl) {
+        contribEl.textContent = contributors > 0
+            ? ` · ${contributors} ${contributors === 1 ? 'contributor' : 'contributors'}`
+            : '';
+    }
+}
+
 function captureModalNoteAndSchedule() {
     const result = {};
     const note = document.getElementById('modal-item-note')?.value || '';
@@ -10879,6 +11106,10 @@ export async function showCheckoutModal(shopSettings, scope = null) {
                 skipBtn?.classList.remove('active');
                 customBtn.classList.add('active');
                 customBtn.click();
+                // Pre-apply the $20 preset so the chip-in opens with a live,
+                // editable contribution already added (visitors came to give).
+                const presetTwenty = chipInSection.querySelector('.chip-in-preset-btn[data-amount="20"]');
+                if (presetTwenty) presetTwenty.click();
             }
         }
         // Load crowdfunding progress from Airtable for this item

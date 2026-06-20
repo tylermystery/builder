@@ -11692,6 +11692,25 @@ hr.total-divider {
     font-size: 1em;
 }
 
+/* Donation items: a prominent "Chip In" button takes the primary slot. Uses the
+   warm heart tone of the chip-in theme to read as a contribution, not a purchase. */
+.modal-donation-primary {
+    margin-bottom: 12px;
+}
+.modal-donation-primary .donation-chip-in-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background-color: #e25555;
+}
+.modal-donation-primary .donation-chip-in-btn:hover {
+    background-color: #cf4646;
+}
+.modal-donation-primary .donation-chip-in-btn svg {
+    flex: 0 0 auto;
+}
+
 .rsvp-list-section {
     background-color: #f0f8ff;
     border-radius: 6px;

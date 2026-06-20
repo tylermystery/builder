@@ -374,6 +374,7 @@ export const CONSTANTS = {
         EVENT: 'Event',
         GROUPING: 'Grouping',
         PACKAGE: 'Package',
+        DONATION: 'Donation',
     },
     // This part is crucial for session loading
     DETAIL_TYPES: {
