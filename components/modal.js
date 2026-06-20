@@ -6,7 +6,7 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage, scoreToAdjective } from '../config.js';
 import { getCurrentUser } from '../chat.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration, formatEventTimeRange, getTempRsvps } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration, formatEventTimeRange, getTempRsvps, encodeSelections } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getDayStatus, AVAILABILITY_STATUS, logBusyTimeSummary, describeSelectedAvailability } from '../availability.js';
 import { showReceiptModal } from './receipt.js';
@@ -10416,6 +10416,115 @@ function captureModalNoteAndSchedule() {
     return result;
 }
 
+// ── Shareable checkout deep links ─────────────────────────────────────────
+// Power users share a checkout flow simply by copying the browser URL: whenever
+// a checkout modal is open, the address bar reflects the exact flow (Rapid Pay /
+// Chip In / plan checkout) plus the selected options and quantity. No extra
+// buttons are added — the address bar is the share affordance. The params are
+// written with replaceState on open and stripped again on close, so refreshing
+// or back/forward never re-fires anything unexpectedly and a clean URL remains
+// once the user leaves checkout. Following such a link never charges anyone; it
+// only re-opens the same checkout modal for the recipient to confirm.
+const CHECKOUT_URL_PARAMS = ['action', 'qty', 'opts'];
+
+function clearCheckoutUrlState() {
+    try {
+        const url = new URL(window.location);
+        let changed = false;
+        CHECKOUT_URL_PARAMS.forEach(p => {
+            if (url.searchParams.has(p)) { url.searchParams.delete(p); changed = true; }
+        });
+        if (changed) history.replaceState(history.state, '', url.toString());
+    } catch (e) {
+        log('Modal', `clearCheckoutUrlState failed: ${e.message}`);
+    }
+}
+
+function writeCheckoutUrlState(scope) {
+    try {
+        const url = new URL(window.location);
+        const sp = url.searchParams;
+        // Start from a clean slate so stale params from a previous flow never leak in.
+        CHECKOUT_URL_PARAMS.forEach(p => sp.delete(p));
+
+        if (scope && scope.mode === 'item') {
+            const isChipIn = !!scope.highlightChipIn;
+            sp.set('action', isChipIn ? 'chipin' : 'rapidpay');
+            // For Chip In the item-modal quantity is carried as maxQuantity
+            // (scope.quantity is the donation count, which begins at 0).
+            const qty = isChipIn ? (scope.maxQuantity || 1) : (scope.quantity || 1);
+            if (qty && qty !== 1) sp.set('qty', String(qty));
+            const optsStr = encodeSelections(scope.selections);
+            if (optsStr) sp.set('opts', optsStr);
+        } else {
+            // Plan checkout (no item scope) — the session id is already in the URL.
+            sp.set('action', 'checkout');
+        }
+        history.replaceState(history.state, '', url.toString());
+    } catch (e) {
+        log('Modal', `writeCheckoutUrlState failed: ${e.message}`);
+    }
+}
+
+/**
+ * Restore a shared checkout deep link inside the already-open item detail modal,
+ * then trigger the matching Rapid Pay / Chip In flow. It drives the real option
+ * buttons and quantity input so every pricing/selection rule runs exactly as if
+ * the recipient had clicked through by hand. No auto-charge happens — the
+ * triggered button only opens the checkout modal for confirmation.
+ *
+ * @param {Object} opts
+ * @param {string} opts.action - 'rapidpay' or 'chipin'.
+ * @param {number|string} [opts.qty] - Quantity selected by the sharer.
+ * @param {Object} [opts.selections] - Decoded option selections keyed by "groupN".
+ */
+export async function applyCheckoutDeepLink({ action, qty, selections } = {}) {
+    if (action !== 'rapidpay' && action !== 'chipin') return;
+
+    // Restore option selections by activating the matching option buttons. Only
+    // touch buttons that aren't already selected (clicking a selected one would
+    // toggle it off) and skip navigation options (which open a different item
+    // rather than record a selection).
+    if (selections && typeof selections === 'object') {
+        Object.keys(selections).forEach(groupKey => {
+            const m = /^group(\d+)$/.exec(groupKey);
+            if (!m) return;
+            const groupIndex = m[1];
+            const value = selections[groupKey];
+            const indices = Array.isArray(value) ? value : [value];
+            indices.forEach(optionIndex => {
+                const btn = document.querySelector(
+                    `#modal-options-container .option-btn[data-group-index="${groupIndex}"][data-option-index="${optionIndex}"]`
+                );
+                if (btn && !btn.classList.contains('navigation-option') && !btn.classList.contains('selected')) {
+                    btn.click();
+                }
+            });
+        });
+    }
+
+    // Restore quantity (the input handlers refresh the running total/price).
+    const qtyNum = parseFloat(qty);
+    if (!isNaN(qtyNum) && qtyNum > 0) {
+        const input = document.querySelector('#modal-quantity-selector .quantity-input');
+        if (input) {
+            input.value = qtyNum;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    // Trigger the matching flow. The existing button handlers build the correct
+    // checkout scope (reading the live selections/quantity we just restored).
+    const btnId = action === 'chipin' ? 'modal-chip-in-btn' : 'modal-rapid-pay-btn';
+    const payBtn = document.getElementById(btnId);
+    if (payBtn) {
+        payBtn.click();
+    } else {
+        log('Modal', `applyCheckoutDeepLink: #${btnId} not found`);
+    }
+}
+
 export async function showCheckoutModal(shopSettings, scope = null) {
     currentShopSettings = shopSettings;
     currentCheckoutScope = scope; // { mode: 'item', itemId, itemName, quantity, price, record, selectedOptionIndex, selections, highlightChipIn } or null (plan mode)
@@ -10457,6 +10566,9 @@ export async function showCheckoutModal(shopSettings, scope = null) {
     }
 
     if (!checkoutModalOverlay) return;
+
+    // Reflect this checkout flow in the URL so it can be copied & shared.
+    writeCheckoutUrlState(scope);
 
     // Guest "create an account / sign in" option vs. signed-in prefill.
     const accountRow = document.getElementById('checkout-account-row');
@@ -10927,6 +11039,9 @@ export function hideCheckoutModal() {
         currentCheckoutIsFree = false;
         currentPaymentType = 'card'; // Reset to default
         suppressPaymentTypeChange = false; // Clear any pending suppression
+        // Strip the shareable deep-link params now that checkout is closing, so a
+        // clean URL remains and a refresh/back won't re-open the checkout modal.
+        clearCheckoutUrlState();
         // Reset quantity toggle and crowdfund progress
         const qtyToggle = document.getElementById('checkout-item-quantity-toggle');
         if (qtyToggle) qtyToggle.style.display = 'none';

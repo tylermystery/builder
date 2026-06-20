@@ -755,6 +755,67 @@ export function updateUrl(paramsToUpdate, options = {}) {
     }
 }
 
+/**
+ * Encode an option-selection object into a compact, URL-safe string so it can
+ * travel in a shareable deep link. The selection shape matches what the detail
+ * modal produces, e.g. { group0: 1, group1: [0, 2] }.
+ *
+ * Format: each group becomes "<groupIndex>-<optIdx[.optIdx...]>", groups joined
+ * by "_". So { group0: 1, group1: [0, 2] } -> "0-1_1-0.2". Only digits, "-",
+ * "_" and "." appear, so no extra percent-encoding is needed.
+ *
+ * @param {Object} selections - Selection object keyed by "groupN".
+ * @returns {string} Encoded string, or '' when there is nothing to encode.
+ */
+export function encodeSelections(selections) {
+    if (!selections || typeof selections !== 'object') return '';
+    const parts = [];
+    Object.keys(selections)
+        .map(key => ({ key, m: /^group(\d+)$/.exec(key) }))
+        .filter(entry => entry.m)
+        .sort((a, b) => parseInt(a.m[1], 10) - parseInt(b.m[1], 10))
+        .forEach(({ key, m }) => {
+            const groupIndex = m[1];
+            const value = selections[key];
+            const indices = (Array.isArray(value) ? value : [value])
+                .map(v => parseInt(v, 10))
+                .filter(v => !isNaN(v) && v >= 0);
+            if (indices.length > 0) {
+                parts.push(`${groupIndex}-${indices.join('.')}`);
+            }
+        });
+    return parts.join('_');
+}
+
+/**
+ * Inverse of {@link encodeSelections}. Parses a deep-link "opts" string back into
+ * a selection object. A single option index decodes to a number; multiple decode
+ * to a sorted array, mirroring how the modal stores single- vs. multi-select.
+ *
+ * @param {string} str - Encoded selection string (e.g. "0-1_1-0.2").
+ * @returns {Object} Selection object keyed by "groupN" (empty when input is blank/invalid).
+ */
+export function decodeSelections(str) {
+    const selections = {};
+    if (!str || typeof str !== 'string') return selections;
+    str.split('_').forEach(part => {
+        const [groupPart, valuePart] = part.split('-');
+        const groupIndex = parseInt(groupPart, 10);
+        if (isNaN(groupIndex) || valuePart === undefined) return;
+        const indices = valuePart
+            .split('.')
+            .map(v => parseInt(v, 10))
+            .filter(v => !isNaN(v) && v >= 0)
+            .sort((a, b) => a - b);
+        if (indices.length === 1) {
+            selections[`group${groupIndex}`] = indices[0];
+        } else if (indices.length > 1) {
+            selections[`group${groupIndex}`] = indices;
+        }
+    });
+    return selections;
+}
+
 // --- NEWLY MOVED FUNCTIONS ---
 
 function getDescendantBookableItems(record, allRecords) {

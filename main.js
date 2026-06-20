@@ -10,7 +10,7 @@ import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
-import { debounce, updateUrl, extractRecordIdFromPath, loadStripe, findStoreBySlugOrId, storeSlug, getShopUrlParam } from './utils.js';
+import { debounce, updateUrl, extractRecordIdFromPath, loadStripe, findStoreBySlugOrId, storeSlug, getShopUrlParam, decodeSelections } from './utils.js';
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js';
 import { initializeSessionChat } from './chat.js';
 import { setupCalendarEventListeners } from './components/calendarView.js';
@@ -427,6 +427,14 @@ function syncUiWithUrl() {
     const view = params.get('view');
     let categoryFilter = params.get('category');
 
+    // Shareable checkout deep-link params (see writeCheckoutUrlState in modal.js):
+    //   action=rapidpay|chipin  → open that flow on the item, with...
+    //   qty / opts              → ...the sharer's quantity and option selections.
+    //   action=checkout         → open the plan checkout for the loaded session.
+    const checkoutAction = params.get('action');
+    const checkoutQty = params.get('qty');
+    const checkoutOpts = params.get('opts');
+
     // --- Auto-select first category when store has categories and no category is selected ---
     // This applies only when:
     // 1. No category is selected (categoryFilter is null/undefined)
@@ -572,9 +580,37 @@ function syncUiWithUrl() {
                     // Give a bit more time for CSS to settle before showing modal
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }
-                ui.showDetailModal(recordToOpen);
+                await ui.showDetailModal(recordToOpen);
+
+                // Shared Rapid Pay / Chip In deep link: restore the sharer's
+                // selections + quantity, then open the matching checkout flow.
+                if (checkoutAction === 'rapidpay' || checkoutAction === 'chipin') {
+                    try {
+                        await ui.applyCheckoutDeepLink({
+                            action: checkoutAction,
+                            qty: checkoutQty,
+                            selections: decodeSelections(checkoutOpts),
+                        });
+                    } catch (e) {
+                        console.warn('[SYNC-URL] Failed to apply checkout deep link:', e?.message);
+                    }
+                }
             } else {
                 console.warn(`Record ID ${openItemId} not found in state.records.all (${state.records.all.length} records loaded)`);
+            }
+        } else if (checkoutAction === 'checkout') {
+            // Shared plan-checkout deep link: open the plan checkout once the
+            // session has loaded and the plan actually has items. An empty plan
+            // just lands on the plan (no forced modal).
+            if (state.cart.lockedItems.size > 0) {
+                try {
+                    const shopSettings = ui.getShopSettings();
+                    ui.showCheckoutModal(shopSettings);
+                } catch (e) {
+                    console.warn('[SYNC-URL] Failed to open plan checkout from deep link:', e?.message);
+                }
+            } else {
+                log('Main', 'action=checkout deep link, but plan has no items — skipping checkout modal.');
             }
         }
     };
