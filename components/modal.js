@@ -1158,7 +1158,12 @@ function setupCheckoutChipIn(cartSubtotal) {
         }, 300));
     }
 
-    // Ensure default state: Skip is active, custom input hidden, amount = 0
+    // Ensure default state: Skip is active, custom input hidden, amount = 0.
+    // Restore visibility of all three options too — the Chip In flow hides Match My
+    // Cart and Skip afterward, but Rapid Pay and plan checkout show the full set.
+    chipInSection.querySelectorAll('.checkout-chip-in-option-btn').forEach(b => {
+        b.style.display = '';
+    });
     if (customInputContainer) customInputContainer.style.display = 'none';
     if (chipInSummary) chipInSummary.style.display = 'none';
 
@@ -10169,11 +10174,12 @@ export function hideDetailModal() {
 }
 
 /**
- * Reorders the checkout modal's Community Fund and "Also purchase this item?" sections.
- * In the Chip In flow we lead with the Community Fund, then show the also-purchase prompt
- * beneath it. Other flows (plan checkout, Rapid Pay) keep the default layout where the
- * Community Fund sits inside the totals block. The reordering is reversible and idempotent,
- * so reopening the modal in any mode always lands in the correct layout.
+ * Reorders the checkout modal's Community Fund section. In the Chip In flow we lead
+ * with the Community Fund (placed directly after the summary); other flows (plan
+ * checkout, Rapid Pay) keep the default layout where the Community Fund sits inside
+ * the totals block. The reordering is reversible and idempotent, so reopening the
+ * modal in any mode always lands in the correct layout. The "Also purchase this item?"
+ * quantity toggle is kept hidden in every flow, so its position is inert.
  */
 function applyChipInSectionOrder(chipInLead) {
     const summaryEl = document.getElementById('checkout-summary-details');
@@ -10663,45 +10669,11 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         }
         summaryList.appendChild(listItem);
 
-        // Show/setup quantity toggle for chip-in mode (when highlightChipIn is true)
+        // The "Also purchase this item?" quantity toggle has been removed. The Chip In
+        // flow is now purely a community contribution (quantity stays 0), so this prompt
+        // is always hidden in item-mode checkout.
         const qtyToggle = document.getElementById('checkout-item-quantity-toggle');
-        if (qtyToggle && scope.highlightChipIn) {
-            qtyToggle.style.display = 'block';
-            const qtyValueEl = document.getElementById('checkout-item-qty');
-            const qtyHint = document.getElementById('checkout-qty-hint');
-            if (qtyValueEl) qtyValueEl.textContent = initialQty;
-            if (qtyHint) {
-                qtyHint.textContent = initialQty === 0
-                    ? 'Quantity 0 = donation only. Increase to also buy.'
-                    : `Quantity ${initialQty} — item will be purchased + donation.`;
-            }
-
-            // Wire up +/- buttons
-            const minusBtn = qtyToggle.querySelector('.checkout-qty-minus');
-            const plusBtn = qtyToggle.querySelector('.checkout-qty-plus');
-
-            // Clone to remove old listeners
-            if (minusBtn) {
-                const newMinus = minusBtn.cloneNode(true);
-                minusBtn.parentNode.replaceChild(newMinus, minusBtn);
-                newMinus.addEventListener('click', () => {
-                    if (currentCheckoutItemQty > 0) {
-                        currentCheckoutItemQty--;
-                        updateCheckoutItemQtyDisplay(scope);
-                    }
-                });
-            }
-            if (plusBtn) {
-                const newPlus = plusBtn.cloneNode(true);
-                plusBtn.parentNode.replaceChild(newPlus, plusBtn);
-                newPlus.addEventListener('click', () => {
-                    currentCheckoutItemQty++;
-                    updateCheckoutItemQtyDisplay(scope);
-                });
-            }
-        } else if (qtyToggle) {
-            qtyToggle.style.display = 'none';
-        }
+        if (qtyToggle) qtyToggle.style.display = 'none';
     } else {
     // Plan mode (original behavior): show all locked items
     // Hide quantity toggle in plan mode
@@ -10884,8 +10856,8 @@ export async function showCheckoutModal(shopSettings, scope = null) {
     // --- UNIFIED CHECKOUT: Setup Chip In Section ---
     setupCheckoutChipIn(finalTotal);
 
-    // Section ordering: the Chip In flow leads with the Community Fund and shows the
-    // "Also purchase this item?" prompt beneath it; other flows keep the default layout.
+    // Section ordering: the Chip In flow leads with the Community Fund; other flows
+    // keep the default layout where the Community Fund sits inside the totals block.
     applyChipInSectionOrder(scope && scope.highlightChipIn);
 
     // If scope says to highlight chip-in, pre-expand it
@@ -10898,8 +10870,13 @@ export async function showCheckoutModal(shopSettings, scope = null) {
             if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
             const customBtn = chipInSection.querySelector('[data-chip-in="custom"]');
             const skipBtn = chipInSection.querySelector('[data-chip-in="skip"]');
-            if (customBtn && skipBtn) {
-                skipBtn.classList.remove('active');
+            const matchBtn = chipInSection.querySelector('[data-chip-in="match"]');
+            // In the Chip In flow "Match My Cart" and "Skip" don't apply — the visitor
+            // came specifically to contribute — so show only the "Chip In" option.
+            if (matchBtn) matchBtn.style.display = 'none';
+            if (skipBtn) skipBtn.style.display = 'none';
+            if (customBtn) {
+                skipBtn?.classList.remove('active');
                 customBtn.classList.add('active');
                 customBtn.click();
             }
