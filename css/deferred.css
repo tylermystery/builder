@@ -18756,6 +18756,23 @@ body.presentation-active .rsb-layout-toggle-fab {
     color: #999;
 }
 
+/* Donation detail view: "goal" framing on the listed price + progress bar.
+   Reuses the .crowdfund-progress-* bar styles above. */
+.donation-goal-suffix {
+    font-size: 0.55em;
+    font-weight: 700;
+    color: #e74c3c;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+
+#modal-donation-progress {
+    margin: 10px 0 14px 0;
+    max-width: 360px;
+}
+
 /* ========================================
    UNIFIED CHECKOUT: Payment Method Toggle
    ======================================== */
