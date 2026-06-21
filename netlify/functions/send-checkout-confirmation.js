@@ -93,13 +93,19 @@ exports.handler = async (event) => {
 
   try {
     const session = await getSessionRecord(sessionId);
-    const storeId = session.fields.Store?.[0];
+    // The Sessions table links to its store via the `Stores` (plural) field —
+    // matching how send-email-notification / send-chat-to-admin resolve it. A
+    // previous `Store` (singular) lookup always returned undefined, so the
+    // store never resolved and every email fell back to the default
+    // "WhatTheFun" sender name / contact email.
+    const storeId = session.fields.Stores?.[0];
     const store = storeId ? await getStoreRecord(storeId) : null;
     const merchantEmail = store?.fields?.ContactEmail;
     console.log('[send-checkout-confirmation] Resolved:', {
       sessionName: session.fields.Name,
       storeId: storeId || null,
       storeFound: !!store,
+      storeName: store?.fields?.Name || null,
       merchantEmail: merchantEmail || null,
     });
 
