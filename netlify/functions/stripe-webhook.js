@@ -82,11 +82,11 @@ function buildReceiptEmail(session, payment, store, baseUrl) {
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 0;">
       <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 28px 32px; border-radius: 12px 12px 0 0; text-align: center;">
-        <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: rgba(255,255,255,0.8); margin-bottom: 8px;">Payment Receipt</div>
-        <div style="font-size: 22px; font-weight: 700; color: white;">${storeName}</div>
+        <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: rgba(255,255,255,0.8); margin-bottom: 10px;">Payment Receipt</div>
+        <div style="font-size: 28px; font-weight: 800; color: white; line-height: 1.2;">${storeName}</div>
       </div>
       <div style="padding: 28px 32px; background: white; border: 1px solid #eee; border-top: none;">
-        <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">Thank you for your payment!</p>
+        <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">Thank you for your payment to <strong>${storeName}</strong>!</p>
 
         <div style="background: #f8f9fb; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
           <div style="font-size: 14px; color: #888; margin-bottom: 4px;">Booking</div>
@@ -130,7 +130,7 @@ function buildReceiptEmail(session, payment, store, baseUrl) {
   `;
 
   return {
-    subject: `Payment Receipt — ${sessionName}`,
+    subject: `${storeName}: Payment Receipt — ${sessionName}`,
     html,
     from: buildFrom(senderName, contactEmail),
   };
@@ -150,7 +150,8 @@ function buildMerchantNotificationEmail(session, payment, store, baseUrl) {
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
       <div style="background: #28a745; padding: 20px 28px; border-radius: 10px 10px 0 0; text-align: center;">
-        <div style="font-size: 20px; font-weight: 700; color: white;">New Payment Received</div>
+        <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: rgba(255,255,255,0.85); margin-bottom: 6px;">New Payment Received</div>
+        <div style="font-size: 22px; font-weight: 800; color: white; line-height: 1.2;">${storeName}</div>
       </div>
       <div style="padding: 24px 28px; background: white; border: 1px solid #eee; border-top: none; border-radius: 0 0 10px 10px;">
         <p style="font-size: 16px; color: #333; margin: 0 0 16px;">A payment of <strong>${amountStr}</strong> was received for <strong>${sessionName}</strong>.</p>
@@ -167,7 +168,7 @@ function buildMerchantNotificationEmail(session, payment, store, baseUrl) {
   `;
 
   return {
-    subject: `💰 Payment received: ${amountStr} for ${sessionName}`,
+    subject: `💰 ${storeName} — Payment received: ${amountStr} for ${sessionName}`,
     html,
     to: contactEmail,
     from: buildFrom(storeName, contactEmail),
@@ -312,10 +313,18 @@ async function handlePaymentIntentUpdate(paymentIntent, status) {
 
   const baseUrl = SITE_URL || URL || 'https://whatthefun.wtf';
   let store = null;
-  const storeId = session.fields.Store?.[0];
+  // Sessions link to their store via the `Stores` (plural) field. A previous
+  // `Store` (singular) lookup always returned undefined, so the store never
+  // resolved and the receipt fell back to the default "WhatTheFun" sender.
+  const storeId = session.fields.Stores?.[0];
   if (storeId) {
     store = await getStoreRecord(storeId);
   }
+  console.log('[stripe-webhook] Store resolved for receipt:', {
+    storeId: storeId || null,
+    storeFound: !!store,
+    storeName: store?.fields?.Name || null,
+  });
 
   if (status === 'succeeded' || status === 'processing') {
     const customerEmail = paymentIntent.metadata?.customerEmail;

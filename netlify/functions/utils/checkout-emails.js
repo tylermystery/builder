@@ -37,8 +37,8 @@ function buildReceiptEmail(session, payment, store, baseUrl, options = {}) {
   // Wording differs only for the "saved plan / no payment taken yet" case.
   const headerKicker = unpaid ? 'Plan Saved' : 'Payment Receipt';
   const introLine = unpaid
-    ? 'Your plan is saved. No payment has been taken yet — open it any time to review and pay.'
-    : 'Thank you for your payment!';
+    ? `Your plan with <strong>${storeName}</strong> is saved. No payment has been taken yet — open it any time to review and pay.`
+    : `Thank you for your payment to <strong>${storeName}</strong>!`;
   const amountLabel = unpaid ? 'Amount Due' : 'Amount Paid';
   const amountColor = unpaid ? '#b8860b' : '#28a745';
   const ctaLabel = unpaid ? 'Open Plan &amp; Pay' : 'View Your Plan';
@@ -65,8 +65,8 @@ function buildReceiptEmail(session, payment, store, baseUrl, options = {}) {
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 0;">
       <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 28px 32px; border-radius: 12px 12px 0 0; text-align: center;">
-        <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: rgba(255,255,255,0.8); margin-bottom: 8px;">${headerKicker}</div>
-        <div style="font-size: 22px; font-weight: 700; color: white;">${storeName}</div>
+        <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: rgba(255,255,255,0.8); margin-bottom: 10px;">${headerKicker}</div>
+        <div style="font-size: 28px; font-weight: 800; color: white; line-height: 1.2;">${storeName}</div>
       </div>
       <div style="padding: 28px 32px; background: white; border: 1px solid #eee; border-top: none;">
         <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">${introLine}</p>
@@ -115,7 +115,7 @@ function buildReceiptEmail(session, payment, store, baseUrl, options = {}) {
   `;
 
   return {
-    subject: unpaid ? `Your plan is saved — ${sessionName}` : `Payment Receipt — ${sessionName}`,
+    subject: unpaid ? `${storeName}: Your plan is saved — ${sessionName}` : `${storeName}: Payment Receipt — ${sessionName}`,
     html,
     from: buildFrom(senderName, contactEmail),
   };
@@ -152,7 +152,8 @@ function buildMerchantNotificationEmail(session, payment, store, baseUrl, option
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto;">
       <div style="background: ${bannerColor}; padding: 20px 28px; border-radius: 10px 10px 0 0; text-align: center;">
-        <div style="font-size: 20px; font-weight: 700; color: white;">${bannerTitle}</div>
+        <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: rgba(255,255,255,0.85); margin-bottom: 6px;">${bannerTitle}</div>
+        <div style="font-size: 22px; font-weight: 800; color: white; line-height: 1.2;">${storeName}</div>
       </div>
       <div style="padding: 24px 28px; background: white; border: 1px solid #eee; border-top: none; border-radius: 0 0 10px 10px;">
         <p style="font-size: 16px; color: #333; margin: 0 0 16px;">${bodyLine}</p>
@@ -171,8 +172,8 @@ function buildMerchantNotificationEmail(session, payment, store, baseUrl, option
 
   return {
     subject: unpaid
-      ? `📝 Plan saved: ${sessionName}`
-      : `💰 Payment received: ${amountStr} for ${sessionName}`,
+      ? `📝 ${storeName} — Plan saved: ${sessionName}`
+      : `💰 ${storeName} — Payment received: ${amountStr} for ${sessionName}`,
     html,
     to: contactEmail,
     from: buildFrom(storeName, contactEmail),

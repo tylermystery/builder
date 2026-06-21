@@ -5617,7 +5617,17 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     ? selections
                     : (itemState.selectedOptionIndex || 0);
                 const selectedOptionIndex = legacyIndexFromSelections(selections);
-                const price = getRecordPrice(record, priceParam);
+                // For a Donation item the headline/checkout price is the crowdfund
+                // GOAL (the item total), and the selected option is a contribution
+                // TIER that pre-fills the chip-in amount. For every other item the
+                // price is just the option-adjusted price (unchanged behavior).
+                const isDonationItem = record.fields['Item Type'] === 'Donation';
+                const tierAmount = getRecordPrice(record, priceParam);
+                const goalAmount = getRecordPrice(record);
+                const price = isDonationItem ? goalAmount : tierAmount;
+                const chipInPreset = (isDonationItem && tierAmount > 0 && tierAmount !== goalAmount)
+                    ? tierAmount
+                    : null;
                 const itemName = record.fields.Name || 'Item';
                 const shopSettings = getShopSettings();
                 showCheckoutModal(shopSettings, {
@@ -5631,6 +5641,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     selectedOptionIndex: selectedOptionIndex,
                     selections: selections,
                     highlightChipIn: true,
+                    chipInPreset: chipInPreset,
                     ...captureModalNoteAndSchedule()
                 });
             });
@@ -6601,6 +6612,19 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
 
+    // Donation items reframe the headline price as a crowdfund GOAL: the item
+    // total (base price) is the goal, and it stays fixed regardless of which
+    // option/contribution tier is selected. renderDonationGoalHeadline writes
+    // that stable "$X goal" headline; it's used both at first render and on
+    // every option change so selecting a tier never moves the goal.
+    const isDonationItem = record.fields['Item Type'] === 'Donation';
+    const renderDonationGoalHeadline = () => {
+        const goalPrice = getRecordPrice(record) || 0;
+        const goalText = goalPrice > 0 ? `$${goalPrice.toFixed(2)}` : 'Free';
+        const suffix = goalPrice > 0 ? '<span class="donation-goal-suffix"> goal</span>' : '';
+        modalItemPrice.innerHTML = goalText + pricingTypeHTML + suffix;
+    };
+
     // Store package data for use throughout modal (will be populated if isPackage)
     let packageContents = null;
     let packageMetadata = null;
@@ -6685,9 +6709,15 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         if ((record.id.startsWith('custom-') || record.id.startsWith('ai-search-') || record.id.startsWith('ai-child-')) && price > 0) {
             priceText += ' (Est.)';
         }
-        modalItemPrice.innerHTML = priceText + pricingTypeHTML;
-        if (typeof price === 'number' && price > 0) {
-            decorateModalPriceWithPromo(record, Math.round(price * 100));
+        if (isDonationItem) {
+            // Headline is the stable crowdfund goal (item total), not the
+            // selected tier's price.
+            renderDonationGoalHeadline();
+        } else {
+            modalItemPrice.innerHTML = priceText + pricingTypeHTML;
+            if (typeof price === 'number' && price > 0) {
+                decorateModalPriceWithPromo(record, Math.round(price * 100));
+            }
         }
     }
 
@@ -7870,9 +7900,15 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
     // Helper function to update UI when selections change
     const updateOptionsUI = () => {
-        // Update price display
-        const newPrice = getRecordPrice(record, currentSelections);
-        modalItemPrice.innerHTML = (typeof newPrice === 'number' ? (newPrice === 0 ? 'Free' : `$${newPrice.toFixed(2)}`) : 'N/A') + pricingTypeHTML;
+        // Update price display. For Donation items the headline is the crowdfund
+        // GOAL (the item total), which must stay fixed when a contribution tier is
+        // selected — so re-render the stable goal instead of the tier's price.
+        if (isDonationItem) {
+            renderDonationGoalHeadline();
+        } else {
+            const newPrice = getRecordPrice(record, currentSelections);
+            modalItemPrice.innerHTML = (typeof newPrice === 'number' ? (newPrice === 0 ? 'Free' : `$${newPrice.toFixed(2)}`) : 'N/A') + pricingTypeHTML;
+        }
 
         // Update description with appended text from selected options
         const fullDescription = getRecordDescription(record, currentSelections);
@@ -10556,12 +10592,11 @@ async function setupDonationGoalProgress(record, itemState) {
         priceRow.insertAdjacentElement('afterend', progress);
     }
 
-    // Goal is the item price (to fund one free giveaway), minimum $5 for free
-    // items — consistent with the checkout chip-in / donation-meter goal logic.
-    // Use the same selected option/variation as the price rendered at the top of
-    // the modal (getRecordPrice(record, itemState.selectedOptionIndex)), so the
-    // "$Y goal" target always matches the listed "$Y goal" price the user sees.
-    const price = getRecordPrice(record, itemState?.selectedOptionIndex) || 0;
+    // Goal is the item total (base price), minimum $5 for free items. The goal is
+    // deliberately the base price — NOT the option-adjusted price — so it stays
+    // fixed as the crowdfund target while options act as contribution tiers. This
+    // matches the stable "$Y goal" headline rendered at the top of the modal.
+    const price = getRecordPrice(record) || 0;
     const goalAmount = price > 0 ? price : 5;
 
     // Load funding totals: Airtable first, localStorage as a fallback.
@@ -11106,10 +11141,23 @@ export async function showCheckoutModal(shopSettings, scope = null) {
                 skipBtn?.classList.remove('active');
                 customBtn.classList.add('active');
                 customBtn.click();
-                // Pre-apply the $20 preset so the chip-in opens with a live,
-                // editable contribution already added (visitors came to give).
-                const presetTwenty = chipInSection.querySelector('.chip-in-preset-btn[data-amount="20"]');
-                if (presetTwenty) presetTwenty.click();
+                // Pre-apply a contribution so the chip-in opens with a live,
+                // editable amount already added (visitors came to give). For a
+                // Donation item this is the tier selected in the detail modal
+                // (scope.chipInPreset); otherwise it falls back to $20. A matching
+                // preset button is used when one exists so its active state shows;
+                // any other amount pre-fills the custom field.
+                const presetAmount = (scope.chipInPreset && scope.chipInPreset > 0) ? scope.chipInPreset : 20;
+                const matchingPreset = chipInSection.querySelector(`.chip-in-preset-btn[data-amount="${presetAmount}"]`);
+                if (matchingPreset) {
+                    matchingPreset.click();
+                } else {
+                    const customAmountInput = document.getElementById('checkout-chip-in-amount');
+                    if (customAmountInput) {
+                        customAmountInput.value = presetAmount.toFixed(2);
+                        customAmountInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                }
             }
         }
         // Load crowdfunding progress from Airtable for this item
