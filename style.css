@@ -775,7 +775,7 @@ html.presentation-active {
     }
 
     /* Hide filter toggle button on desktop - filters are always visible in sidebar */
-    #filter-toggle-btn {
+    #header-search-wrapper #filter-toggle-btn {
         display: none;
     }
 

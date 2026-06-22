@@ -87,7 +87,7 @@ exports.handler = async (event) => {
         const msg = {
             to: email,
             from: DEFAULT_FROM,
-            subject: 'Confirm Your Sign-In for TMT & WhatTheFun',
+            subject: 'Confirm Your Sign-In for WhatTheFun',
             html: `<p>Hello!</p><p>Please click the link below to confirm your sign-in attempt. This link will expire in 15 minutes.</p><p><a href="${confirmationLink}">Confirm Sign-In</a></p>`,
         };
 

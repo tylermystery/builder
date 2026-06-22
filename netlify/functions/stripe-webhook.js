@@ -1,7 +1,7 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
-const { SENDER_EMAIL, SENDER_NAME } = require('./utils/email-config');
+const { SENDER_EMAIL, SENDER_NAME, buildFrom } = require('./utils/email-config');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, STRIPE_WEBHOOK_SECRET, SITE_URL, URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -131,7 +131,7 @@ function buildReceiptEmail(session, payment, store, baseUrl) {
   return {
     subject: `Payment Receipt — ${sessionName}`,
     html,
-    from: `${senderName} <${contactEmail}>`,
+    from: buildFrom(senderName, contactEmail),
   };
 }
 
@@ -168,7 +168,7 @@ function buildMerchantNotificationEmail(session, payment, store, baseUrl) {
     subject: `💰 Payment received: ${amountStr} for ${sessionName}`,
     html,
     to: contactEmail,
-    from: `${storeName} <${contactEmail}>`,
+    from: buildFrom(storeName, contactEmail),
   };
 }
 

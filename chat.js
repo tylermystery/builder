@@ -17,7 +17,6 @@ let pusher = null;
 let sessionChatChannel = null;
 const FUN_ADJECTIVES = ['Happy', 'Clever', 'Sunny', 'Lucky', 'Creative', 'Brave', 'Sparkling', 'Cosmic', 'Witty', 'Zesty'];
 const FUN_NOUNS = ['Panda', 'Wombat', 'Explorer', 'Starship', 'Juggler', 'Wizard', 'Dolphin', 'Robot', 'Pineapple', 'Comet'];
-let originalTitle = document.title;
 let isTabActive = true;
 
 // Unified stream state
@@ -49,7 +48,7 @@ const EVENT_TYPE_DISPLAY = {
 
 window.addEventListener('focus', () => {
   isTabActive = true;
-  document.title = originalTitle;
+  document.title = document.title.replace(/^New (Message|Comment)! - /, '');
 });
 window.addEventListener('blur', () => {
   isTabActive = false;
@@ -2039,7 +2038,7 @@ export async function initializeSessionChat() {
                 isIdea: isIdea
             });
             if (!isTabActive) {
-                document.title = 'New Message! - ' + originalTitle;
+                document.title = 'New Message! - ' + document.title.replace(/^New (Message|Comment)! - /, '');
             }
         }
     });
@@ -2170,7 +2169,7 @@ export async function initializeSessionChat() {
 
             showNewMessageNotification(data.comment.fields?.SenderName || 'Unknown', `@${componentInfo.name}: ${data.comment.fields?.Content || ''}`);
             if (!isTabActive) {
-                document.title = 'New Comment! - ' + originalTitle;
+                document.title = 'New Comment! - ' + document.title.replace(/^New (Message|Comment)! - /, '');
             }
 
             // Refresh forum panel if open to show new component comments

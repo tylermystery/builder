@@ -22,6 +22,8 @@ let loopIterations = 0;
 let lastProgressLog = 0;
 let isPageVisible = true;
 
+const AUTO_DRIFT_SPEED = 0.002;
+
 function animationLoop(timestamp) {
     if (!currentEffect) {
         animationFrameId = requestAnimationFrame(animationLoop);
@@ -53,7 +55,9 @@ function animationLoop(timestamp) {
             lastProgressLog = currentProgress;
         }
 
-        currentEffect.draw(gl, canvas.width, canvas.height, elapsedTime, currentEnergy, currentProgress);
+        const autoProgressDrift = elapsedTime * AUTO_DRIFT_SPEED;
+        const totalProgress = currentProgress + autoProgressDrift;
+        currentEffect.draw(gl, canvas.width, canvas.height, elapsedTime, currentEnergy, totalProgress);
 
     } else if (currentEffect.type === 'canvas') {
         if (!ctx_2d) {

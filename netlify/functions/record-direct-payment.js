@@ -1,6 +1,6 @@
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
-const { SENDER_EMAIL, SENDER_NAME } = require('./utils/email-config');
+const { SENDER_EMAIL, SENDER_NAME, buildFrom } = require('./utils/email-config');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -106,6 +106,7 @@ exports.handler = async (event) => {
             const sessionName = session.fields.Name || 'Your Booking';
             const storeName = store.fields.Name || SENDER_NAME;
             const contactEmail = store.fields.ContactEmail || SENDER_EMAIL;
+            const emailFrom = buildFrom(storeName, contactEmail);
             const planUrl = `${baseUrl}/?session=${sessionId}`;
 
             for (const user of users) {
@@ -113,7 +114,7 @@ exports.handler = async (event) => {
               try {
                 await sgMail.send({
                   to: user.fields.Email,
-                  from: `${storeName} <${contactEmail}>`,
+                  from: emailFrom,
                   subject: `Payment Recorded — ${sessionName}`,
                   html: `
                     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto;">

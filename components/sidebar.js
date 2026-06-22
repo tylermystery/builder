@@ -6,7 +6,7 @@ import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { calculateMissingCategories, buildGoalBucket } from '../availability.js';
 import { calculateRecommendationScore } from '../availability.js';
-import { parseOptions, getRecordPrice, getEffectiveMinQuantity, flattenOptionGroups } from '../utils.js';
+import { parseOptions, getRecordPrice, getEffectiveMinQuantity, flattenOptionGroups, getShopUrlParam } from '../utils.js';
 import { log } from '../utils/debug.js';
 import * as backgroundEngine from './backgroundEngine.js';
 import { showReceiptModal } from './receipt.js';
@@ -1390,7 +1390,7 @@ async function handleSaveAndNew() {
 
         if (newSessionId) {
             // Navigate to the new session
-            const newUrl = `${window.location.pathname}?session=${newSessionId}${state.ui.activeShopId ? `&shopId=${state.ui.activeShopId}` : ''}`;
+            const newUrl = `${window.location.pathname}?session=${newSessionId}${state.ui.activeShopId ? `&${getShopUrlParam(state.ui.activeShopId, state.stores.all)}` : ''}`;
             window.location.href = newUrl;
         } else {
             throw new Error('Failed to create new session');
@@ -1449,11 +1449,11 @@ async function handleDeleteAndNew() {
 
         if (newSessionId) {
             // Navigate to the new session
-            const newUrl = `${window.location.pathname}?session=${newSessionId}${state.ui.activeShopId ? `&shopId=${state.ui.activeShopId}` : ''}`;
+            const newUrl = `${window.location.pathname}?session=${newSessionId}${state.ui.activeShopId ? `&${getShopUrlParam(state.ui.activeShopId, state.stores.all)}` : ''}`;
             window.location.href = newUrl;
         } else {
             // If creating new session fails, go to store root
-            const newUrl = `${window.location.pathname}${state.ui.activeShopId ? `?shopId=${state.ui.activeShopId}` : ''}`;
+            const newUrl = `${window.location.pathname}${state.ui.activeShopId ? `?${getShopUrlParam(state.ui.activeShopId, state.stores.all)}` : ''}`;
             window.location.href = newUrl;
         }
     } catch (error) {
@@ -1493,7 +1493,7 @@ async function handleArchivePlan() {
         if (archived) {
             alert('Plan archived successfully.');
             // Navigate to a new session or store root
-            const newUrl = `${window.location.pathname}${state.ui.activeShopId ? `?shopId=${state.ui.activeShopId}` : ''}`;
+            const newUrl = `${window.location.pathname}${state.ui.activeShopId ? `?${getShopUrlParam(state.ui.activeShopId, state.stores.all)}` : ''}`;
             window.location.href = newUrl;
         } else {
             throw new Error('Failed to archive session');
@@ -1535,7 +1535,7 @@ async function handleDeletePlan() {
         if (deleted) {
             alert('Plan deleted successfully.');
             // Navigate to store root
-            const newUrl = `${window.location.pathname}${state.ui.activeShopId ? `?shopId=${state.ui.activeShopId}` : ''}`;
+            const newUrl = `${window.location.pathname}${state.ui.activeShopId ? `?${getShopUrlParam(state.ui.activeShopId, state.stores.all)}` : ''}`;
             window.location.href = newUrl;
         } else {
             throw new Error('Failed to delete session');
@@ -1735,7 +1735,7 @@ async function showSessionsModal() {
 
             if (openBtn) {
                 const sessionId = openBtn.dataset.sessionId;
-                const newUrl = `${window.location.pathname}?session=${sessionId}${state.ui.activeShopId ? `&shopId=${state.ui.activeShopId}` : ''}`;
+                const newUrl = `${window.location.pathname}?session=${sessionId}${state.ui.activeShopId ? `&${getShopUrlParam(state.ui.activeShopId, state.stores.all)}` : ''}`;
                 window.location.href = newUrl;
             }
 
@@ -2035,7 +2035,8 @@ async function handleInvite() {
                 invitedBy: state.session.user?.id || '',
                 inviterName: inviterName,
                 role: role,
-                sessionName: sessionName
+                sessionName: sessionName,
+                storeId: state.session.storeId || ''
             })
         });
 
@@ -2184,7 +2185,7 @@ export function updateHeader() {
 
     const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
     const shopName = activeShop?.fields?.Name || '';
-    document.title = eventName || (shopName ? `WTFun ${shopName}` : 'WTFun');
+    document.title = eventName || (shopName ? `${shopName} WTFun` : 'WTFun');
     const eventNameInput = document.getElementById('header-event-name');
     if (eventNameInput) {
         console.log('[DEBUG updateHeader] Setting header-event-name input to:', eventName);

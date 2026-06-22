@@ -12,6 +12,7 @@ import * as api from './api.js';
 import { showPresentationView, hidePresentationView, setupPresentationEventListeners } from './components/presentation.js';
 import { addEnergy, updateProgress } from './components/backgroundEngine.js';
 import { shouldUseNetlifyImageCDN, optimizeImageUrl, applyCloudinaryTransform, hasCloudinaryTransformations } from './utils/imageOptimizer.js';
+import { storeSlug } from './utils.js';
 
 console.log('[MODULE DEBUG] ui.js imports resolved. Checking key imports...');
 console.log('[MODULE DEBUG] ui.js: createInteractiveCard:', typeof createInteractiveCard);
@@ -812,7 +813,7 @@ export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
     const shopName = activeShop?.fields?.Name || '';
-    document.title = eventName || (shopName ? `WTFun ${shopName}` : 'WTFun');
+    document.title = eventName || (shopName ? `${shopName} WTFun` : 'WTFun');
     const eventNameInput = document.getElementById('header-event-name');
     if (eventNameInput) {
         eventNameInput.value = eventName || 'Enter Plan Name';
@@ -977,7 +978,7 @@ export function showShopSwitcher() {
     listContainer.innerHTML = ''; 
     storeRecords.forEach(record => {
         const link = document.createElement('a');
-        link.href = `/?shopId=${record.id}`;
+        link.href = `/?shop=${encodeURIComponent(storeSlug(record.fields.Name))}`;
         link.textContent = record.fields.Name;
         link.style.display = 'block';
         link.style.padding = '10px';

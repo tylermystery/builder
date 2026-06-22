@@ -8,7 +8,7 @@ import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus, getPlanDayStatusSync, logBusyTimeSummary } from './availability.js';
-import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, preloadStripe } from './utils.js';
+import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, preloadStripe, getShopUrlParam } from './utils.js';
 import { sendMessage, getCurrentUser, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName, toggleRecentChats, addPlanEventToHistory } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
@@ -2160,7 +2160,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
             log('Events', `Navigating to edit existing session ${sessionId}`);
             const currentShopId = state.ui.activeShopId;
-            window.location.href = `${window.location.pathname}?session=${sessionId}&shopId=${currentShopId}`;
+            window.location.href = `${window.location.pathname}?session=${sessionId}&${getShopUrlParam(currentShopId, state.stores.all)}`;
             return;
         }
 
@@ -2184,7 +2184,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             try {
                 // Navigate to the session with presentation view
                 const currentShopId = state.ui.activeShopId;
-                window.location.href = `${window.location.pathname}?session=${sessionId}&shopId=${currentShopId}&view=present&eventId=${eventId}`;
+                window.location.href = `${window.location.pathname}?session=${sessionId}&${getShopUrlParam(currentShopId, state.stores.all)}&view=present&eventId=${eventId}`;
             } catch (error) {
                 console.error('Error opening presentation view:', error);
                 ui.showToast(`Error: ${error.message}`);
@@ -2228,7 +2228,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
                     // Redirect to the new session for editing
                     const currentShopId = state.ui.activeShopId;
-                    window.location.href = `${window.location.pathname}?session=${newSession.id}&shopId=${currentShopId}`;
+                    window.location.href = `${window.location.pathname}?session=${newSession.id}&${getShopUrlParam(currentShopId, state.stores.all)}`;
                 } else {
                     throw new Error('Failed to create session');
                 }

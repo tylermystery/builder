@@ -182,7 +182,8 @@ async function handleSendInvite() {
                 invitedBy: currentUser?.id,
                 inviterName: currentUser?.name || 'Someone',
                 role,
-                sessionName: eventName
+                sessionName: eventName,
+                storeId: state.session.storeId || ''
             })
         });
 
