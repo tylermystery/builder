@@ -28,6 +28,7 @@
 //   PATCH  /api/groups                        (auth + publish permission)  edit
 //   DELETE /api/groups                        (auth + publish permission)  delete
 //   POST   /api/groups/members                (auth + publish permission)  add member
+//   POST   /api/groups/create-member          (auth + publish permission)  create user + add member
 //   DELETE /api/groups/members                (auth + publish permission)  remove member
 //
 // Permissioning mirrors promotions.ts exactly: the store's PublishPermission
@@ -88,7 +89,16 @@ async function userHasPublishPermissionForStore(
 // ---------------------------------------------------------------------------
 // Airtable user lookups (for rendering rosters and the member picker).
 // ---------------------------------------------------------------------------
-type UserLite = { id: string; name: string; imageUrl: string | null };
+type UserLite = {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  email?: string;
+  bio?: string;
+  storeName?: string;
+  linkedToStore?: boolean;
+  matchedByEmail?: boolean;
+};
 
 // Only ever embed Airtable record ids that match the expected shape into a
 // formula, so a hostile value can never break out of the formula string.
@@ -101,7 +111,40 @@ function shapeUser(rec: { id: string; fields?: Record<string, unknown> }): UserL
     id: rec.id,
     name: (f.Name as string) || "Member",
     imageUrl: (Array.isArray(pic) && pic[0]?.url) || null,
+    email: typeof f.Email === "string" ? f.Email : undefined,
+    bio: typeof f.Bio === "string" ? f.Bio : undefined,
+    storeName: typeof f["Store Name"] === "string" ? f["Store Name"] : undefined,
   };
+}
+
+function cleanEmail(value: unknown): string | null {
+  const email = String(value || "").trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
+}
+
+function airtableStringLiteral(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+async function fetchUserByEmail(email: string): Promise<UserLite | null> {
+  const pat = process.env.AIRTABLE_PAT;
+  const baseId = process.env.BASE_ID;
+  const clean = cleanEmail(email);
+  if (!pat || !baseId || !clean) return null;
+  const formula = `LOWER({Email})='${airtableStringLiteral(clean)}'`;
+  const url =
+    `https://api.airtable.com/v0/${baseId}/Users` +
+    `?filterByFormula=${encodeURIComponent(formula)}` +
+    `&fields%5B%5D=Name&fields%5B%5D=ProfilePicture&fields%5B%5D=Email&pageSize=1`;
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${pat}` } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { records?: Array<{ id: string; fields?: Record<string, unknown> }> };
+    const rec = data.records?.[0];
+    return rec ? { ...shapeUser(rec), matchedByEmail: true } : null;
+  } catch {
+    return null;
+  }
 }
 
 // Resolve a set of Airtable user ids to {id, name, imageUrl}. Batched to keep
@@ -161,6 +204,120 @@ async function fetchStoreUsers(storeId: string): Promise<UserLite[]> {
     /* return whatever we gathered */
   }
   return users;
+}
+
+function cleanPhotoUrls(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value : String(value || "").split(/[\n,]+/);
+  return raw
+    .map((url) => String(url || "").trim())
+    .filter((url) => /^https?:\/\//i.test(url))
+    .slice(0, 6);
+}
+
+function cleanHttpUrl(value: unknown): string | null {
+  const url = String(value || "").trim();
+  return /^https?:\/\//i.test(url) ? url : null;
+}
+
+type CreateMemberFailure = {
+  error: string;
+  debug: {
+    stage: string;
+    status?: number;
+    airtableType?: string;
+    airtableMessage?: string;
+    attemptedFields?: string[];
+  };
+};
+
+async function readAirtableError(res: Response): Promise<{ type?: string; message?: string }> {
+  try {
+    const data = (await res.json()) as { error?: { type?: string; message?: string } | string };
+    if (typeof data.error === "string") return { message: data.error };
+    return {
+      type: data.error?.type,
+      message: data.error?.message,
+    };
+  } catch {
+    return {};
+  }
+}
+
+async function createAirtableUserForGroup(
+  body: Record<string, unknown>,
+  storeId: string,
+): Promise<UserLite | CreateMemberFailure> {
+  const pat = process.env.AIRTABLE_PAT;
+  const baseId = process.env.BASE_ID;
+  if (!pat || !baseId) {
+    return { error: "Airtable is not configured", debug: { stage: "config" } };
+  }
+
+  const name = String(body.name || "").trim();
+  if (!name) return { error: "name is required", debug: { stage: "validation" } };
+
+  const baseFields: Record<string, unknown> = {
+    Name: name,
+  };
+  const email = cleanEmail(body.email ?? body.memberEmail);
+  if (email) baseFields.Email = email;
+  const optionalFields: Array<[string, unknown]> = [["Stores", [storeId]]];
+  const photoUrls = cleanPhotoUrls(body.photoUrls ?? body.imageUrls ?? body.profilePhotos);
+  if (photoUrls.length) optionalFields.push(["ProfilePicture", photoUrls.map((url) => ({ url }))]);
+  const bio = String(body.bio || "").trim();
+  if (bio) optionalFields.push(["Bio", bio]);
+  const storeName = String(body.storeName || "").trim();
+  if (storeName) optionalFields.push(["Store Name", storeName]);
+
+  const url = `https://api.airtable.com/v0/${baseId}/Users`;
+  for (let keep = optionalFields.length; keep >= 0; keep--) {
+    const fields = { ...baseFields };
+    for (const [key, value] of optionalFields.slice(0, keep)) fields[key] = value;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${pat}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ records: [{ fields }] }),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { records?: Array<{ id: string; fields?: Record<string, unknown> }> };
+      const rec = data.records?.[0];
+      return rec ? { ...shapeUser(rec), linkedToStore: "Stores" in fields } : {
+        error: "Could not create member",
+        debug: { stage: "airtable-empty-response", attemptedFields: Object.keys(fields) },
+      };
+    }
+    // Retry by dropping optional fields if Airtable rejects a field that this
+    // base does not have. If the Stores link field itself is unavailable, a
+    // minimal Airtable user is still enough because the group member card lives
+    // in Postgres and is anchored to the group there.
+    if (keep === 0 || res.status !== 422) {
+      const airtableError = await readAirtableError(res);
+      return {
+        error: "Could not create member",
+        debug: {
+          stage: "airtable-create-user",
+          status: res.status,
+          airtableType: airtableError.type,
+          airtableMessage: airtableError.message,
+          attemptedFields: Object.keys(fields),
+        },
+      };
+    }
+  }
+  return { error: "Could not create member", debug: { stage: "airtable-create-user" } };
+}
+
+function buildMemberValues(body: Record<string, unknown>) {
+  const photoUrls = cleanPhotoUrls(body.photoUrls ?? body.imageUrls ?? body.profilePhotos);
+  return {
+    role: String(body.role ?? "member") === "admin" ? "admin" : "member",
+    displayName: String(body.name || body.displayName || "").trim() || null,
+    bio: String(body.bio || "").trim() || null,
+    imageUrls: photoUrls.length ? photoUrls : null,
+    memberEmail: cleanEmail(body.email ?? body.memberEmail),
+    storeName: String(body.storeName || "").trim() || null,
+    storeUrl: cleanHttpUrl(body.storeUrl),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -291,6 +448,8 @@ export default async (req: Request) => {
         .select()
         .from(groupMembers)
         .where(eq(groupMembers.groupId, g.id));
+      const isGroupAdmin = !!userId && memberRows.some((m) => m.userId === userId && m.role === "admin");
+      const canManageMembers = canManage || isGroupAdmin;
 
       if (g.visibility === "private" && !canManage) {
         const isMember = !!userId && memberRows.some((m) => m.userId === userId);
@@ -303,12 +462,20 @@ export default async (req: Request) => {
       const roster = memberRows
         .map((m) => {
           const u = userMap.get(m.userId);
+          const imageUrls = Array.isArray(m.imageUrls) ? m.imageUrls.filter((url): url is string => typeof url === "string") : [];
+          const canEdit = canManageMembers || (!!userId && m.userId === userId);
           return {
             userId: m.userId,
             role: m.role,
             joinedAt: m.joinedAt,
-            name: u?.name || "Member",
-            imageUrl: u?.imageUrl || null,
+            name: m.displayName || u?.name || "Member",
+            imageUrl: imageUrls[0] || u?.imageUrl || null,
+            imageUrls,
+            bio: m.bio || u?.bio || "",
+            email: canEdit ? m.memberEmail || "" : "",
+            storeName: m.storeName || u?.storeName || "",
+            storeUrl: m.storeUrl || "",
+            canEdit,
           };
         })
         .sort((a, b) => {
@@ -318,6 +485,8 @@ export default async (req: Request) => {
 
       return json(200, {
         canManage,
+        canManageMembers,
+        currentUserId: userId,
         group: { ...publicShape(g, roster.length) },
         members: roster,
       });
@@ -339,6 +508,37 @@ export default async (req: Request) => {
     const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
     if (!body) return json(400, { error: "Invalid JSON body" });
 
+    // ---- Create a lightweight Airtable user and add them ------------------
+    if (req.method === "POST" && resource === "create-member") {
+      const groupId = body.groupId == null ? null : Number(body.groupId);
+      if (!groupId) return json(400, { error: "groupId is required" });
+      const [g] = await db.select().from(groups).where(eq(groups.id, groupId));
+      if (!g) return json(404, { error: "Group not found" });
+      if (!(await userHasPublishPermissionForStore(g.storeId, userId)))
+        return json(403, { error: "Forbidden" });
+
+      const matched = cleanEmail(body.email ?? body.memberEmail)
+        ? await fetchUserByEmail(String(body.email ?? body.memberEmail))
+        : null;
+      const created = matched || (await createAirtableUserForGroup(body, g.storeId));
+      if ("error" in created) return json(400, created);
+      const values = buildMemberValues(body);
+      await db
+        .insert(groupMembers)
+        .values({
+          groupId,
+          userId: created.id,
+          ...values,
+          displayName: values.displayName || created.name,
+          memberEmail: values.memberEmail || created.email || null,
+        })
+        .onConflictDoNothing({ target: [groupMembers.groupId, groupMembers.userId] });
+      return json(201, {
+        member: created,
+        debug: { linkedToStore: !!created.linkedToStore, matchedByEmail: !!created.matchedByEmail },
+      });
+    }
+
     // ---- Membership changes ---------------------------------------------
     if (resource === "members") {
       const groupId = body.groupId == null ? null : Number(body.groupId);
@@ -346,17 +546,41 @@ export default async (req: Request) => {
       if (!groupId || !memberId) return json(400, { error: "groupId and userId are required" });
       const [g] = await db.select().from(groups).where(eq(groups.id, groupId));
       if (!g) return json(404, { error: "Group not found" });
-      if (!(await userHasPublishPermissionForStore(g.storeId, userId)))
+      const memberRows = await db
+        .select()
+        .from(groupMembers)
+        .where(eq(groupMembers.groupId, groupId));
+      const canPublish = await userHasPublishPermissionForStore(g.storeId, userId);
+      const isGroupAdmin = memberRows.some((m) => m.userId === userId && m.role === "admin");
+      const isSelf = memberId === userId;
+      if (!canPublish && !isGroupAdmin && !(isSelf && req.method !== "POST"))
         return json(403, { error: "Forbidden" });
 
       if (req.method === "POST") {
-        const role = String(body.role ?? "member") === "admin" ? "admin" : "member";
+        if (!canPublish) return json(403, { error: "Forbidden" });
+        const values = buildMemberValues(body);
         // Idempotent add: ignore a duplicate (group,user) so re-adds are safe.
         await db
           .insert(groupMembers)
-          .values({ groupId, userId: memberId, role })
+          .values({
+            groupId,
+            userId: memberId,
+            ...values,
+          })
           .onConflictDoNothing({ target: [groupMembers.groupId, groupMembers.userId] });
         return json(201, { added: true });
+      }
+      if (req.method === "PATCH") {
+        const existing = memberRows.find((m) => m.userId === memberId);
+        if (!existing) return json(404, { error: "Member not found" });
+        const values = buildMemberValues(body);
+        if (!canPublish && !isGroupAdmin) values.role = existing.role;
+        const [member] = await db
+          .update(groupMembers)
+          .set(values)
+          .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, memberId)))
+          .returning();
+        return json(200, { member });
       }
       if (req.method === "DELETE") {
         await db

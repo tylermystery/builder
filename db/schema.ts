@@ -342,6 +342,15 @@ export const groupMembers = pgTable(
       .references(() => groups.id, { onDelete: "cascade" }),
     // Airtable user record id.
     userId: text("user_id").notNull(),
+    // Optional group-specific display details. These let store publishers add
+    // simple member cards even when the Airtable Users table has only a minimal
+    // record for that person.
+    displayName: text("display_name"),
+    bio: text("bio"),
+    imageUrls: jsonb("image_urls"),
+    memberEmail: text("member_email"),
+    storeName: text("store_name"),
+    storeUrl: text("store_url"),
     // 'member' (default) or 'admin' (a member with elevated standing within the
     // group). Store-level publish permission, not this role, governs who can
     // edit the group itself.

@@ -57,8 +57,15 @@
       color: #fff; font-weight: 700; font-size: 22px; flex-shrink: 0;
     }
     .member .name { font-size: 13px; font-weight: 600; }
+    .member .bio { font-size: 12px; color: var(--muted); max-width: 160px; }
+    .member .store-link { font-size: 12px; color: var(--brand); text-decoration: none; font-weight: 700; }
     .member .role { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
     .member .badge-admin { color: var(--brand); }
+    .member-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+    .member-edit {
+      grid-column: 1 / -1; border: 1px solid var(--line); border-radius: 10px;
+      padding: 12px; background: #fafafa; text-align: left;
+    }
     .empty { color: var(--muted); font-size: 14px; }
     label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .4px; }
     input, select, textarea {
@@ -76,6 +83,11 @@
     .btn.secondary { background: #f1f1f4; color: var(--ink); }
     .btn.tiny { padding: 5px 11px; font-size: 12px; }
     .btn.danger { background: #9aa0a6; }
+    .debug-tools {
+      margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line);
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .debug-status { font-size: 12px; color: var(--muted); }
     .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
     .picker-row {
       display: flex; align-items: center; gap: 10px; padding: 8px 4px;
@@ -124,6 +136,7 @@
       <details class="manage">
         <summary>Manage group</summary>
         <div style="margin-top:16px">
+          <div id="groupSettingsSection">
           <label for="editName">Name</label>
           <input id="editName" />
           <label for="editKind">Kind / label (optional)</label>
@@ -147,10 +160,53 @@
             <button class="btn" id="saveBtn">Save changes</button>
             <button class="btn danger" id="deleteBtn">Delete group</button>
           </div>
+          </div>
 
-          <h2 style="margin-top:26px">Add or remove members</h2>
-          <div class="hint">People linked to this store. Toggle to add or remove them from the group.</div>
+          <div id="addMemberSection">
+          <h2 style="margin-top:26px">Add member</h2>
+          <div class="row">
+            <div>
+              <label for="memberName">Member name</label>
+              <input id="memberName" placeholder="Alex Morgan" />
+            </div>
+            <div>
+              <label for="memberRole">Role</label>
+              <select id="memberRole">
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </div>
+          <label for="memberEmail">Member email (optional)</label>
+          <input id="memberEmail" type="email" placeholder="member@example.com" autocomplete="email" />
+          <label for="memberPhotos">Profile photo URL(s)</label>
+          <textarea id="memberPhotos" placeholder="One image URL per line"></textarea>
+          <label for="memberBio">Bio</label>
+          <textarea id="memberBio" placeholder="Short member bio"></textarea>
+          <div class="row">
+            <div>
+              <label for="memberStoreName">Store name (optional)</label>
+              <input id="memberStoreName" placeholder="Member's store" />
+            </div>
+            <div>
+              <label for="memberStoreUrl">Store link (optional)</label>
+              <input id="memberStoreUrl" placeholder="https://..." />
+            </div>
+          </div>
+          <div style="margin-top:14px">
+            <button class="btn" id="addMemberBtn">Add member</button>
+          </div>
+          </div>
+          <div class="debug-tools">
+            <button class="btn secondary tiny" id="copyDebugBtn" type="button">Copy debug log</button>
+            <span class="debug-status" id="debugStatus">No debug log copied yet.</span>
+          </div>
+
+          <div id="storeUsersSection">
+          <h2 style="margin-top:26px">Existing store users</h2>
+          <div class="hint">People already linked to this store. Toggle to add or remove them from the group.</div>
           <div id="picker" style="margin-top:12px">Loading store members…</div>
+          </div>
         </div>
       </details>
     </div>

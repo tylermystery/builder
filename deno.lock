@@ -11,11 +11,17 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:@netlify/blobs@^8.1.0",
+        "npm:@netlify/database@1",
         "npm:@netlify/edge-functions@^3.0.3",
         "npm:@sendgrid/mail@^8.1.3",
+        "npm:agora-token@^2.0.5",
         "npm:bcryptjs@^2.4.3",
+        "npm:drizzle-kit@^1.0.0-beta.22",
+        "npm:drizzle-orm@^1.0.0-beta.22",
         "npm:jsonwebtoken@^9.0.2",
         "npm:node-fetch@^2.6.7",
+        "npm:node-ical@~0.26.1",
         "npm:pusher@^5.2.0",
         "npm:stripe@^13.2.0",
         "npm:twilio@^5.2.0"
