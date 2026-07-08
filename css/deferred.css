@@ -1576,6 +1576,22 @@
     color: #666;
     margin: 5px 0 10px 0;
 }
+.rich-text-description p {
+    margin: 0 0 0.75em;
+}
+.rich-text-description p:last-child,
+.rich-text-description ul:last-child {
+    margin-bottom: 0;
+}
+.rich-text-description ul {
+    margin: 0 0 0.75em 1.25em;
+    padding: 0;
+}
+.rich-text-description a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
 .card-footer {
     padding: 15px;
     border-top: 1px solid #eee;

@@ -6,7 +6,7 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage, scoreToAdjective } from '../config.js';
 import { getCurrentUser } from '../chat.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration, formatEventTimeRange, getTempRsvps, encodeSelections } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration, formatEventTimeRange, getTempRsvps, encodeSelections, renderRichText } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getDayStatus, AVAILABILITY_STATUS, logBusyTimeSummary, describeSelectedAvailability } from '../availability.js';
 import { showReceiptModal } from './receipt.js';
@@ -3357,7 +3357,7 @@ function enableItemEditMode(record, nameEl, descEl) {
     descContainer.className = 'item-edit-container item-edit-desc-container';
     descContainer.innerHTML = `
         <label class="item-edit-label">Description</label>
-        <textarea class="item-edit-input item-edit-desc-input" placeholder="Enter item description...">${originalDescription}</textarea>
+        <textarea class="item-edit-input item-edit-desc-input" placeholder="Enter item description...">${escapeHtml(originalDescription)}</textarea>
     `;
     descEl.style.display = 'none';
     descEl.parentNode.insertBefore(descContainer, descEl);
@@ -4231,7 +4231,7 @@ function enableItemEditMode(record, nameEl, descEl) {
 
             // Update UI to show saved values
             nameEl.textContent = newName;
-            descEl.textContent = newDesc;
+            descEl.innerHTML = renderRichText(newDesc);
             if (priceEl) {
                 const pricingTypeHTML = newPricingType ? `<span class="pricing-type"> / ${newPricingType.toLowerCase()}</span>` : '';
                 priceEl.innerHTML = (newPrice > 0 ? `$${newPrice.toFixed(2)}` : 'Free') + pricingTypeHTML;
@@ -4637,7 +4637,7 @@ async function showComponentDetailModal(record, imageUrls, history, componentTyp
     infoDiv.className = 'component-detail-info';
     infoDiv.innerHTML = `
         <h4 class="component-detail-name">${record.fields.Name || 'Untitled'}</h4>
-        ${record.fields.Description ? `<p class="component-detail-description">${record.fields.Description}</p>` : ''}
+        ${record.fields.Description ? `<div class="component-detail-description rich-text-description">${renderRichText(record.fields.Description)}</div>` : ''}
     `;
     body.appendChild(infoDiv);
 
@@ -5902,7 +5902,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     }
 
     modalItemName.textContent = displayName;
-    modalItemDescription.textContent = displayDescription;
+    modalItemDescription.innerHTML = renderRichText(displayDescription);
 
     // Show "Combined from" indicator for hybrid merged items
     const existingMergeInfo = document.querySelector('.modal-merge-info');
@@ -7912,7 +7912,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
         // Update description with appended text from selected options
         const fullDescription = getRecordDescription(record, currentSelections);
-        modalItemDescription.textContent = fullDescription;
+        modalItemDescription.innerHTML = renderRichText(fullDescription);
 
         // Handle image tag changes
         const imageTag = getActiveImageTag(record, currentSelections);

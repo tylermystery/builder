@@ -8,7 +8,7 @@ import * as api from '../api.js';
 import { buildGoalBucket, calculateRecommendationScore } from '../availability.js';
 // ^^^ END FINAL IMPORT FIX ^^^
 import { CONSTANTS } from '../config.js';
-import { getRecordPrice, getRecordPriceRange, getTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
+import { getRecordPrice, getRecordPriceRange, getTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, getPackageDefaultHeadcount, renderRichText } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { ensureStorePromotionsLoaded, bestDisplayPromoForItem, rewardLabel, promoTimingHint } from '../utils/promotions-client.js';
 
@@ -410,7 +410,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             ${imageContainerHTML}
             <div class="event-card-content">
                 <h3>${fields.Name || 'Untitled Category'}</h3>
-                <p class="description">${fields.Description || ''}</p>
+                <div class="description rich-text-description">${renderRichText(fields.Description)}</div>
             </div>
             <div class="card-footer">
                 <button class="card-action-btn view-options-btn">View Collection (${childItems.length})</button>
@@ -477,7 +477,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 </div>
                 <div class="event-details">
                     <h3>${fields.Name || 'Untitled Event'}${sentimentChipHTML()}</h3>
-                    <p class="description">${fields.Description || ''}</p>
+                    <div class="description rich-text-description">${renderRichText(fields.Description)}</div>
                 </div>
             </div>
             <div class="card-footer">
@@ -631,7 +631,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             ${imageContainerHTML}
             <div class="event-card-content">
                 <h3>${fields.Name || 'Untitled Package'}</h3>
-                <p class="description">${fields.Description || ''}</p>
+                <div class="description rich-text-description">${renderRichText(fields.Description)}</div>
                 <div class="package-summary">
                     <span class="package-item-count">${includedCount} items included</span>
                     ${addOnCount > 0 ? `<span class="package-addon-count">+ ${addOnCount} add-ons available</span>` : ''}
@@ -803,7 +803,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             </div>
         <div class="event-card-content">
             <h3>${fields.Name || 'Untitled Event'}${sentimentChipHTML()}</h3>
-            <p class="description">${fields.Description || ''}</p>
+            <div class="description rich-text-description">${renderRichText(fields.Description)}</div>
         </div>
         <div class="card-footer">
             <div class="price-wrapper"><div class="valuation-meta"><div class="price">${priceHTML}</div>${vitalityBadgeHTML}</div>${promoSubline}</div>

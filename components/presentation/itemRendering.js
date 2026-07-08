@@ -5,6 +5,7 @@
  */
 
 import { log } from '../../utils/debug.js';
+import { renderRichText } from '../../utils.js';
 import { getActiveStorePillars } from '../../availability.js';
 
 // Track loaded images for each item
@@ -314,7 +315,7 @@ export async function renderItineraryItem(item, index) {
                     </button>
                 </div>
                 <div class="combined-sources-list" data-record-id="${recordId}" style="display: none;">
-                    ${hybridDesc ? `<div class="combined-hybrid-description">${hybridDesc}</div>` : ''}
+                    ${hybridDesc ? `<div class="combined-hybrid-description rich-text-description">${renderRichText(hybridDesc)}</div>` : ''}
                     ${sourceNames.map((sourceName, idx) => `
                         <div class="combined-source-item" data-source-id="${combinedSources[idx]}">
                             <span>• ${sourceName}</span>
@@ -372,7 +373,7 @@ export async function renderItineraryItem(item, index) {
                                 ${quantity > 1 ? `<span class="itinerary-item-qty">× ${quantity}</span>` : ''}
                             </div>
                             ${scheduleHTML}
-                            ${description ? `<div class="itinerary-item-description">${description}</div>` : ''}
+                            ${description ? `<div class="itinerary-item-description rich-text-description">${renderRichText(description)}</div>` : ''}
                             ${selectedOptionsHTML}
                             ${note ? `<div class="itinerary-item-note"><strong>Note:</strong> ${note}</div>` : ''}
                             ${combinedSourcesHTML}
