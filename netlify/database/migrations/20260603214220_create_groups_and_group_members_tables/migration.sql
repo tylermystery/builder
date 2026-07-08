@@ -2,6 +2,11 @@ CREATE TABLE "group_members" (
 	"id" serial PRIMARY KEY,
 	"group_id" integer NOT NULL,
 	"user_id" text NOT NULL,
+	"display_name" text,
+	"bio" text,
+	"image_urls" jsonb,
+	"store_name" text,
+	"store_url" text,
 	"role" text DEFAULT 'member' NOT NULL,
 	"joined_at" timestamp DEFAULT now()
 );

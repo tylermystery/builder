@@ -1,14 +1,20 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "c9d2cf30-c7a2-461e-b33e-64ead916aef4",
+  "id": "d6d90256-57d7-4b75-ad30-d2e8acc337e0",
   "prevIds": [
-    "c7cae612-5605-487f-9ba9-fe4d8cf111ee"
+    "f1d9e054-57fb-43af-8b0a-6edcfd1d8f02"
   ],
   "ddl": [
     {
       "isRlsEnabled": false,
       "name": "comments",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "event_rsvps",
       "entityType": "tables",
       "schema": "public"
     },
@@ -170,6 +176,84 @@
       "entityType": "columns",
       "schema": "public",
       "table": "comments"
+    },
+    {
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "event_rsvps"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "event_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "event_rsvps"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "event_rsvps"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'yes'",
+      "generated": null,
+      "identity": null,
+      "name": "rsvp_type",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "event_rsvps"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "1",
+      "generated": null,
+      "identity": null,
+      "name": "quantity",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "event_rsvps"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "event_rsvps"
     },
     {
       "type": "serial",
@@ -1179,6 +1263,55 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "event_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "event_rsvps_event_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "event_rsvps"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "event_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "event_rsvps_event_user_unique",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "event_rsvps"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "group_id",
           "isExpression": false,
           "asc": true,
@@ -1637,6 +1770,16 @@
       "name": "comments_pkey",
       "schema": "public",
       "table": "comments",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "event_rsvps_pkey",
+      "schema": "public",
+      "table": "event_rsvps",
       "entityType": "pks"
     },
     {
