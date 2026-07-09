@@ -1097,6 +1097,7 @@ function setupCheckoutChipIn(cartSubtotal) {
         if (chipInTotalEl) {
             chipInTotalEl.textContent = `$${amount.toFixed(2)}`;
         }
+        updateCheckoutChipInTotals(cartSubtotal, amount);
         updateCheckoutDisplay();
     };
 
@@ -1166,6 +1167,7 @@ function setupCheckoutChipIn(cartSubtotal) {
     });
     if (customInputContainer) customInputContainer.style.display = 'none';
     if (chipInSummary) chipInSummary.style.display = 'none';
+    updateCheckoutChipInTotals(cartSubtotal, 0);
 
     // Accordion: collapse the Community Fund by default and wire up the toggle.
     // Callers that want it open (e.g. the Chip In flow) expand it after setup.
@@ -1228,6 +1230,55 @@ function buildItemOptionDetailsHtml(scope) {
     return optionLines.map(l => `<small class="checkout-option-detail">› ${l}</small>`).join('');
 }
 
+function makeCheckoutItemSelectable(listItem, recordId) {
+    if (!listItem || !recordId) return;
+    listItem.dataset.recordId = recordId;
+    listItem.tabIndex = 0;
+    listItem.setAttribute('role', 'button');
+    listItem.setAttribute('aria-label', 'View item details');
+    listItem.classList.add('checkout-summary-item-selectable');
+}
+
+function openCheckoutItemDetails(recordId) {
+    const record = getRecordById(recordId);
+    if (!record) return;
+    const checkoutOverlay = document.getElementById('checkout-modal-overlay');
+    const elevateDetail = () => {
+        if (!checkoutOverlay?.classList.contains('active')) return;
+        modalOverlay.style.zIndex = String(getModalZIndex('checkout') + 1);
+        const closeBtn = document.getElementById('modal-close-btn');
+        if (closeBtn) {
+            closeBtn.textContent = '←';
+            closeBtn.setAttribute('aria-label', 'Back to checkout');
+        }
+    };
+    if (checkoutOverlay?.classList.contains('active')) {
+        modalOverlay.dataset.returnToCheckout = 'true';
+    }
+    showDetailModal(record).then(elevateDetail);
+    setTimeout(elevateDetail, 0);
+}
+
+function updateCheckoutChipInTotals(cartSubtotal, contribution) {
+    const amount = Number.isFinite(contribution) ? contribution : 0;
+    const subtotal = Number.isFinite(cartSubtotal) ? cartSubtotal : 0;
+    const hasContribution = amount > 0;
+    const newSubtotal = subtotal + amount;
+
+    const headerTotals = document.getElementById('checkout-chip-in-header-totals');
+    if (headerTotals) {
+        headerTotals.style.display = hasContribution ? '' : 'none';
+        headerTotals.textContent = hasContribution
+            ? `+$${amount.toFixed(2)} · subtotal $${newSubtotal.toFixed(2)}`
+            : '';
+    }
+
+    const newSubtotalRow = document.getElementById('checkout-chip-in-new-subtotal');
+    const newSubtotalTotal = document.getElementById('checkout-chip-in-new-subtotal-total');
+    if (newSubtotalRow) newSubtotalRow.style.display = hasContribution ? 'flex' : 'none';
+    if (newSubtotalTotal) newSubtotalTotal.textContent = `$${newSubtotal.toFixed(2)}`;
+}
+
 function updateCheckoutItemQtyDisplay(scope) {
     const qty = currentCheckoutItemQty;
     const price = scope.price || 0;
@@ -1282,6 +1333,7 @@ function updateCheckoutItemQtyDisplay(scope) {
     if (matchAmountEl) {
         matchAmountEl.textContent = `+$${itemTotal.toFixed(2)}`;
     }
+    updateCheckoutChipInTotals(itemTotal, currentChipInAmount);
 
     // Refresh the checkout display (recalculates fees, updates payment intent)
     updateCheckoutDisplay();
@@ -1574,7 +1626,12 @@ async function updateCheckoutDisplay() {
     const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
     let baseAmountToCharge = totalDue; // This is the amount *before* processing fees
 
-    const isInitialDeposit = !isItemMode && amountReceived === 0 && (currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
+    const isFullOnly = currentShopSettings.paymentOptions === 'FullOnly';
+    const isDepositOnly = currentShopSettings.paymentOptions === 'DepositOnly';
+    const isInitialDeposit = !isItemMode
+        && amountReceived === 0
+        && !isFullOnly
+        && (isDepositOnly || currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
 
     const tipRow = document.querySelector('.tip-row');
     if (tipRow) {
@@ -1598,7 +1655,7 @@ async function updateCheckoutDisplay() {
             document.getElementById('deposit-label').textContent = 'Amount Due:';
         }
     } else if (amountReceived === 0) {
-        if (currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full') {
+        if (isFullOnly || (currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full')) {
             baseAmountToCharge = finalTotal;
             document.getElementById('deposit-label').textContent = 'Full Amount Due:';
         } else {
@@ -5439,6 +5496,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
     const closeBtn = document.getElementById('modal-close-btn');
     closeBtn.onclick = closeDetailModal;
+    closeBtn.textContent = '×';
+    closeBtn.setAttribute('aria-label', 'Close item details modal');
     modalOverlay.addEventListener('click', handleOverlayClick);
     document.addEventListener('keydown', handleEscapeKey);
 
@@ -10256,6 +10315,8 @@ export function hideDetailModal() {
     const closeBtn = document.getElementById('modal-close-btn');
     if (closeBtn) {
         closeBtn.onclick = null;
+        closeBtn.textContent = '×';
+        closeBtn.setAttribute('aria-label', 'Close item details modal');
     }
     modalOverlay.removeEventListener('click', handleOverlayClick);
     document.removeEventListener('keydown', handleEscapeKey);
@@ -10300,7 +10361,11 @@ export function hideDetailModal() {
 
             resetModalState();
         }, 300);
-        document.body.classList.remove('modal-open');
+        const checkoutOverlay = document.getElementById('checkout-modal-overlay');
+        if (!checkoutOverlay?.classList.contains('active')) {
+            document.body.classList.remove('modal-open');
+        }
+        if (modalOverlay?.dataset) delete modalOverlay.dataset.returnToCheckout;
     }
 }
 
@@ -10890,7 +10955,7 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         } else if (scope && scope.mode === 'item') {
             checkoutTitle.textContent = 'Checkout';
         } else {
-            checkoutTitle.textContent = 'Checkout Summary';
+            checkoutTitle.textContent = 'Checkout';
         }
     }
 
@@ -10903,9 +10968,9 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         if (scope && scope.highlightChipIn && (scope.quantity === 0 || !scope.quantity)) {
             totalLabel.textContent = 'Item Price:';
         } else if (state.session.user.amountReceived > 0) {
-            totalLabel.textContent = 'Total Final Cost:';
+            totalLabel.textContent = 'Subtotal:';
         } else {
-            totalLabel.textContent = 'Total Estimated Cost:';
+            totalLabel.textContent = 'Subtotal:';
         }
     }
 
@@ -10982,6 +11047,7 @@ export async function showCheckoutModal(shopSettings, scope = null) {
 
         const listItem = document.createElement('li');
         listItem.id = 'checkout-scope-item';
+        makeCheckoutItemSelectable(listItem, scope.itemId);
         if (initialQty === 0) {
             // Donation-only mode: show item name without price (no purchase)
             listItem.innerHTML = `
@@ -11042,6 +11108,7 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         const itemTotal = price * (itemInfo.quantity || 1);
         finalTotal += itemTotal;
         const listItem = document.createElement('li');
+        makeCheckoutItemSelectable(listItem, recordId);
 
         // Check for edge case notes
         const airtableMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
@@ -11119,6 +11186,17 @@ export async function showCheckoutModal(shopSettings, scope = null) {
     }
     } // end plan mode
     summaryDetailsEl.appendChild(summaryList);
+    summaryList.addEventListener('click', (e) => {
+        const item = e.target.closest('.checkout-summary-item-selectable');
+        if (item?.dataset.recordId) openCheckoutItemDetails(item.dataset.recordId);
+    });
+    summaryList.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const item = e.target.closest('.checkout-summary-item-selectable');
+        if (!item?.dataset.recordId) return;
+        e.preventDefault();
+        openCheckoutItemDetails(item.dataset.recordId);
+    });
 
     // Show the per-unit price as reference in chip-in mode with qty=0
     if (scope && scope.highlightChipIn && currentCheckoutItemQty === 0 && scope.price > 0) {

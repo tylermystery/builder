@@ -6437,6 +6437,20 @@ hr.total-divider {
     align-items: flex-start;
 }
 
+#checkout-summary-details li.checkout-summary-item-selectable {
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 8px;
+    margin: 0 -8px;
+    transition: background-color 0.15s ease;
+}
+
+#checkout-summary-details li.checkout-summary-item-selectable:hover,
+#checkout-summary-details li.checkout-summary-item-selectable:focus {
+    background: #f5f7fa;
+    outline: none;
+}
+
 .summary-item-details {
     display: flex;
     flex-direction: column;
@@ -18545,6 +18559,18 @@ body.presentation-active .rsb-layout-toggle-fab {
     transition: transform 0.25s ease;
 }
 
+.checkout-chip-in-header-totals {
+    margin-left: auto;
+    color: #9f3a38;
+    font-size: 0.82em;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.checkout-chip-in-header-totals + .checkout-chip-in-chevron {
+    margin-left: 6px;
+}
+
 #checkout-chip-in-section.expanded .checkout-chip-in-chevron {
     transform: rotate(180deg);
 }
@@ -18708,6 +18734,13 @@ body.presentation-active .rsb-layout-toggle-fab {
     border-radius: 6px;
     font-size: 0.9em;
     font-weight: 600;
+}
+
+.checkout-chip-in-summary.checkout-chip-in-new-subtotal {
+    margin-top: 6px;
+    background: #fff;
+    color: #9f3a38;
+    border: 1px solid #f3b3ba;
 }
 
 #checkout-chip-in-total {

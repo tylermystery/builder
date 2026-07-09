@@ -10872,6 +10872,20 @@ hr.total-divider {
     align-items: flex-start;
 }
 
+#checkout-summary-details li.checkout-summary-item-selectable {
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 8px;
+    margin: 0 -8px;
+    transition: background-color 0.15s ease;
+}
+
+#checkout-summary-details li.checkout-summary-item-selectable:hover,
+#checkout-summary-details li.checkout-summary-item-selectable:focus {
+    background: #f5f7fa;
+    outline: none;
+}
+
 .summary-item-details {
     display: flex;
     flex-direction: column;

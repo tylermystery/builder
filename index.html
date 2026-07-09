@@ -5547,7 +5547,7 @@ body.ucp-panel-open .unified-chat-panel {
     <div id="checkout-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="checkout-modal-title">
         <div class="checkout-modal-content">
             <button id="checkout-close-btn" class="modal-close-btn" aria-label="Close checkout modal">×</button>
-            <h3 id="checkout-modal-title">Checkout Summary</h3>
+            <h3 id="checkout-modal-title">Checkout</h3>
             <div id="checkout-summary-details">
                 <p>This is a summary of the items in your plan.</p>
             </div>
@@ -5566,7 +5566,7 @@ body.ucp-panel-open .unified-chat-panel {
             <hr>
             <div class="checkout-total-deposit-section">
                 <div class="checkout-total">
-                    <span id="checkout-total-label">Total Estimated Cost:</span>
+                    <span id="checkout-total-label">Subtotal:</span>
                     <span id="full-total-price">$0.00</span>
                 </div>
 
@@ -5575,6 +5575,7 @@ body.ucp-panel-open .unified-chat-panel {
                     <button type="button" class="checkout-chip-in-header" id="checkout-chip-in-toggle" aria-expanded="false" aria-controls="checkout-chip-in-body">
                         <svg class="checkout-chip-in-header-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
                         <span>Community Fund</span>
+                        <span class="checkout-chip-in-header-totals" id="checkout-chip-in-header-totals" style="display: none;"></span>
                         <svg class="checkout-chip-in-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     </button>
                     <div class="checkout-chip-in-body" id="checkout-chip-in-body">
@@ -5630,6 +5631,10 @@ body.ucp-panel-open .unified-chat-panel {
                     <div class="checkout-chip-in-summary" id="checkout-chip-in-summary" style="display: none;">
                         <span>Community Contribution:</span>
                         <span id="checkout-chip-in-total">$0.00</span>
+                    </div>
+                    <div class="checkout-chip-in-summary checkout-chip-in-new-subtotal" id="checkout-chip-in-new-subtotal" style="display: none;">
+                        <span>New Subtotal:</span>
+                        <span id="checkout-chip-in-new-subtotal-total">$0.00</span>
                     </div>
                     </div>
                 </div>
