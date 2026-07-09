@@ -506,7 +506,7 @@ export async function renderCompactCard(item) {
     }
     const cachedImages = itemImagesCache.get(recordId);
     const photoUrl = cachedImages?.images?.[cachedImages.currentIndex] || cachedImages?.images?.[0] || '';
-    const optimizedPhoto = photoUrl ? _deps.applyCloudinaryTransform(photoUrl, 'w_400,h_250,c_fill,f_auto,q_auto') : '';
+    const optimizedPhoto = photoUrl ? _deps.applyCloudinaryTransform(photoUrl, 'w_400,h_250,c_fit,f_auto,q_auto') : '';
 
     // Task status overlay
     const taskStatus = _deps.getElementTaskStatus('item', recordId);
@@ -755,7 +755,7 @@ export async function renderCompactGroupCard(group) {
     }
     const cachedImages = itemImagesCache.get(firstItemId);
     const photoUrl = cachedImages?.images?.[0] || '';
-    const optimizedPhoto = photoUrl ? _deps.applyCloudinaryTransform(photoUrl, 'w_400,h_250,c_fill,f_auto,q_auto') : '';
+    const optimizedPhoto = photoUrl ? _deps.applyCloudinaryTransform(photoUrl, 'w_400,h_250,c_fit,f_auto,q_auto') : '';
 
     // Member name pills
     const maxPills = Math.min(groupItems.length, 4);

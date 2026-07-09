@@ -3205,6 +3205,46 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+function extractBackgroundImageUrl(element) {
+    const value = element?.style?.backgroundImage || '';
+    const match = value.match(/^url\(["']?(.*?)["']?\)$/);
+    return match ? match[1] : '';
+}
+
+function showImageLightbox(imageUrl, label = 'Item image') {
+    if (!imageUrl) return;
+
+    const existing = document.querySelector('.image-lightbox-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'image-lightbox-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', label);
+    overlay.innerHTML = `
+        <button class="image-lightbox-close" type="button" aria-label="Close enlarged image">&times;</button>
+        <img class="image-lightbox-img" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(label)}">
+    `;
+
+    const close = () => {
+        overlay.remove();
+        document.removeEventListener('keydown', onKeyDown);
+    };
+    const onKeyDown = (event) => {
+        if (event.key === 'Escape') close();
+    };
+
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay || event.target.closest('.image-lightbox-close')) {
+            close();
+        }
+    });
+    document.addEventListener('keydown', onKeyDown);
+    document.body.appendChild(overlay);
+    overlay.querySelector('.image-lightbox-close')?.focus();
+}
+
 function resetModalState() {
     console.log('[MODAL DEBUG] resetModalState called.');
     const elements = {
@@ -4607,6 +4647,11 @@ async function showComponentDetailModal(record, imageUrls, history, componentTyp
 
     const mainImageEl = galleryDiv.querySelector('.component-detail-main-image');
     const thumbsContainer = galleryDiv.querySelector('.component-detail-thumbnails');
+    if (mainImageEl) {
+        mainImageEl.addEventListener('click', () => {
+            showImageLightbox(extractBackgroundImageUrl(mainImageEl), record.fields.Name || 'Component image');
+        });
+    }
 
     // Build thumbnails if multiple images
     if (imageUrls.length > 1) {
@@ -5790,7 +5835,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
                             // Update main image
                             const optimizedUrl = aiImageResult.imageUrl.includes('cloudinary')
-                                ? applyCloudinaryTransform(aiImageResult.imageUrl, 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+                                ? applyCloudinaryTransform(aiImageResult.imageUrl, 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
                                 : aiImageResult.imageUrl;
                             liveMainImage.style.backgroundImage = `url('${optimizedUrl}')`;
 
@@ -6852,9 +6897,13 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
     // Optimize main image with proper size and format
     const optimizedMainImage = imageUrls[currentPhotoIndex].includes('cloudinary')
-        ? applyCloudinaryTransform(imageUrls[currentPhotoIndex], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+        ? applyCloudinaryTransform(imageUrls[currentPhotoIndex], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
         : imageUrls[currentPhotoIndex];
     modalMainImage.style.backgroundImage = `url('${optimizedMainImage}')`;
+    modalMainImage.onclick = (event) => {
+        if (event.target.closest('button, .package-collage-overlay, .package-component-name-overlay')) return;
+        showImageLightbox(extractBackgroundImageUrl(modalMainImage), displayName || record.fields.Name || 'Item image');
+    };
 
     // Add AI image source indicator for AI items or manually added items with AI-generated images
     const existingAiImageSource = modalMainImage.querySelector('.ai-image-source-modal');
@@ -6920,7 +6969,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         thumb.addEventListener('click', () => {
             currentPhotoIndex = index;
             const optimizedClickImage = imageUrls[index].includes('cloudinary')
-                ? applyCloudinaryTransform(imageUrls[index], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+                ? applyCloudinaryTransform(imageUrls[index], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
                 : imageUrls[index];
             // Remove any package collage overlay when switching to a regular thumbnail
             const existingCollage = modalMainImage.querySelector('.package-collage-overlay');
@@ -7057,7 +7106,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     if (mainImages.length === 1) {
                         // Single image: just set as background
                         const optimizedUrl = mainImages[0].includes('cloudinary')
-                            ? applyCloudinaryTransform(mainImages[0], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+                            ? applyCloudinaryTransform(mainImages[0], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
                             : mainImages[0];
                         modalMainImage.style.backgroundImage = `url('${optimizedUrl}')`;
                     } else {
@@ -7921,7 +7970,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             api.fetchImagesByTags(record, [imageTag], state.records.all).then(taggedImages => {
                 if (taggedImages && taggedImages.length > 0) {
                     const optimizedImage = taggedImages[0].includes('cloudinary')
-                        ? applyCloudinaryTransform(taggedImages[0], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+                        ? applyCloudinaryTransform(taggedImages[0], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
                         : taggedImages[0];
                     modalMainImage.style.backgroundImage = `url('${optimizedImage}')`;
                 }
