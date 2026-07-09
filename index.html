@@ -179,9 +179,20 @@ body.modal-open {
 }
 #modal-main-image {
     flex-grow: 1;
-    background-size: cover;
+    background-size: contain;
     background-position: center;
+    background-repeat: no-repeat;
+    background-color: #f3f4f6;
     border-right: 1px solid #eee;
+    cursor: zoom-in;
+}
+#modal-main-image.image-portrait {
+    flex-grow: 0;
+    height: min(76vh, 640px);
+}
+#modal-main-image.image-square {
+    flex-grow: 0;
+    height: min(68vh, 560px);
 }
 #modal-thumbnail-strip {
     display: flex;
@@ -6795,4 +6806,3 @@ body.ucp-panel-open .unified-chat-panel {
 
 </body>
 </html>
-

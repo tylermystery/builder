@@ -8,8 +8,9 @@ import * as api from '../api.js';
 import { buildGoalBucket, calculateRecommendationScore } from '../availability.js';
 // ^^^ END FINAL IMPORT FIX ^^^
 import { CONSTANTS } from '../config.js';
-import { getRecordPrice, getRecordPriceRange, getTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
+import { getRecordPrice, getRecordPriceRange, getTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, getPackageDefaultHeadcount, renderRichText } from '../utils.js';
 import { log } from '../utils/debug.js';
+import { applyCloudinaryFitTransform, getImageOrientationClass } from '../utils/imageOptimizer.js';
 import { ensureStorePromotionsLoaded, bestDisplayPromoForItem, rewardLabel, promoTimingHint } from '../utils/promotions-client.js';
 
 // Build the bits of card UI a live promotion adds: a corner badge and a
@@ -367,6 +368,17 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     // Fetch images for all items (AI items will now go through website scraping)
     const { imageUrls, status } = await api.fetchImagesForRecord(record, allRecords, imageCache);
     imageUrlToLoad = getPlaceholderImage(imageUrls);
+    if (imageUrlToLoad?.includes('cloudinary')) {
+        imageUrlToLoad = applyCloudinaryFitTransform(imageUrlToLoad, 'w_900,h_900,c_fit,f_auto,q_auto');
+    }
+    const imageOrientationClass = await getImageOrientationClass(imageUrlToLoad);
+    console.debug('[ImageFit DEBUG] Card image prepared', {
+        recordId: record.id,
+        name: fields.Name,
+        imageUrlToLoad,
+        imageOrientationClass,
+        status
+    });
     // --- END BLOCK ---
 
     if (fields['Item Type'] === 'Grouping') {
@@ -410,7 +422,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             ${imageContainerHTML}
             <div class="event-card-content">
                 <h3>${fields.Name || 'Untitled Category'}</h3>
-                <p class="description">${fields.Description || ''}</p>
+                <div class="description rich-text-description">${renderRichText(fields.Description)}</div>
             </div>
             <div class="card-footer">
                 <button class="card-action-btn view-options-btn">View Collection (${childItems.length})</button>
@@ -461,7 +473,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const placeholder = getLowQualityPlaceholder(imageUrlToLoad);
 
         eventCard.innerHTML = `
-            <div class="event-card-image-container lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
+            <div class="event-card-image-container lazy-load ${imageOrientationClass}" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
                 <button class="heart-icon" data-record-id="${record.id}" aria-label="Like this event" tabindex="0"></button>
                 <button class="availability-btn" title="Select a date range to check availability" aria-label="Check availability">📅</button>
                 ${partnerBadge}
@@ -477,7 +489,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 </div>
                 <div class="event-details">
                     <h3>${fields.Name || 'Untitled Event'}${sentimentChipHTML()}</h3>
-                    <p class="description">${fields.Description || ''}</p>
+                    <div class="description rich-text-description">${renderRichText(fields.Description)}</div>
                 </div>
             </div>
             <div class="card-footer">
@@ -631,7 +643,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             ${imageContainerHTML}
             <div class="event-card-content">
                 <h3>${fields.Name || 'Untitled Package'}</h3>
-                <p class="description">${fields.Description || ''}</p>
+                <div class="description rich-text-description">${renderRichText(fields.Description)}</div>
                 <div class="package-summary">
                     <span class="package-item-count">${includedCount} items included</span>
                     ${addOnCount > 0 ? `<span class="package-addon-count">+ ${addOnCount} add-ons available</span>` : ''}
@@ -791,7 +803,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const vitalityBadgeHTML = vitalityEmoji ? `<span class="valuation-vitality-emoji" title="Goodness: ${goodnessLabel} (click for details)">${vitalityEmoji}</span>` : '';
 
     eventCard.innerHTML = `
-        <div class="event-card-image-container lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
+        <div class="event-card-image-container lazy-load ${imageOrientationClass}" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
             <button class="heart-icon" data-record-id="${record.id}" aria-label="Like this item" tabindex="0"></button>
             <button class="availability-btn" title="Select a date range to check availability" aria-label="Check availability">📅</button>
             ${partnerBadge}
@@ -803,7 +815,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             </div>
         <div class="event-card-content">
             <h3>${fields.Name || 'Untitled Event'}${sentimentChipHTML()}</h3>
-            <p class="description">${fields.Description || ''}</p>
+            <div class="description rich-text-description">${renderRichText(fields.Description)}</div>
         </div>
         <div class="card-footer">
             <div class="price-wrapper"><div class="valuation-meta"><div class="price">${priceHTML}</div>${vitalityBadgeHTML}</div>${promoSubline}</div>

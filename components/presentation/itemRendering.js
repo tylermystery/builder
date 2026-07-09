@@ -5,6 +5,8 @@
  */
 
 import { log } from '../../utils/debug.js';
+import { renderRichText } from '../../utils.js';
+import { applyCloudinaryFitTransform, getImageOrientationClass } from '../../utils/imageOptimizer.js';
 import { getActiveStorePillars } from '../../availability.js';
 
 // Track loaded images for each item
@@ -314,7 +316,7 @@ export async function renderItineraryItem(item, index) {
                     </button>
                 </div>
                 <div class="combined-sources-list" data-record-id="${recordId}" style="display: none;">
-                    ${hybridDesc ? `<div class="combined-hybrid-description">${hybridDesc}</div>` : ''}
+                    ${hybridDesc ? `<div class="combined-hybrid-description rich-text-description">${renderRichText(hybridDesc)}</div>` : ''}
                     ${sourceNames.map((sourceName, idx) => `
                         <div class="combined-source-item" data-source-id="${combinedSources[idx]}">
                             <span>• ${sourceName}</span>
@@ -372,7 +374,7 @@ export async function renderItineraryItem(item, index) {
                                 ${quantity > 1 ? `<span class="itinerary-item-qty">× ${quantity}</span>` : ''}
                             </div>
                             ${scheduleHTML}
-                            ${description ? `<div class="itinerary-item-description">${description}</div>` : ''}
+                            ${description ? `<div class="itinerary-item-description rich-text-description">${renderRichText(description)}</div>` : ''}
                             ${selectedOptionsHTML}
                             ${note ? `<div class="itinerary-item-note"><strong>Note:</strong> ${note}</div>` : ''}
                             ${combinedSourcesHTML}
@@ -505,7 +507,15 @@ export async function renderCompactCard(item) {
     }
     const cachedImages = itemImagesCache.get(recordId);
     const photoUrl = cachedImages?.images?.[cachedImages.currentIndex] || cachedImages?.images?.[0] || '';
-    const optimizedPhoto = photoUrl ? _deps.applyCloudinaryTransform(photoUrl, 'w_400,h_250,c_fill,f_auto,q_auto') : '';
+    const optimizedPhoto = photoUrl ? applyCloudinaryFitTransform(photoUrl, 'w_400,h_500,c_fit,f_auto,q_auto') : '';
+    const imageOrientationClass = await getImageOrientationClass(optimizedPhoto);
+    console.debug('[ImageFit DEBUG] Compact card image prepared', {
+        recordId,
+        name,
+        photoUrl,
+        optimizedPhoto,
+        imageOrientationClass
+    });
 
     // Task status overlay
     const taskStatus = _deps.getElementTaskStatus('item', recordId);
@@ -704,7 +714,7 @@ export async function renderCompactCard(item) {
 
     return `
         <div class="compact-card ${lifecycleClass} ${confidenceClass} ${noPhotoClass}" data-record-id="${recordId}" data-item-type="${type}" data-item-status="${itemStatus}" role="article" tabindex="0" aria-label="${escapeHtml(name)}${showStatus ? ', ' + taskConfig.label : ''}">
-            <div class="compact-card-photo" style="${photoStyle}">
+            <div class="compact-card-photo ${imageOrientationClass}" style="${photoStyle}">
                 ${statusOverlayHTML}
                 ${emojiOverlayHTML}
                 ${lifecycleBadgeHTML}
@@ -754,7 +764,15 @@ export async function renderCompactGroupCard(group) {
     }
     const cachedImages = itemImagesCache.get(firstItemId);
     const photoUrl = cachedImages?.images?.[0] || '';
-    const optimizedPhoto = photoUrl ? _deps.applyCloudinaryTransform(photoUrl, 'w_400,h_250,c_fill,f_auto,q_auto') : '';
+    const optimizedPhoto = photoUrl ? applyCloudinaryFitTransform(photoUrl, 'w_400,h_500,c_fit,f_auto,q_auto') : '';
+    const imageOrientationClass = await getImageOrientationClass(optimizedPhoto);
+    console.debug('[ImageFit DEBUG] Compact group image prepared', {
+        groupId,
+        groupName,
+        photoUrl,
+        optimizedPhoto,
+        imageOrientationClass
+    });
 
     // Member name pills
     const maxPills = Math.min(groupItems.length, 4);
@@ -896,7 +914,7 @@ export async function renderCompactGroupCard(group) {
 
     return `
         <div class="compact-card compact-card-group ${groupLifecycleClass} ${noPhotoClass}" data-group-id="${groupId}" data-item-type="${firstItemType}" role="article" tabindex="0" aria-label="${escapeHtml(groupName)}, ${groupItems.length} options">
-            <div class="compact-card-photo" style="${photoStyle}">
+            <div class="compact-card-photo ${imageOrientationClass}" style="${photoStyle}">
                 <span class="compact-card-group-badge">${groupItems.length} options</span>
             </div>
             <div class="compact-card-body">

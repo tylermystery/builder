@@ -6,11 +6,11 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage, scoreToAdjective } from '../config.js';
 import { getCurrentUser } from '../chat.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration, formatEventTimeRange, getTempRsvps, encodeSelections } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration, formatEventTimeRange, getTempRsvps, encodeSelections, renderRichText } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getDayStatus, AVAILABILITY_STATUS, logBusyTimeSummary, describeSelectedAvailability } from '../availability.js';
 import { showReceiptModal } from './receipt.js';
-import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
+import { applyCloudinaryTransform, applyCloudinaryFitTransform, getImageOrientationClass } from '../utils/imageOptimizer.js';
 import { resizeImageForUpload } from '../utils/imageResizer.js';
 import { triggerSave } from '../events.js';
 import { createCalendarExportButtons, initializeCalendarExportListeners, resolvePlanVenueAddress } from '../utils/calendarExport.js';
@@ -3205,6 +3205,63 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+function extractBackgroundImageUrl(element) {
+    const value = element?.style?.backgroundImage || '';
+    const match = value.match(/^url\(["']?(.*?)["']?\)$/);
+    return match ? match[1] : '';
+}
+
+async function applyImageOrientationClass(element, imageUrl) {
+    if (!element) return;
+    element.classList.remove('image-portrait', 'image-landscape', 'image-square');
+    const orientationClass = await getImageOrientationClass(imageUrl);
+    if (extractBackgroundImageUrl(element) !== imageUrl) return;
+    if (orientationClass) element.classList.add(orientationClass);
+    console.debug('[ImageFit DEBUG] Applied orientation class to modal image', {
+        elementId: element.id || element.className,
+        imageUrl,
+        orientationClass,
+        className: element.className,
+        backgroundSize: getComputedStyle(element).backgroundSize,
+        renderedWidth: element.clientWidth,
+        renderedHeight: element.clientHeight
+    });
+}
+
+function showImageLightbox(imageUrl, label = 'Item image') {
+    if (!imageUrl) return;
+
+    const existing = document.querySelector('.image-lightbox-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'image-lightbox-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', label);
+    overlay.innerHTML = `
+        <button class="image-lightbox-close" type="button" aria-label="Close enlarged image">&times;</button>
+        <img class="image-lightbox-img" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(label)}">
+    `;
+
+    const close = () => {
+        overlay.remove();
+        document.removeEventListener('keydown', onKeyDown);
+    };
+    const onKeyDown = (event) => {
+        if (event.key === 'Escape') close();
+    };
+
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay || event.target.closest('.image-lightbox-close')) {
+            close();
+        }
+    });
+    document.addEventListener('keydown', onKeyDown);
+    document.body.appendChild(overlay);
+    overlay.querySelector('.image-lightbox-close')?.focus();
+}
+
 function resetModalState() {
     console.log('[MODAL DEBUG] resetModalState called.');
     const elements = {
@@ -3357,7 +3414,7 @@ function enableItemEditMode(record, nameEl, descEl) {
     descContainer.className = 'item-edit-container item-edit-desc-container';
     descContainer.innerHTML = `
         <label class="item-edit-label">Description</label>
-        <textarea class="item-edit-input item-edit-desc-input" placeholder="Enter item description...">${originalDescription}</textarea>
+        <textarea class="item-edit-input item-edit-desc-input" placeholder="Enter item description...">${escapeHtml(originalDescription)}</textarea>
     `;
     descEl.style.display = 'none';
     descEl.parentNode.insertBefore(descContainer, descEl);
@@ -4231,7 +4288,7 @@ function enableItemEditMode(record, nameEl, descEl) {
 
             // Update UI to show saved values
             nameEl.textContent = newName;
-            descEl.textContent = newDesc;
+            descEl.innerHTML = renderRichText(newDesc);
             if (priceEl) {
                 const pricingTypeHTML = newPricingType ? `<span class="pricing-type"> / ${newPricingType.toLowerCase()}</span>` : '';
                 priceEl.innerHTML = (newPrice > 0 ? `$${newPrice.toFixed(2)}` : 'Free') + pricingTypeHTML;
@@ -4262,6 +4319,7 @@ function enableItemEditMode(record, nameEl, descEl) {
                         thumb.title = isAI ? 'AI-generated image approximation' : 'Custom photo';
                         thumb.addEventListener('click', () => {
                             modalMainImage.style.backgroundImage = `url('${photoUrl}')`;
+                            applyImageOrientationClass(modalMainImage, photoUrl);
                             modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
                             thumb.classList.add('active');
                             // Update the AI image indicator on the main image
@@ -4276,6 +4334,7 @@ function enableItemEditMode(record, nameEl, descEl) {
                         const firstPhotoUrl = firstPhoto.url || firstPhoto;
                         const isFirstAI = firstPhoto.isAIGenerated === true;
                         modalMainImage.style.backgroundImage = `url('${firstPhotoUrl}')`;
+                        applyImageOrientationClass(modalMainImage, firstPhotoUrl);
                         // Add AI indicator if the first image is AI-generated
                         updateModalAIImageIndicator(isFirstAI);
                     }
@@ -4607,6 +4666,12 @@ async function showComponentDetailModal(record, imageUrls, history, componentTyp
 
     const mainImageEl = galleryDiv.querySelector('.component-detail-main-image');
     const thumbsContainer = galleryDiv.querySelector('.component-detail-thumbnails');
+    applyImageOrientationClass(mainImageEl, mainImageUrl);
+    if (mainImageEl) {
+        mainImageEl.addEventListener('click', () => {
+            showImageLightbox(extractBackgroundImageUrl(mainImageEl), record.fields.Name || 'Component image');
+        });
+    }
 
     // Build thumbnails if multiple images
     if (imageUrls.length > 1) {
@@ -4620,9 +4685,10 @@ async function showComponentDetailModal(record, imageUrls, history, componentTyp
             thumb.addEventListener('click', () => {
                 currentImageIndex = idx;
                 const fullUrl = url.includes('cloudinary')
-                    ? applyCloudinaryTransform(url, 'w_800,h_500,c_fill,f_auto,q_auto')
+                    ? applyCloudinaryFitTransform(url, 'w_800,h_900,c_fit,f_auto,q_auto')
                     : url;
                 mainImageEl.style.backgroundImage = `url('${fullUrl}')`;
+                applyImageOrientationClass(mainImageEl, fullUrl);
                 thumbsContainer.querySelectorAll('.component-detail-thumb').forEach(t => t.classList.remove('active'));
                 thumb.classList.add('active');
             });
@@ -4637,7 +4703,7 @@ async function showComponentDetailModal(record, imageUrls, history, componentTyp
     infoDiv.className = 'component-detail-info';
     infoDiv.innerHTML = `
         <h4 class="component-detail-name">${record.fields.Name || 'Untitled'}</h4>
-        ${record.fields.Description ? `<p class="component-detail-description">${record.fields.Description}</p>` : ''}
+        ${record.fields.Description ? `<div class="component-detail-description rich-text-description">${renderRichText(record.fields.Description)}</div>` : ''}
     `;
     body.appendChild(infoDiv);
 
@@ -5790,9 +5856,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
                             // Update main image
                             const optimizedUrl = aiImageResult.imageUrl.includes('cloudinary')
-                                ? applyCloudinaryTransform(aiImageResult.imageUrl, 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+                                ? applyCloudinaryFitTransform(aiImageResult.imageUrl, 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
                                 : aiImageResult.imageUrl;
                             liveMainImage.style.backgroundImage = `url('${optimizedUrl}')`;
+                            applyImageOrientationClass(liveMainImage, optimizedUrl);
 
                             // Update AI indicator
                             const existingIndicator = liveMainImage.querySelector('.ai-image-source-modal');
@@ -5902,7 +5969,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     }
 
     modalItemName.textContent = displayName;
-    modalItemDescription.textContent = displayDescription;
+    modalItemDescription.innerHTML = renderRichText(displayDescription);
 
     // Show "Combined from" indicator for hybrid merged items
     const existingMergeInfo = document.querySelector('.modal-merge-info');
@@ -6852,9 +6919,14 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
     // Optimize main image with proper size and format
     const optimizedMainImage = imageUrls[currentPhotoIndex].includes('cloudinary')
-        ? applyCloudinaryTransform(imageUrls[currentPhotoIndex], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+        ? applyCloudinaryFitTransform(imageUrls[currentPhotoIndex], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
         : imageUrls[currentPhotoIndex];
     modalMainImage.style.backgroundImage = `url('${optimizedMainImage}')`;
+    applyImageOrientationClass(modalMainImage, optimizedMainImage);
+    modalMainImage.onclick = (event) => {
+        if (event.target.closest('button, .package-collage-overlay, .package-component-name-overlay')) return;
+        showImageLightbox(extractBackgroundImageUrl(modalMainImage), displayName || record.fields.Name || 'Item image');
+    };
 
     // Add AI image source indicator for AI items or manually added items with AI-generated images
     const existingAiImageSource = modalMainImage.querySelector('.ai-image-source-modal');
@@ -6920,7 +6992,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         thumb.addEventListener('click', () => {
             currentPhotoIndex = index;
             const optimizedClickImage = imageUrls[index].includes('cloudinary')
-                ? applyCloudinaryTransform(imageUrls[index], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+                ? applyCloudinaryFitTransform(imageUrls[index], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
                 : imageUrls[index];
             // Remove any package collage overlay when switching to a regular thumbnail
             const existingCollage = modalMainImage.querySelector('.package-collage-overlay');
@@ -6931,6 +7003,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             const aiIndicator = modalMainImage.querySelector('.ai-image-source-modal');
             if (aiIndicator) aiIndicator.style.display = '';
             modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
+            applyImageOrientationClass(modalMainImage, optimizedClickImage);
             modalThumbnailStrip.querySelectorAll('.active').forEach(t => t.classList.remove('active'));
             thumb.classList.add('active');
             // Update "Set as Cover" button visibility
@@ -7057,9 +7130,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     if (mainImages.length === 1) {
                         // Single image: just set as background
                         const optimizedUrl = mainImages[0].includes('cloudinary')
-                            ? applyCloudinaryTransform(mainImages[0], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+                            ? applyCloudinaryFitTransform(mainImages[0], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
                             : mainImages[0];
                         modalMainImage.style.backgroundImage = `url('${optimizedUrl}')`;
+                        applyImageOrientationClass(modalMainImage, optimizedUrl);
                     } else {
                         // Multiple images: show collage grid overlay
                         modalMainImage.style.backgroundImage = 'none';
@@ -7321,6 +7395,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                             thumb.addEventListener('click', () => {
                                 currentPhotoIndex = imageUrls.indexOf(url);
                                 modalMainImage.style.backgroundImage = `url('${url}')`;
+                                applyImageOrientationClass(modalMainImage, url);
                                 modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
                                 thumb.classList.add('active');
                             });
@@ -7912,7 +7987,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
         // Update description with appended text from selected options
         const fullDescription = getRecordDescription(record, currentSelections);
-        modalItemDescription.textContent = fullDescription;
+        modalItemDescription.innerHTML = renderRichText(fullDescription);
 
         // Handle image tag changes
         const imageTag = getActiveImageTag(record, currentSelections);
@@ -7921,9 +7996,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             api.fetchImagesByTags(record, [imageTag], state.records.all).then(taggedImages => {
                 if (taggedImages && taggedImages.length > 0) {
                     const optimizedImage = taggedImages[0].includes('cloudinary')
-                        ? applyCloudinaryTransform(taggedImages[0], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+                        ? applyCloudinaryFitTransform(taggedImages[0], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
                         : taggedImages[0];
                     modalMainImage.style.backgroundImage = `url('${optimizedImage}')`;
+                    applyImageOrientationClass(modalMainImage, optimizedImage);
                 }
             }).catch(err => {
                 log('Modal', `Failed to fetch image for tag ${imageTag}: ${err.message}`);

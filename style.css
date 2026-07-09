@@ -1665,10 +1665,21 @@ html.presentation-active {
     position: relative;
     width: 100%;
     height: 200px;
-    background-size: cover;
+    background-size: contain;
     background-position: center;
+    background-repeat: no-repeat;
     background-color: #e0e0e0; /* Placeholder color while loading */
     transition: opacity 0.3s ease-in;
+}
+.event-card-image-container.collage-container,
+.event-card-image-container .collage-image {
+    background-size: cover;
+}
+.event-card-image-container.image-portrait {
+    height: clamp(280px, 38vw, 380px);
+}
+.event-card-image-container.image-square {
+    height: clamp(240px, 32vw, 320px);
 }
 
 .event-card-image-container.lazy-load {
@@ -1844,6 +1855,22 @@ html.presentation-active {
     font-size: 0.9em;
     color: #666;
     margin: 5px 0 10px 0;
+}
+.rich-text-description p {
+    margin: 0 0 0.75em;
+}
+.rich-text-description p:last-child,
+.rich-text-description ul:last-child {
+    margin-bottom: 0;
+}
+.rich-text-description ul {
+    margin: 0 0 0.75em 1.25em;
+    padding: 0;
+}
+.rich-text-description a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
 }
 .card-footer {
     padding: 15px;
@@ -2291,10 +2318,21 @@ body.presentation-active #chat-widget {
 }
 #modal-main-image {
     flex-grow: 1;
-    background-size: cover;
+    background-size: contain;
     background-position: center;
+    background-repeat: no-repeat;
+    background-color: #f3f4f6;
     border-right: 1px solid #eee;
     position: relative; /* Required for positioning ai-image-source-modal */
+    cursor: zoom-in;
+}
+#modal-main-image.image-portrait {
+    flex-grow: 0;
+    height: min(76vh, 640px);
+}
+#modal-main-image.image-square {
+    flex-grow: 0;
+    height: min(68vh, 560px);
 }
 #modal-thumbnail-strip {
     display: flex;
@@ -2316,6 +2354,38 @@ body.presentation-active #chat-widget {
 }
 .thumbnail-img.active {
     border-color: #007bff;
+}
+.image-lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(17, 24, 39, 0.92);
+}
+.image-lightbox-img {
+    max-width: min(1200px, 96vw);
+    max-height: 92vh;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+    background: #f3f4f6;
+}
+.image-lightbox-close {
+    position: fixed;
+    top: 18px;
+    right: 20px;
+    width: 44px;
+    height: 44px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 30px;
+    line-height: 1;
+    cursor: pointer;
 }
 .modal-sidebar-column {
     flex: 1;
@@ -4652,11 +4722,11 @@ body.presentation-active #chat-widget {
 .itinerary-main-image {
     width: 100%;
     height: 250px;
-    background-size: cover;
+    background-size: contain;
     background-position: center;
     background-repeat: no-repeat;
     border-radius: 8px;
-    background-color: #f8f9fa;
+    background-color: #f3f4f6;
 }
 
 .itinerary-thumbnails {

@@ -1234,6 +1234,47 @@ export function getRecordDescription(record, selectionsOrIndex = null) {
 }
 
 /**
+ * Escapes user/Airtable-provided text before inserting it into HTML.
+ * @param {string} value
+ * @returns {string}
+ */
+export function escapeHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value == null ? '' : String(value);
+    return div.innerHTML;
+}
+
+/**
+ * Render Airtable rich text/markdown-ish long text safely.
+ * Airtable rich text is returned through the API as formatted text, so this
+ * keeps paragraph breaks and common inline formatting without trusting raw HTML.
+ * @param {string} value
+ * @returns {string}
+ */
+export function renderRichText(value) {
+    const text = value == null ? '' : String(value);
+    if (!text.trim()) return '';
+
+    const renderInline = (input) => escapeHtml(input)
+        .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+        .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/__([^_\n]+)__/g, '<strong>$1</strong>')
+        .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>')
+        .replace(/(^|[^_])_([^_\n]+)_(?!_)/g, '$1<em>$2</em>');
+
+    const blocks = text.trim().split(/\n{2,}/);
+    return blocks.map(block => {
+        const lines = block.split(/\n/);
+        const isList = lines.every(line => /^\s*[-*]\s+/.test(line));
+        if (isList) {
+            const items = lines.map(line => `<li>${renderInline(line.replace(/^\s*[-*]\s+/, ''))}</li>`).join('');
+            return `<ul>${items}</ul>`;
+        }
+        return `<p>${renderInline(block).replace(/\n/g, '<br>')}</p>`;
+    }).join('');
+}
+
+/**
  * Calculate the effective minimum quantity for a record based on Union Machine Works presence
  * @param {Object} record - The record to calculate the minimum for
  * @returns {number} The effective minimum quantity (1 if UMW is booked, otherwise the Airtable minimum)
