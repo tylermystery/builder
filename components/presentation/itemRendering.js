@@ -6,7 +6,7 @@
 
 import { log } from '../../utils/debug.js';
 import { renderRichText } from '../../utils.js';
-import { getImageOrientationClass } from '../../utils/imageOptimizer.js';
+import { applyCloudinaryFitTransform, getImageOrientationClass } from '../../utils/imageOptimizer.js';
 import { getActiveStorePillars } from '../../availability.js';
 
 // Track loaded images for each item
@@ -507,8 +507,15 @@ export async function renderCompactCard(item) {
     }
     const cachedImages = itemImagesCache.get(recordId);
     const photoUrl = cachedImages?.images?.[cachedImages.currentIndex] || cachedImages?.images?.[0] || '';
-    const optimizedPhoto = photoUrl ? _deps.applyCloudinaryTransform(photoUrl, 'w_400,h_250,c_fit,f_auto,q_auto') : '';
+    const optimizedPhoto = photoUrl ? applyCloudinaryFitTransform(photoUrl, 'w_400,h_500,c_fit,f_auto,q_auto') : '';
     const imageOrientationClass = await getImageOrientationClass(optimizedPhoto);
+    console.debug('[ImageFit DEBUG] Compact card image prepared', {
+        recordId,
+        name,
+        photoUrl,
+        optimizedPhoto,
+        imageOrientationClass
+    });
 
     // Task status overlay
     const taskStatus = _deps.getElementTaskStatus('item', recordId);
@@ -757,8 +764,15 @@ export async function renderCompactGroupCard(group) {
     }
     const cachedImages = itemImagesCache.get(firstItemId);
     const photoUrl = cachedImages?.images?.[0] || '';
-    const optimizedPhoto = photoUrl ? _deps.applyCloudinaryTransform(photoUrl, 'w_400,h_250,c_fit,f_auto,q_auto') : '';
+    const optimizedPhoto = photoUrl ? applyCloudinaryFitTransform(photoUrl, 'w_400,h_500,c_fit,f_auto,q_auto') : '';
     const imageOrientationClass = await getImageOrientationClass(optimizedPhoto);
+    console.debug('[ImageFit DEBUG] Compact group image prepared', {
+        groupId,
+        groupName,
+        photoUrl,
+        optimizedPhoto,
+        imageOrientationClass
+    });
 
     // Member name pills
     const maxPills = Math.min(groupItems.length, 4);

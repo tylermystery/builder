@@ -10,7 +10,7 @@ import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveI
 import { log } from '../utils/debug.js';
 import { getDayStatus, AVAILABILITY_STATUS, logBusyTimeSummary, describeSelectedAvailability } from '../availability.js';
 import { showReceiptModal } from './receipt.js';
-import { applyCloudinaryTransform, getImageOrientationClass } from '../utils/imageOptimizer.js';
+import { applyCloudinaryTransform, applyCloudinaryFitTransform, getImageOrientationClass } from '../utils/imageOptimizer.js';
 import { resizeImageForUpload } from '../utils/imageResizer.js';
 import { triggerSave } from '../events.js';
 import { createCalendarExportButtons, initializeCalendarExportListeners, resolvePlanVenueAddress } from '../utils/calendarExport.js';
@@ -3217,6 +3217,15 @@ async function applyImageOrientationClass(element, imageUrl) {
     const orientationClass = await getImageOrientationClass(imageUrl);
     if (extractBackgroundImageUrl(element) !== imageUrl) return;
     if (orientationClass) element.classList.add(orientationClass);
+    console.debug('[ImageFit DEBUG] Applied orientation class to modal image', {
+        elementId: element.id || element.className,
+        imageUrl,
+        orientationClass,
+        className: element.className,
+        backgroundSize: getComputedStyle(element).backgroundSize,
+        renderedWidth: element.clientWidth,
+        renderedHeight: element.clientHeight
+    });
 }
 
 function showImageLightbox(imageUrl, label = 'Item image') {
@@ -4676,7 +4685,7 @@ async function showComponentDetailModal(record, imageUrls, history, componentTyp
             thumb.addEventListener('click', () => {
                 currentImageIndex = idx;
                 const fullUrl = url.includes('cloudinary')
-                    ? applyCloudinaryTransform(url, 'w_800,h_900,c_fit,f_auto,q_auto')
+                    ? applyCloudinaryFitTransform(url, 'w_800,h_900,c_fit,f_auto,q_auto')
                     : url;
                 mainImageEl.style.backgroundImage = `url('${fullUrl}')`;
                 applyImageOrientationClass(mainImageEl, fullUrl);
@@ -5847,7 +5856,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
                             // Update main image
                             const optimizedUrl = aiImageResult.imageUrl.includes('cloudinary')
-                                ? applyCloudinaryTransform(aiImageResult.imageUrl, 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
+                                ? applyCloudinaryFitTransform(aiImageResult.imageUrl, 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
                                 : aiImageResult.imageUrl;
                             liveMainImage.style.backgroundImage = `url('${optimizedUrl}')`;
                             applyImageOrientationClass(liveMainImage, optimizedUrl);
@@ -6910,7 +6919,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
     // Optimize main image with proper size and format
     const optimizedMainImage = imageUrls[currentPhotoIndex].includes('cloudinary')
-        ? applyCloudinaryTransform(imageUrls[currentPhotoIndex], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
+        ? applyCloudinaryFitTransform(imageUrls[currentPhotoIndex], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
         : imageUrls[currentPhotoIndex];
     modalMainImage.style.backgroundImage = `url('${optimizedMainImage}')`;
     applyImageOrientationClass(modalMainImage, optimizedMainImage);
@@ -6983,7 +6992,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         thumb.addEventListener('click', () => {
             currentPhotoIndex = index;
             const optimizedClickImage = imageUrls[index].includes('cloudinary')
-                ? applyCloudinaryTransform(imageUrls[index], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
+                ? applyCloudinaryFitTransform(imageUrls[index], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
                 : imageUrls[index];
             // Remove any package collage overlay when switching to a regular thumbnail
             const existingCollage = modalMainImage.querySelector('.package-collage-overlay');
@@ -7121,7 +7130,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                     if (mainImages.length === 1) {
                         // Single image: just set as background
                         const optimizedUrl = mainImages[0].includes('cloudinary')
-                            ? applyCloudinaryTransform(mainImages[0], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
+                            ? applyCloudinaryFitTransform(mainImages[0], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
                             : mainImages[0];
                         modalMainImage.style.backgroundImage = `url('${optimizedUrl}')`;
                         applyImageOrientationClass(modalMainImage, optimizedUrl);
@@ -7987,7 +7996,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             api.fetchImagesByTags(record, [imageTag], state.records.all).then(taggedImages => {
                 if (taggedImages && taggedImages.length > 0) {
                     const optimizedImage = taggedImages[0].includes('cloudinary')
-                        ? applyCloudinaryTransform(taggedImages[0], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
+                        ? applyCloudinaryFitTransform(taggedImages[0], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
                         : taggedImages[0];
                     modalMainImage.style.backgroundImage = `url('${optimizedImage}')`;
                     applyImageOrientationClass(modalMainImage, optimizedImage);

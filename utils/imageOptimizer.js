@@ -65,6 +65,29 @@ export function applyCloudinaryTransform(url, transformations) {
 }
 
 /**
+ * Apply Cloudinary transformations after stripping existing transformations.
+ * Use this for fit/inspection displays where inherited crop transforms would
+ * otherwise keep forcing square or landscape output.
+ * @param {string} url
+ * @param {string} transformations
+ * @returns {string}
+ */
+export function applyCloudinaryFitTransform(url, transformations) {
+  if (!url || !url.includes('cloudinary') || !url.includes('/upload/')) return url;
+  const cleanUrl = getBaseCloudinaryUrl(url);
+  const transformedUrl = applyCloudinaryTransform(cleanUrl, transformations);
+  if (hasCloudinaryTransformations(url) && typeof console !== 'undefined') {
+    console.debug('[ImageFit DEBUG] Stripped existing Cloudinary transforms before fit display', {
+      originalUrl: url,
+      cleanUrl,
+      transformedUrl,
+      transformations
+    });
+  }
+  return transformedUrl;
+}
+
+/**
  * Detects image orientation from loaded dimensions for layout decisions.
  * @param {string} url
  * @returns {Promise<'image-portrait'|'image-landscape'|'image-square'|''>}
@@ -85,9 +108,19 @@ export function getImageOrientationClass(url) {
         return;
       }
       const ratio = width / height;
-      if (ratio < 0.82) resolve('image-portrait');
-      else if (ratio > 1.18) resolve('image-landscape');
-      else resolve('image-square');
+      let orientationClass = 'image-square';
+      if (ratio < 0.82) orientationClass = 'image-portrait';
+      else if (ratio > 1.18) orientationClass = 'image-landscape';
+      if (typeof console !== 'undefined') {
+        console.debug('[ImageFit DEBUG] Orientation detected', {
+          url,
+          width,
+          height,
+          ratio: Number(ratio.toFixed(3)),
+          orientationClass
+        });
+      }
+      resolve(orientationClass);
     };
     img.onerror = () => {
       clearTimeout(timeoutId);

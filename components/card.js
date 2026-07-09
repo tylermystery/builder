@@ -10,7 +10,7 @@ import { buildGoalBucket, calculateRecommendationScore } from '../availability.j
 import { CONSTANTS } from '../config.js';
 import { getRecordPrice, getRecordPriceRange, getTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, getPackageDefaultHeadcount, renderRichText } from '../utils.js';
 import { log } from '../utils/debug.js';
-import { getImageOrientationClass } from '../utils/imageOptimizer.js';
+import { applyCloudinaryFitTransform, getImageOrientationClass } from '../utils/imageOptimizer.js';
 import { ensureStorePromotionsLoaded, bestDisplayPromoForItem, rewardLabel, promoTimingHint } from '../utils/promotions-client.js';
 
 // Build the bits of card UI a live promotion adds: a corner badge and a
@@ -368,7 +368,17 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     // Fetch images for all items (AI items will now go through website scraping)
     const { imageUrls, status } = await api.fetchImagesForRecord(record, allRecords, imageCache);
     imageUrlToLoad = getPlaceholderImage(imageUrls);
+    if (imageUrlToLoad?.includes('cloudinary')) {
+        imageUrlToLoad = applyCloudinaryFitTransform(imageUrlToLoad, 'w_900,h_900,c_fit,f_auto,q_auto');
+    }
     const imageOrientationClass = await getImageOrientationClass(imageUrlToLoad);
+    console.debug('[ImageFit DEBUG] Card image prepared', {
+        recordId: record.id,
+        name: fields.Name,
+        imageUrlToLoad,
+        imageOrientationClass,
+        status
+    });
     // --- END BLOCK ---
 
     if (fields['Item Type'] === 'Grouping') {
