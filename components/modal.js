@@ -6,7 +6,7 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage, scoreToAdjective } from '../config.js';
 import { getCurrentUser } from '../chat.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration, formatEventTimeRange, getTempRsvps, encodeSelections, renderRichText } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration, formatEventTimeRange, getEventScheduleParts, formatEventSchedule, getTempRsvps, encodeSelections, renderRichText } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getDayStatus, AVAILABILITY_STATUS, logBusyTimeSummary, describeSelectedAvailability } from '../availability.js';
 import { showReceiptModal } from './receipt.js';
@@ -6239,11 +6239,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         // Show event info for ALL users (both registered and non-registered) - date/time is important info
         const userIsAuthenticatedForRsvp = state.session.user.isAuthenticated;
         if (!hasChildEventOptions) {
-        const eventDateStr = record.fields.Date;
+        const eventSchedule = getEventScheduleParts(record);
         // Show the published plan's start/end time (the same Start_time/End_time
         // the "Add to Calendar" buttons use), falling back to the legacy Time range.
-        let eventTime = formatEventTimeRange(record.fields.Start_time, record.fields.End_time)
-            || record.fields.Time || '';
+        let eventTime = eventSchedule.time;
         // If the record carries no synced time (it predates schedule syncing, or the
         // cached copy is stale) but this event belongs to the plan currently loaded,
         // fall back to the live plan times — the same source the presentation/plan
@@ -6258,16 +6257,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         }
         const eventLocation = record.fields.Location || '';
 
-        if (eventDateStr) {
-            // Parse date in local timezone to avoid timezone shift issues
-            const eventDate = new Date(eventDateStr + 'T00:00:00');
-            const dateStr = eventDate.toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            });
-
+        if (eventSchedule.date) {
             // Remove any existing event info section before creating new one
             const existingEventInfo = document.querySelector('.event-info-section');
             if (existingEventInfo) existingEventInfo.remove();
@@ -6276,7 +6266,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             eventInfoSection.className = 'event-info-section';
             eventInfoSection.innerHTML = `
                 <div class="event-date-time">
-                    <strong>📅 ${dateStr}</strong>${eventTime ? ` at ${eventTime}` : ''}
+                    <strong>📅 ${eventSchedule.date}</strong>${eventTime ? ` at ${eventTime}` : ''}
                 </div>
                 ${eventLocation ? `<div class="event-location">📍 ${eventLocation}</div>` : ''}
             `;
@@ -11041,8 +11031,11 @@ export async function showCheckoutModal(shopSettings, scope = null) {
             itemNoteHtml = `<small class="checkout-summary-note">Note: ${scope.note}</small>`;
         }
         const itemScheduleStr = formatItemSchedule(scope);
-        const itemScheduleHtml = itemScheduleStr
-            ? `<small class="checkout-summary-schedule"><span class="schedule-icon">🕐</span> ${itemScheduleStr}</small>`
+        const scopeEventScheduleStr = !itemScheduleStr && scope.record?.fields?.['Item Type'] === 'Event'
+            ? formatEventSchedule(scope.record, { compact: true })
+            : '';
+        const itemScheduleHtml = (itemScheduleStr || scopeEventScheduleStr)
+            ? `<small class="checkout-summary-schedule"><span class="schedule-icon">🕐</span> ${itemScheduleStr || scopeEventScheduleStr}</small>`
             : '';
 
         const listItem = document.createElement('li');
@@ -11132,8 +11125,11 @@ export async function showCheckoutModal(shopSettings, scope = null) {
 
         // Per-item scheduling line (date / time / duration)
         const scheduleStr = formatItemSchedule(itemInfo);
-        const scheduleHtml = scheduleStr
-            ? `<small class="checkout-summary-schedule"><span class="schedule-icon">🕐</span> ${scheduleStr}</small>`
+        const eventScheduleStr = !scheduleStr && record.fields?.['Item Type'] === 'Event'
+            ? formatEventSchedule(record, { compact: true })
+            : '';
+        const scheduleHtml = (scheduleStr || eventScheduleStr)
+            ? `<small class="checkout-summary-schedule"><span class="schedule-icon">🕐</span> ${scheduleStr || eventScheduleStr}</small>`
             : '';
 
         // Build option detail lines

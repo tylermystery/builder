@@ -8,7 +8,7 @@ import * as api from '../api.js';
 import { buildGoalBucket, calculateRecommendationScore } from '../availability.js';
 // ^^^ END FINAL IMPORT FIX ^^^
 import { CONSTANTS } from '../config.js';
-import { getRecordPrice, getRecordPriceRange, getTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, getPackageDefaultHeadcount, renderRichText } from '../utils.js';
+import { getRecordPrice, getRecordPriceRange, getTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, getPackageDefaultHeadcount, renderRichText, getEventScheduleParts } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { applyCloudinaryFitTransform, getImageOrientationClass } from '../utils/imageOptimizer.js';
 import { ensureStorePromotionsLoaded, bestDisplayPromoForItem, rewardLabel, promoTimingHint } from '../utils/promotions-client.js';
@@ -436,10 +436,11 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         // Apply AI-sourced styling if this is an AI-generated event
         const aiEventClass = isAISourced ? ' ai-sourced-card' : '';
         eventCard.className = 'event-card event-type-card' + aiEventClass + (confidenceClass ? ` ${confidenceClass}` : '');
+        const scheduleParts = getEventScheduleParts(record);
         const eventDate = fields.Date ? new Date(fields.Date + 'T00:00:00') : null;
         const month = eventDate ? eventDate.toLocaleString('default', { month: 'short' }).toUpperCase() : 'TBD';
         const day = eventDate ? eventDate.getDate() : '??';
-        const eventTime = fields.Time || '';
+        const eventTime = scheduleParts.time;
         const hasRsvpd = (record.fields.RSVPs || []).includes(state.session.user.id);
 
         // Check if event has a linked session (is affiliated to a plan)
