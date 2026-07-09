@@ -1410,6 +1410,12 @@
 .event-card-image-container .collage-image {
     background-size: cover;
 }
+.event-card-image-container.image-portrait {
+    height: clamp(280px, 38vw, 380px);
+}
+.event-card-image-container.image-square {
+    height: clamp(240px, 32vw, 320px);
+}
 
 .event-card-image-container.lazy-load {
     opacity: 0.6;
@@ -1958,6 +1964,14 @@
     border-right: 1px solid #eee;
     position: relative; /* Required for positioning ai-image-source-modal */
     cursor: zoom-in;
+}
+#modal-main-image.image-portrait {
+    flex-grow: 0;
+    height: min(76vh, 640px);
+}
+#modal-main-image.image-square {
+    flex-grow: 0;
+    height: min(68vh, 560px);
 }
 #modal-thumbnail-strip {
     display: flex;
@@ -10698,6 +10712,12 @@ hr.total-divider {
     margin-bottom: 10px;
     cursor: zoom-in;
 }
+.component-detail-main-image.image-portrait {
+    aspect-ratio: 4 / 5;
+}
+.component-detail-main-image.image-square {
+    aspect-ratio: 1 / 1;
+}
 
 .component-detail-thumbnails {
     display: flex;
@@ -16315,6 +16335,12 @@ hr.total-divider {
     background-repeat: no-repeat;
     background-color: rgba(255, 255, 255, 0.05);
     position: relative;
+}
+.compact-card-photo.image-portrait {
+    aspect-ratio: 4 / 5;
+}
+.compact-card-photo.image-square {
+    aspect-ratio: 1 / 1;
 }
 
 .compact-card-no-photo .compact-card-photo {

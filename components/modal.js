@@ -10,7 +10,7 @@ import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveI
 import { log } from '../utils/debug.js';
 import { getDayStatus, AVAILABILITY_STATUS, logBusyTimeSummary, describeSelectedAvailability } from '../availability.js';
 import { showReceiptModal } from './receipt.js';
-import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
+import { applyCloudinaryTransform, getImageOrientationClass } from '../utils/imageOptimizer.js';
 import { resizeImageForUpload } from '../utils/imageResizer.js';
 import { triggerSave } from '../events.js';
 import { createCalendarExportButtons, initializeCalendarExportListeners, resolvePlanVenueAddress } from '../utils/calendarExport.js';
@@ -3211,6 +3211,14 @@ function extractBackgroundImageUrl(element) {
     return match ? match[1] : '';
 }
 
+async function applyImageOrientationClass(element, imageUrl) {
+    if (!element) return;
+    element.classList.remove('image-portrait', 'image-landscape', 'image-square');
+    const orientationClass = await getImageOrientationClass(imageUrl);
+    if (extractBackgroundImageUrl(element) !== imageUrl) return;
+    if (orientationClass) element.classList.add(orientationClass);
+}
+
 function showImageLightbox(imageUrl, label = 'Item image') {
     if (!imageUrl) return;
 
@@ -4302,6 +4310,7 @@ function enableItemEditMode(record, nameEl, descEl) {
                         thumb.title = isAI ? 'AI-generated image approximation' : 'Custom photo';
                         thumb.addEventListener('click', () => {
                             modalMainImage.style.backgroundImage = `url('${photoUrl}')`;
+                            applyImageOrientationClass(modalMainImage, photoUrl);
                             modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
                             thumb.classList.add('active');
                             // Update the AI image indicator on the main image
@@ -4316,6 +4325,7 @@ function enableItemEditMode(record, nameEl, descEl) {
                         const firstPhotoUrl = firstPhoto.url || firstPhoto;
                         const isFirstAI = firstPhoto.isAIGenerated === true;
                         modalMainImage.style.backgroundImage = `url('${firstPhotoUrl}')`;
+                        applyImageOrientationClass(modalMainImage, firstPhotoUrl);
                         // Add AI indicator if the first image is AI-generated
                         updateModalAIImageIndicator(isFirstAI);
                     }
@@ -4647,6 +4657,7 @@ async function showComponentDetailModal(record, imageUrls, history, componentTyp
 
     const mainImageEl = galleryDiv.querySelector('.component-detail-main-image');
     const thumbsContainer = galleryDiv.querySelector('.component-detail-thumbnails');
+    applyImageOrientationClass(mainImageEl, mainImageUrl);
     if (mainImageEl) {
         mainImageEl.addEventListener('click', () => {
             showImageLightbox(extractBackgroundImageUrl(mainImageEl), record.fields.Name || 'Component image');
@@ -4665,9 +4676,10 @@ async function showComponentDetailModal(record, imageUrls, history, componentTyp
             thumb.addEventListener('click', () => {
                 currentImageIndex = idx;
                 const fullUrl = url.includes('cloudinary')
-                    ? applyCloudinaryTransform(url, 'w_800,h_500,c_fill,f_auto,q_auto')
+                    ? applyCloudinaryTransform(url, 'w_800,h_900,c_fit,f_auto,q_auto')
                     : url;
                 mainImageEl.style.backgroundImage = `url('${fullUrl}')`;
+                applyImageOrientationClass(mainImageEl, fullUrl);
                 thumbsContainer.querySelectorAll('.component-detail-thumb').forEach(t => t.classList.remove('active'));
                 thumb.classList.add('active');
             });
@@ -5838,6 +5850,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                                 ? applyCloudinaryTransform(aiImageResult.imageUrl, 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
                                 : aiImageResult.imageUrl;
                             liveMainImage.style.backgroundImage = `url('${optimizedUrl}')`;
+                            applyImageOrientationClass(liveMainImage, optimizedUrl);
 
                             // Update AI indicator
                             const existingIndicator = liveMainImage.querySelector('.ai-image-source-modal');
@@ -6900,6 +6913,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         ? applyCloudinaryTransform(imageUrls[currentPhotoIndex], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
         : imageUrls[currentPhotoIndex];
     modalMainImage.style.backgroundImage = `url('${optimizedMainImage}')`;
+    applyImageOrientationClass(modalMainImage, optimizedMainImage);
     modalMainImage.onclick = (event) => {
         if (event.target.closest('button, .package-collage-overlay, .package-component-name-overlay')) return;
         showImageLightbox(extractBackgroundImageUrl(modalMainImage), displayName || record.fields.Name || 'Item image');
@@ -6980,6 +6994,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             const aiIndicator = modalMainImage.querySelector('.ai-image-source-modal');
             if (aiIndicator) aiIndicator.style.display = '';
             modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
+            applyImageOrientationClass(modalMainImage, optimizedClickImage);
             modalThumbnailStrip.querySelectorAll('.active').forEach(t => t.classList.remove('active'));
             thumb.classList.add('active');
             // Update "Set as Cover" button visibility
@@ -7109,6 +7124,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                             ? applyCloudinaryTransform(mainImages[0], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
                             : mainImages[0];
                         modalMainImage.style.backgroundImage = `url('${optimizedUrl}')`;
+                        applyImageOrientationClass(modalMainImage, optimizedUrl);
                     } else {
                         // Multiple images: show collage grid overlay
                         modalMainImage.style.backgroundImage = 'none';
@@ -7370,6 +7386,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                             thumb.addEventListener('click', () => {
                                 currentPhotoIndex = imageUrls.indexOf(url);
                                 modalMainImage.style.backgroundImage = `url('${url}')`;
+                                applyImageOrientationClass(modalMainImage, url);
                                 modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
                                 thumb.classList.add('active');
                             });
@@ -7973,6 +7990,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                         ? applyCloudinaryTransform(taggedImages[0], 'w_1200,h_1000,c_fit,f_auto,q_auto,fl_progressive')
                         : taggedImages[0];
                     modalMainImage.style.backgroundImage = `url('${optimizedImage}')`;
+                    applyImageOrientationClass(modalMainImage, optimizedImage);
                 }
             }).catch(err => {
                 log('Modal', `Failed to fetch image for tag ${imageTag}: ${err.message}`);

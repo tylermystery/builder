@@ -10,6 +10,7 @@ import { buildGoalBucket, calculateRecommendationScore } from '../availability.j
 import { CONSTANTS } from '../config.js';
 import { getRecordPrice, getRecordPriceRange, getTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, getPackageDefaultHeadcount, renderRichText } from '../utils.js';
 import { log } from '../utils/debug.js';
+import { getImageOrientationClass } from '../utils/imageOptimizer.js';
 import { ensureStorePromotionsLoaded, bestDisplayPromoForItem, rewardLabel, promoTimingHint } from '../utils/promotions-client.js';
 
 // Build the bits of card UI a live promotion adds: a corner badge and a
@@ -367,6 +368,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     // Fetch images for all items (AI items will now go through website scraping)
     const { imageUrls, status } = await api.fetchImagesForRecord(record, allRecords, imageCache);
     imageUrlToLoad = getPlaceholderImage(imageUrls);
+    const imageOrientationClass = await getImageOrientationClass(imageUrlToLoad);
     // --- END BLOCK ---
 
     if (fields['Item Type'] === 'Grouping') {
@@ -461,7 +463,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const placeholder = getLowQualityPlaceholder(imageUrlToLoad);
 
         eventCard.innerHTML = `
-            <div class="event-card-image-container lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
+            <div class="event-card-image-container lazy-load ${imageOrientationClass}" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
                 <button class="heart-icon" data-record-id="${record.id}" aria-label="Like this event" tabindex="0"></button>
                 <button class="availability-btn" title="Select a date range to check availability" aria-label="Check availability">📅</button>
                 ${partnerBadge}
@@ -791,7 +793,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const vitalityBadgeHTML = vitalityEmoji ? `<span class="valuation-vitality-emoji" title="Goodness: ${goodnessLabel} (click for details)">${vitalityEmoji}</span>` : '';
 
     eventCard.innerHTML = `
-        <div class="event-card-image-container lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
+        <div class="event-card-image-container lazy-load ${imageOrientationClass}" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
             <button class="heart-icon" data-record-id="${record.id}" aria-label="Like this item" tabindex="0"></button>
             <button class="availability-btn" title="Select a date range to check availability" aria-label="Check availability">📅</button>
             ${partnerBadge}

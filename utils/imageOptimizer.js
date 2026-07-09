@@ -7,6 +7,7 @@ const DPR = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 
 // Cache for optimized URLs to avoid regenerating the same URLs repeatedly
 const imageUrlCache = new Map();
 const MAX_CACHE_SIZE = 500;
+const imageOrientationCache = new Map();
 
 // Supported image formats for Netlify Image CDN
 const SUPPORTED_IMAGE_FORMATS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.svg'];
@@ -61,6 +62,42 @@ export function applyCloudinaryTransform(url, transformations) {
 
   // No existing transformations, add them normally
   return url.slice(0, uploadIndex + 8) + transformations + '/' + url.slice(uploadIndex + 8);
+}
+
+/**
+ * Detects image orientation from loaded dimensions for layout decisions.
+ * @param {string} url
+ * @returns {Promise<'image-portrait'|'image-landscape'|'image-square'|''>}
+ */
+export function getImageOrientationClass(url) {
+  if (!url || typeof Image === 'undefined') return Promise.resolve('');
+  if (imageOrientationCache.has(url)) return imageOrientationCache.get(url);
+
+  const promise = new Promise((resolve) => {
+    const img = new Image();
+    const timeoutId = setTimeout(() => resolve(''), 900);
+    img.onload = () => {
+      clearTimeout(timeoutId);
+      const width = img.naturalWidth || img.width;
+      const height = img.naturalHeight || img.height;
+      if (!width || !height) {
+        resolve('');
+        return;
+      }
+      const ratio = width / height;
+      if (ratio < 0.82) resolve('image-portrait');
+      else if (ratio > 1.18) resolve('image-landscape');
+      else resolve('image-square');
+    };
+    img.onerror = () => {
+      clearTimeout(timeoutId);
+      resolve('');
+    };
+    img.src = url;
+  });
+
+  imageOrientationCache.set(url, promise);
+  return promise;
 }
 
 /**
