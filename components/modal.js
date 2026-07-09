@@ -5660,13 +5660,17 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
         // Calculate initial amount for rapid pay
         const initialPrice = getRecordPrice(record, itemState.selectedOptionIndex);
-        const initialQuantity = itemState.quantity || 1;
+        const initialQuantity = record.fields?.['Item Type'] === 'Event'
+            ? (parseFloat(document.getElementById('rsvp-quantity-input')?.value) || itemState.quantity || 1)
+            : (itemState.quantity || 1);
         const initialAmount = initialPrice * initialQuantity;
 
         // Update Rapid Pay button label dynamically
         const updateRapidPayLabel = () => {
             if (!rapidPayBtn) return;
-            const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
+            const quantityInput = record.fields?.['Item Type'] === 'Event'
+                ? document.getElementById('rsvp-quantity-input')
+                : document.querySelector('#modal-quantity-selector .quantity-input');
             const currentQuantity = quantityInput ? parseFloat(quantityInput.value) || 1 : 1;
             const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
             let selectedOptionIndex = itemState.selectedOptionIndex || 0;
@@ -5699,7 +5703,9 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             newRapidPayBtn.addEventListener('touchstart', preloadStripe, { once: true });
 
             newRapidPayBtn.addEventListener('click', () => {
-                const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
+                const quantityInput = record.fields?.['Item Type'] === 'Event'
+                    ? document.getElementById('rsvp-quantity-input')
+                    : document.querySelector('#modal-quantity-selector .quantity-input');
                 const quantity = quantityInput ? parseFloat(quantityInput.value) || 1 : 1;
                 const selections = readLiveSelections();
                 const priceParam = Object.keys(selections).length > 0
@@ -10522,15 +10528,34 @@ function setupEventRsvpActionZone(record, linkedSession) {
 
     // Party-size stepper wiring (always clamped to >= 1).
     const qtyInput = block.querySelector('#rsvp-quantity-input');
-    // Prefill a guest's pending party size (signed-in users are filled below from the server).
+    // Prefill from the plan quantity first, then guest/saved RSVP party size when present.
+    const lockedPartyQty = state.cart.lockedItems.get(record.id)?.quantity;
+    if (lockedPartyQty && qtyInput) qtyInput.value = String(lockedPartyQty);
     if (guestPartyQty && qtyInput) qtyInput.value = String(guestPartyQty);
     const minusBtn = block.querySelector('.minus');
     const plusBtn = block.querySelector('.plus');
+    const syncPlanQuantity = () => {
+        if (!state.cart.lockedItems.has(record.id)) return;
+        const qty = parseInt(qtyInput.value, 10) || 1;
+        const itemInfo = state.cart.lockedItems.get(record.id) || {};
+        itemInfo.quantity = qty;
+        itemInfo.lastAttemptedQuantity = qty;
+        state.cart.lockedItems.set(record.id, itemInfo);
+        try {
+            ui.updateTotalCost?.();
+            ui.updateEventPlanSection?.();
+            triggerSave();
+        } catch (err) {
+            log('Modal', `Could not sync RSVP quantity to plan: ${err.message}`);
+        }
+    };
     const clampQty = () => {
         let v = parseInt(qtyInput.value, 10);
         if (!Number.isFinite(v) || v < 1) v = 1;
         if (v > 999) v = 999;
         qtyInput.value = String(v);
+        syncPlanQuantity();
+        document.getElementById('modal-rapid-pay-btn')?._updateText?.();
     };
     if (plusBtn) plusBtn.addEventListener('click', (e) => {
         e.preventDefault(); e.stopPropagation();
@@ -10549,7 +10574,11 @@ function setupEventRsvpActionZone(record, linkedSession) {
     // single spot). Best-effort: on any failure the people-count labels stand.
     api.fetchEventRsvpData(record.id).then((data) => {
         if (!data) return;
-        if (data.mine && data.mine.quantity && qtyInput) qtyInput.value = String(data.mine.quantity);
+        if (data.mine && data.mine.quantity && qtyInput) {
+            qtyInput.value = String(data.mine.quantity);
+            syncPlanQuantity();
+            document.getElementById('modal-rapid-pay-btn')?._updateText?.();
+        }
         const quantities = data.quantities || {};
         const section = document.querySelector('.rsvp-list-section');
         if (section) {

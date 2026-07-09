@@ -279,9 +279,23 @@ function applyRsvpButtonState(clickedBtn, activeType) {
 export async function autoAddEventToPlan(record, partyQty = 1) {
     if (!record || !record.id) return;
     const recordId = record.id;
-    if (state.cart.lockedItems.has(recordId)) return;
-
     const qty = (Number.isFinite(partyQty) && partyQty > 0) ? partyQty : 1;
+    if (state.cart.lockedItems.has(recordId)) {
+        const existing = state.cart.lockedItems.get(recordId) || {};
+        existing.quantity = qty;
+        existing.lastAttemptedQuantity = qty;
+        state.cart.lockedItems.set(recordId, existing);
+        try {
+            await ui.updateEventPlanSection();
+            ui.updateTotalCost();
+        } catch (err) {
+            log('Events', `autoAddEventToPlan quantity sync issue: ${err.message}`);
+        }
+        syncPlanState('catalog', 'itemUpdated', { recordId, itemName: record.fields?.Name || 'Event', quantity: qty });
+        triggerSave();
+        return;
+    }
+
     const itemInfo = { quantity: qty, selectedOptionIndex: 0, selections: {}, note: '', lastAttemptedQuantity: qty };
     state.cart.lockedItems.set(recordId, itemInfo);
     state.cart.items.delete(recordId);
@@ -3055,7 +3069,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             let itemInfo;
             const modalOverlay = document.getElementById('detail-modal-overlay');
             if (modalOverlay?.classList.contains('active') && modalOverlay.dataset.recordId === recordId) {
-                const quantity = parseFloat(document.querySelector('#modal-quantity-selector .quantity-input')?.value) || 1;
+                const isEventRecord = record.fields?.['Item Type'] === 'Event';
+                const quantityInput = isEventRecord
+                    ? document.getElementById('rsvp-quantity-input')
+                    : document.querySelector('#modal-quantity-selector .quantity-input');
+                const quantity = parseFloat(quantityInput?.value) || 1;
                 const note = document.getElementById('modal-item-note')?.value || '';
 
                 // Extract selections from option groups
