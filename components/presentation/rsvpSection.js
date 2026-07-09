@@ -250,9 +250,7 @@ export function handleRsvpClick(e, modal) {
         } else {
             tempRsvps[recordId] = { ...(tempRsvps[recordId] || {}), rsvpType, quantity: tempRsvps[recordId]?.quantity || 1 };
             const labels = { yes: "You're going!", maybe: 'Marked as maybe.', no: "Marked as can't go." };
-            showToast(rsvpType === 'no'
-                ? (labels[rsvpType] || 'RSVP updated!')
-                : `${labels[rsvpType] || 'RSVP updated!'} Sign in at checkout to save it.`);
+            showToast(labels[rsvpType] || 'RSVP updated!');
             if (rsvpType === 'yes' || rsvpType === 'maybe') {
                 showRsvpSignupPopup({ eventId: recordId, rsvpType, eventRecord: linkedEventRecord });
             } else {

@@ -1080,6 +1080,18 @@ body.modal-open {
     right: 20px;
     z-index: 10000;
     max-width: 350px;
+    pointer-events: none;
+}
+
+@media (max-width: 768px) {
+    #toast-notification {
+        top: auto;
+        right: 12px;
+        bottom: max(16px, env(safe-area-inset-bottom));
+        left: 12px;
+        max-width: none;
+        text-align: center;
+    }
 }
 
 /* Projects Panel Styles */

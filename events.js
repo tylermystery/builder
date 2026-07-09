@@ -2853,9 +2853,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
                     const labels = { yes: "You're going!", maybe: "Marked as maybe.", no: "Marked as can't go." };
                     const confirmMsg = labels[rsvpType] || 'RSVP updated!';
-                    ui.showToast(rsvpType === 'no'
-                        ? confirmMsg
-                        : `${confirmMsg} Sign in at checkout to save it to your account.`);
+                    ui.showToast(confirmMsg);
                     if (rsvpType === 'yes' || rsvpType === 'maybe') {
                         showRsvpSignupPopup({ eventId: recordId, rsvpType, eventRecord: record });
                     } else {
