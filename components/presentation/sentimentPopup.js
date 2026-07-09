@@ -307,7 +307,7 @@ function createSentimentPopupHTML() {
             <div class="sentiment-popup-modal">
                 <div class="sentiment-popup-header">
                     <h2 class="sentiment-popup-title">Sentiment Analysis</h2>
-                    <button class="sentiment-popup-close" title="Close">&times;</button>
+                    <button class="sentiment-popup-close" aria-label="Close sentiment details">&times;</button>
                 </div>
                 <div class="sentiment-popup-empty">
                     <span class="empty-icon">✨</span>
@@ -323,7 +323,7 @@ function createSentimentPopupHTML() {
         <div class="sentiment-popup-modal">
             <div class="sentiment-popup-header">
                 <h2 class="sentiment-popup-title">Sentiment Analysis</h2>
-                <button class="sentiment-popup-close" title="Close">&times;</button>
+                <button class="sentiment-popup-close" aria-label="Close sentiment details">&times;</button>
             </div>
 
             <div class="sentiment-popup-content">

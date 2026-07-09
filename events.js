@@ -11,6 +11,7 @@ import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus, g
 import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getTempRsvps, setTempRsvps, getEffectiveMinQuantity, calculateDynamicPackagePrice, preloadStripe, getShopUrlParam, getTimeUnitMinutes, computeEndFromStartDuration } from './utils.js';
 import { sendMessage, getCurrentUser, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName, toggleRecentChats, addPlanEventToHistory } from './chat.js';
 import { publishItemToPublicLayer } from './components/publicCatalog.js';
+import { closeRsvpSignupPopup, showRsvpSignupPopup } from './components/rsvpSignupPopup.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal, startEmailSignIn, generateAuthChannelId, listenForEmailSignIn } from './auth.js';
@@ -2830,6 +2831,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     delete tempRsvps[recordId];
                     setTempRsvps(tempRsvps);
                     applyRsvpButtonState(rsvpBtn, null);
+                    closeRsvpSignupPopup();
                     ui.showToast('RSVP removed.');
                 } else {
                     tempRsvps[recordId] = { rsvpType, quantity: partyQty };
@@ -2854,6 +2856,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     ui.showToast(rsvpType === 'no'
                         ? confirmMsg
                         : `${confirmMsg} Sign in at checkout to save it to your account.`);
+                    if (rsvpType === 'yes' || rsvpType === 'maybe') {
+                        showRsvpSignupPopup({ eventId: recordId, rsvpType, eventRecord: record });
+                    } else {
+                        closeRsvpSignupPopup();
+                    }
                 }
                 return;
             }

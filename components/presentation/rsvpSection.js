@@ -8,8 +8,8 @@ import { state, getRecordById } from '../../state.js';
 import * as api from '../../api.js';
 import { log } from '../../utils/debug.js';
 import { showToast } from '../../ui.js';
-import { showUserModal } from '../../auth.js';
 import { getTempRsvps, setTempRsvps } from '../../utils.js';
+import { closeRsvpSignupPopup, showRsvpSignupPopup } from '../rsvpSignupPopup.js';
 import { createCalendarExportButtons, initializeCalendarExportListeners, resolvePlanVenueAddress } from '../../utils/calendarExport.js';
 
 // Cache for the linked event record
@@ -245,13 +245,19 @@ export function handleRsvpClick(e, modal) {
         const tempRsvps = getTempRsvps();
         if (currentlyActive) {
             delete tempRsvps[recordId];
+            closeRsvpSignupPopup();
             showToast('RSVP removed.');
         } else {
-            tempRsvps[recordId] = { rsvpType, quantity: 1 };
+            tempRsvps[recordId] = { ...(tempRsvps[recordId] || {}), rsvpType, quantity: tempRsvps[recordId]?.quantity || 1 };
             const labels = { yes: "You're going!", maybe: 'Marked as maybe.', no: "Marked as can't go." };
             showToast(rsvpType === 'no'
                 ? (labels[rsvpType] || 'RSVP updated!')
                 : `${labels[rsvpType] || 'RSVP updated!'} Sign in at checkout to save it.`);
+            if (rsvpType === 'yes' || rsvpType === 'maybe') {
+                showRsvpSignupPopup({ eventId: recordId, rsvpType, eventRecord: linkedEventRecord });
+            } else {
+                closeRsvpSignupPopup();
+            }
         }
         setTempRsvps(tempRsvps);
         const rsvpButtonsContainer = document.getElementById('presentation-rsvp-buttons');
@@ -306,4 +312,5 @@ export function handleRsvpClick(e, modal) {
 
 export function cleanup() {
     linkedEventRecord = null;
+    closeRsvpSignupPopup();
 }

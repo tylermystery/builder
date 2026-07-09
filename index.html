@@ -4907,7 +4907,7 @@ body.ucp-panel-open .unified-chat-panel {
     <div id="projects-panel" class="projects-panel" style="display: none;">
         <div class="projects-panel-header">
             <h3>📁 My Projects</h3>
-            <button id="projects-panel-close" class="projects-panel-close-btn" title="Close">&times;</button>
+            <button id="projects-panel-close" class="projects-panel-close-btn" aria-label="Close projects panel">&times;</button>
         </div>
         <div class="projects-panel-filters">
             <button class="projects-filter-btn active" data-filter="all">All</button>
@@ -4929,7 +4929,7 @@ body.ucp-panel-open .unified-chat-panel {
     <div id="wtf-plans-panel" class="wtf-plans-panel" style="display: none;">
         <div class="wtf-plans-panel-header">
             <h3>🎯 WTF Plans</h3>
-            <button id="wtf-plans-panel-close" class="wtf-plans-panel-close-btn" title="Close">&times;</button>
+            <button id="wtf-plans-panel-close" class="wtf-plans-panel-close-btn" aria-label="Close plans panel">&times;</button>
         </div>
         <div class="wtf-plans-browse-catalog-bar">
             <button id="wtf-plans-browse-catalog-btn" class="wtf-plans-browse-catalog-btn" title="Browse the catalog">
@@ -4963,7 +4963,7 @@ body.ucp-panel-open .unified-chat-panel {
                     <span>↕</span>
                 </button>
             </div>
-            <button id="forum-panel-close" class="forum-panel-close-btn" title="Close">&times;</button>
+            <button id="forum-panel-close" class="forum-panel-close-btn" aria-label="Close discussion panel">&times;</button>
         </div>
         <div class="forum-panel-filters">
             <button class="forum-filter-btn active" data-filter="all">All</button>
@@ -5097,7 +5097,7 @@ body.ucp-panel-open .unified-chat-panel {
 
             <!-- Right: Profile -->
             <div id="header-right">
-                <button id="user-profile-button" class="header-icon-btn" title="Sign In / My Account" aria-label="Sign in or view my account">&#128100;</button>
+                <button id="user-profile-button" class="header-icon-btn" aria-label="Sign in or view my account">&#128100;</button>
             </div>
         </div>
         <!-- Marquee banner below header content (optional announcements) -->
@@ -5388,7 +5388,7 @@ body.ucp-panel-open .unified-chat-panel {
             </div>
         </div>
         <div class="modal-content">
-            <button id="modal-close-btn" class="modal-close-btn" title="Close" aria-label="Close item details modal">×</button>
+            <button id="modal-close-btn" class="modal-close-btn" aria-label="Close item details modal">×</button>
             <div class="modal-main-column">
                 <div id="modal-main-image"></div>
                 <div id="modal-thumbnail-strip"></div>
@@ -5534,7 +5534,7 @@ body.ucp-panel-open .unified-chat-panel {
     
     <div id="checkout-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="checkout-modal-title">
         <div class="checkout-modal-content">
-            <button id="checkout-close-btn" class="modal-close-btn" title="Close" aria-label="Close checkout modal">×</button>
+            <button id="checkout-close-btn" class="modal-close-btn" aria-label="Close checkout modal">×</button>
             <h3 id="checkout-modal-title">Checkout Summary</h3>
             <div id="checkout-summary-details">
                 <p>This is a summary of the items in your plan.</p>
@@ -5716,7 +5716,7 @@ body.ucp-panel-open .unified-chat-panel {
 
     <div id="quick-pay-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="quick-pay-title">
         <div class="quick-pay-modal-content">
-            <button id="quick-pay-close-btn" class="modal-close-btn" title="Close" aria-label="Close quick pay modal">×</button>
+            <button id="quick-pay-close-btn" class="modal-close-btn" aria-label="Close quick pay modal">×</button>
             <h3 id="quick-pay-title">Quick Pay Options</h3>
             <p class="quick-pay-description">Choose your preferred payment method to pay the store directly:</p>
             <div id="quick-pay-options-container">
@@ -5729,7 +5729,7 @@ body.ucp-panel-open .unified-chat-panel {
          TODO: Re-enable Quick Plan when the AI-assisted plan creation flow is complete
     <div id="quick-plan-modal-overlay" class="modal-overlay">
         <div class="quick-plan-modal-content">
-            <button id="quick-plan-close-btn" class="modal-close-btn" title="Close" aria-label="Close quick plan modal">×</button>
+            <button id="quick-plan-close-btn" class="modal-close-btn" aria-label="Close quick plan modal">×</button>
             <h3>Quick Plan</h3>
             <p class="quick-plan-description">Describe your plan idea and we'll help you get started.</p>
             <div class="quick-plan-form">
@@ -5746,7 +5746,7 @@ body.ucp-panel-open .unified-chat-panel {
 
 <div id="itinerary-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="itinerary-modal-title">
     <div class="modal-content itinerary-content" style="max-width: 90vw; width: 1400px; height: 90vh;">
-        <button id="itinerary-close-btn" class="modal-close-btn" title="Close" aria-label="Close scene builder">×</button>
+        <button id="itinerary-close-btn" class="modal-close-btn" aria-label="Close scene builder">×</button>
 
         <div class="beta-banner" id="itinerary-modal-title">The Itinerary Builder is now a Visual Scene Builder! We'd love your feedback!</div>
 
@@ -6023,7 +6023,7 @@ body.ucp-panel-open .unified-chat-panel {
         </div>
 
         <div class="presentation-content presentation-itinerary">
-            <button id="presentation-close-btn" class="modal-close-btn" title="Close" style="display: none;">×</button>
+            <button id="presentation-close-btn" class="modal-close-btn" aria-label="Close presentation" style="display: none;">×</button>
 
             <!-- Scrollable Itinerary Container -->
             <div class="presentation-itinerary-scroll">
@@ -6058,7 +6058,7 @@ body.ucp-panel-open .unified-chat-panel {
                                         <span class="team-count-icon">&#128101;</span>
                                         <span id="team-count-number" class="team-count-number">1</span>
                                     </span>
-                                    <button id="presentation-account-btn" class="presentation-account-btn collaborator-btn" title="Account settings"></button>
+                                    <button id="presentation-account-btn" class="presentation-account-btn collaborator-btn" aria-label="Account settings"></button>
                                     <div id="itinerary-collaborators-list" class="collaborators-list collaborators-inline"></div>
                                     <button id="collaborators-add-share-btn" class="collaborator-btn add-share-btn" title="Add people or share this plan">
                                         <span class="add-share-icon">+</span>
@@ -6428,7 +6428,7 @@ body.ucp-panel-open .unified-chat-panel {
 
     <div id="user-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
         <div class="checkout-modal-content" style="max-width: 400px;">
-            <button id="user-modal-close-btn" class="modal-close-btn" title="Close" aria-label="Close sign in modal">×</button>
+            <button id="user-modal-close-btn" class="modal-close-btn" aria-label="Close sign in modal">×</button>
 
             <div id="signin-view">
                 <h3 id="user-modal-title">Sign In or Create Account</h3>
@@ -6585,7 +6585,7 @@ body.ucp-panel-open .unified-chat-panel {
   
     <div id="shop-switcher-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="shop-switcher-title">
         <div class="checkout-modal-content" style="max-width: 500px;">
-            <button id="shop-switcher-close-btn" class="modal-close-btn" title="Close" aria-label="Close shop switcher">×</button>
+            <button id="shop-switcher-close-btn" class="modal-close-btn" aria-label="Close shop switcher">×</button>
             <h3 id="shop-switcher-title">Select a Shop</h3>
             <div id="shop-list-container"></div>
         </div>
@@ -6601,7 +6601,7 @@ body.ucp-panel-open .unified-chat-panel {
 
 <div id="calendar-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="calendar-modal-title">
         <div class="modal-content calendar-modal-content">
-            <button id="calendar-close-btn" class="modal-close-btn" title="Close" aria-label="Close calendar">×</button>
+            <button id="calendar-close-btn" class="modal-close-btn" aria-label="Close calendar">×</button>
             <div class="beta-banner calendar-header" id="calendar-modal-title">The Events Calendar is a Beta feature. We'd love your feedback!</div>
             <div id="calendar-view-controls">
                 <button id="calendar-view-month" class="calendar-view-btn active" data-view="month">📅 Month</button>
@@ -6614,7 +6614,7 @@ body.ucp-panel-open .unified-chat-panel {
     
     <div id="receipt-modal-overlay" class="modal-overlay">
         <div class="receipt-modal-content">
-            <button id="receipt-close-btn" class="modal-close-btn" title="Close">×</button>
+            <button id="receipt-close-btn" class="modal-close-btn" aria-label="Close receipt">×</button>
             <div class="receipt-body"></div>
         </div>
     </div>

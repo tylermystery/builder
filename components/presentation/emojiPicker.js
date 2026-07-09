@@ -67,7 +67,7 @@ function createEmojiPickerHTML(recordId) {
         <div class="emoji-picker-modal" data-record-id="${recordId}">
             <div class="emoji-picker-header">
                 <span class="emoji-picker-title">Choose a Reaction</span>
-                <button class="emoji-picker-close" title="Close">&times;</button>
+                <button class="emoji-picker-close" aria-label="Close emoji picker">&times;</button>
             </div>
             <div class="emoji-picker-categories">${categoriesHTML}</div>
             <div class="emoji-picker-footer">

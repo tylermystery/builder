@@ -1733,10 +1733,11 @@
     padding: 5px 10px;
     border-radius: 4px;
     font-size: 0.8em;
-    top: -30px;
+    top: calc(100% + 8px);
     left: 50%;
     transform: translateX(-50%);
     white-space: nowrap;
+    pointer-events: none;
     z-index: 10;
 }
 /* Modal Share Button */
@@ -2258,10 +2259,11 @@
     padding: 5px 10px;
     border-radius: 4px;
     font-size: 0.8em;
-    top: -30px;
+    top: calc(100% + 8px);
     left: 50%;
     transform: translateX(-50%);
     white-space: nowrap;
+    pointer-events: none;
     z-index: 10;
 }
 .checkout-modal-content {
