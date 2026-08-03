@@ -27,6 +27,28 @@ function getStoreDetails(activeShop) {
 }
 
 /**
+ * Returns a safe, fully qualified store website URL.
+ * @param {Object} storeDetails - Parsed store details object
+ * @returns {string|null} Website URL or null when unavailable/invalid
+ */
+function getStoreWebsiteUrl(storeDetails) {
+    const rawWebsiteUrl = storeDetails?.businessInfo?.websiteUrl;
+    if (!rawWebsiteUrl || typeof rawWebsiteUrl !== 'string') return null;
+
+    const websiteUrl = /^https?:\/\//i.test(rawWebsiteUrl.trim())
+        ? rawWebsiteUrl.trim()
+        : `https://${rawWebsiteUrl.trim()}`;
+
+    try {
+        const parsedUrl = new URL(websiteUrl);
+        return ['http:', 'https:'].includes(parsedUrl.protocol) ? parsedUrl.href : null;
+    } catch (error) {
+        log('Footer', 'Invalid store website URL');
+        return null;
+    }
+}
+
+/**
  * Generates footer HTML based on store details
  * @param {Object} storeDetails - Parsed store details object
  * @returns {string} HTML string for footer content
@@ -38,10 +60,15 @@ function generateFooterHTML(storeDetails) {
 
     const info = storeDetails.businessInfo;
     const footerItems = [];
+    const websiteUrl = getStoreWebsiteUrl(storeDetails);
 
     // Copyright
     if (info.site?.copyright) {
-        footerItems.push(`<span class="footer-copyright">${info.site.copyright}</span>`);
+        if (websiteUrl) {
+            footerItems.push(`<a href="${websiteUrl}" target="_blank" rel="noopener noreferrer" class="footer-copyright footer-store-link" title="Visit website">${info.site.copyright}</a>`);
+        } else {
+            footerItems.push(`<span class="footer-copyright">${info.site.copyright}</span>`);
+        }
     }
 
     // Contact info
@@ -107,7 +134,7 @@ function updateHamburgerMenuWebsiteLink(storeDetails) {
         return;
     }
 
-    const websiteUrl = storeDetails?.businessInfo?.websiteUrl;
+    const websiteUrl = getStoreWebsiteUrl(storeDetails);
 
     if (websiteUrl) {
         websiteLink.href = websiteUrl;
