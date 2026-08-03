@@ -5403,20 +5403,272 @@ let isModalRendering = false;
  * Wire up a collapsible accordion section in the detail modal (Add Notes, Item Scheduling).
  * Resets the section to collapsed and rebinds its toggle so listeners don't stack across opens.
  */
-function setupModalAccordion(containerId, toggleId) {
+function setupModalAccordion(containerId, toggleId, expandedByDefault = false) {
     const container = document.getElementById(containerId);
     const toggle = document.getElementById(toggleId);
     if (!container || !toggle) return;
-    // Start collapsed every time the modal opens.
-    container.classList.remove('expanded');
+    container.classList.toggle('expanded', expandedByDefault);
     // Clone to drop any previously attached listeners.
     const freshToggle = toggle.cloneNode(true);
     toggle.parentNode.replaceChild(freshToggle, toggle);
-    freshToggle.setAttribute('aria-expanded', 'false');
+    freshToggle.setAttribute('aria-expanded', expandedByDefault ? 'true' : 'false');
     freshToggle.addEventListener('click', () => {
         const expanded = container.classList.toggle('expanded');
         freshToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
     });
+}
+
+function getRecordStoreId(record) {
+    const stores = record?.fields?.Stores;
+    if (Array.isArray(stores) && stores.length > 0) return stores[0];
+    if (typeof stores === 'string' && stores) return stores;
+    return state.ui.activeShopId || state.session.storeId || null;
+}
+
+function getComparableValues(record, fieldName) {
+    const value = record?.fields?.[fieldName];
+    const values = Array.isArray(value) ? value : String(value || '').split(/[,|]/);
+    return values.map((entry) => String(entry).trim().toLowerCase()).filter(Boolean);
+}
+
+const similarOfferingImageCache = new Map();
+
+function getOfferingImage(record) {
+    const fields = record?.fields || {};
+    const cached = typeof window !== 'undefined' ? window.itemImagesCache?.get(record.id) : null;
+    const custom = Array.isArray(fields._customImages) ? fields._customImages : [];
+    const attachments = ['Images', 'Photos', 'Image'].flatMap((key) => Array.isArray(fields[key]) ? fields[key] : []);
+    const candidate = cached?.images?.[cached.currentIndex || 0] || custom[0]?.url ||
+        attachments[0]?.thumbnails?.large?.url || attachments[0]?.url ||
+        fields['Image URL'] || fields.ImageURL || fields.imageUrl;
+    return typeof candidate === 'string' && candidate ? candidate : null;
+}
+
+function getOfferingPrice(record) {
+    const value = record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE];
+    if (value == null || value === '') return '';
+    if (typeof value === 'number') return `$${value.toFixed(value % 1 ? 2 : 0)}`;
+    return String(value).startsWith('$') ? String(value) : `$${value}`;
+}
+
+function isSimilarOfferingCandidate(candidate, record, storeId) {
+    if (!candidate?.id || candidate.id === record.id || !candidate.fields?.Name) return false;
+    if (!candidate.id.startsWith('rec')) return false;
+    if (candidate.fields['Item Type'] === 'Grouping') return false;
+    const candidateStores = candidate.fields.Stores;
+    if (storeId && Array.isArray(candidateStores) && candidateStores.length > 0 && !candidateStores.includes(storeId)) return false;
+    return true;
+}
+
+function deriveSimilarOfferings(record, storeId) {
+    const categorySet = new Set(getComparableValues(record, CONSTANTS.FIELD_NAMES.CATEGORIES));
+    const subcategorySet = new Set(getComparableValues(record, CONSTANTS.FIELD_NAMES.SUBCATEGORIES));
+    const tagSet = new Set(getComparableValues(record, CONSTANTS.FIELD_NAMES.MEDIA_TAGS));
+    const nameTokens = new Set(String(record.fields?.Name || '').toLowerCase().match(/[a-z0-9]{4,}/g) || []);
+    const itemType = String(record.fields?.['Item Type'] || '').toLowerCase();
+
+    return state.records.all
+        .filter((candidate) => isSimilarOfferingCandidate(candidate, record, storeId))
+        .map((candidate) => {
+            const categories = getComparableValues(candidate, CONSTANTS.FIELD_NAMES.CATEGORIES);
+            const subcategories = getComparableValues(candidate, CONSTANTS.FIELD_NAMES.SUBCATEGORIES);
+            const tags = getComparableValues(candidate, CONSTANTS.FIELD_NAMES.MEDIA_TAGS);
+            const candidateNameTokens = String(candidate.fields.Name || '').toLowerCase().match(/[a-z0-9]{4,}/g) || [];
+            let score = categories.filter((value) => categorySet.has(value)).length * 6;
+            score += subcategories.filter((value) => subcategorySet.has(value)).length * 4;
+            score += tags.filter((value) => tagSet.has(value)).length * 2;
+            score += candidateNameTokens.filter((value) => nameTokens.has(value)).length;
+            if (itemType && String(candidate.fields['Item Type'] || '').toLowerCase() === itemType) score += 1;
+            return { candidate, score };
+        })
+        .filter(({ score }) => score > 0)
+        .sort((left, right) => right.score - left.score || String(left.candidate.fields.Name).localeCompare(String(right.candidate.fields.Name)))
+        .slice(0, 4)
+        .map(({ candidate }) => candidate);
+}
+
+function renderSimilarOfferingCards(container, offerings) {
+    container.innerHTML = '';
+    const grid = document.createElement('div');
+    grid.className = 'similar-offerings-grid';
+    offerings.forEach((offering) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'similar-offering-card';
+        button.setAttribute('aria-label', `View ${offering.fields.Name}`);
+
+        const image = document.createElement('img');
+        image.alt = '';
+        image.loading = 'lazy';
+        const immediateImage = getOfferingImage(offering);
+        if (immediateImage) {
+            image.src = immediateImage;
+        } else {
+            image.classList.add('is-loading');
+            image.src = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+            api.fetchImagesForRecord(offering, state.records.all, similarOfferingImageCache)
+                .then(({ imageUrls }) => {
+                    if (!image.isConnected || !Array.isArray(imageUrls) || !imageUrls[0]) return;
+                    image.src = imageUrls[0];
+                    image.classList.remove('is-loading');
+                    if (typeof window !== 'undefined' && window.itemImagesCache) {
+                        window.itemImagesCache.set(offering.id, { images: imageUrls, currentIndex: 0 });
+                    }
+                })
+                .catch((error) => {
+                    console.warn('[Modal] Failed to resolve similar offering image:', offering.id, error);
+                    if (image.isConnected) image.classList.remove('is-loading');
+                });
+        }
+
+        const copy = document.createElement('span');
+        copy.className = 'similar-offering-copy';
+        const name = document.createElement('strong');
+        name.textContent = offering.fields.Name;
+        const meta = document.createElement('span');
+        meta.textContent = getOfferingPrice(offering) || offering.fields['Item Type'] || 'View details';
+        copy.append(name, meta);
+        button.append(image, copy);
+        button.addEventListener('click', () => showDetailModal(offering));
+        grid.appendChild(button);
+    });
+    container.appendChild(grid);
+}
+
+function renderSimilarOfferingsEditor(container, record, storeId, currentOfferings, onSaved) {
+    const candidates = state.records.all
+        .filter((candidate) => isSimilarOfferingCandidate(candidate, record, storeId))
+        .sort((left, right) => String(left.fields.Name).localeCompare(String(right.fields.Name)));
+    const selectedIds = new Set(currentOfferings.map((offering) => offering.id));
+    container.innerHTML = '';
+
+    const editor = document.createElement('div');
+    editor.className = 'similar-offerings-editor';
+    const search = document.createElement('input');
+    search.type = 'search';
+    search.placeholder = 'Search catalog offerings';
+    search.className = 'similar-offerings-search';
+    search.setAttribute('aria-label', 'Search catalog offerings');
+    const count = document.createElement('span');
+    count.className = 'similar-offerings-count';
+    const list = document.createElement('div');
+    list.className = 'similar-offerings-picker-list';
+
+    const updateCount = () => {
+        count.textContent = `${selectedIds.size} of 4 selected`;
+    };
+    const renderList = () => {
+        const query = search.value.trim().toLowerCase();
+        list.innerHTML = '';
+        candidates
+            .filter((candidate) => !query || String(candidate.fields.Name).toLowerCase().includes(query))
+            .slice(0, 60)
+            .forEach((candidate) => {
+                const label = document.createElement('label');
+                label.className = 'similar-offerings-picker-row';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = selectedIds.has(candidate.id);
+                checkbox.disabled = !checkbox.checked && selectedIds.size >= 4;
+                checkbox.addEventListener('change', () => {
+                    if (checkbox.checked) selectedIds.add(candidate.id);
+                    else selectedIds.delete(candidate.id);
+                    updateCount();
+                    renderList();
+                });
+                const text = document.createElement('span');
+                text.textContent = candidate.fields.Name;
+                label.append(checkbox, text);
+                list.appendChild(label);
+            });
+    };
+    search.addEventListener('input', renderList);
+
+    const actions = document.createElement('div');
+    actions.className = 'similar-offerings-editor-actions';
+    const automaticButton = document.createElement('button');
+    automaticButton.type = 'button';
+    automaticButton.className = 'similar-offerings-secondary-btn';
+    automaticButton.textContent = 'Use automatic suggestions';
+    const saveButton = document.createElement('button');
+    saveButton.type = 'button';
+    saveButton.className = 'similar-offerings-save-btn';
+    saveButton.textContent = 'Save offerings';
+    const status = document.createElement('span');
+    status.className = 'similar-offerings-status';
+
+    const persist = async (ids) => {
+        automaticButton.disabled = true;
+        saveButton.disabled = true;
+        status.textContent = 'Saving…';
+        const savedIds = await api.setSimilarOfferingIds(storeId, record.id, ids);
+        if (savedIds === null) {
+            status.textContent = 'Could not save. Try again.';
+            automaticButton.disabled = false;
+            saveButton.disabled = false;
+            return;
+        }
+        onSaved(savedIds);
+    };
+    automaticButton.addEventListener('click', () => persist([]));
+    saveButton.addEventListener('click', () => persist([...selectedIds]));
+    actions.append(automaticButton, saveButton, status);
+    editor.append(search, count, list, actions);
+    container.appendChild(editor);
+    updateCount();
+    renderList();
+    search.focus();
+}
+
+async function renderSimilarOfferings(record) {
+    const section = document.getElementById('modal-similar-offerings');
+    const content = document.getElementById('modal-similar-offerings-content');
+    if (!section || !content) return;
+
+    const storeId = getRecordStoreId(record);
+    const generated = deriveSimilarOfferings(record, storeId);
+    if (!storeId) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = 'block';
+    setupModalAccordion('modal-similar-offerings', 'modal-similar-offerings-toggle', true);
+    const source = document.getElementById('modal-similar-offerings-source');
+    if (!source) return;
+    content.innerHTML = '<div class="similar-offerings-loading"><span></span><span></span></div>';
+
+    const explicitIds = await api.getSimilarOfferingIds(storeId, record.id);
+    if (modalOverlay.dataset.recordId !== record.id) return;
+    const explicit = explicitIds
+        .map((id) => state.records.all.find((candidate) => candidate.id === id))
+        .filter((candidate) => candidate && isSimilarOfferingCandidate(candidate, record, storeId));
+    if (explicit.length === 0 && generated.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+    let offerings = explicit.length > 0 ? explicit : generated;
+
+    const renderView = (isManual) => {
+        content.innerHTML = '';
+        renderSimilarOfferingCards(content, offerings);
+        source.textContent = isManual ? 'Selected' : 'Catalog match';
+        if (record.id.startsWith('rec') && api.userHasPublishPermission()) {
+            const editButton = document.createElement('button');
+            editButton.type = 'button';
+            editButton.className = 'similar-offerings-edit-btn';
+            editButton.textContent = 'Edit';
+            editButton.addEventListener('click', () => {
+                renderSimilarOfferingsEditor(content, record, storeId, offerings, (savedIds) => {
+                    const saved = savedIds.map((id) => state.records.all.find((candidate) => candidate.id === id)).filter(Boolean);
+                    offerings = saved.length > 0 ? saved : generated;
+                    renderView(saved.length > 0);
+                });
+            });
+            content.appendChild(editButton);
+        }
+    };
+    renderView(explicit.length > 0);
 }
 
 /**
@@ -6035,6 +6287,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
     modalItemName.textContent = displayName;
     modalItemDescription.innerHTML = renderRichText(displayDescription);
+    void renderSimilarOfferings(record);
 
     // Show "Combined from" indicator for hybrid merged items
     const existingMergeInfo = document.querySelector('.modal-merge-info');

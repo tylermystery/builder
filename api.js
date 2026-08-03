@@ -6689,6 +6689,7 @@ export async function clearStreamMetadata(sessionId) {
 // ============================================================================
 
 const PUBLIC_CATALOG_BASE = '/api/public-catalog';
+const SIMILAR_OFFERINGS_BASE = '/api/similar-offerings';
 
 // Build headers for an authenticated public-catalog write. Returns null when the
 // visitor is not signed in so callers can prompt sign-in instead of failing.
@@ -6699,6 +6700,38 @@ function publicCatalogAuthHeaders() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
     };
+}
+
+export async function getSimilarOfferingIds(storeId, itemId) {
+    if (!storeId || !itemId) return [];
+    try {
+        const params = new URLSearchParams({ storeId, itemId });
+        const response = await fetch(`${SIMILAR_OFFERINGS_BASE}?${params}`);
+        if (!response.ok) return [];
+        const data = await response.json();
+        return Array.isArray(data.relatedItemIds) ? data.relatedItemIds : [];
+    } catch (error) {
+        console.error('[API] getSimilarOfferingIds error:', error);
+        return [];
+    }
+}
+
+export async function setSimilarOfferingIds(storeId, itemId, relatedItemIds) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers || !storeId || !itemId) return null;
+    try {
+        const response = await fetch(SIMILAR_OFFERINGS_BASE, {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify({ storeId, itemId, relatedItemIds })
+        });
+        if (!response.ok) return null;
+        const data = await response.json();
+        return Array.isArray(data.relatedItemIds) ? data.relatedItemIds : [];
+    } catch (error) {
+        console.error('[API] setSimilarOfferingIds error:', error);
+        return null;
+    }
 }
 
 // Fetch the full public catalog for a store: items bundled with their variations,

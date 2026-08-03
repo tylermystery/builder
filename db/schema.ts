@@ -84,6 +84,30 @@ export const publicItems = pgTable(
   }),
 );
 
+// Curated similar-offering overrides for catalog detail pages. These rows are
+// directional: configuring item A does not implicitly change item B. When an
+// item has no rows, the client derives recommendations from catalog metadata.
+export const similarOfferings = pgTable(
+  "similar_offerings",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    catalogItemId: text("catalog_item_id").notNull(),
+    relatedCatalogItemId: text("related_catalog_item_id").notNull(),
+    position: integer("position").notNull().default(0),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    itemIdx: index("similar_offerings_item_idx").on(t.storeId, t.catalogItemId),
+    pairUnique: uniqueIndex("similar_offerings_pair_unique").on(
+      t.storeId,
+      t.catalogItemId,
+      t.relatedCatalogItemId,
+    ),
+  }),
+);
+
 // A user-authored variation/edit of a public item. Created by explicitly editing
 // an existing public item, which records the parent/lineage link. Independently
 // created items remain separate public items rather than being auto-merged.

@@ -777,6 +777,179 @@
     margin-top: 10px;
 }
 
+.similar-offerings {
+    position: relative;
+    background: #fffaf0;
+    border-color: #eadfc9;
+}
+.similar-offerings-source {
+    margin-left: 2px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: #efe4cf;
+    color: #765f3e;
+    font-size: 0.72em;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: none;
+}
+.similar-offerings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+.similar-offering-card {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr);
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+    padding: 7px;
+    border: 1px solid #e6dcc9;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.86);
+    color: #30291f;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.similar-offering-card:hover,
+.similar-offering-card:focus-visible {
+    transform: translateY(-1px);
+    border-color: #bca77d;
+    box-shadow: 0 5px 14px rgba(83, 66, 37, 0.12);
+    outline: none;
+}
+.similar-offering-card img {
+    width: 52px;
+    height: 52px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: #eee7da;
+}
+.similar-offering-card img.is-loading {
+    background: linear-gradient(90deg, #eee5d4 25%, #faf5eb 50%, #eee5d4 75%);
+    background-size: 200% 100%;
+    animation: similar-offerings-shimmer 1.2s infinite linear;
+}
+.similar-offering-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 3px;
+}
+.similar-offering-copy strong {
+    overflow: hidden;
+    color: #30291f;
+    font-size: 0.82em;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.similar-offering-copy span {
+    color: #806f56;
+    font-size: 0.72em;
+}
+.similar-offerings-edit-btn {
+    margin-top: 8px;
+    padding: 5px 9px;
+    border: 1px solid #c9b78f;
+    border-radius: 7px;
+    background: transparent;
+    color: #6f5936;
+    font: inherit;
+    font-size: 0.75em;
+    font-weight: 700;
+    cursor: pointer;
+}
+.similar-offerings-loading {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.similar-offerings-loading span {
+    height: 66px;
+    border-radius: 10px;
+    background: linear-gradient(90deg, #eee5d4 25%, #faf5eb 50%, #eee5d4 75%);
+    background-size: 200% 100%;
+    animation: similar-offerings-shimmer 1.2s infinite linear;
+}
+@keyframes similar-offerings-shimmer {
+    to { background-position: -200% 0; }
+}
+.similar-offerings-editor {
+    display: grid;
+    gap: 8px;
+}
+.similar-offerings-search {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid #d4c6aa;
+    border-radius: 8px;
+    background: #fff;
+    font: inherit;
+}
+.similar-offerings-count,
+.similar-offerings-status {
+    color: #806f56;
+    font-size: 0.75em;
+}
+.similar-offerings-picker-list {
+    display: grid;
+    max-height: 210px;
+    overflow-y: auto;
+    border: 1px solid #eadfc9;
+    border-radius: 8px;
+    background: #fff;
+}
+.similar-offerings-picker-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid #f0e9dc;
+    color: #3f372b;
+    font-size: 0.82em;
+    cursor: pointer;
+}
+.similar-offerings-picker-row:last-child { border-bottom: 0; }
+.similar-offerings-editor-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+.similar-offerings-save-btn,
+.similar-offerings-secondary-btn {
+    padding: 7px 10px;
+    border-radius: 7px;
+    font: inherit;
+    font-size: 0.76em;
+    font-weight: 700;
+    cursor: pointer;
+}
+.similar-offerings-save-btn {
+    border: 1px solid #6f5936;
+    background: #6f5936;
+    color: #fff;
+}
+.similar-offerings-secondary-btn {
+    border: 1px solid #c9b78f;
+    background: #fff;
+    color: #6f5936;
+}
+.similar-offerings-save-btn:disabled,
+.similar-offerings-secondary-btn:disabled { opacity: 0.55; cursor: wait; }
+@media (max-width: 560px) {
+    .similar-offerings-grid { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .similar-offering-card,
+    .similar-offering-card img.is-loading,
+    .similar-offerings-loading span { transition: none; animation: none; }
+}
+
 /* Time component styles - detail modal */
 .modal-time-section {
     margin: 12px 0;
