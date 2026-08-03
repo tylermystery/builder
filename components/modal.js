@@ -111,14 +111,15 @@ function updateFullSeoMetadata(record, title, description, tags = [], imageUrl =
 
     // Generate canonical URL with AI tags for SEO
     const slug = generateSlug(record.fields.Name, record.id, tags);
-    const canonicalUrl = `${window.location.origin}/item/${slug}`;
-    setLinkTag('link[rel="canonical"]', { rel: 'canonical', href: canonicalUrl });
+    const canonicalUrl = new URL(`${window.location.origin}/item/${slug}`);
+    if (!record.id?.startsWith('rec')) canonicalUrl.searchParams.set('openItem', record.id);
+    setLinkTag('link[rel="canonical"]', { rel: 'canonical', href: canonicalUrl.toString() });
 
     // Open Graph meta tags for Facebook, LinkedIn, etc.
     setMetaTag('meta[property="og:type"]', { property: 'og:type', content: record.fields['Item Type'] === 'Event' ? 'event' : 'product' });
     setMetaTag('meta[property="og:title"]', { property: 'og:title', content: title });
     setMetaTag('meta[property="og:description"]', { property: 'og:description', content: description });
-    setMetaTag('meta[property="og:url"]', { property: 'og:url', content: canonicalUrl });
+    setMetaTag('meta[property="og:url"]', { property: 'og:url', content: canonicalUrl.toString() });
     setMetaTag('meta[property="og:site_name"]', { property: 'og:site_name', content: 'WTFun' });
 
     if (imageUrl) {
@@ -128,6 +129,7 @@ function updateFullSeoMetadata(record, title, description, tags = [], imageUrl =
 
     // Twitter Card meta tags
     setMetaTag('meta[name="twitter:card"]', { name: 'twitter:card', content: imageUrl ? 'summary_large_image' : 'summary' });
+    setMetaTag('meta[name="twitter:url"]', { name: 'twitter:url', content: canonicalUrl.toString() });
     setMetaTag('meta[name="twitter:title"]', { name: 'twitter:title', content: title });
     setMetaTag('meta[name="twitter:description"]', { name: 'twitter:description', content: description });
 
@@ -7856,6 +7858,9 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
         // Build share URL with shop slug but WITHOUT session
         const shareUrl = new URL(`${window.location.origin}/item/${slug}`);
+        if (!record.id?.startsWith('rec')) {
+            shareUrl.searchParams.set('openItem', record.id);
+        }
 
         // Include shop slug if available (from current state or URL)
         const currentShopId = state.activeShop?.id || state.ui?.activeShopId || new URLSearchParams(window.location.search).get('shopId');

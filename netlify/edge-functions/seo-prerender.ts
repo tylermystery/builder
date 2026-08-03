@@ -1,308 +1,203 @@
-/**
- * SEO Prerender Edge Function
- *
- * This edge function intercepts requests to /item/* pages and injects SEO metadata
- * (Open Graph tags, Twitter Cards, JSON-LD structured data) into the HTML response.
- *
- * This solves the "soft 404" issue where Google sees empty pages because the SPA
- * content loads via JavaScript, which crawlers don't always execute.
- */
-
 import type { Context, Config } from "@netlify/edge-functions";
 
-const SITE_URL = 'https://whatthefun.wtf';
-const SITE_NAME = 'WTFun';
-const DEFAULT_IMAGE = 'https://res.cloudinary.com/dxvlilrqq/image/upload/v1/wtfun/default-og-image.jpg';
-const DEFAULT_DESCRIPTION = 'Discover and plan amazing events and activities with WTFun - your event planning companion.';
+const SITE_NAME = "WTFun";
+const DEFAULT_IMAGE =
+  "https://res.cloudinary.com/daedqizre/image/upload/c_fill,g_auto,w_1200,h_630,f_jpg,q_auto/ww71meppejsewxsxr4x7.jpg";
+const DEFAULT_DESCRIPTION =
+  "Discover and plan amazing events and activities with WTFun.";
 
-interface ItemData {
+type PreviewItem = {
   id: string;
   name: string;
   description: string;
   price: number;
-  images: string[];
+  imageUrl: string | null;
+  imageType: string;
   categories: string[];
   status: string;
+  itemType: string;
+  startDate: string | null;
+};
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
-/**
- * Extract Airtable record ID from the URL slug
- * Slugs are in format: item-name-tags-recXXXXXXXXXXXXXX
- */
-function extractRecordId(slug: string): string | null {
-  // Airtable record IDs start with "rec" and are 17 chars total
-  const match = slug.match(/rec[A-Za-z0-9]{14}$/);
-  return match ? match[0] : null;
+function validItemId(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9._:-]{3,200}$/.test(value);
 }
 
-/**
- * Fetch item data from Airtable
- */
-async function fetchItemData(recordId: string): Promise<ItemData | null> {
-  const airtablePat = Netlify.env.get('AIRTABLE_PAT');
-  const baseId = Netlify.env.get('BASE_ID');
+function extractItemId(url: URL): string | null {
+  const explicit = url.searchParams.get("openItem");
+  if (validItemId(explicit)) return explicit;
 
-  if (!airtablePat || !baseId) {
-    console.error('[SEO Prerender] Missing Airtable credentials');
-    return null;
-  }
+  const slug = url.pathname.replace(/^\/item\//, "");
+  const recordMatch = slug.match(/rec[A-Za-z0-9]{14}$/);
+  if (recordMatch) return recordMatch[0];
+  const publicMatch = slug.match(/public-\d+$/);
+  if (publicMatch) return publicMatch[0];
+  const generatedMatch = slug.match(
+    /(?:ai-(?:child|search|presentation)-[A-Za-z0-9._:-]+|manual-(?:add|presentation)-[A-Za-z0-9._:-]+|solution-[A-Za-z0-9._:-]+)$/,
+  );
+  return generatedMatch?.[0] || null;
+}
 
-  const itemsTable = 'tblUA4uuS8IYlhKpD';
-  const url = `https://api.airtable.com/v0/${baseId}/${itemsTable}/${recordId}`;
-
+async function fetchPreviewItem(origin: string, itemId: string): Promise<PreviewItem | null> {
   try {
-    const response = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${airtablePat}` }
+    const endpoint = new URL("/api/item-preview", origin);
+    endpoint.searchParams.set("itemId", itemId);
+    const response = await fetch(endpoint, {
+      headers: { accept: "application/json" },
     });
-
-    if (!response.ok) {
-      console.error(`[SEO Prerender] Airtable error: ${response.status}`);
-      return null;
-    }
-
-    const data = await response.json();
-    const fields = data.fields || {};
-
-    // Extract images from the Images field (Airtable attachments)
-    const images: string[] = [];
-    if (fields.Images && Array.isArray(fields.Images)) {
-      for (const img of fields.Images) {
-        if (img.url) {
-          images.push(img.url);
-        } else if (img.thumbnails?.large?.url) {
-          images.push(img.thumbnails.large.url);
-        }
-      }
-    }
-
-    // Parse categories
-    const categories: string[] = [];
-    if (fields.Categories) {
-      categories.push(...String(fields.Categories).split(',').map(c => c.trim()).filter(Boolean));
-    }
-
-    return {
-      id: data.id,
-      name: fields.Name || 'Item',
-      description: fields.Description || DEFAULT_DESCRIPTION,
-      price: parseFloat(fields.Price) || 0,
-      images,
-      categories,
-      status: fields.Status || 'Available'
-    };
+    if (!response.ok) return null;
+    const data = await response.json() as { item?: PreviewItem };
+    return data.item || null;
   } catch (error) {
-    console.error('[SEO Prerender] Fetch error:', error);
+    console.error("[SEO Prerender] Preview API error:", error);
     return null;
   }
 }
 
-/**
- * Generate JSON-LD structured data for the item
- */
-function generateStructuredData(item: ItemData, url: string): string {
-  const productSchema = {
+function canonicalUrlFor(requestUrl: URL, itemId: string): string {
+  const canonical = new URL(requestUrl.pathname, requestUrl.origin);
+  if (!/^rec[A-Za-z0-9]{14}$/.test(itemId)) {
+    canonical.searchParams.set("openItem", itemId);
+  }
+  return canonical.toString();
+}
+
+function generateStructuredData(item: PreviewItem, canonicalUrl: string, image: string): string {
+  const common = {
     "@context": "https://schema.org",
+    name: item.name,
+    description: item.description.slice(0, 500),
+    image: [image],
+    url: canonicalUrl,
+  };
+  if (item.itemType.toLowerCase() === "event" && item.startDate) {
+    return JSON.stringify({
+      ...common,
+      "@type": "Event",
+      startDate: item.startDate,
+      eventStatus: "https://schema.org/EventScheduled",
+      organizer: { "@type": "Organization", name: SITE_NAME },
+    }).replace(/</g, "\\u003c");
+  }
+  return JSON.stringify({
+    ...common,
     "@type": "Product",
-    "name": item.name,
-    "description": item.description.substring(0, 500),
-    "image": item.images.length > 0 ? item.images : [DEFAULT_IMAGE],
-    "url": url,
-    "brand": {
-      "@type": "Organization",
-      "name": SITE_NAME
-    },
-    "offers": {
+    brand: { "@type": "Organization", name: SITE_NAME },
+    category: item.categories.join(" > ") || undefined,
+    offers: {
       "@type": "Offer",
-      "price": item.price,
-      "priceCurrency": "USD",
-      "availability": item.status === 'Available' || item.status === 'Featured'
+      price: item.price,
+      priceCurrency: "USD",
+      availability: item.status === "Available" || item.status === "Featured"
         ? "https://schema.org/InStock"
         : "https://schema.org/OutOfStock",
-      "seller": {
-        "@type": "Organization",
-        "name": SITE_NAME
-      }
-    }
-  };
-
-  // Add category if available
-  if (item.categories.length > 0) {
-    (productSchema as any).category = item.categories.join(' > ');
-  }
-
-  return JSON.stringify(productSchema);
+    },
+  }).replace(/</g, "\\u003c");
 }
 
-/**
- * Generate meta tags HTML string
- */
-function generateMetaTags(item: ItemData, url: string): string {
+function generateMetaTags(item: PreviewItem, canonicalUrl: string): string {
   const title = `${item.name} | ${SITE_NAME}`;
-  const description = item.description.substring(0, 160).replace(/\n/g, ' ');
-  const image = item.images[0] || DEFAULT_IMAGE;
-  const price = item.price > 0 ? `$${item.price.toFixed(2)}` : 'Contact for pricing';
+  const description = (item.description || DEFAULT_DESCRIPTION).replace(/\s+/g, " ").slice(0, 160);
+  const image = item.imageUrl || DEFAULT_IMAGE;
+  const imageAlt = `${item.name} preview image`;
+  const ogType = item.itemType.toLowerCase() === "event" ? "event" : "product";
+  const cloudinarySized = image.includes("res.cloudinary.com") && image.includes("w_1200") && image.includes("h_630");
+  const imageDimensions = cloudinarySized
+    ? '<meta property="og:image:width" content="1200">\n    <meta property="og:image:height" content="630">'
+    : "";
 
   return `
-    <!-- Primary Meta Tags (SEO Prerender) -->
     <title>${escapeHtml(title)}</title>
     <meta name="title" content="${escapeHtml(title)}">
     <meta name="description" content="${escapeHtml(description)}">
-    <link rel="canonical" href="${url}">
+    <link rel="canonical" href="${escapeHtml(canonicalUrl)}">
 
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="product">
-    <meta property="og:url" content="${url}">
+    <meta property="og:type" content="${ogType}">
+    <meta property="og:url" content="${escapeHtml(canonicalUrl)}">
     <meta property="og:title" content="${escapeHtml(title)}">
     <meta property="og:description" content="${escapeHtml(description)}">
-    <meta property="og:image" content="${image}">
+    <meta property="og:image" content="${escapeHtml(image)}">
+    <meta property="og:image:secure_url" content="${escapeHtml(image)}">
+    <meta property="og:image:type" content="${escapeHtml(item.imageType || "image/jpeg")}">
+    ${imageDimensions}
+    <meta property="og:image:alt" content="${escapeHtml(imageAlt)}">
     <meta property="og:site_name" content="${SITE_NAME}">
-    <meta property="product:price:amount" content="${item.price}">
-    <meta property="product:price:currency" content="USD">
 
-    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:url" content="${url}">
+    <meta name="twitter:url" content="${escapeHtml(canonicalUrl)}">
     <meta name="twitter:title" content="${escapeHtml(title)}">
     <meta name="twitter:description" content="${escapeHtml(description)}">
-    <meta name="twitter:image" content="${image}">
+    <meta name="twitter:image" content="${escapeHtml(image)}">
+    <meta name="twitter:image:alt" content="${escapeHtml(imageAlt)}">
 
-    <!-- Additional SEO signals -->
     <meta name="robots" content="index, follow">
-    <meta name="price" content="${price}">
-    ${item.categories.length > 0 ? `<meta name="keywords" content="${escapeHtml(item.categories.join(', '))}">` : ''}
-
-    <!-- JSON-LD Structured Data -->
-    <script type="application/ld+json">
-    ${generateStructuredData(item, url)}
-    </script>
+    ${item.categories.length ? `<meta name="keywords" content="${escapeHtml(item.categories.join(", "))}">` : ""}
+    <script type="application/ld+json">${generateStructuredData(item, canonicalUrl, image)}</script>
   `;
 }
 
-/**
- * Escape HTML special characters
- */
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+function removeConflictingMetadata(html: string): string {
+  return html
+    .replace(/<title[^>]*>.*?<\/title>/gis, "")
+    .replace(/<link[^>]+rel=["']canonical["'][^>]*>/gi, "")
+    .replace(/<meta[^>]+(?:name|property)=["'](?:title|description|keywords|robots|og:[^"']+|twitter:[^"']+)["'][^>]*>/gi, "")
+    .replace(/<script[^>]+type=["']application\/ld\+json["'][^>]*>.*?<\/script>/gis, "");
 }
 
-/**
- * Check if the request is from a known crawler/bot
- */
 function isCrawler(userAgent: string): boolean {
   const crawlerPatterns = [
-    'googlebot',
-    'bingbot',
-    'yandex',
-    'baiduspider',
-    'duckduckbot',
-    'slurp',
-    'facebookexternalhit',
-    'twitterbot',
-    'linkedinbot',
-    'whatsapp',
-    'telegram',
-    'discordbot',
-    'applebot',
-    'pinterest',
-    'semrushbot',
-    'ahrefsbot',
-    'mj12bot',
-    'dotbot'
+    "googlebot", "bingbot", "facebookexternalhit", "twitterbot", "linkedinbot",
+    "whatsapp", "telegram", "discordbot", "slackbot", "skypeuripreview",
+    "pinterest", "redditbot", "applebot", "embedly",
   ];
-
-  const ua = userAgent.toLowerCase();
-  return crawlerPatterns.some(pattern => ua.includes(pattern));
+  const normalized = userAgent.toLowerCase();
+  return crawlerPatterns.some((pattern) => normalized.includes(pattern));
 }
 
 export default async function handler(req: Request, context: Context): Promise<Response> {
-  const url = new URL(req.url);
-  const pathname = url.pathname;
+  const requestUrl = new URL(req.url);
+  if (!requestUrl.pathname.startsWith("/item/")) return context.next();
+  const itemId = extractItemId(requestUrl);
+  if (!itemId) return context.next();
 
-  // Only process /item/* paths
-  if (!pathname.startsWith('/item/')) {
-    return context.next();
+  const [response, item] = await Promise.all([
+    context.next(),
+    fetchPreviewItem(requestUrl.origin, itemId),
+  ]);
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("text/html")) return response;
+  if (!item) {
+    return isCrawler(req.headers.get("user-agent") || "")
+      ? new Response("Not Found", { status: 404 })
+      : response;
   }
 
-  // Extract slug from path
-  const slug = pathname.replace('/item/', '').split('?')[0];
-  if (!slug) {
-    return context.next();
-  }
-
-  // Extract record ID from slug
-  const recordId = extractRecordId(slug);
-  if (!recordId) {
-    console.log(`[SEO Prerender] No valid record ID in slug: ${slug}`);
-    return context.next();
-  }
-
-  // Check if this is a crawler - for regular users, just pass through
-  const userAgent = req.headers.get('user-agent') || '';
-  const isBot = isCrawler(userAgent);
-
-  // Get the original response
-  const response = await context.next();
-
-  // Only modify HTML responses
-  const contentType = response.headers.get('content-type');
-  if (!contentType || !contentType.includes('text/html')) {
-    return response;
-  }
-
-  // Fetch item data from Airtable
-  const itemData = await fetchItemData(recordId);
-
-  if (!itemData) {
-    // Item not found - let the SPA handle it (will show 404 message)
-    // But for crawlers, we should ideally return 404
-    if (isBot) {
-      console.log(`[SEO Prerender] Item not found for bot: ${recordId}`);
-      // Return 404 for crawlers if item doesn't exist
-      return new Response('Not Found', { status: 404 });
-    }
-    return response;
-  }
-
-  // Get the HTML content
-  const html = await response.text();
-
-  // Build the canonical URL
-  const canonicalUrl = `${SITE_URL}${pathname}`;
-
-  // Generate meta tags
-  const metaTags = generateMetaTags(itemData, canonicalUrl);
-
-  // Inject meta tags into the <head> section
-  // Replace existing title and description, add new tags after them
-  let modifiedHtml = html;
-
-  // Remove existing generic meta tags that we'll replace
-  modifiedHtml = modifiedHtml.replace(/<title>.*?<\/title>/i, '');
-  modifiedHtml = modifiedHtml.replace(/<meta name="description"[^>]*>/i, '');
-
-  // Insert our SEO tags right after <head>
-  modifiedHtml = modifiedHtml.replace(
+  const canonicalUrl = canonicalUrlFor(requestUrl, itemId);
+  const html = removeConflictingMetadata(await response.text());
+  const modifiedHtml = html.replace(
     /<head([^>]*)>/i,
-    `<head$1>\n${metaTags}`
+    `<head$1>\n${generateMetaTags(item, canonicalUrl)}`,
   );
-
-  // Return modified response with proper headers
-  return new Response(modifiedHtml, {
-    status: response.status,
-    headers: {
-      ...Object.fromEntries(response.headers.entries()),
-      'content-type': 'text/html; charset=utf-8',
-      // Add cache headers - cache for crawlers
-      'cache-control': isBot ? 'public, max-age=3600' : 'private, no-cache'
-    }
-  });
+  const headers = new Headers(response.headers);
+  headers.set("content-type", "text/html; charset=utf-8");
+  headers.set(
+    "cache-control",
+    isCrawler(req.headers.get("user-agent") || "")
+      ? "public, max-age=3600, stale-while-revalidate=86400"
+      : "private, no-cache",
+  );
+  return new Response(modifiedHtml, { status: response.status, headers });
 }
 
 export const config: Config = {
-  path: "/item/*"
+  path: "/item/*",
 };
