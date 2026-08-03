@@ -276,7 +276,7 @@ function applyRsvpButtonState(clickedBtn, activeType) {
 // lightweight side effect of an RSVP. This intentionally uses a minimal itemInfo
 // rather than the full Add-to-Plan modal extraction (options/scheduling), which
 // does not apply to a quick RSVP. No-op if the event is already in the plan.
-export async function autoAddEventToPlan(record, partyQty = 1) {
+export async function autoAddEventToPlan(record, partyQty = 1, rsvpType = null) {
     if (!record || !record.id) return;
     const recordId = record.id;
     const qty = (Number.isFinite(partyQty) && partyQty > 0) ? partyQty : 1;
@@ -284,6 +284,7 @@ export async function autoAddEventToPlan(record, partyQty = 1) {
         const existing = state.cart.lockedItems.get(recordId) || {};
         existing.quantity = qty;
         existing.lastAttemptedQuantity = qty;
+        if (rsvpType === 'yes' || rsvpType === 'maybe') existing.rsvpType = rsvpType;
         state.cart.lockedItems.set(recordId, existing);
         try {
             await ui.updateEventPlanSection();
@@ -297,6 +298,7 @@ export async function autoAddEventToPlan(record, partyQty = 1) {
     }
 
     const itemInfo = { quantity: qty, selectedOptionIndex: 0, selections: {}, note: '', lastAttemptedQuantity: qty };
+    if (rsvpType === 'yes' || rsvpType === 'maybe') itemInfo.rsvpType = rsvpType;
     state.cart.lockedItems.set(recordId, itemInfo);
     state.cart.items.delete(recordId);
 
@@ -436,6 +438,11 @@ async function handlePaymentFormSubmit(event) {
         // never blocks the charge.
         try { await ui.syncCheckoutCustomerDetails(customerName, customerEmail); }
         catch (e) { console.warn('[CHECKOUT] customer-detail sync skipped:', e.message); }
+
+        // The webhook builds the receipt from the saved session, so persist the
+        // latest cart quantities, RSVP labels, and item schedule before charging.
+        try { await api.saveSessionToAirtable(); }
+        catch (e) { console.warn('[CHECKOUT] pre-payment session save skipped:', e.message); }
 
         // Build return_url preserving the session param so the app reloads correctly after redirect
         const returnUrl = new URL(window.location.href);
@@ -691,6 +698,8 @@ async function registerPlanEventsForCheckout(customerEmail, opts = {}) {
         const record = state.records.all.find(r => r.id === recordId);
         if (record && record.fields['Item Type'] === 'Event') {
             eventEntries.push({ recordId, record, quantity: itemInfo.quantity || 1 });
+            itemInfo.rsvpType = itemInfo.rsvpType || 'yes';
+            state.cart.lockedItems.set(recordId, itemInfo);
         }
     }
 
@@ -808,6 +817,7 @@ async function handleFreeRegistration(submitBtn, buttonText, spinner) {
         // can carry a working sign-in link (instead of a separate magic-link email).
         const signInChannelId = setupGuestSignInChannel();
         const count = await registerPlanEventsForCheckout(customerEmail, { suppressSignInEmail: true });
+        await api.saveSessionToAirtable();
 
         // Ensure the plan is persisted, then email both the purchaser and the
         // store a confirmation (with an "Open Plan & Pay" link). Non-fatal: the
@@ -967,6 +977,7 @@ async function handleSavePlanForLater() {
         // the separate magic-link email here.
         const signInChannelId = setupGuestSignInChannel();
         const count = await registerPlanEventsForCheckout(customerEmail, { suppressSignInEmail: true });
+        await api.saveSessionToAirtable();
         console.log('[SAVE-PLAN] Registered for', count, 'event(s).');
 
         const amountDue = getCheckoutAmountDue();
@@ -2844,6 +2855,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 if (wasActive) {
                     delete tempRsvps[recordId];
                     setTempRsvps(tempRsvps);
+                    if (state.cart.lockedItems.has(recordId)) {
+                        const info = state.cart.lockedItems.get(recordId) || {};
+                        delete info.rsvpType;
+                        state.cart.lockedItems.set(recordId, info);
+                        triggerSave();
+                    }
                     applyRsvpButtonState(rsvpBtn, null);
                     closeRsvpSignupPopup();
                     ui.showToast('RSVP removed.');
@@ -2862,7 +2879,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                                 log('Events', `Guest RSVP could not resolve event ${recordId}: ${err.message}`);
                             }
                         }
-                        if (record) await autoAddEventToPlan(record, partyQty);
+                        if (record) await autoAddEventToPlan(record, partyQty, rsvpType);
                     }
 
                     const labels = { yes: "You're going!", maybe: "Marked as maybe.", no: "Marked as can't go." };
@@ -2888,6 +2905,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     updatedRecord = await api.updateRsvpForEvent(recordId, state.session.user.id, null);
                     // Clearing the RSVP also clears the stored party size.
                     await api.clearEventRsvpQuantity(recordId);
+                    if (state.cart.lockedItems.has(recordId)) {
+                        const info = state.cart.lockedItems.get(recordId) || {};
+                        delete info.rsvpType;
+                        state.cart.lockedItems.set(recordId, info);
+                        triggerSave();
+                    }
                 } else {
                     updatedRecord = await api.updateRsvpForEvent(recordId, state.session.user.id, rsvpType);
                     // Persist the party size alongside the response (best-effort).
@@ -2900,7 +2923,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
                     // RSVPing yes / maybe also adds the event to the plan.
                     if (!wasActive && (rsvpType === 'yes' || rsvpType === 'maybe')) {
-                        await autoAddEventToPlan(updatedRecord, partyQty);
+                        await autoAddEventToPlan(updatedRecord, partyQty, rsvpType);
                     }
 
                     if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {

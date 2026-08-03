@@ -10892,6 +10892,38 @@ hr.total-divider {
     padding-right: 10px;
 }
 
+.checkout-plan-context {
+    padding: 10px 12px;
+    margin: 0 0 12px;
+    border: 1px solid #e6e9ef;
+    border-radius: 8px;
+    background: #f8f9fb;
+}
+
+.checkout-plan-context-row {
+    display: grid;
+    grid-template-columns: minmax(72px, max-content) 1fr;
+    gap: 10px;
+    align-items: baseline;
+    font-size: 0.88rem;
+    line-height: 1.35;
+}
+
+.checkout-plan-context-row + .checkout-plan-context-row {
+    margin-top: 6px;
+}
+
+.checkout-plan-context-label {
+    color: #6c757d;
+    font-weight: 700;
+}
+
+.checkout-plan-context-value {
+    color: #212529;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
 .checkout-summary-note {
     font-size: 0.8em;
     color: #6c757d;

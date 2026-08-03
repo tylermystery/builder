@@ -10953,6 +10953,48 @@ export async function applyCheckoutDeepLink({ action, qty, selections } = {}) {
     }
 }
 
+function buildCheckoutPlanContextElement() {
+    const combined = state.eventDetails?.combined;
+    if (!combined || typeof combined.get !== 'function') return null;
+
+    const planName = combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
+    const goals = combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
+    const date = formatEventDate(combined.get(CONSTANTS.DETAIL_TYPES.DATE), {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+    });
+    const time = formatEventTimeRange(
+        combined.get(CONSTANTS.DETAIL_TYPES.START_TIME),
+        combined.get(CONSTANTS.DETAIL_TYPES.END_TIME)
+    );
+    const schedule = [date, time].filter(Boolean).join(' · ');
+
+    if (!planName && !goals && !schedule) return null;
+
+    const contextEl = document.createElement('div');
+    contextEl.className = 'checkout-plan-context';
+
+    const addRow = (label, value) => {
+        if (!value) return;
+        const row = document.createElement('div');
+        row.className = 'checkout-plan-context-row';
+        const labelEl = document.createElement('span');
+        labelEl.className = 'checkout-plan-context-label';
+        labelEl.textContent = label;
+        const valueEl = document.createElement('span');
+        valueEl.className = 'checkout-plan-context-value';
+        valueEl.textContent = value;
+        row.append(labelEl, valueEl);
+        contextEl.appendChild(row);
+    };
+
+    addRow('Plan', planName);
+    addRow('Goals', goals);
+    addRow('Date & Time', schedule);
+    return contextEl;
+}
+
 export async function showCheckoutModal(shopSettings, scope = null) {
     currentShopSettings = shopSettings;
     currentCheckoutScope = scope; // { mode: 'item', itemId, itemName, quantity, price, record, selectedOptionIndex, selections, highlightChipIn } or null (plan mode)
@@ -11043,6 +11085,8 @@ export async function showCheckoutModal(shopSettings, scope = null) {
     tipAmountInput.value = '';
     let finalTotal = 0; // This is the plan subtotal
     const summaryList = document.createElement('ul');
+    const planContextEl = buildCheckoutPlanContextElement();
+    if (planContextEl) summaryDetailsEl.appendChild(planContextEl);
 
     if (scope && scope.mode === 'item') {
         // Single-item mode: show only the specified item

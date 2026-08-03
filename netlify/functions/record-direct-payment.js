@@ -1,7 +1,7 @@
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
 const { SENDER_EMAIL, SENDER_NAME, buildFrom } = require('./utils/email-config');
-const { buildReceiptEmail } = require('./utils/checkout-emails');
+const { buildReceiptEmail, loadCheckoutEmailDetails } = require('./utils/checkout-emails');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -142,6 +142,7 @@ exports.handler = async (event) => {
       }
 
       const emailFrom = buildFrom(store.fields.Name || SENDER_NAME, store.fields.ContactEmail || SENDER_EMAIL);
+      const emailDetails = await loadCheckoutEmailDetails(session);
       for (const [email, name] of recipients) {
         try {
           const receipt = buildReceiptEmail(
@@ -149,7 +150,7 @@ exports.handler = async (event) => {
             { ...receiptPayment, customerEmail: email, customerName: name || customerName || null },
             store,
             baseUrl,
-            { unpaid: false, amountDue: amount }
+            { unpaid: false, amountDue: amount, ...emailDetails }
           );
           await sgMail.send({ to: email, from: receipt.from || emailFrom, subject: receipt.subject, html: receipt.html });
           console.log(`[record-direct-payment] Receipt sent to ${email}`);
