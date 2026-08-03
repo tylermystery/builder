@@ -197,17 +197,17 @@ function resetSeoMetadata() {
 }
 
 /**
- * Copies a share link to clipboard and provides visual feedback on the button.
- * @param {string} url - The URL to copy to clipboard.
+ * Copies share text to clipboard and provides visual feedback on the button.
+ * @param {string} text - The item name, optional description, and share URL.
  * @param {HTMLButtonElement} buttonEl - The button element to show feedback on.
  */
-async function copyShareLinkToClipboard(url, buttonEl) {
+async function copyShareTextToClipboard(text, buttonEl) {
     try {
-        await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(text);
         const originalHTML = buttonEl.innerHTML;
         buttonEl.innerHTML = '<span class="share-icon">&#10003;</span> Copied!';
         buttonEl.classList.add('share-copied');
-        log('Modal', `Copied share link to clipboard: ${url}`);
+        log('Modal', 'Copied item share text to clipboard');
         setTimeout(() => {
             buttonEl.innerHTML = originalHTML;
             buttonEl.classList.remove('share-copied');
@@ -220,6 +220,29 @@ async function copyShareLinkToClipboard(url, buttonEl) {
         setTimeout(() => {
             buttonEl.innerHTML = originalHTML;
         }, 1500);
+    }
+}
+
+async function createShareImageFile(imageUrl, itemName) {
+    if (!imageUrl || typeof File === 'undefined') return null;
+    try {
+        const shareImageUrl = imageUrl.includes('cloudinary.com')
+            ? applyCloudinaryTransform(imageUrl, 'w_480,h_320,c_fill,f_auto,q_auto')
+            : imageUrl;
+        const response = await fetch(shareImageUrl, { mode: 'cors', credentials: 'omit' });
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        if (!blob.type.startsWith('image/') || blob.size > 10 * 1024 * 1024) return null;
+        const extension = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
+        const safeName = String(itemName || 'wtfun-item')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '')
+            .slice(0, 50) || 'wtfun-item';
+        return new File([blob], `${safeName}.${extension}`, { type: blob.type });
+    } catch (error) {
+        console.warn('[Modal] Unable to prepare image for sharing:', error);
+        return null;
     }
 }
 
@@ -7873,27 +7896,55 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             }
         }
 
+        const itemName = record.fields.Name || 'WTFun item';
+        const description = String(record.fields.Description || '').trim();
+        const descriptionExcerpt = description.length > 120 ? `${description.substring(0, 117)}...` : description;
+        const shareText = descriptionExcerpt
+            ? `${itemName} — ${descriptionExcerpt}`
+            : `${itemName} on WTFun`;
         const shareData = {
-            title: record.fields.Name || 'Check out this item',
-            text: record.fields.Description ? record.fields.Description.substring(0, 100) + '...' : 'Check out this item on WTFun!',
+            title: itemName,
+            text: shareText,
             url: shareUrl.toString()
         };
+        const clipboardText = `${shareText}\n${shareUrl.toString()}`;
 
-        // Try Web Share API first (mobile-friendly)
-        if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+        // Try Web Share API first (mobile-friendly). Supporting browsers receive
+        // the current item image as a small file attachment; all others retain
+        // the title + description + URL payload.
+        if (navigator.share) {
             try {
-                await navigator.share(shareData);
+                let nativeShareData = shareData;
+                const imageFile = await createShareImageFile(imageUrls[0], itemName);
+                if (imageFile) {
+                    const imageShareData = { ...shareData, files: [imageFile] };
+                    if (!navigator.canShare || navigator.canShare(imageShareData)) {
+                        nativeShareData = imageShareData;
+                    }
+                }
+                if (navigator.canShare && !navigator.canShare(nativeShareData)) {
+                    await copyShareTextToClipboard(clipboardText, shareBtn);
+                    return;
+                }
+                await navigator.share(nativeShareData);
                 log('Modal', `Shared item via Web Share API: ${record.fields.Name}`);
             } catch (err) {
                 if (err.name !== 'AbortError') {
                     console.error('Share failed:', err);
-                    // Fallback to clipboard
-                    await copyShareLinkToClipboard(shareUrl.toString(), shareBtn);
+                    // Some targets reject combined file + URL payloads. Retry the
+                    // standard text payload before falling back to the clipboard.
+                    try {
+                        await navigator.share(shareData);
+                    } catch (fallbackError) {
+                        if (fallbackError.name !== 'AbortError') {
+                            await copyShareTextToClipboard(clipboardText, shareBtn);
+                        }
+                    }
                 }
             }
         } else {
-            // Fallback to clipboard copy
-            await copyShareLinkToClipboard(shareUrl.toString(), shareBtn);
+            // Clipboard fallback includes the name as well as the link.
+            await copyShareTextToClipboard(clipboardText, shareBtn);
         }
     });
 
