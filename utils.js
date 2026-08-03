@@ -509,6 +509,37 @@ export function formatEventTimeRange(startTime, endTime) {
     return end && end !== start ? `${start} – ${end}` : start;
 }
 
+export function formatEventDate(dateValue, options = {}) {
+    if (!dateValue) return '';
+    const raw = Array.isArray(dateValue) ? dateValue[0] : dateValue;
+    try {
+        const date = typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw)
+            ? new Date(`${raw}T00:00:00`)
+            : new Date(raw);
+        if (!isNaN(date.getTime())) {
+            return date.toLocaleDateString('en-US', options);
+        }
+    } catch (e) {
+        // Fall through to raw string.
+    }
+    return typeof raw === 'string' ? raw : '';
+}
+
+export function getEventScheduleParts(record) {
+    const fields = record?.fields || {};
+    return {
+        date: formatEventDate(fields.Date, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+        compactDate: formatEventDate(fields.Date, { month: 'short', day: 'numeric' }),
+        time: formatEventTimeRange(fields.Start_time, fields.End_time) || fields.Time || '',
+    };
+}
+
+export function formatEventSchedule(record, options = {}) {
+    const parts = getEventScheduleParts(record);
+    const date = options.compact ? parts.compactDate : parts.date;
+    return [date, parts.time].filter(Boolean).join(options.separator || ' · ');
+}
+
 export function debounce(func, delay = 300) {
     if (typeof func !== 'function') {
         console.warn('[Utils] debounce called with non-function:', func);

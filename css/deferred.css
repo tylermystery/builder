@@ -1733,10 +1733,11 @@
     padding: 5px 10px;
     border-radius: 4px;
     font-size: 0.8em;
-    top: -30px;
+    top: calc(100% + 8px);
     left: 50%;
     transform: translateX(-50%);
     white-space: nowrap;
+    pointer-events: none;
     z-index: 10;
 }
 /* Modal Share Button */
@@ -2258,10 +2259,11 @@
     padding: 5px 10px;
     border-radius: 4px;
     font-size: 0.8em;
-    top: -30px;
+    top: calc(100% + 8px);
     left: 50%;
     transform: translateX(-50%);
     white-space: nowrap;
+    pointer-events: none;
     z-index: 10;
 }
 .checkout-modal-content {
@@ -6435,10 +6437,56 @@ hr.total-divider {
     align-items: flex-start;
 }
 
+#checkout-summary-details li.checkout-summary-item-selectable {
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 8px;
+    margin: 0 -8px;
+    transition: background-color 0.15s ease;
+}
+
+#checkout-summary-details li.checkout-summary-item-selectable:hover,
+#checkout-summary-details li.checkout-summary-item-selectable:focus {
+    background: #f5f7fa;
+    outline: none;
+}
+
 .summary-item-details {
     display: flex;
     flex-direction: column;
     padding-right: 10px;
+}
+
+.checkout-plan-context {
+    padding: 10px 12px;
+    margin: 0 0 12px;
+    border: 1px solid #e6e9ef;
+    border-radius: 8px;
+    background: #f8f9fb;
+}
+
+.checkout-plan-context-row {
+    display: grid;
+    grid-template-columns: minmax(72px, max-content) 1fr;
+    gap: 10px;
+    align-items: baseline;
+    font-size: 0.88rem;
+    line-height: 1.35;
+}
+
+.checkout-plan-context-row + .checkout-plan-context-row {
+    margin-top: 6px;
+}
+
+.checkout-plan-context-label {
+    color: #6c757d;
+    font-weight: 700;
+}
+
+.checkout-plan-context-value {
+    color: #212529;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .checkout-summary-note {
@@ -18543,6 +18591,18 @@ body.presentation-active .rsb-layout-toggle-fab {
     transition: transform 0.25s ease;
 }
 
+.checkout-chip-in-header-totals {
+    margin-left: auto;
+    color: #9f3a38;
+    font-size: 0.82em;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.checkout-chip-in-header-totals + .checkout-chip-in-chevron {
+    margin-left: 6px;
+}
+
 #checkout-chip-in-section.expanded .checkout-chip-in-chevron {
     transform: rotate(180deg);
 }
@@ -18706,6 +18766,13 @@ body.presentation-active .rsb-layout-toggle-fab {
     border-radius: 6px;
     font-size: 0.9em;
     font-weight: 600;
+}
+
+.checkout-chip-in-summary.checkout-chip-in-new-subtotal {
+    margin-top: 6px;
+    background: #fff;
+    color: #9f3a38;
+    border: 1px solid #f3b3ba;
 }
 
 #checkout-chip-in-total {

@@ -6,7 +6,7 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex, EMOJI_TIERS, REACTION_SCORES, EMOJI_REACTIONS, BASE_CATEGORIES, TAG_GROUPS, computeDemocraticAverage, scoreToAdjective } from '../config.js';
 import { getCurrentUser } from '../chat.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration, formatEventTimeRange, getTempRsvps, encodeSelections, renderRichText } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, preloadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount, storeSlug, getShopUrlParam, formatItemSchedule, getTimeUnitMinutes, computeEndFromStartDuration, formatEventDate, formatEventTimeRange, getEventScheduleParts, formatEventSchedule, getTempRsvps, encodeSelections, renderRichText } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getDayStatus, AVAILABILITY_STATUS, logBusyTimeSummary, describeSelectedAvailability } from '../availability.js';
 import { showReceiptModal } from './receipt.js';
@@ -1097,6 +1097,7 @@ function setupCheckoutChipIn(cartSubtotal) {
         if (chipInTotalEl) {
             chipInTotalEl.textContent = `$${amount.toFixed(2)}`;
         }
+        updateCheckoutChipInTotals(cartSubtotal, amount);
         updateCheckoutDisplay();
     };
 
@@ -1166,6 +1167,7 @@ function setupCheckoutChipIn(cartSubtotal) {
     });
     if (customInputContainer) customInputContainer.style.display = 'none';
     if (chipInSummary) chipInSummary.style.display = 'none';
+    updateCheckoutChipInTotals(cartSubtotal, 0);
 
     // Accordion: collapse the Community Fund by default and wire up the toggle.
     // Callers that want it open (e.g. the Chip In flow) expand it after setup.
@@ -1228,6 +1230,55 @@ function buildItemOptionDetailsHtml(scope) {
     return optionLines.map(l => `<small class="checkout-option-detail">› ${l}</small>`).join('');
 }
 
+function makeCheckoutItemSelectable(listItem, recordId) {
+    if (!listItem || !recordId) return;
+    listItem.dataset.recordId = recordId;
+    listItem.tabIndex = 0;
+    listItem.setAttribute('role', 'button');
+    listItem.setAttribute('aria-label', 'View item details');
+    listItem.classList.add('checkout-summary-item-selectable');
+}
+
+function openCheckoutItemDetails(recordId) {
+    const record = getRecordById(recordId);
+    if (!record) return;
+    const checkoutOverlay = document.getElementById('checkout-modal-overlay');
+    const elevateDetail = () => {
+        if (!checkoutOverlay?.classList.contains('active')) return;
+        modalOverlay.style.zIndex = String(getModalZIndex('checkout') + 1);
+        const closeBtn = document.getElementById('modal-close-btn');
+        if (closeBtn) {
+            closeBtn.textContent = '←';
+            closeBtn.setAttribute('aria-label', 'Back to checkout');
+        }
+    };
+    if (checkoutOverlay?.classList.contains('active')) {
+        modalOverlay.dataset.returnToCheckout = 'true';
+    }
+    showDetailModal(record).then(elevateDetail);
+    setTimeout(elevateDetail, 0);
+}
+
+function updateCheckoutChipInTotals(cartSubtotal, contribution) {
+    const amount = Number.isFinite(contribution) ? contribution : 0;
+    const subtotal = Number.isFinite(cartSubtotal) ? cartSubtotal : 0;
+    const hasContribution = amount > 0;
+    const newSubtotal = subtotal + amount;
+
+    const headerTotals = document.getElementById('checkout-chip-in-header-totals');
+    if (headerTotals) {
+        headerTotals.style.display = hasContribution ? '' : 'none';
+        headerTotals.textContent = hasContribution
+            ? `+$${amount.toFixed(2)} · subtotal $${newSubtotal.toFixed(2)}`
+            : '';
+    }
+
+    const newSubtotalRow = document.getElementById('checkout-chip-in-new-subtotal');
+    const newSubtotalTotal = document.getElementById('checkout-chip-in-new-subtotal-total');
+    if (newSubtotalRow) newSubtotalRow.style.display = hasContribution ? 'flex' : 'none';
+    if (newSubtotalTotal) newSubtotalTotal.textContent = `$${newSubtotal.toFixed(2)}`;
+}
+
 function updateCheckoutItemQtyDisplay(scope) {
     const qty = currentCheckoutItemQty;
     const price = scope.price || 0;
@@ -1282,6 +1333,7 @@ function updateCheckoutItemQtyDisplay(scope) {
     if (matchAmountEl) {
         matchAmountEl.textContent = `+$${itemTotal.toFixed(2)}`;
     }
+    updateCheckoutChipInTotals(itemTotal, currentChipInAmount);
 
     // Refresh the checkout display (recalculates fees, updates payment intent)
     updateCheckoutDisplay();
@@ -1574,7 +1626,12 @@ async function updateCheckoutDisplay() {
     const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
     let baseAmountToCharge = totalDue; // This is the amount *before* processing fees
 
-    const isInitialDeposit = !isItemMode && amountReceived === 0 && (currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
+    const isFullOnly = currentShopSettings.paymentOptions === 'FullOnly';
+    const isDepositOnly = currentShopSettings.paymentOptions === 'DepositOnly';
+    const isInitialDeposit = !isItemMode
+        && amountReceived === 0
+        && !isFullOnly
+        && (isDepositOnly || currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
 
     const tipRow = document.querySelector('.tip-row');
     if (tipRow) {
@@ -1598,7 +1655,7 @@ async function updateCheckoutDisplay() {
             document.getElementById('deposit-label').textContent = 'Amount Due:';
         }
     } else if (amountReceived === 0) {
-        if (currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full') {
+        if (isFullOnly || (currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full')) {
             baseAmountToCharge = finalTotal;
             document.getElementById('deposit-label').textContent = 'Full Amount Due:';
         } else {
@@ -5439,6 +5496,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
     const closeBtn = document.getElementById('modal-close-btn');
     closeBtn.onclick = closeDetailModal;
+    closeBtn.textContent = '×';
+    closeBtn.setAttribute('aria-label', 'Close item details modal');
     modalOverlay.addEventListener('click', handleOverlayClick);
     document.addEventListener('keydown', handleEscapeKey);
 
@@ -5601,13 +5660,17 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
         // Calculate initial amount for rapid pay
         const initialPrice = getRecordPrice(record, itemState.selectedOptionIndex);
-        const initialQuantity = itemState.quantity || 1;
+        const initialQuantity = record.fields?.['Item Type'] === 'Event'
+            ? (parseFloat(document.getElementById('rsvp-quantity-input')?.value) || itemState.quantity || 1)
+            : (itemState.quantity || 1);
         const initialAmount = initialPrice * initialQuantity;
 
         // Update Rapid Pay button label dynamically
         const updateRapidPayLabel = () => {
             if (!rapidPayBtn) return;
-            const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
+            const quantityInput = record.fields?.['Item Type'] === 'Event'
+                ? document.getElementById('rsvp-quantity-input')
+                : document.querySelector('#modal-quantity-selector .quantity-input');
             const currentQuantity = quantityInput ? parseFloat(quantityInput.value) || 1 : 1;
             const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
             let selectedOptionIndex = itemState.selectedOptionIndex || 0;
@@ -5640,7 +5703,9 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             newRapidPayBtn.addEventListener('touchstart', preloadStripe, { once: true });
 
             newRapidPayBtn.addEventListener('click', () => {
-                const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
+                const quantityInput = record.fields?.['Item Type'] === 'Event'
+                    ? document.getElementById('rsvp-quantity-input')
+                    : document.querySelector('#modal-quantity-selector .quantity-input');
                 const quantity = quantityInput ? parseFloat(quantityInput.value) || 1 : 1;
                 const selections = readLiveSelections();
                 const priceParam = Object.keys(selections).length > 0
@@ -6180,11 +6245,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         // Show event info for ALL users (both registered and non-registered) - date/time is important info
         const userIsAuthenticatedForRsvp = state.session.user.isAuthenticated;
         if (!hasChildEventOptions) {
-        const eventDateStr = record.fields.Date;
+        const eventSchedule = getEventScheduleParts(record);
         // Show the published plan's start/end time (the same Start_time/End_time
         // the "Add to Calendar" buttons use), falling back to the legacy Time range.
-        let eventTime = formatEventTimeRange(record.fields.Start_time, record.fields.End_time)
-            || record.fields.Time || '';
+        let eventTime = eventSchedule.time;
         // If the record carries no synced time (it predates schedule syncing, or the
         // cached copy is stale) but this event belongs to the plan currently loaded,
         // fall back to the live plan times — the same source the presentation/plan
@@ -6199,16 +6263,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         }
         const eventLocation = record.fields.Location || '';
 
-        if (eventDateStr) {
-            // Parse date in local timezone to avoid timezone shift issues
-            const eventDate = new Date(eventDateStr + 'T00:00:00');
-            const dateStr = eventDate.toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            });
-
+        if (eventSchedule.date) {
             // Remove any existing event info section before creating new one
             const existingEventInfo = document.querySelector('.event-info-section');
             if (existingEventInfo) existingEventInfo.remove();
@@ -6217,7 +6272,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
             eventInfoSection.className = 'event-info-section';
             eventInfoSection.innerHTML = `
                 <div class="event-date-time">
-                    <strong>📅 ${dateStr}</strong>${eventTime ? ` at ${eventTime}` : ''}
+                    <strong>📅 ${eventSchedule.date}</strong>${eventTime ? ` at ${eventTime}` : ''}
                 </div>
                 ${eventLocation ? `<div class="event-location">📍 ${eventLocation}</div>` : ''}
             `;
@@ -10256,6 +10311,8 @@ export function hideDetailModal() {
     const closeBtn = document.getElementById('modal-close-btn');
     if (closeBtn) {
         closeBtn.onclick = null;
+        closeBtn.textContent = '×';
+        closeBtn.setAttribute('aria-label', 'Close item details modal');
     }
     modalOverlay.removeEventListener('click', handleOverlayClick);
     document.removeEventListener('keydown', handleEscapeKey);
@@ -10300,7 +10357,11 @@ export function hideDetailModal() {
 
             resetModalState();
         }, 300);
-        document.body.classList.remove('modal-open');
+        const checkoutOverlay = document.getElementById('checkout-modal-overlay');
+        if (!checkoutOverlay?.classList.contains('active')) {
+            document.body.classList.remove('modal-open');
+        }
+        if (modalOverlay?.dataset) delete modalOverlay.dataset.returnToCheckout;
     }
 }
 
@@ -10467,15 +10528,34 @@ function setupEventRsvpActionZone(record, linkedSession) {
 
     // Party-size stepper wiring (always clamped to >= 1).
     const qtyInput = block.querySelector('#rsvp-quantity-input');
-    // Prefill a guest's pending party size (signed-in users are filled below from the server).
+    // Prefill from the plan quantity first, then guest/saved RSVP party size when present.
+    const lockedPartyQty = state.cart.lockedItems.get(record.id)?.quantity;
+    if (lockedPartyQty && qtyInput) qtyInput.value = String(lockedPartyQty);
     if (guestPartyQty && qtyInput) qtyInput.value = String(guestPartyQty);
     const minusBtn = block.querySelector('.minus');
     const plusBtn = block.querySelector('.plus');
+    const syncPlanQuantity = () => {
+        if (!state.cart.lockedItems.has(record.id)) return;
+        const qty = parseInt(qtyInput.value, 10) || 1;
+        const itemInfo = state.cart.lockedItems.get(record.id) || {};
+        itemInfo.quantity = qty;
+        itemInfo.lastAttemptedQuantity = qty;
+        state.cart.lockedItems.set(record.id, itemInfo);
+        try {
+            ui.updateTotalCost?.();
+            ui.updateEventPlanSection?.();
+            triggerSave();
+        } catch (err) {
+            log('Modal', `Could not sync RSVP quantity to plan: ${err.message}`);
+        }
+    };
     const clampQty = () => {
         let v = parseInt(qtyInput.value, 10);
         if (!Number.isFinite(v) || v < 1) v = 1;
         if (v > 999) v = 999;
         qtyInput.value = String(v);
+        syncPlanQuantity();
+        document.getElementById('modal-rapid-pay-btn')?._updateText?.();
     };
     if (plusBtn) plusBtn.addEventListener('click', (e) => {
         e.preventDefault(); e.stopPropagation();
@@ -10494,7 +10574,11 @@ function setupEventRsvpActionZone(record, linkedSession) {
     // single spot). Best-effort: on any failure the people-count labels stand.
     api.fetchEventRsvpData(record.id).then((data) => {
         if (!data) return;
-        if (data.mine && data.mine.quantity && qtyInput) qtyInput.value = String(data.mine.quantity);
+        if (data.mine && data.mine.quantity && qtyInput) {
+            qtyInput.value = String(data.mine.quantity);
+            syncPlanQuantity();
+            document.getElementById('modal-rapid-pay-btn')?._updateText?.();
+        }
         const quantities = data.quantities || {};
         const section = document.querySelector('.rsvp-list-section');
         if (section) {
@@ -10869,6 +10953,48 @@ export async function applyCheckoutDeepLink({ action, qty, selections } = {}) {
     }
 }
 
+function buildCheckoutPlanContextElement() {
+    const combined = state.eventDetails?.combined;
+    if (!combined || typeof combined.get !== 'function') return null;
+
+    const planName = combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
+    const goals = combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
+    const date = formatEventDate(combined.get(CONSTANTS.DETAIL_TYPES.DATE), {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+    });
+    const time = formatEventTimeRange(
+        combined.get(CONSTANTS.DETAIL_TYPES.START_TIME),
+        combined.get(CONSTANTS.DETAIL_TYPES.END_TIME)
+    );
+    const schedule = [date, time].filter(Boolean).join(' · ');
+
+    if (!planName && !goals && !schedule) return null;
+
+    const contextEl = document.createElement('div');
+    contextEl.className = 'checkout-plan-context';
+
+    const addRow = (label, value) => {
+        if (!value) return;
+        const row = document.createElement('div');
+        row.className = 'checkout-plan-context-row';
+        const labelEl = document.createElement('span');
+        labelEl.className = 'checkout-plan-context-label';
+        labelEl.textContent = label;
+        const valueEl = document.createElement('span');
+        valueEl.className = 'checkout-plan-context-value';
+        valueEl.textContent = value;
+        row.append(labelEl, valueEl);
+        contextEl.appendChild(row);
+    };
+
+    addRow('Plan', planName);
+    addRow('Goals', goals);
+    addRow('Date & Time', schedule);
+    return contextEl;
+}
+
 export async function showCheckoutModal(shopSettings, scope = null) {
     currentShopSettings = shopSettings;
     currentCheckoutScope = scope; // { mode: 'item', itemId, itemName, quantity, price, record, selectedOptionIndex, selections, highlightChipIn } or null (plan mode)
@@ -10890,7 +11016,7 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         } else if (scope && scope.mode === 'item') {
             checkoutTitle.textContent = 'Checkout';
         } else {
-            checkoutTitle.textContent = 'Checkout Summary';
+            checkoutTitle.textContent = 'Checkout';
         }
     }
 
@@ -10903,9 +11029,9 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         if (scope && scope.highlightChipIn && (scope.quantity === 0 || !scope.quantity)) {
             totalLabel.textContent = 'Item Price:';
         } else if (state.session.user.amountReceived > 0) {
-            totalLabel.textContent = 'Total Final Cost:';
+            totalLabel.textContent = 'Subtotal:';
         } else {
-            totalLabel.textContent = 'Total Estimated Cost:';
+            totalLabel.textContent = 'Subtotal:';
         }
     }
 
@@ -10959,6 +11085,8 @@ export async function showCheckoutModal(shopSettings, scope = null) {
     tipAmountInput.value = '';
     let finalTotal = 0; // This is the plan subtotal
     const summaryList = document.createElement('ul');
+    const planContextEl = buildCheckoutPlanContextElement();
+    if (planContextEl) summaryDetailsEl.appendChild(planContextEl);
 
     if (scope && scope.mode === 'item') {
         // Single-item mode: show only the specified item
@@ -10976,12 +11104,16 @@ export async function showCheckoutModal(shopSettings, scope = null) {
             itemNoteHtml = `<small class="checkout-summary-note">Note: ${scope.note}</small>`;
         }
         const itemScheduleStr = formatItemSchedule(scope);
-        const itemScheduleHtml = itemScheduleStr
-            ? `<small class="checkout-summary-schedule"><span class="schedule-icon">🕐</span> ${itemScheduleStr}</small>`
+        const scopeEventScheduleStr = !itemScheduleStr && scope.record?.fields?.['Item Type'] === 'Event'
+            ? formatEventSchedule(scope.record, { compact: true })
+            : '';
+        const itemScheduleHtml = (itemScheduleStr || scopeEventScheduleStr)
+            ? `<small class="checkout-summary-schedule"><span class="schedule-icon">🕐</span> ${itemScheduleStr || scopeEventScheduleStr}</small>`
             : '';
 
         const listItem = document.createElement('li');
         listItem.id = 'checkout-scope-item';
+        makeCheckoutItemSelectable(listItem, scope.itemId);
         if (initialQty === 0) {
             // Donation-only mode: show item name without price (no purchase)
             listItem.innerHTML = `
@@ -11042,6 +11174,7 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         const itemTotal = price * (itemInfo.quantity || 1);
         finalTotal += itemTotal;
         const listItem = document.createElement('li');
+        makeCheckoutItemSelectable(listItem, recordId);
 
         // Check for edge case notes
         const airtableMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
@@ -11065,8 +11198,11 @@ export async function showCheckoutModal(shopSettings, scope = null) {
 
         // Per-item scheduling line (date / time / duration)
         const scheduleStr = formatItemSchedule(itemInfo);
-        const scheduleHtml = scheduleStr
-            ? `<small class="checkout-summary-schedule"><span class="schedule-icon">🕐</span> ${scheduleStr}</small>`
+        const eventScheduleStr = !scheduleStr && record.fields?.['Item Type'] === 'Event'
+            ? formatEventSchedule(record, { compact: true })
+            : '';
+        const scheduleHtml = (scheduleStr || eventScheduleStr)
+            ? `<small class="checkout-summary-schedule"><span class="schedule-icon">🕐</span> ${scheduleStr || eventScheduleStr}</small>`
             : '';
 
         // Build option detail lines
@@ -11119,6 +11255,17 @@ export async function showCheckoutModal(shopSettings, scope = null) {
     }
     } // end plan mode
     summaryDetailsEl.appendChild(summaryList);
+    summaryList.addEventListener('click', (e) => {
+        const item = e.target.closest('.checkout-summary-item-selectable');
+        if (item?.dataset.recordId) openCheckoutItemDetails(item.dataset.recordId);
+    });
+    summaryList.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const item = e.target.closest('.checkout-summary-item-selectable');
+        if (!item?.dataset.recordId) return;
+        e.preventDefault();
+        openCheckoutItemDetails(item.dataset.recordId);
+    });
 
     // Show the per-unit price as reference in chip-in mode with qty=0
     if (scope && scope.highlightChipIn && currentCheckoutItemQty === 0 && scope.price > 0) {

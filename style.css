@@ -1994,10 +1994,11 @@ html.presentation-active {
     padding: 5px 10px;
     border-radius: 4px;
     font-size: 0.8em;
-    top: -30px;
+    top: calc(100% + 8px);
     left: 50%;
     transform: translateX(-50%);
     white-space: nowrap;
+    pointer-events: none;
     z-index: 10;
 }
 
@@ -2931,10 +2932,11 @@ body.presentation-active #chat-widget {
     padding: 5px 10px;
     border-radius: 4px;
     font-size: 0.8em;
-    top: -30px;
+    top: calc(100% + 8px);
     left: 50%;
     transform: translateX(-50%);
     white-space: nowrap;
+    pointer-events: none;
     z-index: 10;
 }
 .checkout-modal-content {
@@ -10870,10 +10872,56 @@ hr.total-divider {
     align-items: flex-start;
 }
 
+#checkout-summary-details li.checkout-summary-item-selectable {
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 8px;
+    margin: 0 -8px;
+    transition: background-color 0.15s ease;
+}
+
+#checkout-summary-details li.checkout-summary-item-selectable:hover,
+#checkout-summary-details li.checkout-summary-item-selectable:focus {
+    background: #f5f7fa;
+    outline: none;
+}
+
 .summary-item-details {
     display: flex;
     flex-direction: column;
     padding-right: 10px;
+}
+
+.checkout-plan-context {
+    padding: 10px 12px;
+    margin: 0 0 12px;
+    border: 1px solid #e6e9ef;
+    border-radius: 8px;
+    background: #f8f9fb;
+}
+
+.checkout-plan-context-row {
+    display: grid;
+    grid-template-columns: minmax(72px, max-content) 1fr;
+    gap: 10px;
+    align-items: baseline;
+    font-size: 0.88rem;
+    line-height: 1.35;
+}
+
+.checkout-plan-context-row + .checkout-plan-context-row {
+    margin-top: 6px;
+}
+
+.checkout-plan-context-label {
+    color: #6c757d;
+    font-weight: 700;
+}
+
+.checkout-plan-context-value {
+    color: #212529;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .checkout-summary-note {
@@ -11876,6 +11924,175 @@ hr.total-divider {
     padding: 10px;
 }
 
+.rsvp-signup-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(22, 27, 34, 0.52);
+}
+
+.rsvp-signup-overlay.active {
+    display: flex;
+}
+
+.rsvp-signup-modal {
+    position: relative;
+    width: min(100%, 430px);
+    border: 1px solid rgba(17, 24, 39, 0.08);
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 22px 70px rgba(17, 24, 39, 0.24);
+    padding: 24px;
+    color: #24292f;
+}
+
+.rsvp-signup-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: #f1f3f5;
+    color: #495057;
+    cursor: pointer;
+    font-size: 22px;
+    line-height: 1;
+}
+
+.rsvp-signup-close:hover {
+    background: #e9ecef;
+}
+
+.rsvp-signup-kicker {
+    margin-bottom: 8px;
+    color: #218838;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.rsvp-signup-modal h3 {
+    margin: 0 36px 8px 0;
+    color: #1f2933;
+    font-size: 1.35rem;
+    line-height: 1.25;
+}
+
+.rsvp-signup-copy {
+    margin: 0 0 18px;
+    color: #5f6b76;
+    font-size: 0.95rem;
+    line-height: 1.45;
+}
+
+.rsvp-signup-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.rsvp-signup-field span {
+    display: block;
+    margin-bottom: 6px;
+    color: #343a40;
+    font-weight: 600;
+}
+
+.rsvp-signup-field input {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid #ced4da;
+    border-radius: 7px;
+    padding: 10px 12px;
+    color: #212529;
+    font-size: 1rem;
+}
+
+.rsvp-signup-field input:focus {
+    outline: 2px solid rgba(0, 123, 255, 0.18);
+    border-color: #007bff;
+}
+
+.rsvp-signup-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    color: #343a40;
+    font-size: 0.94rem;
+    line-height: 1.35;
+}
+
+.rsvp-signup-check input {
+    width: 18px;
+    height: 18px;
+    margin-top: 1px;
+    flex: 0 0 auto;
+    accent-color: #28a745;
+}
+
+.rsvp-signup-message {
+    min-height: 20px;
+    color: #5f6b76;
+    font-size: 0.88rem;
+    line-height: 1.35;
+}
+
+.rsvp-signup-message.success {
+    color: #218838;
+}
+
+.rsvp-signup-message.error {
+    color: #dc3545;
+}
+
+.rsvp-signup-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 2px;
+}
+
+.rsvp-signup-primary,
+.rsvp-signup-secondary {
+    min-height: 42px;
+    border-radius: 7px;
+    padding: 0 16px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.rsvp-signup-primary {
+    border: 1px solid #28a745;
+    background: #28a745;
+    color: #fff;
+}
+
+.rsvp-signup-primary:hover:not(:disabled) {
+    background: #218838;
+}
+
+.rsvp-signup-primary:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.rsvp-signup-secondary {
+    border: 1px solid #dee2e6;
+    background: #fff;
+    color: #495057;
+}
+
+.rsvp-signup-secondary:hover {
+    background: #f8f9fa;
+}
+
 @media (max-width: 768px) {
     .presentation-rsvp-section .rsvp-button-group {
         flex-direction: column;
@@ -11885,6 +12102,24 @@ hr.total-divider {
     .presentation-rsvp-section .rsvp-btn {
         width: 100%;
         max-width: 200px;
+    }
+
+    .rsvp-signup-overlay {
+        align-items: flex-end;
+        padding: 14px;
+    }
+
+    .rsvp-signup-modal {
+        padding: 22px 18px 18px;
+    }
+
+    .rsvp-signup-actions {
+        flex-direction: column-reverse;
+    }
+
+    .rsvp-signup-primary,
+    .rsvp-signup-secondary {
+        width: 100%;
     }
 }
 

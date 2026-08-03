@@ -10,7 +10,7 @@
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
 const crypto = require('crypto');
-const { buildReceiptEmail, buildMerchantNotificationEmail } = require('./utils/checkout-emails');
+const { buildReceiptEmail, buildMerchantNotificationEmail, loadCheckoutEmailDetails } = require('./utils/checkout-emails');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -118,6 +118,7 @@ exports.handler = async (event) => {
       customerName,
       date: new Date().toISOString(),
     };
+    const emailDetails = await loadCheckoutEmailDetails(session);
 
     // When a channel id is supplied (an un-signed-in guest), embed a sign-in link
     // in the confirmation email so a single email carries the quote/receipt AND a
@@ -131,7 +132,7 @@ exports.handler = async (event) => {
 
     // 1) Purchaser confirmation.
     try {
-      const receipt = buildReceiptEmail(session, payment, store, baseUrl, { unpaid, amountDue, signInUrl });
+      const receipt = buildReceiptEmail(session, payment, store, baseUrl, { unpaid, amountDue, signInUrl, ...emailDetails });
       await sgMail.send({ to: customerEmail, from: receipt.from, subject: receipt.subject, html: receipt.html });
       sentTo.push(customerEmail);
       console.log(`[send-checkout-confirmation] Purchaser email sent to ${customerEmail}.`);
@@ -144,7 +145,7 @@ exports.handler = async (event) => {
     // 2) Store-owner notification.
     if (merchantEmail) {
       try {
-        const notification = buildMerchantNotificationEmail(session, payment, store, baseUrl, { unpaid, amountDue });
+        const notification = buildMerchantNotificationEmail(session, payment, store, baseUrl, { unpaid, amountDue, ...emailDetails });
         await sgMail.send({ to: notification.to, from: notification.from, subject: notification.subject, html: notification.html });
         sentTo.push(merchantEmail);
         console.log(`[send-checkout-confirmation] Merchant email sent to ${merchantEmail}.`);

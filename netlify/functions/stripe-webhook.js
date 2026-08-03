@@ -3,6 +3,7 @@ const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
 const { SENDER_EMAIL, SENDER_NAME, buildFrom } = require('./utils/email-config');
 const { recordPromotionRedemption } = require('./utils/promotions-redeem');
+const checkoutEmails = require('./utils/checkout-emails');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, STRIPE_WEBHOOK_SECRET, SITE_URL, URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -327,10 +328,11 @@ async function handlePaymentIntentUpdate(paymentIntent, status) {
   });
 
   if (status === 'succeeded' || status === 'processing') {
+    const emailDetails = await checkoutEmails.loadCheckoutEmailDetails(session);
     const customerEmail = paymentIntent.metadata?.customerEmail;
     if (customerEmail) {
       try {
-        const receipt = buildReceiptEmail(session, paymentEntry, store, baseUrl);
+        const receipt = checkoutEmails.buildReceiptEmail(session, paymentEntry, store, baseUrl, emailDetails);
         await sgMail.send({
           to: customerEmail,
           from: receipt.from,
@@ -346,7 +348,7 @@ async function handlePaymentIntentUpdate(paymentIntent, status) {
     const merchantEmail = store?.fields?.ContactEmail;
     if (merchantEmail) {
       try {
-        const notification = buildMerchantNotificationEmail(session, paymentEntry, store, baseUrl);
+        const notification = checkoutEmails.buildMerchantNotificationEmail(session, paymentEntry, store, baseUrl, emailDetails);
         await sgMail.send({
           to: notification.to,
           from: notification.from,
