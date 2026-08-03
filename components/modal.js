@@ -223,29 +223,6 @@ async function copyShareTextToClipboard(text, buttonEl) {
     }
 }
 
-async function createShareImageFile(imageUrl, itemName) {
-    if (!imageUrl || typeof File === 'undefined') return null;
-    try {
-        const shareImageUrl = imageUrl.includes('cloudinary.com')
-            ? applyCloudinaryTransform(imageUrl, 'w_480,h_320,c_fill,f_auto,q_auto')
-            : imageUrl;
-        const response = await fetch(shareImageUrl, { mode: 'cors', credentials: 'omit' });
-        if (!response.ok) return null;
-        const blob = await response.blob();
-        if (!blob.type.startsWith('image/') || blob.size > 10 * 1024 * 1024) return null;
-        const extension = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
-        const safeName = String(itemName || 'wtfun-item')
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-|-$/g, '')
-            .slice(0, 50) || 'wtfun-item';
-        return new File([blob], `${safeName}.${extension}`, { type: blob.type });
-    } catch (error) {
-        console.warn('[Modal] Unable to prepare image for sharing:', error);
-        return null;
-    }
-}
-
 /**
  * Updates the page's title and meta description for SEO purposes.
  * @param {string} title - The new page title.
@@ -7899,52 +7876,33 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         const itemName = record.fields.Name || 'WTFun item';
         const description = String(record.fields.Description || '').trim();
         const descriptionExcerpt = description.length > 120 ? `${description.substring(0, 117)}...` : description;
-        const shareText = descriptionExcerpt
-            ? `${itemName} — ${descriptionExcerpt}`
-            : `${itemName} on WTFun`;
+        const shareDescription = descriptionExcerpt || 'Discover this offering on WTFun.';
+        const shareText = `${itemName}\n${shareDescription}\n${shareUrl.toString()}`;
         const shareData = {
             title: itemName,
-            text: shareText,
-            url: shareUrl.toString()
+            text: shareText
         };
-        const clipboardText = `${shareText}\n${shareUrl.toString()}`;
 
-        // Try Web Share API first (mobile-friendly). Supporting browsers receive
-        // the current item image as a small file attachment; all others retain
-        // the title + description + URL payload.
+        // Keep the complete share in one text field. Some share targets discard
+        // text and URLs whenever a file attachment is included, which can result
+        // in an image-only share. The URL can still produce the item's Open Graph
+        // image preview in destinations that support link unfurling.
         if (navigator.share) {
             try {
-                let nativeShareData = shareData;
-                const imageFile = await createShareImageFile(imageUrls[0], itemName);
-                if (imageFile) {
-                    const imageShareData = { ...shareData, files: [imageFile] };
-                    if (!navigator.canShare || navigator.canShare(imageShareData)) {
-                        nativeShareData = imageShareData;
-                    }
-                }
-                if (navigator.canShare && !navigator.canShare(nativeShareData)) {
-                    await copyShareTextToClipboard(clipboardText, shareBtn);
+                if (navigator.canShare && !navigator.canShare(shareData)) {
+                    await copyShareTextToClipboard(shareText, shareBtn);
                     return;
                 }
-                await navigator.share(nativeShareData);
+                await navigator.share(shareData);
                 log('Modal', `Shared item via Web Share API: ${record.fields.Name}`);
             } catch (err) {
                 if (err.name !== 'AbortError') {
                     console.error('Share failed:', err);
-                    // Some targets reject combined file + URL payloads. Retry the
-                    // standard text payload before falling back to the clipboard.
-                    try {
-                        await navigator.share(shareData);
-                    } catch (fallbackError) {
-                        if (fallbackError.name !== 'AbortError') {
-                            await copyShareTextToClipboard(clipboardText, shareBtn);
-                        }
-                    }
+                    await copyShareTextToClipboard(shareText, shareBtn);
                 }
             }
         } else {
-            // Clipboard fallback includes the name as well as the link.
-            await copyShareTextToClipboard(clipboardText, shareBtn);
+            await copyShareTextToClipboard(shareText, shareBtn);
         }
     });
 
