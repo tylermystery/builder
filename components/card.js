@@ -396,9 +396,9 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             return itemCategories.includes(groupingNameForFilter);
         });
 
-        const imagePromises = childItems.slice(0, 4).map(item => api.fetchImagesForRecord(item, allRecords, new Map()));
+        const imagePromises = childItems.slice(0, 4).map(item => api.fetchImagesForRecord(item, allRecords, imageCache));
         const imageResults = await Promise.all(imagePromises);
-        const collageImages = imageResults.flatMap(res => res.imageUrls);
+        const collageImages = imageResults.flatMap(res => res.imageUrls?.length ? [res.imageUrls[0]] : []);
 
         let imageContainerHTML = `<div class="event-card-image-container collage-container">`;
         if (collageImages.length > 0) {

@@ -285,14 +285,21 @@ async function createNestedCollectionTile(nestedGrouping, allRecords, imageCache
     // Fetch images for the first 4 child items to create a collage
     let collageImagesHTML = '';
     if (childItems.length > 0) {
-        const imagePromises = childItems.slice(0, 4).map(item =>
+        const distinctChildItems = Array.from(
+            new Map(childItems.map(item => [item.id, item])).values()
+        ).slice(0, 4);
+        const imagePromises = distinctChildItems.map(item =>
             api.fetchImagesForRecord(item, allRecords, imageCache)
         );
         const imageResults = await Promise.all(imagePromises);
-        const collageImages = imageResults.flatMap(res => res.imageUrls).slice(0, 4);
+        const collageImages = imageResults.flatMap((result, index) =>
+            result.imageUrls?.length
+                ? [{ itemId: distinctChildItems[index].id, url: result.imageUrls[0] }]
+                : []
+        );
 
         if (collageImages.length > 0) {
-            collageImagesHTML = collageImages.map(url => {
+            collageImagesHTML = collageImages.map(({ itemId, url }) => {
                 // Use the safe transformation helper to avoid double-transforming
                 const placeholder = url.includes('cloudinary')
                     ? applyCloudinaryTransform(url, 'c_fill,w_50,q_30,f_auto,e_blur:300')
@@ -300,7 +307,7 @@ async function createNestedCollectionTile(nestedGrouping, allRecords, imageCache
                 const optimized = url.includes('cloudinary')
                     ? applyCloudinaryTransform(url, 'c_fill,w_300,q_auto,f_auto')
                     : url;
-                return `<div class="collage-image lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${optimized}"></div>`;
+                return `<div class="collage-image lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${optimized}" data-source-record-id="${itemId}"></div>`;
             }).join('');
         }
     }
