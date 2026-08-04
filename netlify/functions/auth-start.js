@@ -1,7 +1,7 @@
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
 const crypto = require('crypto');
-const { DEFAULT_FROM } = require('./utils/email-config');
+const { AUTH_FROM } = require('./utils/email-config');
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY } = process.env;
 
 // Debug: Log environment variable availability at cold start
@@ -86,9 +86,11 @@ exports.handler = async (event) => {
 
         const msg = {
             to: email,
-            from: DEFAULT_FROM,
+            from: AUTH_FROM,
             subject: 'Confirm Your Sign-In for WhatTheFun',
+            text: `Confirm your WhatTheFun sign-in by opening this link: ${confirmationLink}\n\nThis link expires in 15 minutes. If you did not request it, you can ignore this email.`,
             html: `<p>Hello!</p><p>Please click the link below to confirm your sign-in attempt. This link will expire in 15 minutes.</p><p><a href="${confirmationLink}">Confirm Sign-In</a></p>`,
+            categories: ['authentication', 'magic-link'],
         };
 
         console.log('[auth-start] Sending email via SendGrid to:', email.substring(0, 3) + '***');
@@ -96,11 +98,15 @@ exports.handler = async (event) => {
         try {
             console.log('[auth-start] About to call sgMail.send with msg:', {
                 to: msg.to ? msg.to.substring(0, 3) + '***' : 'missing',
-                from: msg.from,
+                fromDomain: msg.from.email.split('@')[1],
                 subject: msg.subject
             });
             const sendResult = await sgMail.send(msg);
-            console.log('[auth-start] Email sent successfully, result:', JSON.stringify(sendResult));
+            const sendResponse = sendResult[0] || {};
+            console.log('[auth-start] Email accepted by SendGrid:', {
+                statusCode: sendResponse.statusCode,
+                messageId: sendResponse.headers?.['x-message-id'] || 'unavailable'
+            });
         } catch (sendgridError) {
             // Comprehensive SendGrid error logging
             console.error('[auth-start] SendGrid error occurred');
@@ -137,7 +143,11 @@ exports.handler = async (event) => {
         console.log('[auth-start] Returning success response with channelId');
         return {
             statusCode: 200,
-            body: JSON.stringify({ message: 'Confirmation email sent.', channelId: channelId }),
+            body: JSON.stringify({
+                message: 'Confirmation email accepted by the email provider.',
+                channelId: channelId,
+                sender: AUTH_FROM.email
+            }),
         };
     } catch (error) {
         console.error('[auth-start] Unexpected error:', {

@@ -343,7 +343,8 @@ export async function startEmailSignIn(email, opts = {}) {
         throw new Error(data.error || 'Failed to send confirmation email.');
     }
 
-    onStatus(`A confirmation link has been sent to ${email}. Please check your inbox. Waiting for confirmation...`, 'success');
+    const sender = data.sender || 'info@whatthefun.wtf';
+    onStatus(`A confirmation link has been sent to ${email} from ${sender}. Check your spam or promotions folder if it does not appear shortly. Waiting for confirmation...`, 'success');
     if (opts.onSent) opts.onSent();
 
     const pusher = new Pusher('236f480714e5001590b5', {
