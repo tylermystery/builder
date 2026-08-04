@@ -319,10 +319,11 @@ async function handleSignIn(e) {
 // completes the login in THIS tab once the emailed link is clicked. Works for
 // both new accounts (created on verify) and existing-but-not-logged-in users.
 // @param {string} email
-// @param {{ onStatus?: (msg: string, kind?: 'info'|'success'|'error') => void, onSent?: () => void }} [opts]
+// @param {{ onStatus?: (msg: string, kind?: 'info'|'success'|'error') => void, onSent?: () => void, storeId?: string }} [opts]
 export async function startEmailSignIn(email, opts = {}) {
     const onStatus = opts.onStatus || (() => {});
     if (!email) throw new Error('Email is required.');
+    const storeId = opts.storeId || state.ui.activeShopId || state.session.storeId || null;
 
     log('Auth', `startEmailSignIn for: ${email}`);
     localStorage.setItem('lastSignInEmail', email);
@@ -332,7 +333,7 @@ export async function startEmailSignIn(email, opts = {}) {
     const response = await fetch('/api/auth-start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email, siteUrl: window.location.origin }),
+        body: JSON.stringify({ email: email, siteUrl: window.location.origin, storeId }),
     });
 
     log('Auth', `auth-start response status: ${response.status}`);
