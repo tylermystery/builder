@@ -4,6 +4,10 @@ const SENDER_EMAIL = 'info@tylersmysterytours.com';
 const SENDER_NAME = 'WhatTheFun';
 
 const DEFAULT_FROM = { name: SENDER_NAME, email: SENDER_EMAIL };
+const AUTH_FROM = {
+  name: process.env.AUTH_EMAIL_FROM_NAME || SENDER_NAME,
+  email: process.env.AUTH_EMAIL_FROM || process.env.SENDGRID_FROM_EMAIL || 'info@whatthefun.wtf'
+};
 
 function buildFrom(storeName, email) {
   const name = storeName ? `${storeName} on WhatTheFun` : SENDER_NAME;
@@ -27,4 +31,4 @@ async function fetchStoreName(storeId) {
   }
 }
 
-module.exports = { SENDER_EMAIL, SENDER_NAME, DEFAULT_FROM, buildFrom, fetchStoreName };
+module.exports = { SENDER_EMAIL, SENDER_NAME, DEFAULT_FROM, AUTH_FROM, buildFrom, fetchStoreName };
