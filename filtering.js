@@ -1,6 +1,6 @@
 // REPLACE THE ENTIRE CONTENTS OF: filtering.js
 
-import { state } from './state.js';
+import { state, getRecordById } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
@@ -329,6 +329,63 @@ function sortRecords(records, sortBy, goalBucket) {
     });
 }
 
+// Plan ids we already tried (and failed) to back-fill from Airtable, so a plan
+// containing a permanently deleted item can't trigger a fetch on every re-filter.
+const _attemptedPlanBackfillIds = new Set();
+
+/**
+ * Resolve a plan item id to a renderable record for the "My Plan" catalog view.
+ *
+ * The plan can contain items that are not in the live catalog list
+ * (state.records.all): items archived or deleted in Airtable are loaded into
+ * state.records.archive as "ghost items" at session load, and solution items may
+ * only exist in the solution registry. The presentation view reads its items
+ * straight off the cart, so those items show up there; the catalog tiles must
+ * look in the same places or they silently disappear from the plan.
+ */
+function resolvePlanRecord(recordId) {
+    if (!recordId) return null;
+
+    const live = getRecordById(recordId);
+    if (live) return live;
+
+    const ghost = (state.records.archive || []).find(r => r && r.id === recordId);
+    if (ghost) return ghost;
+
+    const solution = (typeof window !== 'undefined' && window._solutionRecords)
+        ? window._solutionRecords.get(recordId)
+        : null;
+    if (solution) return solution;
+
+    return null;
+}
+
+/**
+ * Fetch any plan items that could not be resolved locally but look like real
+ * Airtable records, storing them alongside the other ghost items. Returns the
+ * records that were recovered. Ids are only attempted once per page load.
+ */
+async function backfillMissingPlanRecords(missingIds) {
+    const idsToFetch = missingIds.filter(id =>
+        id && id.startsWith('rec') && !_attemptedPlanBackfillIds.has(id)
+    );
+    if (idsToFetch.length === 0) return [];
+
+    idsToFetch.forEach(id => _attemptedPlanBackfillIds.add(id));
+
+    try {
+        const recovered = await api.fetchGhostItems(idsToFetch);
+        if (recovered && recovered.length > 0) {
+            state.records.archive = [...(state.records.archive || []), ...recovered];
+            console.log(`[PLAN VIEW] Recovered ${recovered.length} plan item(s) missing from the catalog.`);
+            return recovered;
+        }
+    } catch (e) {
+        console.warn('[PLAN VIEW] Failed to fetch missing plan items:', e?.message);
+    }
+    return [];
+}
+
 
 export async function applyFiltersAndSort(imageCache) {
     console.log('[FILTER DEBUG] applyFiltersAndSort called.', {
@@ -369,12 +426,30 @@ export async function applyFiltersAndSort(imageCache) {
     let recordsToDisplay;
 
     if (view === 'plan') {
-        const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your';
         const lockedItemIds = Array.from(state.cart.lockedItems.keys());
         const ideaItemIds = Array.from(state.cart.items.keys());
-        const allPlanRecordIds = [...lockedItemIds, ...ideaItemIds];
-        recordsToDisplay = allPlanRecordIds.map(id => state.records.all.find(record => record.id === id)).filter(Boolean);
-        
+        // Locked-in items first, then ideas. An id can legitimately live in both
+        // maps, so de-dupe to avoid rendering the same tile twice.
+        const allPlanRecordIds = [...new Set([...lockedItemIds, ...ideaItemIds])];
+
+        let resolvedPlanItems = allPlanRecordIds.map(id => ({ id, record: resolvePlanRecord(id) }));
+        if (resolvedPlanItems.some(item => !item.record)) {
+            // Try to recover real Airtable items that aren't in the catalog list
+            // (e.g. archived after they were added to the plan).
+            await backfillMissingPlanRecords(resolvedPlanItems.filter(item => !item.record).map(item => item.id));
+            resolvedPlanItems = allPlanRecordIds.map(id => ({ id, record: resolvePlanRecord(id) }));
+        }
+
+        recordsToDisplay = resolvedPlanItems.map(item => item.record).filter(Boolean);
+
+        console.log('[PLAN VIEW] Building catalog tiles for the plan.', {
+            lockedInItems: lockedItemIds.length,
+            ideaItems: ideaItemIds.length,
+            uniquePlanItems: allPlanRecordIds.length,
+            tilesToRender: recordsToDisplay.length,
+            unresolvedIds: resolvedPlanItems.filter(item => !item.record).map(item => item.id)
+        });
+
     } else if (view === 'likes') {
         let likedIds = new Set();
         if (state.session.user.isAuthenticated) {
@@ -687,7 +762,15 @@ export async function applyFiltersAndSort(imageCache) {
             window.dispatchEvent(new CustomEvent('catalog:rendered'));
         });
     } else {
-        const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
+        // The plan view is a finite, curated list that is shared, printed and
+        // emailed as a whole, so it renders every idea and locked-in item at once
+        // instead of paginating like the browse catalog (where lazy loading keeps
+        // large stores fast). Without this, only the first batch of plan tiles
+        // existed until the reader happened to scroll.
+        const rendersEntireList = view === 'plan';
+        const initialRecords = rendersEntireList
+            ? state.records.filtered
+            : state.records.filtered.slice(0, RECORDS_PER_LOAD);
 
         state.ui.isLoadingMore = true;
         ui.renderRecords(initialRecords, imageCache, false).then(() => {
