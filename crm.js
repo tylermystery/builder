@@ -1,8 +1,4 @@
-// REPLACE the entire contents of: crm.js
-
 // --- Configuration ---
-const AIRTABLE_PAT = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
-const BASE_ID = 'app5yTznb3R5YNUFw';
 const SESSIONS_TABLE = 'Sessions';
 const MESSAGES_TABLE = 'Messages';
 const CATALOG_TABLE = 'tblUA4uuS8IYlhKpD'; 
@@ -43,7 +39,36 @@ const omniSearchBtn = document.getElementById('omni-search-btn');
 const omniSearchResults = document.getElementById('omni-search-results');
 
 
-// --- Airtable & Storage ---
+// --- Secure CRM API & Storage ---
+function crmAuthHeaders(extra = {}) {
+    const token = localStorage.getItem('jwt');
+    return {
+        ...extra,
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+    };
+}
+
+async function crmFetch(url, options = {}) {
+    const response = await fetch(url, {
+        ...options,
+        credentials: 'same-origin',
+        headers: crmAuthHeaders(options.headers || {})
+    });
+    if (response.status === 401 || response.status === 403) {
+        window.location.href = '/crm-login.html';
+        throw new Error('CRM authentication required.');
+    }
+    if (!response.ok) {
+        let message = `CRM request failed (${response.status})`;
+        try {
+            const payload = await response.json();
+            if (payload.error) message = payload.error;
+        } catch {}
+        throw new Error(message);
+    }
+    return response;
+}
+
 function loadArchivedState() {
     const stored = localStorage.getItem(ARCHIVE_STORAGE_KEY);
     if (stored) {
@@ -55,49 +80,22 @@ function saveArchivedState() {
 }
 
 async function fetchAirtableData(tableName) {
-    let allRecords = [];
-    let offset = null;
-    const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${tableName}`; // Base URL
-    
     try {
-        do {
-            let fetchUrl = baseUrl;
-            if (offset) {
-                if (typeof offset === 'string' && offset.startsWith('itr')) {
-                    fetchUrl = `${baseUrl}?offset=${offset}`;
-                } else {
-                    console.warn(`Invalid Airtable offset detected for ${tableName}: ${offset}`);
-                    break; 
-                }
-            }
-
-            const response = await fetch(fetchUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
-            
-            if (!response.ok) {
-                console.error(`Airtable API request failed for URL: ${fetchUrl}`);
-                throw new Error(`Failed to fetch from ${tableName} (Status: ${response.status})`);
-            }
-            
-            const data = await response.json();
-            allRecords = allRecords.concat(data.records);
-            offset = data.offset; 
-        } while (offset);
-        
-        return allRecords;
+        const response = await crmFetch(`/api/crm/legacy?table=${encodeURIComponent(tableName)}`);
+        const data = await response.json();
+        return data.records || [];
     } catch (error) {
-        console.error("Airtable fetch error:", error);
+        console.error("CRM data fetch error:", error);
         throw error;
     }
 }
 async function postChatMessage(sessionId, content) {
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${MESSAGES_TABLE}`;
-    const payload = { records: [{ fields: { SessionID: [sessionId], SenderID: 'admin-dashboard', SenderName: 'TMT Admin', Content: content, Timestamp: new Date().toISOString() } }] };
     try {
-        const response = await fetch(url, { method: 'POST', headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        if (!response.ok) {
-            console.error("Airtable response error:", await response.json());
-            throw new Error('Failed to post message to Airtable.');
-        }
+        await crmFetch('/api/crm/legacy/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, content })
+        });
     } catch (error) { console.error("Error posting chat message:", error); }
 }
 
@@ -209,7 +207,9 @@ function renderEventPlan(sessionId) {
         console.error("Error rendering plan:", e);
         planHtml += '<p>Could not load event plan details.</p>';
     }
+    planHtml += '<section id="crm-email-interactions" class="crm-email-interactions"><h3>Email Activity</h3><p class="crm-muted">Loading private email activity…</p></section>';
     planView.innerHTML = planHtml;
+    window.dispatchEvent(new CustomEvent('crm:plan-selected', { detail: { planId: sessionId } }));
 }
 
 function renderChatPane(sessionId) {

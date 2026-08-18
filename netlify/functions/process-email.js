@@ -4,6 +4,14 @@
 
 const { AIRTABLE_PAT, BASE_ID } = process.env;
 const { generateText, parseJsonResponse } = require('./utils/ai-provider');
+const crypto = require('crypto');
+
+function secretMatches(value, expected) {
+  if (!value || !expected) return false;
+  const left = Buffer.from(value);
+  const right = Buffer.from(expected);
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
 
 exports.handler = async (event) => {
   console.log('--- Function Invoked ---');
@@ -12,10 +20,16 @@ exports.handler = async (event) => {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
+  const ingestSecret = process.env.CRM_INGEST_WEBHOOK_SECRET;
+  const providedSecret = event.headers['x-crm-ingest-secret'] || event.headers['X-Crm-Ingest-Secret'];
+  if (!secretMatches(providedSecret, ingestSecret)) {
+    return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) };
+  }
+
   try {
-    console.log('Step 1: Parsing incoming request body from Zapier.');
+    console.log('Step 1: Parsing authenticated email webhook.');
     const emailData = JSON.parse(event.body);
-    console.log('Step 1 SUCCESS. Parsed email data:', emailData);
+    console.log('Step 1 SUCCESS. Email payload accepted.');
 
     const aiPrompt = `
       You are an expert sales assistant for Tyler's Mystery Tours. Your task is to read an email thread and extract key information about a potential or ongoing event booking. Analyze the entire text and respond ONLY with a valid JSON object. Do not include the markdown specifier \`\`\`json or any text before or after the JSON object.
@@ -45,7 +59,7 @@ ${emailData.body}`;
 
     console.log('Step 3: Attempting to parse AI JSON response.');
     const extractedData = parseJsonResponse(aiResult.text);
-    console.log('Step 3 SUCCESS. Parsed AI data:', extractedData);
+    console.log('Step 3 SUCCESS. Parsed AI data.');
 
     console.log('Step 4: Searching for existing session in Airtable.');
     const findUrl = `https://api.airtable.com/v0/${BASE_ID}/Sessions?filterByFormula=({ClientEmail}='${extractedData.clientEmail}')`;

@@ -386,3 +386,487 @@ export const groupMembers = pgTable(
     memberUnique: uniqueIndex("group_members_unique").on(t.groupId, t.userId),
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Store-scoped CRM, mailbox synchronization, and marketing campaigns.
+//
+// CRM data lives in Postgres while stores, users, and plans continue to use
+// Airtable record ids. Every tenant-owned row carries store_id so the Tyler's
+// Mystery Tours pilot can expand without changing the storage model.
+export const crmStoreEnrollments = pgTable(
+  "crm_store_enrollments",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    status: text("status").notNull().default("pilot"),
+    mailboxLimit: integer("mailbox_limit").notNull().default(1),
+    contactLimit: integer("contact_limit").notNull().default(2000),
+    monthlyRecipientLimit: integer("monthly_recipient_limit").notNull().default(2000),
+    enabledAt: timestamp("enabled_at").defaultNow(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (t) => ({
+    storeUnique: uniqueIndex("crm_store_enrollments_store_unique").on(t.storeId),
+  }),
+);
+
+export const crmStoreAccess = pgTable(
+  "crm_store_access",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    userId: text("user_id"),
+    userEmail: text("user_email").notNull(),
+    role: text("role").notNull().default("owner"),
+    capabilities: jsonb("capabilities"),
+    permissionSource: text("permission_source").notNull().default("pilot_owner"),
+    status: text("status").notNull().default("active"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (t) => ({
+    storeIdx: index("crm_store_access_store_idx").on(t.storeId),
+    storeEmailUnique: uniqueIndex("crm_store_access_store_email_unique").on(
+      t.storeId,
+      t.userEmail,
+    ),
+  }),
+);
+
+export const crmMailboxConnections = pgTable(
+  "crm_mailbox_connections",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    provider: text("provider").notNull().default("google"),
+    mailboxEmail: text("mailbox_email").notNull(),
+    providerAccountId: text("provider_account_id"),
+    encryptedRefreshToken: text("encrypted_refresh_token").notNull(),
+    tokenIv: text("token_iv").notNull(),
+    tokenTag: text("token_tag").notNull(),
+    tokenVersion: integer("token_version").notNull().default(1),
+    scopes: jsonb("scopes"),
+    status: text("status").notNull().default("active"),
+    connectedByUserId: text("connected_by_user_id"),
+    connectedByEmail: text("connected_by_email").notNull(),
+    tokenExpiresAt: timestamp("token_expires_at"),
+    lastError: text("last_error"),
+    lastErrorAt: timestamp("last_error_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (t) => ({
+    storeIdx: index("crm_mailbox_connections_store_idx").on(t.storeId),
+    storeMailboxUnique: uniqueIndex("crm_mailbox_store_email_unique").on(
+      t.storeId,
+      t.mailboxEmail,
+    ),
+  }),
+);
+
+export const crmMailboxSyncState = pgTable(
+  "crm_mailbox_sync_state",
+  {
+    id: serial().primaryKey(),
+    connectionId: integer("connection_id")
+      .notNull()
+      .references(() => crmMailboxConnections.id, { onDelete: "cascade" }),
+    storeId: text("store_id").notNull(),
+    stream: text("stream").notNull().default("all_mail"),
+    historyId: text("history_id"),
+    backfillAfter: timestamp("backfill_after"),
+    backfillPageToken: text("backfill_page_token"),
+    backfillComplete: boolean("backfill_complete").notNull().default(false),
+    lastSuccessfulSyncAt: timestamp("last_successful_sync_at"),
+    nextSyncAt: timestamp("next_sync_at").defaultNow(),
+    failureCount: integer("failure_count").notNull().default(0),
+    recoveryState: text("recovery_state"),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (t) => ({
+    dueIdx: index("crm_mailbox_sync_due_idx").on(t.nextSyncAt),
+    connectionStreamUnique: uniqueIndex("crm_mailbox_sync_stream_unique").on(
+      t.connectionId,
+      t.stream,
+    ),
+  }),
+);
+
+export const crmSyncJobs = pgTable(
+  "crm_sync_jobs",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    connectionId: integer("connection_id")
+      .notNull()
+      .references(() => crmMailboxConnections.id, { onDelete: "cascade" }),
+    jobType: text("job_type").notNull(),
+    status: text("status").notNull().default("queued"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    progress: jsonb("progress"),
+    attempts: integer("attempts").notNull().default(0),
+    errorCategory: text("error_category"),
+    errorMessage: text("error_message"),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (t) => ({
+    storeStatusIdx: index("crm_sync_jobs_store_status_idx").on(t.storeId, t.status),
+    idempotencyUnique: uniqueIndex("crm_sync_jobs_idempotency_unique").on(
+      t.idempotencyKey,
+    ),
+  }),
+);
+
+export const crmEmailThreads = pgTable(
+  "crm_email_threads",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    connectionId: integer("connection_id")
+      .notNull()
+      .references(() => crmMailboxConnections.id, { onDelete: "cascade" }),
+    providerThreadId: text("provider_thread_id").notNull(),
+    subject: text("subject"),
+    participants: jsonb("participants"),
+    firstMessageAt: timestamp("first_message_at"),
+    lastMessageAt: timestamp("last_message_at"),
+    relationshipState: text("relationship_state").notNull().default("unknown"),
+    extractionStatus: text("extraction_status").notNull().default("pending"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (t) => ({
+    storeLastIdx: index("crm_email_threads_store_last_idx").on(t.storeId, t.lastMessageAt),
+    providerThreadUnique: uniqueIndex("crm_email_thread_provider_unique").on(
+      t.connectionId,
+      t.providerThreadId,
+    ),
+  }),
+);
+
+export const crmEmailMessages = pgTable(
+  "crm_email_messages",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    threadId: integer("thread_id")
+      .notNull()
+      .references(() => crmEmailThreads.id, { onDelete: "cascade" }),
+    providerMessageId: text("provider_message_id").notNull(),
+    direction: text("direction").notNull(),
+    senderEmail: text("sender_email"),
+    recipientEmails: jsonb("recipient_emails"),
+    ccEmails: jsonb("cc_emails"),
+    sentAt: timestamp("sent_at"),
+    subject: text("subject"),
+    redactedExcerpt: text("redacted_excerpt"),
+    excerptExpiresAt: timestamp("excerpt_expires_at"),
+    payloadHash: text("payload_hash"),
+    processingStatus: text("processing_status").notNull().default("pending"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    threadSentIdx: index("crm_email_messages_thread_sent_idx").on(t.threadId, t.sentAt),
+    providerMessageUnique: uniqueIndex("crm_email_message_provider_unique").on(
+      t.storeId,
+      t.providerMessageId,
+    ),
+  }),
+);
+
+export const crmContacts = pgTable(
+  "crm_contacts",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    normalizedEmail: text("normalized_email").notNull(),
+    displayName: text("display_name"),
+    company: text("company"),
+    relationshipSummary: text("relationship_summary"),
+    lifecycleStage: text("lifecycle_stage").notNull().default("past_client"),
+    relationshipState: text("relationship_state").notNull().default("candidate"),
+    marketingPermission: text("marketing_permission")
+      .notNull()
+      .default("unconfirmed_relationship"),
+    lastInteractionAt: timestamp("last_interaction_at"),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (t) => ({
+    storeLastIdx: index("crm_contacts_store_last_idx").on(t.storeId, t.lastInteractionAt),
+    storeEmailUnique: uniqueIndex("crm_contacts_store_email_unique").on(
+      t.storeId,
+      t.normalizedEmail,
+    ),
+  }),
+);
+
+export const crmContactSources = pgTable(
+  "crm_contact_sources",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    contactId: integer("contact_id")
+      .notNull()
+      .references(() => crmContacts.id, { onDelete: "cascade" }),
+    threadId: integer("thread_id").references(() => crmEmailThreads.id, {
+      onDelete: "set null",
+    }),
+    qualificationReason: text("qualification_reason").notNull(),
+    confidence: integer("confidence"),
+    extractedFields: jsonb("extracted_fields"),
+    reviewStatus: text("review_status").notNull().default("pending"),
+    reviewedByUserId: text("reviewed_by_user_id"),
+    reviewedAt: timestamp("reviewed_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    contactIdx: index("crm_contact_sources_contact_idx").on(t.contactId),
+  }),
+);
+
+export const crmContactPlanLinks = pgTable(
+  "crm_contact_plan_links",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    contactId: integer("contact_id")
+      .notNull()
+      .references(() => crmContacts.id, { onDelete: "cascade" }),
+    planId: text("plan_id").notNull(),
+    threadId: integer("thread_id").references(() => crmEmailThreads.id, {
+      onDelete: "set null",
+    }),
+    confidence: integer("confidence"),
+    status: text("status").notNull().default("suggested"),
+    confirmedByUserId: text("confirmed_by_user_id"),
+    confirmedAt: timestamp("confirmed_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (t) => ({
+    planIdx: index("crm_contact_plan_links_plan_idx").on(t.storeId, t.planId),
+    contactPlanUnique: uniqueIndex("crm_contact_plan_unique").on(
+      t.contactId,
+      t.planId,
+    ),
+  }),
+);
+
+export const crmInteractions = pgTable(
+  "crm_interactions",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    contactId: integer("contact_id").references(() => crmContacts.id, {
+      onDelete: "cascade",
+    }),
+    planId: text("plan_id"),
+    interactionType: text("interaction_type").notNull(),
+    sourceId: text("source_id"),
+    summary: text("summary").notNull(),
+    actionItems: jsonb("action_items"),
+    visibility: text("visibility").notNull().default("store_private"),
+    occurredAt: timestamp("occurred_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    planOccurredIdx: index("crm_interactions_plan_occurred_idx").on(
+      t.storeId,
+      t.planId,
+      t.occurredAt,
+    ),
+    sourceUnique: uniqueIndex("crm_interactions_source_unique").on(
+      t.storeId,
+      t.interactionType,
+      t.sourceId,
+    ),
+  }),
+);
+
+export const crmConsentEvents = pgTable(
+  "crm_consent_events",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    contactId: integer("contact_id")
+      .notNull()
+      .references(() => crmContacts.id, { onDelete: "cascade" }),
+    purpose: text("purpose").notNull().default("marketing"),
+    state: text("state").notNull(),
+    source: text("source").notNull(),
+    evidence: text("evidence"),
+    actorUserId: text("actor_user_id"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    contactCreatedIdx: index("crm_consent_contact_created_idx").on(
+      t.contactId,
+      t.createdAt,
+    ),
+  }),
+);
+
+export const crmSuppressions = pgTable(
+  "crm_suppressions",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    contactId: integer("contact_id").references(() => crmContacts.id, {
+      onDelete: "set null",
+    }),
+    normalizedEmail: text("normalized_email").notNull(),
+    suppressionType: text("suppression_type").notNull(),
+    source: text("source").notNull(),
+    providerEventId: text("provider_event_id"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    storeEmailIdx: index("crm_suppressions_store_email_idx").on(
+      t.storeId,
+      t.normalizedEmail,
+    ),
+    providerEventUnique: uniqueIndex("crm_suppression_provider_event_unique").on(
+      t.providerEventId,
+    ),
+  }),
+);
+
+export const crmTemplates = pgTable(
+  "crm_templates",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    name: text("name").notNull(),
+    subject: text("subject").notNull(),
+    htmlBody: text("html_body").notNull(),
+    textBody: text("text_body"),
+    status: text("status").notNull().default("draft"),
+    createdByUserId: text("created_by_user_id"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (t) => ({
+    storeIdx: index("crm_templates_store_idx").on(t.storeId),
+  }),
+);
+
+export const crmCampaigns = pgTable(
+  "crm_campaigns",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    templateId: integer("template_id").references(() => crmTemplates.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull(),
+    subject: text("subject").notNull(),
+    htmlBody: text("html_body").notNull(),
+    textBody: text("text_body"),
+    fromEmail: text("from_email").notNull(),
+    fromName: text("from_name").notNull(),
+    replyToEmail: text("reply_to_email"),
+    status: text("status").notNull().default("draft"),
+    scheduledAt: timestamp("scheduled_at"),
+    approvedByUserId: text("approved_by_user_id"),
+    approvedAt: timestamp("approved_at"),
+    audienceCounts: jsonb("audience_counts"),
+    createdByUserId: text("created_by_user_id"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (t) => ({
+    storeStatusIdx: index("crm_campaigns_store_status_idx").on(t.storeId, t.status),
+  }),
+);
+
+export const crmCampaignRecipients = pgTable(
+  "crm_campaign_recipients",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    campaignId: integer("campaign_id")
+      .notNull()
+      .references(() => crmCampaigns.id, { onDelete: "cascade" }),
+    contactId: integer("contact_id").references(() => crmContacts.id, {
+      onDelete: "set null",
+    }),
+    normalizedEmail: text("normalized_email").notNull(),
+    displayName: text("display_name"),
+    status: text("status").notNull().default("pending"),
+    suppressionReason: text("suppression_reason"),
+    providerMessageId: text("provider_message_id"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    lastAttemptAt: timestamp("last_attempt_at"),
+    sentAt: timestamp("sent_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (t) => ({
+    campaignStatusIdx: index("crm_campaign_recipients_status_idx").on(
+      t.campaignId,
+      t.status,
+    ),
+    campaignEmailUnique: uniqueIndex("crm_campaign_recipient_email_unique").on(
+      t.campaignId,
+      t.normalizedEmail,
+    ),
+    idempotencyUnique: uniqueIndex("crm_campaign_recipient_idempotency_unique").on(
+      t.idempotencyKey,
+    ),
+  }),
+);
+
+export const crmEmailEvents = pgTable(
+  "crm_email_events",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    campaignId: integer("campaign_id").references(() => crmCampaigns.id, {
+      onDelete: "set null",
+    }),
+    recipientId: integer("recipient_id").references(() => crmCampaignRecipients.id, {
+      onDelete: "set null",
+    }),
+    providerEventId: text("provider_event_id").notNull(),
+    providerMessageId: text("provider_message_id"),
+    normalizedEmail: text("normalized_email"),
+    eventType: text("event_type").notNull(),
+    occurredAt: timestamp("occurred_at").notNull(),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    providerEventUnique: uniqueIndex("crm_email_events_provider_unique").on(
+      t.providerEventId,
+    ),
+    campaignOccurredIdx: index("crm_email_events_campaign_idx").on(
+      t.campaignId,
+      t.occurredAt,
+    ),
+  }),
+);
+
+export const crmAuditLog = pgTable(
+  "crm_audit_log",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    actorUserId: text("actor_user_id"),
+    actorEmail: text("actor_email"),
+    action: text("action").notNull(),
+    targetType: text("target_type"),
+    targetId: text("target_id"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    storeCreatedIdx: index("crm_audit_store_created_idx").on(t.storeId, t.createdAt),
+  }),
+);

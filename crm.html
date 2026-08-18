@@ -130,10 +130,88 @@
             margin: 5px 0;
         }
         /* --- END NEW STYLES --- */
+
+        .crm-command-button { position: fixed; right: 24px; top: 18px; z-index: 40; border: 1px solid #263a32; background: #183229; color: #f6f0df; border-radius: 999px; padding: 11px 17px; font: 700 0.82rem/1 "Avenir Next", "Segoe UI", sans-serif; letter-spacing: .04em; cursor: pointer; box-shadow: 0 10px 30px rgba(18, 48, 38, .22); }
+        .crm-command-button:hover { transform: translateY(-1px); background: #234438; }
+        .crm-tools-backdrop { position: fixed; inset: 0; z-index: 70; background: rgba(18, 31, 27, .54); backdrop-filter: blur(5px); opacity: 0; pointer-events: none; transition: opacity .22s ease; }
+        .crm-tools-backdrop.open { opacity: 1; pointer-events: auto; }
+        .crm-tools-drawer { position: absolute; inset: 0 0 0 auto; width: min(820px, 94vw); overflow: auto; background: #f4efe3; color: #1d2b27; box-shadow: -30px 0 70px rgba(10, 24, 20, .22); transform: translateX(24px); transition: transform .24s ease; }
+        .crm-tools-backdrop.open .crm-tools-drawer { transform: translateX(0); }
+        .crm-tools-header { position: sticky; top: 0; z-index: 2; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 28px 32px 22px; color: #f7f0de; background: #183229; border-bottom: 4px solid #c97745; }
+        .crm-tools-header h2 { color: inherit; border: 0; margin: 0; font: 700 1.65rem/1.1 Georgia, serif; }
+        .crm-tools-header p { margin: 7px 0 0; max-width: 560px; color: #d7e0d8; font-size: .9rem; }
+        .crm-close { border: 1px solid rgba(255,255,255,.35); background: transparent; color: white; border-radius: 50%; width: 38px; height: 38px; cursor: pointer; font-size: 1.2rem; }
+        .crm-tools-content { padding: 26px 32px 50px; }
+        .crm-summary-grid { display: grid; grid-template-columns: 1.25fr repeat(3, .75fr); gap: 12px; margin-bottom: 24px; }
+        .crm-summary-card { min-height: 86px; padding: 16px; border: 1px solid #d9cfbc; border-radius: 14px; background: rgba(255,255,255,.7); box-shadow: 0 6px 18px rgba(70, 55, 38, .06); }
+        .crm-summary-card strong { display: block; color: #183229; font: 700 1.55rem/1 Georgia, serif; }
+        .crm-summary-card span { display: block; margin-top: 8px; color: #766d60; font-size: .76rem; text-transform: uppercase; letter-spacing: .08em; }
+        .crm-section { margin-top: 22px; padding: 22px; border: 1px solid #d8cdb8; border-radius: 16px; background: #fffdf7; }
+        .crm-section-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 15px; }
+        .crm-section h3 { margin: 0; border: 0; color: #183229; font: 700 1.2rem/1.2 Georgia, serif; }
+        .crm-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .crm-action { border: 1px solid #244438; border-radius: 9px; background: #244438; color: #fffaf0; padding: 9px 13px; font-weight: 700; cursor: pointer; }
+        .crm-action.secondary { background: transparent; color: #244438; }
+        .crm-action.danger { border-color: #9a493c; background: transparent; color: #9a493c; }
+        .crm-action:disabled { opacity: .48; cursor: wait; }
+        .crm-list { display: grid; gap: 10px; }
+        .crm-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; padding: 14px; border: 1px solid #e2dacb; border-radius: 12px; background: #fff; }
+        .crm-row-title { margin: 0; color: #22352e; font-weight: 800; overflow-wrap: anywhere; }
+        .crm-row-meta, .crm-muted { margin: 5px 0 0; color: #756d61; font-size: .82rem; line-height: 1.45; }
+        .crm-pill { display: inline-block; margin: 4px 6px 0 0; padding: 4px 8px; border-radius: 999px; background: #e8eee8; color: #335348; font-size: .7rem; font-weight: 800; letter-spacing: .03em; }
+        .crm-form { display: grid; gap: 10px; }
+        .crm-form input, .crm-form textarea { width: 100%; box-sizing: border-box; border: 1px solid #cfc4b1; border-radius: 10px; background: #fff; color: #1d2b27; padding: 11px 12px; font: inherit; }
+        .crm-form textarea { min-height: 150px; resize: vertical; }
+        .crm-status { margin: 12px 0 0; padding: 10px 12px; border-radius: 9px; background: #ecf1eb; color: #315044; font-size: .85rem; }
+        .crm-status.error { background: #fae9e5; color: #8d3d32; }
+        .crm-email-interactions { margin-top: 28px; padding-top: 20px; border-top: 3px solid #c97745; }
+        .crm-interaction { margin: 10px 0; padding: 12px 14px; border-left: 4px solid #5d806d; background: #f7f4eb; border-radius: 0 10px 10px 0; }
+        .crm-interaction time { display: block; margin-top: 5px; color: #7c7468; font-size: .75rem; }
+        @media (max-width: 760px) { .crm-summary-grid { grid-template-columns: 1fr 1fr; } .crm-tools-content, .crm-tools-header { padding-left: 18px; padding-right: 18px; } .crm-row { grid-template-columns: 1fr; } }
         
     </style>
 </head>
 <body>
+
+    <button id="crm-tools-open" class="crm-command-button" type="button">Contacts &amp; Email</button>
+
+    <div id="crm-tools-backdrop" class="crm-tools-backdrop" aria-hidden="true">
+        <aside class="crm-tools-drawer" role="dialog" aria-modal="true" aria-labelledby="crm-tools-title">
+            <header class="crm-tools-header">
+                <div>
+                    <h2 id="crm-tools-title">Relationship Desk</h2>
+                    <p>Private email context, contact review, consent controls, and deliberate campaign sending.</p>
+                </div>
+                <button id="crm-tools-close" class="crm-close" type="button" aria-label="Close">×</button>
+            </header>
+            <div class="crm-tools-content">
+                <div id="crm-summary" class="crm-summary-grid"></div>
+                <section class="crm-section">
+                    <div class="crm-section-header"><h3>Google mailbox</h3><div class="crm-actions"><button id="crm-google-connect" class="crm-action" type="button">Connect Google</button><button id="crm-sync-now" class="crm-action secondary" type="button">Sync now</button></div></div>
+                    <div id="crm-mailboxes" class="crm-list"><p class="crm-muted">Loading mailbox status…</p></div>
+                </section>
+                <section class="crm-section">
+                    <div class="crm-section-header"><h3>Contact review</h3><button id="crm-refresh-review" class="crm-action secondary" type="button">Refresh</button></div>
+                    <div id="crm-review-list" class="crm-list"><p class="crm-muted">Loading candidates…</p></div>
+                </section>
+                <section class="crm-section">
+                    <div class="crm-section-header"><h3>Approved contacts</h3><button id="crm-refresh-contacts" class="crm-action secondary" type="button">Refresh</button></div>
+                    <div id="crm-contact-list" class="crm-list"><p class="crm-muted">Loading contacts…</p></div>
+                </section>
+                <section class="crm-section">
+                    <div class="crm-section-header"><h3>Campaign drafts</h3></div>
+                    <form id="crm-campaign-form" class="crm-form">
+                        <input name="name" placeholder="Internal campaign name" required>
+                        <input name="subject" placeholder="Email subject" required>
+                        <textarea name="htmlBody" placeholder="Campaign message. The required relationship disclosure, mailing address, and unsubscribe link are appended automatically." required></textarea>
+                        <button class="crm-action" type="submit">Save draft</button>
+                    </form>
+                    <p id="crm-campaign-status" class="crm-status" hidden></p>
+                    <div id="crm-campaign-list" class="crm-list" style="margin-top:16px"></div>
+                </section>
+            </div>
+        </aside>
+    </div>
 
     <div id="dashboard-wrapper">
         <div class="dashboard-container">
@@ -206,15 +284,16 @@
     </div>
 
     <script>
-        // --- PAGE PROTECTION SCRIPT ---
-        const AUTH_KEY = 'tmt-crm-auth-token';
-        const isAuthenticated = sessionStorage.getItem(AUTH_KEY);
-        if (!isAuthenticated) {
-            window.location.href = '/crm-login.html';
-        } else {
+        const crmToken = localStorage.getItem('jwt');
+        fetch('/api/crm/bootstrap', {
+            credentials: 'same-origin',
+            headers: crmToken ? { Authorization: `Bearer ${crmToken}` } : {}
+        }).then((response) => {
+            if (!response.ok) throw new Error('Unauthorized');
             document.getElementById('dashboard-wrapper').style.display = 'block';
-        }
+        }).catch(() => { window.location.href = '/crm-login.html'; });
     </script>
     <script type="module" src="crm.js"></script>
+    <script type="module" src="crm-features.js"></script>
 </body>
 </html>

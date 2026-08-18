@@ -8,46 +8,29 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f4f7f9; margin: 0; }
         .login-container { background-color: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center; }
         h1 { color: #2c3e50; margin-bottom: 25px; }
-        input[type="password"] { width: 100%; padding: 12px; font-size: 1rem; border: 1px solid #ccc; border-radius: 6px; margin-bottom: 20px; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; font-size: 1.1rem; border: none; border-radius: 6px; background-color: #3498db; color: white; cursor: pointer; }
+        p { color: #66736d; line-height: 1.55; max-width: 430px; }
+        a { display: inline-block; width: 100%; box-sizing: border-box; padding: 12px; font-size: 1.05rem; border: none; border-radius: 6px; background-color: #244438; color: white; cursor: pointer; text-decoration: none; }
         #error-message { color: #e74c3c; margin-top: 15px; min-height: 20px; }
     </style>
 </head>
 <body>
     <div class="login-container">
         <h1>Dashboard Access</h1>
-        <form id="login-form">
-            <input type="password" id="password" placeholder="Enter password" required>
-            <button type="submit">Enter</button>
-        </form>
+        <p>The CRM now uses your WhatTheFun account and store permissions. Sign in with the Tyler's Mystery Tours owner account, then return here.</p>
+        <a href="/?signin=1">Open secure sign in</a>
         <p id="error-message"></p>
     </div>
 
     <script>
-        // --- THIS IS THE CLIENT-SIDE AUTHENTICATION LOGIC ---
-
-        // IMPORTANT: Replace 'supersecret' with your actual desired password.
-        const CORRECT_PASSWORD = 'supersecret';
-        const AUTH_KEY = 'tmt-crm-auth-token';
-
-        const form = document.getElementById('login-form');
-        const passwordInput = document.getElementById('password');
         const errorMessage = document.getElementById('error-message');
-
-        form.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const enteredPassword = passwordInput.value;
-
-            if (enteredPassword === CORRECT_PASSWORD) {
-                // On success, set a temporary token in sessionStorage
-                sessionStorage.setItem(AUTH_KEY, 'authenticated');
-                // Redirect to the CRM dashboard
-                window.location.href = '/crm.html';
-            } else {
-                errorMessage.textContent = 'Incorrect password. Please try again.';
-                passwordInput.value = '';
-            }
-        });
+        const token = localStorage.getItem('jwt');
+        fetch('/api/crm/bootstrap', {
+            credentials: 'same-origin',
+            headers: token ? { Authorization: `Bearer ${token}` } : {}
+        }).then((response) => {
+            if (response.ok) window.location.href = '/crm.html';
+            else errorMessage.textContent = 'A store-owner sign in is required.';
+        }).catch(() => { errorMessage.textContent = 'Unable to verify your account right now.'; });
     </script>
 </body>
 </html>
