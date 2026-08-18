@@ -28,6 +28,7 @@ The application is built on a modular architecture to ensure maintainability and
 - **/api/update-user-prefs:** Updates an authenticated user's record in Airtable with their notification preferences, such as phone number.
 - **/api/send-notification:** Triggered when a new chat message is posted. It fetches collaborators for the session and sends real-time SMS alerts via Twilio to users who have opted in.
 - **/api/agora-token:** (v3.8) Generates temporary Agora RTC tokens using the official `agora-token` AccessToken2 format. Validates that stream hosts are authenticated; viewers receive audience-role tokens. Returns test-mode responses when Agora credentials are not yet configured.
+- **CRM email subsystem:** Store-scoped Netlify Database tables and modern Netlify Functions now manage Google mailbox OAuth, encrypted tokens, 24-month Inbox/Sent backfill, ten-minute Gmail history synchronization, two-way contact qualification, private plan interaction timelines, consent and suppression records, campaign audience snapshots, background SendGrid delivery, one-click unsubscribe, and signed SendGrid event processing. The first enrollment is Tyler's Mystery Tours, while every data path remains scoped by Airtable store ID for later publisher and multi-store access. Deployment configuration is documented in `CRM_SETUP.md`.
 - **Other Functions:** Proxies for Calendar, Cloudinary, Payments, and Chat services.
 
 ## Utility Modules
