@@ -5,6 +5,13 @@ import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { parseOptions, getShopUrlParam } from './utils.js';
 import { log } from './utils/debug.js';
 import { serializeIterations, deserializeIterations } from './components/refinementHandler.js';
+// Conversations are components of a plan, so the background needs to know which ones exist.
+// planAtmosphere pulls in nothing from api.js, so this import introduces no cycle.
+import {
+    registerChatThread,
+    syncChatThreadsFromMessages,
+    scheduleAtmosphereRefresh,
+} from './components/planAtmosphere.js';
 import {
     cacheItems, getCachedItems,
     cacheStores, getCachedStores,
@@ -699,6 +706,15 @@ export async function loadSessionFromAirtable(sessionId) {
                 state.session.completedItems = new Set(savedState.completedItems || []);
                 state.session.goalItems = new Set(savedState.goalItems || []);
 
+                // Background seed. Absent on plans saved before this existed, in which case
+                // planAtmosphere derives it from the session id instead.
+                const savedSeed = savedState.background?.seed;
+                state.session.backgroundSeed =
+                    typeof savedSeed === 'number' && isFinite(savedSeed) ? savedSeed : null;
+                state.session.chatThreads = new Set(
+                    Array.isArray(savedState.background?.chatThreads) ? savedState.background.chatThreads : []
+                );
+
                 // Restore combined items: Object<targetId, { sources: Array, hybridData: Object }> -> Map<targetId, { sources: Set, hybridData: Object }>
                 if (savedState.combinedItems && typeof savedState.combinedItems === 'object') {
                     state.session.combinedItems = new Map(
@@ -841,6 +857,8 @@ export async function loadSessionFromAirtable(sessionId) {
                 state.session.completedItems = new Set();
                 state.session.combinedItems = new Map();
                 state.session.relatedGroups = [];
+                state.session.backgroundSeed = null;
+                state.session.chatThreads = new Set();
             }
         } else {
              log('API', `Session ${sessionId} has no 'Items with Variations' data.`);
@@ -1042,6 +1060,17 @@ export async function saveSessionToAirtable() {
     }
 
     const sessionData = {
+        // Per-plan background seed. Rides in this existing JSON blob, so there is no schema
+        // change and no migration. Only written once the session has an id, so a brand-new
+        // plan cannot persist the placeholder seed; the next save fills it in.
+        background: state.session.id
+            ? {
+                seed: typeof state.session.backgroundSeed === 'number' ? state.session.backgroundSeed : undefined,
+                // Which conversations exist on this plan. Persisted so the background is
+                // already right the moment a plan opens, before chat history is fetched.
+                chatThreads: Array.from(state.session.chatThreads || []),
+            }
+            : undefined,
         ideasItems: Object.fromEntries(state.cart.items),
         lockedInItems: Object.fromEntries(state.cart.lockedItems),
         itemReactions: reactionsForSaving,
@@ -2303,6 +2332,9 @@ export async function fetchChatMessages(sessionId) {
 
         const data = await response.json();
         log('API', `Fetched ${data.records.length} chat messages for session ${sessionId}.`);
+        // A full fetch of the plan's messages is the authoritative answer to "which
+        // conversations exist", so deleted threads stop counting against the background.
+        syncChatThreadsFromMessages(sessionId, data.records);
         return data.records;
     } catch (error) {
         log('API', `Error fetching chat messages: ${error.message}`);
@@ -2347,6 +2379,7 @@ async function fetchChatMessagesWithClientSideFilter(sessionId) {
         console.log('[CHAT DEBUG] Messages matching session after client-side filter:', filteredMessages.length);
         log('API', `Fetched ${filteredMessages.length} chat messages for session ${sessionId} (client-side filter).`);
 
+        syncChatThreadsFromMessages(sessionId, filteredMessages);
         return filteredMessages;
     } catch (error) {
         console.error('[CHAT DEBUG] Client-side filter error:', error.message);
@@ -2508,6 +2541,10 @@ export async function postChatMessage(sessionId, senderId, senderName, content, 
             await Promise.allSettled(notificationPromises);
             log('API', `Triggered all notifications for message ${newMessageRecordId}.`);
         }
+
+        // A message in a conversation that did not exist before adds an open component to the
+        // plan; one in an existing thread changes nothing.
+        registerChatThread(sessionId, fields);
 
         // Return the new message record ID so caller can update UI
         return newMessageRecordId;
@@ -3169,6 +3206,10 @@ export async function postComponentComment(sessionId, componentType, componentId
         const newRecord = result.records[0];
         console.log('[ComponentComment DEBUG] ✅ Comment saved with ID:', newRecord.id);
         log('API', `Component comment saved with ID: ${newRecord.id}`);
+
+        // A comment on an item or on the plan header opens a conversation just like a chat
+        // message does, so it becomes an open component of the plan.
+        registerChatThread(sessionId, fields);
 
         // Trigger notifications for component comments
         if (newRecord.id) {
@@ -4868,6 +4909,9 @@ export async function fetchTasks(projectId) {
             console.log('[TASK PERSISTENCE DEBUG] First task ProjectId value:', data.records[0].fields?.ProjectId);
             console.log('[TASK PERSISTENCE DEBUG] ================================================');
             log('API', `Fetched ${data.records.length} tasks for project ${projectId}`);
+            // Tasks land in state after this resolves; re-derive so a plan opened with open
+            // tasks shows the right background from the start.
+            scheduleAtmosphereRefresh('tasks-loaded');
             return data.records;
         }
 
@@ -4940,6 +4984,7 @@ async function fetchTasksWithClientSideFilter(projectId, fieldsQuery) {
 
         console.log('[TASK PERSISTENCE DEBUG] ================================================');
         log('API', `Fetched ${filteredTasks.length} tasks for project ${projectId} (client-side filter)`);
+        scheduleAtmosphereRefresh('tasks-loaded');
         return filteredTasks;
 
     } catch (error) {
@@ -5023,6 +5068,10 @@ export async function createTask(projectId, taskData) {
         console.log('[TASK PERSISTENCE DEBUG] Task created with fields:', JSON.stringify(data.fields, null, 2));
         console.log('[TASK PERSISTENCE DEBUG] Task ProjectId:', data.fields?.ProjectId);
         log('API', `Created task: ${data.id}`);
+        // Tasks are open components of the plan, so creating, completing or removing one moves
+        // the background. Callers write state.tasks after this resolves, hence the deferred
+        // re-derivation rather than an immediate one.
+        scheduleAtmosphereRefresh('task-created');
         return data;
     } catch (error) {
         console.error("Error creating task:", error);
@@ -5099,6 +5148,7 @@ export async function updateTask(taskId, taskData) {
 
         const data = await response.json();
         log('API', `Updated task: ${data.id}`);
+        scheduleAtmosphereRefresh('task-updated');
         return data;
     } catch (error) {
         console.error("Error updating task:", error);
@@ -5136,6 +5186,7 @@ export async function deleteTask(taskId) {
         }
 
         log('API', `Deleted task: ${taskId}`);
+        scheduleAtmosphereRefresh('task-deleted');
         return true;
     } catch (error) {
         console.error("Error deleting task:", error);

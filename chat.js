@@ -11,6 +11,7 @@ import { refreshForumData, setGetCurrentUser, onNewItemReceived, updateNotificat
 import * as unifiedStream from './components/unifiedStream.js';
 import { initializeToastNotifications, handlePusherEvent as handleToastPusherEvent } from './components/toastNotifications.js';
 import { refreshUnifiedChatPanel, onUCPNewItem, updateUCPOnlineCount } from './components/unifiedChatPanel.js';
+import { registerChatThread, registerRealtimeChatThread } from './components/planAtmosphere.js';
 
 let currentUser = null;
 let pusher = null;
@@ -1977,6 +1978,9 @@ export async function initializeSessionChat() {
     bindPresenceEvents();
     sessionChatChannel.bind('client-new-message', (data) => {
         if (data.senderId !== currentUser.id) {
+            // A collaborator opening a new conversation is an open component of the plan, so
+            // the background should move now rather than on the next load.
+            registerRealtimeChatThread(state.session.id, data.content, data.componentInfo?.id || null);
             requestNotificationPermissionIfNeeded();
             // Add to session history items
             const timestamp = data.timestamp || new Date().toISOString();
@@ -2129,6 +2133,7 @@ export async function initializeSessionChat() {
     // Handle real-time component comments from other users
     sessionChatChannel.bind('client-component-comment', (data) => {
         if (data.senderId !== currentUser.id && data.comment) {
+            registerChatThread(state.session.id, data.comment.fields);
             const componentId = data.componentId;
             const componentRecord = state.records.all.find(r => r.id === componentId);
             const componentInfo = {

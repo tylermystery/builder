@@ -2,69 +2,39 @@
  * Presentation Background Engine
  * WebGL shader animation that renders behind all presentation content.
  * Extracted from presentation.js — Phase 1 modularization.
+ *
+ * This renders the SAME background as the catalog view. Both the shader source and the
+ * animated state are shared, so a plan looks identical wherever it is viewed:
+ *   - the GLSL comes from components/effects/fluid.js;
+ *   - progress / crystallization / swirl / seed come from components/planAtmosphere.js.
+ *
+ * It previously drifted on a timer (autoProgressDrift), which meant the background moved
+ * without any user action. That drift is gone — like the catalog, this view only advances
+ * when the user moves their plan forward or back.
  */
 
 import { Shader } from '../../utils/shader.js';
 import { log } from '../../utils/debug.js';
+import { fluidShaderSource } from '../effects/fluid.js';
+import {
+    tickAtmosphere,
+    isAtmosphereSettled,
+    isShimmering,
+    SHIMMER_FRAME_MS,
+    onAtmosphereChange,
+} from '../planAtmosphere.js';
 
-// --- WebGL Shader source ---
-const vsSource = `
-    attribute vec4 a_position;
-    void main() {
-        gl_Position = a_position;
-    }
-`;
-
-const fsSource = `
-    precision mediump float;
-    uniform vec2 u_resolution;
-    uniform float u_time;
-    uniform float u_energy;
-    uniform float u_progress;
-
-    float random(vec2 st) {
-        return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
-    }
-
-    float noise(vec2 st) {
-        vec2 i = floor(st);
-        vec2 f = fract(st);
-        float a = random(i);
-        float b = random(i + vec2(1.0, 0.0));
-        float c = random(i + vec2(0.0, 1.0));
-        float d = random(i + vec2(1.0, 1.0));
-        vec2 u = f * f * (3.0 - 2.0 * f);
-        return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.y * u.x;
-    }
-
-    void main() {
-        vec2 st = gl_FragCoord.xy / u_resolution.xy;
-        st.x *= u_resolution.x / u_resolution.y;
-        vec2 centered_st = st - vec2(0.5, 0.5);
-        float angle = atan(centered_st.y, centered_st.x);
-        float radius = length(centered_st);
-        float vortex_speed = u_time * (0.02 + u_energy * 2.0);
-        float vortex_twist = u_energy * 5.0;
-        float n = noise(vec2(angle * (3.0 + vortex_twist) + vortex_speed, radius * 2.0));
-        float base_wave = n * 1.5 + u_progress * 10.0;
-        const float PI_2_OVER_3 = 2.0943951;
-        float r = pow(sin(base_wave + 0.0) * 0.5 + 0.5, 1.1) + 0.1;
-        float g = pow(sin(base_wave + PI_2_OVER_3) * 0.5 + 0.5, 1.1) + 0.1;
-        float b = pow(sin(base_wave + PI_2_OVER_3 * 2.0) * 0.5 + 0.5, 1.1) + 0.1;
-        float vignette = 1.0 - (radius * 0.2);
-        gl_FragColor = vec4(r * vignette, g * vignette, b * vignette, 1.0);
-    }
-`;
+const { vsSource, fsSource } = fluidShaderSource;
 
 // Module-level state
 let bgCanvas = null;
 let gl = null;
 let shader = null;
 let animationFrameId = null;
+let shimmerTimerId = null;
 let bgStartTime = 0;
-let bgEnergy = 0.0;
-const ENERGY_DECAY_RATE = 0.985;
-const AUTO_DRIFT_SPEED = 0.002;
+let unsubscribeAtmosphere = null;
+let hasDrawnFirstFrame = false;
 
 // Dependencies injected via init()
 let _getState = null;
@@ -119,39 +89,76 @@ export function startAnimation() {
     }
 
     bgStartTime = performance.now();
-    bgEnergy = 0.3;
+    hasDrawnFirstFrame = false;
 
-    const modal = _getModal?.();
-
-    function animate(timestamp) {
-        if (!modal || !modal.classList.contains('active')) {
-            animationFrameId = null;
-            return;
-        }
-
-        const elapsedTime = (timestamp - bgStartTime) / 1000.0;
-        bgEnergy *= ENERGY_DECAY_RATE;
-        if (bgEnergy < 0.01) bgEnergy = 0.0;
-
-        const currentProgress = _getState?.()?.ui?.currentProgress || 0.5;
-        const autoProgressDrift = elapsedTime * AUTO_DRIFT_SPEED;
-        const totalProgress = currentProgress + autoProgressDrift;
-
-        shader.use();
-        gl.uniform2f(shader.getUniformLocation("u_resolution"), bgCanvas.width, bgCanvas.height);
-        gl.uniform1f(shader.getUniformLocation("u_time"), elapsedTime);
-        gl.uniform1f(shader.getUniformLocation("u_energy"), bgEnergy);
-        gl.uniform1f(shader.getUniformLocation("u_progress"), totalProgress);
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-        animationFrameId = requestAnimationFrame(animate);
+    // Wake the (possibly parked) loop whenever the plan's atmosphere changes.
+    if (!unsubscribeAtmosphere) {
+        unsubscribeAtmosphere = onAtmosphereChange(requestRender);
     }
 
-    if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
+    requestRender();
+    log('Presentation', 'Background animation started');
+}
+
+/**
+ * Wake the render loop. Safe to call from anywhere, any number of times.
+ *
+ * @param {number} delayMs - wait this long before drawing. Used only for the shimmer, which is
+ *   a slow sweep and does not need a frame per refresh.
+ */
+function requestRender(delayMs = 0) {
+    if (animationFrameId !== null) return;
+
+    if (delayMs > 0) {
+        if (shimmerTimerId !== null) return;
+        shimmerTimerId = setTimeout(() => {
+            shimmerTimerId = null;
+            animationFrameId = requestAnimationFrame(animate);
+        }, delayMs);
+        return;
+    }
+
+    // A real request outranks a queued shimmer tick.
+    if (shimmerTimerId !== null) {
+        clearTimeout(shimmerTimerId);
+        shimmerTimerId = null;
     }
     animationFrameId = requestAnimationFrame(animate);
-    log('Presentation', 'Background animation started');
+}
+
+function animate(timestamp) {
+    animationFrameId = null;
+
+    const modal = _getModal?.();
+    if (!modal || !modal.classList.contains('active')) {
+        return;
+    }
+
+    const elapsedTime = (timestamp - bgStartTime) / 1000.0;
+    const frame = tickAtmosphere(timestamp);
+
+    shader.use();
+    gl.uniform2f(shader.getUniformLocation("u_resolution"), bgCanvas.width, bgCanvas.height);
+    gl.uniform1f(shader.getUniformLocation("u_time"), elapsedTime);
+    gl.uniform1f(shader.getUniformLocation("u_energy"), frame.energy);
+    gl.uniform1f(shader.getUniformLocation("u_progress"), frame.progress);
+    gl.uniform1f(shader.getUniformLocation("u_spin"), frame.spin);
+    gl.uniform1f(shader.getUniformLocation("u_crystal"), frame.crystal);
+    gl.uniform1f(shader.getUniformLocation("u_seed"), frame.seed);
+    gl.uniform1f(shader.getUniformLocation("u_shimmer"), frame.shimmer);
+    gl.uniform1f(shader.getUniformLocation("u_shimmer_phase"), frame.shimmerPhase);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    const wasFirstFrame = !hasDrawnFirstFrame;
+    hasDrawnFirstFrame = true;
+
+    // Park once everything has settled; a plan edit or a resize re-arms the loop.
+    if (wasFirstFrame || !isAtmosphereSettled()) {
+        requestRender();
+    } else if (isShimmering()) {
+        // Journey settled, but the plan is crystallizing — keep the glint moving, throttled.
+        requestRender(SHIMMER_FRAME_MS);
+    }
 }
 
 /**
@@ -161,26 +168,48 @@ export function stopAnimation() {
     if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
-        log('Presentation', 'Background animation stopped');
     }
+    if (shimmerTimerId !== null) {
+        clearTimeout(shimmerTimerId);
+        shimmerTimerId = null;
+    }
+
+    // Drop the wake-up subscription too. The presentation view is hidden via stopAnimation()
+    // rather than cleanup(), so without this every later plan edit in the catalog would keep
+    // scheduling a no-op frame for a closed view. startAnimation() re-subscribes.
+    if (unsubscribeAtmosphere) {
+        unsubscribeAtmosphere();
+        unsubscribeAtmosphere = null;
+    }
+
+    log('Presentation', 'Background animation stopped');
 }
 
 /**
  * Resize the background canvas to match the window dimensions.
  */
 export function resize() {
-    if (bgCanvas && gl) {
-        bgCanvas.width = window.innerWidth;
-        bgCanvas.height = window.innerHeight;
-        gl.viewport(0, 0, bgCanvas.width, bgCanvas.height);
-    }
+    if (!bgCanvas || !gl) return;
+
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    if (bgCanvas.width === width && bgCanvas.height === height) return;
+
+    bgCanvas.width = width;
+    bgCanvas.height = height;
+    gl.viewport(0, 0, bgCanvas.width, bgCanvas.height);
+
+    // The shader corrects for aspect ratio, so a size change needs one redraw even when the
+    // plan itself has not moved.
+    hasDrawnFirstFrame = false;
+    requestRender();
 }
 
 /**
  * Clean up all background engine resources.
  */
 export function cleanup() {
-    stopAnimation();
+    stopAnimation(); // also drops the atmosphere subscription
     bgCanvas = null;
     gl = null;
     shader = null;
