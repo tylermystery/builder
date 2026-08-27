@@ -1,141 +1,182 @@
-import { state, setState } from '../state.js';
+import { state } from '../state.js';
 import { CONSTANTS } from '../config.js';
 import { log } from '../utils/debug.js';
+import {
+    tickAtmosphere,
+    isAtmosphereSettled,
+    isShimmering,
+    SHIMMER_FRAME_MS,
+    getAtmosphereFrame,
+    refreshFromPlan,
+    pulse,
+    onAtmosphereChange,
+    setManualProgress,
+    setEnergy,
+    setEnergyDecayPerFrame,
+    getAtmosphereDebugInfo,
+} from './planAtmosphere.js';
 
 let canvas;
 let gl, ctx_2d;
 let animationFrameId = null;
+let shimmerTimerId = null;
 let currentEffect = null;
 let debugPanel = null;
 
 let startTime = 0;
-let currentEnergy = 0.0;
 
-// Directional vortex state.
-// `spin` is an accumulator fed into the shader's swirl. It only advances while there is
-// energy, and in the direction of the most recent plan movement (+1 forward / clockwise,
-// -1 backward / counter-clockwise). When energy decays to 0 the background sits still.
-let spin = 0.0;
-let spinDirection = 1;
-let lastFrameTime = 0;
-
-// How quickly the vortex rotates per unit of energy, per second. Kept low so progression
-// reads as a slow, healthy shift rather than a strobe.
-const SPIN_RATE = 1.2;
-
-// Respect users who have asked the OS to minimize motion — keep the background fully static.
-const prefersReducedMotion =
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-let progressMultiplier = 1.0;
-let energyDecayRate = 0.985;
-
-// Color progression sensitivity. The raw per-action weights elsewhere in the app (browsing
-// the catalog, locking items, editing the plan) are intentionally tiny — small enough that
-// `currentProgress` barely moved from its starting value, leaving the background hue
-// effectively frozen as a user built their plan. We scale those weights up here, at the one
-// central chokepoint, so every plan movement reads as a visible shift along the spectrum.
-// This is deliberately isolated from the direction/energy logic below, so the calm,
-// forward/backward vortex behaviour is unchanged — only how far the colour travels changes.
-// A per-call cap keeps a single large burst (e.g. a big package add) reading as a smooth
-// shift rather than a jarring jump.
-const PROGRESS_SENSITIVITY = 50;
-const MAX_PROGRESS_STEP = 0.025;
+// All journey state (progress, crystallization, energy, swirl direction, per-plan seed) lives
+// in components/planAtmosphere.js, because the presentation view renders the same background
+// from the same values. This module is now just the catalog's renderer.
 
 let lastTimestamp_2d = 0;
 let currentColors = [];
 let settings = {};
 
 let loopIterations = 0;
-let lastProgressLog = 0;
 let isPageVisible = true;
 
+let hasDrawnFirstFrame = false;
+
+/**
+ * True while something is actually in flight and worth drawing.
+ *
+ * 2D canvas effects animate off deltaTime, so they always keep running. The WebGL atmosphere
+ * only changes when the user moves their plan, so its loop parks as soon as everything has
+ * settled. That is what makes "only user interactions move the background" true by
+ * construction rather than by vigilance: with nothing pending, there is no frame being drawn
+ * at all, so no unrelated work (image decode, layout, a re-render) can show up on screen.
+ */
+function shouldKeepAnimating() {
+    if (!currentEffect) return true;                 // waiting for loadEffect
+    if (currentEffect.type !== 'webgl') return true; // 2D effects are continuously animated
+    if (!hasDrawnFirstFrame) return true;
+    return !isAtmosphereSettled();
+}
+
+/**
+ * Wake the render loop. Safe to call from anywhere, any number of times.
+ *
+ * @param {number} delayMs - wait this long before drawing. Used for the shimmer, which is a
+ *   slow sweep and does not need a frame per refresh; a timer keeps a crystallized plan from
+ *   holding the compositor at 60fps for the rest of the session.
+ */
+export function requestRender(delayMs = 0) {
+    if (animationFrameId !== null) return;
+
+    if (delayMs > 0) {
+        if (shimmerTimerId !== null) return;
+        shimmerTimerId = setTimeout(() => {
+            shimmerTimerId = null;
+            animationFrameId = requestAnimationFrame(animationLoop);
+        }, delayMs);
+        return;
+    }
+
+    // A real request outranks a queued shimmer tick, so a plan edit or a resize still redraws
+    // on the very next frame rather than waiting out the throttle.
+    if (shimmerTimerId !== null) {
+        clearTimeout(shimmerTimerId);
+        shimmerTimerId = null;
+    }
+    animationFrameId = requestAnimationFrame(animationLoop);
+}
+
+/** Drop any pending frame or shimmer tick. */
+function cancelPendingRender() {
+    if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+    }
+    if (shimmerTimerId !== null) {
+        clearTimeout(shimmerTimerId);
+        shimmerTimerId = null;
+    }
+}
+
 function animationLoop(timestamp) {
+    animationFrameId = null;
+
     if (!currentEffect) {
-        animationFrameId = requestAnimationFrame(animationLoop);
+        requestRender();
         return;
     }
 
     // Pause rendering when page is hidden to save CPU/GPU resources
     if (!isPageVisible) {
-        animationFrameId = requestAnimationFrame(animationLoop);
-        return;
+        return; // visibilitychange re-arms the loop
     }
-
-    const currentProgress = state.ui.currentProgress;
 
     loopIterations++;
 
-    updateDebugPanel(currentProgress, currentEnergy, timestamp / 1000.0, loopIterations);
-
     if (currentEffect.type === 'webgl') {
         if (!gl) {
-             animationFrameId = requestAnimationFrame(animationLoop);
-             return;
+            requestRender();
+            return;
         }
+
         const elapsedTime = (timestamp - startTime) / 1000.0;
-        const dt = lastFrameTime ? Math.min(0.05, (timestamp - lastFrameTime) / 1000.0) : 0.016;
-        lastFrameTime = timestamp;
+        const frame = tickAtmosphere(timestamp);
 
-        currentEnergy *= energyDecayRate;
-        if (currentEnergy < 0.01) currentEnergy = 0.0;
+        updateDebugPanel(frame.progress, frame.energy, elapsedTime, loopIterations);
 
-        if (currentProgress !== lastProgressLog) {
-            lastProgressLog = currentProgress;
-        }
-
-        // Advance the vortex only while there is leftover energy from a recent plan
-        // movement, in the direction of that movement. Idle => spin holds => static.
-        if (!prefersReducedMotion && currentEnergy > 0) {
-            spin += spinDirection * currentEnergy * SPIN_RATE * dt;
-        }
-
-        currentEffect.draw(gl, canvas.width, canvas.height, elapsedTime, currentEnergy, currentProgress, spin);
+        currentEffect.draw(
+            gl, canvas.width, canvas.height,
+            elapsedTime, frame.energy, frame.progress, frame.spin, frame.crystal, frame.seed,
+            frame.shimmer, frame.shimmerPhase
+        );
+        hasDrawnFirstFrame = true;
 
     } else if (currentEffect.type === 'canvas') {
         if (!ctx_2d) {
-            animationFrameId = requestAnimationFrame(animationLoop);
+            requestRender();
             return;
         }
         const deltaTime = timestamp - lastTimestamp_2d;
         lastTimestamp_2d = timestamp;
+        updateDebugPanel(state.ui.currentProgress, 0, (timestamp - startTime) / 1000.0, loopIterations);
         currentEffect.draw(ctx_2d, canvas.width, canvas.height, deltaTime, currentColors, settings);
+        hasDrawnFirstFrame = true;
     }
 
-    animationFrameId = requestAnimationFrame(animationLoop);
-}
-
-export function addEnergy(direction = spinDirection) {
-    log('BG-Engine', 'Adding energy boost!');
-    // Gentle, additive pulse (was a hard reset to 1.0). The vortex spins in the supplied
-    // direction so callers tied to a forward/backward action read correctly.
-    spinDirection = direction >= 0 ? 1 : -1;
-    currentEnergy = Math.min(1.0, currentEnergy + 0.5);
-}
-
-export function updateProgress(weight) {
-    let adjustedWeight = weight * progressMultiplier * PROGRESS_SENSITIVITY;
-    // Cap any single step so even a large burst shifts the colour smoothly rather than jumping.
-    adjustedWeight = Math.max(-MAX_PROGRESS_STEP, Math.min(MAX_PROGRESS_STEP, adjustedWeight));
-    let newProgress = state.ui.currentProgress + adjustedWeight;
-    newProgress = Math.min(1.0, Math.max(0.0, newProgress));
-
-    if (newProgress !== state.ui.currentProgress) {
-        setState({
-            ui: {
-                ...state.ui,
-                currentProgress: newProgress
-            }
-        });
-
-        // Forward progress spins clockwise; regression spins counter-clockwise.
-        spinDirection = weight >= 0 ? 1 : -1;
-        // A small pulse so both proceeding and receding produce a brief, slow swirl
-        // that then settles. Idle stays calm because energy decays back to zero.
-        currentEnergy = Math.min(1.0, currentEnergy + 0.15);
+    if (shouldKeepAnimating()) {
+        requestRender();
+    } else if (currentEffect.type === 'webgl' && isShimmering()) {
+        // Journey settled, but the plan is crystallizing — keep the glint moving, throttled.
+        requestRender(SHIMMER_FRAME_MS);
     }
+}
+
+/**
+ * A brief acknowledgement swirl with no journey movement.
+ * Kept for the existing call sites that fire on a user action which is not itself a plan
+ * mutation (hearting an item, opening a package, finishing a research "dig").
+ */
+export function addEnergy(direction = 1) {
+    pulse(direction);
+    requestRender();
+}
+
+/**
+ * Re-derive the background from the plan.
+ *
+ * The signature is unchanged so every existing call site keeps working, but the meaning is
+ * not: the passed weight is no longer accumulated. Progress is now derived from the plan's
+ * own facts (see components/planAtmosphere.js), so this call is idempotent — calling it twice
+ * for one action, or during a re-render, cannot drift the background. The weight's sign is
+ * still used, but only as a hint for which way to swirl when the derived target did not move.
+ *
+ * @param {number} weight - legacy weight; only its sign is consulted.
+ */
+export function updateProgress(weight = 0) {
+    refreshFromPlan('updateProgress', Math.sign(weight || 0));
+    requestRender();
+}
+
+/** Explicit "the plan changed, re-derive the background" entry point. */
+export function refreshAtmosphere(reason = 'plan-change') {
+    refreshFromPlan(reason, 0);
+    requestRender();
 }
 
 function updateColors() {
@@ -288,6 +329,9 @@ export function loadEffect(effect, controlsContainer) {
     if (currentEffect.type === 'canvas') {
         updateColors();
     }
+
+    hasDrawnFirstFrame = false;
+    requestRender();
 }
 
 export function initBackgroundEngine() {
@@ -300,9 +344,17 @@ export function initBackgroundEngine() {
     }
     console.log('[BG-ENGINE DEBUG] Canvas found:', { width: canvas.width, height: canvas.height, id: canvas.id });
 
-    const resizeCanvas = () => {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+    // Resize is debounced and no-ops when the dimensions did not actually change.
+    // As images load the page grows, a scrollbar appears, and window.innerWidth drops by
+    // ~15px — which fired a resize and, because the shader corrects for aspect ratio, made
+    // the whole pattern jump. That was a visible twitch with no user action behind it.
+    const applyCanvasSize = () => {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        if (canvas.width === width && canvas.height === height) return;
+
+        canvas.width = width;
+        canvas.height = height;
 
         if (currentEffect && typeof currentEffect.resize === 'function') {
             if (currentEffect.type === 'webgl' && gl) {
@@ -311,9 +363,21 @@ export function initBackgroundEngine() {
                 currentEffect.resize(canvas.width, canvas.height);
             }
         }
+
+        hasDrawnFirstFrame = false; // redraw once at the new size
+        requestRender();
+    };
+
+    let resizeTimer = null;
+    const resizeCanvas = () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(applyCanvasSize, 120);
     };
 
     window.addEventListener('resize', resizeCanvas);
+
+    // Wake the (possibly parked) loop whenever the plan's atmosphere changes.
+    onAtmosphereChange(requestRender);
 
     // Use Page Visibility API to pause animations when tab is hidden
     document.addEventListener('visibilitychange', () => {
@@ -321,16 +385,19 @@ export function initBackgroundEngine() {
         if (isPageVisible) {
             // Reset timestamp to prevent large time jumps
             lastTimestamp_2d = performance.now();
+            hasDrawnFirstFrame = false; // draw one frame so the canvas is never stale
+            requestRender();
             log('BG-Engine', 'Page visible - resuming animations');
         } else {
+            cancelPendingRender(); // don't let a queued shimmer tick fire behind a hidden tab
             log('BG-Engine', 'Page hidden - pausing animations to save resources');
         }
     });
 
     startTime = performance.now();
     lastTimestamp_2d = startTime;
-    if (animationFrameId) cancelAnimationFrame(animationFrameId);
-    animationFrameId = requestAnimationFrame(animationLoop);
+    cancelPendingRender();
+    requestRender();
 
     initDebugPanel();
 
@@ -348,7 +415,10 @@ function updateDebugPanel(progress, energy, time, drawCalls) {
     const statusText = document.getElementById('bg-status-text');
     const statusIndicator = document.getElementById('bg-status-indicator');
     
-    if (progressElem) progressElem.textContent = progress.toFixed(3);
+    const frame = getAtmosphereFrame();
+    if (progressElem) {
+        progressElem.textContent = `${progress.toFixed(3)} (crystal ${frame.crystal.toFixed(2)}, shimmer ${frame.shimmer.toFixed(2)}, seed ${frame.seed.toFixed(3)})`;
+    }
     if (energyElem) energyElem.textContent = energy.toFixed(3);
     if (timeElem) timeElem.textContent = time.toFixed(1) + 's';
     if (drawCallsElem) drawCallsElem.textContent = drawCalls;
@@ -388,47 +458,47 @@ function initDebugPanel() {
         });
     }
     
+    // Progress is derived from the plan now, so dragging this slider pins it to a manual
+    // value and suspends derivation. Double-click the slider to hand control back.
     const progressSlider = document.getElementById('bg-progress-slider');
     if (progressSlider) {
         progressSlider.value = state.ui.currentProgress;
         progressSlider.addEventListener('input', (e) => {
-            const newProgress = parseFloat(e.target.value);
-            setState({
-                ui: {
-                    ...state.ui,
-                    currentProgress: newProgress
-                }
-            });
+            setManualProgress(parseFloat(e.target.value));
+        });
+        progressSlider.addEventListener('dblclick', () => {
+            setManualProgress(null);
+            refreshAtmosphere('debug-release');
+            log('BG-Engine', 'Manual progress override released; derivation resumed.');
         });
     }
-    
+
     const energySlider = document.getElementById('bg-energy-slider');
     if (energySlider) {
         energySlider.addEventListener('input', (e) => {
-            currentEnergy = parseFloat(e.target.value);
+            setEnergy(parseFloat(e.target.value));
         });
     }
-    
+
     const energyDecaySlider = document.getElementById('bg-energy-decay');
     if (energyDecaySlider) {
         energyDecaySlider.value = 0.985;
         energyDecaySlider.addEventListener('input', (e) => {
-            energyDecayRate = parseFloat(e.target.value);
+            const rate = parseFloat(e.target.value);
+            setEnergyDecayPerFrame(rate);
             const valueDisplay = document.getElementById('bg-energy-decay-value');
             if (valueDisplay) {
-                valueDisplay.textContent = energyDecayRate.toFixed(2);
+                valueDisplay.textContent = rate.toFixed(2);
             }
         });
     }
-    
+
+    // The old progress multiplier scaled the per-action weights. Those weights no longer
+    // accumulate, so the slider now reports the derived state instead of scaling it.
     const progressMultiplierSlider = document.getElementById('bg-progress-multiplier');
     if (progressMultiplierSlider) {
-        progressMultiplierSlider.addEventListener('input', (e) => {
-            progressMultiplier = parseFloat(e.target.value);
-            const valueDisplay = document.getElementById('bg-progress-multiplier-value');
-            if (valueDisplay) {
-                valueDisplay.textContent = progressMultiplier.toFixed(1);
-            }
+        progressMultiplierSlider.addEventListener('input', () => {
+            log('BG-Engine', 'Progress is derived from the plan; multiplier has no effect.', getAtmosphereDebugInfo());
         });
     }
     

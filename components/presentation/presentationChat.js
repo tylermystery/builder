@@ -15,6 +15,7 @@ import { showToast } from '../../ui.js';
 import { applyCloudinaryTransform } from '../../utils/imageOptimizer.js';
 import { refreshForumData, onNewItemReceived } from '../forumPanel.js';
 import { handlePusherEvent as handleToastPusherEvent } from '../toastNotifications.js';
+import { registerChatThread, registerRealtimeChatThread } from '../planAtmosphere.js';
 import { updateUCPVideoArea, updateUCPLiveBadge, populateFocusSelect, updateFocusBarUI, applyRemoteFocusItem, applyRemotePin } from '../unifiedChatPanel.js';
 import * as reactionRankings from './reactionRankings.js';
 import * as liveStream from '../liveStream.js';
@@ -975,6 +976,8 @@ export async function initializePresentationChat() {
     // Bind to receive new messages
     presentationChatChannel.bind('client-new-message', (data) => {
         if (data.senderId !== currentUser.id) {
+            // A collaborator opening a new conversation is an open component of the plan.
+            registerRealtimeChatThread(state.session.id, data.content, data.componentInfo?.id || null);
             // Remove empty state message if present
             const emptyMsg = chatMessagesEl.querySelector('.chat-empty');
             if (emptyMsg) emptyMsg.remove();
@@ -1075,6 +1078,7 @@ export async function initializePresentationChat() {
     // Handle real-time component comments from other users
     presentationChatChannel.bind('client-component-comment', (data) => {
         if (data.senderId !== currentUser.id) {
+            if (data.comment) registerChatThread(state.session.id, data.comment.fields);
             const componentId = data.componentId;
             // Update count
             const countEl = document.querySelector(`.comments-count[data-component-id="${componentId}"]`);

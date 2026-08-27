@@ -77,6 +77,18 @@ export let state = {
 
         // Recent chats list for expandable chat history
         recentChats: [], // Array of { id, type: 'session'|'item', name, lastMessage, lastMessageTime, unreadCount }
+
+        // Per-plan background seed (0..1), persisted with the session so a plan always looks
+        // like itself. Null means "derive it from the session id" — see
+        // components/planAtmosphere.js getSeed().
+        backgroundSeed: null,
+
+        // Conversation threads that exist on this plan, as thread keys ('plan',
+        // 'item:<recordId>', 'component:<type>'). Each one is an open component of the plan
+        // until it resolves, which is how chats hold crystallization back — see
+        // components/planAtmosphere.js. Persisted with the session so the background is
+        // already correct on load, before chat history has been fetched.
+        chatThreads: new Set(),
     },
     calendar: {
         busyTimes: new Map(),

@@ -10,7 +10,8 @@ import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailabi
 import { updateAllCardAvailabilityIcons } from './events.js';
 import * as api from './api.js';
 import { showPresentationView, hidePresentationView, setupPresentationEventListeners } from './components/presentation.js';
-import { addEnergy, updateProgress } from './components/backgroundEngine.js';
+// The background is driven by components/planAtmosphere.js from plan facts, not by
+// rendering. ui.js deliberately imports nothing from the background engine.
 import { shouldUseNetlifyImageCDN, optimizeImageUrl, applyCloudinaryTransform, hasCloudinaryTransformations } from './utils/imageOptimizer.js';
 import { storeSlug } from './utils.js';
 import { getCommunitySentimentScore } from './components/publicCatalog.js';
@@ -730,8 +731,9 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                 ungroupedSection.appendChild(fragment);
                 fragment.textContent = '';
 
-                addEnergy();
-                updateProgress(0.00005 * chunk.length);
+                // NOTE: the background is interaction-driven. Rendering cards must NOT feed
+                // it — the previous addEnergy()/updateProgress() calls here fired once per
+                // 4-card chunk, which spun the vortex and shifted the hue for the whole load.
 
                 if (i + CHUNK_SIZE < itemsToAppend.length) {
                     await new Promise(resolve => {
@@ -763,8 +765,9 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
             catalogContainer.appendChild(fragment);
             fragment.textContent = '';
 
-            addEnergy();
-            updateProgress(0.00005 * chunk.length);
+            // NOTE: the background is interaction-driven. Rendering cards must NOT feed
+            // it — the previous addEnergy()/updateProgress() calls here fired once per
+            // 4-card chunk, which spun the vortex and shifted the hue for the whole load.
 
             if (i + CHUNK_SIZE < recordsToRender.length) {
                 await new Promise(resolve => {
@@ -817,8 +820,9 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                 const carouselSection = await createGroupingCarouselSection(grouping, childItems, state.records.all, imageCache);
                 if (isStaleRender()) return; // a newer render took over while awaiting
                 catalogContainer.appendChild(carouselSection);
-                addEnergy();
-                updateProgress(0.00005);
+                // NOTE: the background is interaction-driven. Rendering cards must NOT feed
+                // it — the previous addEnergy()/updateProgress() calls here fired once per
+                // 4-card chunk, which spun the vortex and shifted the hue for the whole load.
 
                 // Yield to browser
                 await new Promise(resolve => {
@@ -864,8 +868,9 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                     if (card) fragment.appendChild(card);
                 });
 
-                addEnergy();
-                updateProgress(0.00005 * chunk.length);
+                // NOTE: the background is interaction-driven. Rendering cards must NOT feed
+                // it — the previous addEnergy()/updateProgress() calls here fired once per
+                // 4-card chunk, which spun the vortex and shifted the hue for the whole load.
             }
 
             ungroupedSection.appendChild(fragment);

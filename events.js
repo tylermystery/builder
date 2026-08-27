@@ -15,7 +15,7 @@ import { closeRsvpSignupPopup, showRsvpSignupPopup } from './components/rsvpSign
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal, startEmailSignIn, generateAuthChannelId, listenForEmailSignIn } from './auth.js';
-import { addEnergy, updateProgress } from './components/backgroundEngine.js';
+import { addEnergy, updateProgress, refreshAtmosphere } from './components/backgroundEngine.js';
 import { showReceiptModal } from './components/receipt.js';
 import { showProjectsPanel, hideProjectsPanel } from './components/projectsDashboard.js';
 import { initializeProjectSelector, wasLongPress, resetLongPress } from './components/projectSelector.js';
@@ -238,6 +238,12 @@ export function updateSaveShareButton() {
 
 export function triggerSave() {
     if (state.ui.isInitializing) return;
+
+    // Universal "the plan changed" chokepoint. Re-deriving the background here means plan
+    // mutations that never called updateProgress (task completion, payments, chat-created
+    // tasks) still move the journey. It is idempotent, so the extra call is free.
+    refreshAtmosphere('triggerSave');
+
     clearTimeout(saveTimeout);
     state.ui.saveState = 'MODIFIED';
     updateSaveShareButton();
