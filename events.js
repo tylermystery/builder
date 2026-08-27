@@ -1720,6 +1720,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const isExpanded = filterToggleBtn.getAttribute('aria-expanded') === 'true';
             filterToggleBtn.setAttribute('aria-expanded', !isExpanded);
             leftSidebar?.classList.toggle('collapsed');
+
+            if (!isExpanded && window.innerWidth < 1000) {
+                window.setTimeout(() => {
+                    leftSidebar?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 50);
+            }
         });
     }
 

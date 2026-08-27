@@ -6088,6 +6088,12 @@ hr.total-divider {
 }
 
 @media (max-width: 999px) {
+    /* Keep filters directly below the header instead of after the plan panel. */
+    #left-sidebar {
+        order: -1;
+        scroll-margin-top: 120px;
+    }
+
     #left-sidebar, #right-sidebar {
         max-width: 100%;
         transition: max-height 0.4s ease-out, opacity 0.3s ease, margin 0.4s ease, padding 0.4s ease;
