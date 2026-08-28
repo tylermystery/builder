@@ -266,6 +266,22 @@ async function handlePaymentIntentUpdate(paymentIntent, status) {
     : methodType === 'cashapp' ? 'Cash App'
     : 'Card';
 
+  const latestCharge = paymentIntent.latest_charge && typeof paymentIntent.latest_charge === 'object'
+    ? paymentIntent.latest_charge
+    : null;
+  const paymentMethod = paymentIntent.payment_method && typeof paymentIntent.payment_method === 'object'
+    ? paymentIntent.payment_method
+    : null;
+  const customerEmail = paymentIntent.metadata?.customerEmail
+    || paymentIntent.receipt_email
+    || latestCharge?.billing_details?.email
+    || paymentMethod?.billing_details?.email
+    || null;
+  const customerName = paymentIntent.metadata?.customerName
+    || latestCharge?.billing_details?.name
+    || paymentMethod?.billing_details?.name
+    || null;
+
   const paymentEntry = {
     paymentIntentId: paymentIntent.id,
     amount,
@@ -275,8 +291,8 @@ async function handlePaymentIntentUpdate(paymentIntent, status) {
     note: `${methodLabel} on ${new Date().toLocaleDateString()}${status === 'processing' ? ' (processing)' : ''}`,
     method: methodLabel,
     status,
-    customerEmail: paymentIntent.metadata?.customerEmail || null,
-    customerName: paymentIntent.metadata?.customerName || null,
+    customerEmail,
+    customerName,
   };
 
   if (existingIdx >= 0) {
@@ -329,8 +345,14 @@ async function handlePaymentIntentUpdate(paymentIntent, status) {
 
   if (status === 'succeeded' || status === 'processing') {
     const emailDetails = await checkoutEmails.loadCheckoutEmailDetails(session);
-    const customerEmail = paymentIntent.metadata?.customerEmail;
-    if (customerEmail) {
+    const storedPaymentIndex = paymentHistory.findIndex(p => p.paymentIntentId === paymentIntent.id);
+    const storedPayment = storedPaymentIndex >= 0 ? paymentHistory[storedPaymentIndex] : paymentEntry;
+    const customerReceiptStatusKey = status === 'processing' ? 'customerProcessingReceiptSentAt' : 'customerReceiptSentAt';
+    const merchantReceiptStatusKey = status === 'processing' ? 'merchantProcessingReceiptSentAt' : 'merchantReceiptSentAt';
+    const emailErrors = [];
+    let emailStatusChanged = false;
+
+    if (customerEmail && !storedPayment[customerReceiptStatusKey]) {
       try {
         const receipt = checkoutEmails.buildReceiptEmail(session, paymentEntry, store, baseUrl, emailDetails);
         await sgMail.send({
@@ -339,14 +361,19 @@ async function handlePaymentIntentUpdate(paymentIntent, status) {
           subject: receipt.subject,
           html: receipt.html,
         });
+        storedPayment[customerReceiptStatusKey] = new Date().toISOString();
+        emailStatusChanged = true;
         console.log(`[stripe-webhook] Sent receipt email to ${customerEmail}`);
       } catch (emailErr) {
         console.error(`[stripe-webhook] Failed to send receipt email:`, emailErr.message);
+        emailErrors.push(`customer receipt: ${emailErr.message}`);
       }
+    } else if (!customerEmail) {
+      console.warn(`[stripe-webhook] No customer receipt address was available for intent ${paymentIntent.id}.`);
     }
 
-    const merchantEmail = store?.fields?.ContactEmail;
-    if (merchantEmail) {
+    const merchantEmail = store?.fields?.ContactEmail || SENDER_EMAIL;
+    if (merchantEmail && !storedPayment[merchantReceiptStatusKey]) {
       try {
         const notification = checkoutEmails.buildMerchantNotificationEmail(session, paymentEntry, store, baseUrl, emailDetails);
         await sgMail.send({
@@ -355,10 +382,28 @@ async function handlePaymentIntentUpdate(paymentIntent, status) {
           subject: notification.subject,
           html: notification.html,
         });
+        storedPayment[merchantReceiptStatusKey] = new Date().toISOString();
+        emailStatusChanged = true;
         console.log(`[stripe-webhook] Sent merchant notification to ${merchantEmail}`);
       } catch (emailErr) {
         console.error(`[stripe-webhook] Failed to send merchant notification:`, emailErr.message);
+        emailErrors.push(`merchant receipt: ${emailErr.message}`);
       }
+    } else {
+      if (!merchantEmail) {
+        console.warn(`[stripe-webhook] No merchant receipt address was available for session ${session.id}.`);
+      }
+    }
+
+    if (emailStatusChanged && storedPaymentIndex >= 0) {
+      paymentHistory[storedPaymentIndex] = storedPayment;
+      await updateSessionPayment(session.id, paymentHistory, {
+        'StripePaymentIntentId': paymentIntent.id,
+      });
+    }
+
+    if (emailErrors.length > 0) {
+      throw new Error(`Receipt delivery failed (${emailErrors.join('; ')})`);
     }
   }
 }

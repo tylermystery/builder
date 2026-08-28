@@ -438,12 +438,13 @@ async function handlePaymentFormSubmit(event) {
             return;
         }
 
-        // Make sure the email/name the customer just typed are on the PaymentIntent
-        // before it is confirmed — the webhook reads them from the intent's metadata
-        // to send the receipt. Best-effort and amount-preserving; a failure here
-        // never blocks the charge.
-        try { await ui.syncCheckoutCustomerDetails(customerName, customerEmail); }
-        catch (e) { console.warn('[CHECKOUT] customer-detail sync skipped:', e.message); }
+        // Persist receipt recipients on the PaymentIntent before charging. The
+        // webhook uses these fields to email both the purchaser and the store, so
+        // do not accept payment until the receipt details are synchronized.
+        const receiptDetailsSynced = await ui.syncCheckoutCustomerDetails(customerName, customerEmail);
+        if (!receiptDetailsSynced) {
+            throw new Error('We could not prepare your emailed receipt. Please check your connection and try again.');
+        }
 
         // The webhook builds the receipt from the saved session, so persist the
         // latest cart quantities, RSVP labels, and item schedule before charging.
@@ -631,11 +632,22 @@ async function handlePaymentFormSubmit(event) {
             // Show appropriate success message for ACH vs card
             const successMsg = document.getElementById('payment-success-message');
             if (successMsg) {
+                successMsg.replaceChildren();
+                const statusLine = document.createElement('div');
+                statusLine.textContent = isACHProcessing ? '✅ Bank Payment Submitted!' : '✅ Payment Successful!';
+                successMsg.appendChild(statusLine);
+
                 if (isACHProcessing) {
-                    successMsg.innerHTML = '✅ Bank Payment Submitted!<br><small style="font-size: 0.7em; opacity: 0.85;">ACH transfers typically take 2-4 business days to complete.</small>';
-                } else {
-                    successMsg.textContent = '✅ Payment Successful!';
+                    const processingNote = document.createElement('small');
+                    processingNote.style.cssText = 'display: block; font-size: 0.7em; opacity: 0.85;';
+                    processingNote.textContent = 'ACH transfers typically take 2-4 business days to complete.';
+                    successMsg.appendChild(processingNote);
                 }
+
+                const receiptNote = document.createElement('small');
+                receiptNote.style.cssText = 'display: block; margin-top: 8px; font-size: 0.7em; opacity: 0.85;';
+                receiptNote.textContent = `A receipt will be emailed to ${customerEmail}.`;
+                successMsg.appendChild(receiptNote);
                 successMsg.style.display = 'block';
             }
 

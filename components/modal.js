@@ -1659,7 +1659,7 @@ async function updateCheckoutDisplay() {
         } else {
             document.getElementById('deposit-label').textContent = 'Amount Due:';
         }
-    } else if (choice === 'custom' && !isFullOnly) {
+    } else if (choice === 'custom') {
         const customAmountInput = document.getElementById('custom-payment-amount');
         const customAmount = parseFloat(customAmountInput?.value || '');
         document.getElementById('deposit-label').textContent = 'Partial Payment Amount:';
@@ -1692,7 +1692,7 @@ async function updateCheckoutDisplay() {
     const customPaymentErrorEl = document.getElementById('custom-payment-error');
     const customPaymentHelpEl = document.getElementById('custom-payment-help');
     const customPaymentAmountContainer = document.getElementById('custom-payment-amount-container');
-    if (customPaymentAmountContainer) customPaymentAmountContainer.style.display = choice === 'custom' && !isItemMode && !isFullOnly ? 'block' : 'none';
+    if (customPaymentAmountContainer) customPaymentAmountContainer.style.display = choice === 'custom' && !isItemMode ? 'block' : 'none';
     if (customPaymentHelpEl) customPaymentHelpEl.textContent = `Enter any amount from $0.50 up to $${totalDue.toFixed(2)} before an optional tip.`;
     if (customPaymentErrorEl) {
         customPaymentErrorEl.textContent = customPaymentError;
@@ -1779,7 +1779,7 @@ async function updateCheckoutDisplay() {
         if (finalChargeEl) finalChargeEl.textContent = '—';
         return;
     }
-    const isCustomPayment = choice === 'custom' && !isItemMode && !isFullOnly;
+    const isCustomPayment = choice === 'custom' && !isItemMode;
     if (submitBtn) submitBtn.disabled = isCustomPayment;
 
     // --- DONATION-ONLY MODE: Hide payment until chip-in selected ---
@@ -11638,10 +11638,11 @@ export async function showCheckoutModal(shopSettings, scope = null) {
     }
 
     const outstandingBalance = Math.max(0, finalTotal - (state.session.user.amountReceived || 0));
-    const supportsPartialPayments = currentShopSettings.paymentOptions !== 'FullOnly';
-    if (!(scope && scope.mode === 'item') && supportsPartialPayments && outstandingBalance > 0.009) {
+    if (!(scope && scope.mode === 'item') && outstandingBalance > 0.009) {
         paymentChoiceContainer.style.display = 'block';
         const depositChoice = document.querySelector('input[name="paymentChoice"][value="deposit"]');
+        const fullPaymentRadio = document.querySelector('input[name="paymentChoice"][value="full"]');
+        const depositChoiceContainer = document.getElementById('deposit-payment-choice');
         const depositChoiceLabel = document.getElementById('deposit-choice-label');
         const fullChoice = document.getElementById('full-payment-choice');
         const fullChoiceLabel = document.getElementById('full-choice-label');
@@ -11649,13 +11650,19 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         const customAmountContainer = document.getElementById('custom-payment-amount-container');
         const depositRemainder = Math.max(0, finalTotal * 0.35 - (state.session.user.amountReceived || 0));
 
-        if (depositChoice) depositChoice.checked = true;
+        const isFullOnly = currentShopSettings.paymentOptions === 'FullOnly';
+        if (depositChoiceContainer) depositChoiceContainer.style.display = isFullOnly ? 'none' : '';
+        if (isFullOnly && fullPaymentRadio) {
+            fullPaymentRadio.checked = true;
+        } else if (depositChoice) {
+            depositChoice.checked = true;
+        }
         if (depositChoiceLabel) {
             depositChoiceLabel.textContent = depositRemainder > 0.009
                 ? (state.session.user.amountReceived > 0 ? 'Pay Remaining Deposit' : 'Pay 35% Deposit')
                 : 'Pay Remaining Balance';
         }
-        if (fullChoice) fullChoice.style.display = currentShopSettings.paymentOptions === 'DepositOrFull' ? '' : 'none';
+        if (fullChoice) fullChoice.style.display = ['DepositOrFull', 'FullOnly'].includes(currentShopSettings.paymentOptions) ? '' : 'none';
         if (fullChoiceLabel) fullChoiceLabel.textContent = state.session.user.amountReceived > 0 ? 'Pay Full Remaining Balance' : 'Pay Full Amount';
         if (customAmountInput) {
             customAmountInput.value = '';
