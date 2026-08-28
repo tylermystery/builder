@@ -5748,9 +5748,16 @@ body.ucp-panel-open .unified-chat-panel {
             </div>
             <div id="payment-choice-container" style="display: none; margin: 15px 0; padding: 10px; background-color: #f8f9fa; border-radius: 5px;">
                 <h4 style="margin-top: 0;">Payment Option</h4>
-                <div style="display: flex; justify-content: space-around;">
-                    <label><input type="radio" name="paymentChoice" value="deposit" checked> Pay 35% Deposit</label>
-                    <label><input type="radio" name="paymentChoice" value="full"> Pay Full Amount</label>
+                <div style="display: flex; flex-wrap: wrap; gap: 12px 20px;">
+                    <label id="deposit-payment-choice"><input type="radio" name="paymentChoice" value="deposit" checked> <span id="deposit-choice-label">Pay 35% Deposit</span></label>
+                    <label id="full-payment-choice"><input type="radio" name="paymentChoice" value="full"> <span id="full-choice-label">Pay Full Amount</span></label>
+                    <label id="custom-payment-choice"><input type="radio" name="paymentChoice" value="custom"> Pay a Custom Amount</label>
+                </div>
+                <div id="custom-payment-amount-container" style="display: none; margin-top: 12px;">
+                    <label for="custom-payment-amount" style="display: block; margin-bottom: 5px; font-weight: 600;">Partial payment amount</label>
+                    <input type="number" id="custom-payment-amount" min="0.50" step="0.01" inputmode="decimal" placeholder="0.00" style="width: 100%; padding: 9px 10px; border: 1px solid #ced4da; border-radius: 5px;">
+                    <small id="custom-payment-help" style="display: block; margin-top: 5px; color: #6c757d;"></small>
+                    <small id="custom-payment-error" role="alert" style="display: none; margin-top: 5px; color: #dc3545;"></small>
                 </div>
             </div>
             <div class="terms-and-conditions"></div>

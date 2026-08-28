@@ -1622,14 +1622,17 @@ async function updateCheckoutDisplay() {
     // In single-item mode, don't apply payment history deductions or deposit logic
     const isItemMode = currentCheckoutScope && currentCheckoutScope.mode === 'item';
     const amountReceived = isItemMode ? 0 : (state.session.user.amountReceived || 0);
-    const totalDue = finalTotal - amountReceived;
+    const totalDue = Math.max(0, finalTotal - amountReceived);
     const isFullyPaid = totalDue <= 0.009; // Check for paid status
 
     const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
     let baseAmountToCharge = totalDue; // This is the amount *before* processing fees
+    let customPaymentError = '';
 
     const isFullOnly = currentShopSettings.paymentOptions === 'FullOnly';
     const isDepositOnly = currentShopSettings.paymentOptions === 'DepositOnly';
+    const depositTarget = finalTotal * 0.35;
+    const remainingDepositDue = Math.max(0, Math.min(totalDue, depositTarget - amountReceived));
     const isInitialDeposit = !isItemMode
         && amountReceived === 0
         && !isFullOnly
@@ -1656,20 +1659,48 @@ async function updateCheckoutDisplay() {
         } else {
             document.getElementById('deposit-label').textContent = 'Amount Due:';
         }
-    } else if (amountReceived === 0) {
-        if (isFullOnly || (currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full')) {
-            baseAmountToCharge = finalTotal;
-            document.getElementById('deposit-label').textContent = 'Full Amount Due:';
+    } else if (choice === 'custom' && !isFullOnly) {
+        const customAmountInput = document.getElementById('custom-payment-amount');
+        const customAmount = parseFloat(customAmountInput?.value || '');
+        document.getElementById('deposit-label').textContent = 'Partial Payment Amount:';
+
+        if (!Number.isFinite(customAmount) || customAmount <= 0) {
+            customPaymentError = 'Enter the partial payment amount.';
+            baseAmountToCharge = 0;
+        } else if (customAmount < 0.50) {
+            customPaymentError = 'The minimum card payment is $0.50.';
+            baseAmountToCharge = 0;
+        } else if (customAmount > totalDue + 0.009) {
+            customPaymentError = `Enter no more than the $${totalDue.toFixed(2)} outstanding balance.`;
+            baseAmountToCharge = 0;
         } else {
-            baseAmountToCharge = finalTotal * 0.35;
-            document.getElementById('deposit-label').textContent = '35% Deposit Due:';
+            baseAmountToCharge = customAmount;
         }
+    } else if (isFullOnly || choice === 'full') {
+        baseAmountToCharge = totalDue;
+        document.getElementById('deposit-label').textContent = amountReceived > 0 ? 'Remaining Balance Due:' : 'Full Amount Due:';
+    } else if (remainingDepositDue > 0.009) {
+        baseAmountToCharge = remainingDepositDue;
+        document.getElementById('deposit-label').textContent = amountReceived > 0 ? 'Remaining 35% Deposit Due:' : '35% Deposit Due:';
     } else {
+        baseAmountToCharge = totalDue;
         document.getElementById('deposit-label').textContent = 'Remaining Balance Due:';
     }
     const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
 
-    let finalBaseAmount = baseAmountToCharge + tipAmount + currentChipInAmount;
+    const customAmountInput = document.getElementById('custom-payment-amount');
+    const customPaymentErrorEl = document.getElementById('custom-payment-error');
+    const customPaymentHelpEl = document.getElementById('custom-payment-help');
+    const customPaymentAmountContainer = document.getElementById('custom-payment-amount-container');
+    if (customPaymentAmountContainer) customPaymentAmountContainer.style.display = choice === 'custom' && !isItemMode && !isFullOnly ? 'block' : 'none';
+    if (customPaymentHelpEl) customPaymentHelpEl.textContent = `Enter any amount from $0.50 up to $${totalDue.toFixed(2)} before an optional tip.`;
+    if (customPaymentErrorEl) {
+        customPaymentErrorEl.textContent = customPaymentError;
+        customPaymentErrorEl.style.display = customPaymentError ? 'block' : 'none';
+    }
+    if (customAmountInput) customAmountInput.setAttribute('aria-invalid', customPaymentError ? 'true' : 'false');
+
+    let finalBaseAmount = customPaymentError ? 0 : baseAmountToCharge + tipAmount + currentChipInAmount;
     document.getElementById('deposit-price').textContent = `$${finalBaseAmount.toFixed(2)}`;
 
     // Update P2P amount display if visible
@@ -1738,6 +1769,18 @@ async function updateCheckoutDisplay() {
         return; // Stop here, don't create a payment intent
     }
     // --- END NEW LOGIC ---
+
+    const submitBtn = document.getElementById('payment-submit-btn');
+    if (customPaymentError) {
+        if (paymentForm) paymentForm.style.display = 'block';
+        applyPaymentMethodVisibility(getActivePaymentMethod());
+        if (submitBtn) submitBtn.disabled = true;
+        if (processingFeeEl) processingFeeEl.textContent = '—';
+        if (finalChargeEl) finalChargeEl.textContent = '—';
+        return;
+    }
+    const isCustomPayment = choice === 'custom' && !isItemMode && !isFullOnly;
+    if (submitBtn) submitBtn.disabled = isCustomPayment;
 
     // --- DONATION-ONLY MODE: Hide payment until chip-in selected ---
     const isDonationOnlyPending = isItemMode && currentCheckoutItemQty === 0 && currentChipInAmount <= 0 && finalBaseAmount <= 0;
@@ -1882,11 +1925,13 @@ async function updateCheckoutDisplay() {
             // 4. Add listener to update payment type AND fetch new fee
             paymentElement.on('change', debounce(handlePaymentTypeChange, 300));
             console.log('[PAY-TAB DEBUG] updateCheckoutDisplay: PaymentElement mounted with change listener.');
+            if (submitBtn) submitBtn.disabled = false;
 
         } catch (error) {
             console.error('[PAY-TAB DEBUG] Failed to update payment intent/element:', error);
             if (processingFeeEl) processingFeeEl.textContent = 'Error';
             if (finalChargeEl) finalChargeEl.textContent = 'Error';
+            if (submitBtn && isCustomPayment) submitBtn.disabled = true;
         }
     } else {
          // --- ADDED THIS ELSE BLOCK ---\
@@ -1896,6 +1941,7 @@ async function updateCheckoutDisplay() {
          if (processingFeeEl) processingFeeEl.textContent = `$${currentProcessingFee.toFixed(2)}`;
          renderCheckoutDiscountRow(currentDiscountInCents, currentDiscountName);
          if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount - currentDiscountInCents / 100 + currentProcessingFee).toFixed(2)}`;
+         if (submitBtn) submitBtn.disabled = false;
          // --- END ADDED BLOCK ---\
     }
 }
@@ -11591,12 +11637,44 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         }
     }
 
-    if (!(scope && scope.mode === 'item') && currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
+    const outstandingBalance = Math.max(0, finalTotal - (state.session.user.amountReceived || 0));
+    const supportsPartialPayments = currentShopSettings.paymentOptions !== 'FullOnly';
+    if (!(scope && scope.mode === 'item') && supportsPartialPayments && outstandingBalance > 0.009) {
         paymentChoiceContainer.style.display = 'block';
-        // --- THIS IS CHANGED: Add async/await ---\
+        const depositChoice = document.querySelector('input[name="paymentChoice"][value="deposit"]');
+        const depositChoiceLabel = document.getElementById('deposit-choice-label');
+        const fullChoice = document.getElementById('full-payment-choice');
+        const fullChoiceLabel = document.getElementById('full-choice-label');
+        const customAmountInput = document.getElementById('custom-payment-amount');
+        const customAmountContainer = document.getElementById('custom-payment-amount-container');
+        const depositRemainder = Math.max(0, finalTotal * 0.35 - (state.session.user.amountReceived || 0));
+
+        if (depositChoice) depositChoice.checked = true;
+        if (depositChoiceLabel) {
+            depositChoiceLabel.textContent = depositRemainder > 0.009
+                ? (state.session.user.amountReceived > 0 ? 'Pay Remaining Deposit' : 'Pay 35% Deposit')
+                : 'Pay Remaining Balance';
+        }
+        if (fullChoice) fullChoice.style.display = currentShopSettings.paymentOptions === 'DepositOrFull' ? '' : 'none';
+        if (fullChoiceLabel) fullChoiceLabel.textContent = state.session.user.amountReceived > 0 ? 'Pay Full Remaining Balance' : 'Pay Full Amount';
+        if (customAmountInput) {
+            customAmountInput.value = '';
+            customAmountInput.setAttribute('max', outstandingBalance.toFixed(2));
+            customAmountInput.setAttribute('aria-invalid', 'false');
+        }
+        if (customAmountContainer) customAmountContainer.style.display = 'none';
+
         document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
-            radio.addEventListener('change', async () => await updateCheckoutDisplay());
+            radio.onchange = async () => await updateCheckoutDisplay();
         });
+        if (customAmountInput) {
+            const updateCustomAmount = debounce(async () => await updateCheckoutDisplay(), 350);
+            customAmountInput.oninput = () => {
+                const submitBtn = document.getElementById('payment-submit-btn');
+                if (submitBtn) submitBtn.disabled = true;
+                updateCustomAmount();
+            };
+        }
     } else {
         paymentChoiceContainer.style.display = 'none';
     }
@@ -11766,8 +11844,10 @@ export function hideCheckoutModal() {
         }
         document.getElementById('tip-amount')?.removeEventListener('input', updateCheckoutDisplay);
         document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
-            radio.removeEventListener('change', updateCheckoutDisplay);
+            radio.onchange = null;
         });
+        const customAmountInput = document.getElementById('custom-payment-amount');
+        if (customAmountInput) customAmountInput.oninput = null;
 
         // --- ADD THIS ---\
         if (paymentElement) {
