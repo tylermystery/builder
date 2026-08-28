@@ -1714,14 +1714,81 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     }
 
     const mobileViewPlanBtn = document.getElementById('mobile-view-plan-btn');
+    let mobilePlanDrag = null;
     const setMobilePlanOpen = (isOpen) => {
         if (!rightSidebar || !mobileViewPlanBtn) return;
 
+        mobilePlanDrag = null;
+        rightSidebar.classList.remove('dragging');
+        rightSidebar.style.removeProperty('--mobile-plan-drag-offset');
         rightSidebar.classList.toggle('collapsed', !isOpen);
         document.body.classList.toggle('mobile-plan-open', isOpen);
         mobileViewPlanBtn.setAttribute('aria-expanded', String(isOpen));
         mobileViewPlanBtn.textContent = isOpen ? 'Close Plan' : 'View Plan';
     };
+
+    const interactivePlanControlSelector = 'button, input, textarea, select, a, [contenteditable="true"]';
+
+    rightSidebar?.addEventListener('touchstart', (event) => {
+        if (window.innerWidth >= 1000 || rightSidebar.classList.contains('collapsed') || event.touches.length !== 1) return;
+
+        const touchTarget = event.target instanceof Element ? event.target : null;
+        const startedOnHandle = Boolean(touchTarget?.closest('#mobile-plan-drag-handle'));
+        const startedOnControl = Boolean(touchTarget?.closest(interactivePlanControlSelector));
+
+        if (!startedOnHandle && (rightSidebar.scrollTop > 0 || startedOnControl)) return;
+
+        const touch = event.touches[0];
+        mobilePlanDrag = {
+            startX: touch.clientX,
+            startY: touch.clientY,
+            startTime: performance.now(),
+            active: false,
+            startedOnHandle
+        };
+    }, { passive: true });
+
+    rightSidebar?.addEventListener('touchmove', (event) => {
+        if (!mobilePlanDrag || event.touches.length !== 1) return;
+
+        const touch = event.touches[0];
+        const deltaX = touch.clientX - mobilePlanDrag.startX;
+        const deltaY = touch.clientY - mobilePlanDrag.startY;
+
+        if (!mobilePlanDrag.active) {
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                mobilePlanDrag = null;
+                return;
+            }
+            if (deltaY <= 6 || (!mobilePlanDrag.startedOnHandle && rightSidebar.scrollTop > 0)) return;
+
+            mobilePlanDrag.active = true;
+            rightSidebar.classList.add('dragging');
+        }
+
+        event.preventDefault();
+        const dragOffset = Math.max(0, Math.min(deltaY * 0.88, window.innerHeight * 0.65));
+        rightSidebar.style.setProperty('--mobile-plan-drag-offset', `${dragOffset}px`);
+    }, { passive: false });
+
+    const finishMobilePlanDrag = (event, allowClose) => {
+        if (!mobilePlanDrag) return;
+
+        const touch = event.changedTouches?.[0];
+        const deltaY = touch ? touch.clientY - mobilePlanDrag.startY : 0;
+        const duration = Math.max(performance.now() - mobilePlanDrag.startTime, 1);
+        const velocity = deltaY / duration;
+        const shouldClose = allowClose && mobilePlanDrag.active && (deltaY > 90 || (deltaY > 45 && velocity > 0.5));
+
+        rightSidebar?.classList.remove('dragging');
+        rightSidebar?.style.removeProperty('--mobile-plan-drag-offset');
+        mobilePlanDrag = null;
+
+        if (shouldClose) setMobilePlanOpen(false);
+    };
+
+    rightSidebar?.addEventListener('touchend', (event) => finishMobilePlanDrag(event, true));
+    rightSidebar?.addEventListener('touchcancel', (event) => finishMobilePlanDrag(event, false));
 
     // New filter toggle button handler (replaces old mobile-filter-trigger)
     const filterToggleBtn = document.getElementById('filter-toggle-btn');
