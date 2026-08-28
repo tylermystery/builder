@@ -1713,6 +1713,16 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         rightSidebar?.classList.add('collapsed');
     }
 
+    const mobileViewPlanBtn = document.getElementById('mobile-view-plan-btn');
+    const setMobilePlanOpen = (isOpen) => {
+        if (!rightSidebar || !mobileViewPlanBtn) return;
+
+        rightSidebar.classList.toggle('collapsed', !isOpen);
+        document.body.classList.toggle('mobile-plan-open', isOpen);
+        mobileViewPlanBtn.setAttribute('aria-expanded', String(isOpen));
+        mobileViewPlanBtn.textContent = isOpen ? 'Close Plan' : 'View Plan';
+    };
+
     // New filter toggle button handler (replaces old mobile-filter-trigger)
     const filterToggleBtn = document.getElementById('filter-toggle-btn');
     if (filterToggleBtn) {
@@ -1722,6 +1732,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             leftSidebar?.classList.toggle('collapsed');
 
             if (!isExpanded && window.innerWidth < 1000) {
+                setMobilePlanOpen(false);
                 window.setTimeout(() => {
                     leftSidebar?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 50);
@@ -1746,16 +1757,15 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             leftSidebar?.classList.toggle('collapsed');
         }
     });
-    safeAddEventListener('mobile-view-plan-btn', 'click', () => {
-        const isCurrentlyCollapsed = rightSidebar?.classList.contains('collapsed');
-        rightSidebar?.classList.toggle('collapsed');
+    mobileViewPlanBtn?.addEventListener('click', () => {
+        const isOpen = !rightSidebar?.classList.contains('collapsed');
+        setMobilePlanOpen(!isOpen);
+    });
 
-        if (isCurrentlyCollapsed) {
-            setTimeout(() => {
-                rightSidebar?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            }, 50);
-        } else {
-            document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && document.body.classList.contains('mobile-plan-open')) {
+            setMobilePlanOpen(false);
+            mobileViewPlanBtn?.focus();
         }
     });
 

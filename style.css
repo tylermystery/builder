@@ -137,6 +137,10 @@ html.presentation-active {
 /* In: style.css (REPLACE THE ENTIRE @media (max-width: 999px) BLOCK) */
 
 @media (max-width: 999px) {
+    body {
+        --mobile-summary-bar-height: 60px;
+    }
+
     /* Keep filters directly below the header instead of after the plan panel. */
     #left-sidebar {
         order: -1;
@@ -158,6 +162,55 @@ html.presentation-active {
         margin: 0;
         padding-top: 0;
         padding-bottom: 0;
+    }
+
+    #right-sidebar {
+        position: fixed;
+        left: 10px;
+        right: 10px;
+        bottom: calc(var(--mobile-summary-bar-height) + env(safe-area-inset-bottom, 0px));
+        z-index: 997;
+        width: auto;
+        max-width: none;
+        max-height: 72vh;
+        max-height: min(72dvh, 720px);
+        margin: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        border-radius: 18px 18px 0 0;
+        box-shadow: 0 -16px 42px rgba(15, 23, 42, 0.28);
+        transform: translateY(0);
+        visibility: visible;
+        transition: transform 0.3s ease, opacity 0.2s ease, visibility 0s;
+    }
+
+    #right-sidebar.collapsed {
+        max-height: 72vh;
+        max-height: min(72dvh, 720px);
+        transform: translateY(calc(100% + 24px));
+        visibility: hidden;
+        pointer-events: none;
+        transition: transform 0.3s ease, opacity 0.2s ease, visibility 0s linear 0.3s;
+    }
+
+    #right-sidebar::before {
+        content: "";
+        display: block;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        width: 42px;
+        height: 5px;
+        margin: 8px auto -13px;
+        border-radius: 999px;
+        background: rgba(71, 85, 105, 0.35);
+    }
+
+    #right-sidebar #event-plan-panel {
+        position: static;
+        top: auto;
+        border-radius: 18px 18px 0 0;
+        background-color: rgba(255, 255, 255, 0.96);
     }
 
     #mobile-summary-bar, #mobile-show-filters-btn {
@@ -185,6 +238,13 @@ html.presentation-active {
     #mobile-summary-bar {
         transform: translateY(100%);
         transition: transform 0.3s ease-in-out;
+        min-height: var(--mobile-summary-bar-height);
+        padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+
+    #mobile-view-plan-btn[aria-expanded="true"] {
+        background-color: #fff;
+        color: #1f2937;
     }
 
     body.mobile-bar-active #mobile-summary-bar {
