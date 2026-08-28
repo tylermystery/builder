@@ -18,6 +18,7 @@ import { openUCPForItem, openUCPGlobalForItem } from './unifiedChatPanel.js';
 import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
 import { openActionMenu } from './actionMenu.js';
+import { getCatalogRecordId, getPlanInstancesForCatalog } from '../utils/planInstances.js';
 import { syncPlanState as syncPlanStateAcrossViews } from '../utils/planStateSync.js';
 import { getCommunityRowForRecord, toggleCommunityReactionForRecord, isPublicIdeaRecord } from './publicCatalog.js';
 import { ensureStorePromotionsLoaded, bestDisplayPromoForItem, rewardLabel, promoTimingHint, quoteCart } from '../utils/promotions-client.js';
@@ -407,7 +408,7 @@ let currentDiscountName = 'Discount';
 function buildPromotableCartLines(quoteStoreId) {
     try {
         const lines = [];
-        const toLine = (record, unitPrice, qty, itemDate) => {
+        const toLine = (record, unitPrice, qty, itemDate, itemInfo = null) => {
             if (!record) return null;
             const fields = record.fields || {};
             const storeIds = Array.isArray(fields.Stores) ? fields.Stores : (fields.Stores ? [fields.Stores] : []);
@@ -415,7 +416,7 @@ function buildPromotableCartLines(quoteStoreId) {
             const catRaw = fields[CONSTANTS.FIELD_NAMES.CATEGORIES];
             const categories = Array.isArray(catRaw) ? catRaw : (typeof catRaw === 'string' ? catRaw.split(',') : []);
             return {
-                itemId: record.id,
+                itemId: getCatalogRecordId(record.id, itemInfo, record),
                 storeId: primaryStore,
                 categories,
                 unitPriceCents: Math.round((Number(unitPrice) || 0) * 100),
@@ -437,7 +438,7 @@ function buildPromotableCartLines(quoteStoreId) {
                     const priceParam = (info.selections && Object.keys(info.selections).length > 0)
                         ? info.selections : info.selectedOptionIndex;
                     const unit = (info.overridePrice != null) ? info.overridePrice : getRecordPrice(record, priceParam);
-                    const l = toLine(record, unit, info.quantity, info.itemDate);
+                    const l = toLine(record, unit, info.quantity, info.itemDate, info);
                     if (l) lines.push(l);
                 });
             }
@@ -3410,6 +3411,8 @@ function resetModalState() {
     if (actionsContainerReset) {
         const stowedAddBtn = actionsContainerReset.querySelector('.modal-secondary-menu #modal-add-to-plan-btn');
         if (stowedAddBtn) actionsContainerReset.appendChild(stowedAddBtn);
+        const stowedAddAnotherBtn = actionsContainerReset.querySelector('.modal-secondary-menu #modal-add-another-instance-btn');
+        if (stowedAddAnotherBtn) actionsContainerReset.appendChild(stowedAddAnotherBtn);
         actionsContainerReset.querySelectorAll('.modal-rsvp-primary, .modal-donation-primary, .modal-secondary-menu').forEach(el => el.remove());
     }
     const quantitySelectorReset = document.getElementById('modal-quantity-selector');
@@ -5793,6 +5796,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
     const modalAdditionalDetails = document.getElementById('modal-additional-details');
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
+    const addAnotherInstanceBtn = document.getElementById('modal-add-another-instance-btn');
 
     const closeBtn = document.getElementById('modal-close-btn');
     closeBtn.onclick = closeDetailModal;
@@ -5884,6 +5888,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     }
 
     const isLocked = state.cart.lockedItems.has(record.id);
+    const catalogRecordId = getCatalogRecordId(record.id, state.cart.lockedItems.get(record.id), record);
+    const instanceCount = getPlanInstancesForCatalog(state.cart.lockedItems, catalogRecordId, getRecordById).length;
     modalOverlay.dataset.mode = isLocked ? 'edit-locked' : 'edit-favorite';
 
     const itemState = isLocked ? state.cart.lockedItems.get(record.id) : ui.getItemState(record.id);
@@ -5896,6 +5902,15 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         addToPlanBtn.style.display = '';
         addToPlanBtn.textContent = isLocked ? 'Update plan' : 'Add to Plan';
         addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
+    }
+    if (addAnotherInstanceBtn) {
+        const canAddAnother = instanceCount > 0 && !isPackageItem;
+        addAnotherInstanceBtn.style.display = canAddAnother ? '' : 'none';
+        addAnotherInstanceBtn.textContent = instanceCount > 1
+            ? `Add Another Instance (${instanceCount} in plan)`
+            : 'Add Another Instance';
+        addAnotherInstanceBtn.dataset.catalogRecordId = catalogRecordId;
+        addAnotherInstanceBtn.setAttribute('aria-label', `Add another instance of ${record.fields?.Name || 'this item'}`);
     }
 
     // When the item is already in the plan, surface what specifically was added
@@ -10726,6 +10741,8 @@ let _eventMenuOutsideHandler = null;
 function setupEventRsvpActionZone(record, linkedSession) {
     const actions = document.getElementById('modal-actions-container');
     if (!actions) return;
+    const planItemInfo = state.cart.lockedItems.get(record.id);
+    const rsvpRecordId = getCatalogRecordId(record.id, planItemInfo, record);
 
     const userId = state.session.user.id;
     const rsvpYes = record.fields.RSVPs || [];
@@ -10739,7 +10756,7 @@ function setupEventRsvpActionZone(record, linkedSession) {
     // (held in localStorage until they sign in at checkout) as the active state.
     let guestPartyQty = null;
     if (!state.session.user.isAuthenticated) {
-        const pending = getTempRsvps()[record.id];
+        const pending = getTempRsvps()[rsvpRecordId];
         if (pending) {
             hasYes = pending.rsvpType === 'yes';
             hasMaybe = pending.rsvpType === 'maybe';
@@ -10775,6 +10792,8 @@ function setupEventRsvpActionZone(record, linkedSession) {
     if (priorMenu) {
         const moved = priorMenu.querySelector('#modal-add-to-plan-btn');
         if (moved) actions.appendChild(moved);
+        const movedAddAnother = priorMenu.querySelector('#modal-add-another-instance-btn');
+        if (movedAddAnother) actions.appendChild(movedAddAnother);
         priorMenu.remove();
     }
     const priorRsvp = actions.querySelector('.modal-rsvp-primary');
@@ -10782,6 +10801,7 @@ function setupEventRsvpActionZone(record, linkedSession) {
 
     // --- Secondary "…" menu holding Add to Plan ----------------------------
     const addBtn = document.getElementById('modal-add-to-plan-btn');
+    const addAnotherBtn = document.getElementById('modal-add-another-instance-btn');
     const menu = document.createElement('div');
     menu.className = 'modal-secondary-menu';
     const menuToggle = document.createElement('button');
@@ -10798,6 +10818,7 @@ function setupEventRsvpActionZone(record, linkedSession) {
         addBtn.style.display = '';
         menuDropdown.appendChild(addBtn); // relocate the existing button as-is
     }
+    if (addAnotherBtn) menuDropdown.appendChild(addAnotherBtn);
     menu.appendChild(menuToggle);
     menu.appendChild(menuDropdown);
     menuToggle.addEventListener('click', (e) => {
@@ -10830,9 +10851,9 @@ function setupEventRsvpActionZone(record, linkedSession) {
             </div>
         </div>
         <div class="rsvp-button-group rsvp-primary-group">
-            <button class="rsvp-btn rsvp-yes ${hasYes ? 'active' : ''}" data-record-id="${record.id}" data-rsvp-type="yes">${hasYes ? 'Going ✅' : 'Yes'}</button>
-            <button class="rsvp-btn rsvp-maybe ${hasMaybe ? 'active' : ''}" data-record-id="${record.id}" data-rsvp-type="maybe">${hasMaybe ? 'Maybe ❓' : 'Maybe'}</button>
-            <button class="rsvp-btn rsvp-no ${hasNo ? 'active' : ''}" data-record-id="${record.id}" data-rsvp-type="no">${hasNo ? "Can't Go ❌" : 'No'}</button>
+            <button class="rsvp-btn rsvp-yes ${hasYes ? 'active' : ''}" data-record-id="${rsvpRecordId}" data-rsvp-type="yes">${hasYes ? 'Going ✅' : 'Yes'}</button>
+            <button class="rsvp-btn rsvp-maybe ${hasMaybe ? 'active' : ''}" data-record-id="${rsvpRecordId}" data-rsvp-type="maybe">${hasMaybe ? 'Maybe ❓' : 'Maybe'}</button>
+            <button class="rsvp-btn rsvp-no ${hasNo ? 'active' : ''}" data-record-id="${rsvpRecordId}" data-rsvp-type="no">${hasNo ? "Can't Go ❌" : 'No'}</button>
         </div>`;
 
     // Primary block first, then the "…" menu — both at the top of the zone.
@@ -10885,7 +10906,7 @@ function setupEventRsvpActionZone(record, linkedSession) {
     // Airtable RSVP lists, folding in each guest's stored party size (guests with
     // no stored size — e.g. anyone who responded before this feature — count as a
     // single spot). Best-effort: on any failure the people-count labels stand.
-    api.fetchEventRsvpData(record.id).then((data) => {
+    api.fetchEventRsvpData(rsvpRecordId).then((data) => {
         if (!data) return;
         if (data.mine && data.mine.quantity && qtyInput) {
             qtyInput.value = String(data.mine.quantity);
@@ -10959,6 +10980,8 @@ function setupDonationActionZone(record) {
     if (priorMenu) {
         const moved = priorMenu.querySelector('#modal-add-to-plan-btn');
         if (moved) actions.appendChild(moved);
+        const movedAddAnother = priorMenu.querySelector('#modal-add-another-instance-btn');
+        if (movedAddAnother) actions.appendChild(movedAddAnother);
         priorMenu.remove();
     }
     const priorPrimary = actions.querySelector('.modal-donation-primary');
@@ -10966,6 +10989,7 @@ function setupDonationActionZone(record) {
 
     // --- Secondary "…" menu holding Add to Plan ----------------------------
     const addBtn = document.getElementById('modal-add-to-plan-btn');
+    const addAnotherBtn = document.getElementById('modal-add-another-instance-btn');
     const menu = document.createElement('div');
     menu.className = 'modal-secondary-menu';
     const menuToggle = document.createElement('button');
@@ -10982,6 +11006,7 @@ function setupDonationActionZone(record) {
         addBtn.style.display = '';
         menuDropdown.appendChild(addBtn); // relocate the existing button as-is
     }
+    if (addAnotherBtn) menuDropdown.appendChild(addAnotherBtn);
     menu.appendChild(menuToggle);
     menu.appendChild(menuDropdown);
     menuToggle.addEventListener('click', (e) => {

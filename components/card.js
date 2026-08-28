@@ -12,6 +12,7 @@ import { getRecordPrice, getRecordPriceRange, getTempLikes, getEffectiveMinQuant
 import { log } from '../utils/debug.js';
 import { applyCloudinaryFitTransform, getImageOrientationClass } from '../utils/imageOptimizer.js';
 import { ensureStorePromotionsLoaded, bestDisplayPromoForItem, rewardLabel, promoTimingHint } from '../utils/promotions-client.js';
+import { getCatalogRecordId, getPlanInstancesForCatalog } from '../utils/planInstances.js';
 
 // Build the bits of card UI a live promotion adds: a corner badge and a
 // struck-through original price next to the discounted one. Returns empty
@@ -227,14 +228,23 @@ export function batchUpdateCardIcons(recordIds) {
 }
 
 export function updateCardButtonText(recordId, isLocked) {
-    const cardButtons = document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .add-to-plan-btn`);
+    const record = state.records.all.find(item => item.id === recordId);
+    const itemInfo = state.cart.lockedItems.get(recordId) || state.cart.items.get(recordId);
+    const catalogRecordId = getCatalogRecordId(recordId, itemInfo, record);
+    const cardButtons = document.querySelectorAll(`.event-card[data-record-id="${catalogRecordId}"] .add-to-plan-btn`);
     const modalButton = document.getElementById('modal-add-to-plan-btn');
+    const instanceCount = getPlanInstancesForCatalog(
+        state.cart.lockedItems,
+        catalogRecordId,
+        id => state.records.all.find(record => record.id === id)
+    ).length;
+    const hasLockedInstances = instanceCount > 0;
     
     cardButtons.forEach(btn => {
         if (btn) {
-            btn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
-            btn.disabled = isLocked;
-            btn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
+            btn.textContent = hasLockedInstances ? `In Plan${instanceCount > 1 ? ` · ${instanceCount}` : ''}` : 'Add to Plan';
+            btn.disabled = hasLockedInstances;
+            btn.dataset.tooltip = hasLockedInstances ? 'Open item details to update or add another instance' : 'Add to plan';
         }
     });
     
@@ -740,7 +750,12 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     eventCard.className = 'event-card' + aiBookableClass + (confidenceClass ? ` ${confidenceClass}` : '');
     const itemState = ui.getItemState(record.id);
     const effectiveMin = getEffectiveMinQuantity(record);
-    const isLocked = state.cart.lockedItems.has(record.id);
+    const instanceCount = getPlanInstancesForCatalog(
+        state.cart.lockedItems,
+        record.id,
+        id => state.records.all.find(item => item.id === id)
+    ).length;
+    const isLocked = instanceCount > 0;
     const quantitySelectorHTML = `<div class="quantity-selector"><button type="button" class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${effectiveMin}" step="0.1" aria-label="Quantity"><button type="button" class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
     const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex);
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
@@ -770,7 +785,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     // misleading. Instead, surface a "See options" button that opens the detail
     // modal so the customer can make their selection. Single-price items keep the
     // inline quantity stepper and add-to-plan button.
-    const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'Update Plan' : 'Add to Plan'}</button>`;
+    const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? `In Plan${instanceCount > 1 ? ` · ${instanceCount}` : ''}` : 'Add to Plan'}</button>`;
     const actionsHTML = hasPriceRange
         ? `<button class="card-action-btn see-options-btn">See options</button>`
         : `${quantitySelectorHTML}${addToPlanBtnHTML}`;

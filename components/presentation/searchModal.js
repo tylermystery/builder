@@ -285,6 +285,7 @@ async function performPresentationSearch(searchTerm) {
     // Filter catalog items
     const searchLower = searchTerm.toLowerCase();
     const catalogMatches = state.records.all.filter(record => {
+        if (record._planInstance) return false;
         const name = (record.fields.Name || '').toLowerCase();
         const description = (record.fields.Description || '').toLowerCase();
         const category = (record.fields.Category || '').toLowerCase();

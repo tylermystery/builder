@@ -240,6 +240,7 @@ function getChildItemsForGrouping(groupingRecord, allRecords) {
     const statusFilter = getActiveCatalogStatusFilter();
 
     const results = allRecords.filter(r => {
+        if (r._planInstance) return false;
         const itemType = r.fields['Item Type'];
         if (itemType !== 'Bookable Item' && itemType !== 'Event' && itemType !== 'Package') return false;
         if (!childItemMatchesStatusFilter(r, statusFilter)) return false;

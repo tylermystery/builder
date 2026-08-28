@@ -14,6 +14,7 @@ import { showReceiptModal } from './receipt.js';
 import { syncPlanState, registerSyncCallback, updateMobileSummaryBar } from '../utils/planStateSync.js';
 import { applyCloudinaryTransform, hasCloudinaryTransformations } from '../utils/imageOptimizer.js';
 import { resolvePlanVenueAddress } from '../utils/calendarExport.js';
+import { getCatalogRecordId, getPlanInstancePosition } from '../utils/planInstances.js';
 
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
@@ -318,11 +319,21 @@ async function createLockedInItemElement(record, itemInfo) {
 
     // Build a compact schedule line (date / time / duration) for the plan panel
     const scheduleStr = formatItemSchedule(itemInfo);
+    const catalogRecordId = getCatalogRecordId(record.id, itemInfo, record);
+    const instancePosition = getPlanInstancePosition(
+        state.cart.lockedItems,
+        record.id,
+        catalogRecordId,
+        getRecordById
+    );
+    const instanceBadge = instancePosition.count > 1
+        ? `<span class="plan-instance-badge">Instance ${instancePosition.index} of ${instancePosition.count}</span>`
+        : '';
 
     itemElement.innerHTML = `
         <img class="locked-item-thumbnail lazy-load" data-src="${imageUrl}" width="60" height="60" alt="${fields.Name}" loading="lazy">
         <div class="locked-item-details">
-            <p class="locked-item-name"><span class="locked-item-name-text">${fields.Name}</span>${solutionBadgeHtml}</p>
+            <p class="locked-item-name"><span class="locked-item-name-text">${fields.Name}</span>${instanceBadge}${solutionBadgeHtml}</p>
             ${optionDetailsHtml ? `<div class="locked-item-options">${optionDetailsHtml}</div>` : ''}
             <p class="locked-item-pricing">${quantityDisplay} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
             ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}

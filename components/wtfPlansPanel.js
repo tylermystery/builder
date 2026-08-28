@@ -484,6 +484,7 @@ async function loadWtfPlansData() {
         // For non-authenticated users, show upcoming public events they can browse/RSVP to
         if (isAuthenticated && userId) {
             wtfPlansData.rsvps = state.records.all.filter(record => {
+                if (record._planInstance) return false;
                 if (record.fields['Item Type'] !== 'Event') return false;
                 const rsvpYes = record.fields.RSVPs || [];
                 const rsvpMaybe = record.fields.RSVPMaybe || [];
@@ -495,6 +496,7 @@ async function loadWtfPlansData() {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             wtfPlansData.rsvps = state.records.all.filter(record => {
+                if (record._planInstance) return false;
                 if (record.fields['Item Type'] !== 'Event') return false;
                 const eventDate = record.fields.Date;
                 if (!eventDate) return false;
@@ -511,7 +513,7 @@ async function loadWtfPlansData() {
         } else {
             likedIds = getTempLikes();
         }
-        wtfPlansData.favorites = state.records.all.filter(record => likedIds.has(record.id));
+        wtfPlansData.favorites = state.records.all.filter(record => !record._planInstance && likedIds.has(record.id));
 
         isLoading = false;
         console.log(`[WTF-PLANS] ========== loadWtfPlansData END (rendering ${wtfPlansData.plans.length + wtfPlansData.drafts.length} plans/drafts, ${wtfPlansData.rsvps.length} rsvps, ${wtfPlansData.favorites.length} favorites) ==========`);
