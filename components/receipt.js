@@ -2,6 +2,7 @@ import { state } from '../state.js';
 import { CONSTANTS } from '../config.js';
 import { getRecordPrice, getEffectiveMinQuantity, parseOptions, flattenOptionGroups } from '../utils.js';
 import { log } from '../utils/debug.js';
+import { getCatalogRecordId, getPlanInstancePosition } from '../utils/planInstances.js';
 
 export function showReceiptModal(paymentIndex) {
     log('Receipt', `Opening receipt in new window for payment index ${paymentIndex}`);
@@ -60,6 +61,16 @@ export function showReceiptModal(paymentIndex) {
         const quantity = itemInfo.quantity || 1;
         const itemTotal = unitPrice * quantity;
         itemsSubtotal += itemTotal;
+        const catalogRecordId = getCatalogRecordId(recordId, itemInfo, record);
+        const instancePosition = getPlanInstancePosition(
+            state.cart.lockedItems,
+            recordId,
+            catalogRecordId,
+            id => state.records.all.find(item => item.id === id)
+        );
+        const instanceLabel = instancePosition.count > 1
+            ? `<br><small style="color: #55705f;">Instance ${instancePosition.index} of ${instancePosition.count}</small>`
+            : '';
 
         // Check for edge case notes
         const airtableMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
@@ -114,7 +125,7 @@ export function showReceiptModal(paymentIndex) {
 
         itemsHtml += `
             <tr>
-                <td>${record.fields.Name}${optionDetailsForReceipt}${edgeCaseNote}</td>
+                <td>${record.fields.Name}${instanceLabel}${optionDetailsForReceipt}${edgeCaseNote}</td>
                 <td style="text-align: center;">${quantity}</td>
                 <td style="text-align: right;">$${unitPrice.toFixed(2)}</td>
                 <td style="text-align: right;">$${itemTotal.toFixed(2)}</td>

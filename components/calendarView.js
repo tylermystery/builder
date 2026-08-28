@@ -21,6 +21,7 @@ async function fetchUpcomingEvents() {
     }
 
     const eventItems = state.records.all.filter(record => {
+        if (record._planInstance) return false;
         const itemType = record.fields['Item Type'];
         const hasDate = record.fields.Date;
         const isEvent = itemType === 'Event';

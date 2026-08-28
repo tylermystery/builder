@@ -5,6 +5,7 @@ import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { parseOptions, getShopUrlParam } from './utils.js';
 import { log } from './utils/debug.js';
 import { serializeIterations, deserializeIterations } from './components/refinementHandler.js';
+import { getCatalogRecordId } from './utils/planInstances.js';
 // Conversations are components of a plan, so the background needs to know which ones exist.
 // planAtmosphere pulls in nothing from api.js, so this import introduces no cycle.
 import {
@@ -1004,8 +1005,10 @@ export async function saveSessionToAirtable() {
     const customRecordsToSave = {};
     let customCategorizationCount = 0;
     for (const itemId of allCartItemIds) {
+        const itemInfo = state.cart.lockedItems.get(itemId) || state.cart.items.get(itemId);
         // Custom items include AI-generated items, manually added items, and solution items
-        const isCustomItem = itemId.startsWith('ai-') || itemId.startsWith('manual-') || itemId.startsWith('solution-');
+        const isPlanInstance = !!itemInfo?.catalogRecordId && itemInfo.catalogRecordId !== itemId;
+        const isCustomItem = itemId.startsWith('ai-') || itemId.startsWith('manual-') || itemId.startsWith('solution-') || isPlanInstance;
         if (isCustomItem) {
             // Look in state.records.all first
             let customRecord = state.records.all.find(r => r.id === itemId);
@@ -1037,7 +1040,9 @@ export async function saveSessionToAirtable() {
                     solutionData: customRecord.solutionData,
                     // Preserve research data for solution items that have been "dug"
                     _researchData: customRecord._researchData,
-                    _aiConfidence: customRecord._aiConfidence
+                    _aiConfidence: customRecord._aiConfidence,
+                    _planInstance: customRecord._planInstance === true,
+                    _catalogRecordId: getCatalogRecordId(itemId, itemInfo, customRecord)
                 };
             }
         }

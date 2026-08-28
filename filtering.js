@@ -420,7 +420,7 @@ export async function applyFiltersAndSort(imageCache) {
     const goalBucket = buildGoalBucket(sortBy);
 
     let baseRecordsToFilter = state.records.all.filter(record =>
-        record.fields.Stores && record.fields.Stores.includes(state.ui.activeShopId)
+        !record._planInstance && record.fields.Stores && record.fields.Stores.includes(state.ui.activeShopId)
     );
 
     let recordsToDisplay;

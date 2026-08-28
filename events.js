@@ -23,6 +23,7 @@ import { broadcastItemAdded, broadcastItemRemoved } from './utils/realtimeUpdate
 import { showWtfPlansPanel, initializeWtfPlansPanel } from './components/wtfPlansPanel.js';
 import { syncPlanState, initializePlanStateSync } from './utils/planStateSync.js';
 import { initializeUnifiedChatPanel, showUnifiedChatPanel, toggleUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage } from './components/unifiedChatPanel.js';
+import { createPlanInstanceId, createPlanInstanceRecord, cloneItemInfoForAnotherInstance, getCatalogRecordId, getPlanInstancesForCatalog } from './utils/planInstances.js';
 
 console.log('[MODULE DEBUG] events.js imports resolved successfully.', performance.now().toFixed(2) + 'ms');
 
@@ -711,15 +712,21 @@ async function handlePaymentFormSubmit(event) {
 async function registerPlanEventsForCheckout(customerEmail, opts = {}) {
     const { suppressSignInEmail = false } = opts;
     // The events to register for are the "Event" records in the plan.
-    const eventEntries = [];
+    const eventEntriesByCatalogId = new Map();
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (record && record.fields['Item Type'] === 'Event') {
-            eventEntries.push({ recordId, record, quantity: itemInfo.quantity || 1 });
+            const catalogRecordId = getCatalogRecordId(recordId, itemInfo, record);
+            const quantity = itemInfo.quantity || 1;
+            const existing = eventEntriesByCatalogId.get(catalogRecordId);
+            if (!existing || quantity > existing.quantity) {
+                eventEntriesByCatalogId.set(catalogRecordId, { recordId: catalogRecordId, record, quantity });
+            }
             itemInfo.rsvpType = itemInfo.rsvpType || 'yes';
             state.cart.lockedItems.set(recordId, itemInfo);
         }
     }
+    const eventEntries = Array.from(eventEntriesByCatalogId.values());
 
     const isAuthed = state.session.user.isAuthenticated;
 
@@ -2577,6 +2584,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const saveShareBtn = e.target.closest('#save-share-btn');
         const breadcrumbLink = e.target.closest('.breadcrumb-link');
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
+        const addAnotherInstanceBtn = e.target.closest('#modal-add-another-instance-btn');
         const receiptLink = e.target.closest('.receipt-link, .receipt-btn');
         const openToEditBtn = e.target.closest('.open-to-edit-btn');
         const editEventBtn = e.target.closest('.edit-event-btn');
@@ -3139,6 +3147,64 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             }
         }
         
+        else if (addAnotherInstanceBtn) {
+            e.stopPropagation();
+
+            const modalOverlay = document.getElementById('detail-modal-overlay');
+            const currentRecordId = modalOverlay?.dataset.recordId;
+            const currentRecord = state.records.all.find(record => record.id === currentRecordId)
+                || window._solutionRecords?.get(currentRecordId);
+            if (!currentRecordId || !currentRecord) return;
+
+            const catalogRecordId = getCatalogRecordId(
+                currentRecordId,
+                state.cart.lockedItems.get(currentRecordId),
+                currentRecord
+            );
+            const existingInstances = getPlanInstancesForCatalog(
+                state.cart.lockedItems,
+                catalogRecordId,
+                id => state.records.all.find(record => record.id === id)
+            );
+            if (existingInstances.length === 0) return;
+
+            addAnotherInstanceBtn.disabled = true;
+            addAnotherInstanceBtn.textContent = 'Adding Instance…';
+
+            try {
+                const sourceInstance = existingInstances.find(instance => instance.recordId === currentRecordId) || existingInstances[0];
+                const instanceId = createPlanInstanceId(catalogRecordId);
+                const instanceRecord = createPlanInstanceRecord(currentRecord, instanceId, catalogRecordId);
+                const instanceInfo = cloneItemInfoForAnotherInstance(sourceInstance.itemInfo, catalogRecordId);
+
+                state.records.all.push(instanceRecord);
+                invalidateRecordsIndex();
+                state.cart.lockedItems.set(instanceId, instanceInfo);
+                if (state.session.planItemOrder?.length > 0) state.session.planItemOrder.push(instanceId);
+                triggerSave();
+
+                const newCount = existingInstances.length + 1;
+                addEnergy();
+                updateProgress(0.0002 * (instanceInfo.quantity || 1));
+                ui.updateCardButtonText(catalogRecordId, true);
+                await ui.updateEventPlanSection();
+                ui.updateTotalCost();
+                await updateAllCardAvailabilityIcons();
+                await ui.updateLockedItemStatusIcons();
+                updateMobileBarAvailability();
+                broadcastItemAdded(instanceId, currentRecord.fields?.Name || 'Item');
+
+                addAnotherInstanceBtn.textContent = `Add Another Instance (${newCount} in plan)`;
+                ui.showEventPlanNotification(`Added another instance of “${currentRecord.fields?.Name || 'Item'}”.`);
+            } catch (error) {
+                console.error('[PlanInstances] Failed to add another instance:', error);
+                addAnotherInstanceBtn.textContent = 'Add Another Instance';
+                ui.showToast('Could not add another instance. Please try again.');
+            } finally {
+                addAnotherInstanceBtn.disabled = false;
+            }
+        }
+
         else if (addToPlanBtn) {
             e.stopPropagation();
             const recordId = addToPlanBtn.closest('[data-record-id]')?.dataset.recordId;
@@ -3338,6 +3404,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             // Update itemInfo with enforced quantity
             itemInfo.quantity = quantityToSave;
 
+            itemInfo.catalogRecordId = getCatalogRecordId(recordId, itemInfo, record);
             state.cart.lockedItems.set(recordId, itemInfo);
             state.cart.items.delete(recordId);
 

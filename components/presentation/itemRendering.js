@@ -8,6 +8,7 @@ import { log } from '../../utils/debug.js';
 import { renderRichText } from '../../utils.js';
 import { applyCloudinaryFitTransform, getImageOrientationClass } from '../../utils/imageOptimizer.js';
 import { getActiveStorePillars } from '../../availability.js';
+import { getCatalogRecordId, getPlanInstancePosition } from '../../utils/planInstances.js';
 
 // Track loaded images for each item
 const itemImagesCache = new Map();
@@ -177,6 +178,11 @@ export async function renderItineraryItem(item, index) {
     const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
     const hybridDataForName = _deps.getCombinedHybridData(recordId);
     const name = hybridDataForName?.hybridName || record.fields.Name || 'Untitled Item';
+    const catalogRecordId = getCatalogRecordId(recordId, itemInfo, record);
+    const instancePosition = getPlanInstancePosition(state.cart.lockedItems, recordId, catalogRecordId, _deps.getRecordById);
+    const instanceBadgeHTML = type === 'locked' && instancePosition.count > 1
+        ? `<span class="plan-instance-badge">Instance ${instancePosition.index} of ${instancePosition.count}</span>`
+        : '';
     const selectionsOrIndex = itemInfo?.selections || itemInfo?.selectedOptionIndex;
     const price = _deps.getRecordPrice(record, selectionsOrIndex);
     const quantity = itemInfo?.quantity || 1;
@@ -357,6 +363,7 @@ export async function renderItineraryItem(item, index) {
                     <div class="item-accordion-title-row">
                         ${taskStatusButtonHTML}
                         <h3 class="item-accordion-title">${name}</h3>
+                        ${instanceBadgeHTML}
                         ${emojiIndicatorHTML}
                         ${combinedIndicatorHTML}
                         ${groupIndicatorHTML}
@@ -461,6 +468,11 @@ export async function renderCompactCard(item) {
     const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
     const hybridDataForName = _deps.getCombinedHybridData(recordId);
     const name = hybridDataForName?.hybridName || record.fields?.Name || 'Untitled Item';
+    const catalogRecordId = getCatalogRecordId(recordId, itemInfo, record);
+    const instancePosition = getPlanInstancePosition(state.cart.lockedItems, recordId, catalogRecordId, _deps.getRecordById);
+    const instanceBadgeHTML = type === 'locked' && instancePosition.count > 1
+        ? `<span class="plan-instance-badge">${instancePosition.index}/${instancePosition.count}</span>`
+        : '';
 
     // Confidence tier
     const isAIItem = recordId.startsWith('custom-') || recordId.startsWith('ai-search-') || recordId.startsWith('ai-group-') || recordId.startsWith('ai-child-');
@@ -724,6 +736,7 @@ export async function renderCompactCard(item) {
                 <div class="compact-card-title-row">
                     ${goalBadgeHTML}
                     <h4 class="compact-card-name" title="${escapeHtml(name)}">${escapeHtml(name)}</h4>
+                    ${instanceBadgeHTML}
                     ${sourceTypeBadgeHTML}
                 </div>
                 ${provenanceHTML}
