@@ -1,7 +1,7 @@
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
 const { SENDER_EMAIL, SENDER_NAME, buildFrom } = require('./utils/email-config');
-const { buildReceiptEmail, loadCheckoutEmailDetails } = require('./utils/checkout-emails');
+const { buildReceiptEmail, buildMerchantNotificationEmail, loadCheckoutEmailDetails } = require('./utils/checkout-emails');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -96,20 +96,26 @@ exports.handler = async (event) => {
       throw new Error(`Failed to update session: ${errText}`);
     }
 
-    if (sendReceipt) {
-      const baseUrl = SITE_URL || URL || 'https://whatthefun.wtf';
+    const baseUrl = SITE_URL || URL || 'https://whatthefun.wtf';
+    const receiptPayment = {
+      amount,
+      method: methodLabels[paymentMethod],
+      status: 'succeeded',
+      date: newEntry.date,
+      customerEmail: customerEmail || null,
+      customerName: customerName || null,
+    };
+    let emailDetails = {};
+    try {
+      emailDetails = await loadCheckoutEmailDetails(session);
+    } catch (emailErr) {
+      console.error('[record-direct-payment] Failed to load receipt details:', emailErr.message);
+    }
 
+    if (sendReceipt) {
       // The full payment record drives the shared receipt template (the same one
       // online card payments use), so a manually-recorded payment produces an
       // identical, branded receipt.
-      const receiptPayment = {
-        amount,
-        method: methodLabels[paymentMethod],
-        status: 'succeeded',
-        date: newEntry.date,
-        customerEmail: customerEmail || null,
-        customerName: customerName || null,
-      };
 
       // Collect every address that should receive the receipt: the customer's
       // email entered at the dashboard (if any), plus any collaborator accounts
@@ -142,7 +148,6 @@ exports.handler = async (event) => {
       }
 
       const emailFrom = buildFrom(store.fields.Name || SENDER_NAME, store.fields.ContactEmail || SENDER_EMAIL);
-      const emailDetails = await loadCheckoutEmailDetails(session);
       for (const [email, name] of recipients) {
         try {
           const receipt = buildReceiptEmail(
@@ -157,6 +162,28 @@ exports.handler = async (event) => {
         } catch (emailErr) {
           console.error(`[record-direct-payment] Failed to email ${email}:`, emailErr.message);
         }
+      }
+    }
+
+    const merchantEmail = store.fields.ContactEmail || SENDER_EMAIL;
+    if (merchantEmail) {
+      try {
+        const notification = buildMerchantNotificationEmail(
+          session,
+          receiptPayment,
+          store,
+          baseUrl,
+          { unpaid: false, amountDue: amount, ...emailDetails }
+        );
+        await sgMail.send({
+          to: merchantEmail,
+          from: notification.from,
+          subject: notification.subject,
+          html: notification.html,
+        });
+        console.log(`[record-direct-payment] Merchant receipt sent to ${merchantEmail}`);
+      } catch (emailErr) {
+        console.error(`[record-direct-payment] Failed to email merchant receipt:`, emailErr.message);
       }
     }
 

@@ -438,12 +438,13 @@ async function handlePaymentFormSubmit(event) {
             return;
         }
 
-        // Make sure the email/name the customer just typed are on the PaymentIntent
-        // before it is confirmed — the webhook reads them from the intent's metadata
-        // to send the receipt. Best-effort and amount-preserving; a failure here
-        // never blocks the charge.
-        try { await ui.syncCheckoutCustomerDetails(customerName, customerEmail); }
-        catch (e) { console.warn('[CHECKOUT] customer-detail sync skipped:', e.message); }
+        // Persist receipt recipients on the PaymentIntent before charging. The
+        // webhook uses these fields to email both the purchaser and the store, so
+        // do not accept payment until the receipt details are synchronized.
+        const receiptDetailsSynced = await ui.syncCheckoutCustomerDetails(customerName, customerEmail);
+        if (!receiptDetailsSynced) {
+            throw new Error('We could not prepare your emailed receipt. Please check your connection and try again.');
+        }
 
         // The webhook builds the receipt from the saved session, so persist the
         // latest cart quantities, RSVP labels, and item schedule before charging.
@@ -631,11 +632,22 @@ async function handlePaymentFormSubmit(event) {
             // Show appropriate success message for ACH vs card
             const successMsg = document.getElementById('payment-success-message');
             if (successMsg) {
+                successMsg.replaceChildren();
+                const statusLine = document.createElement('div');
+                statusLine.textContent = isACHProcessing ? '✅ Bank Payment Submitted!' : '✅ Payment Successful!';
+                successMsg.appendChild(statusLine);
+
                 if (isACHProcessing) {
-                    successMsg.innerHTML = '✅ Bank Payment Submitted!<br><small style="font-size: 0.7em; opacity: 0.85;">ACH transfers typically take 2-4 business days to complete.</small>';
-                } else {
-                    successMsg.textContent = '✅ Payment Successful!';
+                    const processingNote = document.createElement('small');
+                    processingNote.style.cssText = 'display: block; font-size: 0.7em; opacity: 0.85;';
+                    processingNote.textContent = 'ACH transfers typically take 2-4 business days to complete.';
+                    successMsg.appendChild(processingNote);
                 }
+
+                const receiptNote = document.createElement('small');
+                receiptNote.style.cssText = 'display: block; margin-top: 8px; font-size: 0.7em; opacity: 0.85;';
+                receiptNote.textContent = `A receipt will be emailed to ${customerEmail}.`;
+                successMsg.appendChild(receiptNote);
                 successMsg.style.display = 'block';
             }
 
@@ -1713,6 +1725,83 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         rightSidebar?.classList.add('collapsed');
     }
 
+    const mobileViewPlanBtn = document.getElementById('mobile-view-plan-btn');
+    let mobilePlanDrag = null;
+    const setMobilePlanOpen = (isOpen) => {
+        if (!rightSidebar || !mobileViewPlanBtn) return;
+
+        mobilePlanDrag = null;
+        rightSidebar.classList.remove('dragging');
+        rightSidebar.style.removeProperty('--mobile-plan-drag-offset');
+        rightSidebar.classList.toggle('collapsed', !isOpen);
+        document.body.classList.toggle('mobile-plan-open', isOpen);
+        mobileViewPlanBtn.setAttribute('aria-expanded', String(isOpen));
+        mobileViewPlanBtn.textContent = isOpen ? 'Close Plan' : 'View Plan';
+    };
+
+    const interactivePlanControlSelector = 'button, input, textarea, select, a, [contenteditable="true"]';
+
+    rightSidebar?.addEventListener('touchstart', (event) => {
+        if (window.innerWidth >= 1000 || rightSidebar.classList.contains('collapsed') || event.touches.length !== 1) return;
+
+        const touchTarget = event.target instanceof Element ? event.target : null;
+        const startedOnHandle = Boolean(touchTarget?.closest('#mobile-plan-drag-handle'));
+        const startedOnControl = Boolean(touchTarget?.closest(interactivePlanControlSelector));
+
+        if (!startedOnHandle && (rightSidebar.scrollTop > 0 || startedOnControl)) return;
+
+        const touch = event.touches[0];
+        mobilePlanDrag = {
+            startX: touch.clientX,
+            startY: touch.clientY,
+            startTime: performance.now(),
+            active: false,
+            startedOnHandle
+        };
+    }, { passive: true });
+
+    rightSidebar?.addEventListener('touchmove', (event) => {
+        if (!mobilePlanDrag || event.touches.length !== 1) return;
+
+        const touch = event.touches[0];
+        const deltaX = touch.clientX - mobilePlanDrag.startX;
+        const deltaY = touch.clientY - mobilePlanDrag.startY;
+
+        if (!mobilePlanDrag.active) {
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                mobilePlanDrag = null;
+                return;
+            }
+            if (deltaY <= 6 || (!mobilePlanDrag.startedOnHandle && rightSidebar.scrollTop > 0)) return;
+
+            mobilePlanDrag.active = true;
+            rightSidebar.classList.add('dragging');
+        }
+
+        event.preventDefault();
+        const dragOffset = Math.max(0, Math.min(deltaY * 0.88, window.innerHeight * 0.65));
+        rightSidebar.style.setProperty('--mobile-plan-drag-offset', `${dragOffset}px`);
+    }, { passive: false });
+
+    const finishMobilePlanDrag = (event, allowClose) => {
+        if (!mobilePlanDrag) return;
+
+        const touch = event.changedTouches?.[0];
+        const deltaY = touch ? touch.clientY - mobilePlanDrag.startY : 0;
+        const duration = Math.max(performance.now() - mobilePlanDrag.startTime, 1);
+        const velocity = deltaY / duration;
+        const shouldClose = allowClose && mobilePlanDrag.active && (deltaY > 90 || (deltaY > 45 && velocity > 0.5));
+
+        rightSidebar?.classList.remove('dragging');
+        rightSidebar?.style.removeProperty('--mobile-plan-drag-offset');
+        mobilePlanDrag = null;
+
+        if (shouldClose) setMobilePlanOpen(false);
+    };
+
+    rightSidebar?.addEventListener('touchend', (event) => finishMobilePlanDrag(event, true));
+    rightSidebar?.addEventListener('touchcancel', (event) => finishMobilePlanDrag(event, false));
+
     // New filter toggle button handler (replaces old mobile-filter-trigger)
     const filterToggleBtn = document.getElementById('filter-toggle-btn');
     if (filterToggleBtn) {
@@ -1720,6 +1809,13 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const isExpanded = filterToggleBtn.getAttribute('aria-expanded') === 'true';
             filterToggleBtn.setAttribute('aria-expanded', !isExpanded);
             leftSidebar?.classList.toggle('collapsed');
+
+            if (!isExpanded && window.innerWidth < 1000) {
+                setMobilePlanOpen(false);
+                window.setTimeout(() => {
+                    leftSidebar?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 50);
+            }
         });
     }
 
@@ -1740,16 +1836,15 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             leftSidebar?.classList.toggle('collapsed');
         }
     });
-    safeAddEventListener('mobile-view-plan-btn', 'click', () => {
-        const isCurrentlyCollapsed = rightSidebar?.classList.contains('collapsed');
-        rightSidebar?.classList.toggle('collapsed');
+    mobileViewPlanBtn?.addEventListener('click', () => {
+        const isOpen = !rightSidebar?.classList.contains('collapsed');
+        setMobilePlanOpen(!isOpen);
+    });
 
-        if (isCurrentlyCollapsed) {
-            setTimeout(() => {
-                rightSidebar?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            }, 50);
-        } else {
-            document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && document.body.classList.contains('mobile-plan-open')) {
+            setMobilePlanOpen(false);
+            mobileViewPlanBtn?.focus();
         }
     });
 

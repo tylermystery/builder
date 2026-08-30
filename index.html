@@ -3016,7 +3016,21 @@ body.presentation-active .modal-overlay {
 
 /* Critical Mobile Sidebar Styles - Must be inline for direct URL access */
 /* These styles are applied by JS on mobile viewports before deferred.css loads */
+#mobile-plan-drag-handle {
+    display: none;
+}
+
 @media (max-width: 999px) {
+    body {
+        --mobile-summary-bar-height: 60px;
+    }
+
+    /* Keep filters directly below the header instead of after the plan panel. */
+    #left-sidebar {
+        order: -1;
+        scroll-margin-top: 120px;
+    }
+
     #left-sidebar, #right-sidebar {
         max-width: 100%;
         transition: max-height 0.4s ease-out, opacity 0.3s ease, margin 0.4s ease, padding 0.4s ease;
@@ -3033,9 +3047,80 @@ body.presentation-active .modal-overlay {
         padding-bottom: 0;
     }
 
+    #right-sidebar {
+        position: fixed;
+        left: 10px;
+        right: 10px;
+        bottom: calc(var(--mobile-summary-bar-height) + env(safe-area-inset-bottom, 0px));
+        z-index: 997;
+        width: auto;
+        max-width: none;
+        max-height: 72vh;
+        max-height: min(72dvh, 720px);
+        margin: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        border-radius: 18px 18px 0 0;
+        box-shadow: 0 -16px 42px rgba(15, 23, 42, 0.28);
+        transform: translateY(var(--mobile-plan-drag-offset, 0px));
+        visibility: visible;
+        transition: transform 0.3s ease, opacity 0.2s ease, visibility 0s;
+    }
+
+    #right-sidebar.dragging {
+        transition: none;
+        user-select: none;
+    }
+
+    #right-sidebar.collapsed {
+        max-height: 72vh;
+        max-height: min(72dvh, 720px);
+        transform: translateY(calc(100% + 24px));
+        visibility: hidden;
+        pointer-events: none;
+        transition: transform 0.3s ease, opacity 0.2s ease, visibility 0s linear 0.3s;
+    }
+
+    #mobile-plan-drag-handle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        width: 100%;
+        height: 28px;
+        margin-bottom: -20px;
+        background: rgba(255, 255, 255, 0.96);
+        touch-action: none;
+        cursor: grab;
+    }
+
+    #mobile-plan-drag-handle::after {
+        content: "";
+        width: 42px;
+        height: 5px;
+        border-radius: 999px;
+        background: rgba(71, 85, 105, 0.35);
+    }
+
+    #right-sidebar #event-plan-panel {
+        position: static;
+        top: auto;
+        border-radius: 18px 18px 0 0;
+        background-color: rgba(255, 255, 255, 0.96);
+    }
+
     #mobile-summary-bar {
         transform: translateY(100%);
         transition: transform 0.3s ease-in-out;
+        min-height: var(--mobile-summary-bar-height);
+        padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+
+    #mobile-view-plan-btn[aria-expanded="true"] {
+        background-color: #fff;
+        color: #1f2937;
     }
 
     body.mobile-bar-active #mobile-summary-bar {
@@ -5122,6 +5207,7 @@ body.ucp-panel-open .unified-chat-panel {
 
     <div class="main-content">
 <div id="right-sidebar">
+            <div id="mobile-plan-drag-handle" aria-hidden="true"></div>
             <div id="event-plan-panel">
                 <div class="event-plan-header-row">
                     <div class="event-name-group">
@@ -5662,9 +5748,16 @@ body.ucp-panel-open .unified-chat-panel {
             </div>
             <div id="payment-choice-container" style="display: none; margin: 15px 0; padding: 10px; background-color: #f8f9fa; border-radius: 5px;">
                 <h4 style="margin-top: 0;">Payment Option</h4>
-                <div style="display: flex; justify-content: space-around;">
-                    <label><input type="radio" name="paymentChoice" value="deposit" checked> Pay 35% Deposit</label>
-                    <label><input type="radio" name="paymentChoice" value="full"> Pay Full Amount</label>
+                <div style="display: flex; flex-wrap: wrap; gap: 12px 20px;">
+                    <label id="deposit-payment-choice"><input type="radio" name="paymentChoice" value="deposit" checked> <span id="deposit-choice-label">Pay 35% Deposit</span></label>
+                    <label id="full-payment-choice"><input type="radio" name="paymentChoice" value="full"> <span id="full-choice-label">Pay Full Amount</span></label>
+                    <label id="custom-payment-choice"><input type="radio" name="paymentChoice" value="custom"> Pay a Custom Amount</label>
+                </div>
+                <div id="custom-payment-amount-container" style="display: none; margin-top: 12px;">
+                    <label for="custom-payment-amount" style="display: block; margin-bottom: 5px; font-weight: 600;">Partial payment amount</label>
+                    <input type="number" id="custom-payment-amount" min="0.50" step="0.01" inputmode="decimal" placeholder="0.00" style="width: 100%; padding: 9px 10px; border: 1px solid #ced4da; border-radius: 5px;">
+                    <small id="custom-payment-help" style="display: block; margin-top: 5px; color: #6c757d;"></small>
+                    <small id="custom-payment-error" role="alert" style="display: none; margin-top: 5px; color: #dc3545;"></small>
                 </div>
             </div>
             <div class="terms-and-conditions"></div>
@@ -6625,7 +6718,7 @@ body.ucp-panel-open .unified-chat-panel {
             <span id="mobile-bar-item-count">0 items</span>
             <span id="mobile-bar-total-cost">$0.00</span>
         </div>
-        <button id="mobile-view-plan-btn">View Plan</button>
+        <button id="mobile-view-plan-btn" aria-controls="right-sidebar" aria-expanded="false">View Plan</button>
     </div>
 
 <div id="calendar-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="calendar-modal-title">
