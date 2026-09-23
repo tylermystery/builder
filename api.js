@@ -6791,7 +6791,14 @@ export async function setSimilarOfferingIds(storeId, itemId, relatedItemIds) {
 export async function getPublicCatalog(storeId) {
     if (!storeId) return [];
     try {
-        const response = await fetch(`${PUBLIC_CATALOG_BASE}?storeId=${encodeURIComponent(storeId)}`);
+        // The token is optional: guests get the same public payload as before.
+        // When one is present the server also returns the viewer's own pending
+        // suggestions (and, for a publisher, the store's) alongside them.
+        const headers = publicCatalogAuthHeaders();
+        const response = await fetch(
+            `${PUBLIC_CATALOG_BASE}?storeId=${encodeURIComponent(storeId)}`,
+            headers ? { headers } : undefined
+        );
         if (!response.ok) {
             log('API', `getPublicCatalog non-OK status ${response.status}`);
             return [];
@@ -6826,6 +6833,60 @@ export async function createPublicItem(payload) {
         return data.item || null;
     } catch (error) {
         console.error('[API] createPublicItem error:', error);
+        return null;
+    }
+}
+
+// Promote a public item into the store's catalog. Publish-permission only —
+// the server re-checks against the store's PublishPermission field, so this is
+// a convenience call, not the security boundary.
+//
+// `payload` takes one of three shapes, in the endpoint's own priority order:
+//   { publicItemId }                        — promote an existing public row
+//   { originSessionId, originItemId, ... }  — promote the row that publish-on-add
+//                                             already created for this plan item
+//   { storeId, name, ... }                  — create and publish in one call
+// Returns the published row, or null when the caller is logged out or refused.
+export async function publishPublicItem(payload) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers) return null;
+    try {
+        const response = await fetch(`${PUBLIC_CATALOG_BASE}/publish`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            log('API', `publishPublicItem non-OK status ${response.status}`);
+            return null;
+        }
+        const data = await response.json();
+        return data.item || null;
+    } catch (error) {
+        console.error('[API] publishPublicItem error:', error);
+        return null;
+    }
+}
+
+// Reverse a publish: the row drops back to a community idea ('none'). The item
+// itself, and its reactions/comments/variations, are untouched.
+export async function unpublishPublicItem(publicItemId) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers || !publicItemId) return null;
+    try {
+        const response = await fetch(`${PUBLIC_CATALOG_BASE}/unpublish`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ publicItemId })
+        });
+        if (!response.ok) {
+            log('API', `unpublishPublicItem non-OK status ${response.status}`);
+            return null;
+        }
+        const data = await response.json();
+        return data.item || null;
+    } catch (error) {
+        console.error('[API] unpublishPublicItem error:', error);
         return null;
     }
 }

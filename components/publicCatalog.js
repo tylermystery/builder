@@ -72,7 +72,14 @@ function transformPublicRowToRecord(row, storeId) {
     if (row.description) f.Description = row.description;
     if (row.imageUrl && !f['Curated Images']) f.imageUrl = row.imageUrl;
     if (row.price != null && f.Price == null) f.Price = row.price;
-    f.Status = PUBLIC_IDEA_STATUS;
+
+    // A row a publisher promoted into the store catalog renders as an ordinary
+    // catalog item: 'Available' is what the default status filter admits, so the
+    // item simply shows up alongside the curated ones. Everything else keeps the
+    // "Public Idea" status it has always had and stays under that filter.
+    const catalogStatus = row.catalogStatus || 'none';
+    f.Status = catalogStatus === 'published' ? 'Available' : PUBLIC_IDEA_STATUS;
+
     // Anchor to the originating store so the store-scoped catalog filter includes it.
     f.Stores = [storeId];
     if (!f['Item Type']) f['Item Type'] = 'Bookable Item';
@@ -81,6 +88,10 @@ function transformPublicRowToRecord(row, storeId) {
     record.publicItemId = row.id;
     record.publicSource = row.source || 'custom';
     record.publicImageUrl = row.imageUrl || null;
+    // Carried so cards/modals can label the row and so the publisher control knows
+    // whether it is offering "add to catalog" or "remove from catalog".
+    record.catalogStatus = catalogStatus;
+    record.publicAuthorId = row.authorId || null;
 
     return record;
 }
@@ -114,11 +125,34 @@ function injectPublicRecords(rows, storeId) {
     for (const row of ideaRows) {
         const record = transformPublicRowToRecord(row, storeId);
         publicIdeaIndex.set(record.id, row);
+        if (adoptOriginRecord(row, record)) continue;
         const existingIdx = state.records.all.findIndex(r => r.id === record.id);
         if (existingIdx >= 0) state.records.all[existingIdx] = record;
         else state.records.all.push(record);
     }
     invalidateRecordsIndex();
+}
+
+// A published row whose origin item is still present in THIS session's catalog
+// (the AI / manual record the publisher added moments ago) would render as a
+// second, identical card. Instead of injecting the twin, tag the origin record
+// with the public identity so it shows the published badge and the publisher
+// control, and report that the row has been accounted for. Visitors who never
+// had the origin record fall through and get the injected row as usual.
+function adoptOriginRecord(row, record) {
+    if (!row || row.catalogStatus !== 'published' || !row.originItemId) return false;
+    const origin = state.records.all.find(
+        r => r.id === row.originItemId && !isPublicIdeaRecord(r)
+    );
+    if (!origin) return false;
+    origin.publicItemId = row.id;
+    origin.catalogStatus = 'published';
+    origin.publicAuthorId = row.authorId || null;
+    if (origin.fields) origin.fields.Status = 'Available';
+    // Drop any previously injected twin of this row.
+    const twinIdx = state.records.all.findIndex(r => r.id === record.id);
+    if (twinIdx >= 0) state.records.all.splice(twinIdx, 1);
+    return true;
 }
 
 // Inject (or refresh) a single public-layer row into the live catalog without
@@ -128,6 +162,10 @@ function injectPublicRecords(rows, storeId) {
 function injectOnePublicRow(row, storeId) {
     const record = transformPublicRowToRecord(row, storeId);
     publicIdeaIndex.set(record.id, row);
+    if (adoptOriginRecord(row, record)) {
+        invalidateRecordsIndex();
+        return record;
+    }
     const existingIdx = state.records.all.findIndex(r => r.id === record.id);
     if (existingIdx >= 0) state.records.all[existingIdx] = record;
     else state.records.all.push(record);
@@ -194,6 +232,101 @@ export async function publishItemToPublicLayer(record, source = 'custom') {
         }
     } catch (error) {
         console.error('[PublicCatalog] publishItemToPublicLayer error:', error);
+    }
+}
+
+// --- Publisher: add an item to / remove it from the store catalog -----------
+//
+// Phase 1 of the catalog-contribution work. A user with publish permission on
+// the active store can promote an AI, manual, or public-idea item into the
+// store's catalog, where it renders like any other available item for everyone.
+// The promotion lives in the Postgres public layer (`public_items.catalog_status`)
+// — Airtable is not written to, so curated catalog data is untouched. The server
+// re-checks publish permission on every call; the checks here only decide whether
+// to OFFER the control.
+
+// Records that can be promoted: a session-local AI/manual item, or a public idea.
+// Curated Airtable records ("rec…") are already in the catalog, and community
+// containers for them are not promotable either.
+export function canOfferCatalogPublish(record) {
+    if (!record) return false;
+    if (typeof record.id === 'string' && record.id.startsWith('rec')) return false;
+    // Events keep their own dedicated publish/edit flow in the modal.
+    if (record.fields?.['Item Type'] === 'Event') return false;
+    if (!state.session?.user?.isAuthenticated) return false;
+    return api.userHasPublishPermission();
+}
+
+// True when the record is currently part of the store catalog via the public layer.
+export function isRecordInStoreCatalog(record) {
+    return !!(record && record.catalogStatus === 'published');
+}
+
+/**
+ * Promote a record into the active store's catalog, or take it back out.
+ * Returns { ok, row, error }. Never throws.
+ *
+ * Publishing is idempotent: the server first looks for an existing public row by
+ * id, then by origin identity (this session + the original item id), so an item
+ * that publish-on-add already mirrored is promoted rather than duplicated.
+ */
+export async function setRecordCatalogMembership(record, publish) {
+    if (!record) return { ok: false, error: 'No item' };
+    if (!state.session?.user?.isAuthenticated) {
+        requireSignIn();
+        return { ok: false, error: 'Login required' };
+    }
+
+    const storeId = storeIdForRecord(record);
+    const fields = record.fields || {};
+
+    try {
+        let row;
+        if (publish) {
+            row = await api.publishPublicItem({
+                publicItemId: record.publicItemId ?? undefined,
+                storeId,
+                source: record.publicSource || (record.isManual ? 'custom' : 'ai'),
+                name: fields.Name || 'Untitled item',
+                description: fields.Description || '',
+                imageUrl: fields.imageUrl || record.publicImageUrl || null,
+                price: fields.Price != null ? String(fields.Price) : null,
+                data: record,
+                originSessionId: state.session?.id || null,
+                originItemId: record.id || null
+            });
+        } else {
+            if (record.publicItemId == null) return { ok: false, error: 'Not published' };
+            row = await api.unpublishPublicItem(record.publicItemId);
+        }
+
+        if (!row) return { ok: false, error: publish ? 'Could not add to catalog' : 'Could not remove from catalog' };
+
+        // Keep the cached row and the on-screen record in sync, then re-render so
+        // the item moves between the catalog and the Public Ideas filter without
+        // a reload.
+        const publicId = publicRecordId(row);
+        const cached = publicIdeaIndex.get(publicId);
+        if (cached) cached.catalogStatus = row.catalogStatus;
+        injectOnePublicRow(row, row.storeId || storeId);
+
+        record.publicItemId = row.id;
+        record.catalogStatus = row.catalogStatus;
+        if (record.fields) {
+            record.fields.Status = row.catalogStatus === 'published'
+                ? 'Available'
+                : (isPublicIdeaRecord(record) ? PUBLIC_IDEA_STATUS : record.fields.Status);
+        }
+        invalidateRecordsIndex();
+        if (typeof window.applyFiltersAndSort === 'function') {
+            window.applyFiltersAndSort(window.imageCache);
+        }
+
+        log('PublicCatalog', `${publish ? 'Added' : 'Removed'} item ${record.id} ${publish ? 'to' : 'from'} store catalog`);
+        return { ok: true, row };
+    } catch (error) {
+        console.error('[PublicCatalog] setRecordCatalogMembership error:', error);
+        return { ok: false, error: 'Something went wrong' };
     }
 }
 
