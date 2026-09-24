@@ -64,10 +64,40 @@ export const publicItems = pgTable(
     // The full original record so the existing UI can render it faithfully.
     data: jsonb("data"),
     hidden: boolean("hidden").notNull().default(false),
+    // Where this row stands in relation to the STORE'S OWN CATALOG:
+    //   'none'      — a community idea (everything that existed before this
+    //                 column). Surfaced under the "Public Ideas" filter only.
+    //   'pending'   — suggested for the catalog, awaiting a publisher's review.
+    //                 Visible to its author and the store's publishers only.
+    //   'published' — promoted by a publisher; renders as an ordinary catalog
+    //                 item for everyone browsing the store.
+    //   'rejected'  — reviewed and declined; visible to its author only.
+    // The 'none' default is what keeps every pre-existing row behaving exactly
+    // as it did before this column was added.
+    catalogStatus: text("catalog_status").notNull().default("none"),
+    // Which variation the catalog currently presents. Null means the base row's
+    // own fields are current. Set null automatically if that variation is
+    // deleted, so the pointer can never dangle.
+    currentVariationId: integer("current_variation_id").references(
+      (): AnyPgColumn => itemVariations.id,
+      { onDelete: "set null" },
+    ),
+    // Audit trail for the promote action (who put this in the catalog, when).
+    publishedAt: timestamp("published_at"),
+    publishedBy: text("published_by"),
+    // Audit trail for approving/declining a suggested item.
+    reviewedAt: timestamp("reviewed_at"),
+    reviewedBy: text("reviewed_by"),
+    reviewNote: text("review_note"),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (t) => ({
     storeIdx: index("public_items_store_idx").on(t.storeId),
+    // Reads for a store's catalog filter on (store, catalog status).
+    storeCatalogStatusIdx: index("public_items_store_catalog_status_idx").on(
+      t.storeId,
+      t.catalogStatus,
+    ),
     // Idempotent backfill: the same (session, original item) maps to one row.
     // Net-new items created through the API leave these null and never collide.
     originUnique: uniqueIndex("public_items_origin_unique").on(
@@ -125,6 +155,29 @@ export const itemVariations = pgTable(
     price: text("price"),
     data: jsonb("data"),
     hidden: boolean("hidden").notNull().default(false),
+    // Review state. 'approved' is the default so the rows that existed before
+    // this column keep showing up exactly as they do today; variations authored
+    // by someone without publish permission are inserted as 'pending' and are
+    // visible only to their author and the store's publishers until reviewed.
+    status: text("status").notNull().default("approved"),
+    // How this variation came about: 'ai' | 'manual' | 'edit'. Drives the badge
+    // shown in the variation accordion.
+    source: text("source").notNull().default("edit"),
+    // Human-friendly name for the variation ("Winter menu", "Budget version").
+    // Null falls back to the author's name plus the creation date.
+    label: text("label"),
+    // Lineage: the variation this one was derived from. Null when it came from
+    // the base item itself.
+    basedOnVariationId: integer("based_on_variation_id").references(
+      (): AnyPgColumn => itemVariations.id,
+      { onDelete: "set null" },
+    ),
+    // Audit trail for approving/declining this variation.
+    reviewedAt: timestamp("reviewed_at"),
+    reviewedBy: text("reviewed_by"),
+    reviewNote: text("review_note"),
+    // Display order within the accordion.
+    position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (t) => ({

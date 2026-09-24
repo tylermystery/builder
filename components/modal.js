@@ -19,7 +19,10 @@ import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
 import { openActionMenu } from './actionMenu.js';
 import { syncPlanState as syncPlanStateAcrossViews } from '../utils/planStateSync.js';
-import { getCommunityRowForRecord, toggleCommunityReactionForRecord, isPublicIdeaRecord } from './publicCatalog.js';
+import { getCommunityRowForRecord, toggleCommunityReactionForRecord, isPublicIdeaRecord,
+         canOfferCatalogPublish, isRecordInStoreCatalog, setRecordCatalogMembership,
+         canOfferCatalogSuggestion, isRecordAwaitingCatalogReview, suggestRecordForCatalog,
+         renderItemVariations, isCatalogEditTarget, recordEditAsVariation } from './publicCatalog.js';
 import { ensureStorePromotionsLoaded, bestDisplayPromoForItem, rewardLabel, promoTimingHint, quoteCart } from '../utils/promotions-client.js';
 
 // Decorate the detail-modal price with an active promotion (struck-through
@@ -4386,6 +4389,40 @@ function enableItemEditMode(record, nameEl, descEl) {
                 await triggerSave();
             }
 
+            // Catalog items carry versions: an edit to something that lives in
+            // the store catalog is recorded as a new version rather than quietly
+            // rewriting what everyone else already sees. A publisher may promote
+            // their version to the one the catalog shows; everyone else's goes to
+            // the store for review. Plan-local AI / manual items are untouched by
+            // this and keep saving exactly as before.
+            if (isCatalogEditTarget(record) && state.session?.user?.isAuthenticated) {
+                const editorIsPublisher = api.userHasPublishPermission();
+                const makeCurrent = editorIsPublisher && confirm(
+                    'Show this edited version in the store catalog from now on?\n\n' +
+                    'Plans that already hold this item keep the version they were added with.'
+                );
+                const variationResult = await recordEditAsVariation(record, {
+                    name: newName,
+                    description: newDesc,
+                    price: newPrice,
+                    imageUrl: allPhotos.length > 0 ? (allPhotos[0].url || allPhotos[0]) : null,
+                    source: 'edit',
+                    makeCurrent
+                });
+
+                if (ui && typeof ui.showToast === 'function') {
+                    if (!variationResult) {
+                        ui.showToast('Saved to your plan, but the store version could not be created.', 5000, 'error');
+                    } else if (!editorIsPublisher) {
+                        ui.showToast('Your version was sent to the store for review.', 5000, 'success');
+                    } else {
+                        ui.showToast(makeCurrent ? 'The catalog now shows this version.' : 'Saved as a new version.', 5000, 'success');
+                    }
+                }
+
+                renderItemVariations(document.getElementById('modal-item-variations'), record);
+            }
+
             // Sync plan state across all views
             if (typeof syncPlanState === 'function') {
                 syncPlanState('modal', 'itemUpdated', { recordId: record.id, itemName: newName });
@@ -6336,6 +6373,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     modalItemName.textContent = displayName;
     modalItemDescription.innerHTML = renderRichText(displayDescription);
     void renderSimilarOfferings(record);
+    renderItemVariations(document.getElementById('modal-item-variations'), record);
 
     // Show "Combined from" indicator for hybrid merged items
     const existingMergeInfo = document.querySelector('.modal-merge-info');
@@ -8238,6 +8276,90 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
                 editItemBtn.innerHTML = '✏️ Edit Item';
                 editItemBtn.classList.remove('editing');
                 disableItemEditMode(record, modalItemName, modalItemDescription);
+            }
+        });
+    }
+
+    // Add-to-catalog control (publish-permission users only). Promotes an AI /
+    // manual / community item into the active store's catalog so it renders as an
+    // ordinary available item for everyone, and offers the reverse. The promotion
+    // is stored in the public (Postgres) layer; Airtable catalog data is never
+    // written to here, and curated "rec…" items already belong to the catalog so
+    // they never show the control.
+    if (canOfferCatalogPublish(record)) {
+        const catalogBtn = document.createElement('button');
+        catalogBtn.className = 'card-action-btn add-to-catalog-btn';
+        catalogBtn.id = 'modal-add-to-catalog-btn';
+        catalogBtn.dataset.recordId = record.id;
+        catalogBtn.style.marginRight = '10px';
+
+        const paintCatalogBtn = () => {
+            const inCatalog = isRecordInStoreCatalog(record);
+            catalogBtn.innerHTML = inCatalog ? '✅ In store catalog' : '➕ Add to store catalog';
+            catalogBtn.title = inCatalog
+                ? 'This item is in the store catalog — click to remove it'
+                : 'Add this item to the store catalog so everyone can see it';
+            catalogBtn.classList.toggle('in-catalog', inCatalog);
+        };
+        paintCatalogBtn();
+        modalHeaderActions.appendChild(catalogBtn);
+
+        catalogBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const publish = !isRecordInStoreCatalog(record);
+            if (!publish && !confirm('Remove this item from the store catalog? It stays available as a community idea.')) return;
+
+            catalogBtn.disabled = true;
+            catalogBtn.innerHTML = publish ? 'Adding…' : 'Removing…';
+            const result = await setRecordCatalogMembership(record, publish);
+            catalogBtn.disabled = false;
+            paintCatalogBtn();
+
+            if (ui && typeof ui.showToast === 'function') {
+                if (result.ok) {
+                    ui.showToast(publish ? 'Added to the store catalog.' : 'Removed from the store catalog.', 5000, 'success');
+                } else if (result.error !== 'Login required') {
+                    ui.showToast(result.error || 'Could not update the catalog.', 5000, 'error');
+                }
+            }
+        });
+    }
+
+    // The same control for everyone else: send the item to the store's
+    // publishers as a suggestion. It stays visible only to its author and those
+    // publishers until one of them approves it.
+    if (canOfferCatalogSuggestion(record)) {
+        const suggestBtn = document.createElement('button');
+        suggestBtn.className = 'card-action-btn suggest-to-catalog-btn';
+        suggestBtn.id = 'modal-suggest-to-catalog-btn';
+        suggestBtn.dataset.recordId = record.id;
+        suggestBtn.style.marginRight = '10px';
+
+        const paintSuggestBtn = () => {
+            const pending = isRecordAwaitingCatalogReview(record);
+            suggestBtn.innerHTML = pending ? '⏳ Awaiting review' : '💡 Suggest for the store catalog';
+            suggestBtn.title = pending
+                ? 'The store is reviewing this suggestion'
+                : 'Ask the store to add this item to its catalog';
+            suggestBtn.classList.toggle('pending-review', pending);
+            suggestBtn.disabled = pending;
+        };
+        paintSuggestBtn();
+        modalHeaderActions.appendChild(suggestBtn);
+
+        suggestBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            suggestBtn.disabled = true;
+            suggestBtn.innerHTML = 'Sending…';
+            const result = await suggestRecordForCatalog(record);
+            paintSuggestBtn();
+
+            if (ui && typeof ui.showToast === 'function') {
+                if (result.ok) {
+                    ui.showToast('Sent to the store for review.', 5000, 'success');
+                } else if (result.error !== 'Login required') {
+                    ui.showToast(result.error || 'Could not send the suggestion.', 5000, 'error');
+                }
             }
         });
     }
