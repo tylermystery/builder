@@ -11,7 +11,7 @@ import { applyFiltersAndSort } from './filtering.js';
 import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
 import { debounce, updateUrl, extractRecordIdFromPath, loadStripe, findStoreBySlugOrId, storeSlug, getShopUrlParam, decodeSelections } from './utils.js';
-import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js';
+import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget, triggerSave } from './events.js';
 import { initializeSessionChat } from './chat.js';
 import { setupCalendarEventListeners } from './components/calendarView.js';
 import { setupAuthEventListeners, updateUserProfileIcon, initializeBiometricAuth, showBiometricSetupPromptIfNeeded, updateBiometricManagementUI, showUserModal } from './auth.js';
@@ -32,6 +32,13 @@ window.imageCache = imageCache;
 
 window.applyFiltersAndSort = applyFiltersAndSort;
 window.showReceiptModal = showReceiptModal;
+
+// Exposed for modules that must nudge the host page without importing it
+// (components/publicCatalog.js would otherwise form an import cycle with
+// ui.js -> sidebar.js -> publicCatalog.js).
+window.triggerSave = triggerSave;
+window.updateEventPlanSection = (...args) => ui.updateEventPlanSection(...args);
+window.showToast = (...args) => ui.showToast(...args);
 
 // ─── Invite Flow: Process pending invite after login ────────────────
 async function handlePendingInvite() {

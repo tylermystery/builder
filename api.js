@@ -623,6 +623,16 @@ export async function loadSessionFromAirtable(sessionId) {
                 state.cart.items = new Map(Object.entries(savedState.ideasItems || savedState.favoritedItems || {}));
                 state.cart.lockedItems = new Map(Object.entries(savedState.lockedInItems || {}));
 
+                // Plans saved before item versions existed carry no variationId.
+                // They were built from the original version of each item, so
+                // stamp them as such rather than letting them drift onto a newer
+                // version the owner never chose.
+                for (const lockedInfo of state.cart.lockedItems.values()) {
+                    if (lockedInfo && typeof lockedInfo === 'object' && !('variationId' in lockedInfo)) {
+                        lockedInfo.variationId = null;
+                    }
+                }
+
                 const reactionsObject = savedState.itemReactions || {};
                 state.session.reactions = new Map();
                 console.log('[REACTIONS-DEBUG] Loading reactions from saved state. Keys found:', Object.keys(reactionsObject));
@@ -6891,7 +6901,12 @@ export async function unpublishPublicItem(publicItemId) {
     }
 }
 
-// Add a user-authored variation of a public item.
+// Add a user-authored variation. The target is either `publicItemId` or, for a
+// curated catalog item with no community container yet, `catalogItemId` +
+// `storeId` (the server creates the container). The server decides the review
+// status from the author's publish permission, so the caller never sends one.
+// Returns { variation, item } — `item` carries the (possibly updated) current
+// variation pointer — or null when logged out / on error.
 export async function addPublicVariation(payload) {
     const headers = publicCatalogAuthHeaders();
     if (!headers) return null;
@@ -6901,11 +6916,114 @@ export async function addPublicVariation(payload) {
             headers,
             body: JSON.stringify(payload)
         });
-        if (!response.ok) return null;
+        if (!response.ok) {
+            log('API', `addPublicVariation non-OK status ${response.status}`);
+            return null;
+        }
         const data = await response.json();
-        return data.variation || null;
+        if (!data.variation) return null;
+        return { variation: data.variation, item: data.item || null };
     } catch (error) {
         console.error('[API] addPublicVariation error:', error);
+        return null;
+    }
+}
+
+// Publisher decision on a suggested variation. `decision` is 'approve' or
+// 'reject'; `makeCurrent` additionally points the catalog at it on approval.
+// Returns { variation, item } or null.
+export async function reviewPublicVariation(variationId, decision, opts = {}) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers || !variationId) return null;
+    try {
+        const response = await fetch(`${PUBLIC_CATALOG_BASE}/variation-review`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                variationId,
+                decision,
+                reviewNote: opts.reviewNote || null,
+                makeCurrent: !!opts.makeCurrent
+            })
+        });
+        if (!response.ok) {
+            log('API', `reviewPublicVariation non-OK status ${response.status}`);
+            return null;
+        }
+        const data = await response.json();
+        return { variation: data.variation || null, item: data.item || null };
+    } catch (error) {
+        console.error('[API] reviewPublicVariation error:', error);
+        return null;
+    }
+}
+
+// Publisher chooses which version the catalog presents. Pass null to point back
+// at the item's own base fields. Returns the updated item row, or null.
+export async function setCurrentVariation(publicItemId, variationId) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers || publicItemId == null) return null;
+    try {
+        const response = await fetch(`${PUBLIC_CATALOG_BASE}/current-variation`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ publicItemId, variationId: variationId ?? null })
+        });
+        if (!response.ok) {
+            log('API', `setCurrentVariation non-OK status ${response.status}`);
+            return null;
+        }
+        const data = await response.json();
+        return data.item || null;
+    } catch (error) {
+        console.error('[API] setCurrentVariation error:', error);
+        return null;
+    }
+}
+
+// Publisher decision on a suggested item: 'approve' puts it in the catalog,
+// 'reject' leaves it visible to its author alone. Returns the item row, or null.
+export async function reviewPublicItem(publicItemId, decision, reviewNote = null) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers || publicItemId == null) return null;
+    try {
+        const response = await fetch(`${PUBLIC_CATALOG_BASE}/item-review`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ publicItemId, decision, reviewNote })
+        });
+        if (!response.ok) {
+            log('API', `reviewPublicItem non-OK status ${response.status}`);
+            return null;
+        }
+        const data = await response.json();
+        return data.item || null;
+    } catch (error) {
+        console.error('[API] reviewPublicItem error:', error);
+        return null;
+    }
+}
+
+// Suggest an item for the store catalog. Same payload shapes as
+// publishPublicItem, but available to any signed-in user: the row lands as
+// 'pending' and only its author and the store's publishers can see it.
+export async function suggestPublicItem(payload) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers) return null;
+    try {
+        const response = await fetch(`${PUBLIC_CATALOG_BASE}/suggest`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            log('API', `suggestPublicItem non-OK status ${response.status}`);
+            return null;
+        }
+        const data = await response.json();
+        return data.item || null;
+    } catch (error) {
+        console.error('[API] suggestPublicItem error:', error);
         return null;
     }
 }

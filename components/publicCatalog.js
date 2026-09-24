@@ -93,7 +93,39 @@ function transformPublicRowToRecord(row, storeId) {
     record.catalogStatus = catalogStatus;
     record.publicAuthorId = row.authorId || null;
 
+    // If a publisher pointed the catalog at one of the item's variations, that is
+    // the version everyone browsing sees. Plans keep whatever version they were
+    // added with — see the plan-pinning helpers further down.
+    applyCurrentVariationFields(record, row);
+
     return record;
+}
+
+// Overlay the item's current variation (if any) onto a record's display fields.
+// A no-op when the row has no current variation, which is every row until a
+// publisher explicitly switches one on.
+function applyCurrentVariationFields(record, row) {
+    const variation = currentVariationOfRow(row);
+    if (!variation) return;
+    const f = record.fields;
+    if (variation.name) f.Name = variation.name;
+    if (variation.description) f.Description = variation.description;
+    if (variation.price != null) {
+        const asNumber = Number(variation.price);
+        f.Price = Number.isFinite(asNumber) ? asNumber : variation.price;
+    }
+    if (variation.imageUrl) {
+        f.imageUrl = variation.imageUrl;
+        record.publicImageUrl = variation.imageUrl;
+    }
+    record.currentVariationId = variation.id;
+}
+
+// The approved variation a row currently presents, or null for the base version.
+function currentVariationOfRow(row) {
+    if (!row || row.currentVariationId == null) return null;
+    const variation = (row.variations || []).find(v => v.id === row.currentVariationId);
+    return variation && variation.status === 'approved' ? variation : null;
 }
 
 // Replace any previously injected public-idea records for this store with `rows`,
@@ -106,8 +138,12 @@ function injectPublicRecords(rows, storeId) {
     communityRowByCatalogId.clear();
     const ideaRows = [];
     for (const row of rows) {
-        if (row.catalogItemId) communityRowByCatalogId.set(row.catalogItemId, row);
-        else ideaRows.push(row);
+        if (row.catalogItemId) {
+            communityRowByCatalogId.set(row.catalogItemId, row);
+            applyCurrentVariationToCatalogItem(row);
+        } else {
+            ideaRows.push(row);
+        }
     }
 
     const fresh = new Set(ideaRows.map(publicRecordId));
@@ -153,6 +189,37 @@ function adoptOriginRecord(row, record) {
     const twinIdx = state.records.all.findIndex(r => r.id === record.id);
     if (twinIdx >= 0) state.records.all.splice(twinIdx, 1);
     return true;
+}
+
+// A curated Airtable item renders from Airtable, not from its community
+// container — so when a publisher points that item at one of its variations, the
+// new version has to be overlaid onto the loaded record. The untouched fields are
+// snapshotted first so clearing the current variation restores the curated copy
+// without a reload. Items whose container has no current variation (all of them,
+// until a publisher picks one) are left exactly as Airtable sent them.
+function applyCurrentVariationToCatalogItem(row) {
+    const record = state.records.all.find(r => r.id === row.catalogItemId);
+    if (!record || !record.fields) return;
+
+    const variation = currentVariationOfRow(row);
+    if (!variation) {
+        if (record._variationBaseFields) {
+            Object.assign(record.fields, record._variationBaseFields);
+            delete record._variationBaseFields;
+            delete record.currentVariationId;
+        }
+        return;
+    }
+
+    if (!record._variationBaseFields) {
+        record._variationBaseFields = {
+            Name: record.fields.Name,
+            Description: record.fields.Description,
+            Price: record.fields.Price,
+            imageUrl: record.fields.imageUrl
+        };
+    }
+    applyCurrentVariationFields(record, row);
 }
 
 // Inject (or refresh) a single public-layer row into the live catalog without
@@ -258,6 +325,66 @@ export function canOfferCatalogPublish(record) {
 }
 
 // True when the record is currently part of the store catalog via the public layer.
+// Everyone else's version of the control above: a signed-in user without
+// publish permission may *suggest* that an item join the catalog. The
+// suggestion lands as a pending item that only its author and the store's
+// publishers can see until it is approved.
+export function canOfferCatalogSuggestion(record) {
+    if (!record) return false;
+    if (typeof record.id === 'string' && record.id.startsWith('rec')) return false;
+    if (record.fields?.['Item Type'] === 'Event') return false;
+    if (!state.session?.user?.isAuthenticated) return false;
+    if (api.userHasPublishPermission()) return false;
+    if (record.catalogStatus === 'published') return false;
+    // Only your own idea is yours to put forward — a suggestion makes the item
+    // visible to its author and the store's publishers alone until it is
+    // approved, so it must never be applied to someone else's visible idea.
+    const authorId = record.publicAuthorId || null;
+    return !authorId || authorId === currentUser().id;
+}
+
+export function isRecordAwaitingCatalogReview(record) {
+    return !!(record && record.catalogStatus === 'pending');
+}
+
+export async function suggestRecordForCatalog(record) {
+    if (!record) return { ok: false, error: 'No item' };
+    if (!state.session?.user?.isAuthenticated) {
+        requireSignIn();
+        return { ok: false, error: 'Login required' };
+    }
+
+    const storeId = storeIdForRecord(record);
+    const fields = record.fields || {};
+
+    try {
+        const row = await api.suggestPublicItem({
+            publicItemId: record.publicItemId ?? undefined,
+            storeId,
+            source: record.publicSource || (record.isManual ? 'custom' : 'ai'),
+            name: fields.Name || 'Untitled item',
+            description: fields.Description || '',
+            imageUrl: fields.imageUrl || record.publicImageUrl || null,
+            price: fields.Price != null ? String(fields.Price) : null,
+            data: record,
+            originSessionId: state.session?.id || null,
+            originItemId: record.id || null
+        });
+        if (!row) return { ok: false, error: 'Could not send the suggestion' };
+
+        const cached = publicIdeaIndex.get(publicRecordId(row));
+        if (cached) cached.catalogStatus = row.catalogStatus;
+        record.publicItemId = row.id;
+        record.catalogStatus = row.catalogStatus;
+
+        log('PublicCatalog', `Suggested item ${record.id} for the store catalog`);
+        return { ok: true, row };
+    } catch (error) {
+        console.error('[PublicCatalog] suggestRecordForCatalog error:', error);
+        return { ok: false, error: 'Something went wrong' };
+    }
+}
+
 export function isRecordInStoreCatalog(record) {
     return !!(record && record.catalogStatus === 'published');
 }
@@ -385,10 +512,20 @@ function getOrInitCommunityRow(record) {
     if (isPublicIdeaRecord(record)) {
         return publicIdeaIndex.get(record.id) || null;
     }
+    // An AI / manual item that was published and then adopted back onto its
+    // origin record (so the plan's reference survives) keeps its public identity
+    // on the record itself — use that row rather than opening a second container.
+    const adopted = adoptedCommunityRow(record);
+    if (adopted) return adopted;
+
     let row = communityRowByCatalogId.get(record.id);
     if (!row) {
-        row = { id: null, catalogItemId: record.id, reactions: {}, comments: [] };
+        row = { id: record.publicItemId ?? null, catalogItemId: record.id, reactions: {}, comments: [] };
         communityRowByCatalogId.set(record.id, row);
+    } else if (row.id == null && record.publicItemId != null) {
+        // The record was promoted or suggested since this row was created; point
+        // it at the real container instead of opening another one.
+        row.id = record.publicItemId;
     }
     return row;
 }
@@ -757,7 +894,14 @@ async function toggleCommentReaction(section, record, row, comment, emoji, me, o
 export function getCommunityRowForRecord(record) {
     if (!record) return null;
     if (isPublicIdeaRecord(record)) return publicIdeaIndex.get(record.id) || null;
-    return communityRowByCatalogId.get(record.id) || null;
+    return adoptedCommunityRow(record) || communityRowByCatalogId.get(record.id) || null;
+}
+
+// The public row behind a record that was published from this session and then
+// adopted onto its origin item, if it is loaded.
+function adoptedCommunityRow(record) {
+    if (!record || record.publicItemId == null) return null;
+    return publicIdeaIndex.get(`public-${record.publicItemId}`) || null;
 }
 
 // Build a Map<userId, Set<emoji>> from a community row's reactions so the
@@ -896,4 +1040,710 @@ export function renderAggregatedCommunityFeed(container, records, onOpenItem) {
         });
         container.appendChild(card);
     });
+}
+
+// ===========================================================================
+// VARIATIONS
+// ---------------------------------------------------------------------------
+// A variation is an alternative version of an item — an edit, an AI rewrite, a
+// manual rework — authored by any signed-in user and stored in the public layer
+// next to the item it varies. Three rules shape everything below:
+//
+//   1. A publisher's variation is live immediately; anyone else's is a
+//      suggestion, visible only to its author and the store's publishers until
+//      a publisher approves or denies it inline in this accordion.
+//   2. The catalog presents ONE version at a time (the item's "current"
+//      variation, or its base fields). A publisher switches that over.
+//   3. A plan keeps the version it was added with. Switching the catalog over
+//      never rewrites anybody's plan; the plan's owner moves across when they
+//      choose to, from this same accordion.
+// ===========================================================================
+
+// Where an item's versions come from: 'edit' (someone edited the item), 'ai'
+// (an AI-generated alternative), 'manual' (written from scratch).
+const VARIATION_SOURCE_BADGES = { edit: '✏️', ai: '🤖', manual: '✍️' };
+
+// Resolve a display name for a user id, falling back politely when the session
+// has never seen that person (they collaborated from another plan).
+function userLabel(userId) {
+    if (!userId) return 'Someone';
+    const me = currentUser();
+    if (me.id && userId === me.id) return 'You';
+    return state.session?.userProfiles?.get(userId) || 'A collaborator';
+}
+
+// "Version 2" unless the author named it.
+function variationLabel(variation, index) {
+    if (variation && variation.label) return variation.label;
+    return `Version ${(index == null ? 0 : index) + 2}`;
+}
+
+// The variations of a record that the current viewer may act on, in display
+// order. The server already filtered out other people's pending/rejected ones.
+function visibleVariations(row) {
+    return (row?.variations || [])
+        .slice()
+        .sort((a, b) => (a.position || 0) - (b.position || 0) || a.id - b.id);
+}
+
+// True when this viewer may approve/deny suggestions for the record's store.
+function viewerCanReview() {
+    return !!(state.session?.user?.isAuthenticated && api.userHasPublishPermission());
+}
+
+/**
+ * The version of `record` the CATALOG currently presents: a variation id, or
+ * null for the item's own base fields.
+ */
+export function currentVariationIdForRecord(record) {
+    const row = getCommunityRowForRecord(record);
+    const variation = currentVariationOfRow(row);
+    return variation ? variation.id : null;
+}
+
+/**
+ * Plan pinning. A plan item's `variationId` records the version it was added
+ * with: a variation id, or null for the base version. The key is stamped once —
+ * items restored from a saved session are stamped null on load (they predate
+ * variations), and an item added during this session is stamped with whatever
+ * the catalog presents at that moment. After that the pin only ever changes
+ * when the plan's owner switches it here.
+ */
+export function stampPlanVariation(record, itemInfo) {
+    if (!itemInfo || typeof itemInfo !== 'object') return itemInfo;
+    if (!('variationId' in itemInfo)) {
+        itemInfo.variationId = currentVariationIdForRecord(record);
+    }
+    return itemInfo;
+}
+
+/**
+ * Return the record as this plan item should be displayed: the pinned
+ * variation's fields overlaid on a shallow copy, or the record itself when the
+ * item is pinned to the base version (the overwhelmingly common case).
+ */
+export function applyPlanVariation(record, itemInfo) {
+    const variationId = itemInfo && itemInfo.variationId;
+    if (!record || variationId == null) return record;
+
+    const row = getCommunityRowForRecord(record);
+    const variation = (row?.variations || []).find(v => v.id === variationId);
+    if (!variation) return record;
+
+    const view = { ...record, fields: { ...record.fields } };
+    if (variation.name) view.fields.Name = variation.name;
+    if (variation.description) view.fields.Description = variation.description;
+    if (variation.price != null) {
+        const asNumber = Number(variation.price);
+        view.fields.Price = Number.isFinite(asNumber) ? asNumber : variation.price;
+    }
+    if (variation.imageUrl) view.fields.imageUrl = variation.imageUrl;
+    view.planVariationId = variationId;
+    return view;
+}
+
+/**
+ * True when the plan holds this item on an older version than the catalog now
+ * presents — what the "update to the newest version" prompt keys off.
+ */
+export function planVariationIsBehind(record) {
+    const itemInfo = state.cart?.lockedItems?.get(record?.id);
+    if (!itemInfo || !('variationId' in itemInfo)) return false;
+    return itemInfo.variationId !== currentVariationIdForRecord(record);
+}
+
+// Move this plan's copy of the item onto `variationId` (null = base version).
+// Returns false when the item is not in the plan.
+function setPlanVariation(recordId, variationId) {
+    const itemInfo = state.cart?.lockedItems?.get(recordId);
+    if (!itemInfo) return false;
+    itemInfo.variationId = variationId;
+    state.cart.lockedItems.set(recordId, itemInfo);
+    return true;
+}
+
+/**
+ * Record an edit as a variation of a CATALOG item. Called after the item modal
+ * saves an edit, so editing a catalog item proposes a new version of it instead
+ * of changing only the editor's own plan. Returns null when the edit was to a
+ * plan-local item (nothing to propose) or the user is signed out — in both cases
+ * the edit stays exactly as local as it has always been.
+ *
+ * @param {object} record - the record that was edited (already mutated in place)
+ * @param {{name?, description?, price?, imageUrl?, source?, label?, makeCurrent?}} changes
+ */
+export async function recordEditAsVariation(record, changes = {}) {
+    if (!record || !isCatalogEditTarget(record)) return null;
+    if (!state.session?.user?.isAuthenticated) return null;
+
+    const publicItemId = record.publicItemId ?? null;
+    const payload = {
+        ...(publicItemId != null
+            ? { publicItemId }
+            : communityWriteOpts(record)),
+        name: changes.name ?? record.fields?.Name ?? null,
+        description: changes.description ?? record.fields?.Description ?? null,
+        imageUrl: changes.imageUrl ?? record.fields?.imageUrl ?? null,
+        price: changes.price != null ? String(changes.price) : null,
+        source: changes.source || 'edit',
+        label: changes.label || null,
+        basedOnVariationId: currentVariationIdForRecord(record),
+        makeCurrent: !!changes.makeCurrent
+    };
+
+    const result = await api.addPublicVariation(payload);
+    if (!result) return null;
+
+    mergeVariationIntoCache(record, result);
+    return result;
+}
+
+/**
+ * Items whose edits are proposals rather than private changes: anything that is
+ * part of the store catalog, whether curated in Airtable or promoted from the
+ * public layer. A plan-local AI/manual item keeps its plain local edit.
+ */
+export function isCatalogEditTarget(record) {
+    if (!record) return false;
+    if (typeof record.id === 'string' && record.id.startsWith('rec')) return true;
+    return record.catalogStatus === 'published';
+}
+
+// Fold a variation write's response back into the cached row so the accordion
+// re-renders without refetching the store.
+function mergeVariationIntoCache(record, result) {
+    const row = getOrInitCommunityRow(record);
+    if (!row) return;
+    if (row.id == null && result.item?.id != null) row.id = result.item.id;
+    if (record && record.publicItemId == null && row.id != null) record.publicItemId = row.id;
+
+    row.variations = row.variations || [];
+    if (result.variation) {
+        const existing = row.variations.findIndex(v => v.id === result.variation.id);
+        const merged = {
+            reactions: {},
+            comments: [],
+            ...(existing >= 0 ? row.variations[existing] : {}),
+            ...result.variation
+        };
+        if (existing >= 0) row.variations[existing] = merged;
+        else row.variations.push(merged);
+    }
+    if (result.item && 'currentVariationId' in result.item) {
+        row.currentVariationId = result.item.currentVariationId;
+    }
+}
+
+/**
+ * Render the variation accordion for a record into `section`.
+ *
+ * This is the one place where versions are read and acted on: it lists the base
+ * version and every variation the viewer may see, marks which one the catalog
+ * presents and which one this plan holds, and carries the inline controls —
+ * approve/deny for publishers, "use in my plan" for everyone, and a composer for
+ * suggesting a new version.
+ *
+ * @param {HTMLElement} section
+ * @param {object} record
+ * @param {{expanded?: boolean}} [opts]
+ */
+export function renderItemVariations(section, record, opts = {}) {
+    if (!section || !record) return;
+
+    const row = getCommunityRowForRecord(record);
+    const variations = visibleVariations(row);
+    const canReview = viewerCanReview();
+    const inPlan = !!state.cart?.lockedItems?.has(record.id);
+
+    // Nothing to show and nothing to propose: stay out of the way entirely.
+    // (Anyone signed in may propose a version of a catalog item; a plan-local
+    // item with no versions has no catalog to propose anything to.)
+    const canSuggest = !!state.session?.user?.isAuthenticated && isCatalogEditTarget(record);
+    // A suggested item (someone without publish permission asked for it to join
+    // the catalog) is reviewed here too, so publishers never have to go looking
+    // for a separate queue.
+    const needsItemReview = canReview && row?.catalogStatus === 'pending' && row?.id != null;
+    if (variations.length === 0 && !canSuggest && !needsItemReview) {
+        section.style.display = 'none';
+        return;
+    }
+
+    const pendingCount = variations.filter(v => v.status === 'pending').length;
+    const expanded = opts.expanded === true || pendingCount > 0 || needsItemReview;
+
+    section.style.display = 'block';
+    section.classList.add('modal-rsb-host', 'item-variations-host');
+    section.innerHTML = '';
+
+    const summaryParts = [`${variations.length + 1} version${variations.length ? 's' : ''}`];
+    if (pendingCount > 0) summaryParts.push(`${pendingCount} awaiting review`);
+    if (needsItemReview) summaryParts.push('suggested for the catalog');
+
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.className = 'modal-rsb-accordion-header' + (expanded ? ' expanded' : '');
+    header.innerHTML = `
+        <span class="modal-rsb-accordion-chevron">${expanded ? '▾' : '▸'}</span>
+        <span class="modal-rsb-accordion-summary">${escapeHtml(summaryParts.join(' · '))}</span>
+        <span class="item-variations-tag">🧬 Versions</span>
+    `;
+
+    const body = document.createElement('div');
+    body.className = 'modal-rsb-accordion-body item-variations-body' + (expanded ? ' expanded' : '');
+
+    header.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = body.classList.toggle('expanded');
+        header.classList.toggle('expanded', isOpen);
+        header.querySelector('.modal-rsb-accordion-chevron').textContent = isOpen ? '▾' : '▸';
+    });
+
+    const currentId = row && row.currentVariationId != null ? row.currentVariationId : null;
+    const planItem = state.cart?.lockedItems?.get(record.id);
+    const planId = planItem && 'variationId' in planItem ? planItem.variationId : null;
+
+    const ctx = { section, record, row, canReview, inPlan, currentId, planId, opts };
+
+    if (needsItemReview) body.appendChild(buildItemReviewBar(ctx));
+
+    // The base version always comes first: it is what the item was before anyone
+    // proposed anything.
+    body.appendChild(buildVariationCard(ctx, null, -1));
+    variations.forEach((variation, index) => {
+        body.appendChild(buildVariationCard(ctx, variation, index));
+    });
+
+    if (canSuggest) body.appendChild(buildSuggestVersionBlock(ctx));
+
+    section.appendChild(header);
+    section.appendChild(body);
+}
+
+// Re-render in place, keeping the accordion open (the viewer just acted).
+function rerenderVariations(ctx) {
+    renderItemVariations(ctx.section, ctx.record, { ...ctx.opts, expanded: true });
+}
+
+// One row in the accordion. `variation` is null for the item's base version,
+// which cannot be reviewed or deleted but can be the catalog's current version
+// The inline review of a *suggested item* (as opposed to a suggested version).
+// Approving promotes it to the catalog; denying leaves it with its author as an
+// ordinary community idea and records the note.
+function buildItemReviewBar(ctx) {
+    const { record, row } = ctx;
+    const wrap = document.createElement('div');
+    wrap.className = 'variation-item-review';
+    wrap.innerHTML = `
+        <div class="variation-item-review-text">
+            ${escapeHtml(userLabel(row?.authorId))} suggested this item for the store catalog.
+        </div>
+    `;
+
+    const actions = document.createElement('div');
+    actions.className = 'variation-actions';
+
+    const addButton = (label, className, handler) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `variation-action-btn ${className}`;
+        btn.textContent = label;
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            btn.disabled = true;
+            await handler();
+            btn.disabled = false;
+        });
+        actions.appendChild(btn);
+    };
+
+    addButton('✅ Add to the catalog', 'variation-approve-btn', async () => {
+        const item = await api.reviewPublicItem(row.id, 'approve');
+        if (!item) return notify(ctx, 'Could not approve that item.', 'error');
+        applyItemReviewResult(record, row, item);
+        refreshAfterVariationChange(ctx);
+        notify(ctx, 'Added to the store catalog.', 'success');
+    });
+
+    addButton('✖️ Decline', 'variation-deny-btn', async () => {
+        const note = prompt('Optional note back to the author:', '');
+        if (note === null) return;
+        const item = await api.reviewPublicItem(row.id, 'reject', note || null);
+        if (!item) return notify(ctx, 'Could not decline that item.', 'error');
+        applyItemReviewResult(record, row, item);
+        refreshAfterVariationChange(ctx);
+        notify(ctx, 'Suggestion declined.', 'success');
+    });
+
+    wrap.appendChild(actions);
+    return wrap;
+}
+
+// Mirror an item review decision onto the cached row and the on-screen record so
+// the item moves between the catalog and Public Ideas without a reload. An
+// approved item carries the 'Available' status the rest of the app filters on;
+// a declined one goes back to being an ordinary community idea.
+function applyItemReviewResult(record, row, item) {
+    if (row) row.catalogStatus = item.catalogStatus;
+    const cachedRow = publicIdeaIndex.get(publicRecordId(row || item));
+    if (cachedRow) cachedRow.catalogStatus = item.catalogStatus;
+
+    if (!record) return;
+    record.catalogStatus = item.catalogStatus;
+    if (record.fields) {
+        record.fields.Status = item.catalogStatus === 'published'
+            ? 'Available'
+            : PUBLIC_IDEA_STATUS;
+    }
+}
+
+// and can be what a plan holds.
+function buildVariationCard(ctx, variation, index) {
+    const { record, row, canReview, inPlan, currentId, planId } = ctx;
+    const variationId = variation ? variation.id : null;
+    const isCurrent = currentId === variationId;
+    const isPlanned = inPlan && planId === variationId;
+    const status = variation ? variation.status : 'approved';
+
+    const card = document.createElement('div');
+    card.className = 'variation-card'
+        + (isCurrent ? ' is-current' : '')
+        + (isPlanned ? ' is-planned' : '')
+        + (status !== 'approved' ? ` is-${status}` : '');
+
+    const fields = record.fields || {};
+    const name = variation ? (variation.name || fields.Name) : fields.Name;
+    const description = variation ? (variation.description || '') : (fields.Description || '');
+    const price = variation ? variation.price : fields.Price;
+    const sourceBadge = variation ? (VARIATION_SOURCE_BADGES[variation.source] || '✏️') : '📄';
+    const title = variation ? variationLabel(variation, index) : 'Original';
+    const author = variation ? userLabel(variation.authorId) : userLabel(row?.authorId);
+
+    const chips = [];
+    if (isCurrent) chips.push('<span class="variation-chip is-current-chip">In the catalog</span>');
+    if (isPlanned) chips.push('<span class="variation-chip is-planned-chip">In your plan</span>');
+    if (status === 'pending') chips.push('<span class="variation-chip is-pending-chip">Awaiting review</span>');
+    if (status === 'rejected') chips.push('<span class="variation-chip is-rejected-chip">Not accepted</span>');
+
+    const priceText = price == null || price === ''
+        ? ''
+        : `<span class="variation-price">${escapeHtml(typeof price === 'number' ? `$${price}` : price)}</span>`;
+
+    card.innerHTML = `
+        <div class="variation-card-head">
+            <span class="variation-source">${sourceBadge}</span>
+            <span class="variation-title">${escapeHtml(title)}</span>
+            <span class="variation-author">by ${escapeHtml(author)}</span>
+            ${priceText}
+            <span class="variation-chips">${chips.join('')}</span>
+        </div>
+        <div class="variation-name">${escapeHtml(name || 'Untitled')}</div>
+        ${description ? `<div class="variation-description">${escapeHtml(description)}</div>` : ''}
+        ${variation && variation.reviewNote ? `<div class="variation-review-note">Reviewer: ${escapeHtml(variation.reviewNote)}</div>` : ''}
+    `;
+
+    card.appendChild(buildVariationReactionRow(ctx, variation));
+    card.appendChild(buildVariationActions(ctx, variation, { isCurrent, isPlanned, status }));
+    card.appendChild(buildVariationComments(ctx, variation));
+    return card;
+}
+
+// Reaction chips scoped to one version. The public layer has carried a
+// variation id on reactions since it was built, so this needed no new plumbing.
+function buildVariationReactionRow(ctx, variation) {
+    const { record, row } = ctx;
+    const wrap = document.createElement('div');
+    wrap.className = 'variation-reaction-row';
+
+    const me = currentUser();
+    const summary = (variation ? variation.reactions : row?.reactions) || {};
+
+    EMOJI_REACTIONS.forEach(emoji => {
+        const data = summary[emoji] || { count: 0, users: [] };
+        const mine = me.id && Array.isArray(data.users) && data.users.includes(me.id);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'public-reaction-btn variation-reaction-btn' + (mine ? ' reacted' : '');
+        btn.innerHTML = `<span class="pr-emoji">${emoji}</span>${data.count ? `<span class="pr-count">${data.count}</span>` : ''}`;
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!requireSignIn()) return;
+            btn.disabled = true;
+            const target = getOrInitCommunityRow(record);
+            const result = await api.togglePublicReaction(
+                target?.id ?? null,
+                emoji,
+                variation ? variation.id : null,
+                target?.id == null ? communityWriteOpts(record) : {}
+            );
+            btn.disabled = false;
+            if (!result) return;
+            if (target && target.id == null && result.publicItemId != null) target.id = result.publicItemId;
+            applyReactionToggle(variation || target, emoji, me.id, result.reacted);
+            rerenderVariations(ctx);
+        });
+        wrap.appendChild(btn);
+    });
+
+    return wrap;
+}
+
+// The inline controls: approve/deny (publishers), switch the catalog over
+// (publishers), and move this plan across (anyone whose plan holds the item).
+function buildVariationActions(ctx, variation, flags) {
+    const { record, canReview, inPlan } = ctx;
+    const wrap = document.createElement('div');
+    wrap.className = 'variation-actions';
+
+    const addButton = (label, className, handler) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `variation-action-btn ${className}`;
+        btn.textContent = label;
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            btn.disabled = true;
+            await handler(btn);
+            btn.disabled = false;
+        });
+        wrap.appendChild(btn);
+        return btn;
+    };
+
+    if (variation && canReview && flags.status === 'pending') {
+        addButton('✅ Approve', 'variation-approve-btn', async () => {
+            const makeCurrent = confirm(
+                'Approve this version.\n\nPress OK to also make it the version the catalog shows. ' +
+                'Plans that already added this item keep the version they have.'
+            );
+            const result = await api.reviewPublicVariation(variation.id, 'approve', { makeCurrent });
+            if (!result) return notify(ctx, 'Could not approve that version.', 'error');
+            mergeVariationIntoCache(record, result);
+            refreshAfterVariationChange(ctx);
+            notify(ctx, makeCurrent ? 'Approved and shown in the catalog.' : 'Version approved.', 'success');
+        });
+
+        addButton('✖️ Deny', 'variation-deny-btn', async () => {
+            const note = prompt('Optional note back to the author:', '');
+            if (note === null) return;
+            const result = await api.reviewPublicVariation(variation.id, 'reject', { reviewNote: note || null });
+            if (!result) return notify(ctx, 'Could not deny that version.', 'error');
+            mergeVariationIntoCache(record, result);
+            refreshAfterVariationChange(ctx);
+            notify(ctx, 'Version denied.', 'success');
+        });
+    }
+
+    if (canReview && !flags.isCurrent && flags.status === 'approved' && ctx.row?.id != null) {
+        addButton(
+            variation ? '🏬 Show this in the catalog' : '🏬 Show the original in the catalog',
+            'variation-current-btn',
+            async () => {
+                const item = await api.setCurrentVariation(ctx.row.id, variation ? variation.id : null);
+                if (!item) return notify(ctx, 'Could not update the catalog.', 'error');
+                mergeVariationIntoCache(record, { item });
+                refreshAfterVariationChange(ctx);
+                notify(ctx, 'The catalog now shows this version.', 'success');
+            }
+        );
+    }
+
+    if (inPlan && !flags.isPlanned) {
+        addButton('📋 Use this version in my plan', 'variation-plan-btn', async () => {
+            if (!setPlanVariation(record.id, variation ? variation.id : null)) return;
+            if (typeof window.triggerSave === 'function') window.triggerSave();
+            refreshAfterVariationChange(ctx);
+            notify(ctx, 'Your plan now uses this version.', 'success');
+        });
+    }
+
+    return wrap;
+}
+
+// A compact per-version comment thread. Comments have carried a variation id
+// since the public layer was built, so each version keeps its own conversation.
+function buildVariationComments(ctx, variation) {
+    const { record, row } = ctx;
+    const variationId = variation ? variation.id : null;
+    const thread = (row?.comments || []).filter(c =>
+        (c.variationId == null ? null : c.variationId) === variationId);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'variation-comments';
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'variation-comments-toggle';
+    toggle.textContent = thread.length
+        ? `💬 ${thread.length} comment${thread.length !== 1 ? 's' : ''}`
+        : '💬 Comment on this version';
+    wrap.appendChild(toggle);
+
+    const panel = document.createElement('div');
+    panel.className = 'variation-comments-panel';
+    panel.style.display = 'none';
+    wrap.appendChild(panel);
+
+    thread.forEach(c => {
+        const line = document.createElement('div');
+        line.className = 'variation-comment';
+        line.innerHTML = `<strong>${escapeHtml(c.authorName || userLabel(c.authorId))}:</strong> ${escapeHtml(c.body)}`;
+        panel.appendChild(line);
+    });
+
+    const composer = document.createElement('div');
+    composer.className = 'variation-comment-composer';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Add a comment…';
+    const send = document.createElement('button');
+    send.type = 'button';
+    send.textContent = 'Post';
+    composer.append(input, send);
+    panel.appendChild(composer);
+
+    toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        if (panel.style.display === 'block') input.focus();
+    });
+
+    const post = async () => {
+        const text = input.value.trim();
+        if (!text) return;
+        if (!requireSignIn()) return;
+        send.disabled = true;
+        const target = getOrInitCommunityRow(record);
+        const me = currentUser();
+        const created = await api.addPublicComment(
+            target?.id ?? null,
+            text,
+            me.name,
+            variationId,
+            target?.id == null ? communityWriteOpts(record) : {}
+        );
+        send.disabled = false;
+        if (!created) return notify(ctx, 'Could not post that comment.', 'error');
+        if (target && target.id == null && created.publicItemId != null) target.id = created.publicItemId;
+        target.comments = target.comments || [];
+        target.comments.push(created);
+        rerenderVariations(ctx);
+    };
+    send.addEventListener('click', (e) => { e.stopPropagation(); post(); });
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); post(); }
+    });
+
+    return wrap;
+}
+
+// The composer for proposing a new version. For a publisher it goes live; for
+// everyone else it becomes a suggestion the store reviews here.
+function buildSuggestVersionBlock(ctx) {
+    const { record } = ctx;
+    const canReview = viewerCanReview();
+
+    const wrap = document.createElement('div');
+    wrap.className = 'variation-suggest';
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'variation-suggest-toggle';
+    toggle.textContent = canReview ? '➕ Add a version' : '💡 Suggest a version';
+    wrap.appendChild(toggle);
+
+    const form = document.createElement('div');
+    form.className = 'variation-suggest-form';
+    form.style.display = 'none';
+    form.innerHTML = `
+        <input type="text" class="variation-input-label" placeholder="Name this version (optional)">
+        <input type="text" class="variation-input-name" placeholder="Item name">
+        <textarea class="variation-input-description" rows="3" placeholder="Describe this version"></textarea>
+        <input type="text" class="variation-input-price" placeholder="Price (optional)">
+        <div class="variation-suggest-actions">
+            <button type="button" class="variation-suggest-submit"></button>
+            <span class="variation-suggest-hint"></span>
+        </div>
+    `;
+    wrap.appendChild(form);
+
+    const nameInput = form.querySelector('.variation-input-name');
+    const descInput = form.querySelector('.variation-input-description');
+    const priceInput = form.querySelector('.variation-input-price');
+    const labelInput = form.querySelector('.variation-input-label');
+    const submit = form.querySelector('.variation-suggest-submit');
+    const hint = form.querySelector('.variation-suggest-hint');
+
+    nameInput.value = record.fields?.Name || '';
+    descInput.value = record.fields?.Description || '';
+    priceInput.value = record.fields?.Price != null ? String(record.fields.Price) : '';
+    submit.textContent = canReview ? 'Save version' : 'Send suggestion';
+    hint.textContent = canReview
+        ? 'Saved live. You choose whether the catalog switches to it.'
+        : 'A store publisher reviews this before anyone else sees it.';
+
+    toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+        if (form.style.display === 'flex') nameInput.focus();
+    });
+
+    submit.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!requireSignIn()) return;
+        if (!nameInput.value.trim() && !descInput.value.trim()) {
+            notify(ctx, 'Give the version a name or a description.', 'error');
+            return;
+        }
+        submit.disabled = true;
+        const makeCurrent = canReview && confirm(
+            'Save this version.\n\nPress OK to also make it the version the catalog shows. ' +
+            'Plans that already added this item keep the version they have.'
+        );
+        const result = await recordEditAsVariation(record, {
+            name: nameInput.value.trim() || record.fields?.Name,
+            description: descInput.value.trim(),
+            price: priceInput.value.trim() || null,
+            label: labelInput.value.trim() || null,
+            source: 'manual',
+            makeCurrent
+        });
+        submit.disabled = false;
+        if (!result) return notify(ctx, 'Could not save that version.', 'error');
+        refreshAfterVariationChange(ctx);
+        notify(
+            ctx,
+            canReview ? 'Version saved.' : 'Suggestion sent to the store for review.',
+            'success'
+        );
+    });
+
+    return wrap;
+}
+
+// Re-render the accordion and, when the catalog's current version moved, the
+// catalog and plan views behind it.
+function refreshAfterVariationChange(ctx) {
+    const row = getCommunityRowForRecord(ctx.record);
+    if (row) {
+        if (row.catalogItemId) applyCurrentVariationToCatalogItem(row);
+        else applyCurrentVariationFields(ctx.record, row);
+    }
+    invalidateRecordsIndex();
+    rerenderVariations(ctx);
+    if (typeof window.applyFiltersAndSort === 'function') {
+        window.applyFiltersAndSort(window.imageCache);
+    }
+    if (typeof window.updateEventPlanSection === 'function') {
+        window.updateEventPlanSection();
+    }
+}
+
+// Toast when the host page offers one; otherwise stay silent rather than
+// interrupting with an alert.
+function notify(ctx, message, type) {
+    if (typeof window.showToast === 'function') {
+        window.showToast(message, 5000, type === 'error' ? 'error' : 'success');
+    } else {
+        log('PublicCatalog', message);
+    }
 }

@@ -20443,3 +20443,312 @@ body.presentation-active .rsb-layout-toggle-fab {
     font-size: 0.85em;
     font-style: italic;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ITEM VERSIONS ACCORDION
+   The detail modal's versions drawer: the original, every proposed version,
+   and (for publishers) the approve / deny controls. Reuses the modal RSB
+   accordion header so it reads as a sibling of the reactions drawer.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.modal-item-variations {
+    margin: 10px 0;
+}
+.item-variations-host .modal-rsb-accordion-header {
+    background: rgba(245, 243, 255, 0.9);
+    color: #5b21b6;
+}
+.item-variations-host .modal-rsb-accordion-header:hover {
+    background: rgba(237, 233, 254, 0.95);
+}
+.item-variations-tag {
+    margin-left: auto;
+    font-size: 0.9em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.item-variations-body {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px 2px 2px;
+}
+.item-variations-body.expanded {
+    display: flex;
+}
+
+/* ---- One version ------------------------------------------------------- */
+.variation-card {
+    border: 1px solid rgba(109, 40, 217, 0.16);
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.92);
+}
+.variation-card.is-current {
+    border-color: #8b5cf6;
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.12);
+}
+.variation-card.is-planned {
+    border-left: 3px solid #2563eb;
+}
+.variation-card.is-pending {
+    background: rgba(255, 251, 235, 0.9);
+    border-color: rgba(217, 119, 6, 0.35);
+}
+.variation-card.is-rejected {
+    opacity: 0.7;
+}
+.variation-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+}
+.variation-title {
+    font-weight: 700;
+    font-size: 0.92em;
+    color: #4c1d95;
+}
+.variation-source {
+    font-size: 0.95em;
+}
+.variation-author {
+    font-size: 0.8em;
+    color: #6b7280;
+}
+.variation-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-left: auto;
+}
+.variation-chip {
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 0.72em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.variation-chip.is-current-chip {
+    background: #ede9fe;
+    color: #5b21b6;
+}
+.variation-chip.is-planned-chip {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+.variation-chip.is-pending-chip {
+    background: #fef3c7;
+    color: #92400e;
+}
+.variation-chip.is-rejected-chip {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+.variation-name {
+    margin-top: 3px;
+    font-weight: 600;
+    color: #111827;
+}
+.variation-description {
+    margin-top: 2px;
+    font-size: 0.88em;
+    color: #4b5563;
+    white-space: pre-wrap;
+}
+.variation-price {
+    margin-top: 3px;
+    font-size: 0.88em;
+    font-weight: 600;
+    color: #065f46;
+}
+.variation-review-note {
+    margin-top: 4px;
+    font-size: 0.82em;
+    font-style: italic;
+    color: #b45309;
+}
+
+/* ---- Reactions on a version ------------------------------------------- */
+.variation-reaction-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 6px;
+}
+.variation-reaction-btn {
+    padding: 2px 7px;
+    font-size: 0.9em;
+}
+
+/* ---- Publisher and plan actions ---------------------------------------- */
+.variation-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 7px;
+}
+.variation-action-btn {
+    padding: 4px 10px;
+    border: 1px solid rgba(109, 40, 217, 0.25);
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.8em;
+    font-weight: 600;
+    color: #4c1d95;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+.variation-action-btn:hover {
+    background: #f5f3ff;
+    border-color: #8b5cf6;
+}
+.variation-action-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+.variation-action-btn.variation-approve-btn {
+    color: #065f46;
+    border-color: rgba(16, 185, 129, 0.45);
+}
+.variation-action-btn.variation-approve-btn:hover {
+    background: #ecfdf5;
+    border-color: #10b981;
+}
+.variation-action-btn.variation-deny-btn {
+    color: #b91c1c;
+    border-color: rgba(239, 68, 68, 0.4);
+}
+.variation-action-btn.variation-deny-btn:hover {
+    background: #fef2f2;
+    border-color: #ef4444;
+}
+
+/* ---- Per-version comments ---------------------------------------------- */
+.variation-comments {
+    margin-top: 6px;
+}
+.variation-comments-toggle {
+    padding: 2px 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.8em;
+    color: #6d28d9;
+}
+.variation-comments-toggle:hover {
+    text-decoration: underline;
+}
+.variation-comments-panel {
+    margin-top: 4px;
+    padding-left: 6px;
+    border-left: 2px solid rgba(109, 40, 217, 0.15);
+}
+.variation-comment {
+    font-size: 0.84em;
+    color: #374151;
+    margin-bottom: 3px;
+}
+.variation-comment-composer {
+    display: flex;
+    gap: 5px;
+    margin-top: 5px;
+}
+.variation-comment-composer input {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid rgba(109, 40, 217, 0.2);
+    border-radius: 8px;
+    font-size: 0.84em;
+}
+.variation-comment-composer button {
+    padding: 4px 10px;
+    border: 1px solid rgba(109, 40, 217, 0.25);
+    border-radius: 8px;
+    background: #f5f3ff;
+    cursor: pointer;
+    font-size: 0.8em;
+    font-weight: 600;
+    color: #4c1d95;
+}
+
+/* ---- Proposing a version ----------------------------------------------- */
+.variation-suggest {
+    border-top: 1px dashed rgba(109, 40, 217, 0.2);
+    padding-top: 7px;
+}
+.variation-suggest-toggle {
+    padding: 4px 10px;
+    border: 1px dashed rgba(109, 40, 217, 0.35);
+    border-radius: 8px;
+    background: rgba(245, 243, 255, 0.7);
+    cursor: pointer;
+    font-size: 0.82em;
+    font-weight: 600;
+    color: #5b21b6;
+}
+.variation-suggest-toggle:hover {
+    background: #ede9fe;
+}
+.variation-suggest-form {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 6px;
+}
+.variation-suggest-form input,
+.variation-suggest-form textarea {
+    width: 100%;
+    padding: 5px 8px;
+    border: 1px solid rgba(109, 40, 217, 0.2);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.86em;
+    box-sizing: border-box;
+}
+.variation-suggest-form textarea {
+    resize: vertical;
+}
+.variation-suggest-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.variation-suggest-submit {
+    padding: 5px 12px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.82em;
+    font-weight: 600;
+}
+.variation-suggest-submit:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+.variation-suggest-hint {
+    font-size: 0.78em;
+    color: #6b7280;
+}
+
+/* Suggest-for-catalog control in the modal header (non-publishers) */
+.suggest-to-catalog-btn.pending-review {
+    background: #fef3c7;
+    border-color: rgba(217, 119, 6, 0.4);
+    color: #92400e;
+    cursor: default;
+}
+
+/* Inline review of an item someone suggested for the catalog */
+.variation-item-review {
+    border: 1px solid rgba(217, 119, 6, 0.35);
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: rgba(255, 251, 235, 0.9);
+}
+.variation-item-review-text {
+    font-size: 0.86em;
+    font-weight: 600;
+    color: #92400e;
+}

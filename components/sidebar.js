@@ -14,6 +14,7 @@ import { showReceiptModal } from './receipt.js';
 import { syncPlanState, registerSyncCallback, updateMobileSummaryBar } from '../utils/planStateSync.js';
 import { applyCloudinaryTransform, hasCloudinaryTransformations } from '../utils/imageOptimizer.js';
 import { resolvePlanVenueAddress } from '../utils/calendarExport.js';
+import { stampPlanVariation, applyPlanVariation } from './publicCatalog.js';
 
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
@@ -2032,7 +2033,13 @@ export async function updateEventPlanSection() {
                 }
 
                 if (record) {
-                    const itemElement = await createLockedInItemElement(record, itemInfo); // Pass the full record
+                    // A plan keeps the version of the item it was added with.
+                    // Items added before versions existed get stamped with
+                    // whatever the catalog shows now, and from then on they stay
+                    // on it until their owner switches over in the versions
+                    // accordion.
+                    stampPlanVariation(record, itemInfo);
+                    const itemElement = await createLockedInItemElement(applyPlanVariation(record, itemInfo), itemInfo); // Pass the full record
                     fragment.appendChild(itemElement);
                 } else {
                     log('Sidebar', `Could not render item ${recordId}, not found in state.records.all or archive.`);
