@@ -20752,3 +20752,104 @@ body.presentation-active .rsb-layout-toggle-fab {
     font-weight: 600;
     color: #92400e;
 }
+
+.checkout-print-btn {
+    margin: 0 0 16px;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 5px;
+    background: #fff;
+    color: #333;
+    font: inherit;
+    cursor: pointer;
+}
+
+.checkout-print-btn:hover {
+    background: #f8f9fa;
+}
+
+#checkout-modal-overlay .terms-and-conditions {
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+#checkout-modal-overlay .terms-and-conditions ul {
+    padding-left: 20px;
+}
+
+@media print {
+    body:has(#checkout-modal-overlay.active) {
+        height: auto !important;
+        overflow: visible !important;
+        background: #fff !important;
+        color: #333 !important;
+    }
+
+    body:has(#checkout-modal-overlay.active) > :not(#checkout-modal-overlay),
+    body:has(#checkout-modal-overlay.active)::before,
+    body:has(#checkout-modal-overlay.active)::after {
+        display: none !important;
+    }
+
+    #checkout-modal-overlay.active,
+    #checkout-modal-overlay.active .checkout-modal-content {
+        display: block !important;
+        position: static !important;
+        width: 100% !important;
+        max-width: none !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        transform: none !important;
+        opacity: 1 !important;
+        background: #fff !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+    }
+
+    #checkout-modal-overlay.active,
+    #checkout-modal-overlay.active * {
+        visibility: visible !important;
+    }
+
+    #checkout-modal-overlay.active #checkout-summary-details,
+    #checkout-modal-overlay.active .checkout-total-deposit-section,
+    #checkout-modal-overlay.active .terms-and-conditions {
+        display: block !important;
+    }
+
+    #checkout-modal-overlay.active button,
+    #checkout-modal-overlay.active #payment-form,
+    #checkout-modal-overlay.active #payment-choice-container,
+    #checkout-modal-overlay.active #checkout-item-quantity-toggle,
+    #checkout-modal-overlay.active .checkout-chip-in-desc,
+    #checkout-modal-overlay.active #checkout-crowdfund-progress,
+    #checkout-modal-overlay.active .checkout-chip-in-options,
+    #checkout-modal-overlay.active #checkout-chip-in-custom-input,
+    #checkout-modal-overlay.active #payment-success-message {
+        display: none !important;
+    }
+
+    #checkout-modal-overlay.active .checkout-chip-in-body {
+        display: block !important;
+    }
+
+    #checkout-modal-overlay.active .terms-and-conditions {
+        margin-top: 24px;
+        padding-top: 16px;
+        border-top: 1px solid #ddd;
+    }
+
+    #checkout-modal-overlay.active h3,
+    #checkout-modal-overlay.active h4 {
+        break-after: avoid;
+    }
+
+    #checkout-modal-overlay.active #checkout-summary-list li,
+    #checkout-modal-overlay.active .payment-receipt-row,
+    #checkout-modal-overlay.active .checkout-total,
+    #checkout-modal-overlay.active .checkout-deposit {
+        break-inside: avoid;
+    }
+}

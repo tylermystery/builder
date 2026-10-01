@@ -11438,6 +11438,8 @@ export async function showCheckoutModal(shopSettings, scope = null) {
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     const fullTotalEl = document.getElementById('full-total-price');
     const checkoutCloseBtn = document.getElementById('checkout-close-btn');
+    const checkoutPrintBtn = document.getElementById('checkout-print-btn');
+    if (checkoutPrintBtn) checkoutPrintBtn.onclick = () => window.print();
     const summaryDetailsEl = document.getElementById('checkout-summary-details');
     const tipAmountInput = document.getElementById('tip-amount');
     const paymentChoiceContainer = document.getElementById('payment-choice-container');
@@ -11808,8 +11810,9 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         paymentChoiceContainer.style.display = 'none';
     }
 
-    if (termsContainer && currentShopSettings.terms) {
-        termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\\n/g, '<br>')}</p>`;
+    if (termsContainer) {
+        const termsContent = renderRichText(currentShopSettings.terms?.replace(/\\n/g, '\n'));
+        termsContainer.innerHTML = termsContent ? `<h4>Store Terms &amp; Conditions</h4>${termsContent}` : '';
     }
 
     // --- UNIFIED CHECKOUT: Setup Chip In Section ---
