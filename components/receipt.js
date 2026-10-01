@@ -1,6 +1,6 @@
 import { state } from '../state.js';
 import { CONSTANTS } from '../config.js';
-import { getRecordPrice, getEffectiveMinQuantity, parseOptions, flattenOptionGroups } from '../utils.js';
+import { getRecordPrice, getEffectiveMinQuantity, parseOptions, flattenOptionGroups, renderRichText } from '../utils.js';
 import { log } from '../utils/debug.js';
 
 export function showReceiptModal(paymentIndex) {
@@ -34,6 +34,12 @@ export function showReceiptModal(paymentIndex) {
     });
     
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Untitled Event';
+    const storeId = state.session.storeId || state.ui.activeShopId;
+    const store = state.stores.all.find(store => store.id === storeId);
+    const termsContent = renderRichText(store?.fields?.TermsAndConditions?.replace(/\\n/g, '\n'));
+    const termsHtml = termsContent
+        ? `<section class="receipt-terms"><h2>Store Terms &amp; Conditions</h2>${termsContent}</section>`
+        : '';
 
     // Check if UMW is in plan
     let isUmwInPlan = false;
@@ -237,6 +243,26 @@ export function showReceiptModal(paymentIndex) {
             border-left: 3px solid #007bff;
             font-style: italic;
         }
+        .receipt-terms {
+            border-top: 1px solid #ddd;
+            padding-top: 20px;
+            margin-bottom: 30px;
+            font-size: 14px;
+            line-height: 1.6;
+            overflow-wrap: anywhere;
+        }
+        .receipt-terms h2 {
+            font-size: 20px;
+            margin-bottom: 15px;
+            break-after: avoid;
+        }
+        .receipt-terms p,
+        .receipt-terms ul {
+            margin-bottom: 12px;
+        }
+        .receipt-terms ul {
+            padding-left: 20px;
+        }
         .receipt-footer {
             text-align: center;
             padding-top: 30px;
@@ -404,6 +430,8 @@ export function showReceiptModal(paymentIndex) {
             ` : ''}
         </div>
         
+        ${termsHtml}
+
         <div class="receipt-footer">
             <p>Thank you for your payment!</p>
             <button onclick="window.print()" class="print-button">Print Receipt</button>
