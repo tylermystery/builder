@@ -2765,6 +2765,46 @@ body.presentation-active .modal-overlay {
     z-index: 2200;
 }
 
+/* Detail dialogs share the available center space in catalog and plan views.
+   Inline modal styles still own visibility and stacking. Narrow screens retain
+   the existing foreground dialog rather than compressing it between rails. */
+#detail-modal-overlay {
+    left: var(--detail-left-inset, 0px) !important;
+    right: var(--detail-right-inset, 0px) !important;
+    width: calc(100% - var(--detail-left-inset, 0px) - var(--detail-right-inset, 0px)) !important;
+    box-sizing: border-box;
+    container: detail-space / inline-size;
+}
+@container detail-space (max-width: 700px) {
+    #detail-modal-overlay .modal-content { flex-direction: column !important; }
+    #detail-modal-overlay .modal-main-column {
+        flex: none !important;
+        height: 220px !important;
+    }
+    #detail-modal-overlay .modal-sidebar-column {
+        flex: 1 !important;
+        padding: 20px !important;
+        overflow-y: auto;
+    }
+}
+@media (min-width: 1100px) {
+    body:has(#detail-modal-overlay.active) #wtf-plans-panel-overlay,
+    body:has(#detail-modal-overlay.active) #forum-panel-overlay {
+        display: none !important;
+    }
+}
+#detail-modal-overlay .modal-content {
+    min-width: 0;
+}
+@media (min-width: 769px) {
+    #detail-modal-overlay .modal-main-column,
+    #detail-modal-overlay .modal-sidebar-column { min-width: 0; }
+}
+#ucp-attach-bar {
+    flex-shrink: 0;
+    margin: 8px 12px;
+}
+
 /* Search More Photos button styles */
 #modal-search-photos-container {
     text-align: center;
@@ -4934,6 +4974,7 @@ body.ucp-panel-open .unified-chat-panel {
     }
     </script>
 
+    <link rel="stylesheet" href="/css/workspace.css">
     </head>
 <body>
     <!-- The canvas is now our one and only background element -->
@@ -5023,7 +5064,7 @@ body.ucp-panel-open .unified-chat-panel {
     <div id="projects-panel-overlay" class="projects-panel-overlay"></div>
 
     <!-- WTF Plans Panel (Slide-out) - Master view for all user's plans -->
-    <div id="wtf-plans-panel" class="wtf-plans-panel" style="display: none;">
+    <div id="wtf-plans-panel" role="region" aria-label="Plans navigation" class="wtf-plans-panel" style="display: none;">
         <div class="wtf-plans-panel-header">
             <h3>🎯 WTF Plans</h3>
             <button id="wtf-plans-panel-close" class="wtf-plans-panel-close-btn" aria-label="Close plans panel">&times;</button>
@@ -5121,8 +5162,7 @@ body.ucp-panel-open .unified-chat-panel {
 
     <header id="main-header">
         <div class="header-content">
-            <!-- Left: Hamburger Menu, Logo and Title -->
-            <div id="header-left">
+        <div id="header-left">
                 <div id="hamburger-menu-container">
                     <button id="hamburger-menu-btn" class="header-icon-btn" title="Navigation Menu" aria-label="Open navigation menu">
                         <span class="hamburger-icon">☰</span>
@@ -5178,8 +5218,7 @@ body.ucp-panel-open .unified-chat-panel {
                 <h1 id="main-shop-title"></h1>
             </div>
 
-            <!-- Center: Search Bar -->
-            <div id="header-center">
+        <div id="header-center">
                 <div id="header-search-wrapper">
                     <input type="search" id="name-filter" name="wtfun-search" placeholder="Search activities, venues, experiences..." autocomplete="off">
                     <button id="clear-search-btn" title="Clear Search">×</button>
@@ -5191,17 +5230,16 @@ body.ucp-panel-open .unified-chat-panel {
                     </button>
                 </div>
             </div>
-
-            <!-- Right: Profile -->
-            <div id="header-right">
+        <div id="header-right">
                 <button id="user-profile-button" class="header-icon-btn" aria-label="Sign in or view my account">&#128100;</button>
-            </div>
+        </div>
         </div>
         <!-- Marquee banner below header content (optional announcements) -->
         <div id="marquee-banner-container" style="display: none;">
             <div id="marquee-text"></div>
         </div>
     </header>
+    <div id="catalog-workspace">
     
     <div id="loading-message" style="text-align: center; padding: 40px;">Loading catalog...</div>
 
@@ -5462,7 +5500,9 @@ body.ucp-panel-open .unified-chat-panel {
         </div>
     </div>
 
-    <div id="detail-modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-item-name">
+    </div><!-- catalog-workspace -->
+
+    <div id="detail-modal-overlay" class="modal-overlay" role="dialog" aria-modal="false" aria-labelledby="modal-item-name">
         <!-- Reactions bar floating above the modal -->
         <div id="modal-reactions-section" class="modal-reactions-section" style="display: none;">
             <div class="modal-reactions-quick-bar" id="modal-reactions-quick-bar">
@@ -5990,73 +6030,8 @@ body.ucp-panel-open .unified-chat-panel {
         <!-- Background Canvas for Presentation View -->
         <canvas id="presentation-bg-canvas" class="presentation-bg-canvas"></canvas>
 
-        <!-- Presentation View Header - Clean single-row layout -->
-        <header id="presentation-header" class="presentation-header">
-            <div class="header-content">
-                <!-- Left: Hamburger Menu only -->
-                <div id="presentation-header-left">
-                    <button id="presentation-back-btn" class="header-icon-btn" title="WTF Plans" aria-label="Open WTF Plans menu">
-                        <span class="hamburger-icon">&#9776;</span>
-                    </button>
-                </div>
+        <!-- Navigation is provided by the shared workspace header. -->
 
-                <!-- Center: Plan Title (full display, wraps if needed) -->
-                <div id="presentation-header-center">
-                    <div class="presentation-header-title-row">
-                        <span id="presentation-event-label" class="presentation-event-label">Viewing Plan</span>
-                        <span id="presentation-live-badge" class="presentation-live-badge" style="display: none;">
-                            <span class="live-dot"></span>
-                            <span>LIVE</span>
-                        </span>
-                        <button id="plan-focus-regenerate-btn" class="plan-focus-regenerate-btn" title="Regenerate plan focus from goals" aria-label="Regenerate plan focus" style="display: none;">&#x21BB;</button>
-                    </div>
-                    <div id="goal-chips-container" class="goal-chips-container"></div>
-                </div>
-
-                <!-- Right: Video Chat Toolbar (v3.8) + Vitality emoji + Price -->
-                <div id="presentation-header-right">
-                    <!-- Live Stream Toolbar -->
-                    <div id="live-stream-toolbar" class="live-stream-toolbar" style="display: none;">
-                        <!-- Go Live button (shown when no stream active) -->
-                        <button id="live-go-live-btn" class="live-toolbar-btn live-go-live-btn" title="Start live video" aria-label="Go Live">
-                            <span class="live-btn-icon">&#x1F4F9;</span>
-                            <span class="live-btn-label">Go Live</span>
-                        </button>
-
-                        <!-- Stream Controls (shown when stream is active) -->
-                        <div id="live-stream-controls" class="live-stream-controls" style="display: none;">
-                            <div id="live-indicator" class="live-indicator">
-                                <span class="live-dot"></span>
-                                <span class="live-text">LIVE</span>
-                                <span id="live-viewer-count" class="live-viewer-count">0</span>
-                            </div>
-                            <button id="live-toggle-audio" class="live-toolbar-btn live-control-btn" title="Toggle microphone" aria-label="Toggle microphone">
-                                <span class="live-btn-icon" id="live-audio-icon">&#x1F3A4;</span>
-                            </button>
-                            <button id="live-toggle-video" class="live-toolbar-btn live-control-btn" title="Toggle camera" aria-label="Toggle camera">
-                                <span class="live-btn-icon" id="live-video-icon">&#x1F4F7;</span>
-                            </button>
-                            <button id="live-toggle-transcription" class="live-toolbar-btn live-control-btn" title="Toggle Ryry voice commands" aria-label="Toggle voice commands" style="display: none;">
-                                <span class="live-btn-icon" id="live-transcription-icon">&#x1F399;</span>
-                            </button>
-                            <button id="live-copy-link" class="live-toolbar-btn live-control-btn" title="Copy stream link" aria-label="Copy shareable stream link" style="display: none;">
-                                <span class="live-btn-icon" id="live-copy-link-icon">&#x1F517;</span>
-                            </button>
-                            <button id="live-end-stream" class="live-toolbar-btn live-end-btn" title="End stream" aria-label="End stream">
-                                <span class="live-btn-icon">&#x23F9;</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Presence Avatar Bar -->
-                    <div id="presentation-presence-avatar-bar" class="presence-avatar-bar" style="display: none;"></div>
-                    <button id="presentation-header-total" class="presentation-header-total" title="View checkout" aria-label="View checkout summary"></button>
-                </div>
-            </div>
-            <!-- Hidden elements for logo/shop-title (kept for JS compatibility) -->
-            <div id="presentation-logo-container" class="presentation-logo-container" style="display:none;"></div>
-            <h1 id="presentation-shop-title" class="presentation-shop-title" style="display:none;"></h1>
-        </header>
 
         <!-- Live Video Preview Strip (v3.8) - shown below header when stream is active -->
         <div id="live-video-strip" class="live-video-strip" style="display: none;">
@@ -6148,10 +6123,76 @@ body.ucp-panel-open .unified-chat-panel {
         </div>
 
         <div class="presentation-content presentation-itinerary">
-            <button id="presentation-close-btn" class="modal-close-btn" aria-label="Close presentation" style="display: none;">×</button>
+            <button id="presentation-close-btn" class="modal-close-btn" aria-label="Return to catalog" title="Return to catalog">×</button>
 
             <!-- Scrollable Itinerary Container -->
             <div class="presentation-itinerary-scroll">
+        <section id="presentation-header" class="workspace-plan-context" aria-label="Plan context and collaboration tools">
+            <div class="header-content">
+                <!-- Left: Hamburger Menu only -->
+                <div id="presentation-header-left" hidden>
+                    <button id="presentation-back-btn" class="header-icon-btn" title="WTF Plans" aria-label="Open WTF Plans menu">
+                        <span class="hamburger-icon">&#9776;</span>
+                    </button>
+                </div>
+
+                <!-- Center: Plan Title (full display, wraps if needed) -->
+                <div id="presentation-header-center">
+                    <div class="presentation-header-title-row">
+                        <span id="presentation-event-label" class="presentation-event-label">Viewing Plan</span>
+                        <span id="presentation-live-badge" class="presentation-live-badge" style="display: none;">
+                            <span class="live-dot"></span>
+                            <span>LIVE</span>
+                        </span>
+                        <button id="plan-focus-regenerate-btn" class="plan-focus-regenerate-btn" title="Regenerate plan focus from goals" aria-label="Regenerate plan focus" style="display: none;">&#x21BB;</button>
+                    </div>
+                    <div id="goal-chips-container" class="goal-chips-container"></div>
+                </div>
+
+                <!-- Right: Video Chat Toolbar (v3.8) + Vitality emoji + Price -->
+                <div id="presentation-header-right">
+                    <!-- Live Stream Toolbar -->
+                    <div id="live-stream-toolbar" class="live-stream-toolbar" style="display: none;">
+                        <!-- Go Live button (shown when no stream active) -->
+                        <button id="live-go-live-btn" class="live-toolbar-btn live-go-live-btn" title="Start live video" aria-label="Go Live">
+                            <span class="live-btn-icon">&#x1F4F9;</span>
+                            <span class="live-btn-label">Go Live</span>
+                        </button>
+
+                        <!-- Stream Controls (shown when stream is active) -->
+                        <div id="live-stream-controls" class="live-stream-controls" style="display: none;">
+                            <div id="live-indicator" class="live-indicator">
+                                <span class="live-dot"></span>
+                                <span class="live-text">LIVE</span>
+                                <span id="live-viewer-count" class="live-viewer-count">0</span>
+                            </div>
+                            <button id="live-toggle-audio" class="live-toolbar-btn live-control-btn" title="Toggle microphone" aria-label="Toggle microphone">
+                                <span class="live-btn-icon" id="live-audio-icon">&#x1F3A4;</span>
+                            </button>
+                            <button id="live-toggle-video" class="live-toolbar-btn live-control-btn" title="Toggle camera" aria-label="Toggle camera">
+                                <span class="live-btn-icon" id="live-video-icon">&#x1F4F7;</span>
+                            </button>
+                            <button id="live-toggle-transcription" class="live-toolbar-btn live-control-btn" title="Toggle Ryry voice commands" aria-label="Toggle voice commands" style="display: none;">
+                                <span class="live-btn-icon" id="live-transcription-icon">&#x1F399;</span>
+                            </button>
+                            <button id="live-copy-link" class="live-toolbar-btn live-control-btn" title="Copy stream link" aria-label="Copy shareable stream link" style="display: none;">
+                                <span class="live-btn-icon" id="live-copy-link-icon">&#x1F517;</span>
+                            </button>
+                            <button id="live-end-stream" class="live-toolbar-btn live-end-btn" title="End stream" aria-label="End stream">
+                                <span class="live-btn-icon">&#x23F9;</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Presence Avatar Bar -->
+                    <div id="presentation-presence-avatar-bar" class="presence-avatar-bar" style="display: none;"></div>
+                    <button id="presentation-header-total" class="presentation-header-total" title="View checkout" aria-label="View checkout summary"></button>
+                </div>
+            </div>
+            <!-- Hidden elements for logo/shop-title (kept for JS compatibility) -->
+            <div id="presentation-logo-container" class="presentation-logo-container" style="display:none;"></div>
+            <h1 id="presentation-shop-title" class="presentation-shop-title" style="display:none;"></h1>
+        </section>
 
                 <!-- Plan Focus Suggestion Banner (hidden by default) -->
                 <div id="plan-focus-suggestion" class="plan-focus-suggestion" style="display: none;">
@@ -6477,7 +6518,7 @@ body.ucp-panel-open .unified-chat-panel {
     </div>
 
     <!-- Unified Chat Side Panel - Shared across catalog and presentation views -->
-    <div id="unified-chat-panel" class="unified-chat-panel">
+    <div id="unified-chat-panel" role="region" aria-label="Conversations and tasks" class="unified-chat-panel">
         <div class="ucp-header">
             <div class="ucp-header-left">
                 <h3 class="ucp-title">Conversations</h3>
@@ -6529,6 +6570,11 @@ body.ucp-panel-open .unified-chat-panel {
                 <button id="ucp-focus-clear" class="ucp-focus-clear" title="Clear focus" style="display: none;">&times;</button>
             </div>
         </div>
+            <div id="ucp-attach-bar" class="ucp-attach-bar">
+                <select id="ucp-attach-select" class="ucp-attach-select" title="Filter conversations and tasks by plan item" aria-label="Conversation and task scope">
+                    <option value="">Plan-wide</option>
+                </select>
+            </div>
         <div id="ucp-content" class="ucp-content">
             <div class="ucp-loading">Loading conversations...</div>
         </div>
@@ -6536,11 +6582,6 @@ body.ucp-panel-open .unified-chat-panel {
             <div id="ucp-reply-indicator" class="ucp-reply-indicator" style="display: none;">
                 <span class="ucp-reply-text"></span>
                 <button class="ucp-reply-cancel" type="button">&times;</button>
-            </div>
-            <div id="ucp-attach-bar" class="ucp-attach-bar">
-                <select id="ucp-attach-select" class="ucp-attach-select" title="Attach to plan item">
-                    <option value="">Plan-wide chat</option>
-                </select>
             </div>
             <form id="ucp-message-form" class="ucp-message-form">
                 <input type="text" id="ucp-message-input" class="ucp-message-input" placeholder="Message the team..." autocomplete="off">
