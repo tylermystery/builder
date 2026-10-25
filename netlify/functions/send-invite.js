@@ -5,6 +5,8 @@ const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
 const crypto = require('crypto');
 const { buildFrom, fetchStoreName } = require('./utils/email-config');
+const { loadPlanSnapshot, buildSnapshotEmailParts } = require('./utils/plan-snapshot-email');
+const { escapeHtml } = require('./utils/checkout-emails');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL: NETLIFY_URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
@@ -36,6 +38,10 @@ exports.handler = async (event) => {
         // Cap role to editor max (prevent URL tampering to owner)
         const assignedRole = (role === 'viewer') ? 'Viewer' : 'Editor';
 
+        // Load the saved plan before creating or sending the invitation.
+        const snapshotData = await loadPlanSnapshot(sessionId);
+        const snapshot = buildSnapshotEmailParts(snapshotData);
+
         // Generate a secure invite token and store in Netlify Blobs
         const token = crypto.randomBytes(32).toString('hex');
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -58,11 +64,11 @@ exports.handler = async (event) => {
         const baseUrl = SITE_URL || NETLIFY_URL;
         // Use tokenized invite link — no sensitive data in URL
         const inviteLink = `${baseUrl}/?invite_token=${token}`;
-        const planName = sessionName || 'an event plan';
+        const planName = snapshotData.plan.name || sessionName || 'an event plan';
         const senderName = inviterName || 'Someone';
 
         // Resolve store name for dynamic sender
-        const storeName = await fetchStoreName(storeId);
+        const storeName = await fetchStoreName(snapshotData.storeId || storeId);
         const emailFrom = buildFrom(storeName);
 
         // Send the invitation email
@@ -70,13 +76,15 @@ exports.handler = async (event) => {
             to: email,
             from: emailFrom,
             subject: `${senderName} invited you to collaborate on "${planName}"`,
+            text: `${senderName} invited you to collaborate on "${planName}" as ${assignedRole}.\n\n${snapshot.text}\n\nView & join the plan: ${inviteLink}`,
+            ...(snapshot.attachments ? { attachments: snapshot.attachments } : {}),
             html: `
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px;">
                     <div style="text-align: center; margin-bottom: 24px;">
                         <h2 style="color: #333; margin: 0;">You're Invited!</h2>
                     </div>
                     <p style="color: #555; font-size: 16px; line-height: 1.5;">
-                        <strong>${senderName}</strong> has invited you to collaborate on <strong>"${planName}"</strong> as a <strong>${assignedRole}</strong>.
+                        <strong>${escapeHtml(senderName)}</strong> has invited you to collaborate on <strong>"${escapeHtml(planName)}"</strong> as a <strong>${assignedRole}</strong>.
                     </p>
                     <p style="color: #555; font-size: 15px; line-height: 1.5;">
                         ${assignedRole === 'Editor'
@@ -92,6 +100,7 @@ exports.handler = async (event) => {
                         Click the button above to view the plan and sign in to collaborate in real time.
                     </p>
                 </div>
+                ${snapshot.html}
             `
         };
 

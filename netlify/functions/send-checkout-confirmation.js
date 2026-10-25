@@ -12,6 +12,8 @@ const sgMail = require('@sendgrid/mail');
 const crypto = require('crypto');
 const { buildReceiptEmail, buildMerchantNotificationEmail, loadCheckoutEmailDetails } = require('./utils/checkout-emails');
 
+const { loadPlanSnapshot, buildSnapshotEmailParts } = require('./utils/plan-snapshot-email');
+
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
 
@@ -119,6 +121,8 @@ exports.handler = async (event) => {
       date: new Date().toISOString(),
     };
     const emailDetails = await loadCheckoutEmailDetails(session);
+    const snapshot = unpaid ? buildSnapshotEmailParts(await loadPlanSnapshot(session, emailDetails)) : null;
+    if (snapshot) emailDetails.snapshotHtml = snapshot.html;
 
     // When a channel id is supplied (an un-signed-in guest), embed a sign-in link
     // in the confirmation email so a single email carries the quote/receipt AND a
@@ -133,7 +137,13 @@ exports.handler = async (event) => {
     // 1) Purchaser confirmation.
     try {
       const receipt = buildReceiptEmail(session, payment, store, baseUrl, { unpaid, amountDue, signInUrl, ...emailDetails });
-      await sgMail.send({ to: customerEmail, from: receipt.from, subject: receipt.subject, html: receipt.html });
+      await sgMail.send({
+        to: customerEmail, from: receipt.from, subject: receipt.subject, html: receipt.html,
+        ...(snapshot ? {
+          text: `Your plan is saved. No payment has been taken. Amount due: $${Number(amountDue).toFixed(2)}.\n\n${snapshot.text}\n\n${signInUrl ? `Sign in to save and manage your plan: ${signInUrl}\n\n` : ''}Open plan: ${baseUrl}/?session=${session.id}`,
+          ...(snapshot.attachments ? { attachments: snapshot.attachments } : {})
+        } : {})
+      });
       sentTo.push(customerEmail);
       console.log(`[send-checkout-confirmation] Purchaser email sent to ${customerEmail}.`);
     } catch (emailErr) {
@@ -146,7 +156,13 @@ exports.handler = async (event) => {
     if (merchantEmail) {
       try {
         const notification = buildMerchantNotificationEmail(session, payment, store, baseUrl, { unpaid, amountDue, ...emailDetails });
-        await sgMail.send({ to: notification.to, from: notification.from, subject: notification.subject, html: notification.html });
+        await sgMail.send({
+          to: notification.to, from: notification.from, subject: notification.subject, html: notification.html,
+          ...(snapshot ? {
+            text: `${snapshot.text}\n\nOpen plan: ${baseUrl}/?session=${session.id}`,
+            ...(snapshot.attachments ? { attachments: snapshot.attachments } : {})
+          } : {})
+        });
         sentTo.push(merchantEmail);
         console.log(`[send-checkout-confirmation] Merchant email sent to ${merchantEmail}.`);
       } catch (emailErr) {

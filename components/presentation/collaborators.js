@@ -5,6 +5,7 @@
  */
 
 import { state } from '../../state.js';
+import { saveSessionToAirtable } from '../../api.js';
 import { getCurrentUser } from '../../chat.js';
 import { triggerSave } from '../../events.js';
 import { log } from '../../utils/debug.js';
@@ -170,6 +171,7 @@ async function handleSendInvite() {
     }
 
     try {
+        if (!await saveSessionToAirtable()) throw new Error('Please save the plan before sharing it.');
         const currentUser = getCurrentUser();
         const eventName = state.eventDetails?.combined?.get?.('Event Name') || 'Event Plan';
 

@@ -2097,6 +2097,7 @@ async function handleInvite() {
     statusEl.textContent = "";
 
     try {
+        if (!await api.saveSessionToAirtable()) throw new Error('Please save the plan before sharing it.');
         const inviterName = state.session.user?.name || "A friend";
         const sessionName = state.eventDetails?.combined?.get?.('eventName') || state.eventDetails?.combined?.get?.('Event Name') || '';
 
