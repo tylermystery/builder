@@ -30,6 +30,7 @@ function chatHarness() {
         ]]]) }
     };
     const run = loadModule('components/unifiedChatPanel.js', {
+        getProjectTaskLoadState: () => ({ loading: false }),
         state, getRecordById: id => ({ fields: { Name: id } }),
         document: {
             getElementById: id => id === 'ucp-attach-select' ? select : null,

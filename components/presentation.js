@@ -12,6 +12,7 @@
  * Phase 6 of the Presentation View Architecture Overhaul.
  */
 
+import { loadProjectTasks } from '../utils/projectTasks.js';
 import { state, setState, getRecordById, getAggregateReactions } from '../state.js';
 import * as api from '../api.js';
 import { CONSTANTS, EMOJI_TIERS, REACTION_SCORES, computeDemocraticAverage } from '../config.js';
@@ -415,7 +416,7 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Parallelize independent async operations: permissions + tasks fetch
     const projectId = state.session.id;
     const needsPermissions = state.permissions?.isLoading !== false && state.session.id && state.session.user?.isAuthenticated && state.session.user?.id;
-    const needsTasks = projectId && !state.tasks.byProject.has(projectId);
+    const needsTasks = !!projectId;
 
     const parallelPromises = [];
 
@@ -446,15 +447,7 @@ export async function showPresentationView(listType, startRecordId = null) {
 
     if (needsTasks) {
         parallelPromises.push(
-            api.fetchTasks(projectId)
-                .then(tasks => {
-                    if (Array.isArray(tasks)) {
-                        tasks.forEach(task => {
-                            state.tasks.all.set(task.id, task);
-                        });
-                        state.tasks.byProject.set(projectId, tasks);
-                    }
-                })
+            loadProjectTasks(projectId, api.fetchTasks)
                 .catch(error => {
                     console.error('[Presentation] Error fetching tasks:', error);
                 })

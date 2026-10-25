@@ -1,6 +1,7 @@
 // FILE: api.js (REPLACE ENTIRE FILE)
 
 import { state, invalidateRecordsIndex, getRecordById } from './state.js';
+import { upsertProjectTask, removeProjectTask } from './utils/projectTasks.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { parseOptions, getShopUrlParam } from './utils.js';
 import { log } from './utils/debug.js';
@@ -4829,12 +4830,28 @@ export const TASK_STATUS = {
     COMPLETED: 'completed'
 };
 
+// Airtable returns tasks in pages, including on the client-side filter fallback.
+async function appendTaskPages(url, data) {
+    if (!Array.isArray(data.records)) throw new Error('Invalid task response');
+    let offset = data.offset;
+    while (offset) {
+        const response = await fetchWithTimeout(`${url}&offset=${encodeURIComponent(offset)}`, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!response.ok) throw new Error('Unable to load all tasks');
+        const page = await response.json();
+        if (!Array.isArray(page.records)) throw new Error('Invalid task response');
+        data.records.push(...page.records);
+        offset = page.offset;
+    }
+}
+
 /**
  * Fetch all tasks for a specific project
  * @param {string} projectId - The project/session ID to fetch tasks for
  * @returns {Promise<Array>} - Array of task records
  */
-export async function fetchTasks(projectId) {
+export async function fetchTasks(projectId, { throwOnError = false } = {}) {
     console.log('[API DEBUG] fetchTasks called with projectId:', projectId);
 
     if (!projectId) {
@@ -4898,10 +4915,11 @@ export async function fetchTasks(projectId) {
             const errorText = await response.text();
             console.log('[TASK PERSISTENCE DEBUG] Server-side filter failed:', errorText);
             console.log('[TASK PERSISTENCE DEBUG] Falling back to client-side filtering...');
-            return await fetchTasksWithClientSideFilter(projectId, fieldsQuery);
+            return await fetchTasksWithClientSideFilter(projectId, fieldsQuery, throwOnError);
         }
 
         const data = await response.json();
+        await appendTaskPages(url, data);
         console.log('[API DEBUG] fetchTasks response data:', {
             hasRecords: !!data.records,
             recordCount: data.records?.length ?? 0,
@@ -4929,12 +4947,12 @@ export async function fetchTasks(projectId) {
         // This handles the case where ProjectId_Rollup field exists but is empty,
         // or where the field doesn't contain the expected data
         console.log('[TASK PERSISTENCE DEBUG] No tasks found with server filter, trying client-side filter...');
-        return await fetchTasksWithClientSideFilter(projectId, fieldsQuery);
+        return await fetchTasksWithClientSideFilter(projectId, fieldsQuery, throwOnError);
 
     } catch (error) {
         console.error('[API DEBUG] fetchTasks caught error:', error);
         console.log('[TASK PERSISTENCE DEBUG] Falling back to client-side filtering after error...');
-        return await fetchTasksWithClientSideFilter(projectId, fieldsQuery);
+        return await fetchTasksWithClientSideFilter(projectId, fieldsQuery, throwOnError);
     }
 }
 
@@ -4945,7 +4963,7 @@ export async function fetchTasks(projectId) {
  * @param {string} fieldsQuery - URL query string for fields to fetch
  * @returns {Promise<Array>} - Array of task records for this project
  */
-async function fetchTasksWithClientSideFilter(projectId, fieldsQuery) {
+async function fetchTasksWithClientSideFilter(projectId, fieldsQuery, throwOnError = false) {
     console.log('[TASK PERSISTENCE DEBUG] ========== CLIENT-SIDE FILTER ==========');
     console.log('[TASK PERSISTENCE DEBUG] Fetching all tasks and filtering client-side for project:', projectId);
 
@@ -4960,11 +4978,13 @@ async function fetchTasksWithClientSideFilter(projectId, fieldsQuery) {
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('[TASK PERSISTENCE DEBUG] Client-side filter fetch failed:', errorText);
+            console.error('[TASK PERSISTENCE DEBUG] Client-side filter fetch failed:', response.status);
+            if (throwOnError) throw new Error('Unable to load tasks');
             return [];
         }
 
         const data = await response.json();
+        await appendTaskPages(url, data);
         console.log('[TASK PERSISTENCE DEBUG] Total tasks in table:', data.records.length);
 
         // Filter client-side by checking if ProjectId array contains the target projectId
@@ -4999,6 +5019,7 @@ async function fetchTasksWithClientSideFilter(projectId, fieldsQuery) {
 
     } catch (error) {
         console.error('[TASK PERSISTENCE DEBUG] Client-side filter error:', error);
+        if (throwOnError) throw error;
         return [];
     }
 }
@@ -5078,9 +5099,8 @@ export async function createTask(projectId, taskData) {
         console.log('[TASK PERSISTENCE DEBUG] Task created with fields:', JSON.stringify(data.fields, null, 2));
         console.log('[TASK PERSISTENCE DEBUG] Task ProjectId:', data.fields?.ProjectId);
         log('API', `Created task: ${data.id}`);
-        // Tasks are open components of the plan, so creating, completing or removing one moves
-        // the background. Callers write state.tasks after this resolves, hence the deferred
-        // re-derivation rather than an immediate one.
+        // Publish saved tasks before returning so every creation path refreshes task views.
+        upsertProjectTask(data, projectId);
         scheduleAtmosphereRefresh('task-created');
         return data;
     } catch (error) {
@@ -5158,6 +5178,7 @@ export async function updateTask(taskId, taskData) {
 
         const data = await response.json();
         log('API', `Updated task: ${data.id}`);
+        upsertProjectTask(data);
         scheduleAtmosphereRefresh('task-updated');
         return data;
     } catch (error) {
@@ -5196,6 +5217,7 @@ export async function deleteTask(taskId) {
         }
 
         log('API', `Deleted task: ${taskId}`);
+        removeProjectTask(taskId);
         scheduleAtmosphereRefresh('task-deleted');
         return true;
     } catch (error) {

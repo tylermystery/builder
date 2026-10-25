@@ -606,11 +606,6 @@ async function createTaskFromMessage(messageId, content) {
 
         const newTask = await api.createTask(projectId, taskData);
         if (newTask) {
-            // Update local state
-            state.tasks.all.set(newTask.id, newTask);
-            const existingTasks = state.tasks.byProject.get(projectId) || [];
-            state.tasks.byProject.set(projectId, [...existingTasks, newTask]);
-
             // Save comment-to-task link for persistence
             if (messageId) {
                 const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};

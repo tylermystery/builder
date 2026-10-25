@@ -8,6 +8,7 @@ import { log } from '../utils/debug.js';
 import * as api from '../api.js';
 import { showToast } from '../ui.js';
 import { showTaskModal } from './taskManager.js';
+import { loadProjectTasks, getProjectTaskLoadState } from '../utils/projectTasks.js';
 import { renderPublicReactions, renderAggregatedCommunityFeed } from './publicCatalog.js';
 
 // ===== MODULE STATE =====
@@ -143,6 +144,7 @@ export function initializeUnifiedChatPanel() {
     document.addEventListener('planStateChanged', () => {
         validateItemScope();
         populateAttachSelect();
+        if (panelOpen) loadTaskData();
         if (panelOpen) {
             if (messagesSessionId !== state.session?.id) loadPanelData();
             else renderContent();
@@ -188,7 +190,7 @@ export async function showUnifiedChatPanel() {
     populateAttachSelect();
     populateFocusSelect();
     updateFocusBarUI();
-    await loadPanelData();
+    await Promise.all([loadPanelData(), loadTaskData(true)]);
     updateOnlineCount();
 
     // Debug: log layout dimensions
@@ -263,6 +265,7 @@ function setupFilters() {
     filterBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             currentFilter = btn.dataset.filter;
+            if (currentFilter === 'tasks') loadTaskData(true);
             filterBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             shouldScrollToBottom = true;
@@ -337,6 +340,16 @@ function populateAttachSelect() {
 
 // ===== DATA LOADING =====
 
+async function loadTaskData(force = false) {
+    const projectId = state.session?.id;
+    if (!projectId) return;
+    try {
+        await loadProjectTasks(projectId, api.fetchTasks, { force });
+    } catch {
+        // The task tab renders its own retry state; conversations remain usable.
+    }
+}
+
 async function loadPanelData() {
     const sessionId = state.session?.id;
     if (!sessionId) {
@@ -402,7 +415,8 @@ async function loadPanelData() {
     } catch (error) {
         log('UCP', 'Error loading panel data:', error);
         isLoading = false;
-        showEmptyState('Error loading conversations');
+        if (currentFilter === 'tasks') renderContent();
+        else showEmptyState('Error loading conversations');
     }
 }
 
@@ -1127,15 +1141,26 @@ function renderTasksTab(container) {
 
     const projectId = state.session?.id;
     validateItemScope();
-    const projectTasks = (projectId ? (state.tasks.byProject.get(projectId) || []) : [])
+    const taskLoad = getProjectTaskLoadState(projectId);
+    const savedTasks = projectId ? (state.tasks.byProject.get(projectId) || []) : [];
+    const tasksById = new Map(savedTasks.map(task => [task.id, state.tasks.all?.get(task.id) || task]));
+    const projectTasks = [...tasksById.values()]
         .filter(task => !selectedItemId || (task.fields?.LinkedItem || []).includes(selectedItemId));
 
     console.log('[UCP-TASKS TAB DEBUG] Rendering tasks tab:', { projectId, taskCount: projectTasks.length });
 
     if (projectTasks.length === 0) {
         // Check if tasks might still be loading
-        const isLoading = projectId && !state.tasks.byProject.has(projectId);
-        if (isLoading) {
+        const isLoading = projectId && taskLoad.loading;
+        if (taskLoad.error) {
+            container.innerHTML = '<div class="ucp-empty">Unable to load tasks.</div>';
+            const retry = document.createElement('button');
+            retry.type = 'button';
+            retry.className = 'ucp-action-btn';
+            retry.textContent = 'Retry';
+            retry.addEventListener('click', () => loadTaskData(true));
+            container.appendChild(retry);
+        } else if (isLoading) {
             container.innerHTML = `
                 <div class="ucp-empty">
                     <span class="ucp-empty-icon">⏳</span>

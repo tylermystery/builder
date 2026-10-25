@@ -673,11 +673,6 @@ async function createTaskFromComment(commentId, commentContent, componentId = nu
     try {
         const newTask = await deps.api.createTask(projectId, taskData);
         if (newTask) {
-            // Update local state
-            state.tasks.all.set(newTask.id, newTask);
-            const existingTasks = state.tasks.byProject.get(projectId) || [];
-            state.tasks.byProject.set(projectId, [...existingTasks, newTask]);
-
             // IMPORTANT: Persist the comment-to-task link if commentId is provided
             if (commentId) {
                 saveCommentTaskLink(commentId, newTask.id);
