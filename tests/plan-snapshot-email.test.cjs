@@ -116,6 +116,7 @@ test('long task descriptions are not truncated; a complete attachment protects a
 
 function handler(filename, f, sent, overrides = {}) {
   const source = fs.readFileSync(`netlify/functions/${filename}.js`, 'utf8');
+  let blobsConnected = false;
   const context = vm.createContext({
     exports: {}, process: { env: { SITE_URL: 'https://example.test', SENDGRID_API_KEY: true } }, console: { log() {}, warn() {}, error() {} }, Buffer, URL, URLSearchParams,
     require: name => {
@@ -125,12 +126,25 @@ function handler(filename, f, sent, overrides = {}) {
       if (name === './utils/plan-snapshot-email') return { loadPlanSnapshot: input => loadPlanSnapshot(input, options(f)), buildSnapshotEmailParts, ...overrides };
       if (name === './utils/checkout-emails') return { ...require('../netlify/functions/utils/checkout-emails'), loadCheckoutEmailDetails: async () => ({ sessionData: f.data, itemRecords: [f.record] }) };
       if (name === 'crypto') return require('node:crypto');
-      if (name === '@netlify/blobs') return { getStore: () => ({ setJSON: async () => {} }) };
+      if (name === '@netlify/blobs') return {
+        connectLambda: event => {
+          assert.equal(event.httpMethod, 'POST');
+          assert.ok(event.blobs, 'the original invocation context reaches Blobs');
+          blobsConnected = true;
+        },
+        getStore: () => {
+          assert.ok(blobsConnected, 'Blobs must connect before accessing the invite store');
+          return { setJSON: async () => {} };
+        }
+      };
       throw new Error(`Unexpected test dependency: ${name}`);
     }
   });
   vm.runInContext(source, context);
-  return body => context.exports.handler({ httpMethod: 'POST', body: JSON.stringify(body) });
+  return body => {
+    blobsConnected = false;
+    return context.exports.handler({ httpMethod: 'POST', body: JSON.stringify(body), blobs: 'test-invocation-context' });
+  };
 }
 
 test('update notifications include the snapshot while preserving preferences and sender exclusion', async () => {

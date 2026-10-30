@@ -2132,7 +2132,7 @@ async function handleInvite() {
         }
     } catch (e) {
         console.error(e);
-        statusEl.textContent = "Error sending invite.";
+        statusEl.textContent = e.message || "Error sending invite.";
         statusEl.style.color = "#dc3545";
         btn.textContent = "Send Invite";
         btn.disabled = false;

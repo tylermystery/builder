@@ -46,7 +46,9 @@ exports.handler = async (event) => {
         const token = crypto.randomBytes(32).toString('hex');
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-        const { getStore } = require('@netlify/blobs');
+        const { getStore, connectLambda } = require('@netlify/blobs');
+        // Lambda-compatible handlers must initialize Blobs from this invocation.
+        connectLambda(event);
         const store = getStore({ name: 'invite-tokens', consistency: 'strong' });
         await store.setJSON(token, {
             token,
