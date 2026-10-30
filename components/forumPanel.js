@@ -3,6 +3,7 @@
 // Slides in from the right side, parallel to the presentation view
 
 import { state, getRecordById } from '../state.js';
+import { taskMessageText } from '../utils/taskDiscussion.js';
 import { log } from '../utils/debug.js';
 import { computeDemocraticAverage, convertMessageReactions } from '../config.js';
 import * as api from '../api.js';
@@ -763,7 +764,7 @@ function createMessageObject(record) {
         id: record.id,
         senderId: fields.SenderID,
         senderName: fields.SenderName || 'Anonymous',
-        content: content,
+        content: taskMessageText(content),
         timestamp: timestamp,
         parentMessageId: fields.ParentMessageID,
         reactions: parseReactions(fields.Reactions),

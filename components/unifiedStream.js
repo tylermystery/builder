@@ -8,6 +8,7 @@
 // 5. Content-based default with ability to change (component affiliation)
 // 6. Context menu action for task conversion and mark unread
 
+import { taskMessageText } from '../utils/taskDiscussion.js';
 import { state } from '../state.js';
 import { log } from '../utils/debug.js';
 import * as api from '../api.js';
@@ -940,7 +941,7 @@ export function renderTopic(message) {
     // Content
     const content = `
         <div class="stream-content">
-            ${message.isDeleted ? '<em class="deleted">This message was deleted</em>' : escapeHtml(message.content)}
+            ${message.isDeleted ? '<em class="deleted">This message was deleted</em>' : escapeHtml(taskMessageText(message.content))}
             ${message.isEdited && !message.isDeleted ? '<span class="edited-indicator">(edited)</span>' : ''}
         </div>
     `;

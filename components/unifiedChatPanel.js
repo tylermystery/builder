@@ -9,6 +9,7 @@ import * as api from '../api.js';
 import { showToast } from '../ui.js';
 import { showTaskModal } from './taskManager.js';
 import { loadProjectTasks, getProjectTaskLoadState } from '../utils/projectTasks.js';
+import { taskMessageId, taskMessageText } from '../utils/taskDiscussion.js';
 import { renderPublicReactions, renderAggregatedCommunityFeed } from './publicCatalog.js';
 
 // ===== MODULE STATE =====
@@ -421,6 +422,12 @@ async function loadPanelData() {
 }
 
 function createMessageObj(record) {
+    const taskId = taskMessageId(record.fields?.Content || '');
+    if (taskId) {
+        const links = state.eventDetails.combined.get('_commentTaskLinks') || {};
+        links[record.id] = taskId;
+        state.eventDetails.combined.set('_commentTaskLinks', links);
+    }
     const fields = record.fields || record;
     const currentUser = getCurrentUser();
     const timestamp = record.createdTime || fields.Timestamp || new Date().toISOString();
@@ -445,7 +452,7 @@ function createMessageObj(record) {
         id: record.id,
         senderId: fields.SenderID,
         senderName: fields.SenderName || 'Anonymous',
-        content,
+        content: taskMessageText(content),
         timestamp,
         parentMessageId: fields.ParentMessageID,
         reactions: parseReactions(fields.Reactions),
@@ -910,6 +917,7 @@ function createTaskLinkBadge(message) {
  * This avoids needing a full re-render when a task is created or updated from a message.
  */
 function setupTaskCreationListener() {
+    window.addEventListener('task-discussion-updated', () => refreshUnifiedChatPanel());
     // Handle new task created from a message
     window.addEventListener('task-created-from-message', (e) => {
         const { messageId, taskId, task } = e.detail;
@@ -1731,6 +1739,19 @@ function openTaskModalFromMessage(message) {
         return;
     }
 
+    // Check if this message already has a linked task
+    const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
+    const existingTaskId = linksObj[message.id];
+    if (existingTaskId) {
+        const existingTask = state.tasks.all.get(existingTaskId);
+        if (existingTask) {
+            console.log('[UCP-TASK DEBUG] Message already has linked task, opening for edit:', existingTaskId);
+            showTaskModal(existingTask, state.session.id);
+            return;
+        }
+    }
+
+
     // Permission check
     const currentRole = state.permissions?.currentRole;
     const isLoadingPerms = state.permissions?.isLoading !== false;
@@ -1749,18 +1770,6 @@ function openTaskModalFromMessage(message) {
         componentId: message.componentId,
         sessionId: state.session.id
     });
-
-    // Check if this message already has a linked task
-    const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
-    const existingTaskId = linksObj[message.id];
-    if (existingTaskId) {
-        const existingTask = state.tasks.all.get(existingTaskId);
-        if (existingTask) {
-            console.log('[UCP-TASK DEBUG] Message already has linked task, opening for edit:', existingTaskId);
-            showTaskModal(existingTask, state.session.id);
-            return;
-        }
-    }
 
     // Pre-fill task data from the message and open the full task modal
     const prefillTask = {

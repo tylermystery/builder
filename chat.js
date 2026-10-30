@@ -1,6 +1,7 @@
 // REPLACE THE ENTIRE CONTENTS OF: chat.js
 
 import { state, setState } from './state.js';
+import { taskMessageText } from './utils/taskDiscussion.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
 import { log } from './utils/debug.js';
@@ -1215,6 +1216,7 @@ let editingMessage = null;
  * Enhanced addMessageToUI with reactions, edit/delete, thread support, and component tags
  */
 function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmin, messageId, senderId, options = {}) {
+    message = taskMessageText(message);
     const { reactions = {}, isEdited = false, isDeleted = false, replyCount = 0, parentMessageId = null, isReply = false, componentInfo = null } = options;
 
     // Skip deleted messages

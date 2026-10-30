@@ -2317,7 +2317,28 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     return { imageUrls, status: imageSource };
 }
 
-export async function fetchChatMessages(sessionId) {
+// Read the full conversation so older tasks keep replies beyond the first page.
+async function readChatMessagePages(url, response) {
+    const records = [];
+    const offsets = new Set();
+    while (true) {
+        if (!response.ok) throw new Error('Unable to load conversations');
+        const data = await response.json();
+        if (!Array.isArray(data.records)) throw new Error('Invalid conversation response');
+        records.push(...data.records);
+        if (!data.offset) break;
+        if (offsets.has(data.offset)) throw new Error('Invalid conversation pagination');
+        offsets.add(data.offset);
+        const next = new URL(url);
+        next.searchParams.set('offset', data.offset);
+        response = await fetch(next.toString(), {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+    }
+    return { records: [...new Map(records.map(record => [record.id, record])).values()] };
+}
+
+export async function fetchChatMessages(sessionId, { throwOnError = false } = {}) {
     if (!sessionId || !sessionId.startsWith('rec')) {
          log('API', 'fetchChatMessages: Invalid or missing sessionId.');
          return [];
@@ -2338,10 +2359,10 @@ export async function fetchChatMessages(sessionId) {
         // fall back to fetching all messages and filtering client-side
         if (!response.ok) {
             console.log('[CHAT DEBUG] Server-side filter failed, falling back to client-side filtering...');
-            return await fetchChatMessagesWithClientSideFilter(sessionId);
+            return await fetchChatMessagesWithClientSideFilter(sessionId, { throwOnError });
         }
 
-        const data = await response.json();
+        const data = await readChatMessagePages(url, response);
         log('API', `Fetched ${data.records.length} chat messages for session ${sessionId}.`);
         // A full fetch of the plan's messages is the authoritative answer to "which
         // conversations exist", so deleted threads stop counting against the background.
@@ -2350,7 +2371,7 @@ export async function fetchChatMessages(sessionId) {
     } catch (error) {
         log('API', `Error fetching chat messages: ${error.message}`);
         console.log('[CHAT DEBUG] Falling back to client-side filtering after error...');
-        return await fetchChatMessagesWithClientSideFilter(sessionId);
+        return await fetchChatMessagesWithClientSideFilter(sessionId, { throwOnError });
     }
 }
 
@@ -2360,7 +2381,7 @@ export async function fetchChatMessages(sessionId) {
  * @param {string} sessionId - The session ID to filter by
  * @returns {Promise<Array>} - Array of message records for this session
  */
-async function fetchChatMessagesWithClientSideFilter(sessionId) {
+async function fetchChatMessagesWithClientSideFilter(sessionId, { throwOnError = false } = {}) {
     console.log('[CHAT DEBUG] ========== CLIENT-SIDE FILTER ==========');
     console.log('[CHAT DEBUG] Fetching all messages and filtering client-side for session:', sessionId);
 
@@ -2375,10 +2396,10 @@ async function fetchChatMessagesWithClientSideFilter(sessionId) {
         if (!response.ok) {
             const errorText = await response.text();
             console.error('[CHAT DEBUG] Client-side filter fetch failed:', errorText);
-            return [];
+            throw new Error('Unable to load conversations');
         }
 
-        const data = await response.json();
+        const data = await readChatMessagePages(url, response);
         console.log('[CHAT DEBUG] Total messages in table:', data.records.length);
 
         // Filter client-side by checking if SessionID array contains our sessionId
@@ -2394,6 +2415,7 @@ async function fetchChatMessagesWithClientSideFilter(sessionId) {
         return filteredMessages;
     } catch (error) {
         console.error('[CHAT DEBUG] Client-side filter error:', error.message);
+        if (throwOnError) throw new Error('Unable to load task discussion. Please retry.');
         return [];
     }
 }
@@ -2473,7 +2495,7 @@ export async function postPlanEvent(sessionId, eventType, eventData = {}) {
     }
 }
 
-export async function postChatMessage(sessionId, senderId, senderName, content, itemId = null) {
+export async function postChatMessage(sessionId, senderId, senderName, content, itemId = null, { notify = true } = {}) {
     if (!sessionId || !sessionId.startsWith('rec')) {
         log('API', `postChatMessage: Invalid sessionId provided: "${sessionId}". Cannot save message.`);
         return null;
@@ -2529,7 +2551,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content, 
         const newMessageRecordId = result.records[0].id;
          log('API', `Chat message saved with record ID: ${newMessageRecordId}`);
 
-        if (newMessageRecordId) {
+        if (newMessageRecordId && notify) {
             const notificationPromises = [
                 fetch('/api/send-notification', {
                     method: 'POST',
@@ -2604,6 +2626,20 @@ export async function updateChatMessage(messageId, newContent, senderId) {
 
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}/${messageId}`;
     console.log('[updateChatMessage DEBUG] PATCH URL:', url);
+
+    // Preserve task affiliation when a chat view edits the visible message text.
+    // Task discussions are discovered from this persisted prefix after reload.
+    try {
+        const originalResponse = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!originalResponse.ok) return null;
+        const original = await originalResponse.json();
+        const prefix = (original.fields?.Content || '').match(/^(?:\[PLAN_COMMENT:item:[^\]]+\]\s*)?\[TASK:[^\]]+\]\s*/)?.[0];
+        if (prefix) {
+            newContent = prefix + newContent.replace(/^(?:\[PLAN_COMMENT:item:[^\]]+\]\s*)?\[TASK:[^\]]+\]\s*/, '');
+        }
+    } catch { return null; }
 
     // Only update the Content field - IsEdited may not exist in all Airtable schemas
     // The field will still show as edited by comparing Content with original
