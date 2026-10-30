@@ -8,6 +8,7 @@ import { log } from '../utils/debug.js';
 import * as api from '../api.js';
 import { showToast } from '../ui.js';
 import { showTaskModal } from './taskManager.js';
+import { loadProjectTasks, getProjectTaskLoadState } from '../utils/projectTasks.js';
 import { renderPublicReactions, renderAggregatedCommunityFeed } from './publicCatalog.js';
 
 // ===== MODULE STATE =====
@@ -16,6 +17,7 @@ let sendChatMessageFn = null; // Setter-injected from chat.js to avoid circular 
 let panelOpen = false;
 let currentFilter = 'all'; // 'all' (the plan conversation) | 'global' | 'tasks'
 let ucpMessages = [];
+let messagesSessionId = null;
 let ucpPlanEvents = [];
 let replyingTo = null;
 let editingMessage = null; // { id, content } for inline editing
@@ -30,8 +32,73 @@ let isFullscreen = false; // v3.8: Full-screen mode state
 // the Global tab shows that item's community thread; otherwise it shows the
 // read-only aggregated community feed across the plan's items.
 let ucpFocusRecordId = null;
+let selectedItemId = null;
+let scopeSessionId = null;
+let scopeWasPlanItem = false;
+
+function planIncludesItem(id) {
+    return state.cart?.lockedItems?.has(id) || state.cart?.items?.has(id);
+}
+
+// Local browsing scope is deliberately independent of shared live-stream focus.
+export function setUCPItemScope(itemId) {
+    scopeSessionId = state.session?.id || null;
+    selectedItemId = itemId || null;
+    scopeWasPlanItem = !!planIncludesItem(itemId);
+    cancelReply();
+    populateAttachSelect();
+    shouldScrollToBottom = true;
+    if (panelOpen) renderContent();
+}
+
+function validateItemScope() {
+    const sessionId = state.session?.id || null;
+    if (scopeSessionId !== sessionId || (selectedItemId && scopeWasPlanItem && !planIncludesItem(selectedItemId))) {
+        selectedItemId = null;
+        scopeSessionId = sessionId;
+        cancelReply();
+    }
+}
+
+function messageMatchesScope(message) {
+    return !selectedItemId || message.componentId === selectedItemId ||
+        message.replies?.some(messageMatchesScope);
+}
+
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '🔥', '🎉', '😮', '👀', '💯'];
+
+// Only transient view preferences travel across a full session navigation.
+export function getUCPWorkspacePreferences() {
+    return {
+        filter: currentFilter,
+        hideCompleted,
+        scrollTop: document.getElementById('ucp-content')?.scrollTop || 0,
+        sessionId: state.session?.id,
+        selectedItemId,
+        communityItemId: ucpFocusRecordId
+    };
+}
+
+export async function restoreUCPWorkspacePreferences(preferences) {
+    initializeUnifiedChatPanel();
+    if (!preferences) return showUnifiedChatPanel();
+    currentFilter = ['all', 'global', 'tasks'].includes(preferences.filter) ? preferences.filter : 'all';
+    hideCompleted = !!preferences.hideCompleted;
+    ucpFocusRecordId = preferences.sessionId === state.session?.id && getRecordById(preferences.communityItemId)
+        ? preferences.communityItemId : null;
+    const checkbox = document.getElementById('ucp-hide-completed-cb');
+    if (checkbox) checkbox.checked = hideCompleted;
+    document.querySelectorAll('.ucp-filter-btn').forEach(button => {
+        button.classList.toggle('active', button.dataset.filter === currentFilter);
+    });
+    setUCPItemScope(preferences.sessionId === state.session?.id ? preferences.selectedItemId : null);
+    await showUnifiedChatPanel();
+    const content = document.getElementById('ucp-content');
+    if (content && preferences.sessionId === state.session?.id) {
+        content.scrollTop = Math.max(0, Number(preferences.scrollTop) || 0);
+    }
+}
 
 // ===== INITIALIZATION =====
 
@@ -71,29 +138,59 @@ export function initializeUnifiedChatPanel() {
     setupHideCompletedToggle();
     setupFullscreenToggle();
     setupFocusBar();
+    document.getElementById('ucp-attach-select')?.addEventListener('change', (event) => {
+        setUCPItemScope(event.target.value);
+    });
+    document.addEventListener('planStateChanged', () => {
+        validateItemScope();
+        populateAttachSelect();
+        if (panelOpen) loadTaskData();
+        if (panelOpen) {
+            if (messagesSessionId !== state.session?.id) loadPanelData();
+            else renderContent();
+        }
+    });
 
     initialized = true;
     log('UCP', 'Unified Chat Panel initialized.');
 }
 
+// Workspace menu navigation uses the same tab state and render path as panel tabs.
+export async function openUCPWorkspaceTab(filter) {
+    initializeUnifiedChatPanel();
+    currentFilter = filter === 'tasks' ? 'tasks' : 'all';
+    document.querySelectorAll('.ucp-filter-btn').forEach(button => {
+        button.classList.toggle('active', button.dataset.filter === currentFilter);
+    });
+    shouldScrollToBottom = true;
+    await showUnifiedChatPanel();
+    renderContent();
+}
+
 export async function showUnifiedChatPanel() {
+    initializeUnifiedChatPanel();
+    if (panelOpen) {
+        document.dispatchEvent(new CustomEvent('workspace-panel-opening', { detail: { surface: 'right', panel: 'chat' } }));
+        return;
+    }
+    validateItemScope();
     console.log('[UCP DEBUG] showUnifiedChatPanel called. Task state:', {
         tasksAllSize: state.tasks.all.size,
         sessionId: state.session?.id,
         commentTaskLinks: state.eventDetails.combined.get('_commentTaskLinks')
     });
+    document.dispatchEvent(new CustomEvent('workspace-panel-opening', { detail: { surface: 'right', panel: 'chat' } }));
     document.body.classList.add('ucp-panel-open');
     // Also maintain legacy class for any CSS that still references it
     document.body.classList.add('ucp-panel-active');
     panelOpen = true;
     shouldScrollToBottom = true;
-    // General open (not for a specific item): Global tab shows the plan-wide feed.
-    ucpFocusRecordId = null;
+    // Keep the current tab and item context when reopening this workspace rail.
 
     populateAttachSelect();
     populateFocusSelect();
     updateFocusBarUI();
-    await loadPanelData();
+    await Promise.all([loadPanelData(), loadTaskData(true)]);
     updateOnlineCount();
 
     // Debug: log layout dimensions
@@ -168,6 +265,7 @@ function setupFilters() {
     filterBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             currentFilter = btn.dataset.filter;
+            if (currentFilter === 'tasks') loadTaskData(true);
             filterBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             shouldScrollToBottom = true;
@@ -202,7 +300,8 @@ function populateAttachSelect() {
     const select = document.getElementById('ucp-attach-select');
     if (!select) return;
 
-    select.innerHTML = '<option value="">Plan-wide chat</option>';
+    validateItemScope();
+    select.innerHTML = '<option value="">Plan-wide</option>';
 
     // Gather plan item IDs from locked items (confirmed) and ideas (favorites)
     const planItemIds = new Set();
@@ -213,10 +312,11 @@ function populateAttachSelect() {
         state.cart.items.forEach((info, id) => planItemIds.add(id));
     }
 
-    // Fall back to all records if no plan items
-    if (planItemIds.size === 0 && state.records?.all) {
-        state.records.all.forEach(r => { if (r?.id) planItemIds.add(r.id); });
+    // Catalog discussions retain access to catalog items outside a plan.
+    if (!document.body.classList.contains('presentation-active') && planItemIds.size === 0) {
+        state.records?.all?.forEach(record => { if (record?.id) planItemIds.add(record.id); });
     }
+    if (selectedItemId) planItemIds.add(selectedItemId);
 
     // Build options by looking up actual record data for proper names
     const entries = [];
@@ -235,18 +335,32 @@ function populateAttachSelect() {
         option.textContent = name;
         select.appendChild(option);
     });
+    select.value = selectedItemId || '';
 }
 
 // ===== DATA LOADING =====
 
+async function loadTaskData(force = false) {
+    const projectId = state.session?.id;
+    if (!projectId) return;
+    try {
+        await loadProjectTasks(projectId, api.fetchTasks, { force });
+    } catch {
+        // The task tab renders its own retry state; conversations remain usable.
+    }
+}
+
 async function loadPanelData() {
     const sessionId = state.session?.id;
     if (!sessionId) {
+        ucpMessages = [];
+        messagesSessionId = null;
         showEmptyState('No active session');
         return;
     }
 
     if (isLoading) return;
+    if (messagesSessionId !== sessionId) ucpMessages = [];
     isLoading = true;
 
     const container = document.getElementById('ucp-content');
@@ -285,7 +399,15 @@ async function loadPanelData() {
             });
         }
 
+        // Ignore responses from a plan that is no longer active.
+        if (state.session?.id !== sessionId) {
+            ucpMessages = [];
+            isLoading = false;
+            return loadPanelData();
+        }
+        messagesSessionId = sessionId;
         buildThreads();
+        populateAttachSelect();
 
         isLoading = false;
         renderContent();
@@ -293,7 +415,8 @@ async function loadPanelData() {
     } catch (error) {
         log('UCP', 'Error loading panel data:', error);
         isLoading = false;
-        showEmptyState('Error loading conversations');
+        if (currentFilter === 'tasks') renderContent();
+        else showEmptyState('Error loading conversations');
     }
 }
 
@@ -402,7 +525,12 @@ function renderContent() {
     const container = document.getElementById('ucp-content');
     if (!container) return;
 
+    validateItemScope();
+    if (messagesSessionId !== state.session?.id) ucpMessages = [];
     updateUCPTabLabels();
+    const scopeBar = document.getElementById('ucp-attach-bar');
+    if (scopeBar) scopeBar.hidden = currentFilter === 'global';
+    updateInputPlaceholder();
 
     // Tasks tab has its own rendering path
     if (currentFilter === 'tasks') {
@@ -432,8 +560,9 @@ function renderContent() {
             items = ucpMessages;
     }
 
+    items = items.filter(messageMatchesScope);
     if (items.length === 0) {
-        showEmptyState(getEmptyMessage());
+        showEmptyState(selectedItemId ? 'No conversations for this item yet.' : getEmptyMessage());
         return;
     }
 
@@ -490,6 +619,11 @@ function updateInputPlaceholder() {
     const input = document.getElementById('ucp-message-input');
     if (!input) return;
 
+    if (selectedItemId && currentFilter === 'all') {
+        const name = getRecordById(selectedItemId)?.fields?.Name || 'this item';
+        input.placeholder = `Message about ${name}...`;
+        return;
+    }
     // v3.8 Phase 3: Show focus item context in placeholder
     if (state.stream?.isActive && state.stream?.focusItemId && currentFilter === 'all') {
         const record = getRecordById(state.stream.focusItemId);
@@ -1006,14 +1140,27 @@ function renderTasksTab(container) {
     container.innerHTML = '';
 
     const projectId = state.session?.id;
-    const projectTasks = projectId ? (state.tasks.byProject.get(projectId) || []) : [];
+    validateItemScope();
+    const taskLoad = getProjectTaskLoadState(projectId);
+    const savedTasks = projectId ? (state.tasks.byProject.get(projectId) || []) : [];
+    const tasksById = new Map(savedTasks.map(task => [task.id, state.tasks.all?.get(task.id) || task]));
+    const projectTasks = [...tasksById.values()]
+        .filter(task => !selectedItemId || (task.fields?.LinkedItem || []).includes(selectedItemId));
 
     console.log('[UCP-TASKS TAB DEBUG] Rendering tasks tab:', { projectId, taskCount: projectTasks.length });
 
     if (projectTasks.length === 0) {
         // Check if tasks might still be loading
-        const isLoading = projectId && !state.tasks.byProject.has(projectId);
-        if (isLoading) {
+        const isLoading = projectId && taskLoad.loading;
+        if (taskLoad.error) {
+            container.innerHTML = '<div class="ucp-empty">Unable to load tasks.</div>';
+            const retry = document.createElement('button');
+            retry.type = 'button';
+            retry.className = 'ucp-action-btn';
+            retry.textContent = 'Retry';
+            retry.addEventListener('click', () => loadTaskData(true));
+            container.appendChild(retry);
+        } else if (isLoading) {
             container.innerHTML = `
                 <div class="ucp-empty">
                     <span class="ucp-empty-icon">⏳</span>
@@ -1024,7 +1171,7 @@ function renderTasksTab(container) {
             container.innerHTML = `
                 <div class="ucp-empty">
                     <span class="ucp-empty-icon">☑</span>
-                    <div>No tasks yet. Create one from any message or the Tasks panel.</div>
+                    <div>${selectedItemId ? 'No tasks for this item yet.' : 'No tasks yet. Create one from any message or the Tasks panel.'}</div>
                 </div>
             `;
         }
@@ -1654,8 +1801,8 @@ export function updateUCPOnlineCount(count) {
 /**
  * Open the UCP filtered to comments for a specific item.
  * Called from the detail modal's discussion button.
- * Expands the panel if collapsed, switches to Comments filter,
- * pre-selects the item in the attach dropdown, and scrolls to show relevant messages.
+ * Expands the panel if collapsed and applies the shared conversation/task scope.
+ * Keeps the current plan/task tab and pre-selects the item for new messages.
  * @param {string} recordId - The item record ID to filter discussion for
  */
 export async function openUCPForItem(recordId) {
@@ -1670,6 +1817,7 @@ export async function openUCPForItem(recordId) {
     initializeUnifiedChatPanel();
 
     // Open the panel using the standard mechanism
+    document.dispatchEvent(new CustomEvent('workspace-panel-opening', { detail: { surface: 'right', panel: 'chat' } }));
     document.body.classList.add('ucp-panel-open');
     document.body.classList.add('ucp-panel-active');
     panelOpen = true;
@@ -1677,30 +1825,12 @@ export async function openUCPForItem(recordId) {
     // Remember the item so the Global tab, if opened, shows its community thread.
     ucpFocusRecordId = recordId;
 
-    // Open the single, unified plan conversation (the plan tab). The item stays
-    // pre-selected in the attach dropdown below so a new message is attached to it.
-    currentFilter = 'all';
-    const filterBtns = document.querySelectorAll('.ucp-filter-btn');
-    filterBtns.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.filter === 'all');
+    // Keep the current plan/task tab while selecting the item's discussion.
+    if (currentFilter === 'global') currentFilter = 'all';
+    document.querySelectorAll('.ucp-filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === currentFilter);
     });
-
-    // Pre-select the item in the attach dropdown
-    const attachSelect = document.getElementById('ucp-attach-select');
-    if (attachSelect) {
-        // Ensure the option exists
-        let optionExists = false;
-        for (const opt of attachSelect.options) {
-            if (opt.value === recordId) {
-                optionExists = true;
-                break;
-            }
-        }
-        if (!optionExists) {
-            populateAttachSelect();
-        }
-        attachSelect.value = recordId;
-    }
+    setUCPItemScope(recordId);
 
     // Load data and render with comments filter
     shouldScrollToBottom = true;
@@ -1708,8 +1838,8 @@ export async function openUCPForItem(recordId) {
 
     // Focus the input for immediate typing
     const input = document.getElementById('ucp-message-input');
-    if (input) {
-        input.placeholder = 'Comment on this item...';
+    if (input && currentFilter !== 'tasks') {
+        updateInputPlaceholder();
         setTimeout(() => input.focus(), 100);
     }
 }
@@ -1728,6 +1858,7 @@ export async function openUCPGlobalForItem(recordId) {
     // Idempotent.
     initializeUnifiedChatPanel();
 
+    document.dispatchEvent(new CustomEvent('workspace-panel-opening', { detail: { surface: 'right', panel: 'chat' } }));
     document.body.classList.add('ucp-panel-open');
     document.body.classList.add('ucp-panel-active');
     panelOpen = true;

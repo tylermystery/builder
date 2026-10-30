@@ -462,11 +462,6 @@ async function createTaskFromMessage(message) {
         // Persist to Airtable via API
         const newTask = await api.createTask(projectId, taskData);
         if (newTask) {
-            // Update local state so task appears immediately
-            state.tasks.all.set(newTask.id, newTask);
-            const existingTasks = state.tasks.byProject.get(projectId) || [];
-            state.tasks.byProject.set(projectId, [...existingTasks, newTask]);
-
             // Save comment-to-task link for persistence
             if (message.id) {
                 console.log('[UnifiedStream-TASK DEBUG] Saving comment-task link:', {

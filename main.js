@@ -20,8 +20,10 @@ import fluidEffect from './components/effects/fluid.js';
 import { showReceiptModal } from './components/receipt.js';
 import { updateFooter } from './components/footer.js';
 import { initializeProjectsDashboard, updateProjectsData, showProjectsLoading } from './components/projectsDashboard.js';
-import { initializeWtfPlansPanel, syncWtfPlansPanelWithUrl, refreshWtfPlansData, isWtfPlansPanelOpen, trackRecentPlan } from './components/wtfPlansPanel.js';
-import { initializeForumPanel, syncForumPanelWithUrl } from './components/forumPanel.js';
+import { initializeWtfPlansPanel, showWtfPlansPanel, hideWtfPlansPanel, syncWtfPlansPanelWithUrl, refreshWtfPlansData, isWtfPlansPanelOpen, trackRecentPlan } from './components/wtfPlansPanel.js';
+import { initializeWorkspace } from './utils/workspace.js';
+import { hideUnifiedChatPanel, exitFullscreen, getUCPWorkspacePreferences, restoreUCPWorkspacePreferences } from './components/unifiedChatPanel.js';
+import { initializeForumPanel, hideForumPanel, syncForumPanelWithUrl } from './components/forumPanel.js';
 import { loadPublicIdeasForStore } from './components/publicCatalog.js';
 import { applyCloudinaryTransform, getBaseCloudinaryUrl } from './utils/imageOptimizer.js';
 import { loadTempIterations, loadTempReactions } from './components/refinementHandler.js';
@@ -1406,6 +1408,31 @@ async function initialize() {
         initializeBiometricAuth(); // Initialize biometric/passkey authentication
         initializeWtfPlansPanel(); // Initialize WTF Plans panel
         initializeForumPanel(); // Initialize Forum Panel
+        initializeWorkspace({
+            openLeft: showWtfPlansPanel,
+            closeLeft: hideWtfPlansPanel,
+            openRight: preferences => preferences ? restoreUCPWorkspacePreferences(preferences) : openChatWidget(),
+            getRightPreferences: getUCPWorkspacePreferences,
+            closeRight: () => {
+                if (document.getElementById('forum-panel')?.classList.contains('open')) hideForumPanel();
+                else hideUnifiedChatPanel();
+            },
+            closeForum: () => hideForumPanel({ skipPushState: true }),
+            closeChat: hideUnifiedChatPanel,
+            exitChatFullscreen: exitFullscreen,
+            closeDetail: () => {
+                updateUrl({ openItem: null });
+                ui.hideDetailModal();
+            },
+            setCentralView: async presenting => {
+                updateUrl({ view: presenting ? 'present' : null });
+                if (presenting) await ui.showPresentationView('locked');
+                else {
+                    ui.hidePresentationView();
+                    applyFiltersAndSort(imageCache);
+                }
+            }
+        });
         updateUserProfileIcon();
 
         // If user is already authenticated, fetch their projects (skip in presentation mode)
@@ -1427,6 +1454,7 @@ async function initialize() {
 
         console.log('[INIT DEBUG] Calling syncUiWithUrl...');
         syncUiWithUrl();
+        document.dispatchEvent(new CustomEvent('workspace-restore'));
         console.log('[INIT DEBUG] syncUiWithUrl completed.');
         window.addEventListener('popstate', syncUiWithUrl);
 

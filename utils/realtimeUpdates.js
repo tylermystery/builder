@@ -3,6 +3,7 @@
 // Handles incoming Pusher events and updates UI accordingly
 
 import { state, setState } from '../state.js';
+import { upsertProjectTask, removeProjectTask } from './projectTasks.js';
 import { log } from './debug.js';
 import { subscribeToProject, unsubscribeFromProject, triggerProjectEvent, getPusherInstance } from '../pusher.js';
 import { showToast } from '../ui.js';
@@ -145,13 +146,7 @@ function handleTaskCreated(data) {
     const { task, userName } = data;
 
     if (task && task.id) {
-        // Add to state
-        state.tasks.all.set(task.id, task);
-
-        // Update byProject map
-        const projectTasks = state.tasks.byProject.get(currentProjectId) || [];
-        projectTasks.push(task);
-        state.tasks.byProject.set(currentProjectId, projectTasks);
+        upsertProjectTask(task, currentProjectId);
 
         // Show notification
         showRealtimeToast(`${userName || 'A collaborator'} created task: "${task.fields?.Name || 'New task'}"`);
@@ -178,16 +173,7 @@ function handleTaskUpdated(data) {
     const { task, userName, changes } = data;
 
     if (task && task.id) {
-        // Update in state
-        state.tasks.all.set(task.id, task);
-
-        // Update in byProject map
-        const projectTasks = state.tasks.byProject.get(currentProjectId) || [];
-        const taskIndex = projectTasks.findIndex(t => t.id === task.id);
-        if (taskIndex >= 0) {
-            projectTasks[taskIndex] = task;
-            state.tasks.byProject.set(currentProjectId, projectTasks);
-        }
+        upsertProjectTask(task, currentProjectId);
 
         // Show notification with change details
         let changeDescription = 'updated';
@@ -222,13 +208,7 @@ function handleTaskDeleted(data) {
     const { taskId, taskName, userName } = data;
 
     if (taskId) {
-        // Remove from state
-        state.tasks.all.delete(taskId);
-
-        // Remove from byProject map
-        const projectTasks = state.tasks.byProject.get(currentProjectId) || [];
-        const filteredTasks = projectTasks.filter(t => t.id !== taskId);
-        state.tasks.byProject.set(currentProjectId, filteredTasks);
+        removeProjectTask(taskId);
 
         // Show notification
         showRealtimeToast(`${userName || 'A collaborator'} deleted task: "${taskName || 'task'}"`);

@@ -2097,6 +2097,7 @@ async function handleInvite() {
     statusEl.textContent = "";
 
     try {
+        if (!await api.saveSessionToAirtable()) throw new Error('Please save the plan before sharing it.');
         const inviterName = state.session.user?.name || "A friend";
         const sessionName = state.eventDetails?.combined?.get?.('eventName') || state.eventDetails?.combined?.get?.('Event Name') || '';
 
@@ -2131,7 +2132,7 @@ async function handleInvite() {
         }
     } catch (e) {
         console.error(e);
-        statusEl.textContent = "Error sending invite.";
+        statusEl.textContent = e.message || "Error sending invite.";
         statusEl.style.color = "#dc3545";
         btn.textContent = "Send Invite";
         btn.disabled = false;

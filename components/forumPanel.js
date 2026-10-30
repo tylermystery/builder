@@ -452,7 +452,7 @@ export function initializeForumPanel() {
 
     // Close on escape key
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && panel && panel.classList.contains('open')) {
+        if (e.key === 'Escape' && !document.body.classList.contains('workspace-ready') && panel && panel.classList.contains('open')) {
             hideForumPanel();
         }
     });
@@ -483,6 +483,7 @@ export function initializeForumPanel() {
  */
 export async function showForumPanel(options = {}) {
     const { skipPushState = false, filter = null, componentId = null } = options;
+    document.dispatchEvent(new CustomEvent('workspace-panel-opening', { detail: { surface: 'right', panel: 'forum' } }));
     const panel = document.getElementById('forum-panel');
     const overlay = document.getElementById('forum-panel-overlay');
 

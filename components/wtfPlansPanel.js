@@ -174,7 +174,8 @@ export function initializeWtfPlansPanel() {
     if (browseCatalogBtn) {
         browseCatalogBtn.addEventListener('click', () => {
             log('WtfPlansPanel', 'Browse Catalog clicked — navigating to catalog view');
-            hideWtfPlansPanel();
+            document.body.dataset.workspaceSurface = 'center';
+            document.dispatchEvent(new CustomEvent('workspace-surface-changed'));
             // Remove the view=present param to exit presentation mode
             updateUrl({ view: null });
             // Dispatch a custom event that presentation.js can listen for to hide itself
@@ -197,7 +198,7 @@ export function initializeWtfPlansPanel() {
 
     // Close on escape key
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && panel && panel.classList.contains('open')) {
+        if (e.key === 'Escape' && !document.body.classList.contains('workspace-ready') && panel && panel.classList.contains('open')) {
             hideWtfPlansPanel();
         }
     });
@@ -250,6 +251,7 @@ export async function showWtfPlansPanel(options = {}) {
         options
     });
 
+    document.dispatchEvent(new CustomEvent('workspace-panel-opening', { detail: { surface: 'left', panel: 'plans' } }));
     if (panel) {
         panel.style.display = 'flex';
         // Trigger reflow for animation
@@ -942,14 +944,11 @@ function createWtfPlanItem(item) {
 function handleWtfPlanItemClick(item) {
     log('WtfPlansPanel', `Clicked ${item.type}: ${item.name} (${item.id})`);
 
-    // If clicking the current session, just close the panel - no need to reload
+    // Navigation replaces the center while retaining the plans rail.
     if (item.isCurrentSession) {
-        hideWtfPlansPanel();
+        document.dispatchEvent(new CustomEvent('workspace-show-plan'));
         return;
     }
-
-    // Close the panel (skipPushState since we'll handle navigation ourselves)
-    hideWtfPlansPanel({ skipPushState: true });
 
     switch (item.type) {
         case 'plan':
@@ -965,8 +964,8 @@ function handleWtfPlanItemClick(item) {
 
             // Now push the new session URL with presentation view as default
             const sessionUrl = new URL(window.location.href);
-            sessionUrl.searchParams.delete('wtfPlans');
-            sessionUrl.searchParams.delete('wtfFilter');
+            sessionUrl.searchParams.set('wtfPlans', 'open');
+            sessionUrl.searchParams.set('wtfFilter', currentFilter);
             sessionUrl.searchParams.set('session', item.id);
             sessionUrl.searchParams.set('view', 'present'); // Default to presentation view
             sessionUrl.searchParams.delete('category');
@@ -995,8 +994,8 @@ function handleWtfPlanItemClick(item) {
                 window.history.replaceState({ wtfPlans: 'open', filter: currentFilter }, '', wtfUrl.toString());
 
                 const itemUrl = new URL(window.location.href);
-                itemUrl.searchParams.delete('wtfPlans');
-                itemUrl.searchParams.delete('wtfFilter');
+                itemUrl.searchParams.set('wtfPlans', 'open');
+                itemUrl.searchParams.set('wtfFilter', currentFilter);
                 itemUrl.searchParams.set('openItem', item.id);
                 window.location.href = itemUrl.toString();
             }

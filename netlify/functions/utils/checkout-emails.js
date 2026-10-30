@@ -319,8 +319,8 @@ function buildReceiptEmail(session, payment, store, baseUrl, options = {}) {
   const sessionData = options.sessionData || parseSessionData(session);
   const planContext = getPlanContext(session, sessionData);
   const checkoutItems = getCheckoutItems(sessionData, options.itemRecords || []);
-  const planContextHtml = buildPlanContextHtml(planContext);
-  const itemizedHtml = buildItemizedHtml(checkoutItems);
+  const planContextHtml = options.snapshotHtml || buildPlanContextHtml(planContext);
+  const itemizedHtml = options.snapshotHtml ? '' : buildItemizedHtml(checkoutItems);
   const sessionName = session.fields.Name || 'Your Booking';
   const storeName = store?.fields?.Name || SENDER_NAME;
   const contactEmail = store?.fields?.ContactEmail || SENDER_EMAIL;
@@ -436,8 +436,8 @@ function buildMerchantNotificationEmail(session, payment, store, baseUrl, option
   const sessionData = options.sessionData || parseSessionData(session);
   const planContext = getPlanContext(session, sessionData);
   const checkoutItems = getCheckoutItems(sessionData, options.itemRecords || []);
-  const planContextHtml = buildPlanContextHtml(planContext);
-  const itemizedHtml = buildItemizedHtml(checkoutItems);
+  const planContextHtml = options.snapshotHtml || buildPlanContextHtml(planContext);
+  const itemizedHtml = options.snapshotHtml ? '' : buildItemizedHtml(checkoutItems);
   const sessionName = session.fields.Name || 'A Booking';
   const storeName = store?.fields?.Name || SENDER_NAME;
   const contactEmail = store?.fields?.ContactEmail || SENDER_EMAIL;
@@ -491,4 +491,4 @@ function buildMerchantNotificationEmail(session, payment, store, baseUrl, option
   };
 }
 
-module.exports = { buildReceiptEmail, buildMerchantNotificationEmail, loadCheckoutEmailDetails };
+module.exports = { buildReceiptEmail, buildMerchantNotificationEmail, loadCheckoutEmailDetails, parseSessionData, getPlanContext, getCheckoutItems, escapeHtml };

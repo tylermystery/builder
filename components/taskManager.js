@@ -5,6 +5,7 @@
 // Provides task management interface for a selected project
 
 import { state, setState } from '../state.js';
+import { loadProjectTasks } from '../utils/projectTasks.js';
 import { log } from '../utils/debug.js';
 import * as api from '../api.js';
 import { showToast } from '../ui.js';
@@ -63,7 +64,7 @@ export async function initTaskManager(containerId, projectId) {
         // Fetch tasks for this project
         console.log('[TaskManager DEBUG] Starting api.fetchTasks() call...');
         const fetchStartTime = performance.now();
-        const tasks = await api.fetchTasks(projectId);
+        const tasks = await loadProjectTasks(projectId, api.fetchTasks, { force: true });
         const fetchEndTime = performance.now();
         console.log(`[TaskManager DEBUG] api.fetchTasks() completed in ${(fetchEndTime - fetchStartTime).toFixed(2)}ms`);
         console.log('[TaskManager DEBUG] Tasks fetched:', { count: tasks?.length ?? 'null/undefined', tasks });
@@ -1189,7 +1190,7 @@ async function refreshTaskList() {
     cleanupSortables();
 
     try {
-        const apiTasks = await api.fetchTasks(currentProjectId);
+        const apiTasks = await loadProjectTasks(currentProjectId, api.fetchTasks, { force: true });
 
         // Merge API results with locally-known tasks to prevent data loss
         // This handles the case where the server-side filter fails or returns incomplete results
