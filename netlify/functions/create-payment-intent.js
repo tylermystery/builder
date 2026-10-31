@@ -95,6 +95,7 @@ exports.handler = async (event) => {
     var customerName = body.customerName || null;
     existingPaymentIntentId = body.paymentIntentId || null;
     var discountToken = body.discountToken || null;
+    var chipIn = body.chipIn && typeof body.chipIn === 'object' ? body.chipIn : null;
   } catch (error) {
     console.error('[create-payment-intent] Error parsing request body:', error);
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid request body.' }) };
@@ -151,6 +152,19 @@ exports.handler = async (event) => {
       discountInCents: String(discountInCents),
     };
 
+    // Crowdfund chip-in carried on the intent so the Stripe webhook can credit
+    // the item's meter. Never more than what is actually being charged. Keys are
+    // always written (blank when absent) so an updated intent drops a chip-in the
+    // customer removed.
+    const chipInMetadata = { chipInFundKey: '', chipInAmountCents: '', chipInItemName: '', chipInStoreId: '' };
+    const chipInCents = Math.min(Math.round(Number(chipIn?.amountCents) || 0), effectiveBaseInCents);
+    if (chipIn && chipInCents > 0 && /^[A-Za-z0-9._:-]{3,200}$/.test(String(chipIn.fundKey || ''))) {
+      chipInMetadata.chipInFundKey = String(chipIn.fundKey);
+      chipInMetadata.chipInAmountCents = String(chipInCents);
+      chipInMetadata.chipInItemName = String(chipIn.itemName || '').slice(0, 200);
+      chipInMetadata.chipInStoreId = String(chipIn.storeId || '').slice(0, 100);
+    }
+
     let paymentIntent;
 
     if (existingPaymentIntentId) {
@@ -165,6 +179,7 @@ exports.handler = async (event) => {
           customerEmail: customerEmail || '',
           customerName: customerName || '',
           ...promoMetadata,
+          ...chipInMetadata,
         },
       });
       console.log(`[create-payment-intent] PaymentIntent updated: id=${paymentIntent.id}, status=${paymentIntent.status}, amount=${paymentIntent.amount}c`);
@@ -180,6 +195,7 @@ exports.handler = async (event) => {
           customerEmail: customerEmail || '',
           customerName: customerName || '',
           ...promoMetadata,
+          ...chipInMetadata,
         },
       });
       console.log(`[create-payment-intent] PaymentIntent created: id=${paymentIntent.id}, status=${paymentIntent.status}, amount=${paymentIntent.amount}c`);

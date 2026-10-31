@@ -42,10 +42,6 @@ const HISTORICAL_PRODUCTS_TABLE_NAME = 'Historical_Products';
 const TASKS_TABLE_NAME = 'Tasks';
 // --------------------------------
 
-// --- COMMUNITY FUND / CROWDFUNDING TABLE ---
-const COMMUNITY_FUND_TABLE_NAME = 'Community_Fund';
-// --------------------------------
-
 // --- API Timeout Configuration ---
 const API_TIMEOUT_MS = 15000; // 15 second timeout for API calls
 
@@ -6471,20 +6467,18 @@ export async function scrapeWebsitePhotos(websiteUrl, businessName, maxImages = 
 // =============================================================================
 
 /**
- * Fetch the community fund record for a specific item.
- * Queries the Community_Fund table by Item_Record_Id.
- * @param {string} itemRecordId - The Airtable record ID of the item
- * @returns {Promise<Object|null>} - The fund record { id, fields: { Item_Record_Id, Item_Name, Goal_Amount, Total_Raised, Contributor_Count, Store_Id } } or null
+ * Fetch an item's crowdfund meter totals from Netlify Database.
+ * Contributions are recorded server-side by the Stripe webhook from the chip-in
+ * carried on the PaymentIntent, so there is no client-side write counterpart.
+ * @param {string} fundKey - The item's shareable id (Airtable record id or `public-<id>`)
+ * @returns {Promise<Object|null>} - { fields: { Total_Raised, Contributor_Count } }, or null if the read failed
  */
-export async function fetchCommunityFund(itemRecordId) {
-    if (!itemRecordId) return null;
-
-    const formula = encodeURIComponent(`{Item_Record_Id} = '${itemRecordId}'`);
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${COMMUNITY_FUND_TABLE_NAME}?filterByFormula=${formula}&maxRecords=1`;
+export async function fetchCommunityFund(fundKey) {
+    if (!fundKey) return null;
 
     try {
-        const response = await fetchWithTimeout(url, {
-            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        const response = await fetchWithTimeout(`/api/crowdfund?fundKey=${encodeURIComponent(fundKey)}`, {
+            headers: { 'Accept': 'application/json' }
         });
 
         if (!response.ok) {
@@ -6493,96 +6487,14 @@ export async function fetchCommunityFund(itemRecordId) {
         }
 
         const data = await response.json();
-        if (data.records && data.records.length > 0) {
-            return data.records[0];
-        }
-        return null;
+        return {
+            fields: {
+                Total_Raised: data.raised || 0,
+                Contributor_Count: data.contributors || 0
+            }
+        };
     } catch (error) {
         console.error('[API] fetchCommunityFund error:', error);
-        return null;
-    }
-}
-
-/**
- * Create or update a community fund record for an item.
- * If a record exists for this item, updates Total_Raised and Contributor_Count.
- * If no record exists, creates a new one.
- * @param {string} itemRecordId - The item's Airtable record ID
- * @param {string} itemName - The item's display name
- * @param {number} donationAmount - The amount being contributed
- * @param {number} goalAmount - The fundraising goal (item price)
- * @param {string} storeId - The store ID
- * @returns {Promise<Object|null>} - The created/updated record or null
- */
-export async function upsertCommunityFund(itemRecordId, itemName, donationAmount, goalAmount, storeId) {
-    if (!itemRecordId || donationAmount <= 0) return null;
-
-    log('API', `Upserting community fund for item ${itemRecordId}: +$${donationAmount}`);
-
-    try {
-        // Check if a record already exists
-        const existing = await fetchCommunityFund(itemRecordId);
-
-        if (existing) {
-            // Update existing record
-            const currentRaised = existing.fields.Total_Raised || 0;
-            const currentCount = existing.fields.Contributor_Count || 0;
-
-            const url = `https://api.airtable.com/v0/${BASE_ID}/${COMMUNITY_FUND_TABLE_NAME}/${existing.id}`;
-            const response = await fetch(url, {
-                method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    fields: {
-                        Total_Raised: currentRaised + donationAmount,
-                        Contributor_Count: currentCount + 1
-                    }
-                })
-            });
-
-            if (!response.ok) {
-                console.warn('[API] upsertCommunityFund update error:', response.status);
-                return null;
-            }
-
-            const data = await response.json();
-            log('API', `Community fund updated: $${(currentRaised + donationAmount).toFixed(2)} raised`);
-            return data;
-        } else {
-            // Create new record
-            const url = `https://api.airtable.com/v0/${BASE_ID}/${COMMUNITY_FUND_TABLE_NAME}`;
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    fields: {
-                        Item_Record_Id: itemRecordId,
-                        Item_Name: itemName,
-                        Goal_Amount: goalAmount,
-                        Total_Raised: donationAmount,
-                        Contributor_Count: 1,
-                        Store_Id: storeId || ''
-                    }
-                })
-            });
-
-            if (!response.ok) {
-                console.warn('[API] upsertCommunityFund create error:', response.status);
-                return null;
-            }
-
-            const data = await response.json();
-            log('API', `Community fund created for "${itemName}": $${donationAmount.toFixed(2)} raised`);
-            return data;
-        }
-    } catch (error) {
-        console.error('[API] upsertCommunityFund error:', error);
         return null;
     }
 }

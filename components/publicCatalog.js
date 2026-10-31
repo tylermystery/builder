@@ -245,7 +245,20 @@ function injectOnePublicRow(row, storeId) {
  * re-run the filter/render pipeline. Fire-and-forget safe: never throws, and a
  * failure leaves the existing catalog exactly as it was.
  */
-export async function loadPublicIdeasForStore(storeId) {
+// The in-flight (or last) public-ideas load, so a shared /item/...-public-N link
+// can wait for its record before giving up on opening it.
+let publicIdeasLoad = Promise.resolve();
+
+export function whenPublicIdeasLoaded() {
+    return publicIdeasLoad;
+}
+
+export function loadPublicIdeasForStore(storeId) {
+    publicIdeasLoad = loadPublicIdeasForStoreNow(storeId);
+    return publicIdeasLoad;
+}
+
+async function loadPublicIdeasForStoreNow(storeId) {
     if (!storeId) return;
     try {
         const rows = await api.getPublicCatalog(storeId);
