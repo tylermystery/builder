@@ -484,7 +484,7 @@ async function handlePaymentFormSubmit(event) {
             if (chipInCtx.chipInAmount > 0 && chipInCtx.scope) {
                 pendingPaymentCtx.chipIn = {
                     amount: chipInCtx.chipInAmount,
-                    itemId: chipInCtx.scope.itemId,
+                    itemId: chipInCtx.fundKey || chipInCtx.scope.itemId,
                     itemName: chipInCtx.scope.itemName || 'Item',
                     goalAmount: chipInCtx.scope.price || 0,
                     storeId: state.shop?.id || state.session?.storeId || ''
@@ -570,26 +570,15 @@ async function handlePaymentFormSubmit(event) {
 
             const amountPaid = paymentIntent.amount / 100;
 
-            // --- Track Community Fund chip-in to Airtable ---
+            // --- Community Fund chip-in ---
+            // The Stripe webhook records the contribution in the crowdfund meter
+            // (from the chip-in carried on the PaymentIntent). The local copy is
+            // only a fallback for when the meter can't be read.
             const chipInCtx = ui.getCheckoutChipInContext();
             if (chipInCtx.chipInAmount > 0 && chipInCtx.scope) {
-                const storeId = state.shop?.id || state.session?.storeId || '';
-                const goalAmount = chipInCtx.scope.price || 0;
-                api.upsertCommunityFund(
-                    chipInCtx.scope.itemId,
-                    chipInCtx.scope.itemName || 'Item',
-                    chipInCtx.chipInAmount,
-                    goalAmount,
-                    storeId
-                ).then(result => {
-                    log('Events', `Community fund tracked: $${chipInCtx.chipInAmount.toFixed(2)}`);
-                }).catch(err => {
-                    console.warn('[Events] Failed to track community fund:', err);
-                });
-
                 // Also update localStorage for offline/fallback tracking
                 try {
-                    const donationKey = `donation_fund_${chipInCtx.scope.itemId}`;
+                    const donationKey = `donation_fund_${chipInCtx.fundKey || chipInCtx.scope.itemId}`;
                     let localData = { raised: 0, contributors: 0 };
                     const stored = localStorage.getItem(donationKey);
                     if (stored) localData = JSON.parse(stored);

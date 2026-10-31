@@ -599,7 +599,8 @@ export function generateSlug(name, recordId, tags = []) {
 /**
  * Extracts the Airtable record ID from a pretty URL path.
  * Pretty URLs are in format: /item/event-name-recXYZ
- * The record ID is always the last part after the final dash, starting with "rec".
+ * The record ID is always the last part after the final dash, starting with "rec"
+ * (or "public-<n>" for a store-published item).
  *
  * @param {string} path - The URL path to parse (e.g., "/item/sunset-boat-party-rec123")
  * @returns {string|null} The extracted record ID (e.g., "rec123") or null if not found
@@ -622,6 +623,12 @@ export function extractRecordIdFromPath(path) {
     const recMatch = slug.match(/rec[A-Za-z0-9]{14}$/);
     if (recMatch) {
         return recMatch[0];
+    }
+
+    // Store-published (public layer) items use ids like "public-12"
+    const publicMatch = slug.match(/public-\d+$/);
+    if (publicMatch) {
+        return publicMatch[0];
     }
 
     return null;

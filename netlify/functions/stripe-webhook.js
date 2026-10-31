@@ -3,6 +3,11 @@ const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
 const { SENDER_EMAIL, SENDER_NAME, buildFrom } = require('./utils/email-config');
 const { recordPromotionRedemption } = require('./utils/promotions-redeem');
+const {
+  recordCrowdfundContribution,
+  markCrowdfundContributionFailed,
+  markCrowdfundContributionRefunded,
+} = require('./utils/crowdfund-contributions');
 const checkoutEmails = require('./utils/checkout-emails');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, STRIPE_WEBHOOK_SECRET, SITE_URL, URL } = process.env;
@@ -242,6 +247,18 @@ async function resolveSession(paymentIntent) {
 }
 
 async function handlePaymentIntentUpdate(paymentIntent, status) {
+  // Track any crowdfund chip-in first: contributors arriving from a shared item
+  // link often have no plan session, and the meter must count them regardless.
+  // Idempotent per payment intent; a tracking failure never blocks the receipt.
+  try {
+    const result = await recordCrowdfundContribution(paymentIntent, status);
+    if (result.recorded) {
+      console.log(`[stripe-webhook] Crowdfund contribution ${result.fundKey}: ${result.amountCents}c (${status})`);
+    }
+  } catch (fundErr) {
+    console.error('[stripe-webhook] Failed to record crowdfund contribution:', fundErr.message);
+  }
+
   const session = await resolveSession(paymentIntent);
   if (!session) {
     console.warn(`[stripe-webhook] No session found for ${paymentIntent.id}, skipping.`);
@@ -409,6 +426,12 @@ async function handlePaymentIntentUpdate(paymentIntent, status) {
 }
 
 async function handlePaymentIntentFailed(paymentIntent) {
+  try {
+    await markCrowdfundContributionFailed(paymentIntent.id);
+  } catch (fundErr) {
+    console.error('[stripe-webhook] Failed to update crowdfund contribution:', fundErr.message);
+  }
+
   const session = await resolveSession(paymentIntent);
   if (!session) return;
 
@@ -444,6 +467,15 @@ async function handleChargeRefunded(charge) {
   if (!paymentIntentId) {
     console.warn('[stripe-webhook] charge.refunded without payment_intent, skipping');
     return;
+  }
+
+  // A full refund takes the chip-in back off the crowdfund meter.
+  if (charge.refunded || charge.amount_refunded >= charge.amount) {
+    try {
+      await markCrowdfundContributionRefunded(paymentIntentId);
+    } catch (fundErr) {
+      console.error('[stripe-webhook] Failed to update crowdfund contribution:', fundErr.message);
+    }
   }
 
   const session = await findSessionByPaymentIntentId(paymentIntentId);

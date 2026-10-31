@@ -20768,6 +20768,10 @@ body.presentation-active .rsb-layout-toggle-fab {
     background: #f8f9fa;
 }
 
+.checkout-share-btn {
+    margin-left: 8px;
+}
+
 #checkout-modal-overlay .terms-and-conditions {
     line-height: 1.6;
     overflow-wrap: anywhere;

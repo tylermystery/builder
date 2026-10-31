@@ -204,6 +204,46 @@ function resetSeoMetadata() {
 }
 
 /**
+ * The clean, session-free link to an item's detail modal. Store-published items
+ * link to their public id (what every visitor can load), even when the publisher
+ * is viewing them from the original draft record in their own plan.
+ * @param {Object} record
+ * @param {Object} [extraParams] - Extra query params (e.g. a checkout deep link).
+ * @returns {URL}
+ */
+function buildItemShareUrl(record, extraParams = {}) {
+    const shareId = crowdfundKeyFor(record) || record.id;
+    const slug = generateSlug(record.fields.Name, shareId);
+
+    // Build share URL with shop slug but WITHOUT session
+    const shareUrl = new URL(`${window.location.origin}/item/${slug}`);
+    if (!shareId?.startsWith('rec')) {
+        shareUrl.searchParams.set('openItem', shareId);
+    }
+
+    // Include shop slug if available (from current state or URL)
+    const currentShopId = state.activeShop?.id || state.ui?.activeShopId || new URLSearchParams(window.location.search).get('shopId');
+    if (currentShopId) {
+        const shop = state.stores?.all?.find(s => s.id === currentShopId);
+        if (shop?.fields?.Name) {
+            shareUrl.searchParams.set('shop', storeSlug(shop.fields.Name));
+        } else {
+            shareUrl.searchParams.set('shopId', currentShopId);
+        }
+    } else {
+        const shopSlugParam = new URLSearchParams(window.location.search).get('shop');
+        if (shopSlugParam) {
+            shareUrl.searchParams.set('shop', shopSlugParam);
+        }
+    }
+
+    Object.entries(extraParams).forEach(([key, value]) => {
+        if (value !== null && value !== undefined && value !== '') shareUrl.searchParams.set(key, String(value));
+    });
+    return shareUrl;
+}
+
+/**
  * Copies share text to clipboard and provides visual feedback on the button.
  * @param {string} text - The item name, optional description, and share URL.
  * @param {HTMLButtonElement} buttonEl - The button element to show feedback on.
@@ -1347,33 +1387,25 @@ function updateCheckoutItemQtyDisplay(scope) {
 }
 
 /**
- * Loads and displays crowdfunding progress from Airtable for the given item.
- * Falls back to localStorage data if the Airtable fetch fails.
- * @param {string} itemRecordId - The item's Airtable record ID
+ * Loads and displays crowdfunding progress for the given item.
+ * Falls back to this browser's local record only if the meter can't be read.
+ * @param {string} fundKey - The item's crowdfund key (see crowdfundKeyFor)
  * @param {number} goalAmount - The fundraising goal (item price)
  */
-async function loadCrowdfundProgress(itemRecordId, goalAmount) {
+async function loadCrowdfundProgress(fundKey, goalAmount) {
     const progressContainer = document.getElementById('checkout-crowdfund-progress');
     if (!progressContainer) return;
 
-    // Try Airtable first
     let raised = 0;
     let contributors = 0;
 
-    try {
-        const fundRecord = await api.fetchCommunityFund(itemRecordId);
-        if (fundRecord) {
-            raised = fundRecord.fields.Total_Raised || 0;
-            contributors = fundRecord.fields.Contributor_Count || 0;
-        }
-    } catch (e) {
-        console.warn('[ChipIn] Failed to load from Airtable, falling back to localStorage', e);
-    }
-
-    // Fallback: merge localStorage data if Airtable had nothing
-    if (raised === 0) {
+    const fundRecord = await api.fetchCommunityFund(fundKey);
+    if (fundRecord) {
+        raised = fundRecord.fields.Total_Raised || 0;
+        contributors = fundRecord.fields.Contributor_Count || 0;
+    } else {
         try {
-            const stored = localStorage.getItem(`donation_fund_${itemRecordId}`);
+            const stored = localStorage.getItem(`donation_fund_${fundKey}`);
             if (stored) {
                 const localData = JSON.parse(stored);
                 raised = localData.raised || 0;
@@ -1883,7 +1915,8 @@ async function updateCheckoutDisplay() {
                     paymentMethodType: currentPaymentType,
                     sessionId: state.session?.id || null,
                     customerEmail: document.getElementById('customer-email')?.value || null,
-                    discountToken: currentDiscountToken || undefined
+                    discountToken: currentDiscountToken || undefined,
+                    chipIn: buildChipInIntentPayload()
                 }),
             });
             if (!intentResponse.ok) throw new Error('Could not update payment intent.');
@@ -1998,7 +2031,8 @@ async function handlePaymentTypeChange(event) {
             paymentMethodType: currentPaymentType,
             sessionId: state.session?.id || null,
             customerEmail: document.getElementById('customer-email')?.value || null,
-            discountToken: currentDiscountToken || undefined
+            discountToken: currentDiscountToken || undefined,
+            chipIn: buildChipInIntentPayload()
         };
         if (currentPaymentIntentId) {
             requestBody.paymentIntentId = currentPaymentIntentId;
@@ -5823,7 +5857,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
 
 
     log('Modal', `Showing detail modal for \"${record.fields.Name}\"`);
-    updateUrl({ openItem: record.id });
+    // Use the shareable id so the address bar can be copied as-is. A store-
+    // published item seen from its publisher's draft record gets its public id.
+    const urlItemId = crowdfundKeyFor(record) || record.id;
+    updateUrl({ openItem: urlItemId }, { itemName: record.fields.Name });
     const modalHeaderActions = document.getElementById('modal-header-actions');
     const modalItemName = document.getElementById('modal-item-name');
     const modalItemPrice = document.getElementById('modal-item-price');
@@ -7945,30 +7982,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     shareBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
 
-        // Generate slug for pretty URL
-        const slug = generateSlug(record.fields.Name, record.id);
-
-        // Build share URL with shop slug but WITHOUT session
-        const shareUrl = new URL(`${window.location.origin}/item/${slug}`);
-        if (!record.id?.startsWith('rec')) {
-            shareUrl.searchParams.set('openItem', record.id);
-        }
-
-        // Include shop slug if available (from current state or URL)
-        const currentShopId = state.activeShop?.id || state.ui?.activeShopId || new URLSearchParams(window.location.search).get('shopId');
-        if (currentShopId) {
-            const shop = state.stores?.all?.find(s => s.id === currentShopId);
-            if (shop?.fields?.Name) {
-                shareUrl.searchParams.set('shop', storeSlug(shop.fields.Name));
-            } else {
-                shareUrl.searchParams.set('shopId', currentShopId);
-            }
-        } else {
-            const shopSlugParam = new URLSearchParams(window.location.search).get('shop');
-            if (shopSlugParam) {
-                shareUrl.searchParams.set('shop', shopSlugParam);
-            }
-        }
+        const shareUrl = buildItemShareUrl(record);
 
         const itemName = record.fields.Name || 'WTFun item';
         const description = String(record.fields.Description || '').trim();
@@ -11204,21 +11218,18 @@ async function setupDonationGoalProgress(record, itemState) {
     const price = getRecordPrice(record) || 0;
     const goalAmount = price > 0 ? price : 5;
 
-    // Load funding totals: Airtable first, localStorage as a fallback.
+    // Load funding totals from the shared meter; this browser's local record is
+    // only a fallback for when the meter can't be read.
+    const fundKey = crowdfundKeyFor(record);
     let raised = 0;
     let contributors = 0;
-    try {
-        const fundRecord = await api.fetchCommunityFund(record.id);
-        if (fundRecord) {
-            raised = fundRecord.fields.Total_Raised || 0;
-            contributors = fundRecord.fields.Contributor_Count || 0;
-        }
-    } catch (e) {
-        console.warn('[Donation] Failed to load fund from Airtable, falling back to localStorage', e);
-    }
-    if (raised === 0) {
+    const fundRecord = await api.fetchCommunityFund(fundKey);
+    if (fundRecord) {
+        raised = fundRecord.fields.Total_Raised || 0;
+        contributors = fundRecord.fields.Contributor_Count || 0;
+    } else {
         try {
-            const stored = localStorage.getItem(`donation_fund_${record.id}`);
+            const stored = localStorage.getItem(`donation_fund_${fundKey}`);
             if (stored) {
                 const local = JSON.parse(stored);
                 raised = local.raised || 0;
@@ -11313,6 +11324,19 @@ function clearCheckoutUrlState() {
     }
 }
 
+// The deep-link params (action / qty / opts) describing an item checkout flow.
+function itemCheckoutDeepLinkParams(scope) {
+    const isChipIn = !!scope.highlightChipIn;
+    const params = { action: isChipIn ? 'chipin' : 'rapidpay' };
+    // For Chip In the item-modal quantity is carried as maxQuantity
+    // (scope.quantity is the donation count, which begins at 0).
+    const qty = isChipIn ? (scope.maxQuantity || 1) : (scope.quantity || 1);
+    if (qty && qty !== 1) params.qty = String(qty);
+    const optsStr = encodeSelections(scope.selections);
+    if (optsStr) params.opts = optsStr;
+    return params;
+}
+
 function writeCheckoutUrlState(scope) {
     try {
         const url = new URL(window.location);
@@ -11321,14 +11345,7 @@ function writeCheckoutUrlState(scope) {
         CHECKOUT_URL_PARAMS.forEach(p => sp.delete(p));
 
         if (scope && scope.mode === 'item') {
-            const isChipIn = !!scope.highlightChipIn;
-            sp.set('action', isChipIn ? 'chipin' : 'rapidpay');
-            // For Chip In the item-modal quantity is carried as maxQuantity
-            // (scope.quantity is the donation count, which begins at 0).
-            const qty = isChipIn ? (scope.maxQuantity || 1) : (scope.quantity || 1);
-            if (qty && qty !== 1) sp.set('qty', String(qty));
-            const optsStr = encodeSelections(scope.selections);
-            if (optsStr) sp.set('opts', optsStr);
+            Object.entries(itemCheckoutDeepLinkParams(scope)).forEach(([k, v]) => sp.set(k, v));
         } else {
             // Plan checkout (no item scope) — the session id is already in the URL.
             sp.set('action', 'checkout');
@@ -11396,6 +11413,40 @@ export async function applyCheckoutDeepLink({ action, qty, selections } = {}) {
     } else {
         log('Modal', `applyCheckoutDeepLink: #${btnId} not found`);
     }
+}
+
+// Item checkouts (Chip In / Rapid Pay) get a Share button. The address bar also
+// carries the flow, but it includes the sharer's plan session; this link is
+// session-free, so recipients open the same checkout under their own plan.
+function setupCheckoutShareButton(scope) {
+    const btn = document.getElementById('checkout-share-btn');
+    if (!btn) return;
+    const record = scope && scope.mode === 'item' ? scope.record : null;
+    if (!record || !record.fields) {
+        btn.style.display = 'none';
+        btn.onclick = null;
+        return;
+    }
+    btn.style.display = '';
+    btn.innerHTML = '<span class="share-icon">&#x1F517;</span> Share';
+    btn.onclick = async () => {
+        const shareUrl = buildItemShareUrl(record, itemCheckoutDeepLinkParams(scope)).toString();
+        const itemName = record.fields.Name || 'WTFun item';
+        const shareText = scope.highlightChipIn
+            ? `Chip in to ${itemName}\n${shareUrl}`
+            : `${itemName}\n${shareUrl}`;
+        const shareData = { title: itemName, text: shareText };
+        if (navigator.share && (!navigator.canShare || navigator.canShare(shareData))) {
+            try {
+                await navigator.share(shareData);
+                log('Modal', `Shared checkout link for ${itemName}`);
+            } catch (err) {
+                if (err.name !== 'AbortError') await copyShareTextToClipboard(shareText, btn);
+            }
+        } else {
+            await copyShareTextToClipboard(shareText, btn);
+        }
+    };
 }
 
 function buildCheckoutPlanContextElement() {
@@ -11486,6 +11537,7 @@ export async function showCheckoutModal(shopSettings, scope = null) {
 
     // Reflect this checkout flow in the URL so it can be copied & shared.
     writeCheckoutUrlState(scope);
+    setupCheckoutShareButton(scope);
 
     // Guest "create an account / sign in" option vs. signed-in prefill.
     const accountRow = document.getElementById('checkout-account-row');
@@ -11872,7 +11924,7 @@ export async function showCheckoutModal(shopSettings, scope = null) {
         }
         // Load crowdfunding progress from Airtable for this item
         if (scope.itemId && scope.price) {
-            loadCrowdfundProgress(scope.itemId, scope.price);
+            loadCrowdfundProgress(crowdfundKeyFor(scope.record) || scope.itemId, scope.price);
         }
     }
 
@@ -12044,7 +12096,37 @@ export function getCheckoutChipInContext() {
     return {
         chipInAmount: currentChipInAmount,
         scope: currentCheckoutScope,
-        itemQty: currentCheckoutItemQty
+        itemQty: currentCheckoutItemQty,
+        fundKey: crowdfundKeyFor(currentCheckoutScope?.record) || currentCheckoutScope?.itemId || null
+    };
+}
+
+/**
+ * The id an item's crowdfund meter is keyed on — the same id a shared link
+ * carries, so the sharer and every recipient read one total. A store-published
+ * item is keyed on its public id even in the publisher's own session (where it
+ * still renders from the original draft record).
+ */
+export function crowdfundKeyFor(record) {
+    if (!record || !record.id) return null;
+    if (record.publicItemId != null && !String(record.id).startsWith('rec')) {
+        return `public-${record.publicItemId}`;
+    }
+    return record.id;
+}
+
+// The chip-in sent with every create-payment-intent request, so the Stripe
+// webhook can credit the item's crowdfund meter when the payment is submitted.
+function buildChipInIntentPayload() {
+    const scope = currentCheckoutScope;
+    if (!scope || scope.mode !== 'item' || !(currentChipInAmount > 0)) return undefined;
+    const fundKey = crowdfundKeyFor(scope.record) || scope.itemId;
+    if (!fundKey) return undefined;
+    return {
+        fundKey,
+        amountCents: Math.round(currentChipInAmount * 100),
+        itemName: scope.itemName || scope.record?.fields?.Name || 'Item',
+        storeId: state.ui?.activeShopId || state.session?.storeId || ''
     };
 }
 
@@ -12075,6 +12157,7 @@ export async function syncCheckoutCustomerDetails(customerName, customerEmail) {
                 customerName: customerName || null,
                 paymentIntentId: currentPaymentIntentId,
                 discountToken: currentDiscountToken || undefined,
+                chipIn: buildChipInIntentPayload(),
             }),
         });
         return res.ok;

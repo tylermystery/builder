@@ -24,7 +24,7 @@ import { initializeWtfPlansPanel, showWtfPlansPanel, hideWtfPlansPanel, syncWtfP
 import { initializeWorkspace } from './utils/workspace.js';
 import { hideUnifiedChatPanel, exitFullscreen, getUCPWorkspacePreferences, restoreUCPWorkspacePreferences } from './components/unifiedChatPanel.js';
 import { initializeForumPanel, hideForumPanel, syncForumPanelWithUrl } from './components/forumPanel.js';
-import { loadPublicIdeasForStore } from './components/publicCatalog.js';
+import { loadPublicIdeasForStore, whenPublicIdeasLoaded } from './components/publicCatalog.js';
 import { applyCloudinaryTransform, getBaseCloudinaryUrl } from './utils/imageOptimizer.js';
 import { loadTempIterations, loadTempReactions } from './components/refinementHandler.js';
 
@@ -243,13 +243,10 @@ async function handlePaymentRedirectReturn() {
                 ? `ACH payment redirect return - processing. Amount: $${amountPaid}`
                 : `Payment redirect return - succeeded. Amount: $${amountPaid}`);
 
-            // Track community fund chip-in if context is available
+            // Community fund chip-in: the Stripe webhook records it in the
+            // crowdfund meter; keep a local fallback copy for offline reads.
             if (pendingCtx?.chipIn) {
                 const ci = pendingCtx.chipIn;
-                api.upsertCommunityFund(ci.itemId, ci.itemName, ci.amount, ci.goalAmount, ci.storeId)
-                    .then(() => log('Main', `Community fund tracked from redirect: $${ci.amount.toFixed(2)}`))
-                    .catch(err => console.warn('[ACH REDIRECT] Failed to track community fund:', err));
-
                 try {
                     const donationKey = `donation_fund_${ci.itemId}`;
                     let localData = { raised: 0, contributors: 0 };
@@ -581,7 +578,18 @@ function syncUiWithUrl() {
             // This prevents styling issues where the page behind the modal looks broken
             const cssResult = await waitForDeferredCss(1500);
 
-            const recordToOpen = state.records.all.find(r => r.id === openItemId);
+            // A store-published item ("public-N") may still be loading in the
+            // background, so wait for it. In the publisher's own session the item
+            // renders from its original draft record, which carries publicItemId.
+            const findRecordToOpen = () => state.records.all.find(r => r.id === openItemId) ||
+                (/^public-\d+$/.test(openItemId)
+                    ? state.records.all.find(r => r.publicItemId != null && `public-${r.publicItemId}` === openItemId)
+                    : undefined);
+            let recordToOpen = findRecordToOpen();
+            if (!recordToOpen && /^public-\d+$/.test(openItemId)) {
+                await whenPublicIdeasLoaded();
+                recordToOpen = findRecordToOpen();
+            }
             if (recordToOpen) {
                 if (!cssResult.loaded || !cssResult.rulesApplied) {
                     // Force a layout recalculation by triggering a reflow

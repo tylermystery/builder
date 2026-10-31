@@ -923,3 +923,30 @@ export const crmAuditLog = pgTable(
     storeCreatedIdx: index("crm_audit_store_created_idx").on(t.storeId, t.createdAt),
   }),
 );
+
+// One row per crowdfund ("chip in") contribution, written by the Stripe webhook
+// when the payment is submitted. The item's crowdfund meter sums the rows that
+// still count. `fund_key` is the item's shareable id (an Airtable record id or
+// `public-<id>` for a store-published item) so every visitor reads the same
+// total. Keyed uniquely on the payment intent so webhook retries never
+// double-count; a failed or refunded payment flips `status` and drops out.
+export const crowdfundContributions = pgTable(
+  "crowdfund_contributions",
+  {
+    id: serial().primaryKey(),
+    fundKey: text("fund_key").notNull(),
+    itemName: text("item_name"),
+    storeId: text("store_id"),
+    paymentIntentId: text("payment_intent_id").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    // 'processing' (ACH submitted) | 'succeeded' | 'failed' | 'refunded'
+    status: text("status").notNull(),
+    sessionId: text("session_id"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (t) => ({
+    paymentIntentUnique: uniqueIndex("crowdfund_contributions_pi_unique").on(t.paymentIntentId),
+    fundKeyIdx: index("crowdfund_contributions_fund_key_idx").on(t.fundKey),
+  }),
+);
