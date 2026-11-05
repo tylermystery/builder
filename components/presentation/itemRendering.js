@@ -965,15 +965,27 @@ export async function renderAllItems() {
         return true;
     });
 
+    // Group items by section first (Confirmed → Ideas → Archived → Completed) so each
+    // section renders as a single contiguous block with one divider. The user's custom
+    // order (planItemOrder) is then applied within each section. Previously the custom
+    // order alone drove the sort, which interleaved confirmed/idea items and produced
+    // repeated section dividers.
+    const sectionRank = (item) => {
+        if (item.itemStatus === 'archived') return 2;
+        if (item.itemStatus === 'completed') return 3;
+        return item.type === 'locked' ? 0 : 1;
+    };
     const customOrder = state.session.planItemOrder || [];
-    if (customOrder.length > 0) {
-        const orderMap = new Map(customOrder.map((id, index) => [id, index]));
-        combinedList.sort((a, b) => {
-            const orderA = orderMap.has(a.recordId) ? orderMap.get(a.recordId) : Infinity;
-            const orderB = orderMap.has(b.recordId) ? orderMap.get(b.recordId) : Infinity;
-            return orderA - orderB;
-        });
-    }
+    const orderMap = new Map(customOrder.map((id, index) => [id, index]));
+    const originalIndex = new Map(combinedList.map((item, index) => [item, index]));
+    combinedList.sort((a, b) => {
+        const rankDiff = sectionRank(a) - sectionRank(b);
+        if (rankDiff !== 0) return rankDiff;
+        const orderA = orderMap.has(a.recordId) ? orderMap.get(a.recordId) : Infinity;
+        const orderB = orderMap.has(b.recordId) ? orderMap.get(b.recordId) : Infinity;
+        if (orderA !== orderB) return orderA - orderB;
+        return originalIndex.get(a) - originalIndex.get(b);
+    });
 
     const archivedCount = archivedItems.size;
     const completedCount = completedItems.size;
