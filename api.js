@@ -173,15 +173,26 @@ export async function fetchPlansForUser(userId, includeFullDetails = false) {
     // If includeFullDetails is true, fetch all fields for catalog display
 
     try {
-        const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
-        });
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Airtable Error fetching plans:', errorText);
-            throw new Error('Failed to fetch user plans from Airtable.');
-        }
-        const data = await response.json();
+        // Airtable returns at most 100 records per page. Follow the offset cursor so users with
+        // many plans still see their newest ones (previously anything past page 1 went missing).
+        const data = { records: [] };
+        let offset = null;
+        let pages = 0;
+        do {
+            const pageUrl = offset ? `${url}&offset=${encodeURIComponent(offset)}` : url;
+            const response = await fetch(pageUrl, {
+                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Airtable Error fetching plans:', errorText);
+                throw new Error('Failed to fetch user plans from Airtable.');
+            }
+            const page = await response.json();
+            data.records.push(...(page.records || []));
+            offset = page.offset || null;
+            pages++;
+        } while (offset && pages < 20);
         // Sort by creation time, newest first
         data.records.sort((a, b) => new Date(b.createdTime) - new Date(a.createdTime));
         console.log(`[PLANS-FETCH] Fetched ${data.records.length} plans for user ${userId}:`);
@@ -547,6 +558,9 @@ export async function loadSessionFromAirtable(sessionId) {
         state.session.userProfiles = new Map();
         state.eventDetails.combined = new Map();
         state.session.storeId = null;
+        state.session.planActivity = null;
+        state.session.contentFingerprint = null;
+        state.session.loadedCollaborators = Array.isArray(record.fields.Collaborators) ? [...record.fields.Collaborators] : [];
         state.session.user.amountReceived = 0;
         state.session.user.paymentHistory = [];
 
@@ -615,6 +629,9 @@ export async function loadSessionFromAirtable(sessionId) {
         if (sessionDataString && sessionDataString.trim() !== '') {
             try {
                 const savedState = JSON.parse(sessionDataString);
+                state.session.planActivity = (savedState.planActivity && typeof savedState.planActivity === 'object')
+                    ? savedState.planActivity
+                    : null;
                 console.log(`[SESSION-LOAD] Parsed session data - eventDetails keys: ${Object.keys(savedState.eventDetails || {}).join(', ')}`);
 
                 state.cart.items = new Map(Object.entries(savedState.ideasItems || savedState.favoritedItems || {}));
@@ -880,6 +897,10 @@ export async function loadSessionFromAirtable(sessionId) {
         if (loadedFromCache) {
             console.log('[SESSION-LOAD] ⚠️ Session loaded from OFFLINE CACHE — some data may be outdated');
         }
+        // Snapshot the loaded plan content so later saves can tell a real edit apart from
+        // incidental saves (presence/profile updates) made just by viewing the plan.
+        state.session.contentFingerprint = computePlanContentFingerprint();
+
         console.log('[SESSION-LOAD] Dispatching sessionReady event...');
         document.dispatchEvent(new CustomEvent('sessionReady'));
         log('API', `Finished loading session ${sessionId}. Fired sessionReady event.`);
@@ -929,6 +950,86 @@ export async function updatePaymentHistory(sessionId, paymentHistory) {
         log('API', `Failed to update payment history: ${error.message}`);
         return null;
     }
+}
+
+/**
+ * Hash of the user-meaningful plan content (items, plan details, ordering, groupings,
+ * variations). Excludes presence-ish data (user profiles, reactions, positions, background)
+ * so that simply opening a plan never counts as editing it.
+ * @returns {string|null} Fingerprint, or null if it could not be computed
+ */
+function computePlanContentFingerprint() {
+    try {
+        const seen = new WeakSet();
+        const replacer = (key, value) => {
+            if (key === 'parentConceptRecord') return undefined;
+            if (value instanceof Set) return Array.from(value);
+            if (value instanceof Map) return Array.from(value.entries());
+            if (typeof value === 'object' && value !== null) {
+                if (seen.has(value)) return undefined;
+                seen.add(value);
+            }
+            return value;
+        };
+        const content = JSON.stringify({
+            ideas: Array.from(state.cart.items.entries()),
+            locked: Array.from(state.cart.lockedItems.entries()),
+            details: Array.from(state.eventDetails.combined.entries()),
+            order: state.session.planItemOrder || [],
+            archived: Array.from(state.session.archivedItems || []),
+            completed: Array.from(state.session.completedItems || []),
+            goals: Array.from(state.session.goalItems || []),
+            combined: state.session.combinedItems ? Array.from(state.session.combinedItems.keys()) : [],
+            groups: state.session.relatedGroups || [],
+            iterations: serializeAllIterations()
+        }, replacer);
+        // djb2 hash keeps the stored baseline small
+        let hash = 5381;
+        for (let i = 0; i < content.length; i++) {
+            hash = ((hash << 5) + hash + content.charCodeAt(i)) | 0;
+        }
+        return `${content.length}:${hash >>> 0}`;
+    } catch (e) {
+        console.warn('[PLAN-ACTIVITY] Could not compute plan content fingerprint:', e?.message);
+        return null;
+    }
+}
+
+/**
+ * Build the next `planActivity` block persisted in the session JSON.
+ * Records the creator, every authenticated user who actually edited the plan, and when the
+ * plan was last edited. Used by the hamburger plan list for "mine vs shared" and sorting.
+ * @param {{ isCreate: boolean, isEdit: boolean }} opts
+ * @returns {Object} planActivity
+ */
+function buildNextPlanActivity({ isCreate, isEdit }) {
+    const userId = state.session.user.isAuthenticated ? state.session.user.id : null;
+    const prev = (!isCreate && state.session.planActivity) || {};
+    const activity = {
+        createdBy: prev.createdBy || null,
+        editors: Array.isArray(prev.editors) ? [...prev.editors] : [],
+        lastEditedAt: prev.lastEditedAt || null,
+        lastEditedBy: prev.lastEditedBy || null
+    };
+
+    if (!activity.createdBy) {
+        if (isCreate) {
+            activity.createdBy = userId;
+        } else {
+            // Legacy plan without activity data: the first collaborator is the original creator.
+            const legacyCreator = (state.session.loadedCollaborators || [])[0];
+            activity.createdBy = legacyCreator || null;
+        }
+    }
+
+    if (isEdit) {
+        activity.lastEditedAt = new Date().toISOString();
+        if (userId) {
+            activity.lastEditedBy = userId;
+            if (!activity.editors.includes(userId)) activity.editors.push(userId);
+        }
+    }
+    return activity;
 }
 
 /**
@@ -1114,6 +1215,14 @@ export async function saveSessionToAirtable() {
         activeVariationIndices: getActiveVariationIndices()
     };
 
+    // Plan activity (creator / editors / last edited) for the hamburger plan list.
+    const isCreateSave = !state.session.id;
+    const contentFingerprint = computePlanContentFingerprint();
+    const isEditSave = isCreateSave || contentFingerprint === null || contentFingerprint !== state.session.contentFingerprint;
+    const nextPlanActivity = buildNextPlanActivity({ isCreate: isCreateSave, isEdit: isEditSave });
+    sessionData.planActivity = nextPlanActivity;
+    console.log(`[PLAN-ACTIVITY] Save is ${isEditSave ? 'an EDIT' : 'not a content edit'} (editors: [${nextPlanActivity.editors}])`);
+
     // v3.8: Preserve _streamMeta during session saves so viewer page stream detection works.
     // Without this, session saves overwrite the field and destroy stream metadata.
     if (state.stream?.isActive && state.stream?.channelName) {
@@ -1145,6 +1254,15 @@ export async function saveSessionToAirtable() {
      if (state.session.user.isAuthenticated && state.session.user.id && !validCollaboratorIds.includes(state.session.user.id)) {
           validCollaboratorIds.push(state.session.user.id);
      }
+    // Never drop collaborators that were already on the record (e.g. people who joined via a
+    // shared link but are not in this browser's userProfiles). Dropping them made the plan
+    // vanish from their hamburger plan list after someone else edited it.
+    if (!isCreateSave) {
+        const existing = (state.session.loadedCollaborators || []).filter(id => id && typeof id === 'string' && id.startsWith('rec'));
+        for (let i = existing.length - 1; i >= 0; i--) {
+            if (!validCollaboratorIds.includes(existing[i])) validCollaboratorIds.unshift(existing[i]);
+        }
+    }
 
     const storesValue = state.ui.activeShopId ? [state.ui.activeShopId] : null;
 
@@ -1198,6 +1316,10 @@ export async function saveSessionToAirtable() {
         }
 
         const result = await response.json();
+
+        state.session.planActivity = nextPlanActivity;
+        state.session.contentFingerprint = contentFingerprint;
+        state.session.loadedCollaborators = [...validCollaboratorIds];
 
         if (!isUpdate && result.records && result.records.length > 0) {
             const newSessionId = result.records[0].id;
@@ -4610,7 +4732,13 @@ export async function createSessionFromEvent(eventId, eventRecord, storeId, user
             'eventName': fields.Name || 'Untitled Event',
             'goals': fields.Description || '',
         },
-        itemPositions: {}
+        itemPositions: {},
+        planActivity: {
+            createdBy: userId || null,
+            editors: userId ? [userId] : [],
+            lastEditedAt: new Date().toISOString(),
+            lastEditedBy: userId || null
+        }
     };
 
     // Add date to eventDetails if available (using ISO format for consistency)
@@ -5976,7 +6104,13 @@ export async function createNewSession(storeId, userId, name = 'New Plan') {
         eventDetails: {
             eventName: name
         },
-        itemPositions: {}
+        itemPositions: {},
+        planActivity: {
+            createdBy: userId || null,
+            editors: userId ? [userId] : [],
+            lastEditedAt: new Date().toISOString(),
+            lastEditedBy: userId || null
+        }
     };
 
     const sessionFields = {

@@ -57,6 +57,13 @@ export let state = {
         },
         userProfiles: new Map(),
         reactions: new Map(),
+
+        // Plan list bookkeeping (who created/edited this plan and when). Persisted inside the
+        // session JSON as `planActivity` so the hamburger plan list can tell "my plans" apart
+        // from plans the user only opened, and sort by last edit.
+        planActivity: null,          // { createdBy, editors: [], lastEditedAt, lastEditedBy }
+        contentFingerprint: null,    // Hash of plan content as last loaded/saved (edit detection)
+        loadedCollaborators: [],     // Collaborators on the record when loaded (preserved on save)
         flaggedUsers: new Set(),
         bannedUsers: new Set(),
 

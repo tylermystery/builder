@@ -17,7 +17,9 @@ export const WTF_PLAN_TYPES = {
     DRAFTS: 'drafts',    // Sessions not yet shared (only creator, no RSVPs)
     RSVPS: 'rsvps',      // Public events and guest invites
     FAVORITES: 'favorites', // Liked items
-    PROJECTS: 'projects'    // Projects/sessions owned
+    PROJECTS: 'projects',   // Projects/sessions owned
+    SHARED: 'shared',       // Plans the user opened via a link but never created/edited
+    STORE: 'store'          // Plans made for the user's store (store owners only)
 };
 
 // Local state for the panel
@@ -26,7 +28,9 @@ let wtfPlansData = {
     drafts: [],     // Unshared plans (only creator)
     rsvps: [],
     favorites: [],
-    projects: []
+    projects: [],
+    shared: [],     // Plans shared with the user that they haven't created or edited
+    store: []       // Store plans (store owners) that aren't the owner's personal plans
 };
 let currentFilter = WTF_PLAN_TYPES.ALL;
 let isLoading = false;
@@ -69,6 +73,62 @@ export function trackRecentPlan(sessionId) {
     } catch (e) {
         console.warn('[WTF-PLANS] Could not persist recent plan to localStorage:', e);
     }
+}
+
+// ---- Plan activity helpers (creator / editors / last edited) ----
+const planActivityCache = new WeakMap();
+
+/**
+ * Read the `planActivity` block stored in a plan's session JSON.
+ * @param {Object} plan - Session record
+ * @returns {Object|null} { createdBy, editors, lastEditedAt, lastEditedBy } or null
+ */
+function getPlanActivity(plan) {
+    if (!plan || typeof plan !== 'object') return null;
+    if (planActivityCache.has(plan)) return planActivityCache.get(plan);
+    let activity = null;
+    try {
+        const raw = plan.fields?.['Items with Variations'];
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && parsed.planActivity && typeof parsed.planActivity === 'object') {
+                activity = parsed.planActivity;
+            }
+        }
+    } catch {
+        activity = null;
+    }
+    planActivityCache.set(plan, activity);
+    return activity;
+}
+
+/**
+ * Whether the user created or edited this plan (i.e. it is "theirs").
+ * Plans saved before edit tracking fall back to the first collaborator being the creator.
+ */
+function isPersonalPlan(plan, userId) {
+    if (!userId) return true;
+    const activity = getPlanActivity(plan);
+    if (activity) {
+        if (activity.createdBy === userId) return true;
+        if (Array.isArray(activity.editors) && activity.editors.includes(userId)) return true;
+        if (activity.createdBy) return false;
+    }
+    const collaborators = plan.fields?.Collaborators || [];
+    return collaborators[0] === userId;
+}
+
+/** Whether a plan belongs to the store the current user owns. */
+function isOwnedStorePlan(plan) {
+    const user = state.session.user;
+    if (!user.isOwner || !user.ownedStoreId) return false;
+    const stores = plan.fields?.Stores || [];
+    return Array.isArray(stores) ? stores.includes(user.ownedStoreId) : stores === user.ownedStoreId;
+}
+
+/** Timestamp used for sorting/"time ago": last edit, falling back to creation. */
+function getPlanActivityTime(plan) {
+    return getPlanActivity(plan)?.lastEditedAt || plan.createdTime;
 }
 
 /**
@@ -466,10 +526,23 @@ async function loadWtfPlansData() {
         // A plan is "shared" if it has:
         // 1. More than 1 collaborator (creator + at least 1 other), OR
         // 2. Has RSVPs on its linked event
+        // Plans the user created/edited are "theirs" (Plans/Drafts). Store plans they didn't
+        // make go to the Store filter; anything else they merely opened goes to Shared with me.
         wtfPlansData.plans = [];
         wtfPlansData.drafts = [];
+        wtfPlansData.shared = [];
+        wtfPlansData.store = [];
 
+        const signedInUserId = isAuthenticated ? userId : null;
         allUserPlans.forEach(plan => {
+            if (!isPersonalPlan(plan, signedInUserId)) {
+                if (isOwnedStorePlan(plan)) {
+                    wtfPlansData.store.push(plan);
+                } else {
+                    wtfPlansData.shared.push(plan);
+                }
+                return;
+            }
             const isShared = isPlanShared(plan, userId);
             if (isShared) {
                 wtfPlansData.plans.push(plan);
@@ -477,6 +550,7 @@ async function loadWtfPlansData() {
                 wtfPlansData.drafts.push(plan);
             }
         });
+        console.log(`[WTF-PLANS] Not personal: ${wtfPlansData.shared.length} shared with me, ${wtfPlansData.store.length} store plans`);
         log('WtfPlansPanel', `Separated ${allUserPlans.length} plans: ${wtfPlansData.plans.length} shared, ${wtfPlansData.drafts.length} drafts`);
         console.log(`[WTF-PLANS] Plans breakdown: ${wtfPlansData.plans.length} shared, ${wtfPlansData.drafts.length} drafts (from ${allUserPlans.length} total)`);
         wtfPlansData.plans.forEach((p, i) => console.log(`[WTF-PLANS]   Shared ${i+1}: "${p.fields?.Name}" (${p.id})`));
@@ -623,96 +697,79 @@ function getCombinedItems() {
     let items = [];
     const currentSessionId = state.session.id;
     const currentSessionItem = buildCurrentSessionItem();
-    const currentUserId = state.session.user.id;
+    const currentUserId = state.session.user.isAuthenticated ? state.session.user.id : null;
+    const showAll = currentFilter === WTF_PLAN_TYPES.ALL;
 
-    // Determine if the current session is a draft or shared
-    // For the current session, we need to check collaborators from the live state
-    // Since the current session might not be in the fetched plans yet
-    let currentSessionIsDraft = true;
-    if (currentSessionItem && currentUserId) {
-        // Check if current session exists in plans (shared) or drafts
-        const inPlans = wtfPlansData.plans.some(p => p.id === currentSessionId);
-        const inDrafts = wtfPlansData.drafts.some(p => p.id === currentSessionId);
+    // Work out which section the live (currently open) session belongs to.
+    // Live activity wins: once the user edits the open plan it is theirs immediately,
+    // even before the list data is re-fetched.
+    let currentSessionCategory = 'draft';
+    if (currentSessionItem) {
+        const findIn = list => list.find(p => p.id === currentSessionId);
+        const fetched = findIn(wtfPlansData.plans) || findIn(wtfPlansData.drafts) ||
+            findIn(wtfPlansData.shared) || findIn(wtfPlansData.store);
+        const live = state.session.planActivity;
+        const liveIsMine = !!(currentUserId && live && (live.createdBy === currentUserId ||
+            (Array.isArray(live.editors) && live.editors.includes(currentUserId))));
 
-        if (inPlans) {
-            currentSessionIsDraft = false;
-        } else if (inDrafts) {
-            currentSessionIsDraft = true;
-        } else {
-            // If not in either list (new unsaved session), check state
-            // New sessions are drafts by default until shared
-            currentSessionIsDraft = true;
+        if (findIn(wtfPlansData.plans)) currentSessionCategory = 'plan';
+        else if (findIn(wtfPlansData.drafts)) currentSessionCategory = 'draft';
+        else if (findIn(wtfPlansData.store)) currentSessionCategory = 'store';
+        else if (findIn(wtfPlansData.shared)) currentSessionCategory = 'shared';
+        // New, not-yet-fetched sessions default to draft
+
+        if (liveIsMine && (currentSessionCategory === 'shared' || currentSessionCategory === 'store')) {
+            currentSessionCategory = (fetched && isPlanShared(fetched, currentUserId)) ? 'plan' : 'draft';
         }
     }
 
-    // Add shared plans
-    if (currentFilter === WTF_PLAN_TYPES.ALL || currentFilter === WTF_PLAN_TYPES.PLANS) {
-        wtfPlansData.plans.forEach(plan => {
-            // Skip the current session from fetched plans - we'll add the live version instead
-            if (currentSessionId && plan.id === currentSessionId) {
-                return;
-            }
+    const CATEGORY_META = {
+        plan: { filter: WTF_PLAN_TYPES.PLANS, icon: '📋', untitled: 'Untitled Plan' },
+        draft: { filter: WTF_PLAN_TYPES.DRAFTS, icon: '📝', untitled: 'Untitled Draft' },
+        shared: { filter: WTF_PLAN_TYPES.SHARED, icon: '👥', untitled: 'Untitled Plan' },
+        store: { filter: WTF_PLAN_TYPES.STORE, icon: '🏪', untitled: 'Untitled Plan' }
+    };
 
-            // Parse Items with Variations to get accurate item count and total cost
+    const addSessionList = (list, type) => {
+        const meta = CATEGORY_META[type];
+        // "All" only shows the user's own plans; shared/store plans live in their own filters.
+        const inAll = type === 'plan' || type === 'draft';
+        if (!(currentFilter === meta.filter || (showAll && inAll))) return;
+
+        list.forEach(plan => {
+            // Skip the current session - the live version is added below
+            if (currentSessionId && plan.id === currentSessionId) return;
             const { itemCount, totalCost } = parsePlanItemsData(plan);
-
             items.push({
-                type: 'plan',
+                type,
                 id: plan.id,
-                name: plan.fields?.Name || 'Untitled Plan',
+                name: plan.fields?.Name || meta.untitled,
                 date: plan.fields?.Date,
                 createdTime: plan.createdTime,
+                activityTime: getPlanActivityTime(plan),
                 itemCount,
                 totalCost,
-                icon: '📋',
+                icon: meta.icon,
                 data: plan
             });
         });
+    };
 
-        // Add the current session with live data if it's a shared plan
-        if (currentSessionItem && !currentSessionIsDraft) {
-            items.push(currentSessionItem);
-        }
-    }
+    addSessionList(wtfPlansData.plans, 'plan');
+    addSessionList(wtfPlansData.drafts, 'draft');
+    addSessionList(wtfPlansData.shared, 'shared');
+    addSessionList(wtfPlansData.store, 'store');
 
-    // Add drafts (unshared plans)
-    if (currentFilter === WTF_PLAN_TYPES.ALL || currentFilter === WTF_PLAN_TYPES.DRAFTS) {
-        wtfPlansData.drafts.forEach(draft => {
-            // Skip the current session from fetched drafts - we'll add the live version instead
-            if (currentSessionId && draft.id === currentSessionId) {
-                return;
-            }
-
-            // Parse Items with Variations to get accurate item count and total cost
-            const { itemCount, totalCost } = parsePlanItemsData(draft);
-
-            items.push({
-                type: 'draft',
-                id: draft.id,
-                name: draft.fields?.Name || 'Untitled Draft',
-                date: draft.fields?.Date,
-                createdTime: draft.createdTime,
-                itemCount,
-                totalCost,
-                icon: '📝',
-                data: draft
-            });
-        });
-
-        // Add the current session with live data if it's a draft
-        if (currentSessionItem && currentSessionIsDraft) {
-            // Mark the current session item as a draft
-            const draftSessionItem = {
-                ...currentSessionItem,
-                type: 'draft',
-                icon: '📝'
-            };
-            items.push(draftSessionItem);
+    // The open plan always appears in "All" (it's what the user is looking at) and in its own section
+    if (currentSessionItem) {
+        const meta = CATEGORY_META[currentSessionCategory];
+        if (showAll || currentFilter === meta.filter) {
+            items.push({ ...currentSessionItem, type: currentSessionCategory, icon: meta.icon });
         }
     }
 
     // Add RSVPs (for authenticated users) or Upcoming Events (for non-authenticated)
-    if (currentFilter === WTF_PLAN_TYPES.ALL || currentFilter === WTF_PLAN_TYPES.RSVPS) {
+    if (showAll || currentFilter === WTF_PLAN_TYPES.RSVPS) {
         const isAuthenticated = state.session.user.isAuthenticated;
         const userId = state.session.user.id;
 
@@ -743,7 +800,7 @@ function getCombinedItems() {
     }
 
     // Add Favorites
-    if (currentFilter === WTF_PLAN_TYPES.ALL || currentFilter === WTF_PLAN_TYPES.FAVORITES) {
+    if (showAll || currentFilter === WTF_PLAN_TYPES.FAVORITES) {
         wtfPlansData.favorites.forEach(item => {
             items.push({
                 type: 'favorite',
@@ -758,13 +815,11 @@ function getCombinedItems() {
         });
     }
 
-    // Add Projects (only those not already in plans to avoid duplicates)
-    if (currentFilter === WTF_PLAN_TYPES.ALL || currentFilter === WTF_PLAN_TYPES.PROJECTS) {
-        const planIds = new Set(wtfPlansData.plans.map(p => p.id));
+    // Add Projects - only sessions not already listed in any plan section
+    if (showAll || currentFilter === WTF_PLAN_TYPES.PROJECTS) {
+        const knownIds = getKnownSessionIds();
         wtfPlansData.projects.forEach(project => {
-            // Skip if already in plans
-            if (planIds.has(project.id)) return;
-            // Also skip current session if it's the same
+            if (knownIds.has(project.id)) return;
             if (currentSessionId && project.id === currentSessionId) return;
 
             items.push({
@@ -773,34 +828,41 @@ function getCombinedItems() {
                 name: project.fields?.Name || 'Untitled Project',
                 date: project.fields?.Date,
                 createdTime: project.createdTime,
+                activityTime: getPlanActivityTime(project),
                 icon: '📁',
                 data: project
             });
         });
     }
 
-    // Sort by most recent (createdTime or date)
-    // Current session items get priority by having a recent createdTime
-    // Public events (for non-authenticated users) are sorted by upcoming date (soonest first)
+    // Sort: current session first, public events by upcoming date, everything else by
+    // most recent activity (last edit for plans, creation time otherwise)
     items.sort((a, b) => {
-        // Current session always goes first
         if (a.isCurrentSession) return -1;
         if (b.isCurrentSession) return 1;
 
-        // Public events for non-authenticated users should be sorted by event date (soonest first)
         if (a.isPublicEvent && b.isPublicEvent) {
             const dateA = a.date ? new Date(a.date + 'T00:00:00') : new Date(9999, 11, 31);
             const dateB = b.date ? new Date(b.date + 'T00:00:00') : new Date(9999, 11, 31);
             return dateA - dateB; // Soonest first
         }
 
-        // Regular items sorted by most recent
-        const dateA = new Date(a.createdTime || a.date || 0);
-        const dateB = new Date(b.createdTime || b.date || 0);
+        const dateA = new Date(a.activityTime || a.createdTime || a.date || 0);
+        const dateB = new Date(b.activityTime || b.createdTime || b.date || 0);
         return dateB - dateA; // Most recent first
     });
 
     return items;
+}
+
+/** IDs of every session already shown in a plan section (used to de-dupe projects). */
+function getKnownSessionIds() {
+    return new Set([
+        ...wtfPlansData.plans,
+        ...wtfPlansData.drafts,
+        ...wtfPlansData.shared,
+        ...wtfPlansData.store
+    ].map(p => p.id));
 }
 
 /**
@@ -817,6 +879,9 @@ function renderWtfPlansList() {
 
     const items = getCombinedItems();
 
+    // Update counts (and Shared/Store filter visibility) even when this filter is empty
+    updateFilterCounts();
+
     if (items.length === 0) {
         const emptyMessage = getEmptyMessage();
         container.innerHTML = `<div class="wtf-plans-empty">${emptyMessage}</div>`;
@@ -829,9 +894,6 @@ function renderWtfPlansList() {
         const itemEl = createWtfPlanItem(item);
         container.appendChild(itemEl);
     });
-
-    // Update counts in filter buttons
-    updateFilterCounts();
 }
 
 /**
@@ -851,6 +913,8 @@ function getEmptyMessage() {
             case WTF_PLAN_TYPES.PLANS:
             case WTF_PLAN_TYPES.DRAFTS:
             case WTF_PLAN_TYPES.PROJECTS:
+            case WTF_PLAN_TYPES.SHARED:
+            case WTF_PLAN_TYPES.STORE:
                 return 'Sign in to see your plans and projects.';
             default:
                 return 'Sign in to see your plans, RSVPs, and favorites.';
@@ -868,6 +932,10 @@ function getEmptyMessage() {
             return 'No favorites yet. Heart items you love!';
         case WTF_PLAN_TYPES.PROJECTS:
             return 'No projects yet. Create your first project!';
+        case WTF_PLAN_TYPES.SHARED:
+            return 'No plans shared with you yet. Plans you open from a link show up here until you edit them.';
+        case WTF_PLAN_TYPES.STORE:
+            return 'No store plans yet. Plans customers make for your store show up here.';
         default:
             return 'Nothing here yet. Start planning something fun!';
     }
@@ -913,10 +981,15 @@ function createWtfPlanItem(item) {
             const projDate = item.date ? new Date(item.date + 'T00:00:00').toLocaleDateString() : '';
             preview = projDate || 'Project';
             break;
+        case 'shared':
+        case 'store':
+            const otherDateStr = item.date ? new Date(item.date + 'T00:00:00').toLocaleDateString() : 'No date';
+            preview = `${item.type === 'shared' ? 'Shared with you' : 'Store plan'} • ${item.itemCount} items • ${otherDateStr}`;
+            break;
     }
 
-    // Format time ago - show "Now" for current session
-    const timeAgo = item.isCurrentSession ? 'Now' : formatTimeAgo(item.createdTime);
+    // Format time ago (last edit when known) - show "Now" for current session
+    const timeAgo = item.isCurrentSession ? 'Now' : formatTimeAgo(item.activityTime || item.createdTime);
 
     // Show "Editing" indicator for current session
     const currentBadge = item.isCurrentSession ? '<span class="wtf-plans-current-badge">Editing</span>' : '';
@@ -954,6 +1027,8 @@ function handleWtfPlanItemClick(item) {
         case 'plan':
         case 'draft':
         case 'project':
+        case 'shared':
+        case 'store':
             // Navigate to session using pushState for proper browser history
             // First, ensure the wtfPlans state is in history so back button returns to it
             const wtfPlansUrl = new URL(window.location.href);
@@ -1013,16 +1088,22 @@ function updateFilterCounts() {
     const rsvpsBtn = document.querySelector('.wtf-plans-filter-btn[data-filter="rsvps"]');
     const favoritesBtn = document.querySelector('.wtf-plans-filter-btn[data-filter="favorites"]');
     const projectsBtn = document.querySelector('.wtf-plans-filter-btn[data-filter="projects"]');
+    const sharedBtn = document.querySelector('.wtf-plans-filter-btn[data-filter="shared"]');
+    const storeBtn = document.querySelector('.wtf-plans-filter-btn[data-filter="store"]');
+
+    // Shared/Store filters only make sense for signed-in users (Store: store owners only)
+    const user = state.session.user;
+    if (sharedBtn) sharedBtn.style.display = user.isAuthenticated ? '' : 'none';
+    if (storeBtn) storeBtn.style.display = (user.isAuthenticated && user.isOwner && user.ownedStoreId) ? '' : 'none';
 
     const planCount = wtfPlansData.plans.length;
     const draftCount = wtfPlansData.drafts.length;
     const rsvpCount = wtfPlansData.rsvps.length;
     const favoriteCount = wtfPlansData.favorites.length;
 
-    // Projects that aren't already in plans or drafts
-    const planIds = new Set(wtfPlansData.plans.map(p => p.id));
-    const draftIds = new Set(wtfPlansData.drafts.map(p => p.id));
-    const projectCount = wtfPlansData.projects.filter(p => !planIds.has(p.id) && !draftIds.has(p.id)).length;
+    // Projects that aren't already listed in a plan section
+    const knownIds = getKnownSessionIds();
+    const projectCount = wtfPlansData.projects.filter(p => !knownIds.has(p.id)).length;
 
     const totalCount = planCount + draftCount + rsvpCount + favoriteCount + projectCount;
 
@@ -1032,6 +1113,8 @@ function updateFilterCounts() {
     if (rsvpsBtn) updateButtonCount(rsvpsBtn, rsvpCount);
     if (favoritesBtn) updateButtonCount(favoritesBtn, favoriteCount);
     if (projectsBtn) updateButtonCount(projectsBtn, projectCount);
+    if (sharedBtn) updateButtonCount(sharedBtn, wtfPlansData.shared.length);
+    if (storeBtn) updateButtonCount(storeBtn, wtfPlansData.store.length);
 }
 
 /**
