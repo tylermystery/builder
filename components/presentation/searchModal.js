@@ -174,6 +174,28 @@ export function openSearchModal() {
 }
 
 /**
+ * Opens the search modal pre-filled with a query (used by the site header
+ * search bar while the presentation view is active).
+ * @param {string} query
+ */
+export function openSearchModalWithQuery(query = '') {
+    if (!presentationSearchModal) return;
+    if (!presentationSearchModal.classList.contains('active')) {
+        openSearchModal();
+    }
+    if (presentationSearchInput) {
+        presentationSearchInput.value = query;
+        handleSearchInput({ target: presentationSearchInput });
+        // Keep the caret at the end so typing continues naturally.
+        setTimeout(() => {
+            presentationSearchInput.focus();
+            const end = presentationSearchInput.value.length;
+            try { presentationSearchInput.setSelectionRange(end, end); } catch { /* search inputs in some browsers */ }
+        }, 0);
+    }
+}
+
+/**
  * Closes the search modal
  */
 export function closeSearchModal() {

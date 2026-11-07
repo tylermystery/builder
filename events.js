@@ -1791,22 +1791,74 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     rightSidebar?.addEventListener('touchend', (event) => finishMobilePlanDrag(event, true));
     rightSidebar?.addEventListener('touchcancel', (event) => finishMobilePlanDrag(event, false));
 
-    // New filter toggle button handler (replaces old mobile-filter-trigger)
+    // Filter toggle button. On narrow screens the filter panel is a drop-down
+    // sheet pinned beneath the header. The catalog workspace is a CSS size
+    // container, which traps position:fixed descendants, so while in sheet mode
+    // the panel is hosted directly on <body> and returned on wider screens.
     const filterToggleBtn = document.getElementById('filter-toggle-btn');
+    const mobileFilterQuery = window.matchMedia('(max-width: 999px)');
+    const filterPanelAnchor = document.createComment('left-sidebar-anchor');
+    leftSidebar?.parentNode?.insertBefore(filterPanelAnchor, leftSidebar);
+
+    let filterSheetBackdrop = null;
+    if (leftSidebar) {
+        filterSheetBackdrop = document.createElement('div');
+        filterSheetBackdrop.id = 'mobile-filter-backdrop';
+        filterSheetBackdrop.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(filterSheetBackdrop);
+
+        const doneBtn = document.createElement('button');
+        doneBtn.type = 'button';
+        doneBtn.id = 'mobile-filter-done-btn';
+        doneBtn.textContent = 'Show results';
+        leftSidebar.appendChild(doneBtn);
+        doneBtn.addEventListener('click', () => setFilterPanelOpen(false));
+        filterSheetBackdrop.addEventListener('click', () => setFilterPanelOpen(false));
+    }
+
+    function setFilterPanelOpen(isOpen) {
+        if (!leftSidebar) return;
+        leftSidebar.classList.toggle('collapsed', !isOpen);
+        filterToggleBtn?.setAttribute('aria-expanded', String(isOpen));
+        const sheetOpen = isOpen && mobileFilterQuery.matches;
+        document.body.classList.toggle('mobile-filters-open', sheetOpen);
+        if (sheetOpen) {
+            setMobilePlanOpen(false);
+            leftSidebar.scrollTop = 0;
+        }
+    }
+
+    const placeFilterPanel = () => {
+        if (!leftSidebar) return;
+        if (mobileFilterQuery.matches) {
+            if (leftSidebar.parentNode !== document.body) document.body.appendChild(leftSidebar);
+            leftSidebar.classList.add('mobile-filter-sheet');
+            document.body.classList.toggle('mobile-filters-open', !leftSidebar.classList.contains('collapsed'));
+        } else {
+            if (filterPanelAnchor.parentNode && leftSidebar.previousSibling !== filterPanelAnchor) {
+                filterPanelAnchor.parentNode.insertBefore(leftSidebar, filterPanelAnchor.nextSibling);
+            }
+            leftSidebar.classList.remove('mobile-filter-sheet');
+            document.body.classList.remove('mobile-filters-open');
+        }
+    };
+    placeFilterPanel();
+    mobileFilterQuery.addEventListener?.('change', placeFilterPanel);
+
     if (filterToggleBtn) {
         filterToggleBtn.addEventListener('click', () => {
             const isExpanded = filterToggleBtn.getAttribute('aria-expanded') === 'true';
-            filterToggleBtn.setAttribute('aria-expanded', !isExpanded);
-            leftSidebar?.classList.toggle('collapsed');
-
-            if (!isExpanded && window.innerWidth < 1000) {
-                setMobilePlanOpen(false);
-                window.setTimeout(() => {
-                    leftSidebar?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 50);
-            }
+            setFilterPanelOpen(!isExpanded);
         });
     }
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && document.body.classList.contains('mobile-filters-open')) {
+            event.preventDefault();
+            setFilterPanelOpen(false);
+            filterToggleBtn?.focus();
+        }
+    });
 
     // Show/hide clear search button based on input value
     const nameFilterInput = document.getElementById('name-filter');
@@ -1822,7 +1874,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     // Legacy mobile-filter-trigger (kept for backwards compatibility)
     safeAddEventListener('mobile-filter-trigger', 'click', () => {
         if (window.innerWidth < 1000) {
-            leftSidebar?.classList.toggle('collapsed');
+            setFilterPanelOpen(leftSidebar?.classList.contains('collapsed'));
         }
     });
     mobileViewPlanBtn?.addEventListener('click', () => {

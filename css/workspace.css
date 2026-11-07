@@ -135,3 +135,78 @@ body.ucp-fullscreen-active #chat-widget-container { visibility: hidden; }
     body.workspace-ready #header-left { flex: 1; }
     body.workspace-ready #presentation-header { padding: 12px; }
 }
+/* Mobile filters: a drop-down sheet beneath the fixed header instead of a block
+   that lands after the catalog. The panel is moved onto <body> in this mode. */
+#mobile-filter-backdrop,
+#mobile-filter-done-btn { display: none; }
+@media (max-width: 999px) {
+    #left-sidebar.mobile-filter-sheet {
+        position: fixed;
+        top: var(--workspace-header-height, 80px);
+        left: 0;
+        right: 0;
+        z-index: 2250;
+        width: auto;
+        max-width: none;
+        max-height: calc(100dvh - var(--workspace-header-height, 80px) - 12px);
+        margin: 0;
+        padding: 12px 14px 0;
+        box-sizing: border-box;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        background: rgb(255 255 255 / 97%);
+        border-radius: 0 0 16px 16px;
+        box-shadow: 0 12px 32px rgb(0 0 0 / 25%);
+        opacity: 1;
+        transform: translateY(0);
+        visibility: visible;
+        transition: transform 0.25s ease, opacity 0.2s ease, visibility 0s linear 0s;
+    }
+    #left-sidebar.mobile-filter-sheet.collapsed {
+        max-height: calc(100dvh - var(--workspace-header-height, 80px) - 12px);
+        padding: 12px 14px 0;
+        margin: 0;
+        opacity: 0;
+        transform: translateY(-12px);
+        visibility: hidden;
+        pointer-events: none;
+        transition: transform 0.2s ease, opacity 0.2s ease, visibility 0s linear 0.2s;
+    }
+    #left-sidebar.mobile-filter-sheet #mobile-filter-done-btn {
+        display: block;
+        position: sticky;
+        bottom: 0;
+        width: calc(100% + 28px);
+        margin: 12px -14px 0;
+        padding: 14px;
+        border: 0;
+        border-top: 1px solid #e5e7eb;
+        background: #111827;
+        color: #fff;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    body.mobile-filters-open #mobile-filter-backdrop {
+        display: block;
+        position: fixed;
+        inset: var(--workspace-header-height, 80px) 0 0;
+        z-index: 2240;
+        background: rgb(0 0 0 / 35%);
+    }
+    body.mobile-filters-open:not(.presentation-active) { overflow: hidden; }
+}
+body.presentation-active #mobile-filter-backdrop,
+body.presentation-loading #mobile-filter-backdrop { display: none !important; }
+/* In the plan view the header search feeds the plan's "Add items" search;
+   catalog filters don't apply there, so the Filters button is hidden. */
+body.presentation-active #header-search-wrapper #filter-toggle-btn { display: none !important; }
+/* A rail taking over the screen on mobile hides the filter sheet with the catalog. */
+@media (max-width: 1099px) {
+    body.workspace-ready[data-workspace-surface="left"] #left-sidebar.mobile-filter-sheet,
+    body.workspace-ready[data-workspace-surface="right"] #left-sidebar.mobile-filter-sheet,
+    body.workspace-ready[data-workspace-surface="left"] #mobile-filter-backdrop,
+    body.workspace-ready[data-workspace-surface="right"] #mobile-filter-backdrop { visibility: hidden !important; pointer-events: none !important; }
+}

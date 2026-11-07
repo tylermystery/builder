@@ -396,6 +396,73 @@ function initializeAccordions() {
 // Lifecycle: Show / Hide
 // ============================================
 
+// ============================================
+// Header search bridge
+// ============================================
+// The site header search bar stays visible over the presentation view. While a
+// plan is shown, typing there opens the plan's "Add items" search pre-filled,
+// instead of silently filtering the hidden catalog. The catalog's search term
+// is parked while the plan is open and restored when returning.
+
+const HEADER_SEARCH_PLAN_PLACEHOLDER = 'Search to add to this plan...';
+let headerSearchBridgeInstalled = false;
+let parkedCatalogSearch = null;
+let parkedCatalogPlaceholder = null;
+
+function isPresentationShowing() {
+    return document.body.classList.contains('presentation-active');
+}
+
+function installHeaderSearchBridge() {
+    if (headerSearchBridgeInstalled) return;
+    headerSearchBridgeInstalled = true;
+
+    // Capture phase on document runs before the catalog's own listeners on the
+    // input, so they never see keystrokes made while the plan is showing.
+    document.addEventListener('input', (e) => {
+        if (e.target?.id !== 'name-filter' || !isPresentationShowing()) return;
+        e.stopImmediatePropagation();
+        const query = e.target.value;
+        e.target.value = '';
+        if (query.trim()) {
+            searchModal.openSearchModalWithQuery(query);
+        }
+    }, true);
+
+    document.addEventListener('keydown', (e) => {
+        if (e.target?.id !== 'name-filter' || !isPresentationShowing()) return;
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            const query = e.target.value;
+            e.target.value = '';
+            searchModal.openSearchModalWithQuery(query);
+        }
+    }, true);
+}
+
+function parkCatalogHeaderSearch() {
+    const input = document.getElementById('name-filter');
+    if (!input || parkedCatalogSearch !== null) return;
+    parkedCatalogSearch = input.value;
+    parkedCatalogPlaceholder = input.placeholder;
+    input.value = '';
+    input.placeholder = HEADER_SEARCH_PLAN_PLACEHOLDER;
+    const clearBtn = document.getElementById('clear-search-btn');
+    if (clearBtn) clearBtn.style.display = 'none';
+}
+
+function restoreCatalogHeaderSearch() {
+    const input = document.getElementById('name-filter');
+    if (!input || parkedCatalogSearch === null) return;
+    input.value = parkedCatalogSearch;
+    if (parkedCatalogPlaceholder !== null) input.placeholder = parkedCatalogPlaceholder;
+    const clearBtn = document.getElementById('clear-search-btn');
+    if (clearBtn) clearBtn.style.display = input.value.trim() ? 'block' : 'none';
+    parkedCatalogSearch = null;
+    parkedCatalogPlaceholder = null;
+}
+
 function handleKeyDown(e) {
     if (e.key === 'Escape' && !document.body.classList.contains('workspace-ready')) {
         updateUrl({ view: null });
@@ -521,6 +588,9 @@ export async function showPresentationView(listType, startRecordId = null) {
     document.body.classList.add('presentation-active');
     document.documentElement.classList.add('presentation-active');
 
+    installHeaderSearchBridge();
+    parkCatalogHeaderSearch();
+
     document.addEventListener('keydown', handleKeyDown);
 
     // Show drag buckets
@@ -602,6 +672,7 @@ export function hidePresentationView() {
     document.body.classList.remove('presentation-active');
     document.documentElement.classList.remove('presentation-active');
     document.removeEventListener('keydown', handleKeyDown);
+    restoreCatalogHeaderSearch();
 
     // Trigger catalog render if needed
     if (presState.getCatalogNeedsRender() && typeof window.applyFiltersAndSort === 'function') {
