@@ -6130,72 +6130,6 @@ body.ucp-panel-open .unified-chat-panel {
 
             <!-- Scrollable Itinerary Container -->
             <div class="presentation-itinerary-scroll">
-        <section id="presentation-header" class="workspace-plan-context" aria-label="Plan context and collaboration tools">
-            <div class="header-content">
-                <!-- Left: Hamburger Menu only -->
-                <div id="presentation-header-left" hidden>
-                    <button id="presentation-back-btn" class="header-icon-btn" title="WTF Plans" aria-label="Open WTF Plans menu">
-                        <span class="hamburger-icon">&#9776;</span>
-                    </button>
-                </div>
-
-                <!-- Center: Plan Title (full display, wraps if needed) -->
-                <div id="presentation-header-center">
-                    <div class="presentation-header-title-row">
-                        <span id="presentation-event-label" class="presentation-event-label">Viewing Plan</span>
-                        <span id="presentation-live-badge" class="presentation-live-badge" style="display: none;">
-                            <span class="live-dot"></span>
-                            <span>LIVE</span>
-                        </span>
-                        <button id="plan-focus-regenerate-btn" class="plan-focus-regenerate-btn" title="Regenerate plan focus from goals" aria-label="Regenerate plan focus" style="display: none;">&#x21BB;</button>
-                    </div>
-                    <div id="goal-chips-container" class="goal-chips-container"></div>
-                </div>
-
-                <!-- Right: Video Chat Toolbar (v3.8) + Vitality emoji + Price -->
-                <div id="presentation-header-right">
-                    <!-- Live Stream Toolbar -->
-                    <div id="live-stream-toolbar" class="live-stream-toolbar" style="display: none;">
-                        <!-- Go Live button (shown when no stream active) -->
-                        <button id="live-go-live-btn" class="live-toolbar-btn live-go-live-btn" title="Start live video" aria-label="Go Live">
-                            <span class="live-btn-icon">&#x1F4F9;</span>
-                            <span class="live-btn-label">Go Live</span>
-                        </button>
-
-                        <!-- Stream Controls (shown when stream is active) -->
-                        <div id="live-stream-controls" class="live-stream-controls" style="display: none;">
-                            <div id="live-indicator" class="live-indicator">
-                                <span class="live-dot"></span>
-                                <span class="live-text">LIVE</span>
-                                <span id="live-viewer-count" class="live-viewer-count">0</span>
-                            </div>
-                            <button id="live-toggle-audio" class="live-toolbar-btn live-control-btn" title="Toggle microphone" aria-label="Toggle microphone">
-                                <span class="live-btn-icon" id="live-audio-icon">&#x1F3A4;</span>
-                            </button>
-                            <button id="live-toggle-video" class="live-toolbar-btn live-control-btn" title="Toggle camera" aria-label="Toggle camera">
-                                <span class="live-btn-icon" id="live-video-icon">&#x1F4F7;</span>
-                            </button>
-                            <button id="live-toggle-transcription" class="live-toolbar-btn live-control-btn" title="Toggle Ryry voice commands" aria-label="Toggle voice commands" style="display: none;">
-                                <span class="live-btn-icon" id="live-transcription-icon">&#x1F399;</span>
-                            </button>
-                            <button id="live-copy-link" class="live-toolbar-btn live-control-btn" title="Copy stream link" aria-label="Copy shareable stream link" style="display: none;">
-                                <span class="live-btn-icon" id="live-copy-link-icon">&#x1F517;</span>
-                            </button>
-                            <button id="live-end-stream" class="live-toolbar-btn live-end-btn" title="End stream" aria-label="End stream">
-                                <span class="live-btn-icon">&#x23F9;</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Presence Avatar Bar -->
-                    <div id="presentation-presence-avatar-bar" class="presence-avatar-bar" style="display: none;"></div>
-                    <button id="presentation-header-total" class="presentation-header-total" title="View checkout" aria-label="View checkout summary"></button>
-                </div>
-            </div>
-            <!-- Hidden elements for logo/shop-title (kept for JS compatibility) -->
-            <div id="presentation-logo-container" class="presentation-logo-container" style="display:none;"></div>
-            <h1 id="presentation-shop-title" class="presentation-shop-title" style="display:none;"></h1>
-        </section>
 
                 <!-- Plan Focus Suggestion Banner (hidden by default) -->
                 <div id="plan-focus-suggestion" class="plan-focus-suggestion" style="display: none;">
@@ -6219,6 +6153,65 @@ body.ucp-panel-open .unified-chat-panel {
                 <!-- Event Header Section -->
                 <section class="itinerary-section itinerary-header itinerary-accordion" data-section="header">
                     <div class="itinerary-accordion-header" data-section="header">
+                        <!-- Plan context bar: title, Go Live, presence and price estimate.
+                             Always visible; clicks here never toggle the accordion. -->
+                        <div id="presentation-header" class="plan-context-bar" role="group" aria-label="Plan context and collaboration tools">
+                        <!-- Center: Plan Title (full display, wraps if needed) -->
+                        <div id="presentation-header-center">
+                            <div class="presentation-header-title-row">
+                                <span id="presentation-event-label" class="presentation-event-label">Viewing Plan</span>
+                                <span id="presentation-live-badge" class="presentation-live-badge" style="display: none;">
+                                    <span class="live-dot"></span>
+                                    <span>LIVE</span>
+                                </span>
+                                <button id="plan-focus-regenerate-btn" class="plan-focus-regenerate-btn" title="Regenerate plan focus from goals" aria-label="Regenerate plan focus" style="display: none;">&#x21BB;</button>
+                            </div>
+                            <div id="goal-chips-container" class="goal-chips-container"></div>
+                        </div>
+
+                        <!-- Right: Video Chat Toolbar (v3.8) + Vitality emoji + Price -->
+                        <div id="presentation-header-right">
+                            <!-- Live Stream Toolbar -->
+                            <div id="live-stream-toolbar" class="live-stream-toolbar" style="display: none;">
+                                <!-- Go Live button (shown when no stream active) -->
+                                <button id="live-go-live-btn" class="live-toolbar-btn live-go-live-btn" title="Start live video" aria-label="Go Live">
+                                    <span class="live-btn-icon">&#x1F4F9;</span>
+                                    <span class="live-btn-label">Go Live</span>
+                                </button>
+
+                                <!-- Stream Controls (shown when stream is active) -->
+                                <div id="live-stream-controls" class="live-stream-controls" style="display: none;">
+                                    <div id="live-indicator" class="live-indicator">
+                                        <span class="live-dot"></span>
+                                        <span class="live-text">LIVE</span>
+                                        <span id="live-viewer-count" class="live-viewer-count">0</span>
+                                    </div>
+                                    <button id="live-toggle-audio" class="live-toolbar-btn live-control-btn" title="Toggle microphone" aria-label="Toggle microphone">
+                                        <span class="live-btn-icon" id="live-audio-icon">&#x1F3A4;</span>
+                                    </button>
+                                    <button id="live-toggle-video" class="live-toolbar-btn live-control-btn" title="Toggle camera" aria-label="Toggle camera">
+                                        <span class="live-btn-icon" id="live-video-icon">&#x1F4F7;</span>
+                                    </button>
+                                    <button id="live-toggle-transcription" class="live-toolbar-btn live-control-btn" title="Toggle Ryry voice commands" aria-label="Toggle voice commands" style="display: none;">
+                                        <span class="live-btn-icon" id="live-transcription-icon">&#x1F399;</span>
+                                    </button>
+                                    <button id="live-copy-link" class="live-toolbar-btn live-control-btn" title="Copy stream link" aria-label="Copy shareable stream link" style="display: none;">
+                                        <span class="live-btn-icon" id="live-copy-link-icon">&#x1F517;</span>
+                                    </button>
+                                    <button id="live-end-stream" class="live-toolbar-btn live-end-btn" title="End stream" aria-label="End stream">
+                                        <span class="live-btn-icon">&#x23F9;</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Presence Avatar Bar -->
+                            <div id="presentation-presence-avatar-bar" class="presence-avatar-bar" style="display: none;"></div>
+                            <button id="presentation-header-total" class="presentation-header-total" title="View checkout" aria-label="View checkout summary"></button>
+                        </div>
+                        <!-- Hidden elements for logo/shop-title (kept for JS compatibility) -->
+                        <div id="presentation-logo-container" class="presentation-logo-container" style="display:none;"></div>
+                        <h1 id="presentation-shop-title" class="presentation-shop-title" style="display:none;"></h1>
+                        </div>
                         <div class="itinerary-accordion-title-row">
                             <!-- People List: Team count badge, current user, team members, share button -->
                             <div id="itinerary-collaborators" class="itinerary-collaborators">

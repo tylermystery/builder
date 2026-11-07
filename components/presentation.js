@@ -756,6 +756,9 @@ export function setupPresentationEventListeners() {
 
             // Don't trigger accordion on interactive elements inside
             if (e.target.closest('button') || e.target.closest('a') || e.target.closest('input')) return;
+            // The plan context bar (title, goal chips, Go Live, price) lives in the
+            // details header but must not collapse/expand the details.
+            if (e.target.closest('.plan-context-bar')) return;
 
             const section = accordionHeader.dataset.section;
             if (section) {
