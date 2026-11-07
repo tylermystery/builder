@@ -90,22 +90,48 @@ body.workspace-ready #forum-panel-overlay { display: none !important; }
     body.workspace-ready[data-workspace-surface="left"],
     body.workspace-ready[data-workspace-surface="right"] { overflow: hidden; }
 }
-body.workspace-ready #presentation-header {
-    position: relative;
-    top: auto;
-    z-index: 1;
-    flex: none;
-    margin: 0 0 16px;
-    padding: 16px;
-    border: 1px solid rgb(255 255 255 / 35%);
-    border-radius: 12px;
-    background: rgb(255 255 255 / 14%);
-    box-shadow: none;
+/* Plan context bar (title, Go Live, presence, price) sits at the top of the
+   collaborators/details card rather than in a separate box above it. */
+#presentation-header.plan-context-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 12px;
+    margin: 0 0 12px;
+    padding: 0 0 12px;
+    border-bottom: 1px solid rgb(255 255 255 / 25%);
+    cursor: default;
+    text-align: left;
 }
-body.workspace-ready #presentation-header .header-content { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 0; max-width: none; }
-body.workspace-ready #presentation-header-center { flex: 1 1 200px; min-width: 0; }
-body.workspace-ready #presentation-header-right { position: static; flex: 0 1 auto; flex-wrap: wrap; min-width: 0; margin-left: auto; gap: 8px; }
-body.workspace-ready #presentation-event-label { font-size: clamp(18px, 2vw, 24px); text-align: left; }
+#presentation-header.plan-context-bar #presentation-header-center {
+    flex: 1 1 200px;
+    min-width: 0;
+    align-items: flex-start;
+}
+#presentation-header.plan-context-bar .presentation-header-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+#presentation-header.plan-context-bar .goal-chips-container { justify-content: flex-start; }
+#presentation-header.plan-context-bar #presentation-header-right {
+    position: static;
+    display: flex;
+    align-items: center;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
+    margin-left: auto;
+    gap: 8px;
+}
+#presentation-header.plan-context-bar #presentation-event-label {
+    font-size: clamp(18px, 2vw, 24px);
+    text-align: left;
+}
+.itinerary-accordion.itinerary-header .itinerary-accordion-header:has(.plan-context-bar:hover) { background: transparent; }
 /* Keep the original site header and chat control available above every surface. */
 body.workspace-ready #main-header {
     display: block !important;
@@ -133,5 +159,80 @@ body.ucp-fullscreen-active #chat-widget-container { visibility: hidden; }
     body.workspace-ready #header-center { order: 3; flex-basis: 100%; }
     body.workspace-ready #header-right { margin-left: auto; }
     body.workspace-ready #header-left { flex: 1; }
-    body.workspace-ready #presentation-header { padding: 12px; }
+    #presentation-header.plan-context-bar #presentation-header-right { margin-left: 0; justify-content: flex-start; }
+}
+/* Mobile filters: a drop-down sheet beneath the fixed header instead of a block
+   that lands after the catalog. The panel is moved onto <body> in this mode. */
+#mobile-filter-backdrop,
+#mobile-filter-done-btn { display: none; }
+@media (max-width: 999px) {
+    #left-sidebar.mobile-filter-sheet {
+        position: fixed;
+        top: var(--workspace-header-height, 80px);
+        left: 0;
+        right: 0;
+        z-index: 2250;
+        width: auto;
+        max-width: none;
+        max-height: calc(100dvh - var(--workspace-header-height, 80px) - 12px);
+        margin: 0;
+        padding: 12px 14px 0;
+        box-sizing: border-box;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        background: rgb(255 255 255 / 97%);
+        border-radius: 0 0 16px 16px;
+        box-shadow: 0 12px 32px rgb(0 0 0 / 25%);
+        opacity: 1;
+        transform: translateY(0);
+        visibility: visible;
+        transition: transform 0.25s ease, opacity 0.2s ease, visibility 0s linear 0s;
+    }
+    #left-sidebar.mobile-filter-sheet.collapsed {
+        max-height: calc(100dvh - var(--workspace-header-height, 80px) - 12px);
+        padding: 12px 14px 0;
+        margin: 0;
+        opacity: 0;
+        transform: translateY(-12px);
+        visibility: hidden;
+        pointer-events: none;
+        transition: transform 0.2s ease, opacity 0.2s ease, visibility 0s linear 0.2s;
+    }
+    #left-sidebar.mobile-filter-sheet #mobile-filter-done-btn {
+        display: block;
+        position: sticky;
+        bottom: 0;
+        width: calc(100% + 28px);
+        margin: 12px -14px 0;
+        padding: 14px;
+        border: 0;
+        border-top: 1px solid #e5e7eb;
+        background: #111827;
+        color: #fff;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    body.mobile-filters-open #mobile-filter-backdrop {
+        display: block;
+        position: fixed;
+        inset: var(--workspace-header-height, 80px) 0 0;
+        z-index: 2240;
+        background: rgb(0 0 0 / 35%);
+    }
+    body.mobile-filters-open:not(.presentation-active) { overflow: hidden; }
+}
+body.presentation-active #mobile-filter-backdrop,
+body.presentation-loading #mobile-filter-backdrop { display: none !important; }
+/* In the plan view the header search feeds the plan's "Add items" search;
+   catalog filters don't apply there, so the Filters button is hidden. */
+body.presentation-active #header-search-wrapper #filter-toggle-btn { display: none !important; }
+/* A rail taking over the screen on mobile hides the filter sheet with the catalog. */
+@media (max-width: 1099px) {
+    body.workspace-ready[data-workspace-surface="left"] #left-sidebar.mobile-filter-sheet,
+    body.workspace-ready[data-workspace-surface="right"] #left-sidebar.mobile-filter-sheet,
+    body.workspace-ready[data-workspace-surface="left"] #mobile-filter-backdrop,
+    body.workspace-ready[data-workspace-surface="right"] #mobile-filter-backdrop { visibility: hidden !important; pointer-events: none !important; }
 }
