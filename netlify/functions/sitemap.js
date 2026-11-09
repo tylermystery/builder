@@ -125,6 +125,11 @@ exports.handler = async (event) => {
     <priority>0.9</priority>
   </url>`;
 
+        // Public business introductions are independent of interactive shop state.
+        for (const path of ['/shops/', '/shops/tylers-mystery-tours/', '/shops/union-machine-works/']) {
+            urlEntries += `\n  <url><loc>${SITE_URL}${path}</loc></url>`;
+        }
+
         // Dynamic item pages
         for (const record of allRecords) {
             const name = record.fields.Name;
