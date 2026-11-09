@@ -55,7 +55,7 @@ function getStoreWebsiteUrl(storeDetails) {
  */
 function generateFooterHTML(storeDetails) {
     if (!storeDetails || !storeDetails.businessInfo) {
-        return '<a href="/crm-login.html">Admin Dashboard</a>';
+        return '<a href="/crm-login.html">Admin Dashboard</a><span class="footer-separator" aria-hidden="true">|</span><a href="/shops/" class="footer-platform">Explore WTFun</a>';
     }
 
     const info = storeDetails.businessInfo;
@@ -118,6 +118,7 @@ function generateFooterHTML(storeDetails) {
 
     // Admin dashboard link (always present)
     footerItems.push('<a href="/crm-login.html" class="footer-admin">Admin</a>');
+    footerItems.push('<a href="/shops/" class="footer-platform">Explore WTFun</a>');
 
     return footerItems.join('<span class="footer-separator">|</span>');
 }

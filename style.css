@@ -9750,6 +9750,15 @@ hr.total-divider {
     color: #777;
     font-size: 0.9em;
 }
+.footer-platform {
+    white-space: nowrap;
+    font-weight: 600;
+}
+.footer-link a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 4px;
+    border-radius: 2px;
+}
 @media (max-width: 600px) {
     .footer-link {
         padding: 10px 15px;
