@@ -14,7 +14,9 @@ import { applyCloudinaryTransform, applyCloudinaryFitTransform, getImageOrientat
 import { resizeImageForUpload } from '../utils/imageResizer.js';
 import { triggerSave } from '../events.js';
 import { createCalendarExportButtons, initializeCalendarExportListeners, resolvePlanVenueAddress } from '../utils/calendarExport.js';
-import { openUCPForItem, openUCPGlobalForItem } from './unifiedChatPanel.js';
+import { initializeDetailModalLayout } from '../utils/detailModalLayout.js';
+import { activateWorkspaceSurface } from '../utils/workspace.js';
+import { setUCPItemScope, openUCPForItem, openUCPGlobalForItem } from './unifiedChatPanel.js';
 import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
 import { openActionMenu } from './actionMenu.js';
@@ -5799,6 +5801,12 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
         return;
     }
     isModalRendering = true;
+    initializeDetailModalLayout();
+    activateWorkspaceSurface('center');
+    if (document.body.classList.contains('presentation-active') &&
+        (state.cart?.lockedItems?.has(record.id) || state.cart?.items?.has(record.id))) {
+        setUCPItemScope(record.id);
+    }
 
     try {
 
@@ -10394,6 +10402,8 @@ export async function showGroupDetailModal(group, allRecords) {
         return;
     }
     isModalRendering = true;
+    initializeDetailModalLayout();
+    activateWorkspaceSurface('center');
 
     try {
 

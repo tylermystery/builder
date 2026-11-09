@@ -1,0 +1,137 @@
+/* Shared workspace: controls, independent rails, and one central surface. */
+:root {
+    --workspace-header-height: 80px;
+    --wtf-dock-width: 360px;
+    --conv-dock-width: 380px;
+}
+body.workspace-ready #catalog-workspace {
+    padding-top: var(--workspace-header-height);
+    margin-left: var(--detail-left-inset, 0px);
+    margin-right: var(--detail-right-inset, 0px);
+    min-width: 0;
+    container: catalog-space / inline-size;
+}
+body.workspace-ready #wtf-plans-panel,
+body.workspace-ready #forum-panel,
+body.workspace-ready .unified-chat-panel:not(.ucp-fullscreen) {
+    top: var(--workspace-header-height);
+    height: calc(100dvh - var(--workspace-header-height));
+    box-sizing: border-box;
+    z-index: 2100;
+}
+body.workspace-ready #presentation-modal-overlay,
+body.workspace-ready #detail-modal-overlay {
+    top: var(--workspace-header-height) !important;
+    height: calc(100dvh - var(--workspace-header-height)) !important;
+    left: var(--detail-left-inset, 0px) !important;
+    right: var(--detail-right-inset, 0px) !important;
+    width: calc(100% - var(--detail-left-inset, 0px) - var(--detail-right-inset, 0px)) !important;
+    transition: none;
+}
+/* Rails no longer dismiss or dim the independently interactive center. */
+body.workspace-ready #wtf-plans-panel-overlay,
+body.workspace-ready #forum-panel-overlay { display: none !important; }
+@media (min-width: 1100px) {
+    body.workspace-ready #wtf-plans-panel { width: var(--wtf-dock-width); }
+    body.workspace-ready #forum-panel,
+    body.workspace-ready .unified-chat-panel:not(.ucp-fullscreen) {
+        width: var(--conv-dock-width);
+        min-width: var(--conv-dock-width);
+        max-width: var(--conv-dock-width);
+    }
+}
+/* Adapt to available catalog width rather than the viewport behind the rails. */
+@container catalog-space (max-width: 1099px) {
+    body.workspace-ready .main-content {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        box-sizing: border-box;
+        gap: 16px;
+        padding: 12px;
+    }
+    body.workspace-ready #catalog-area { order: 0; width: 100%; }
+    body.workspace-ready #left-sidebar { order: 1; }
+    body.workspace-ready #right-sidebar { order: 2; }
+    body.workspace-ready #catalog-container:not(:has(.grouping-carousel-section)) {
+        grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+    }
+    body.workspace-ready .header-content { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+    body.workspace-ready #header-left,
+    body.workspace-ready #header-center,
+    body.workspace-ready #header-right { min-width: 0; max-width: 100%; }
+}
+@media (min-width: 769px) {
+    @container catalog-space (max-width: 1099px) {
+        body.workspace-ready #left-sidebar,
+        body.workspace-ready #right-sidebar { position: static; width: auto; min-width: 0; max-width: 100%; grid-column: auto; grid-row: auto; }
+    }
+}
+@media (max-width: 1099px) {
+    body.workspace-ready #wtf-plans-panel,
+    body.workspace-ready #forum-panel,
+    body.workspace-ready .unified-chat-panel:not(.ucp-fullscreen) {
+        width: min(100%, 420px);
+        min-width: 0;
+        max-width: 100%;
+    }
+    body.workspace-ready[data-workspace-surface="left"] #wtf-plans-panel.open,
+    body.workspace-ready[data-workspace-surface="right"] #forum-panel.open,
+    body.workspace-ready[data-workspace-surface="right"].ucp-panel-open .unified-chat-panel { width: 100%; max-width: 100%; }
+    body.workspace-ready:not([data-workspace-surface="left"]) #wtf-plans-panel,
+    body.workspace-ready:not([data-workspace-surface="right"]) #forum-panel,
+    body.workspace-ready:not([data-workspace-surface="right"]) .unified-chat-panel:not(.ucp-fullscreen),
+    body.workspace-ready[data-workspace-surface="left"] #catalog-workspace,
+    body.workspace-ready[data-workspace-surface="right"] #catalog-workspace,
+    body.workspace-ready[data-workspace-surface="left"] #presentation-modal-overlay,
+    body.workspace-ready[data-workspace-surface="right"] #presentation-modal-overlay,
+    body.workspace-ready[data-workspace-surface="left"] #detail-modal-overlay,
+    body.workspace-ready[data-workspace-surface="right"] #detail-modal-overlay { visibility: hidden !important; pointer-events: none !important; }
+    body.workspace-ready[data-workspace-surface="left"],
+    body.workspace-ready[data-workspace-surface="right"] { overflow: hidden; }
+}
+body.workspace-ready #presentation-header {
+    position: relative;
+    top: auto;
+    z-index: 1;
+    flex: none;
+    margin: 0 0 16px;
+    padding: 16px;
+    border: 1px solid rgb(255 255 255 / 35%);
+    border-radius: 12px;
+    background: rgb(255 255 255 / 14%);
+    box-shadow: none;
+}
+body.workspace-ready #presentation-header .header-content { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 0; max-width: none; }
+body.workspace-ready #presentation-header-center { flex: 1 1 200px; min-width: 0; }
+body.workspace-ready #presentation-header-right { position: static; flex: 0 1 auto; flex-wrap: wrap; min-width: 0; margin-left: auto; gap: 8px; }
+body.workspace-ready #presentation-event-label { font-size: clamp(18px, 2vw, 24px); text-align: left; }
+/* Keep the original site header and chat control available above every surface. */
+body.workspace-ready #main-header {
+    display: block !important;
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 2300;
+}
+body.workspace-ready #main-header .header-content { flex-wrap: wrap; gap: 10px; }
+body.workspace-ready #header-left { min-width: 0; max-width: 100%; flex-shrink: 1; }
+body.workspace-ready #main-shop-title { min-width: 0; overflow-wrap: anywhere; }
+body.workspace-ready #header-center { min-width: 0; }
+body.workspace-ready #chat-widget-container { display: block !important; z-index: 2300; }
+body.workspace-ready #chat-widget-container #chat-toggle-button { display: flex !important; }
+body.workspace-ready #detail-modal-overlay .modal-content { max-height: calc(100dvh - var(--workspace-header-height) - 24px) !important; }
+body:has(.modal-overlay.active:not(#detail-modal-overlay)) #main-header,
+body:has(.task-modal-overlay.active) #main-header,
+body:has(.task-detail-modal-overlay.active) #main-header,
+body.ucp-fullscreen-active #main-header,
+body:has(.modal-overlay.active:not(#detail-modal-overlay)) #chat-widget-container,
+body:has(.task-modal-overlay.active) #chat-widget-container,
+body:has(.task-detail-modal-overlay.active) #chat-widget-container,
+body.ucp-fullscreen-active #chat-widget-container { visibility: hidden; }
+@media (max-width: 480px) {
+    body.workspace-ready #main-header .header-content { padding: 8px 10px; }
+    body.workspace-ready #header-center { order: 3; flex-basis: 100%; }
+    body.workspace-ready #header-right { margin-left: auto; }
+    body.workspace-ready #header-left { flex: 1; }
+    body.workspace-ready #presentation-header { padding: 12px; }
+}

@@ -1,6 +1,7 @@
 // REPLACE THE ENTIRE CONTENTS OF: chat.js
 
 import { state, setState } from './state.js';
+import { taskMessageText } from './utils/taskDiscussion.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
 import { log } from './utils/debug.js';
@@ -606,11 +607,6 @@ async function createTaskFromMessage(messageId, content) {
 
         const newTask = await api.createTask(projectId, taskData);
         if (newTask) {
-            // Update local state
-            state.tasks.all.set(newTask.id, newTask);
-            const existingTasks = state.tasks.byProject.get(projectId) || [];
-            state.tasks.byProject.set(projectId, [...existingTasks, newTask]);
-
             // Save comment-to-task link for persistence
             if (messageId) {
                 const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
@@ -1220,6 +1216,7 @@ let editingMessage = null;
  * Enhanced addMessageToUI with reactions, edit/delete, thread support, and component tags
  */
 function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmin, messageId, senderId, options = {}) {
+    message = taskMessageText(message);
     const { reactions = {}, isEdited = false, isDeleted = false, replyCount = 0, parentMessageId = null, isReply = false, componentInfo = null } = options;
 
     // Skip deleted messages

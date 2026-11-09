@@ -1,12 +1,18 @@
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
-const { DEFAULT_FROM, buildFrom, fetchStoreName } = require('./utils/email-config');
+const { buildFrom, fetchStoreName } = require('./utils/email-config');
+const { loadPlanSnapshot, buildSnapshotEmailParts } = require('./utils/plan-snapshot-email');
+const { escapeHtml } = require('./utils/checkout-emails');
 
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
 
 // Notification type templates
 const NOTIFICATION_TEMPLATES = {
+  plan_updated: {
+    subject: data => `Plan updated: "${data.sessionName}"`,
+    html: data => `<p>Hi ${data.recipientName},</p><p><strong>${data.senderName}</strong> shared an update to <strong>${data.sessionName}</strong>.</p><p>${data.content}</p><p><a href="${data.viewPlanUrl}">Open the latest plan</a></p>`
+  },
   message: {
     subject: (data) => `New Message in your plan: "${data.sessionName}"`,
     html: (data) => `
@@ -133,30 +139,25 @@ exports.handler = async (event) => {
     const baseUrl = SITE_URL || URL;
     const viewPlanUrl = `${baseUrl}/?session=${sessionId}`;
 
-    const notificationsToSend = users
-      .filter(user =>
-        user.fields.NotificationFrequency === 'Real-Time' &&
-        user.fields.Email &&
-        user.id !== SenderID
-      )
-      .map(user => {
-        const templateData = {
-          recipientName: user.fields.Name || 'there',
-          senderName: SenderName,
-          sessionName,
-          content: cleanContent,
-          viewPlanUrl,
-          rsvpType: rsvpType || 'Yes',
-          taskAction: taskAction || 'updated a task'
-        };
-
-        return sgMail.send({
-          to: user.fields.Email,
-          from: emailFrom,
-          subject: template.subject(templateData),
-          html: template.html(templateData)
-        });
+    const recipients = users.filter(user =>
+      user.fields.NotificationFrequency === 'Real-Time' && user.fields.Email && user.id !== SenderID
+    );
+    // Fetch once per email batch, even if the sender never opened item/task panels.
+    const snapshot = recipients.length ? buildSnapshotEmailParts(await loadPlanSnapshot(session)) : null;
+    const notificationsToSend = recipients.map(user => {
+      const templateData = {
+        recipientName: user.fields.Name || 'there', senderName: SenderName, sessionName,
+        content: cleanContent, viewPlanUrl, rsvpType: rsvpType || 'Yes', taskAction: taskAction || 'updated a task'
+      };
+      const safeData = Object.fromEntries(Object.entries(templateData).map(([key, value]) => [key, escapeHtml(value)]));
+      return sgMail.send({
+        to: user.fields.Email, from: emailFrom,
+        subject: template.subject(templateData),
+        html: template.html(safeData) + snapshot.html,
+        text: `Hi ${templateData.recipientName},\n${SenderName || 'Someone'} shared an update in ${sessionName}:\n${cleanContent}\n\n${snapshot.text}\n\nView plan: ${viewPlanUrl}`,
+        ...(snapshot.attachments ? { attachments: snapshot.attachments } : {})
       });
+    });
 
     await Promise.all(notificationsToSend);
 

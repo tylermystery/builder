@@ -3,6 +3,7 @@
 // Slides in from the right side, parallel to the presentation view
 
 import { state, getRecordById } from '../state.js';
+import { taskMessageText } from '../utils/taskDiscussion.js';
 import { log } from '../utils/debug.js';
 import { computeDemocraticAverage, convertMessageReactions } from '../config.js';
 import * as api from '../api.js';
@@ -452,7 +453,7 @@ export function initializeForumPanel() {
 
     // Close on escape key
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && panel && panel.classList.contains('open')) {
+        if (e.key === 'Escape' && !document.body.classList.contains('workspace-ready') && panel && panel.classList.contains('open')) {
             hideForumPanel();
         }
     });
@@ -483,6 +484,7 @@ export function initializeForumPanel() {
  */
 export async function showForumPanel(options = {}) {
     const { skipPushState = false, filter = null, componentId = null } = options;
+    document.dispatchEvent(new CustomEvent('workspace-panel-opening', { detail: { surface: 'right', panel: 'forum' } }));
     const panel = document.getElementById('forum-panel');
     const overlay = document.getElementById('forum-panel-overlay');
 
@@ -762,7 +764,7 @@ function createMessageObject(record) {
         id: record.id,
         senderId: fields.SenderID,
         senderName: fields.SenderName || 'Anonymous',
-        content: content,
+        content: taskMessageText(content),
         timestamp: timestamp,
         parentMessageId: fields.ParentMessageID,
         reactions: parseReactions(fields.Reactions),

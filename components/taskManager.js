@@ -5,11 +5,14 @@
 // Provides task management interface for a selected project
 
 import { state, setState } from '../state.js';
+import { loadProjectTasks } from '../utils/projectTasks.js';
 import { log } from '../utils/debug.js';
 import * as api from '../api.js';
 import { showToast } from '../ui.js';
 import { triggerSave } from '../events.js';
 import { showDetailModal } from './modal.js';
+import { mountTaskDiscussion } from './taskDiscussion.js';
+import { getCurrentUser } from '../chat.js';
 import {
     initializeRealtimeUpdates,
     cleanupRealtimeUpdates,
@@ -25,6 +28,7 @@ let currentProjectId = null;
 let currentTasks = [];
 let editingTaskId = null;
 let sortableInstances = []; // Track SortableJS instances for cleanup
+let disposeTaskDiscussion = null;
 let sourceMessageId = null; // Track the message ID that triggered task creation from chat
 
 /**
@@ -63,7 +67,7 @@ export async function initTaskManager(containerId, projectId) {
         // Fetch tasks for this project
         console.log('[TaskManager DEBUG] Starting api.fetchTasks() call...');
         const fetchStartTime = performance.now();
-        const tasks = await api.fetchTasks(projectId);
+        const tasks = await loadProjectTasks(projectId, api.fetchTasks, { force: true });
         const fetchEndTime = performance.now();
         console.log(`[TaskManager DEBUG] api.fetchTasks() completed in ${(fetchEndTime - fetchStartTime).toFixed(2)}ms`);
         console.log('[TaskManager DEBUG] Tasks fetched:', { count: tasks?.length ?? 'null/undefined', tasks });
@@ -601,7 +605,11 @@ function handleTaskClick(e) {
             showToast('You have view-only access to this project', 3000);
             return;
         }
-        // Still allow clicking on task card to view details but not edit
+        // Viewers can inspect the task and participate in its conversation.
+        if (taskCard && !e.target.closest('.task-checkbox')) {
+            const task = state.tasks.all.get(taskCard.dataset.taskId);
+            if (task) showTaskModal(task);
+        }
         return;
     }
 
@@ -676,7 +684,10 @@ async function handleCheckboxChange(e) {
  * @param {Object|null} task - Task to edit, or null for new task
  */
 export function showTaskModal(task = null, projectId = null, messageId = null) {
-    editingTaskId = task ? task.id : null;
+    disposeTaskDiscussion?.();
+    document.getElementById('task-modal-overlay')?.remove();
+    const previousFocus = document.activeElement;
+    editingTaskId = task?.id || null;
     sourceMessageId = messageId; // Store message ID for linking after creation
     const isEditing = !!editingTaskId;
     const fields = task?.fields || {};
@@ -691,9 +702,10 @@ export function showTaskModal(task = null, projectId = null, messageId = null) {
     });
 
     // Allow external callers to specify project context
-    if (projectId && !currentProjectId) {
-        currentProjectId = projectId;
-    }
+    currentProjectId = projectId || fields.ProjectId?.[0] || state.session.id || currentProjectId;
+    const canUserEdit = state.session.isOwned === true ||
+        (state.permissions?.isLoading === false && api.canEdit(state.permissions.currentRole));
+    const readOnly = isEditing && !canUserEdit;
 
     // Build plan items dropdown options (locked items + ideas from the current plan)
     const planItemsOptions = buildPlanItemsOptions(linkedItemId);
@@ -706,10 +718,10 @@ export function showTaskModal(task = null, projectId = null, messageId = null) {
     // Create modal HTML
     const modalHtml = `
         <div id="task-modal-overlay" class="task-modal-overlay">
-            <div class="task-modal">
+            <div class="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-modal-title" tabindex="-1">
                 <div class="task-modal-header">
-                    <h3>${isEditing ? 'Edit Task' : 'New Task'}</h3>
-                    <button class="task-modal-close" id="task-modal-close">&times;</button>
+                    <h3 id="task-modal-title">${isEditing ? (readOnly ? 'View Task' : 'Edit Task') : 'New Task'}</h3>
+                    <button class="task-modal-close" id="task-modal-close" aria-label="Close task">&times;</button>
                 </div>
                 <form id="task-form" class="task-form">
                     <div class="task-form-group">
@@ -774,6 +786,7 @@ export function showTaskModal(task = null, projectId = null, messageId = null) {
                         <button type="submit" class="task-save-btn">${isEditing ? 'Save Changes' : 'Create Task'}</button>
                     </div>
                 </form>
+                ${isEditing ? '<section class="task-discussion" aria-label="Task discussion"></section>' : '<p class="task-discussion-hint">Save the task to add replies and reactions.</p>'}
             </div>
         </div>
     `;
@@ -789,15 +802,40 @@ export function showTaskModal(task = null, projectId = null, messageId = null) {
 
     // Setup collaborator chip input
     setupCollaboratorInput();
+    if (readOnly) {
+        form.querySelectorAll('input, textarea, select, button').forEach(el => {
+            if (el !== cancelBtn) el.disabled = true;
+        });
+        form.querySelector('.task-save-btn').hidden = true;
+        cancelBtn.textContent = 'Close';
+    }
+    const cleanupDiscussion = isEditing ? mountTaskDiscussion(
+        overlay.querySelector('.task-discussion'), task, currentProjectId, getCurrentUser,
+        () => window.dispatchEvent(new CustomEvent('task-discussion-updated'))
+    ) : null;
+    disposeTaskDiscussion = cleanupDiscussion;
 
     // Close modal handlers
     const closeModal = () => {
+        cleanupDiscussion?.();
+        disposeTaskDiscussion = null;
         overlay.classList.remove('active');
+        previousFocus?.focus();
         setTimeout(() => overlay.remove(), 300);
         editingTaskId = null;
         sourceMessageId = null;
     };
 
+    overlay.addEventListener('keydown', event => {
+        if (event.key === 'Escape') { event.stopPropagation(); closeModal(); }
+        if (event.key !== 'Tab') return;
+        const focusable = [...overlay.querySelectorAll('button, input, textarea, select, [tabindex="0"]')]
+            .filter(el => !el.disabled && !el.hidden && el.getClientRects().length);
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    });
     closeBtn.addEventListener('click', closeModal);
     cancelBtn.addEventListener('click', closeModal);
     overlay.addEventListener('click', (e) => {
@@ -807,7 +845,7 @@ export function showTaskModal(task = null, projectId = null, messageId = null) {
     // Form submit handler
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        await handleTaskSubmit(form, closeModal);
+        if (!readOnly) await handleTaskSubmit(form, closeModal);
     });
 
     // Setup status indicator color sync
@@ -833,7 +871,7 @@ export function showTaskModal(task = null, projectId = null, messageId = null) {
     });
 
     // Focus on name input
-    document.getElementById('task-name').focus();
+    (readOnly ? closeBtn : document.getElementById('task-name')).focus();
 }
 
 /**
@@ -1189,7 +1227,7 @@ async function refreshTaskList() {
     cleanupSortables();
 
     try {
-        const apiTasks = await api.fetchTasks(currentProjectId);
+        const apiTasks = await loadProjectTasks(currentProjectId, api.fetchTasks, { force: true });
 
         // Merge API results with locally-known tasks to prevent data loss
         // This handles the case where the server-side filter fails or returns incomplete results

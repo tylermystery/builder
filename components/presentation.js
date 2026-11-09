@@ -12,6 +12,7 @@
  * Phase 6 of the Presentation View Architecture Overhaul.
  */
 
+import { loadProjectTasks } from '../utils/projectTasks.js';
 import { state, setState, getRecordById, getAggregateReactions } from '../state.js';
 import * as api from '../api.js';
 import { CONSTANTS, EMOJI_TIERS, REACTION_SCORES, computeDemocraticAverage } from '../config.js';
@@ -27,7 +28,7 @@ import { showToast } from '../ui.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 import { getComponentMessageReactions } from './forumPanel.js';
 import { initializeToastNotifications } from './toastNotifications.js';
-import { initializeUnifiedChatPanel, showUnifiedChatPanel, hideUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage } from './unifiedChatPanel.js';
+import { initializeUnifiedChatPanel, showUnifiedChatPanel, setUCPGetCurrentUser, setUCPSendMessage } from './unifiedChatPanel.js';
 import { initVitalityUI, cleanupVitalityUI, refreshFlowLines } from '../vitality/vitalityUI.js';
 import { requestVitalityRecalc, recalculateVitality } from '../vitality/vitalityEngine.js';
 import { openActionMenu, closeActionMenu, isActionMenuOpen, registerActionHandler } from './actionMenu.js';
@@ -396,7 +397,7 @@ function initializeAccordions() {
 // ============================================
 
 function handleKeyDown(e) {
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' && !document.body.classList.contains('workspace-ready')) {
         updateUrl({ view: null });
         hidePresentationView();
     }
@@ -415,7 +416,7 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Parallelize independent async operations: permissions + tasks fetch
     const projectId = state.session.id;
     const needsPermissions = state.permissions?.isLoading !== false && state.session.id && state.session.user?.isAuthenticated && state.session.user?.id;
-    const needsTasks = projectId && !state.tasks.byProject.has(projectId);
+    const needsTasks = !!projectId;
 
     const parallelPromises = [];
 
@@ -446,15 +447,7 @@ export async function showPresentationView(listType, startRecordId = null) {
 
     if (needsTasks) {
         parallelPromises.push(
-            api.fetchTasks(projectId)
-                .then(tasks => {
-                    if (Array.isArray(tasks)) {
-                        tasks.forEach(task => {
-                            state.tasks.all.set(task.id, task);
-                        });
-                        state.tasks.byProject.set(projectId, tasks);
-                    }
-                })
+            loadProjectTasks(projectId, api.fetchTasks)
                 .catch(error => {
                     console.error('[Presentation] Error fetching tasks:', error);
                 })
@@ -476,11 +469,10 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Initialize toast notification system
     initializeToastNotifications({ getCurrentUser });
 
-    // Initialize and show the Unified Chat Panel
+    // Initialize the shared rail without changing its workspace open state
     setUCPGetCurrentUser(getCurrentUser);
     setUCPSendMessage(sendChatMessage);
     initializeUnifiedChatPanel();
-    showUnifiedChatPanel();
 
     // Initialize the Universal Vitality UI system
     initVitalityUI();
@@ -585,8 +577,7 @@ export function hidePresentationView() {
         setState({ stream: { ...state.stream, joinedFromViewer: false } });
     }
 
-    // Hide the Unified Chat Panel
-    hideUnifiedChatPanel();
+    // The conversation rail belongs to the workspace, not this central view.
 
     // Stop the background animation
     backgroundEngine.stopAnimation();

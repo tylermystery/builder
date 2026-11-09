@@ -1251,11 +1251,6 @@ function showCreateTaskFromCommentPopup(commentId, commentContent, componentId, 
             if (newTask) {
                 console.log('[CreateTaskFromComment DEBUG] \u2705 Task created successfully:', newTask.id);
 
-                // Update local state
-                state.tasks.all.set(newTask.id, newTask);
-                const existingTasks = state.tasks.byProject.get(projectId) || [];
-                state.tasks.byProject.set(projectId, [...existingTasks, newTask]);
-
                 // IMPORTANT: Persist the comment-to-task link so it survives page refresh
                 // Since Airtable Tasks table doesn't have SourceCommentId field, we store this mapping in session data
                 if (saveCommentTaskLink) {

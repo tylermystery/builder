@@ -9817,7 +9817,7 @@ hr.total-divider {
     color: #dc3545;
 }
 
-/* Task Modal */
+/* Task dialogs sit above both docked and fullscreen conversation panels. */
 .task-modal-overlay {
     position: fixed;
     top: 0;
@@ -9828,7 +9828,7 @@ hr.total-divider {
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 1100;
+    z-index: 10020;
     opacity: 0;
     transition: opacity 0.3s ease;
 }
@@ -20852,4 +20852,27 @@ body.presentation-active .rsb-layout-toggle-fab {
     #checkout-modal-overlay.active .checkout-deposit {
         break-inside: avoid;
     }
+}
+
+/* Task discussion shares the task dialog's scroll area and existing form palette. */
+.task-discussion { padding: 0 24px 24px; border-top: 1px solid #e9ecef; color: #343a40; }
+.task-discussion h4 { margin: 20px 0 8px; }
+.task-discussion-summary, .task-discussion-status, .task-discussion-hint { font-size: .85rem; color: #606970; }
+.task-discussion-hint { padding: 0 24px 20px; }
+.task-discussion-message { padding: 12px 0; border-bottom: 1px solid #e9ecef; overflow-wrap: anywhere; }
+.task-discussion-message time, .task-discussion-message small { display: block; color: #606970; font-size: .75rem; margin-top: 4px; }
+.task-discussion-message p { white-space: pre-wrap; margin: 8px 0; }
+.task-discussion-reactions { display: flex; flex-wrap: wrap; gap: 6px; }
+.task-discussion button { min-height: 36px; padding: 6px 10px; border: 1px solid #d8dde2; border-radius: 8px; background: #f8f9fa; color: #343a40; cursor: pointer; }
+.task-discussion button[aria-pressed="true"] { background: #e6f1ff; border-color: #7da9d9; }
+.task-discussion button:disabled { opacity: .55; cursor: default; }
+.task-discussion button:focus-visible, .task-discussion textarea:focus-visible { outline: 2px solid #3978b9; outline-offset: 2px; }
+.task-discussion-composer { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.task-discussion-composer span { flex: 1; font-size: .85rem; align-self: center; }
+.task-discussion-composer textarea { flex: 1 0 100%; width: 100%; box-sizing: border-box; padding: 10px; font: inherit; border: 1px solid #ced4da; border-radius: 8px; resize: vertical; }
+.task-discussion-composer button[type="submit"] { margin-left: auto; background: #356fa9; color: white; }
+@media (max-width: 768px) {
+    .task-modal-overlay { box-sizing: border-box; padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
+    .task-modal-overlay .task-modal { width: 100%; max-height: 100%; max-height: calc(100dvh - 32px); overscroll-behavior: contain; }
+    .task-discussion button { min-height: 44px; }
 }
