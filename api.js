@@ -2485,6 +2485,7 @@ export async function fetchChatMessages(sessionId, { throwOnError = false } = {}
         // A full fetch of the plan's messages is the authoritative answer to "which
         // conversations exist", so deleted threads stop counting against the background.
         syncChatThreadsFromMessages(sessionId, data.records);
+        globalThis.dispatchEvent?.(new CustomEvent('plan-messages-loaded', { detail: { sessionId, records: data.records } })); // open chat/task counts
         return data.records;
     } catch (error) {
         log('API', `Error fetching chat messages: ${error.message}`);
@@ -2530,6 +2531,7 @@ async function fetchChatMessagesWithClientSideFilter(sessionId, { throwOnError =
         log('API', `Fetched ${filteredMessages.length} chat messages for session ${sessionId} (client-side filter).`);
 
         syncChatThreadsFromMessages(sessionId, filteredMessages);
+        globalThis.dispatchEvent?.(new CustomEvent('plan-messages-loaded', { detail: { sessionId, records: filteredMessages } })); // open chat/task counts
         return filteredMessages;
     } catch (error) {
         console.error('[CHAT DEBUG] Client-side filter error:', error.message);
@@ -2698,6 +2700,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content, 
         registerChatThread(sessionId, fields);
 
         // Return the new message record ID so caller can update UI
+        globalThis.dispatchEvent?.(new CustomEvent('plan-chat-activity')); // refresh open chat/task counts
         return newMessageRecordId;
     } catch (error) {
         console.error("CRITICAL: Failed to save chat message to database.", error);
@@ -2838,6 +2841,7 @@ export async function updateChatMessageItemLink(messageId, itemId) {
 
         const result = await response.json();
         log('API', `Message ${messageId} Item Link updated successfully`);
+        globalThis.dispatchEvent?.(new CustomEvent('plan-chat-activity')); // refresh open chat/task counts
         return result;
     } catch (error) {
         log('API', `Error updating message Item Link: ${error.message}`);
@@ -2905,6 +2909,7 @@ export async function deleteChatMessage(messageId, senderId) {
                 if (deleteResponse.ok) {
                     console.log('[deleteChatMessage DEBUG] ✅ Hard delete successful');
                     log('API', `Message ${messageId} hard-deleted successfully`);
+                    globalThis.dispatchEvent?.(new CustomEvent('plan-chat-activity')); // refresh open chat/task counts
                     return true;
                 } else {
                     const deleteError = await deleteResponse.json();
@@ -2919,6 +2924,7 @@ export async function deleteChatMessage(messageId, senderId) {
 
         console.log('[deleteChatMessage DEBUG] ✅ Soft delete successful');
         log('API', `Message ${messageId} deleted successfully`);
+        globalThis.dispatchEvent?.(new CustomEvent('plan-chat-activity')); // refresh open chat/task counts
         return true;
     } catch (error) {
         console.log('[deleteChatMessage DEBUG] ❌ Exception:', error.message);
@@ -3008,6 +3014,7 @@ export async function clearChatMessages(sessionId) {
     }
 
     log('API', `Chat clear complete: ${success} succeeded, ${failed} failed`);
+    globalThis.dispatchEvent?.(new CustomEvent('plan-chat-activity')); // refresh open chat/task counts
     return { success, failed };
 }
 
@@ -3210,6 +3217,7 @@ export async function postReplyMessage(parentMessageId, sessionId, itemId, sende
 
         const result = await response.json();
         log('API', `Reply posted successfully with ID: ${result.records[0].id}`);
+        globalThis.dispatchEvent?.(new CustomEvent('plan-chat-activity')); // refresh open chat/task counts
         return result.records[0];
     } catch (error) {
         log('API', `Error posting reply: ${error.message}`);
@@ -3394,6 +3402,7 @@ export async function postComponentComment(sessionId, componentType, componentId
             await Promise.allSettled(notificationPromises);
         }
 
+        globalThis.dispatchEvent?.(new CustomEvent('plan-chat-activity')); // refresh open chat/task counts
         return newRecord;
     } catch (error) {
         console.log('[ComponentComment DEBUG] ❌ Exception:', error.message);

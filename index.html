@@ -3538,6 +3538,54 @@ body.ucp-panel-open .unified-chat-panel {
     display: none;
 }
 
+/* Resolved chat threads (no longer counted as open) */
+.ucp-msg.ucp-msg-resolved {
+    opacity: 0.55;
+}
+.ucp-msg.ucp-msg-resolved:hover {
+    opacity: 0.85;
+}
+.ucp-msg.ucp-msg-resolved.ucp-hide-done {
+    display: none;
+}
+.ucp-resolved-badge {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: rgba(40, 167, 69, 0.12);
+    color: #1e7e34;
+    font-size: 0.72em;
+    font-weight: 600;
+}
+.ucp-action-btn.ucp-resolve-btn.is-resolved {
+    color: #1e7e34;
+}
+.ucp-open-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0 0 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: rgba(59, 130, 246, 0.08);
+    font-size: 0.78em;
+    color: #444;
+}
+.ucp-open-summary-tasks {
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    background: #fff;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font: inherit;
+    color: #1d4ed8;
+    cursor: pointer;
+}
+.ucp-open-summary-tasks:hover {
+    background: rgba(59, 130, 246, 0.1);
+}
+
 /* Tasks tab: hide completed group when toggle is active */
 .ucp-tasks-group.ucp-completed-group-hidden {
     display: none;
@@ -4770,10 +4818,51 @@ body.ucp-panel-open .unified-chat-panel {
     margin-left: 4px;
 }
 
+/* Open chats/tasks on the plan (summary box) */
+.plan-open-convo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    font: inherit;
+    font-size: 0.85em;
+    color: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(4px);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+.plan-open-convo-badge:hover,
+.plan-open-convo-badge:focus-visible {
+    background: rgba(59, 130, 246, 0.25);
+    border-color: rgba(147, 197, 253, 0.5);
+}
+.plan-open-convo-badge.has-open {
+    background: rgba(59, 130, 246, 0.22);
+    border-color: rgba(147, 197, 253, 0.45);
+}
+.plan-open-convo-count {
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.95);
+}
+.plan-open-convo-label {
+    opacity: 0.8;
+}
+
 @media (max-width: 600px) {
     .team-count-badge {
         padding: 3px 8px;
         font-size: 0.8em;
+    }
+    .plan-open-convo-badge {
+        padding: 3px 8px;
+        font-size: 0.8em;
+    }
+    .plan-open-convo-label {
+        display: none;
     }
 }
     </style>
@@ -6222,6 +6311,11 @@ body.ucp-panel-open .unified-chat-panel {
                                         <span class="team-count-icon">&#128101;</span>
                                         <span id="team-count-number" class="team-count-number">1</span>
                                     </span>
+                                    <button type="button" id="plan-open-convo-badge" class="plan-open-convo-badge" title="Open chats and tasks on this plan" aria-label="Open chats and tasks on this plan">
+                                        <span class="plan-open-convo-icon" aria-hidden="true">&#128172;</span>
+                                        <span class="plan-open-convo-count">0</span>
+                                        <span class="plan-open-convo-label">open</span>
+                                    </button>
                                     <button id="presentation-account-btn" class="presentation-account-btn collaborator-btn" aria-label="Account settings"></button>
                                     <div id="itinerary-collaborators-list" class="collaborators-list collaborators-inline"></div>
                                     <button id="collaborators-add-share-btn" class="collaborator-btn add-share-btn" title="Add people or share this plan">

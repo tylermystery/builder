@@ -17733,6 +17733,15 @@ hr.total-divider {
     font-size: 0.9em;
 }
 
+/* Card badge highlights when the item has open chats/tasks */
+.reaction-zone-comments-btn.has-open,
+.compact-badge-comment.has-open {
+    background: rgba(59, 130, 246, 0.22);
+    border-color: rgba(147, 197, 253, 0.45);
+    color: rgba(219, 234, 254, 1);
+    font-weight: 600;
+}
+
 /* Hover: brighten summary */
 .compact-card:hover .reaction-zone-summary-text {
     color: rgba(255, 255, 255, 0.6);

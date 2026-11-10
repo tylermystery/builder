@@ -148,6 +148,8 @@ function threadSet() {
 export function registerChatThread(sessionId, fields) {
     try {
         if (!sessionId || sessionId !== state.session?.id) return;
+        // Open chat/task counts refresh on any plan message, not just a thread's first one.
+        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('plan-chat-activity'));
         const threads = threadSet();
         if (!threads) return;
 
