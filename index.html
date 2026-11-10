@@ -1530,6 +1530,30 @@ body.modal-open {
     flex-shrink: 0;
 }
 
+/* Open chats/tasks on a plan row (selecting it opens the plan chat) */
+.wtf-plans-open-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: 12px;
+    background: rgba(59, 130, 246, 0.1);
+    color: #1d4ed8;
+    font: inherit;
+    font-size: 0.75em;
+    font-weight: 600;
+    line-height: 1.4;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+.wtf-plans-open-badge:hover,
+.wtf-plans-open-badge:focus-visible {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.6);
+}
+
 /* Current session styling in WTF Plans list */
 .wtf-plans-item.current-session {
     background-color: #e8f4fd;

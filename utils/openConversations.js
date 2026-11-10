@@ -10,12 +10,15 @@
 // links), so every collaborator sees the same state without a schema change.
 import { state } from '../state.js';
 import { taskMessageId } from './taskDiscussion.js';
+import { getProjectTaskLoadState } from './projectTasks.js';
 
 export const RESOLVED_THREADS_KEY = '_resolvedChatThreads';
 const PLAN_COMMENT_PREFIX = /^\[PLAN_COMMENT:item:([^\]]+)\]/;
 const REFRESH_DELAY_MS = 1200;
+const SNAPSHOT_DELAY_MS = 4000;
 
-let deps = { fetchChatMessages: null, triggerSave: null };
+let deps = { fetchChatMessages: null, triggerSave: null, saveSnapshot: null };
+let snapshotTimer = null;
 let records = [];
 let recordsSessionId = null;
 let refreshTimer = null;
@@ -23,11 +26,13 @@ let listening = false;
 
 function notify() {
     window.dispatchEvent(new CustomEvent('open-conversations-updated'));
+    scheduleSnapshotSave();
 }
 
-export function initOpenConversations({ fetchChatMessages, triggerSave } = {}) {
+export function initOpenConversations({ fetchChatMessages, triggerSave, saveSnapshot } = {}) {
     if (fetchChatMessages) deps.fetchChatMessages = fetchChatMessages;
     if (triggerSave) deps.triggerSave = triggerSave;
+    if (saveSnapshot) deps.saveSnapshot = saveSnapshot;
     if (listening) return;
     listening = true;
     // Any full message fetch (this module's, the conversation panel's, ...) is authoritative.
@@ -165,4 +170,54 @@ export function getOpenCountsForItems(itemIds = []) {
     }
     counts.total = counts.chats + counts.tasks;
     return counts;
+}
+
+// ===== Saved snapshot (used by the plans list for plans that aren't open) =====
+
+/**
+ * The current plan's open counts, or null while its messages or tasks are still
+ * loading (so a partial count is never saved over a good one).
+ */
+export function getOpenConversationSnapshot() {
+    const sessionId = state.session?.id;
+    if (!sessionId || recordsSessionId !== sessionId) return null;
+    if (!getProjectTaskLoadState(sessionId).loaded) return null;
+    const { plan } = getOpenConversationCounts();
+    return { chats: plan.chats, tasks: plan.tasks, total: plan.total, at: new Date().toISOString() };
+}
+
+/** The snapshot to write with a full plan save: fresh when known, otherwise the last saved one. */
+export function getOpenConversationSnapshotForSave() {
+    const fresh = getOpenConversationSnapshot();
+    if (fresh) {
+        state.session.openConversationsSnapshot = fresh;
+        return fresh;
+    }
+    return state.session?.openConversationsSnapshot || undefined;
+}
+
+export function readSavedOpenConversations(planData) {
+    const snap = planData?.openConversations;
+    if (!snap || typeof snap !== 'object') return null;
+    const chats = Number(snap.chats) || 0;
+    const tasks = Number(snap.tasks) || 0;
+    return { chats, tasks, total: chats + tasks, at: snap.at || null };
+}
+
+// When the live count drifts from the saved one (e.g. a new chat arrived), save
+// just the snapshot after things settle, so the plans list stays close to current.
+function scheduleSnapshotSave() {
+    if (!deps.saveSnapshot) return;
+    clearTimeout(snapshotTimer);
+    snapshotTimer = setTimeout(() => {
+        snapshotTimer = null;
+        const sessionId = state.session?.id;
+        const fresh = getOpenConversationSnapshot();
+        if (!sessionId || !fresh) return;
+        const saved = state.session.openConversationsSnapshot;
+        if (saved && saved.chats === fresh.chats && saved.tasks === fresh.tasks) return;
+        Promise.resolve(deps.saveSnapshot(sessionId, fresh)).then(ok => {
+            if (ok && state.session?.id === sessionId) state.session.openConversationsSnapshot = fresh;
+        }).catch(() => {});
+    }, SNAPSHOT_DELAY_MS);
 }

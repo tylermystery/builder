@@ -14,6 +14,7 @@ function harness() {
     const target = { addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn); }, dispatchEvent: (e) => (listeners[e.type] || []).forEach(fn => fn(e)) };
     const context = vm.createContext({
         state, window: target, document: target, setTimeout, clearTimeout,
+        getProjectTaskLoadState: () => ({ loaded: !!state.__tasksLoaded }),
         CustomEvent: class { constructor(type, options = {}) { this.type = type; this.detail = options.detail; } },
         taskMessageId: content => String(content).replace(/^\[PLAN_COMMENT:item:[^\]]+\]\s*/, '').match(/^\[TASK:([^\]]+)\]\s*/)?.[1] || null
     });
@@ -74,4 +75,25 @@ test('ignores messages loaded for another plan', () => {
     const { run, context } = harness();
     run("window.dispatchEvent(new CustomEvent('plan-messages-loaded', { detail: { sessionId: 'plan-b', records: [{ id: 'x', fields: { SenderID: 'u', Content: 'hi' } }] } }))");
     assert.equal(run('getOpenConversationCounts().plan.chats'), 0);
+});
+
+test('snapshot is only produced once messages and tasks are loaded, and falls back to the saved one', () => {
+    const { state, run, load } = harness();
+    state.session.openConversationsSnapshot = { chats: 4, tasks: 1, total: 5 };
+    assert.equal(run('getOpenConversationSnapshot()'), null);
+    assert.equal(run('getOpenConversationSnapshotForSave()').total, 5); // keeps the saved one
+    load([msg('m1')]);
+    assert.equal(run('getOpenConversationSnapshot()'), null);            // tasks not loaded yet
+    state.__tasksLoaded = true;
+    const fresh = run('getOpenConversationSnapshotForSave()');
+    assert.equal(fresh.chats, 1);
+    assert.equal(fresh.total, 1);
+    assert.equal(state.session.openConversationsSnapshot.total, 1);
+});
+
+test('reads saved snapshots defensively', () => {
+    const { run } = harness();
+    assert.equal(run('readSavedOpenConversations({})'), null);
+    assert.equal(run("readSavedOpenConversations({ openConversations: 'x' })"), null);
+    assert.equal(run("readSavedOpenConversations({ openConversations: { chats: 2, tasks: '3' } }).total"), 5);
 });

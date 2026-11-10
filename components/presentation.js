@@ -289,7 +289,7 @@ function ensureDOMElements() {
     };
 
     itemRendering.init(phase4ADeps);
-    openConversationBadges.init({ fetchChatMessages: api.fetchChatMessages, triggerSave });
+    openConversationBadges.init({ fetchChatMessages: api.fetchChatMessages, triggerSave, saveSnapshot: api.saveOpenConversationsSnapshot });
     reactionSummaryBar.init(phase4ADeps);
     cardInteractions.init(phase4ADeps);
     itemActions.init({

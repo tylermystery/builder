@@ -2,6 +2,7 @@
 
 import { state, invalidateRecordsIndex, getRecordById } from './state.js';
 import { upsertProjectTask, removeProjectTask } from './utils/projectTasks.js';
+import { getOpenConversationSnapshotForSave } from './utils/openConversations.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { parseOptions, getShopUrlParam } from './utils.js';
 import { log } from './utils/debug.js';
@@ -738,6 +739,9 @@ export async function loadSessionFromAirtable(sessionId) {
                 state.session.chatThreads = new Set(
                     Array.isArray(savedState.background?.chatThreads) ? savedState.background.chatThreads : []
                 );
+                state.session.openConversationsSnapshot =
+                    savedState.openConversations && typeof savedState.openConversations === 'object'
+                        ? savedState.openConversations : null;
 
                 // Restore combined items: Object<targetId, { sources: Array, hybridData: Object }> -> Map<targetId, { sources: Set, hybridData: Object }>
                 if (savedState.combinedItems && typeof savedState.combinedItems === 'object') {
@@ -883,6 +887,7 @@ export async function loadSessionFromAirtable(sessionId) {
                 state.session.relatedGroups = [];
                 state.session.backgroundSeed = null;
                 state.session.chatThreads = new Set();
+                state.session.openConversationsSnapshot = null;
             }
         } else {
              log('API', `Session ${sessionId} has no 'Items with Variations' data.`);
@@ -1179,6 +1184,8 @@ export async function saveSessionToAirtable() {
                 chatThreads: Array.from(state.session.chatThreads || []),
             }
             : undefined,
+        // Open chat/task count snapshot, read by the plans list for plans that aren't open.
+        openConversations: getOpenConversationSnapshotForSave(),
         ideasItems: Object.fromEntries(state.cart.items),
         lockedInItems: Object.fromEntries(state.cart.lockedItems),
         itemReactions: reactionsForSaving,
@@ -4648,6 +4655,41 @@ function setMemCachedSession(key, data) {
  * @param {string} sessionId - The session record ID
  * @returns {Promise<Object>} The session record
  */
+/**
+ * Save only the open chat/task snapshot into a plan's saved data, leaving
+ * everything else as stored. Skipped while a full save is pending, because that
+ * save carries the snapshot itself.
+ * @returns {Promise<boolean>} whether the snapshot was written
+ */
+export async function saveOpenConversationsSnapshot(sessionId, snapshot) {
+    if (!sessionId || !String(sessionId).startsWith('rec') || !snapshot) return false;
+    if (state.ui?.isInitializing || ['MODIFIED', 'SAVING'].includes(state.ui?.saveState)) return false;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    try {
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+        if (!response.ok) return false;
+        const record = await response.json();
+        const raw = record.fields?.['Items with Variations'];
+        if (!raw) return false; // never create plan data from a snapshot alone
+        const data = JSON.parse(raw);
+        const prior = data.openConversations;
+        if (prior && prior.chats === snapshot.chats && prior.tasks === snapshot.tasks) return true;
+        // A full save may have started while reading; let it carry the snapshot.
+        if (['MODIFIED', 'SAVING'].includes(state.ui?.saveState) || state.session?.id !== sessionId) return false;
+        data.openConversations = snapshot;
+        const patch = await fetch(url, {
+            method: 'PATCH',
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields: { 'Items with Variations': JSON.stringify(data) } })
+        });
+        if (patch.ok) log('API', `Saved open chat/task snapshot for ${sessionId}: ${snapshot.total}`);
+        return patch.ok;
+    } catch (error) {
+        log('API', `Open chat/task snapshot not saved: ${error.message}`);
+        return false;
+    }
+}
+
 export async function fetchSessionById(sessionId) {
     if (!sessionId) {
         return null;

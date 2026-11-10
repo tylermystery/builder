@@ -15,8 +15,8 @@ import { openUCPConversations } from '../unifiedChatPanel.js';
 let initialized = false;
 let frame = null;
 
-export function init({ fetchChatMessages, triggerSave }) {
-    initOpenConversations({ fetchChatMessages, triggerSave });
+export function init({ fetchChatMessages, triggerSave, saveSnapshot }) {
+    initOpenConversations({ fetchChatMessages, triggerSave, saveSnapshot });
     if (initialized) return;
     initialized = true;
 
@@ -33,6 +33,16 @@ export function init({ fetchChatMessages, triggerSave }) {
 export function refresh() {
     scheduleOpenConversationsRefresh(0);
     scheduleUpdate();
+    openChatFromUrl();
+}
+
+// The plans list links to "?openChat=plan" when a plan's open count is selected.
+function openChatFromUrl() {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('openChat') !== 'plan') return;
+    url.searchParams.delete('openChat');
+    window.history.replaceState(window.history.state, '', url.toString());
+    setTimeout(() => openUCPConversations(null), 300);
 }
 
 export function openForItem(recordId) {
