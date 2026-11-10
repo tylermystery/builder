@@ -4860,6 +4860,12 @@ export async function saveOpenConversationsSnapshot(sessionId, snapshot) {
         const raw = record.fields?.['Items with Variations'];
         if (!raw) return false; // never create plan data from a snapshot alone
         const data = JSON.parse(raw);
+        // This device is behind (e.g. a collaborator just linked a chat to a task):
+        // catch up first instead of writing a count based on an older copy.
+        if (state.session?.syncBase && hasMeaningfulDifference(data, state.session.syncBase)) {
+            refreshSessionFromRemote({ reason: 'snapshot' });
+            return false;
+        }
         const prior = data.openConversations;
         if (prior && prior.chats === snapshot.chats && prior.tasks === snapshot.tasks) return true;
         // A full save may have started while reading; let it carry the snapshot.

@@ -11,6 +11,7 @@
 import { state } from '../state.js';
 import { taskMessageId } from './taskDiscussion.js';
 import { getProjectTaskLoadState } from './projectTasks.js';
+import { isPlanReadOnly } from './planAccess.js';
 
 export const RESOLVED_THREADS_KEY = '_resolvedChatThreads';
 const PLAN_COMMENT_PREFIX = /^\[PLAN_COMMENT:item:([^\]]+)\]/;
@@ -24,9 +25,18 @@ let recordsSessionId = null;
 let refreshTimer = null;
 let listening = false;
 
+let notifyQueued = false;
+
+// Announced on the next tick, so links saved right after a task is created (in the
+// same flow) are already in place when listeners read the counts.
 function notify() {
-    window.dispatchEvent(new CustomEvent('open-conversations-updated'));
-    scheduleSnapshotSave();
+    if (notifyQueued) return;
+    notifyQueued = true;
+    setTimeout(() => {
+        notifyQueued = false;
+        window.dispatchEvent(new CustomEvent('open-conversations-updated'));
+        scheduleSnapshotSave();
+    }, 0);
 }
 
 export function initOpenConversations({ fetchChatMessages, triggerSave, saveSnapshot } = {}) {
@@ -44,9 +54,12 @@ export function initOpenConversations({ fetchChatMessages, triggerSave, saveSnap
         records = loaded;
         recordsSessionId = sessionId;
         notify();
+        scheduleLinkRepair();
     });
     window.addEventListener('plan-chat-activity', () => scheduleOpenConversationsRefresh());
-    window.addEventListener('tasks-state-updated', notify);
+    window.addEventListener('tasks-state-updated', () => { notify(); scheduleLinkRepair(); });
+    // A chat was just turned into a task (the link is saved right after the task).
+    window.addEventListener('task-created-from-message', () => setTimeout(notify, 0));
     document.addEventListener('planStateChanged', () => {
         if (recordsSessionId !== state.session?.id) scheduleOpenConversationsRefresh(0);
         else notify();
@@ -115,9 +128,8 @@ export function getOpenConversationCounts() {
     const sessionId = state.session?.id;
     if (!sessionId) return { plan, byItem };
 
-    const links = state.eventDetails.combined.get('_commentTaskLinks') || {};
     const tasks = projectTasks();
-    const taskSources = new Set(tasks.map(task => task.fields?.SourceCommentId).filter(Boolean));
+    const taskThreads = recordsSessionId === sessionId ? getTaskThreadRoots(tasks).roots : new Set();
     const resolved = getResolvedThreads();
 
     if (recordsSessionId === sessionId) {
@@ -129,7 +141,8 @@ export function getOpenConversationCounts() {
             if (itemId) bucket(byItem, itemId).comments++;
 
             if (fields.ParentMessageID) continue; // replies belong to their thread
-            if (links[record.id] || taskSources.has(record.id) || taskMessageId(fields.Content || '')) continue;
+            // A chat turned into a task is the same conversation: its task counts instead.
+            if (taskThreads.has(record.id)) continue;
             if (resolved[record.id]) continue;
             plan.chats++;
             if (itemId) bucket(byItem, itemId).chats++;
@@ -145,6 +158,108 @@ export function getOpenConversationCounts() {
     plan.total = plan.chats + plan.tasks;
     for (const counts of byItem.values()) counts.total = counts.chats + counts.tasks;
     return { plan, byItem };
+}
+
+// ===== Chat ↔ task linking =====
+
+const LEADING_TAGS = /^(?:\s*\[(?:PLAN_COMMENT:item:[^\]]+|TASK:[^\]]+|IDEA)\]\s*)+/;
+const normalize = text => String(text || '').replace(LEADING_TAGS, '').replace(/\s+/g, ' ').trim().toLowerCase();
+const MATCH_SKEW_MS = 2 * 60 * 1000;
+
+function recordTime(record) {
+    return Date.parse(record?.fields?.Timestamp || record?.createdTime || '') || 0;
+}
+
+// Tasks created from a chat copy its text into their name ("first 100 chars…") and
+// description. Used to recognise conversions whose saved link went missing.
+function taskMatchesMessage(task, text) {
+    if (text.length < 3) return false;
+    let name = normalize(task.fields?.Name).replace(/^\[[^\]]*\]\s*/, '');
+    const truncated = name.endsWith('...');
+    if (truncated) name = name.slice(0, -3).trim();
+    if (name.length >= 3 && (truncated ? text.startsWith(name) : text === name || text.slice(0, 100) === name)) return true;
+    const description = normalize(task.fields?.Description);
+    return text.length >= 12 && description.endsWith(text);
+}
+
+/**
+ * Which chat threads are represented by a task.
+ * @returns {{ roots: Set<string>, inferred: Map<string, string> }} thread root ids, and
+ *          links recognised from content only (message id -> task id)
+ */
+export function getTaskThreadRoots(tasks = projectTasks()) {
+    const links = state.eventDetails?.combined?.get('_commentTaskLinks') || {};
+    const taskIds = new Set(tasks.map(task => task.id));
+    const byId = new Map(records.map(record => [record.id, record]));
+    const rootOf = (id) => {
+        let current = byId.get(id);
+        for (let hops = 0; current?.fields?.ParentMessageID && hops < 50; hops++) {
+            const parent = byId.get(current.fields.ParentMessageID);
+            if (!parent) break;
+            current = parent;
+        }
+        return current?.id || id;
+    };
+
+    const linkedTasks = new Set();
+    const roots = new Set();
+    const mark = (messageId, taskId) => {
+        if (!messageId || !taskIds.has(taskId)) return;
+        linkedTasks.add(taskId);
+        roots.add(rootOf(messageId)); // a reply turned into a task covers its whole thread
+    };
+    for (const [messageId, taskId] of Object.entries(links)) mark(messageId, taskId);
+    for (const task of tasks) if (task.fields?.SourceCommentId) mark(task.fields.SourceCommentId, task.id);
+    for (const record of records) {
+        const taskId = taskMessageId(record?.fields?.Content || '');
+        if (taskId) mark(record.id, taskId);
+    }
+
+    // Fallback: match unlinked tasks to the latest unlinked thread that carries their text.
+    const inferred = new Map();
+    const candidates = records.filter(record => record?.fields && !record.fields.IsDeleted &&
+        record.fields.SenderID !== 'system' && !roots.has(rootOf(record.id)));
+    for (const task of tasks) {
+        if (linkedTasks.has(task.id)) continue;
+        const created = Date.parse(task.fields?.CreatedTime || task.createdTime || '') || Infinity;
+        let best = null;
+        for (const record of candidates) {
+            if (roots.has(rootOf(record.id)) || recordTime(record) > created + MATCH_SKEW_MS) continue;
+            if (!taskMatchesMessage(task, normalize(record.fields.Content))) continue;
+            if (!best || recordTime(record) > recordTime(best)) best = record;
+        }
+        if (best) {
+            inferred.set(best.id, task.id);
+            roots.add(rootOf(best.id));
+        }
+    }
+    return { roots, inferred };
+}
+
+let repairTimer = null;
+
+// Save links recognised from content so every view (and every collaborator) treats
+// the chat and its task as one from now on. Only for people who can edit the plan.
+function scheduleLinkRepair() {
+    clearTimeout(repairTimer);
+    repairTimer = setTimeout(() => {
+        repairTimer = null;
+        const sessionId = state.session?.id;
+        if (!sessionId || recordsSessionId !== sessionId || !deps.triggerSave) return;
+        if (!state.session.user?.isAuthenticated || isPlanReadOnly()) return;
+        if (!getProjectTaskLoadState(sessionId).loaded) return;
+        const { inferred } = getTaskThreadRoots();
+        if (inferred.size === 0) return;
+        const links = { ...(state.eventDetails.combined.get('_commentTaskLinks') || {}) };
+        for (const [messageId, taskId] of inferred) {
+            links[messageId] = taskId;
+            const task = state.tasks.all.get(taskId);
+            if (task?.fields && !task.fields.SourceCommentId) task.fields.SourceCommentId = messageId;
+        }
+        state.eventDetails.combined.set('_commentTaskLinks', links);
+        deps.triggerSave();
+        window.dispatchEvent(new CustomEvent('open-conversations-updated'));
+    }, 1500);
 }
 
 export function describeOpenCounts(counts, { emptyLabel = 'No open chats or tasks' } = {}) {

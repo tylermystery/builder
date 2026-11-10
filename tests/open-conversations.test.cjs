@@ -15,6 +15,7 @@ function harness() {
     const context = vm.createContext({
         state, window: target, document: target, setTimeout, clearTimeout,
         getProjectTaskLoadState: () => ({ loaded: !!state.__tasksLoaded }),
+        isPlanReadOnly: () => false,
         CustomEvent: class { constructor(type, options = {}) { this.type = type; this.detail = options.detail; } },
         taskMessageId: content => String(content).replace(/^\[PLAN_COMMENT:item:[^\]]+\]\s*/, '').match(/^\[TASK:([^\]]+)\]\s*/)?.[1] || null
     });
@@ -96,4 +97,41 @@ test('reads saved snapshots defensively', () => {
     assert.equal(run('readSavedOpenConversations({})'), null);
     assert.equal(run("readSavedOpenConversations({ openConversations: 'x' })"), null);
     assert.equal(run("readSavedOpenConversations({ openConversations: { chats: 2, tasks: '3' } }).total"), 5);
+});
+
+test('a chat turned into a task counts once, even when the task came from a reply', () => {
+    const { state, run, load } = harness();
+    state.tasks.byProject.set('plan-a', [{ id: 't1', fields: { Status: 'pending' } }]);
+    state.eventDetails.combined.set('_commentTaskLinks', { r1: 't1' });
+    load([msg('m1', { Content: 'Book the boat' }), msg('r1', { ParentMessageID: 'm1', Content: 'I will do it' })]);
+    const { plan } = run('getOpenConversationCounts()');
+    assert.equal(plan.chats, 0);
+    assert.equal(plan.total, 1);
+});
+
+test('chats converted to tasks whose saved link is missing are recognised, and the link is repaired', async () => {
+    const { state, run, load } = harness();
+    state.session.user = { isAuthenticated: true };
+    state.__tasksLoaded = true;
+    const long = 'Call the venue about parking for the whole group and confirm the arrival time with them before Friday please ok';
+    state.tasks.byProject.set('plan-a', [
+        { id: 't1', createdTime: '2026-11-10T10:05:00Z', fields: { Name: 'Book the boat', Description: 'From comment by Ann: Book the boat', Status: 'pending' } },
+        { id: 't2', createdTime: '2026-11-10T10:06:00Z', fields: { Name: long.slice(0, 100) + '...', Status: 'in_progress' } },
+        { id: 't3', createdTime: '2026-11-10T10:07:00Z', fields: { Name: 'Unrelated task', Status: 'pending' } }
+    ]);
+    load([
+        msg('m1', { Content: 'Book the boat', Timestamp: '2026-11-10T10:00:00Z' }),
+        msg('m2', { Content: `[PLAN_COMMENT:item:custom-1] ${long}`, Timestamp: '2026-11-10T10:01:00Z' }),
+        msg('m3', { Content: 'Still an open question', Timestamp: '2026-11-10T10:02:00Z' }),
+        msg('m4', { Content: 'Book the boat', Timestamp: '2026-11-10T11:00:00Z' }) // posted after the task: not its source
+    ]);
+    const { plan } = run('getOpenConversationCounts()');
+    assert.equal(plan.tasks, 3);
+    assert.equal(plan.chats, 2); // m3 and m4
+    assert.equal(plan.total, 5);
+    await new Promise(r => setTimeout(r, 1700));
+    const links = state.eventDetails.combined.get('_commentTaskLinks');
+    assert.equal(links.m1, 't1');
+    assert.equal(links.m2, 't2');
+    assert.equal(run('globalThis.__saves'), 1);
 });
