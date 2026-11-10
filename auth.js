@@ -4,6 +4,7 @@ import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
 import { getTempRsvps, setTempRsvps } from './utils.js';
 import * as api from './api.js';
+import { showToast } from './ui.js';
 import * as backgroundEngine from './components/backgroundEngine.js';
 
 import fractalEffect from './components/effects/fractal.js';
@@ -34,14 +35,14 @@ const effects = [
 ];
 
 // Refactored function to handle a successful login from any method
-async function _handleSuccessfulLogin(payload) {
+async function _handleSuccessfulLogin(payload, { associateSession = true } = {}) {
     console.log(`[LOGIN-ASSOC] ========== _handleSuccessfulLogin START ==========`);
     console.log(`[LOGIN-ASSOC] User: ${payload.user?.email} (ID: ${payload.user?.id})`);
     console.log(`[LOGIN-ASSOC] Current state.session.id: ${state.session.id}`);
     log('Auth', `Login successful for user: ${payload.user?.email}`);
 
     // Associate the current session with the logged-in user (if a session exists)
-    if (state.session.id) {
+    if (state.session.id && associateSession) {
         console.log(`[LOGIN-ASSOC] Session ${state.session.id} exists, associating with user ${payload.user.id}...`);
         await api.associateSessionWithUser(state.session.id, payload.user.id);
         console.log(`[LOGIN-ASSOC] Association complete for existing session.`);
@@ -626,6 +627,9 @@ export function handleSignOut() {
     localStorage.removeItem('jwt');
     localStorage.removeItem('tempLikes'); // Clear any temporary likes on sign out
     localStorage.removeItem('tempRsvps'); // Clear any pending guest RSVPs on sign out
+    // Forget the Google (Netlify Identity) session as well, so the next sign-in starts clean.
+    localStorage.removeItem('gotrue.user');
+    try { if (typeof netlifyIdentity !== 'undefined' && netlifyIdentity.currentUser()) netlifyIdentity.logout(); } catch (e) { /* not loaded */ }
 
     // Reset user state, including clearing likedItemIds
     setState({
@@ -778,304 +782,200 @@ export function setupAuthEventListeners() {
         });
     }
 
-    // Netlify Identity SSO Setup
-    if (typeof netlifyIdentity !== 'undefined') {
-        console.log('[Google-SSO] Netlify Identity already loaded, initializing immediately');
-        initializeNetlifyIdentity();
-    } else {
-        // Try to load Netlify Identity if the loader is available
-        console.log('[Google-SSO] Netlify Identity not yet loaded, attempting to load...');
-        if (typeof window.loadNetlifyIdentity === 'function') {
-            console.log('[Google-SSO] loadNetlifyIdentity function available, calling it...');
-            window.loadNetlifyIdentity().then(() => {
-                if (typeof netlifyIdentity !== 'undefined') {
-                    console.log('[Google-SSO] Netlify Identity loaded via loadNetlifyIdentity');
-                    initializeNetlifyIdentity();
-                } else {
-                    console.error('[Google-SSO] Netlify Identity failed to load via loadNetlifyIdentity');
-                }
-            }).catch(err => {
-                console.error('[Google-SSO] Error loading Netlify Identity:', err);
-            });
-        } else {
-            console.log('[Google-SSO] No loadNetlifyIdentity function, waiting for window load event');
-            // Wait for the script to load
-            window.addEventListener('load', () => {
-                if (typeof netlifyIdentity !== 'undefined') {
-                    console.log('[Google-SSO] Netlify Identity available after window load');
-                    initializeNetlifyIdentity();
-                } else if (typeof window.loadNetlifyIdentity === 'function') {
-                    console.log('[Google-SSO] loadNetlifyIdentity available after window load, calling...');
-                    window.loadNetlifyIdentity().then(() => {
-                        if (typeof netlifyIdentity !== 'undefined') {
-                            console.log('[Google-SSO] Netlify Identity loaded after window load');
-                            initializeNetlifyIdentity();
-                        } else {
-                            console.error('[Google-SSO] Netlify Identity still not available after all attempts');
-                        }
-                    });
-                } else {
-                    console.error('[Google-SSO] No way to load Netlify Identity - SSO will not be available');
-                }
-            });
-        }
+    // Google sign-in (Netlify Identity)
+    setupGoogleSignIn();
+}
+
+
+// ============================================
+// GOOGLE SIGN-IN (Netlify Identity)
+// ============================================
+//
+// Flow: the button sends the browser to this site's own /.netlify/identity/authorize
+// endpoint → Google → back to this site with #access_token. The Identity widget reads
+// that token, and /api/auth-social exchanges it for the app's own sign-in token (same
+// account as email sign-in, matched by email). Afterwards the visitor returns to the
+// page they started from.
+//
+// Every site address (custom domain, netlify.app, deploy previews) uses its own
+// Identity endpoint, so Google always hands the visitor back to the address they
+// started on and the sign-in is stored there.
+
+const SSO_RETURN_KEY = 'wtf.ssoReturn';
+const SSO_RETURN_MAX_AGE_MS = 30 * 60 * 1000;
+let googleLoginHandled = false;
+
+function showSigninMessage(text, kind = 'error') {
+    if (!signinMessage) return;
+    signinMessage.textContent = text;
+    signinMessage.style.color = kind === 'error' ? '#dc3545' : (kind === 'success' ? '#28a745' : '#555');
+}
+
+function readSsoReturn() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(SSO_RETURN_KEY) || 'null');
+        if (!saved || Date.now() - saved.at > SSO_RETURN_MAX_AGE_MS) return null;
+        const url = new URL(saved.url);
+        return url.origin === window.location.origin ? saved : null;
+    } catch {
+        return null;
+    }
+}
+
+function friendlySsoError(description = '') {
+    const text = String(description).toLowerCase();
+    if (text.includes('access_denied') || text.includes('denied') || text.includes('cancel')) {
+        return 'Google sign-in was cancelled. You can try again or use your email instead.';
+    }
+    if (text.includes('webhook')) return 'Google sign-in hit a temporary server issue. Please try again.';
+    if (text.includes('signup') && text.includes('disabled')) return 'New accounts can’t be created with Google right now. Please use your email instead.';
+    return 'Google sign-in didn’t finish. Please try again, or use your email instead.';
+}
+
+function setGoogleButtonBusy(busy) {
+    const btn = document.getElementById('google-sso-btn');
+    if (!btn) return;
+    btn.disabled = busy;
+    btn.setAttribute('aria-busy', String(busy));
+    const label = btn.querySelector('.sso-btn-label');
+    if (label) label.textContent = busy ? 'Connecting to Google…' : 'Continue with Google';
+}
+
+function setupGoogleSignIn() {
+    const btn = document.getElementById('google-sso-btn');
+    const divider = btn?.previousElementSibling?.classList.contains('sso-divider') ? btn.previousElementSibling : null;
+
+    // Show the button only when Google is switched on in Identity for this site.
+    fetch('/.netlify/identity/settings', { cache: 'no-store' })
+        .then(res => (res.ok ? res.json() : null))
+        .then(settings => {
+            const enabled = !!settings?.external?.google;
+            if (btn) btn.style.display = enabled ? '' : 'none';
+            if (divider) divider.style.display = enabled ? '' : 'none';
+        })
+        .catch(() => { /* Identity unreachable: keep Google hidden; email sign-in still works */ });
+
+    if (btn && !btn.dataset.ssoBound) {
+        btn.dataset.ssoBound = 'true';
+        btn.addEventListener('click', () => {
+            log('Auth', 'Google sign-in started');
+            setGoogleButtonBusy(true);
+            showSigninMessage('', 'info');
+            try {
+                localStorage.setItem(SSO_RETURN_KEY, JSON.stringify({
+                    url: window.location.href.split('#')[0],
+                    sessionId: state.session?.id || null,
+                    at: Date.now()
+                }));
+            } catch { /* storage full or blocked: the visitor just lands on the home page */ }
+            window.location.href = `${window.location.origin}/.netlify/identity/authorize?provider=google`;
+        });
+    }
+
+    // Returning from Google with an error (e.g. the visitor cancelled).
+    if (window._oauthError) {
+        console.warn('[Google-SSO] Sign-in returned an error:', window._oauthError.type);
+        showSigninMessage(friendlySsoError(`${window._oauthError.type} ${window._oauthError.description}`));
+        localStorage.removeItem(SSO_RETURN_KEY);
+        delete window._oauthError;
+        showUserModal();
+    }
+
+    // Returning from Google with a token: let the Identity widget read it.
+    if (window.location.hash.includes('access_token=')) {
+        const start = () => {
+            if (typeof netlifyIdentity !== 'undefined') initializeNetlifyIdentity();
+            else showSigninMessage('Google sign-in couldn’t finish loading. Please try again.');
+        };
+        if (typeof netlifyIdentity !== 'undefined') start();
+        else if (typeof window.loadNetlifyIdentity === 'function') window.loadNetlifyIdentity().then(start).catch(start);
+        else start();
     }
 }
 
 function initializeNetlifyIdentity() {
-    console.log('[Google-SSO] ========== INITIALIZING NETLIFY IDENTITY ==========');
-    log('Auth', 'Initializing Netlify Identity');
+    if (window._wtfIdentityInitialized) return;
+    window._wtfIdentityInitialized = true;
+    log('Auth', 'Initializing Netlify Identity for the Google sign-in callback');
 
-    // Determine the correct API URL - always use production for OAuth redirects
-    const PRODUCTION_SITE_URL = 'https://whatthefunfinder.netlify.app';
-    const CUSTOM_DOMAIN = 'whatthefun.wtf';
-    const currentHost = window.location.hostname;
-    const isDeployPreview = currentHost.includes('--whatthefunfinder.netlify.app') ||
-                            currentHost.includes('deploy-preview') ||
-                            currentHost.includes('agent-');
-    const isProduction = currentHost === 'whatthefunfinder.netlify.app' ||
-                         currentHost === CUSTOM_DOMAIN ||
-                         currentHost === `www.${CUSTOM_DOMAIN}`;
-    const isCustomDomain = currentHost === CUSTOM_DOMAIN || currentHost === `www.${CUSTOM_DOMAIN}`;
+    // Register handlers before init, so the callback's login event is never missed.
+    netlifyIdentity.on('login', (user) => completeGoogleSignIn(user));
+    netlifyIdentity.on('error', (error) => {
+        console.error('[Google-SSO] Identity error:', error?.message || error);
+        localStorage.removeItem(SSO_RETURN_KEY);
+        showSigninMessage(friendlySsoError(error?.message || ''));
+        showUserModal();
+    });
 
-    console.log('[Google-SSO] Current host:', currentHost);
-    console.log('[Google-SSO] Is deploy preview:', isDeployPreview);
-    console.log('[Google-SSO] Is production:', isProduction);
-    console.log('[Google-SSO] Is custom domain:', isCustomDomain);
-
-    // Clear any stale netlifySiteURL from localStorage on production site
-    if (isProduction) {
-        const storedSiteURL = localStorage.getItem('netlifySiteURL');
-        if (storedSiteURL && !storedSiteURL.includes(CUSTOM_DOMAIN) && storedSiteURL !== PRODUCTION_SITE_URL) {
-            localStorage.removeItem('netlifySiteURL');
-        }
-
-        const goTrueUrl = localStorage.getItem('goTrueUrl');
-        if (goTrueUrl && !goTrueUrl.includes(CUSTOM_DOMAIN) && !goTrueUrl.includes('whatthefunfinder.netlify.app')) {
-            localStorage.removeItem('goTrueUrl');
-        }
-    }
-
-    // Build init options
-    const initOptions = {
-        locale: 'en'
-    };
-
-    if (isDeployPreview || isCustomDomain) {
-        // Force API calls to use the Netlify subdomain's identity endpoint
-        initOptions.APIUrl = `${PRODUCTION_SITE_URL}/.netlify/identity`;
-    }
-
-    console.log('[Google-SSO] Init options:', JSON.stringify(initOptions));
-
-    // Force store the correct site URL for OAuth redirects
-    const currentSiteUrl = window.location.origin;
-    if (isProduction) {
-        localStorage.setItem('netlifySiteURL', currentSiteUrl);
-    }
-    console.log('[Google-SSO] Current site URL:', currentSiteUrl);
-    console.log('[Google-SSO] Stored netlifySiteURL:', localStorage.getItem('netlifySiteURL'));
-
-    // Initialize the widget
+    const cameBackWithToken = window.location.hash.includes('access_token=');
     try {
-        netlifyIdentity.init(initOptions);
-        console.log('[Google-SSO] Netlify Identity initialized successfully');
-        console.log('[Google-SSO] gotrue client available after init:', !!netlifyIdentity.gotrue);
-        console.log('[Google-SSO] gotrue API URL:', netlifyIdentity.gotrue?.api?.apiURL);
-        console.log('[Google-SSO] Current user after init:', netlifyIdentity.currentUser()?.email || 'none');
-
-        // Ensure the widget's own modal is closed — we manage our own sign-in UI.
-        // The widget may auto-open on error hashes or certain URL fragments.
+        // Same-origin Identity endpoint (the widget's default).
+        netlifyIdentity.init({ locale: 'en' });
+        // We use our own sign-in UI; never show the widget's modal.
         netlifyIdentity.close();
-
-        // Check if the widget detected an OAuth callback in the URL hash
-        const currentHash = window.location.hash;
-        if (currentHash && currentHash.includes('access_token=')) {
-            console.log('[Google-SSO] WARNING: access_token still in URL hash after init — widget may not have processed the callback yet');
-            console.log('[Google-SSO] The login event should fire shortly if the token is valid');
-        } else if (!currentHash && document.referrer && document.referrer.includes('accounts.google.com')) {
-            console.log('[Google-SSO] Redirected from Google but no hash token — the OAuth flow may have failed at the provider level');
+        // If the widget processed the token before our listener was attached, finish here.
+        if (cameBackWithToken) {
+            setTimeout(() => {
+                const current = netlifyIdentity.currentUser();
+                if (current && !googleLoginHandled) completeGoogleSignIn(current);
+            }, 4000);
         }
     } catch (initError) {
-        console.error('[Google-SSO] Error initializing Netlify Identity:', initError);
-        console.error('[Google-SSO] Init error details:', initError.message, initError.stack);
+        console.error('[Google-SSO] Could not start Identity:', initError);
+        showSigninMessage('Google sign-in couldn’t finish. Please try again.');
     }
+}
 
-    // Set up Google SSO button — redirect directly to Google OAuth via gotrue
-    const googleSsoBtn = document.getElementById('google-sso-btn');
+async function completeGoogleSignIn(user) {
+    if (googleLoginHandled) return;
+    googleLoginHandled = true;
+    const clearHash = () => {
+        if (window.location.hash.includes('access_token=')) {
+            window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+        }
+    };
+    try {
+        const identityToken = user?.token?.access_token;
+        if (!identityToken) throw new Error('missing token');
 
-    if (googleSsoBtn) {
-        googleSsoBtn.addEventListener('click', (event) => {
-            console.log('[Google-SSO] ========== GOOGLE SSO BUTTON CLICKED ==========');
-            log('Auth', 'Google SSO button clicked');
-            try {
-                // Use gotrue client to get the direct OAuth URL, bypassing the widget UI
-                const gotrueClient = netlifyIdentity.gotrue;
-                console.log('[Google-SSO] gotrue client available:', !!gotrueClient);
-                console.log('[Google-SSO] gotrue API URL:', gotrueClient?.api?.apiURL);
-
-                if (gotrueClient && typeof gotrueClient.loginExternalUrl === 'function') {
-                    const googleAuthUrl = gotrueClient.loginExternalUrl('google');
-                    console.log('[Google-SSO] Direct OAuth URL:', googleAuthUrl);
-                    console.log('[Google-SSO] Redirecting to Google OAuth...');
-
-                    // Close the account modal before redirecting
-                    hideUserModal();
-
-                    // Redirect directly to Google's OAuth consent screen
-                    window.location.href = googleAuthUrl;
-                } else {
-                    // Fallback: open the Netlify Identity widget if gotrue client is not available
-                    console.warn('[Google-SSO] gotrue client or loginExternalUrl not available, falling back to widget');
-                    console.log('[Google-SSO] gotrue client type:', typeof gotrueClient);
-                    console.log('[Google-SSO] loginExternalUrl type:', typeof gotrueClient?.loginExternalUrl);
-                    netlifyIdentity.open('login');
-                }
-            } catch (error) {
-                console.error('[Google-SSO] Error initiating Google SSO:', error);
-                console.error('[Google-SSO] Error name:', error.name);
-                console.error('[Google-SSO] Error message:', error.message);
-                console.error('[Google-SSO] Error stack:', error.stack);
-                signinMessage.textContent = "Error opening Google sign-in. Please try again.";
-                signinMessage.style.color = '#dc3545';
-            }
+        const response = await fetch('/api/auth-social', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${identityToken}` }
         });
-    } else {
-        console.warn('[Google-SSO] Google SSO button element not found in DOM');
-    }
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.token) {
+            console.error('[Google-SSO] auth-social failed:', response.status, payload?.error);
+            throw new Error(payload?.error || `auth-social ${response.status}`);
+        }
 
-    // Handle successful login from Netlify Identity (Google OAuth callback)
-    netlifyIdentity.on('login', async (user) => {
-        console.log('[Google-SSO] ========== NETLIFY IDENTITY LOGIN EVENT ==========');
-        console.log('[Google-SSO] Event fired at:', new Date().toISOString());
-        console.log('[Google-SSO] User object present:', !!user);
-        console.log('[Google-SSO] User email:', user?.email);
-        console.log('[Google-SSO] User id:', user?.id);
-        console.log('[Google-SSO] User confirmed_at:', user?.confirmed_at);
-        console.log('[Google-SSO] User app_metadata:', JSON.stringify(user?.app_metadata));
-        console.log('[Google-SSO] User user_metadata:', JSON.stringify(user?.user_metadata));
-        console.log('[Google-SSO] Token object present:', !!user?.token);
-        console.log('[Google-SSO] access_token present:', !!user?.token?.access_token);
-        console.log('[Google-SSO] access_token length:', user?.token?.access_token?.length);
-        console.log('[Google-SSO] token_type:', user?.token?.token_type);
-        console.log('[Google-SSO] expires_at:', user?.token?.expires_at);
-        log('Auth', `Netlify Identity login event for: ${user?.email}`);
+        clearHash();
+        const ret = readSsoReturn();
+        localStorage.removeItem(SSO_RETURN_KEY);
+        // Signing in shouldn't adopt whatever empty plan the landing page opened;
+        // the plan the visitor came from is joined when we take them back to it.
+        const returningElsewhere = ret && ret.url !== window.location.href.split('#')[0];
+        await _handleSuccessfulLogin(payload, { associateSession: !returningElsewhere });
+        try { netlifyIdentity.close(); } catch { /* widget already closed */ }
+        log('Auth', 'Google sign-in complete');
 
-        try {
-            const netlifyJwt = user.token.access_token;
-
-            if (!netlifyJwt) {
-                console.error('[Google-SSO] ERROR: No access_token in user.token — cannot call auth-social');
-                signinMessage.textContent = "Login token missing. Please try again.";
-                signinMessage.style.color = '#dc3545';
-                return;
+        if (returningElsewhere) {
+            if (ret.sessionId) {
+                try { await api.associateSessionWithUser(ret.sessionId, payload.user.id); } catch { /* joined on load anyway */ }
             }
-
-            console.log('[Google-SSO] Calling /api/auth-social with Bearer token...');
-            console.log('[Google-SSO] Token first 20 chars:', netlifyJwt.substring(0, 20) + '...');
-
-            // Call serverless function to get app-specific JWT
-            const response = await fetch('/api/auth-social', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${netlifyJwt}`
-                }
-            });
-
-            console.log('[Google-SSO] auth-social response status:', response.status);
-            console.log('[Google-SSO] auth-social response ok:', response.ok);
-            console.log('[Google-SSO] auth-social response headers:', JSON.stringify(Object.fromEntries(response.headers.entries())));
-
-            const responseText = await response.text();
-            console.log('[Google-SSO] auth-social response body length:', responseText.length);
-
-            if (!response.ok) {
-                console.error('[Google-SSO] auth-social error response body:', responseText);
-                let errorMsg = 'Failed to sync social login.';
-                try {
-                    const errorData = JSON.parse(responseText);
-                    errorMsg = errorData.error || errorMsg;
-                } catch (e) {
-                    console.error('[Google-SSO] Could not parse error response as JSON');
-                }
-                throw new Error(errorMsg);
-            }
-
-            let appPayload;
-            try {
-                appPayload = JSON.parse(responseText);
-            } catch (parseErr) {
-                console.error('[Google-SSO] Failed to parse auth-social success response:', parseErr.message);
-                throw new Error('Invalid response from auth-social');
-            }
-
-            console.log('[Google-SSO] auth-social success. User ID:', appPayload.user?.id);
-            console.log('[Google-SSO] auth-social user email:', appPayload.user?.email);
-
-            await _handleSuccessfulLogin(appPayload);
-            netlifyIdentity.close();
-            console.log('[Google-SSO] ========== GOOGLE SSO LOGIN COMPLETE ==========');
-            log('Auth', 'Google SSO login complete');
-
-        } catch (error) {
-            console.error('[Google-SSO] ========== SSO LOGIN ERROR ==========');
-            console.error('[Google-SSO] Error name:', error.name);
-            console.error('[Google-SSO] Error message:', error.message);
-            console.error('[Google-SSO] Error stack:', error.stack);
-            signinMessage.textContent = `Google sign-in error: ${error.message}`;
-            signinMessage.style.color = '#dc3545';
+            window.location.replace(ret.url);
+            return;
         }
-    });
-
-    // Handle errors
-    netlifyIdentity.on('error', (error) => {
-        console.error('[Google-SSO] ========== NETLIFY IDENTITY ERROR EVENT ==========');
-        console.error('[Google-SSO] Error event fired at:', new Date().toISOString());
-        console.error('[Google-SSO] Error object:', error);
-        console.error('[Google-SSO] Error type:', typeof error);
-        console.error('[Google-SSO] Error message:', error?.message || error?.msg || String(error));
-        if (error?.json) {
-            console.error('[Google-SSO] Error JSON:', JSON.stringify(error.json));
-        }
-        if (error?.status) {
-            console.error('[Google-SSO] Error status:', error.status);
-        }
-        console.error('[Google-SSO] Full error details:', JSON.stringify(error, Object.getOwnPropertyNames(error || {})));
-        signinMessage.textContent = `Authentication error: ${error?.message || error?.msg || String(error)}`;
-        signinMessage.style.color = '#dc3545';
-    });
-
-    // Listen for init event to confirm widget is ready
-    netlifyIdentity.on('init', (user) => {
-        console.log('[Google-SSO] ========== NETLIFY IDENTITY INIT EVENT ==========');
-        console.log('[Google-SSO] Init event fired at:', new Date().toISOString());
-        console.log('[Google-SSO] Current user from init:', user ? user.email : 'none (not logged in)');
-        console.log('[Google-SSO] Current URL hash present:', !!window.location.hash);
-        if (window.location.hash) {
-            console.log('[Google-SSO] Hash (first 80 chars):', window.location.hash.substring(0, 80));
-        }
-        if (user) {
-            console.log('[Google-SSO] Init user token present:', !!user?.token?.access_token);
-            console.log('[Google-SSO] Init user provider:', user?.app_metadata?.provider);
-        }
-    });
-
-    console.log('[Google-SSO] ========== NETLIFY IDENTITY INITIALIZATION COMPLETE ==========');
-    log('Auth', 'Netlify Identity initialization complete');
-
-    // Check if an OAuth error was captured during page load (e.g., webhook failure)
-    if (window._oauthError) {
-        console.error('[Google-SSO] Displaying OAuth error from page load:', window._oauthError);
-        const errorDesc = window._oauthError.description || 'Unknown error';
-        // Show a user-friendly message
-        if (errorDesc.toLowerCase().includes('webhook')) {
-            signinMessage.textContent = 'Google sign-in encountered a temporary server issue. Please try again.';
-        } else {
-            signinMessage.textContent = `Google sign-in failed: ${errorDesc}`;
-        }
-        signinMessage.style.color = '#dc3545';
-        delete window._oauthError;
+        showToast(`Signed in as ${payload.user?.name || payload.user?.email || 'you'}`, 2500, 'success');
+    } catch (error) {
+        console.error('[Google-SSO] Sign-in could not be completed:', error.message);
+        googleLoginHandled = false;
+        clearHash();
+        localStorage.removeItem(SSO_RETURN_KEY);
+        try { netlifyIdentity.logout(); } catch { /* nothing to clear */ }
+        showSigninMessage('We couldn’t finish signing you in with Google. Please try again, or use your email instead.');
+        showUserModal();
+    } finally {
+        setGoogleButtonBusy(false);
     }
 }
 
