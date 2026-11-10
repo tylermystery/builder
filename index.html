@@ -3562,6 +3562,145 @@ body.ucp-panel-open .unified-chat-panel {
     display: none;
 }
 
+/* Conversations panel polish: tab counts, Open/All chips, scope chip, ⋯ menu, composer */
+.ucp-title {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ucp-tab-count {
+    display: inline-block;
+    min-width: 18px;
+    margin-left: 4px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: #667eea;
+    color: #fff;
+    font-size: 0.75em;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+}
+.ucp-tab-count[hidden] { display: none; }
+.ucp-filter-btn.active .ucp-tab-count { background: #fff; color: #667eea; }
+.ucp-hide-completed-toggle[hidden] { display: none; }
+.ucp-view-chips {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 10px;
+}
+.ucp-view-chip {
+    padding: 3px 12px;
+    border: 1px solid #d9dcf5;
+    border-radius: 14px;
+    background: #fff;
+    color: #555;
+    font: inherit;
+    font-size: 0.76em;
+    cursor: pointer;
+}
+.ucp-view-chip.active {
+    background: #667eea;
+    border-color: #667eea;
+    color: #fff;
+}
+.ucp-view-note {
+    margin-left: auto;
+    font-size: 0.72em;
+    color: #999;
+}
+#ucp-attach-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+#ucp-attach-bar[hidden] { display: none; }
+.ucp-attach-label {
+    display: none;
+    font-size: 0.78em;
+    font-weight: 600;
+    color: #4c5bd4;
+}
+#ucp-attach-bar.is-scoped {
+    padding: 2px 4px 2px 10px;
+    border-radius: 16px;
+    background: rgba(102, 126, 234, 0.1);
+    border: 1px solid rgba(102, 126, 234, 0.35);
+}
+#ucp-attach-bar.is-scoped .ucp-attach-label { display: inline; }
+#ucp-attach-bar.is-scoped .ucp-attach-select {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    font-weight: 600;
+    color: #333;
+    padding: 4px 2px;
+}
+.ucp-attach-clear {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(102, 126, 234, 0.15);
+    color: #4c5bd4;
+    font-size: 1em;
+    line-height: 1;
+    cursor: pointer;
+}
+.ucp-attach-clear:hover { background: rgba(102, 126, 234, 0.3); }
+.ucp-attach-clear[hidden] { display: none; }
+.ucp-more-btn {
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+.ucp-more-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    min-width: 170px;
+    margin-top: 2px;
+    padding: 4px;
+    border-radius: 10px;
+    background: #fff;
+    border: 1px solid #e6e6ee;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+.ucp-more-item {
+    padding: 7px 10px;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    font: inherit;
+    font-size: 0.82em;
+    color: #333;
+    text-align: left;
+    cursor: pointer;
+}
+.ucp-more-item:hover,
+.ucp-more-item:focus-visible { background: rgba(102, 126, 234, 0.1); outline: none; }
+.ucp-actions.menu-open { opacity: 1; }
+/* Touch screens have no hover: keep message actions reachable */
+@media (hover: none) {
+    .ucp-actions { opacity: 1; }
+}
+.ucp-message-form { align-items: flex-end; }
+textarea.ucp-message-input {
+    resize: none;
+    min-height: 38px;
+    max-height: 140px;
+    overflow-y: auto;
+    font-family: inherit;
+    line-height: 1.35;
+    border-radius: 18px;
+}
+
 /* Plan History tab */
 .ucp-history-intro {
     margin: 0 0 8px;
@@ -3673,30 +3812,6 @@ body.plan-view-readonly #radial-menu-container {
 }
 .ucp-action-btn.ucp-resolve-btn.is-resolved {
     color: #1e7e34;
-}
-.ucp-open-summary {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin: 0 0 8px;
-    padding: 6px 10px;
-    border-radius: 8px;
-    background: rgba(59, 130, 246, 0.08);
-    font-size: 0.78em;
-    color: #444;
-}
-.ucp-open-summary-tasks {
-    border: 1px solid rgba(59, 130, 246, 0.3);
-    background: #fff;
-    border-radius: 12px;
-    padding: 2px 8px;
-    font: inherit;
-    color: #1d4ed8;
-    cursor: pointer;
-}
-.ucp-open-summary-tasks:hover {
-    background: rgba(59, 130, 246, 0.1);
 }
 
 /* Tasks tab: hide completed group when toggle is active */
@@ -6761,11 +6876,10 @@ body.plan-view-readonly #radial-menu-container {
             <div id="ucp-video-tiles" class="ucp-video-tiles"></div>
         </div>
         <div class="ucp-filters">
-            <button class="ucp-filter-btn active" data-filter="all">Current Plan</button>
-            <button class="ucp-filter-btn" data-filter="global">Global</button>
-            <button class="ucp-filter-btn" data-filter="tasks">Tasks</button>
+            <button class="ucp-filter-btn active" data-filter="all">Chat <span class="ucp-tab-count" data-count-for="all" hidden></span></button>
+            <button class="ucp-filter-btn" data-filter="tasks">Tasks <span class="ucp-tab-count" data-count-for="tasks" hidden></span></button>
             <button class="ucp-filter-btn" data-filter="history" title="What changed on this plan, and who changed it">History</button>
-            <label class="ucp-hide-completed-toggle" id="ucp-hide-completed-toggle" title="Hide completed items">
+            <label class="ucp-hide-completed-toggle" id="ucp-hide-completed-toggle" title="Hide completed tasks" hidden>
                 <input type="checkbox" id="ucp-hide-completed-cb">
                 <span class="ucp-hide-completed-label">Hide done</span>
             </label>
@@ -6782,9 +6896,11 @@ body.plan-view-readonly #radial-menu-container {
             </div>
         </div>
             <div id="ucp-attach-bar" class="ucp-attach-bar">
-                <select id="ucp-attach-select" class="ucp-attach-select" title="Filter conversations and tasks by plan item" aria-label="Conversation and task scope">
+                <span class="ucp-attach-label" aria-hidden="true">About:</span>
+                <select id="ucp-attach-select" class="ucp-attach-select" title="Show conversations and tasks about one plan item" aria-label="Conversation and task scope">
                     <option value="">Plan-wide</option>
                 </select>
+                <button type="button" id="ucp-attach-clear" class="ucp-attach-clear" title="Show the whole plan" aria-label="Clear item filter" hidden>&times;</button>
             </div>
         <div id="ucp-content" class="ucp-content">
             <div class="ucp-loading">Loading conversations...</div>
@@ -6796,7 +6912,7 @@ body.plan-view-readonly #radial-menu-container {
                 <button class="ucp-reply-cancel" type="button">&times;</button>
             </div>
             <form id="ucp-message-form" class="ucp-message-form">
-                <input type="text" id="ucp-message-input" class="ucp-message-input" placeholder="Message the team..." autocomplete="off">
+                <textarea id="ucp-message-input" class="ucp-message-input" placeholder="Message the team..." rows="1" autocomplete="off" aria-label="Message" enterkeyhint="send"></textarea>
                 <button type="submit" class="ucp-send-btn" title="Send">
                     <span>&#10148;</span>
                 </button>

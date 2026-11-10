@@ -106,3 +106,19 @@ test('detail layout measures either or both rails and releases insets on narrow 
     assert.equal(widths.get('--detail-left-inset'), '0px');
     assert.equal(widths.get('--detail-right-inset'), '0px');
 });
+
+test('chat Open view hides resolved threads and threads whose task is done', () => {
+    const state = {
+        session: { id: 'plan-a' }, cart: { lockedItems: new Map(), items: new Map() },
+        eventDetails: { combined: new Map([['_commentTaskLinks', { m2: 't-done', m3: 't-open' }]]) },
+        tasks: { all: new Map([['t-done', { fields: { Status: 'completed' } }], ['t-open', { fields: { Status: 'pending' } }]]), byProject: new Map() }
+    };
+    const run = loadModule('components/unifiedChatPanel.js', {
+        state, getRecordById: () => null, isThreadResolved: id => id === 'm1',
+        document: { getElementById: () => null, createElement: element, body: { classList: { contains: () => true } } }
+    });
+    assert.equal(run("isThreadDone({ id: 'm1' })"), true);   // resolved
+    assert.equal(run("isThreadDone({ id: 'm2' })"), true);   // its task is complete
+    assert.equal(run("isThreadDone({ id: 'm3' })"), false);  // its task is still open
+    assert.equal(run("isThreadDone({ id: 'm4' })"), false);  // plain open chat
+});
