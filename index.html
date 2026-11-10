@@ -3562,6 +3562,95 @@ body.ucp-panel-open .unified-chat-panel {
     display: none;
 }
 
+/* Plan History tab */
+.ucp-history-intro {
+    margin: 0 0 8px;
+    font-size: 0.75em;
+    color: #777;
+}
+.ucp-history-entry {
+    margin: 0 0 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #fff;
+    border: 1px solid #eee;
+}
+.ucp-history-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.8em;
+    margin-bottom: 4px;
+}
+.ucp-history-who {
+    font-weight: 600;
+    color: #333;
+}
+.ucp-history-time {
+    color: #999;
+    white-space: nowrap;
+}
+.ucp-history-changes {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 0.82em;
+    color: #444;
+}
+.ucp-history-change + .ucp-history-change {
+    margin-top: 2px;
+}
+.ucp-history-merged {
+    margin-top: 4px;
+    font-size: 0.7em;
+    color: #8a6d00;
+}
+
+/* View-only plans for signed-out visitors */
+.ucp-readonly-note {
+    display: none;
+    margin: 8px 12px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #fff8e1;
+    color: #6b5200;
+    font-size: 0.8em;
+    text-align: center;
+}
+body.plan-view-readonly .ucp-readonly-note { display: block; }
+body.plan-view-readonly #ucp-input-area,
+body.plan-view-readonly .ucp-actions,
+body.plan-view-readonly #presentation-add-btn,
+body.plan-view-readonly #presentation-drag-buckets,
+body.plan-view-readonly #radial-menu-container {
+    display: none !important;
+}
+.plan-readonly-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 8px 0;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: rgba(255, 193, 7, 0.16);
+    border: 1px solid rgba(255, 193, 7, 0.45);
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 0.88em;
+}
+.plan-readonly-banner[hidden] { display: none; }
+.plan-readonly-signin {
+    border: none;
+    border-radius: 16px;
+    padding: 6px 14px;
+    background: #ffc107;
+    color: #222;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+.plan-readonly-signin:hover { background: #ffcd38; }
+
 /* Resolved chat threads (no longer counted as open) */
 .ucp-msg.ucp-msg-resolved {
     opacity: 0.55;
@@ -6379,6 +6468,11 @@ body.ucp-panel-open .unified-chat-panel {
                     </div>
                 </section>
 
+                <!-- Shown to signed-out visitors on plans that signed-in people work on -->
+                <div id="plan-readonly-banner" class="plan-readonly-banner" role="status" hidden>
+                    <span class="plan-readonly-text">&#128064; You're viewing this plan. Sign in to collaborate &mdash; add items, adjust tasks, react or chat.</span>
+                    <button type="button" id="plan-readonly-signin" class="plan-readonly-signin">Sign in</button>
+                </div>
                 <!-- Add Item Section - Standalone add functionality -->
                 <section class="itinerary-section itinerary-add-section" data-section="add">
                     <button id="presentation-add-btn" class="presentation-add-item-btn" title="Add items to plan" aria-label="Add items to plan">
@@ -6670,6 +6764,7 @@ body.ucp-panel-open .unified-chat-panel {
             <button class="ucp-filter-btn active" data-filter="all">Current Plan</button>
             <button class="ucp-filter-btn" data-filter="global">Global</button>
             <button class="ucp-filter-btn" data-filter="tasks">Tasks</button>
+            <button class="ucp-filter-btn" data-filter="history" title="What changed on this plan, and who changed it">History</button>
             <label class="ucp-hide-completed-toggle" id="ucp-hide-completed-toggle" title="Hide completed items">
                 <input type="checkbox" id="ucp-hide-completed-cb">
                 <span class="ucp-hide-completed-label">Hide done</span>
@@ -6694,6 +6789,7 @@ body.ucp-panel-open .unified-chat-panel {
         <div id="ucp-content" class="ucp-content">
             <div class="ucp-loading">Loading conversations...</div>
         </div>
+        <div class="ucp-readonly-note">Sign in to join the conversation and work on tasks.</div>
         <div id="ucp-input-area" class="ucp-input-area">
             <div id="ucp-reply-indicator" class="ucp-reply-indicator" style="display: none;">
                 <span class="ucp-reply-text"></span>

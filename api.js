@@ -3,6 +3,8 @@
 import { state, invalidateRecordsIndex, getRecordById } from './state.js';
 import { upsertProjectTask, removeProjectTask } from './utils/projectTasks.js';
 import { getOpenConversationSnapshotForSave } from './utils/openConversations.js';
+import { mergeSessionData, safeClone, deepEqual, describePlanChanges, hasMeaningfulDifference } from './utils/planMerge.js';
+import { isPlanReadOnly, blockIfReadOnly } from './utils/planAccess.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { parseOptions, getShopUrlParam } from './utils.js';
 import { log } from './utils/debug.js';
@@ -484,6 +486,254 @@ export async function associateSessionWithUser(sessionId, userId) {
 }
 
 
+/**
+ * Apply a plan's saved data ("Items with Variations" JSON) to the in-memory state.
+ * Used when a plan is loaded and when a newer version from another device is applied.
+ * @param {Object} savedState
+ */
+async function hydrateSessionState(savedState) {
+    state.session.planActivity = (savedState.planActivity && typeof savedState.planActivity === 'object')
+        ? savedState.planActivity
+        : null;
+    console.log(`[SESSION-LOAD] Parsed session data - eventDetails keys: ${Object.keys(savedState.eventDetails || {}).join(', ')}`);
+
+    state.cart.items = new Map(Object.entries(savedState.ideasItems || savedState.favoritedItems || {}));
+    state.cart.lockedItems = new Map(Object.entries(savedState.lockedInItems || {}));
+
+    // Plans saved before item versions existed carry no variationId.
+    // They were built from the original version of each item, so
+    // stamp them as such rather than letting them drift onto a newer
+    // version the owner never chose.
+    for (const lockedInfo of state.cart.lockedItems.values()) {
+        if (lockedInfo && typeof lockedInfo === 'object' && !('variationId' in lockedInfo)) {
+            lockedInfo.variationId = null;
+        }
+    }
+
+    const reactionsObject = savedState.itemReactions || {};
+    state.session.reactions = new Map();
+    console.log('[REACTIONS-DEBUG] Loading reactions from saved state. Keys found:', Object.keys(reactionsObject));
+    for (const reactionKey in reactionsObject) {
+        // Reverse any prior "::original" normalization so runtime lookups
+        // using plain recordId work correctly. Photo compound keys (::photo::)
+        // are preserved as-is for future Phase 5 support.
+        let finalKey = reactionKey;
+        if (reactionKey.endsWith('::original')) {
+            finalKey = reactionKey.replace('::original', '');
+            console.log(`[REACTIONS-DEBUG] De-normalized key "${reactionKey}" -> "${finalKey}"`);
+        }
+        const userReactionsRaw = reactionsObject[reactionKey];
+        const userReactionsMap = new Map();
+        for (const [userId, emojiData] of Object.entries(userReactionsRaw)) {
+            // Support both legacy (string) and new (array) format
+            if (Array.isArray(emojiData)) {
+                userReactionsMap.set(userId, new Set(emojiData));
+            } else if (typeof emojiData === 'string') {
+                // Migrate legacy single-emoji to Set with one element
+                userReactionsMap.set(userId, new Set([emojiData]));
+            }
+        }
+        // If finalKey already exists (e.g. both "rec123" and "rec123::original"
+        // are present), merge the user reactions rather than overwriting
+        if (state.session.reactions.has(finalKey)) {
+            const existingMap = state.session.reactions.get(finalKey);
+            for (const [userId, emojiSet] of userReactionsMap.entries()) {
+                if (existingMap.has(userId)) {
+                    const existing = existingMap.get(userId);
+                    for (const e of emojiSet) existing.add(e);
+                } else {
+                    existingMap.set(userId, emojiSet);
+                }
+            }
+            console.log(`[REACTIONS-DEBUG] Merged duplicate key "${finalKey}"`);
+        } else {
+            state.session.reactions.set(finalKey, userReactionsMap);
+        }
+        console.log(`[REACTIONS-DEBUG] Loaded reaction key="${finalKey}", users=${(state.session.reactions.get(finalKey))?.size || 0}`);
+    }
+
+    state.session.userProfiles = new Map(Object.entries(savedState.userProfiles || {}));
+
+    // Normalize eventDetails keys to handle legacy format
+    // Legacy keys: 'Event Name', 'Goals', 'Date' -> New keys: 'eventName', 'goals', 'date'
+    const rawEventDetails = savedState.eventDetails || savedState.favoritedDetails || {};
+    const normalizedEventDetails = {};
+
+    // Key normalization mapping (legacy -> current)
+    const keyMapping = {
+        'Event Name': CONSTANTS.DETAIL_TYPES.EVENT_NAME,  // 'eventName'
+        'Goals': CONSTANTS.DETAIL_TYPES.GOALS,            // 'goals'
+        'Date': CONSTANTS.DETAIL_TYPES.DATE,              // 'date'
+        // Also handle already-correct camelCase keys
+        'eventName': CONSTANTS.DETAIL_TYPES.EVENT_NAME,
+        'goals': CONSTANTS.DETAIL_TYPES.GOALS,
+        'date': CONSTANTS.DETAIL_TYPES.DATE,
+        'guestCount': CONSTANTS.DETAIL_TYPES.GUEST_COUNT,
+        'specialRequests': CONSTANTS.DETAIL_TYPES.SPECIAL_REQUESTS,
+        'dateEnd': CONSTANTS.DETAIL_TYPES.DATE_END,
+        'startTime': CONSTANTS.DETAIL_TYPES.START_TIME,
+        'endTime': CONSTANTS.DETAIL_TYPES.END_TIME,
+        'duration': CONSTANTS.DETAIL_TYPES.DURATION
+    };
+
+    for (const [key, value] of Object.entries(rawEventDetails)) {
+        const normalizedKey = keyMapping[key] || key; // Use mapping if exists, otherwise keep original
+        normalizedEventDetails[normalizedKey] = value;
+    }
+
+    state.eventDetails.combined = new Map(Object.entries(normalizedEventDetails));
+    console.log('[SESSION-LOAD DEBUG] Event details loaded:', Object.fromEntries(state.eventDetails.combined));
+    console.log('[SESSION-LOAD DEBUG] Date value:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE));
+
+    state.session.itemPositions = new Map(Object.entries(savedState.itemPositions || {}));
+
+    // Restore plan item organization
+    state.session.planItemOrder = savedState.planItemOrder || [];
+    state.session.archivedItems = new Set(savedState.archivedItems || []);
+    state.session.completedItems = new Set(savedState.completedItems || []);
+    state.session.goalItems = new Set(savedState.goalItems || []);
+
+    // Background seed. Absent on plans saved before this existed, in which case
+    // planAtmosphere derives it from the session id instead.
+    const savedSeed = savedState.background?.seed;
+    state.session.backgroundSeed =
+        typeof savedSeed === 'number' && isFinite(savedSeed) ? savedSeed : null;
+    state.session.chatThreads = new Set(
+        Array.isArray(savedState.background?.chatThreads) ? savedState.background.chatThreads : []
+    );
+    state.session.openConversationsSnapshot =
+        savedState.openConversations && typeof savedState.openConversations === 'object'
+            ? savedState.openConversations : null;
+
+    // Restore combined items: Object<targetId, { sources: Array, hybridData: Object }> -> Map<targetId, { sources: Set, hybridData: Object }>
+    if (savedState.combinedItems && typeof savedState.combinedItems === 'object') {
+        state.session.combinedItems = new Map(
+            Object.entries(savedState.combinedItems).map(([target, entry]) => {
+                // Handle both old format (plain array) and new format (object with sources + hybridData)
+                if (Array.isArray(entry)) {
+                    return [target, { sources: new Set(entry), hybridData: null }];
+                }
+                const sources = Array.isArray(entry.sources) ? new Set(entry.sources) : new Set();
+                return [target, { sources, hybridData: entry.hybridData || null }];
+            })
+        );
+        console.log('[SESSION-LOAD DEBUG] Restored combinedItems:', {
+            size: state.session.combinedItems.size,
+            entries: Array.from(state.session.combinedItems.entries()).map(([t, s]) => [t, Array.from(s)])
+        });
+    } else {
+        state.session.combinedItems = new Map();
+    }
+
+    // Restore related groups (grouped options)
+    state.session.relatedGroups = Array.isArray(savedState.relatedGroups) ? savedState.relatedGroups : [];
+    console.log('[SESSION-LOAD DEBUG] Restored relatedGroups:', state.session.relatedGroups);
+
+    // Restore item iterations / variations (Decision 1C: Hybrid storage)
+    if (savedState.itemIterations && typeof savedState.itemIterations === 'object') {
+        const activeIndices = savedState.activeVariationIndices || {};
+        for (const [recordId, iterData] of Object.entries(savedState.itemIterations)) {
+            const activeIndex = activeIndices[recordId] || 0;
+            deserializeIterations(recordId, iterData, activeIndex);
+        }
+        console.log(`[SESSION-LOAD DEBUG] Restored iterations for ${Object.keys(savedState.itemIterations).length} items`);
+    }
+
+    // DEBUG: Log restored archived/completed items
+    console.log('[SESSION-LOAD DEBUG] Restored archivedItems:', {
+        rawData: savedState.archivedItems,
+        setSize: state.session.archivedItems.size,
+        items: Array.from(state.session.archivedItems)
+    });
+    console.log('[SESSION-LOAD DEBUG] Restored completedItems:', {
+        rawData: savedState.completedItems,
+        setSize: state.session.completedItems.size,
+        items: Array.from(state.session.completedItems)
+    });
+
+    log('API', `Parsed session data: ${state.cart.items.size} ideas, ${state.cart.lockedItems.size} locked items, ${state.eventDetails.combined.size} details.`);
+
+    // Restore custom records from saved session data
+    // These are items that were created via AI parsing or manually added, and don't exist in Airtable
+    // Includes: AI-generated items (ai-*), manually added items (manual-add-*, manual-presentation-*),
+    // and solution items (solution-*)
+    if (savedState.aiRecords && Object.keys(savedState.aiRecords).length > 0) {
+        const customRecordsToRestore = Object.values(savedState.aiRecords);
+        const restoredWithCategorization = customRecordsToRestore.filter(r => r && r._categorization);
+        console.log('[SESSION-LOAD DEBUG] Restoring custom records', {
+            total: customRecordsToRestore.length,
+            withCategorization: restoredWithCategorization.length,
+            sample: restoredWithCategorization.slice(0, 5).map(r => ({
+                recordId: r.id,
+                recordName: r.fields?.Name,
+                baseCategories: r._categorization?.baseCategories || [],
+                tagsCount: r._categorization?.tags?.length || 0
+            }))
+        });
+        for (const customRecord of customRecordsToRestore) {
+            // Only add if not already in state.records.all
+            if (!state.records.all.some(r => r.id === customRecord.id)) {
+                // Preserve the isManual flag for manual items
+                if (customRecord.isManual) {
+                    customRecord.isManual = true;
+                }
+                // Preserve solution item flags and data
+                if (customRecord.isSolution) {
+                    customRecord.isSolution = true;
+                    // Restore to solution records registry for sidebar rendering
+                    if (!window._solutionRecords) {
+                        window._solutionRecords = new Map();
+                    }
+                    window._solutionRecords.set(customRecord.id, customRecord);
+                    log('API', `Restored solution record to registry: ${customRecord.id}`);
+                }
+                state.records.all.push(customRecord);
+                invalidateRecordsIndex();
+            }
+        }
+        log('API', `Restored ${customRecordsToRestore.length} custom items from session data`);
+        console.log(`[SESSION-LOAD] Restored ${customRecordsToRestore.length} custom items (AI + manual + solution)`);
+    }
+
+    // Fetch ghost items (archived/deleted items in the plan)
+    const allItemIds = [
+        ...Array.from(state.cart.lockedItems.keys()),
+        ...Array.from(state.cart.items.keys())
+    ];
+    const missingItemIds = allItemIds.filter(id =>
+        !state.records.all.some(r => r.id === id) &&
+        id.startsWith('rec') // Only fetch real Airtable IDs, not custom items (ai-*, manual-*)
+    );
+
+    if (missingItemIds.length > 0) {
+        log('API', `Found ${missingItemIds.length} ghost items in session, fetching...`);
+        const ghostItems = await fetchGhostItems(missingItemIds);
+        setState({ records: { ...state.records, archive: ghostItems } });
+        log('API', `Stored ${ghostItems.length} ghost items in state.records.archive`);
+    }
+
+    // Restore generated options to record objects from itemInfo
+    // This allows AI-generated options to persist across page reloads
+    const restoreGeneratedOptions = (itemsMap) => {
+        for (const [recordId, itemInfo] of itemsMap.entries()) {
+            if (itemInfo.generatedOptions) {
+                // Find the record in state.records.all or state.records.archive
+                let record = state.records.all.find(r => r.id === recordId);
+                if (!record) {
+                    record = state.records.archive?.find(r => r.id === recordId);
+                }
+                if (record) {
+                    record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = itemInfo.generatedOptions;
+                    log('API', `Restored generated options for item ${recordId}`);
+                }
+            }
+        }
+    };
+
+    restoreGeneratedOptions(state.cart.lockedItems);
+    restoreGeneratedOptions(state.cart.items);
+}
+
 export async function loadSessionFromAirtable(sessionId) {
     console.log('[SESSION-LOAD] ========== START ==========');
     console.log(`[SESSION-LOAD] Loading session: ${sessionId}`);
@@ -561,6 +811,8 @@ export async function loadSessionFromAirtable(sessionId) {
         state.session.storeId = null;
         state.session.planActivity = null;
         state.session.contentFingerprint = null;
+        state.session.syncBase = null;
+        state.session.syncBaseRaw = null;
         state.session.loadedCollaborators = Array.isArray(record.fields.Collaborators) ? [...record.fields.Collaborators] : [];
         state.session.user.amountReceived = 0;
         state.session.user.paymentHistory = [];
@@ -630,246 +882,8 @@ export async function loadSessionFromAirtable(sessionId) {
         if (sessionDataString && sessionDataString.trim() !== '') {
             try {
                 const savedState = JSON.parse(sessionDataString);
-                state.session.planActivity = (savedState.planActivity && typeof savedState.planActivity === 'object')
-                    ? savedState.planActivity
-                    : null;
-                console.log(`[SESSION-LOAD] Parsed session data - eventDetails keys: ${Object.keys(savedState.eventDetails || {}).join(', ')}`);
-
-                state.cart.items = new Map(Object.entries(savedState.ideasItems || savedState.favoritedItems || {}));
-                state.cart.lockedItems = new Map(Object.entries(savedState.lockedInItems || {}));
-
-                // Plans saved before item versions existed carry no variationId.
-                // They were built from the original version of each item, so
-                // stamp them as such rather than letting them drift onto a newer
-                // version the owner never chose.
-                for (const lockedInfo of state.cart.lockedItems.values()) {
-                    if (lockedInfo && typeof lockedInfo === 'object' && !('variationId' in lockedInfo)) {
-                        lockedInfo.variationId = null;
-                    }
-                }
-
-                const reactionsObject = savedState.itemReactions || {};
-                state.session.reactions = new Map();
-                console.log('[REACTIONS-DEBUG] Loading reactions from saved state. Keys found:', Object.keys(reactionsObject));
-                for (const reactionKey in reactionsObject) {
-                    // Reverse any prior "::original" normalization so runtime lookups
-                    // using plain recordId work correctly. Photo compound keys (::photo::)
-                    // are preserved as-is for future Phase 5 support.
-                    let finalKey = reactionKey;
-                    if (reactionKey.endsWith('::original')) {
-                        finalKey = reactionKey.replace('::original', '');
-                        console.log(`[REACTIONS-DEBUG] De-normalized key "${reactionKey}" -> "${finalKey}"`);
-                    }
-                    const userReactionsRaw = reactionsObject[reactionKey];
-                    const userReactionsMap = new Map();
-                    for (const [userId, emojiData] of Object.entries(userReactionsRaw)) {
-                        // Support both legacy (string) and new (array) format
-                        if (Array.isArray(emojiData)) {
-                            userReactionsMap.set(userId, new Set(emojiData));
-                        } else if (typeof emojiData === 'string') {
-                            // Migrate legacy single-emoji to Set with one element
-                            userReactionsMap.set(userId, new Set([emojiData]));
-                        }
-                    }
-                    // If finalKey already exists (e.g. both "rec123" and "rec123::original"
-                    // are present), merge the user reactions rather than overwriting
-                    if (state.session.reactions.has(finalKey)) {
-                        const existingMap = state.session.reactions.get(finalKey);
-                        for (const [userId, emojiSet] of userReactionsMap.entries()) {
-                            if (existingMap.has(userId)) {
-                                const existing = existingMap.get(userId);
-                                for (const e of emojiSet) existing.add(e);
-                            } else {
-                                existingMap.set(userId, emojiSet);
-                            }
-                        }
-                        console.log(`[REACTIONS-DEBUG] Merged duplicate key "${finalKey}"`);
-                    } else {
-                        state.session.reactions.set(finalKey, userReactionsMap);
-                    }
-                    console.log(`[REACTIONS-DEBUG] Loaded reaction key="${finalKey}", users=${(state.session.reactions.get(finalKey))?.size || 0}`);
-                }
-
-                state.session.userProfiles = new Map(Object.entries(savedState.userProfiles || {}));
-
-                // Normalize eventDetails keys to handle legacy format
-                // Legacy keys: 'Event Name', 'Goals', 'Date' -> New keys: 'eventName', 'goals', 'date'
-                const rawEventDetails = savedState.eventDetails || savedState.favoritedDetails || {};
-                const normalizedEventDetails = {};
-
-                // Key normalization mapping (legacy -> current)
-                const keyMapping = {
-                    'Event Name': CONSTANTS.DETAIL_TYPES.EVENT_NAME,  // 'eventName'
-                    'Goals': CONSTANTS.DETAIL_TYPES.GOALS,            // 'goals'
-                    'Date': CONSTANTS.DETAIL_TYPES.DATE,              // 'date'
-                    // Also handle already-correct camelCase keys
-                    'eventName': CONSTANTS.DETAIL_TYPES.EVENT_NAME,
-                    'goals': CONSTANTS.DETAIL_TYPES.GOALS,
-                    'date': CONSTANTS.DETAIL_TYPES.DATE,
-                    'guestCount': CONSTANTS.DETAIL_TYPES.GUEST_COUNT,
-                    'specialRequests': CONSTANTS.DETAIL_TYPES.SPECIAL_REQUESTS,
-                    'dateEnd': CONSTANTS.DETAIL_TYPES.DATE_END,
-                    'startTime': CONSTANTS.DETAIL_TYPES.START_TIME,
-                    'endTime': CONSTANTS.DETAIL_TYPES.END_TIME,
-                    'duration': CONSTANTS.DETAIL_TYPES.DURATION
-                };
-
-                for (const [key, value] of Object.entries(rawEventDetails)) {
-                    const normalizedKey = keyMapping[key] || key; // Use mapping if exists, otherwise keep original
-                    normalizedEventDetails[normalizedKey] = value;
-                }
-
-                state.eventDetails.combined = new Map(Object.entries(normalizedEventDetails));
-                console.log('[SESSION-LOAD DEBUG] Event details loaded:', Object.fromEntries(state.eventDetails.combined));
-                console.log('[SESSION-LOAD DEBUG] Date value:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE));
-
-                state.session.itemPositions = new Map(Object.entries(savedState.itemPositions || {}));
-
-                // Restore plan item organization
-                state.session.planItemOrder = savedState.planItemOrder || [];
-                state.session.archivedItems = new Set(savedState.archivedItems || []);
-                state.session.completedItems = new Set(savedState.completedItems || []);
-                state.session.goalItems = new Set(savedState.goalItems || []);
-
-                // Background seed. Absent on plans saved before this existed, in which case
-                // planAtmosphere derives it from the session id instead.
-                const savedSeed = savedState.background?.seed;
-                state.session.backgroundSeed =
-                    typeof savedSeed === 'number' && isFinite(savedSeed) ? savedSeed : null;
-                state.session.chatThreads = new Set(
-                    Array.isArray(savedState.background?.chatThreads) ? savedState.background.chatThreads : []
-                );
-                state.session.openConversationsSnapshot =
-                    savedState.openConversations && typeof savedState.openConversations === 'object'
-                        ? savedState.openConversations : null;
-
-                // Restore combined items: Object<targetId, { sources: Array, hybridData: Object }> -> Map<targetId, { sources: Set, hybridData: Object }>
-                if (savedState.combinedItems && typeof savedState.combinedItems === 'object') {
-                    state.session.combinedItems = new Map(
-                        Object.entries(savedState.combinedItems).map(([target, entry]) => {
-                            // Handle both old format (plain array) and new format (object with sources + hybridData)
-                            if (Array.isArray(entry)) {
-                                return [target, { sources: new Set(entry), hybridData: null }];
-                            }
-                            const sources = Array.isArray(entry.sources) ? new Set(entry.sources) : new Set();
-                            return [target, { sources, hybridData: entry.hybridData || null }];
-                        })
-                    );
-                    console.log('[SESSION-LOAD DEBUG] Restored combinedItems:', {
-                        size: state.session.combinedItems.size,
-                        entries: Array.from(state.session.combinedItems.entries()).map(([t, s]) => [t, Array.from(s)])
-                    });
-                } else {
-                    state.session.combinedItems = new Map();
-                }
-
-                // Restore related groups (grouped options)
-                state.session.relatedGroups = Array.isArray(savedState.relatedGroups) ? savedState.relatedGroups : [];
-                console.log('[SESSION-LOAD DEBUG] Restored relatedGroups:', state.session.relatedGroups);
-
-                // Restore item iterations / variations (Decision 1C: Hybrid storage)
-                if (savedState.itemIterations && typeof savedState.itemIterations === 'object') {
-                    const activeIndices = savedState.activeVariationIndices || {};
-                    for (const [recordId, iterData] of Object.entries(savedState.itemIterations)) {
-                        const activeIndex = activeIndices[recordId] || 0;
-                        deserializeIterations(recordId, iterData, activeIndex);
-                    }
-                    console.log(`[SESSION-LOAD DEBUG] Restored iterations for ${Object.keys(savedState.itemIterations).length} items`);
-                }
-
-                // DEBUG: Log restored archived/completed items
-                console.log('[SESSION-LOAD DEBUG] Restored archivedItems:', {
-                    rawData: savedState.archivedItems,
-                    setSize: state.session.archivedItems.size,
-                    items: Array.from(state.session.archivedItems)
-                });
-                console.log('[SESSION-LOAD DEBUG] Restored completedItems:', {
-                    rawData: savedState.completedItems,
-                    setSize: state.session.completedItems.size,
-                    items: Array.from(state.session.completedItems)
-                });
-
-                log('API', `Parsed session data: ${state.cart.items.size} ideas, ${state.cart.lockedItems.size} locked items, ${state.eventDetails.combined.size} details.`);
-
-                // Restore custom records from saved session data
-                // These are items that were created via AI parsing or manually added, and don't exist in Airtable
-                // Includes: AI-generated items (ai-*), manually added items (manual-add-*, manual-presentation-*),
-                // and solution items (solution-*)
-                if (savedState.aiRecords && Object.keys(savedState.aiRecords).length > 0) {
-                    const customRecordsToRestore = Object.values(savedState.aiRecords);
-                    const restoredWithCategorization = customRecordsToRestore.filter(r => r && r._categorization);
-                    console.log('[SESSION-LOAD DEBUG] Restoring custom records', {
-                        total: customRecordsToRestore.length,
-                        withCategorization: restoredWithCategorization.length,
-                        sample: restoredWithCategorization.slice(0, 5).map(r => ({
-                            recordId: r.id,
-                            recordName: r.fields?.Name,
-                            baseCategories: r._categorization?.baseCategories || [],
-                            tagsCount: r._categorization?.tags?.length || 0
-                        }))
-                    });
-                    for (const customRecord of customRecordsToRestore) {
-                        // Only add if not already in state.records.all
-                        if (!state.records.all.some(r => r.id === customRecord.id)) {
-                            // Preserve the isManual flag for manual items
-                            if (customRecord.isManual) {
-                                customRecord.isManual = true;
-                            }
-                            // Preserve solution item flags and data
-                            if (customRecord.isSolution) {
-                                customRecord.isSolution = true;
-                                // Restore to solution records registry for sidebar rendering
-                                if (!window._solutionRecords) {
-                                    window._solutionRecords = new Map();
-                                }
-                                window._solutionRecords.set(customRecord.id, customRecord);
-                                log('API', `Restored solution record to registry: ${customRecord.id}`);
-                            }
-                            state.records.all.push(customRecord);
-                            invalidateRecordsIndex();
-                        }
-                    }
-                    log('API', `Restored ${customRecordsToRestore.length} custom items from session data`);
-                    console.log(`[SESSION-LOAD] Restored ${customRecordsToRestore.length} custom items (AI + manual + solution)`);
-                }
-
-                // Fetch ghost items (archived/deleted items in the plan)
-                const allItemIds = [
-                    ...Array.from(state.cart.lockedItems.keys()),
-                    ...Array.from(state.cart.items.keys())
-                ];
-                const missingItemIds = allItemIds.filter(id =>
-                    !state.records.all.some(r => r.id === id) &&
-                    id.startsWith('rec') // Only fetch real Airtable IDs, not custom items (ai-*, manual-*)
-                );
-
-                if (missingItemIds.length > 0) {
-                    log('API', `Found ${missingItemIds.length} ghost items in session, fetching...`);
-                    const ghostItems = await fetchGhostItems(missingItemIds);
-                    setState({ records: { ...state.records, archive: ghostItems } });
-                    log('API', `Stored ${ghostItems.length} ghost items in state.records.archive`);
-                }
-
-                // Restore generated options to record objects from itemInfo
-                // This allows AI-generated options to persist across page reloads
-                const restoreGeneratedOptions = (itemsMap) => {
-                    for (const [recordId, itemInfo] of itemsMap.entries()) {
-                        if (itemInfo.generatedOptions) {
-                            // Find the record in state.records.all or state.records.archive
-                            let record = state.records.all.find(r => r.id === recordId);
-                            if (!record) {
-                                record = state.records.archive?.find(r => r.id === recordId);
-                            }
-                            if (record) {
-                                record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = itemInfo.generatedOptions;
-                                log('API', `Restored generated options for item ${recordId}`);
-                            }
-                        }
-                    }
-                };
-
-                restoreGeneratedOptions(state.cart.lockedItems);
-                restoreGeneratedOptions(state.cart.items);
+                await hydrateSessionState(savedState);
+                state.session.syncBaseRaw = sessionDataString;
 
             } catch (jsonError) {
                 log('API', `Failed to parse session JSON for ${sessionId}: ${jsonError.message}`);
@@ -905,6 +919,11 @@ export async function loadSessionFromAirtable(sessionId) {
         // Snapshot the loaded plan content so later saves can tell a real edit apart from
         // incidental saves (presence/profile updates) made just by viewing the plan.
         state.session.contentFingerprint = computePlanContentFingerprint();
+        // Remember the plan as loaded: later saves apply only this device's changes on
+        // top of the latest stored version (see utils/planMerge.js).
+        state.session.syncBase = loadedFromCache ? null : safeClone(buildSessionData());
+        if (loadedFromCache) state.session.syncBaseRaw = null;
+        else if (state.session.syncBaseRaw == null) state.session.syncBaseRaw = record.fields['Items with Variations'] || '';
 
         console.log('[SESSION-LOAD] Dispatching sessionReady event...');
         document.dispatchEvent(new CustomEvent('sessionReady'));
@@ -1067,27 +1086,12 @@ function getActiveVariationIndices() {
 }
 
 
-export async function saveSessionToAirtable() {
-    const hasPlanData = state.cart.items.size > 0 || state.cart.lockedItems.size > 0;
-    const hasDetails = state.eventDetails.combined.size > 0;
-    const hasReactions = state.session.reactions.size > 0;
-    const needsInitialSave = !state.session.id;
-
-    if (!hasPlanData && !hasDetails && !hasReactions && !needsInitialSave) {
-        log('API', 'saveSessionToAirtable: No changes or data to save, skipping.');
-        state.ui.saveState = 'SAVED';
-        // Check if ui.updateSaveShareButton exists before calling
-        if (typeof ui !== 'undefined' && ui.updateSaveShareButton) {
-            ui.updateSaveShareButton();
-        }
-        return false;
-    }
-
-    const sessionStatus = state.session.id ? `UPDATE (id: ${state.session.id})` : 'CREATE (new session)';
-    log('API', `saveSessionToAirtable: Triggered for ${sessionStatus}`);
-    state.ui.saveState = 'SAVING';
-    if (typeof ui !== 'undefined' && ui.updateSaveShareButton) ui.updateSaveShareButton();
-
+/**
+ * Build the plan's saved data ("Items with Variations" JSON) from the in-memory state.
+ * Excludes planActivity and stream metadata, which the save adds.
+ * @returns {Object}
+ */
+function buildSessionData() {
     const reactionsForSaving = {};
     for (const [recordId, userReactionsMap] of state.session.reactions.entries()) {
         const userObj = {};
@@ -1221,6 +1225,152 @@ export async function saveSessionToAirtable() {
         // Session-level active variation indices (which variation is selected per item in this session)
         activeVariationIndices: getActiveVariationIndices()
     };
+    return sessionData;
+}
+
+/** Read the stored plan record directly (no caches), for merging and freshness checks. */
+async function fetchLatestSessionRecord(sessionId) {
+    if (!sessionId || !String(sessionId).startsWith('rec')) return null;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+    if (!response.ok) throw new Error(`Could not read the latest plan (${response.status})`);
+    return response.json();
+}
+
+function ensureCurrentUserProfile() {
+    if (state.session.user.isAuthenticated && state.session.user.id && !state.session.userProfiles.has(state.session.user.id)) {
+        state.session.userProfiles.set(state.session.user.id, state.session.user.name || 'User');
+    }
+}
+
+function planItemName(id, data) {
+    return getRecordById(id)?.fields?.Name || data?.aiRecords?.[id]?.fields?.Name || 'an item';
+}
+
+function announcePlanEvent(type, detail) {
+    try { window.dispatchEvent(new CustomEvent(type, { detail })); } catch (e) { /* non-browser */ }
+}
+
+/**
+ * Bookkeeping after a successful save: remember what is now stored, apply other
+ * devices' changes that the merge folded in, and announce the save (live refresh
+ * for collaborators + Plan History).
+ */
+async function afterPlanSaved({ isCreateSave, syncBase, localSnapshot, payloadData, mergeOutcome, serializedSessionData }) {
+    try {
+        const sessionId = state.session.id;
+        const before = syncBase || {};
+        const changes = isCreateSave ? [] : describePlanChanges(before, localSnapshot || {}, id => planItemName(id, localSnapshot));
+        const remoteChanged = !!mergeOutcome?.remoteChanged;
+        const editedMeanwhile = state.ui.saveState !== 'SAVING';
+
+        state.session.syncBaseRaw = serializedSessionData;
+        if (remoteChanged && !editedMeanwhile) {
+            await hydrateSessionState(safeClone(payloadData));
+            ensureCurrentUserProfile();
+            state.session.syncBase = safeClone(buildSessionData());
+            state.session.contentFingerprint = computePlanContentFingerprint();
+            announcePlanEvent('plan-remote-applied', { sessionId, reason: 'merge' });
+        } else if (remoteChanged) {
+            // New edits started during this save: keep them, and let the next save
+            // merge again. Forget the stored copy so the screen refreshes after that.
+            state.session.syncBase = localSnapshot;
+            state.session.syncBaseRaw = null;
+        } else {
+            state.session.syncBase = localSnapshot || safeClone(payloadData);
+        }
+
+        if (!isCreateSave && (changes.length || remoteChanged)) {
+            announcePlanEvent('plan-saved', { sessionId, changes, merged: remoteChanged });
+        }
+    } catch (error) {
+        console.warn('[SESSION-SAVE] Post-save sync step failed:', error.message);
+    }
+}
+
+let refreshInFlight = null;
+
+/**
+ * Bring this device up to date with the stored plan if another device changed it.
+ * Skipped while this device has unsaved edits (their save merges instead), unless
+ * `force` is set (used to undo changes a view-only visitor made on screen).
+ * @returns {Promise<boolean>} whether newer data was applied
+ */
+export function refreshSessionFromRemote({ force = false, reason = 'check' } = {}) {
+    if (refreshInFlight) return refreshInFlight;
+    const sessionId = state.session?.id;
+    const busy = () => ['MODIFIED', 'SAVING'].includes(state.ui.saveState);
+    if (!sessionId || state.ui.isInitializing || (!force && busy())) return Promise.resolve(false);
+    refreshInFlight = (async () => {
+        try {
+            const latest = await fetchLatestSessionRecord(sessionId);
+            if (!latest || state.session.id !== sessionId) return false;
+            const raw = latest.fields?.['Items with Variations'] || '';
+            if (!raw || (!force && raw === state.session.syncBaseRaw)) return false;
+            if (!force && busy()) return false; // an edit started meanwhile; its save merges
+            const latestData = JSON.parse(raw);
+            if (!force && state.session.syncBase && !hasMeaningfulDifference(latestData, state.session.syncBase)) {
+                state.session.syncBaseRaw = raw; // only bookkeeping changed; nothing to show
+                return false;
+            }
+            await hydrateSessionState(latestData);
+            ensureCurrentUserProfile();
+            const known = state.session.loadedCollaborators || [];
+            for (const id of latest.fields?.Collaborators || []) if (!known.includes(id)) known.push(id);
+            state.session.loadedCollaborators = known;
+            state.session.syncBaseRaw = raw;
+            state.session.syncBase = safeClone(buildSessionData());
+            state.session.contentFingerprint = computePlanContentFingerprint();
+            if (force && busy()) state.ui.saveState = 'SAVED';
+            announcePlanEvent('plan-remote-applied', { sessionId, reason });
+            return true;
+        } catch (error) {
+            console.warn('[PLAN-SYNC] Could not refresh the plan:', error.message);
+            return false;
+        } finally {
+            refreshInFlight = null;
+        }
+    })();
+    return refreshInFlight;
+}
+
+export async function saveSessionToAirtable() {
+    const hasPlanData = state.cart.items.size > 0 || state.cart.lockedItems.size > 0;
+    const hasDetails = state.eventDetails.combined.size > 0;
+    const hasReactions = state.session.reactions.size > 0;
+    const needsInitialSave = !state.session.id;
+
+    if (!hasPlanData && !hasDetails && !hasReactions && !needsInitialSave) {
+        log('API', 'saveSessionToAirtable: No changes or data to save, skipping.');
+        state.ui.saveState = 'SAVED';
+        // Check if ui.updateSaveShareButton exists before calling
+        if (typeof ui !== 'undefined' && ui.updateSaveShareButton) {
+            ui.updateSaveShareButton();
+        }
+        return false;
+    }
+
+    // Signed-out visitors can view, but not change, plans that signed-in people work on.
+    if (isPlanReadOnly()) {
+        log('API', 'saveSessionToAirtable: plan is view-only for signed-out visitors; not saving.');
+        state.ui.saveState = 'SAVED';
+        // Background saves from just viewing (presence, profiles) are skipped quietly;
+        // an actual change on screen is undone and the visitor is asked to sign in.
+        const contentChanged = computePlanContentFingerprint() !== state.session.contentFingerprint ||
+            !deepEqual(safeClone(buildSessionData().itemReactions) || {}, state.session.syncBase?.itemReactions || {});
+        if (contentChanged) {
+            blockIfReadOnly('save changes');
+            try { window.dispatchEvent(new CustomEvent('plan-readonly-revert')); } catch (e) { /* non-browser */ }
+        }
+        return false;
+    }
+
+    const sessionStatus = state.session.id ? `UPDATE (id: ${state.session.id})` : 'CREATE (new session)';
+    log('API', `saveSessionToAirtable: Triggered for ${sessionStatus}`);
+    state.ui.saveState = 'SAVING';
+    if (typeof ui !== 'undefined' && ui.updateSaveShareButton) ui.updateSaveShareButton();
+
+    const sessionData = buildSessionData();
 
     // Plan activity (creator / editors / last edited) for the hamburger plan list.
     const isCreateSave = !state.session.id;
@@ -1245,8 +1395,36 @@ export async function saveSessionToAirtable() {
     console.log('[SESSION-SAVE DEBUG] Saving archivedItems:', sessionData.archivedItems);
     console.log('[SESSION-SAVE DEBUG] Saving completedItems:', sessionData.completedItems);
 
-    const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `New Plan - ${new Date().toLocaleDateString()}`;
-    const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    // Merge onto the latest stored plan: apply only what this device changed since it
+    // last loaded/saved, so an older copy (e.g. a dormant tab) never reverts newer edits.
+    const syncBase = state.session.syncBase;
+    const localSnapshot = safeClone(sessionData);
+    let payloadData = sessionData;
+    let mergeOutcome = null;
+    if (!isCreateSave && syncBase && localSnapshot) {
+        try {
+            const latest = await fetchLatestSessionRecord(state.session.id);
+            if (latest) {
+                const known = state.session.loadedCollaborators || [];
+                for (const id of latest.fields?.Collaborators || []) {
+                    if (!known.includes(id)) known.push(id);
+                }
+                state.session.loadedCollaborators = known;
+                const remoteRaw = latest.fields?.['Items with Variations'] || '';
+                if (remoteRaw && remoteRaw !== state.session.syncBaseRaw) {
+                    mergeOutcome = mergeSessionData(syncBase, localSnapshot, JSON.parse(remoteRaw));
+                    payloadData = mergeOutcome.merged;
+                    console.log(`[SESSION-SAVE] Plan changed elsewhere since this device loaded it; merged this device's changes onto the latest version.`);
+                }
+            }
+        } catch (mergeError) {
+            console.warn('[SESSION-SAVE] Could not check the latest plan before saving:', mergeError.message);
+        }
+    }
+    const savedDetails = new Map(Object.entries(payloadData.eventDetails || {}));
+
+    const sessionName = savedDetails.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `New Plan - ${new Date().toLocaleDateString()}`;
+    const dateValue = savedDetails.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
     if (dateValue) {
         const dateToFormat = Array.isArray(dateValue) ? dateValue[0] : dateValue;
@@ -1276,12 +1454,12 @@ export async function saveSessionToAirtable() {
     // Safely serialize session data, handling potential circular references
     let serializedSessionData;
     try {
-        serializedSessionData = JSON.stringify(sessionData, null, 2);
+        serializedSessionData = JSON.stringify(payloadData, null, 2);
     } catch (stringifyError) {
         console.error('[SESSION-SAVE] JSON.stringify failed, attempting safe serialization:', stringifyError.message);
         // Use a replacer to break circular references
         const seen = new WeakSet();
-        serializedSessionData = JSON.stringify(sessionData, (key, value) => {
+        serializedSessionData = JSON.stringify(payloadData, (key, value) => {
             // Skip parentConceptRecord to avoid circular references
             if (key === 'parentConceptRecord') return undefined;
             if (typeof value === 'object' && value !== null) {
@@ -1296,8 +1474,8 @@ export async function saveSessionToAirtable() {
         "Name": sessionName,
         "Items with Variations": serializedSessionData,
         "Collaborators": validCollaboratorIds,
-        "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
-        "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
+        "Guest Count": parseInt(savedDetails.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
+        "Goals": savedDetails.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
         "Stores": storesValue
     };
     if (formattedDate) {
@@ -1324,9 +1502,10 @@ export async function saveSessionToAirtable() {
 
         const result = await response.json();
 
-        state.session.planActivity = nextPlanActivity;
+        state.session.planActivity = payloadData.planActivity || nextPlanActivity;
         state.session.contentFingerprint = contentFingerprint;
         state.session.loadedCollaborators = [...validCollaboratorIds];
+        await afterPlanSaved({ isCreateSave, syncBase, localSnapshot, payloadData, mergeOutcome, serializedSessionData });
 
         if (!isUpdate && result.records && result.records.length > 0) {
             const newSessionId = result.records[0].id;
@@ -2623,6 +2802,7 @@ export async function postPlanEvent(sessionId, eventType, eventData = {}) {
 }
 
 export async function postChatMessage(sessionId, senderId, senderName, content, itemId = null, { notify = true } = {}) {
+    if (typeof blockIfReadOnly === 'function' && blockIfReadOnly('send messages')) return null; // view-only for signed-out visitors
     if (!sessionId || !sessionId.startsWith('rec')) {
         log('API', `postChatMessage: Invalid sessionId provided: "${sessionId}". Cannot save message.`);
         return null;
@@ -2736,6 +2916,7 @@ export async function banUser(userId) {
  * @returns {Promise<object|null>} The updated record or null on failure
  */
 export async function updateChatMessage(messageId, newContent, senderId) {
+    if (typeof blockIfReadOnly === 'function' && blockIfReadOnly('edit messages')) return null; // view-only for signed-out visitors
     console.log('[updateChatMessage DEBUG] ========== updateChatMessage CALLED ==========');
     console.log('[updateChatMessage DEBUG] messageId:', messageId);
     console.log('[updateChatMessage DEBUG] newContent:', newContent?.substring(0, 50));
@@ -2816,6 +2997,7 @@ export async function updateChatMessage(messageId, newContent, senderId) {
  * @returns {Promise<object|null>} The updated record or null on failure
  */
 export async function updateChatMessageItemLink(messageId, itemId) {
+    if (typeof blockIfReadOnly === 'function' && blockIfReadOnly('pin messages')) return null; // view-only for signed-out visitors
     if (!messageId || !messageId.startsWith('rec')) {
         log('API', `updateChatMessageItemLink: Invalid messageId: "${messageId}"`);
         return null;
@@ -2863,6 +3045,7 @@ export async function updateChatMessageItemLink(messageId, itemId) {
  * @returns {Promise<boolean>} True if successful, false otherwise
  */
 export async function deleteChatMessage(messageId, senderId) {
+    if (typeof blockIfReadOnly === 'function' && blockIfReadOnly('delete messages')) return false; // view-only for signed-out visitors
     console.log('[deleteChatMessage DEBUG] ========== deleteChatMessage CALLED ==========');
     console.log('[deleteChatMessage DEBUG] messageId:', messageId);
     console.log('[deleteChatMessage DEBUG] senderId:', senderId);
@@ -2947,6 +3130,7 @@ export async function deleteChatMessage(messageId, senderId) {
  * @returns {Promise<{success: number, failed: number}>} Counts of successful and failed deletions
  */
 export async function clearChatMessages(sessionId) {
+    if (typeof blockIfReadOnly === 'function' && blockIfReadOnly('clear the conversation')) return { success: 0, failed: 0 }; // view-only for signed-out visitors
     if (!sessionId) {
         log('API', 'clearChatMessages: No sessionId provided');
         return { success: 0, failed: 0 };
@@ -3031,6 +3215,7 @@ export async function clearChatMessages(sessionId) {
  * @returns {Promise<{success: number, failed: number}>} Counts of successful and failed deletions
  */
 export async function archiveCompletedTasks(projectId) {
+    if (typeof blockIfReadOnly === 'function' && blockIfReadOnly('archive tasks')) return { success: 0, failed: 0 }; // view-only for signed-out visitors
     if (!projectId) {
         log('API', 'archiveCompletedTasks: No projectId provided');
         return { success: 0, failed: 0 };
@@ -3088,6 +3273,7 @@ export async function archiveCompletedTasks(projectId) {
  * @returns {Promise<object|null>} The updated reactions or null on failure
  */
 export async function toggleMessageReaction(messageId, userId, emoji, add = true) {
+    if (typeof blockIfReadOnly === 'function' && blockIfReadOnly('react to messages')) return null; // view-only for signed-out visitors
     if (!messageId || !messageId.startsWith('rec')) {
         log('API', `toggleMessageReaction: Invalid messageId provided: "${messageId}"`);
         return null;
@@ -3177,6 +3363,7 @@ export async function toggleMessageReaction(messageId, userId, emoji, add = true
  * @returns {Promise<object|null>} The created record or null on failure
  */
 export async function postReplyMessage(parentMessageId, sessionId, itemId, senderId, senderName, content) {
+    if (typeof blockIfReadOnly === 'function' && blockIfReadOnly('reply')) return null; // view-only for signed-out visitors
     if (!parentMessageId || !parentMessageId.startsWith('rec')) {
         log('API', `postReplyMessage: Invalid parentMessageId: "${parentMessageId}"`);
         return null;
@@ -3297,6 +3484,7 @@ export const COMPONENT_TYPES = {
  * @returns {Promise<object|null>} The created record or null on failure
  */
 export async function postComponentComment(sessionId, componentType, componentId, senderId, senderName, content, parentCommentId = null, attachments = []) {
+    if (typeof blockIfReadOnly === 'function' && blockIfReadOnly('comment')) return null; // view-only for signed-out visitors
     console.log('[ComponentComment DEBUG] ========== postComponentComment CALLED ==========');
     console.log('[ComponentComment DEBUG] Params:', { sessionId, componentType, componentId, senderId, senderName, contentLength: content?.length, parentCommentId, attachmentsCount: attachments?.length || 0 });
 
@@ -5241,7 +5429,24 @@ async function fetchTasksWithClientSideFilter(projectId, fieldsQuery, throwOnErr
  * @param {Object} taskData - Task data: { Name, Description, Status, DueDate, Assignee, ParentTask, Priority }
  * @returns {Promise<Object|null>} - The created task record or null if failed
  */
+const TASK_STATUS_WORDS = { pending: 'pending', in_progress: 'in progress', blocked: 'blocked', completed: 'complete' };
+
+function taskHistoryName(task) {
+    return String(task?.fields?.Name || 'Untitled task').slice(0, 80);
+}
+
+// Task changes live outside the plan's saved data, so they report to Plan History directly.
+function recordTaskHistory(sessionId, text, task) {
+    if (!sessionId || !text) return;
+    const itemId = task?.fields?.LinkedItem?.[0];
+    const change = itemId ? { type: 'task', text, itemId } : { type: 'task', text };
+    try {
+        window.dispatchEvent(new CustomEvent('plan-saved', { detail: { sessionId, changes: [change], merged: false, source: 'task' } }));
+    } catch (e) { /* non-browser */ }
+}
+
 export async function createTask(projectId, taskData) {
+    if (typeof blockIfReadOnly === 'function' && blockIfReadOnly('add tasks')) return null; // view-only for signed-out visitors
     if (!projectId) {
         console.error('createTask called without projectId');
         return null;
@@ -5313,6 +5518,7 @@ export async function createTask(projectId, taskData) {
         // Publish saved tasks before returning so every creation path refreshes task views.
         upsertProjectTask(data, projectId);
         scheduleAtmosphereRefresh('task-created');
+        recordTaskHistory(projectId, `Added the task “${taskHistoryName(data)}”`, data);
         return data;
     } catch (error) {
         console.error("Error creating task:", error);
@@ -5327,6 +5533,7 @@ export async function createTask(projectId, taskData) {
  * @returns {Promise<Object|null>} - The updated task record or null if failed
  */
 export async function updateTask(taskId, taskData) {
+    if (typeof blockIfReadOnly === 'function' && blockIfReadOnly('change tasks')) return null; // view-only for signed-out visitors
     if (!taskId) {
         console.error('updateTask called without taskId');
         return null;
@@ -5389,8 +5596,18 @@ export async function updateTask(taskId, taskData) {
 
         const data = await response.json();
         log('API', `Updated task: ${data.id}`);
+        const previousTask = state.tasks.all.get(data.id);
         upsertProjectTask(data);
         scheduleAtmosphereRefresh('task-updated');
+        const previousStatus = previousTask?.fields?.Status || 'pending';
+        const nextStatus = data.fields?.Status || 'pending';
+        recordTaskHistory(
+            data.fields?.ProjectId?.[0] || state.session?.id,
+            previousStatus !== nextStatus
+                ? `Marked the task “${taskHistoryName(data)}” ${TASK_STATUS_WORDS[nextStatus] || nextStatus}`
+                : `Updated the task “${taskHistoryName(data)}”`,
+            data
+        );
         return data;
     } catch (error) {
         console.error("Error updating task:", error);
@@ -5404,6 +5621,7 @@ export async function updateTask(taskId, taskData) {
  * @returns {Promise<boolean>} - True if deleted successfully, false otherwise
  */
 export async function deleteTask(taskId) {
+    if (typeof blockIfReadOnly === 'function' && blockIfReadOnly('delete tasks')) return false; // view-only for signed-out visitors
     if (!taskId) {
         console.error('deleteTask called without taskId');
         return false;
@@ -5428,7 +5646,10 @@ export async function deleteTask(taskId) {
         }
 
         log('API', `Deleted task: ${taskId}`);
+        const deletedTask = state.tasks.all.get(taskId);
         removeProjectTask(taskId);
+        recordTaskHistory(deletedTask?.fields?.ProjectId?.[0] || state.session?.id,
+            deletedTask ? `Deleted the task “${taskHistoryName(deletedTask)}”` : 'Deleted a task', deletedTask);
         scheduleAtmosphereRefresh('task-deleted');
         return true;
     } catch (error) {
@@ -5444,6 +5665,7 @@ export async function deleteTask(taskId) {
  * @returns {Promise<boolean>} - True if all updates succeeded, false otherwise
  */
 export async function updateTaskOrder(taskOrders) {
+    if (typeof blockIfReadOnly === 'function' && blockIfReadOnly('reorder tasks')) return false; // view-only for signed-out visitors
     if (!taskOrders || taskOrders.length === 0) {
         log('API', 'updateTaskOrder called with empty array');
         return true;

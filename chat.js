@@ -17,6 +17,11 @@ import { registerChatThread, registerRealtimeChatThread } from './components/pla
 let currentUser = null;
 let pusher = null;
 let sessionChatChannel = null;
+
+/** The plan's realtime channel in the catalog/chat view (null until subscribed). */
+export function getSessionChatChannel() {
+    return sessionChatChannel;
+}
 const FUN_ADJECTIVES = ['Happy', 'Clever', 'Sunny', 'Lucky', 'Creative', 'Brave', 'Sparkling', 'Cosmic', 'Witty', 'Zesty'];
 const FUN_NOUNS = ['Panda', 'Wombat', 'Explorer', 'Starship', 'Juggler', 'Wizard', 'Dolphin', 'Robot', 'Pineapple', 'Comet'];
 let isTabActive = true;
@@ -1973,6 +1978,10 @@ export async function initializeSessionChat() {
     const channelName = `presence-session-${sessionId}`;
     sessionChatChannel = pusher.subscribe(channelName);
     bindPresenceEvents();
+    // A collaborator saved the plan: bring this device up to date (see components/planSync.js).
+    sessionChatChannel.bind('client-plan-updated', (data) => {
+        window.dispatchEvent(new CustomEvent('remote-plan-updated', { detail: data || {} }));
+    });
     sessionChatChannel.bind('client-new-message', (data) => {
         if (data.senderId !== currentUser.id) {
             // A collaborator opening a new conversation is an open component of the plan, so

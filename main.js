@@ -20,6 +20,7 @@ import fluidEffect from './components/effects/fluid.js';
 import { showReceiptModal } from './components/receipt.js';
 import { updateFooter } from './components/footer.js';
 import { initializeProjectsDashboard, updateProjectsData, showProjectsLoading } from './components/projectsDashboard.js';
+import { initializePlanSync } from './components/planSync.js';
 import { initializeWtfPlansPanel, showWtfPlansPanel, hideWtfPlansPanel, syncWtfPlansPanelWithUrl, refreshWtfPlansData, isWtfPlansPanelOpen, trackRecentPlan } from './components/wtfPlansPanel.js';
 import { initializeWorkspace } from './utils/workspace.js';
 import { hideUnifiedChatPanel, exitFullscreen, getUCPWorkspacePreferences, restoreUCPWorkspacePreferences } from './components/unifiedChatPanel.js';
@@ -1415,6 +1416,7 @@ async function initialize() {
 
         initializeBiometricAuth(); // Initialize biometric/passkey authentication
         initializeWtfPlansPanel(); // Initialize WTF Plans panel
+        initializePlanSync(); // Keep this device on the latest plan; Plan History; view-only for signed-out visitors
         initializeForumPanel(); // Initialize Forum Panel
         initializeWorkspace({
             openLeft: showWtfPlansPanel,

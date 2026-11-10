@@ -85,7 +85,7 @@ export function getUCPWorkspacePreferences() {
 export async function restoreUCPWorkspacePreferences(preferences) {
     initializeUnifiedChatPanel();
     if (!preferences) return showUnifiedChatPanel();
-    currentFilter = ['all', 'global', 'tasks'].includes(preferences.filter) ? preferences.filter : 'all';
+    currentFilter = ['all', 'global', 'tasks', 'history'].includes(preferences.filter) ? preferences.filter : 'all';
     hideCompleted = !!preferences.hideCompleted;
     ucpFocusRecordId = preferences.sessionId === state.session?.id && getRecordById(preferences.communityItemId)
         ? preferences.communityItemId : null;
@@ -140,6 +140,10 @@ export function initializeUnifiedChatPanel() {
     setupHideCompletedToggle();
     setupFullscreenToggle();
     setupFocusBar();
+    window.addEventListener('plan-history-changed', () => {
+        historyCache.fetchedAt = 0;
+        if (panelOpen && currentFilter === 'history') loadPlanHistory(true);
+    });
     document.getElementById('ucp-attach-select')?.addEventListener('change', (event) => {
         setUCPItemScope(event.target.value);
     });
@@ -543,6 +547,12 @@ function renderContent() {
     // Tasks tab has its own rendering path
     if (currentFilter === 'tasks') {
         renderTasksTab(container);
+        return;
+    }
+
+    // Plan History tab (read-only timeline of saved plan changes)
+    if (currentFilter === 'history') {
+        renderHistoryTab(container);
         return;
     }
 
@@ -1196,6 +1206,104 @@ function syncMessageContextFromTask(messageId, task) {
  * grouped by status with color-coded badges.
  * @param {HTMLElement} container - The UCP content container
  */
+// ===== PLAN HISTORY TAB =====
+
+const HISTORY_TTL_MS = 30 * 1000;
+let historyCache = { sessionId: null, entries: null, fetchedAt: 0, error: false };
+let historyRequest = null;
+
+function loadPlanHistory(force = false) {
+    const sessionId = state.session?.id;
+    if (!sessionId) return Promise.resolve();
+    const fresh = historyCache.sessionId === sessionId && Date.now() - historyCache.fetchedAt < HISTORY_TTL_MS;
+    if (!force && fresh) return Promise.resolve();
+    if (historyRequest) return historyRequest;
+    historyRequest = fetch(`/api/plan-history?sessionId=${encodeURIComponent(sessionId)}&limit=150`)
+        .then(res => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+        .then(data => {
+            historyCache = { sessionId, entries: Array.isArray(data.entries) ? data.entries : [], fetchedAt: Date.now(), error: false };
+        })
+        .catch(() => {
+            historyCache = { sessionId, entries: historyCache.sessionId === sessionId ? historyCache.entries : null, fetchedAt: Date.now(), error: true };
+        })
+        .finally(() => {
+            historyRequest = null;
+            if (panelOpen && currentFilter === 'history' && state.session?.id === sessionId) renderContent();
+        });
+    return historyRequest;
+}
+
+
+function renderHistoryTab(container) {
+    container.innerHTML = '';
+    const inputArea = document.getElementById('ucp-input-area');
+    if (inputArea) inputArea.style.display = 'none';
+
+    const sessionId = state.session?.id;
+    if (!sessionId) {
+        showEmptyState('No active plan');
+        return;
+    }
+    const cached = historyCache.sessionId === sessionId ? historyCache.entries : null;
+    loadPlanHistory();
+    if (!cached) {
+        container.innerHTML = historyCache.error && historyCache.sessionId === sessionId
+            ? '<div class="ucp-empty">Unable to load plan history.</div>'
+            : '<div class="ucp-loading">Loading plan history...</div>';
+        return;
+    }
+
+    const entries = cached
+        .map(entry => ({
+            ...entry,
+            changes: (Array.isArray(entry.changes) ? entry.changes : [])
+                .filter(change => !selectedItemId || change.itemId === selectedItemId)
+        }))
+        .filter(entry => entry.changes.length > 0);
+
+    const intro = document.createElement('div');
+    intro.className = 'ucp-history-intro';
+    intro.textContent = selectedItemId
+        ? 'Changes to this item by signed-in collaborators, newest first.'
+        : 'Changes to this plan by signed-in collaborators, newest first.';
+    container.appendChild(intro);
+
+    if (entries.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'ucp-empty';
+        empty.innerHTML = `<span class="ucp-empty-icon">🕘</span><div>${selectedItemId ? 'No recorded changes for this item yet.' : 'No recorded changes yet. Edits by signed-in collaborators show up here.'}</div>`;
+        container.appendChild(empty);
+        return;
+    }
+
+    let lastDateLabel = '';
+    for (const entry of entries) {
+        const dateLabel = getDateLabel(entry.createdAt);
+        if (dateLabel !== lastDateLabel) {
+            const divider = document.createElement('div');
+            divider.className = 'ucp-date-divider';
+            divider.innerHTML = `<span>${escapeHtml(dateLabel)}</span>`;
+            container.appendChild(divider);
+            lastDateLabel = dateLabel;
+        }
+        const el = document.createElement('div');
+        el.className = 'ucp-history-entry';
+        const isMe = entry.userId && entry.userId === state.session?.user?.id;
+        const who = isMe ? 'You' : (entry.userName || state.session?.userProfiles?.get?.(entry.userId) || 'A collaborator');
+        el.innerHTML = `
+            <div class="ucp-history-head">
+                <span class="ucp-history-who">${escapeHtml(who)}</span>
+                <span class="ucp-history-time">${formatTime(entry.createdAt)}</span>
+            </div>
+            <ul class="ucp-history-changes">
+                ${entry.changes.map(change => `<li class="ucp-history-change ucp-history-${escapeHtml(change.type || 'item')}">${escapeHtml(change.text)}</li>`).join('')}
+            </ul>
+            ${entry.merged ? '<div class="ucp-history-merged" title="Saved on top of newer changes from another device">Merged with other recent changes</div>' : ''}
+        `;
+        container.appendChild(el);
+    }
+}
+
 function renderTasksTab(container) {
     container.innerHTML = '';
 

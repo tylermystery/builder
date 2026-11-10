@@ -950,6 +950,10 @@ export async function initializePresentationChat() {
 
     const channelName = `presence-session-${sessionId}`;
     presentationChatChannel = presentationPusher.subscribe(channelName);
+    // A collaborator saved the plan: bring this device up to date (see components/planSync.js).
+    presentationChatChannel.bind('client-plan-updated', (data) => {
+        window.dispatchEvent(new CustomEvent('remote-plan-updated', { detail: data || {} }));
+    });
 
     // Bind presence events
     presentationChatChannel.bind('pusher:subscription_succeeded', (members) => {

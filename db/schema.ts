@@ -950,3 +950,23 @@ export const crowdfundContributions = pgTable(
     fundKeyIdx: index("crowdfund_contributions_fund_key_idx").on(t.fundKey),
   }),
 );
+
+// Plan History: one row per saved change to a plan by a signed-in person, shown in
+// the conversation panel's History tab. `session_id` is the Airtable plan id;
+// `changes` is a list of { type, text, itemId? } describing what that save changed.
+// `merged` marks saves that were folded onto newer changes from another device.
+export const planHistory = pgTable(
+  "plan_history",
+  {
+    id: serial().primaryKey(),
+    sessionId: text("session_id").notNull(),
+    userId: text("user_id").notNull(),
+    userName: text("user_name"),
+    changes: jsonb("changes").notNull(),
+    merged: boolean("merged").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    sessionCreatedIdx: index("plan_history_session_created_idx").on(t.sessionId, t.createdAt),
+  }),
+);
