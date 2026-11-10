@@ -8,6 +8,7 @@ import { log } from '../../utils/debug.js';
 import { renderRichText } from '../../utils.js';
 import { applyCloudinaryFitTransform, getImageOrientationClass } from '../../utils/imageOptimizer.js';
 import { getActiveStorePillars } from '../../availability.js';
+import { getOpenConversationCounts, getOpenCountsForItems, describeOpenCounts } from '../../utils/openConversations.js';
 
 // Track loaded images for each item
 const itemImagesCache = new Map();
@@ -635,7 +636,12 @@ export async function renderCompactCard(item) {
     const commentCacheKey = `item:${recordId}`;
     const cachedComments = _deps.componentComments.getCache().get(commentCacheKey);
     const commentCount = cachedComments?.length || 0;
-    const commentsBtnHTML = `<button class="reaction-zone-comments-btn" data-record-id="${recordId}" data-component-id="${recordId}" title="${commentCount > 0 ? commentCount + ' comment' + (commentCount !== 1 ? 's' : '') : 'Add a comment'}"><span class="reaction-zone-comments-icon">💬</span><span>${commentCount || ''}</span></button>`;
+    // One combined badge: open chats + open tasks for this item. Selecting it opens
+    // the plan chat scoped to the item; the full message count lives in the tooltip.
+    const openCounts = getOpenConversationCounts().byItem.get(recordId) || { chats: 0, tasks: 0, comments: commentCount, total: 0 };
+    if (!openCounts.comments) openCounts.comments = commentCount;
+    const openTitle = openCounts.total > 0 || openCounts.comments > 0 ? describeOpenCounts(openCounts) : 'Add a comment';
+    const commentsBtnHTML = `<button class="reaction-zone-comments-btn${openCounts.total > 0 ? ' has-open' : ''}" data-record-id="${recordId}" data-component-id="${recordId}" title="${escapeHtml(openTitle)}" aria-label="${escapeHtml(openTitle)}"><span class="reaction-zone-comments-icon">💬</span><span class="reaction-zone-open-count">${openCounts.total || ''}</span></button>`;
 
     // Task status badge
     const taskStatusForBadge = _deps.getElementTaskStatus('item', recordId);
@@ -824,9 +830,11 @@ export async function renderCompactGroupCard(group) {
         const memberComments = _deps.componentComments.getCache().get(`item:${gId}`);
         groupCommentCount += memberComments?.length || 0;
     }
-    const groupCommentBadgeHTML = groupCommentCount > 0
-        ? `<span class="compact-badge-pill compact-badge-comment" title="${groupCommentCount} comment${groupCommentCount !== 1 ? 's' : ''} across group"><span class="compact-badge-icon">💬</span><span class="compact-badge-count">${groupCommentCount}</span></span>`
-        : '';
+    const groupOpen = getOpenCountsForItems(groupItems);
+    if (!groupOpen.comments) groupOpen.comments = groupCommentCount;
+    // Always rendered (hidden while empty) so it can appear once counts finish loading.
+    const groupHasActivity = groupOpen.total > 0 || groupOpen.comments > 0;
+    const groupCommentBadgeHTML = `<span class="compact-badge-pill compact-badge-comment${groupOpen.total > 0 ? ' has-open' : ''}" data-open-group-items="${escapeHtml(groupItems.join(','))}" title="${escapeHtml(describeOpenCounts(groupOpen) + ' across group')}"${groupHasActivity ? '' : ' hidden'}><span class="compact-badge-icon">💬</span><span class="compact-badge-count">${groupOpen.total || ''}</span></span>`;
 
     // Aggregate task status
     const taskStatusCounts = {};
@@ -899,7 +907,7 @@ export async function renderCompactGroupCard(group) {
         groupReactionBarHTML = `<span class="compact-card-reactions" title="${groupTotalReactions} reaction${groupTotalReactions !== 1 ? 's' : ''} across group">${summaryPill}${top3Group}${moreGroupReactions}</span>`;
     }
 
-    const hasGroupMeta = groupReactionBarHTML || groupTaskBadgeHTML || groupCommentBadgeHTML;
+    const hasGroupMeta = groupReactionBarHTML || groupTaskBadgeHTML || groupHasActivity;
     const groupMetaHTML = hasGroupMeta ? `
                 <div class="compact-card-meta">
                     ${groupReactionBarHTML}

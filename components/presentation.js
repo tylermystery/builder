@@ -69,6 +69,7 @@ import * as reactions from './presentation/reactions.js';
 // Phase 6 extracted modules
 import * as presState from './presentation/presState.js';
 import * as headerSummary from './presentation/headerSummary.js';
+import * as openConversationBadges from './presentation/openConversationBadges.js';
 
 // Task status constants (re-exported from taskStatusManagement)
 const { ELEMENT_TASK_STATUS, TASK_STATUS_CONFIG } = taskStatusManagement;
@@ -260,6 +261,7 @@ function ensureDOMElements() {
         refreshFlowLines,
         showUnifiedChatPanel,
         openConversationForItem: (recordId) => cardInteractions.openConversationForItem(recordId),
+        openOpenConversations: (recordId) => openConversationBadges.openForItem(recordId),
         getItineraryItemsListEl: () => presState.getItineraryItemsListEl(),
         updatePresentationHeaderTotal: () => headerSummary.updatePresentationHeaderTotal(),
         itemImagesCache,
@@ -268,6 +270,7 @@ function ensureDOMElements() {
             // Critical interactions first (user needs these immediately)
             cardInteractions.initializeCompactCardClicks();
             reactionSummaryBar.initializeReactionZones();
+            openConversationBadges.updateBadges();
 
             // Defer non-critical post-render work to avoid blocking the main thread
             requestAnimationFrame(() => {
@@ -286,6 +289,7 @@ function ensureDOMElements() {
     };
 
     itemRendering.init(phase4ADeps);
+    openConversationBadges.init({ fetchChatMessages: api.fetchChatMessages, triggerSave, saveSnapshot: api.saveOpenConversationsSnapshot });
     reactionSummaryBar.init(phase4ADeps);
     cardInteractions.init(phase4ADeps);
     itemActions.init({
@@ -601,6 +605,9 @@ export async function showPresentationView(listType, startRecordId = null) {
 
     // Load comment counts in background (non-blocking)
     componentComments.loadAllCommentCounts();
+
+    // Open chat/task counts for the summary box and item cards (non-blocking)
+    openConversationBadges.refresh();
 
     // Scroll to specific item if provided
     if (startRecordId) {

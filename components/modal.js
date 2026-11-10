@@ -2314,7 +2314,9 @@ function updateModalSentimentChips(recordId) {
         if (globalChip) globalChip.style.display = 'none';
         return;
     }
-    if (globalChip) renderSentimentChip(globalChip, recordId, 'global');
+    // Store-wide ("global item") reactions are retired from the detail view; the plan's
+    // own reactions, comments and tasks cover this. The chip stays hidden.
+    if (globalChip) globalChip.style.display = 'none';
 }
 
 // ── Anchored sentiment popup (chat-message style) ───────────────────────────
