@@ -6862,9 +6862,15 @@ body.plan-view-readonly #radial-menu-container {
                 <button id="ucp-fullscreen-btn" class="ucp-fullscreen-btn" title="Expand to full screen" aria-label="Toggle full screen">
                     <span id="ucp-fullscreen-icon">&#x26F6;</span>
                 </button>
-                <button id="ucp-menu-btn" class="ucp-menu-btn" title="Chat options" aria-label="Chat options">
-                    <span class="ucp-menu-icon">&#x22EE;</span>
-                </button>
+                <label class="ucp-view-select-wrap" title="Show">
+                    <span class="visually-hidden">Show</span>
+                    <select id="ucp-view-select" class="ucp-view-select" aria-label="Show">
+                        <option value="open">Open</option>
+                        <option value="tasks">Tasks</option>
+                        <option value="all">All</option>
+                        <option value="history">History</option>
+                    </select>
+                </label>
                 <button id="ucp-close-btn" class="ucp-close-btn" title="Close panel" aria-label="Close chat panel">
                     <span>&times;</span>
                 </button>

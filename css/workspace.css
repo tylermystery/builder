@@ -391,3 +391,13 @@ body.presentation-active #header-search-wrapper #filter-toggle-btn { display: no
     display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 10px;
     background: rgba(14, 165, 233, 0.12); color: #0369a1; font-size: 0.72em; font-weight: 600;
 }
+
+/* Conversations panel header: view dropdown (Open · Tasks · All · History) */
+.ucp-view-select-wrap { display: inline-flex; align-items: center; }
+.ucp-view-select-wrap .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ucp-view-select {
+    padding: 4px 26px 4px 10px; border-radius: 14px; border: 1px solid #ddd;
+    background: #fff; color: #333; font: inherit; font-size: 0.8em; font-weight: 600; cursor: pointer;
+}
+.ucp-view-select:focus-visible { outline: 2px solid #8b5cf6; outline-offset: 1px; }
+.ucp-view-chips:empty { display: none; }

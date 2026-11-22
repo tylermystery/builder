@@ -553,10 +553,7 @@ function updateUCPTabLabels() {
 
 // Open chats / open tasks for the current scope (the whole plan, or the chosen item).
 function updateTabCounts() {
-    // Counts live on the view chips; refresh them in place.
-    const container = document.getElementById('ucp-content');
-    const old = container?.querySelector(':scope > .ucp-view-chips');
-    if (old) old.replaceWith(buildViewChips(Number(old.querySelector('.ucp-view-note')?.textContent?.match(/\d+/)?.[0]) || 0));
+    syncViewSelect();
 }
 
 // Item scope shown as a chip: "About: <item> ✕". The select stays the way to pick.
@@ -584,44 +581,13 @@ function currentViewChip() {
 }
 
 function buildViewChips(hiddenCount = 0) {
+    syncViewSelect();
     const row = document.createElement('div');
     row.className = 'ucp-view-chips';
-    row.setAttribute('role', 'radiogroup');
-    row.setAttribute('aria-label', 'Show');
-    let counts = { chats: 0, tasks: 0 };
-    if (state.session?.id) {
-        const { plan, byItem } = getOpenConversationCounts();
-        counts = selectedItemId ? (byItem.get(selectedItemId) || counts) : plan;
-    }
-    const active = currentViewChip();
-    const defs = [
-        ['open', 'Open', counts.chats + counts.tasks, 'Open chats and tasks'],
-        ['all', 'All', 0, 'Everything, including resolved and done'],
-        ['tasks', 'Tasks', counts.tasks, 'Chats turned into tasks, by status'],
-        ['history', 'History', 0, 'What changed on this plan, and who changed it']
-    ];
-    for (const [value, label, n, title] of defs) {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.setAttribute('role', 'radio');
-        chip.className = `ucp-view-chip${active === value ? ' active' : ''}`;
-        chip.setAttribute('aria-checked', String(active === value));
-        chip.title = title;
-        chip.innerHTML = `${label}${n > 0 ? ` <span class="ucp-tab-count">${n}</span>` : ''}`;
-        chip.addEventListener('click', () => {
-            if (active === value) return;
-            if (value === 'open' || value === 'all') { currentFilter = 'all'; chatView = value; }
-            else currentFilter = value;
-            if (value === 'tasks') loadTaskData(true);
-            shouldScrollToBottom = true;
-            renderContent();
-        });
-        row.appendChild(chip);
-    }
-    if (active === 'open' && hiddenCount > 0) {
+    if (currentViewChip() === 'open' && hiddenCount > 0) {
         const note = document.createElement('span');
         note.className = 'ucp-view-note';
-        note.textContent = `${hiddenCount} resolved or done hidden`;
+        note.textContent = `${hiddenCount} resolved or done hidden · choose “All” to see them`;
         row.appendChild(note);
     }
     return row;
@@ -2756,107 +2722,41 @@ function formatMessageContent(content) {
 
 // ===== CHAT MENU ACTIONS (Clear/Archive) =====
 
+// The header's view dropdown: Open (default) · Tasks · All · History.
 function setupChatMenuActions() {
-    const menuBtn = document.getElementById('ucp-menu-btn');
-    if (!menuBtn) return;
-
-    menuBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleChatMenu();
-    });
+    const select = document.getElementById('ucp-view-select');
+    if (!select) return;
+    select.addEventListener('change', () => setPanelView(select.value));
 }
 
-function toggleChatMenu() {
-    const existing = document.querySelector('.ucp-chat-menu');
-    if (existing) {
-        existing.remove();
-        return;
+function setPanelView(value) {
+    if (value === 'open' || value === 'all') { currentFilter = 'all'; chatView = value; }
+    else currentFilter = value === 'tasks' ? 'tasks' : 'history';
+    if (value === 'tasks') loadTaskData(true);
+    shouldScrollToBottom = true;
+    renderContent();
+}
+
+// Keep the dropdown's selection and open counts current.
+function syncViewSelect() {
+    const select = document.getElementById('ucp-view-select');
+    if (!select) return;
+    let counts = { chats: 0, tasks: 0 };
+    if (state.session?.id) {
+        const { plan, byItem } = getOpenConversationCounts();
+        counts = selectedItemId ? (byItem.get(selectedItemId) || counts) : plan;
     }
-
-    const menuBtn = document.getElementById('ucp-menu-btn');
-    if (!menuBtn) return;
-
-    const menu = document.createElement('div');
-    menu.className = 'ucp-chat-menu';
-
-    // Permission check
-    const currentRole = state.permissions?.currentRole;
-    const isLoadingPerms = state.permissions?.isLoading !== false;
-    const canEditByRole = api.canEdit ? api.canEdit(currentRole) : false;
-    const canEditByOwnership = state.session.isOwned === true;
-    const canUserEdit = (!isLoadingPerms && canEditByRole) || canEditByOwnership;
-
-    const messageCount = ucpMessages.length;
-
-    menu.innerHTML = `
-        <button class="ucp-chat-menu-item ${!canUserEdit || messageCount === 0 ? 'disabled' : ''}" data-action="clear">
-            <span class="ucp-chat-menu-icon">🗑</span>
-            <span>Clear Conversation</span>
-            ${messageCount > 0 ? `<span class="ucp-chat-menu-count">${messageCount}</span>` : ''}
-        </button>
-    `;
-
-    menuBtn.parentElement.appendChild(menu);
-
-    // Attach handlers
-    const clearBtn = menu.querySelector('[data-action="clear"]');
-    if (clearBtn && canUserEdit && messageCount > 0) {
-        clearBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            menu.remove();
-            handleClearConversation();
-        });
-    }
-
-    // Close on outside click
-    const closeHandler = (e) => {
-        if (!menu.contains(e.target) && e.target !== menuBtn) {
-            menu.remove();
-            document.removeEventListener('click', closeHandler);
-        }
+    const labels = {
+        open: `Open${counts.chats + counts.tasks ? ` (${counts.chats + counts.tasks})` : ''}`,
+        tasks: `Tasks${counts.tasks ? ` (${counts.tasks})` : ''}`,
+        all: 'All',
+        history: 'History'
     };
-    setTimeout(() => document.addEventListener('click', closeHandler), 10);
+    for (const opt of select.options) opt.textContent = labels[opt.value] || opt.textContent;
+    select.value = currentViewChip();
 }
 
-async function handleClearConversation() {
-    const messageCount = ucpMessages.length;
-    if (messageCount === 0) {
-        showToast('No messages to clear', 2000);
-        return;
-    }
 
-    // Show confirmation dialog
-    const confirmed = confirm(
-        `Clear all ${messageCount} message${messageCount !== 1 ? 's' : ''} in this conversation?\n\nThis cannot be undone.`
-    );
-
-    if (!confirmed) return;
-
-    const sessionId = state.session?.id;
-    if (!sessionId) return;
-
-    showToast('Clearing conversation...', 2000);
-
-    try {
-        const result = await api.clearChatMessages(sessionId);
-
-        if (result.success > 0) {
-            // Clear local state
-            ucpMessages = [];
-            ucpPlanEvents = [];
-            shouldScrollToBottom = true;
-            renderContent();
-            showToast(`Cleared ${result.success} message${result.success !== 1 ? 's' : ''}`, 3000);
-        } else if (result.failed > 0) {
-            showToast('Failed to clear some messages', 3000);
-        } else {
-            showToast('No messages to clear', 2000);
-        }
-    } catch (error) {
-        log('UCP', 'Error clearing conversation:', error);
-        showToast('Failed to clear conversation', 3000);
-    }
-}
 
 // ===== Collab on chat messages (same interface as items) =====
 registerCollabKind('message', {
