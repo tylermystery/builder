@@ -25,6 +25,8 @@ import { state, getRecordById, invalidateRecordsIndex } from '../state.js';
 import * as api from '../api.js';
 import { EMOJI_REACTIONS, computeDemocraticAverage } from '../config.js';
 import { showUserModal } from '../auth.js';
+import { showToast } from '../ui.js';
+import { togglePendingReaction, queuePendingComment } from '../utils/pendingCollab.js';
 import { log } from '../utils/debug.js';
 
 export const PUBLIC_IDEA_STATUS = 'Public Idea';
@@ -251,6 +253,14 @@ let publicIdeasLoad = Promise.resolve();
 
 export function whenPublicIdeasLoaded() {
     return publicIdeasLoad;
+}
+
+// After sign-in (held collab sent, and admins now see suggested ideas), reload.
+if (typeof window !== 'undefined') {
+    window.addEventListener('public-catalog-refresh', () => {
+        const storeId = state.ui?.activeShopId;
+        if (storeId) loadPublicIdeasForStore(storeId);
+    });
 }
 
 export function loadPublicIdeasForStore(storeId) {
@@ -485,6 +495,25 @@ function currentUser() {
 }
 
 // Promote the user to sign in for any public write. Returns true if already signed in.
+const GUEST_ID = 'pending-guest';
+
+// Signed out: hold the reaction on this device (sent on sign-in) and show it now.
+// Returns the same shape as api.togglePublicReaction.
+function holdGuestReaction(publicItemId, emoji, variationId = null, opts = {}) {
+    const reacted = togglePendingReaction(publicItemId, emoji, variationId, opts);
+    if (reacted) {
+        try { showToast('Reaction saved. Sign in to share it with the community.', 3500, 'info'); } catch (_) {}
+    }
+    return { reacted, publicItemId };
+}
+
+// Signed out: keep the comment and ask them to sign in; it posts once they do.
+function holdGuestComment(publicItemId, text, opts = {}) {
+    queuePendingComment(publicItemId, text, null, opts);
+    try { showToast('Sign in to post your comment. We’ll post it as soon as you do.', 4000, 'info'); } catch (_) {}
+    try { showUserModal(); } catch (_) {}
+}
+
 function requireSignIn() {
     if (state.session?.user?.isAuthenticated) return true;
     try { showUserModal(); } catch (_) {}
@@ -642,22 +671,24 @@ function buildReactionRow(section, record, row, opts = {}) {
     const me = currentUser();
     EMOJI_REACTIONS.forEach(emoji => {
         const data = (row.reactions || {})[emoji] || { count: 0, users: [] };
-        const mine = me.id && Array.isArray(data.users) && data.users.includes(me.id);
+        const mine = Array.isArray(data.users) && data.users.includes(me.id || GUEST_ID);
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'public-reaction-btn' + (mine ? ' reacted' : '');
         btn.innerHTML = `<span class="pr-emoji">${emoji}</span>${data.count ? `<span class="pr-count">${data.count}</span>` : ''}`;
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (!requireSignIn()) return;
+            const signedIn = !!state.session?.user?.isAuthenticated;
             btn.disabled = true;
             // No container yet -> send catalog identity so the server creates one.
-            const result = await api.togglePublicReaction(
-                row.id, emoji, null, row.id == null ? communityWriteOpts(record) : {});
+            const writeOpts = row.id == null ? communityWriteOpts(record) : {};
+            const result = signedIn
+                ? await api.togglePublicReaction(row.id, emoji, null, writeOpts)
+                : holdGuestReaction(row.id, emoji, null, writeOpts);
             btn.disabled = false;
             if (!result) return;
             if (row.id == null && result.publicItemId != null) row.id = result.publicItemId;
-            applyReactionToggle(row, emoji, me.id, result.reacted);
+            applyReactionToggle(row, emoji, me.id || GUEST_ID, result.reacted);
             rerenderOpen(section, record, opts);
         });
         wrap.appendChild(btn);
@@ -744,12 +775,16 @@ function buildComposer(section, record, row, me, opts, parentCommentId) {
     sendBtn.textContent = parentCommentId != null ? 'Reply' : 'Post';
     sendBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!requireSignIn()) return;
         const text = ta.value.trim();
         if (!text) { ta.focus(); return; }
-        sendBtn.disabled = true;
         const writeOpts = row.id == null ? communityWriteOpts(record) : {};
         if (parentCommentId != null) writeOpts.parentCommentId = parentCommentId;
+        if (!state.session?.user?.isAuthenticated) {
+            holdGuestComment(row.id, text, writeOpts);
+            ta.value = '';
+            return;
+        }
+        sendBtn.disabled = true;
         const created = await api.addPublicComment(row.id, text, me.name, null, writeOpts);
         sendBtn.disabled = false;
         if (!created) return;
@@ -805,7 +840,6 @@ function buildCommentEl(section, record, row, comment, me, opts = {}, isReply = 
         replyBtn.innerHTML = '↩ Reply';
         replyBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (!requireSignIn()) return;
             if (!replyComposer) {
                 replyComposer = buildComposer(section, record, row, me, opts, comment.id);
                 el.appendChild(replyComposer);
@@ -852,7 +886,7 @@ function buildCommentReactionChips(section, record, row, comment, me, opts) {
     const chipsRow = document.createElement('div');
     chipsRow.className = 'public-comment-reactions';
     entries.forEach(([emoji, data]) => {
-        const mine = me.id && Array.isArray(data.users) && data.users.includes(me.id);
+        const mine = Array.isArray(data.users) && data.users.includes(me.id || GUEST_ID);
         const chip = document.createElement('button');
         chip.type = 'button';
         chip.className = 'public-comment-reaction' + (mine ? ' reacted' : '');
@@ -887,9 +921,10 @@ function buildCommentEmojiPicker(section, record, row, comment, me, opts) {
 // Toggle the current user's `emoji` reaction on a single comment, optimistically
 // updating the cached summary and re-rendering the open panel.
 async function toggleCommentReaction(section, record, row, comment, emoji, me, opts, btn) {
-    if (!requireSignIn()) return;
     if (btn) btn.disabled = true;
-    const result = await api.togglePublicReaction(row.id, emoji, null, { commentId: comment.id });
+    const result = state.session?.user?.isAuthenticated
+        ? await api.togglePublicReaction(row.id, emoji, null, { commentId: comment.id })
+        : holdGuestReaction(row.id, emoji, null, { commentId: comment.id });
     if (btn) btn.disabled = false;
     if (!result) return;
     comment.reactions = comment.reactions || {};
@@ -962,7 +997,7 @@ export function getCommunitySentimentScore(record) {
  */
 export async function toggleCommunityReactionForRecord(record, emoji) {
     if (!record) return false;
-    if (!requireSignIn()) return false;
+    if (!requireSignIn()) return false; // (only used by the retired global popup)
     const row = getOrInitCommunityRow(record);
     if (!row) return false;
     const me = currentUser();
@@ -1275,7 +1310,9 @@ export function renderItemVariations(section, record, opts = {}) {
     // A suggested item (someone without publish permission asked for it to join
     // the catalog) is reviewed here too, so publishers never have to go looking
     // for a separate queue.
-    const needsItemReview = canReview && row?.catalogStatus === 'pending' && row?.id != null;
+    // Collab lifecycle review for admins: Suggested -> Recommended -> In catalog.
+    const needsItemReview = canReview && row?.id != null && !row?.catalogItemId &&
+        (row?.catalogStatus === 'pending' || row?.catalogStatus === 'recommended');
     if (variations.length === 0 && !canSuggest && !needsItemReview) {
         section.style.display = 'none';
         return;
@@ -1290,7 +1327,7 @@ export function renderItemVariations(section, record, opts = {}) {
 
     const summaryParts = [`${variations.length + 1} version${variations.length ? 's' : ''}`];
     if (pendingCount > 0) summaryParts.push(`${pendingCount} awaiting review`);
-    if (needsItemReview) summaryParts.push('suggested for the catalog');
+    if (needsItemReview) summaryParts.push(row.catalogStatus === 'recommended' ? 'recommended idea' : 'suggested idea · needs review');
 
     const header = document.createElement('button');
     header.type = 'button';
@@ -1344,11 +1381,15 @@ function rerenderVariations(ctx) {
 // ordinary community idea and records the note.
 function buildItemReviewBar(ctx) {
     const { record, row } = ctx;
+    const status = row?.catalogStatus;
     const wrap = document.createElement('div');
     wrap.className = 'variation-item-review';
+    const who = escapeHtml(userLabel(row?.authorId));
     wrap.innerHTML = `
         <div class="variation-item-review-text">
-            ${escapeHtml(userLabel(row?.authorId))} suggested this item for the store catalog.
+            ${status === 'recommended'
+                ? `<strong>Recommended</strong> · open to everyone's collab. Add it to the catalog when it's ready to book.`
+                : `<strong>Suggested</strong> by ${who} · only you and other store admins can see it. Step 1: recommend it to the community. Step 2: add it to the catalog.`}
         </div>
     `;
 
@@ -1369,23 +1410,40 @@ function buildItemReviewBar(ctx) {
         actions.appendChild(btn);
     };
 
-    addButton('✅ Add to the catalog', 'variation-approve-btn', async () => {
-        const item = await api.reviewPublicItem(row.id, 'approve');
-        if (!item) return notify(ctx, 'Could not approve that item.', 'error');
+    const decide = async (decision, done, failed, note = null) => {
+        const item = await api.reviewPublicItem(row.id, decision, note);
+        if (!item) return notify(ctx, failed, 'error');
         applyItemReviewResult(record, row, item);
         refreshAfterVariationChange(ctx);
-        notify(ctx, 'Added to the store catalog.', 'success');
-    });
+        notify(ctx, done, 'success');
+    };
 
-    addButton('✖️ Decline', 'variation-deny-btn', async () => {
-        const note = prompt('Optional note back to the author:', '');
-        if (note === null) return;
-        const item = await api.reviewPublicItem(row.id, 'reject', note || null);
-        if (!item) return notify(ctx, 'Could not decline that item.', 'error');
-        applyItemReviewResult(record, row, item);
-        refreshAfterVariationChange(ctx);
-        notify(ctx, 'Suggestion declined.', 'success');
-    });
+    if (status === 'pending') {
+        addButton('⭐ Recommend', 'variation-approve-btn', () =>
+            decide('recommend', 'Recommended: everyone can now collab on it.', 'Could not recommend that idea.'));
+    }
+    addButton('✅ Add to the catalog', 'variation-approve-btn', () =>
+        decide('catalog', 'Added to the store catalog.', 'Could not add that item.'));
+    if (status === 'recommended') {
+        addButton('⚑ Back to suggested', 'variation-deny-btn', () =>
+            decide('flag', 'Moved back to suggested.', 'Could not move that idea.'));
+    } else {
+        addButton('✖️ Decline', 'variation-deny-btn', async () => {
+            const note = prompt('Optional note back to the author:', '');
+            if (note === null) return;
+            await decide('reject', 'Suggestion declined.', 'Could not decline that item.', note || null);
+        });
+    }
+
+    // Approve the author as a store member so their next ideas skip review.
+    const storeId = row?.storeId || storeIdForRecord(record);
+    const authorId = row?.authorId;
+    if (status === 'pending' && authorId && storeId && authorId !== currentUser().id) {
+        addButton(`👤 Make ${userLabel(authorId)} a member`, 'variation-approve-btn', async () => {
+            const ok = await api.setCollabMemberStatus(storeId, authorId, 'member');
+            notify(ctx, ok ? 'Approved as a member. Their next ideas are recommended straight away.' : 'Could not approve that member.', ok ? 'success' : 'error');
+        });
+    }
 
     wrap.appendChild(actions);
     return wrap;
@@ -1472,26 +1530,24 @@ function buildVariationReactionRow(ctx, variation) {
 
     EMOJI_REACTIONS.forEach(emoji => {
         const data = summary[emoji] || { count: 0, users: [] };
-        const mine = me.id && Array.isArray(data.users) && data.users.includes(me.id);
+        const mine = Array.isArray(data.users) && data.users.includes(me.id || GUEST_ID);
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'public-reaction-btn variation-reaction-btn' + (mine ? ' reacted' : '');
         btn.innerHTML = `<span class="pr-emoji">${emoji}</span>${data.count ? `<span class="pr-count">${data.count}</span>` : ''}`;
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (!requireSignIn()) return;
             btn.disabled = true;
             const target = getOrInitCommunityRow(record);
-            const result = await api.togglePublicReaction(
-                target?.id ?? null,
-                emoji,
-                variation ? variation.id : null,
-                target?.id == null ? communityWriteOpts(record) : {}
-            );
+            const args = [target?.id ?? null, emoji, variation ? variation.id : null,
+                target?.id == null ? communityWriteOpts(record) : {}];
+            const result = state.session?.user?.isAuthenticated
+                ? await api.togglePublicReaction(...args)
+                : holdGuestReaction(...args);
             btn.disabled = false;
             if (!result) return;
             if (target && target.id == null && result.publicItemId != null) target.id = result.publicItemId;
-            applyReactionToggle(variation || target, emoji, me.id, result.reacted);
+            applyReactionToggle(variation || target, emoji, me.id || GUEST_ID, result.reacted);
             rerenderVariations(ctx);
         });
         wrap.appendChild(btn);
@@ -1623,7 +1679,14 @@ function buildVariationComments(ctx, variation) {
     const post = async () => {
         const text = input.value.trim();
         if (!text) return;
-        if (!requireSignIn()) return;
+        if (!state.session?.user?.isAuthenticated) {
+            const held = getOrInitCommunityRow(record);
+            queuePendingComment(held?.id ?? null, text, variationId, held?.id == null ? communityWriteOpts(record) : {});
+            try { showToast('Sign in to post your comment. We’ll post it as soon as you do.', 4000, 'info'); } catch (_) {}
+            try { showUserModal(); } catch (_) {}
+            input.value = '';
+            return;
+        }
         send.disabled = true;
         const target = getOrInitCommunityRow(record);
         const me = currentUser();

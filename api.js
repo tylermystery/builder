@@ -7432,12 +7432,42 @@ function publicWriteTarget(publicItemId, opts = {}) {
 // when reacting to a catalog item that has no community container yet — pass
 // `opts.catalogItemId` + `opts.storeId` and the server creates one. Returns
 // { reacted, publicItemId, commentId } on success, or null when logged out / on error.
+// ===== Collab membership (store contributors / members) =====
+
+export async function joinStoreCollab(storeId) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers || !storeId) return null;
+    try {
+        const res = await fetch('/api/collab/join', { method: 'POST', headers, body: JSON.stringify({ storeId }) });
+        return res.ok ? (await res.json()).status || null : null;
+    } catch { return null; }
+}
+
+export async function getMyCollabStatus(storeId) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers || !storeId) return null;
+    try {
+        const res = await fetch(`/api/collab/me?storeId=${encodeURIComponent(storeId)}`, { headers });
+        return res.ok ? await res.json() : null;
+    } catch { return null; }
+}
+
+export async function setCollabMemberStatus(storeId, userId, status) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers || !storeId || !userId) return false;
+    try {
+        const res = await fetch('/api/collab/members', { method: 'POST', headers, body: JSON.stringify({ storeId, userId, status }) });
+        return res.ok;
+    } catch { return false; }
+}
+
 export async function togglePublicReaction(publicItemId, emoji, variationId = null, opts = {}) {
     const headers = publicCatalogAuthHeaders();
     if (!headers) return null;
     try {
         const body = { ...publicWriteTarget(publicItemId, opts), emoji, variationId };
         if (opts.commentId != null) body.commentId = opts.commentId;
+        if (opts.ensure) body.ensure = true;
         const response = await fetch(`${PUBLIC_CATALOG_BASE}/reactions`, {
             method: 'POST',
             headers,

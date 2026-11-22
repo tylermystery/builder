@@ -54,10 +54,31 @@ import {
   itemVariations,
   reactions,
   comments,
+  storeMembers,
 } from "../../db/schema.js";
 
-// Catalog statuses that are visible to everyone, signed in or not.
-const PUBLIC_CATALOG_STATUSES = ["none", "published"];
+// COLLAB LIFECYCLE (`public_items.catalog_status`)
+//   'pending'     Suggested   — visible to its author and the store's admins only
+//   'recommended' Recommended — approved by an admin; open to everyone's collab
+//   'published'   In catalog  — a bookable store item (still open to collab)
+//   'rejected'    Declined    — back with its author, with the admin's note
+//   'none'        a community container holding collab on a curated catalog item
+// Statuses that are visible to everyone, signed in or not.
+const PUBLIC_CATALOG_STATUSES = ["none", "recommended", "published"];
+
+// Approved store members' ideas are recommended straight away; everyone else's
+// (contributors) are suggestions an admin reviews. Fails closed to 'contributor'.
+async function isApprovedMember(storeId: string, userId: string): Promise<boolean> {
+  try {
+    const rows = await db
+      .select({ status: storeMembers.status })
+      .from(storeMembers)
+      .where(and(eq(storeMembers.storeId, storeId), eq(storeMembers.userId, userId)));
+    return rows[0]?.status === "member";
+  } catch {
+    return false;
+  }
+}
 
 
 const json = (status: number, payload: unknown) =>
@@ -296,6 +317,7 @@ async function resolvePublicItemId(
         storeId,
         source: "catalog",
         catalogItemId,
+        catalogStatus: "none",
         authorId: userId,
         name: body.name ? String(body.name) : "Catalog item",
         description: body.description ? String(body.description) : "",
@@ -346,10 +368,15 @@ export default async (req: Request) => {
       if (resource === "items") {
         if (!body.storeId || !body.name)
           return json(400, { error: "storeId and name are required" });
+        const ideaStoreId = String(body.storeId);
+        const recommendNow =
+          (await userHasPublishPermissionForStore(ideaStoreId, userId)) ||
+          (await isApprovedMember(ideaStoreId, userId));
         const [row] = await db
           .insert(publicItems)
           .values({
-            storeId: String(body.storeId),
+            catalogStatus: recommendNow ? "recommended" : "pending",
+            storeId: ideaStoreId,
             source: body.source || "custom",
             originSessionId: body.originSessionId ?? null,
             originItemId: body.originItemId ?? null,
@@ -495,7 +522,7 @@ export default async (req: Request) => {
                 publishedAt: new Date(),
                 publishedBy: userId,
               }
-            : { catalogStatus: "none" };
+            : { catalogStatus: "recommended" }; // unpublish: back to a recommended idea
 
         const [updated] = await db
           .update(publicItems)
@@ -511,9 +538,19 @@ export default async (req: Request) => {
       if (resource === "item-review") {
         if (body.publicItemId == null)
           return json(400, { error: "publicItemId is required" });
+        // recommend: Suggested -> Recommended (step 1)
+        // approve / catalog: -> In catalog (step 2)
+        // reject: -> Declined;  flag: pull a recommended idea back to Suggested
         const decision = String(body.decision || "");
-        if (decision !== "approve" && decision !== "reject")
-          return json(400, { error: "decision must be approve or reject" });
+        const NEXT: Record<string, string> = {
+          recommend: "recommended",
+          approve: "published",
+          catalog: "published",
+          reject: "rejected",
+          flag: "pending",
+        };
+        if (!NEXT[decision])
+          return json(400, { error: "decision must be recommend, catalog, reject or flag" });
 
         const [row] = await db
           .select()
@@ -523,11 +560,14 @@ export default async (req: Request) => {
         if (!(await userHasPublishPermissionForStore(row.storeId, userId)))
           return json(403, { error: "Forbidden" });
 
-        const approved = decision === "approve";
+        if (row.catalogItemId)
+          return json(400, { error: "This item is already in the catalog" });
+        const nextStatus = NEXT[decision];
+        const approved = nextStatus === "published";
         const [updated] = await db
           .update(publicItems)
           .set({
-            catalogStatus: approved ? "published" : "rejected",
+            catalogStatus: nextStatus,
             reviewedAt: new Date(),
             reviewedBy: userId,
             reviewNote: body.reviewNote ? String(body.reviewNote) : null,
@@ -750,6 +790,11 @@ export default async (req: Request) => {
             ),
           );
 
+        // `ensure` (a reaction held while signed out, sent after sign-in) only ever
+        // adds — it never removes a reaction the person already made elsewhere.
+        if (existing.length > 0 && body.ensure === true) {
+          return json(200, { reacted: true, publicItemId: itemId, commentId });
+        }
         if (existing.length > 0) {
           await db.delete(reactions).where(eq(reactions.id, existing[0].id));
           return json(200, {

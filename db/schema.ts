@@ -74,7 +74,7 @@ export const publicItems = pgTable(
     //   'rejected'  — reviewed and declined; visible to its author only.
     // The 'none' default is what keeps every pre-existing row behaving exactly
     // as it did before this column was added.
-    catalogStatus: text("catalog_status").notNull().default("none"),
+    catalogStatus: text("catalog_status").notNull().default("pending"),
     // Which variation the catalog currently presents. Null means the base row's
     // own fields are current. Set null automatically if that variation is
     // deleted, so the pointer can never dangle.
@@ -968,5 +968,29 @@ export const planHistory = pgTable(
   },
   (t) => ({
     sessionCreatedIdx: index("plan_history_session_created_idx").on(t.sessionId, t.createdAt),
+  }),
+);
+
+// Store collab membership. Everyone who signs in on a store becomes a
+// 'contributor' (can react, comment and suggest; their ideas wait for review).
+// A store admin (Airtable PublishPermission) promotes them to 'member', whose
+// ideas are recommended to the community straight away. Ids are Airtable record
+// ids stored as text, like the other tables here.
+export const storeMembers = pgTable(
+  "store_members",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    userId: text("user_id").notNull(),
+    userName: text("user_name"),
+    // 'contributor' | 'member'
+    status: text("status").notNull().default("contributor"),
+    joinedAt: timestamp("joined_at").defaultNow(),
+    approvedAt: timestamp("approved_at"),
+    approvedBy: text("approved_by"),
+  },
+  (t) => ({
+    storeUserUnique: uniqueIndex("store_members_store_user_unique").on(t.storeId, t.userId),
+    storeStatusIdx: index("store_members_store_status_idx").on(t.storeId, t.status),
   }),
 );
