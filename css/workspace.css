@@ -320,3 +320,48 @@ body.presentation-active #header-search-wrapper #filter-toggle-btn { display: no
     padding: 0 12px; border: none; border-radius: 10px; background: #6d28d9; color: #fff; font: inherit; font-weight: 600; cursor: pointer;
 }
 @media (prefers-reduced-motion: reduce) { .collab-menu { animation: none; } .collab-sup, .collab-react-btn { transition: none; } }
+
+/* Superscript: sentiment emoji + open comment count */
+.collab-sup { display: inline-flex; align-items: flex-start; gap: 1px; }
+.collab-sup-count {
+    font-size: 0.72em; font-weight: 700; line-height: 1;
+    padding: 1px 3px; border-radius: 6px; background: #6d28d9; color: #fff;
+    filter: none;
+}
+.collab-sup:not(.has-reactions).has-open { opacity: 0.85; filter: none; }
+
+/* Collab menu: chat summary + latest comments */
+.collab-menu-chats { margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: #f7f6fb; }
+.collab-menu-chats-summary { font-size: 0.8em; font-weight: 600; color: #4c1d95; margin-bottom: 4px; }
+.collab-menu-comment { font-size: 0.8em; color: #444; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.collab-menu-comment + .collab-menu-comment { margin-top: 3px; }
+.collab-menu-comment-scope { margin-right: 3px; }
+.collab-menu-action.is-more { margin-left: auto; font-weight: 600; }
+
+/* Item detail: Collab section (the full collab view) */
+.modal-collab-section {
+    margin: 14px 0; padding: 14px 16px; border-radius: 14px;
+    background: #faf9ff; border: 1px solid #ece8fb; color: #222;
+}
+.collab-detail-head { display: flex; gap: 12px; align-items: flex-start; }
+.collab-detail-emoji { font-size: 2.4em; line-height: 1; }
+.collab-detail-title { margin: 0; font-size: 1.05em; }
+.collab-detail-meta { font-size: 0.86em; color: #444; margin-top: 2px; }
+.collab-detail-breakdown, .collab-detail-status { font-size: 0.8em; color: #777; margin-top: 2px; }
+.collab-detail-status { color: #4c1d95; font-weight: 600; }
+.collab-detail-reactions { max-width: 420px; }
+.collab-detail-convo { margin-top: 14px; border-top: 1px solid #ece8fb; padding-top: 10px; }
+.collab-detail-convo-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+.collab-detail-convo-head h4 { margin: 0; font-size: 0.95em; display: flex; align-items: center; gap: 6px; }
+.collab-detail-count { font-size: 0.75em; padding: 0 7px; border-radius: 9px; background: #ece8fb; color: #4c1d95; }
+.collab-detail-filter { display: flex; gap: 10px; font-size: 0.8em; color: #555; }
+.collab-detail-filter label { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; }
+.collab-detail-timeline { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; max-height: 360px; overflow-y: auto; }
+.collab-detail-comment { padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid #eee; }
+.collab-detail-comment.is-reply { margin-left: 18px; }
+.collab-detail-comment-head { display: flex; align-items: center; gap: 4px; font-size: 0.82em; }
+.collab-detail-comment-time { margin-left: auto; color: #999; font-size: 0.9em; }
+.collab-detail-reply-to { font-size: 0.75em; color: #888; margin-top: 2px; }
+.collab-detail-comment-text { font-size: 0.88em; color: #333; margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.collab-detail-empty { font-size: 0.85em; color: #888; padding: 6px 0; }
+.collab-detail-compose { margin-top: 10px; }

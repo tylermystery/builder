@@ -18,6 +18,7 @@ import { initializeDetailModalLayout } from '../utils/detailModalLayout.js';
 import { activateWorkspaceSurface } from '../utils/workspace.js';
 import { setUCPItemScope, openUCPForItem, openUCPGlobalForItem } from './unifiedChatPanel.js';
 import { collabSupHTML } from './collab/collabControl.js';
+import { renderCollabDetail, initCollabDetail } from './collab/collabDetail.js';
 import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
 import { openActionMenu } from './actionMenu.js';
@@ -2543,16 +2544,12 @@ function renderInPlanSummary(record, itemState, isLocked) {
         <div class="in-plan-head">
             <span class="in-plan-check">✓</span>
             <span class="in-plan-title">In your plan</span>
-            <button type="button" class="in-plan-react-btn${planS.has ? ' has-reactions' : ''}" title="${escapeHtml(reactTitle)}">${reactLabel}</button>
         </div>
         <div class="in-plan-details">${details.join('<span class="in-plan-sep">·</span>')}</div>
         ${note ? `<div class="in-plan-note">${escapeHtml(note)}</div>` : ''}
     `;
-    const reactBtn = block.querySelector('.in-plan-react-btn');
-    if (reactBtn) reactBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openItemSentimentPopup(reactBtn, record.id, 'plan');
-    });
+    // Reactions are in the title superscript and the Collab section (one interface).
+    void reactLabel; void reactTitle;
 
     container.insertBefore(block, container.firstChild);
 }
@@ -6432,6 +6429,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     modalItemDescription.innerHTML = renderRichText(displayDescription);
     void renderSimilarOfferings(record);
     renderItemVariations(document.getElementById('modal-item-variations'), record);
+    renderCollabDetail(document.getElementById('modal-collab-section'), record);
 
     // Show "Combined from" indicator for hybrid merged items
     const existingMergeInfo = document.querySelector('.modal-merge-info');

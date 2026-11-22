@@ -18,8 +18,11 @@ import { isPlanReadOnly } from '../../utils/planAccess.js';
 import { COLLAB_REACTIONS, mergeReactionMaps, summarizeReactions } from '../../utils/collabSummary.js';
 import {
     toggleCommunityReactionForRecord, addCommunityCommentForRecord, communityUserMapForRecord,
-    communityCommentCountForRecord, COLLAB_GUEST_ID, isPublicIdeaRecord, collabStageOf, COLLAB_STAGE_LABELS
+    communityCommentCountForRecord, COLLAB_GUEST_ID, isPublicIdeaRecord, collabStageOf, COLLAB_STAGE_LABELS,
+    latestCommunityComments, collabIdeaStageActions
 } from '../publicCatalog.js';
+import { getOpenConversationCounts, planMessagesForItem } from '../../utils/openConversations.js';
+import { taskMessageText } from '../../utils/taskDiscussion.js';
 
 const adapters = new Map();
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -34,6 +37,9 @@ const HOVER_CLOSE_MS = 350;
  *   mine(id, scope)                -> Set<emoji> the viewer reacted in that scope
  *   toggle(id, scope, emoji)       -> Promise<boolean|null>
  *   commentCount?(id)              -> number
+ *   openCount?(id)                 -> open comment count shown in the superscript
+ *   latestComments?(id)            -> [{ author, text, scope }] newest first (menu preview)
+ *   moreDetails?(id)               -> open the full detail view
  *   comment?(id, scope, text)      -> Promise<boolean>
  *   openConversation?(id, scope)   -> void
  *   statusActions?(id)             -> [{ label, run }]
@@ -50,14 +56,29 @@ function summaryFor(kind, id) {
     return summarizeReactions(mergeReactionMaps(...sources.map(s => s.map)));
 }
 
-/** The superscript markup to place right after a title. */
+function supParts(kind, id) {
+    const s = summaryFor(kind, id);
+    const adapter = adapters.get(kind);
+    const open = adapter?.openCount ? Number(adapter.openCount(id)) || 0 : 0;
+    return { s, open };
+}
+
+function supInner({ s, open }) {
+    return `<span class="collab-sup-emoji">${s.has ? esc(s.emoji) : '☺'}</span>${open > 0 ? `<span class="collab-sup-count">${open}</span>` : ''}`;
+}
+
+function supLabel({ s, open }, title) {
+    const parts = [s.has ? `${s.label}, ${s.total} reaction${s.total === 1 ? '' : 's'}` : 'No reactions yet'];
+    if (open > 0) parts.push(`${open} open comment${open === 1 ? '' : 's'}`);
+    return `${parts.join(' · ')}. Collab on ${title || 'this'}`;
+}
+
+/** The superscript markup to place right after a title: sentiment emoji + open comment count. */
 export function collabSupHTML(kind, id, title = '') {
     if (!kind || id == null) return '';
-    const s = summaryFor(kind, id);
-    const label = s.has
-        ? `${s.label} — ${s.total} reaction${s.total === 1 ? '' : 's'}. Collab on ${title || 'this'}`
-        : `Collab on ${title || 'this'}: react or comment`;
-    return `<sup class="collab-sup${s.has ? ' has-reactions' : ''}" data-collab-kind="${esc(kind)}" data-collab-id="${esc(id)}" role="button" tabindex="0" aria-haspopup="dialog" aria-label="${esc(label)}" title="${esc(label)}">${s.has ? esc(s.emoji) : '☺'}</sup>`;
+    const parts = supParts(kind, id);
+    const label = supLabel(parts, title);
+    return `<sup class="collab-sup${parts.s.has ? ' has-reactions' : ''}${parts.open ? ' has-open' : ''}" data-collab-kind="${esc(kind)}" data-collab-id="${esc(id)}" data-collab-title="${esc(title)}" role="button" tabindex="0" aria-haspopup="dialog" aria-label="${esc(label)}" title="${esc(label)}">${supInner(parts)}</sup>`;
 }
 
 /** Re-draw every superscript for one thing (or all of them). */
@@ -66,9 +87,13 @@ export function refreshCollabSups(kind = null, id = null) {
         ? `.collab-sup[data-collab-kind="${CSS.escape(kind)}"]${id != null ? `[data-collab-id="${CSS.escape(String(id))}"]` : ''}`
         : '.collab-sup';
     document.querySelectorAll(selector).forEach(el => {
-        const s = summaryFor(el.dataset.collabKind, el.dataset.collabId);
-        el.textContent = s.has ? s.emoji : '☺';
-        el.classList.toggle('has-reactions', s.has);
+        const parts = supParts(el.dataset.collabKind, el.dataset.collabId);
+        el.innerHTML = supInner(parts);
+        el.classList.toggle('has-reactions', parts.s.has);
+        el.classList.toggle('has-open', parts.open > 0);
+        const label = supLabel(parts, el.dataset.collabTitle || '');
+        el.setAttribute('aria-label', label);
+        el.title = label;
     });
 }
 
@@ -110,6 +135,12 @@ function renderMenu() {
     const mine = scope ? (adapter.mine(id, scope) || new Set()) : new Set();
     const comments = adapter.commentCount ? adapter.commentCount(id) : 0;
     const stage = adapter.stage ? adapter.stage(id) : '';
+    const openSummary = adapter.openSummary ? adapter.openSummary(id) : '';
+    const latest = adapter.latestComments ? adapter.latestComments(id) : [];
+    const chatBlock = (openSummary || latest.length) ? `<div class="collab-menu-chats">
+            ${openSummary ? `<div class="collab-menu-chats-summary">💬 ${esc(openSummary)}</div>` : ''}
+            ${latest.map(c => `<div class="collab-menu-comment"><span class="collab-menu-comment-scope">${c.scope === 'plan' ? '👥' : '🌐'}</span><strong>${esc(c.author)}:</strong> ${esc(String(c.text).slice(0, 90))}${String(c.text).length > 90 ? '…' : ''}</div>`).join('')}
+        </div>` : '';
     const breakdown = sources.length > 1
         ? sources.map(x => `${x.icon} ${summarizeReactions(x.map).people} ${esc(x.label)}`).join(' · ')
         : '';
@@ -137,6 +168,7 @@ function renderMenu() {
         ${scope ? `<div class="collab-menu-reactions" role="group" aria-label="React">
             ${COLLAB_REACTIONS.map(emoji => `<button type="button" class="collab-react-btn${mine.has(emoji) ? ' mine' : ''}" data-emoji="${esc(emoji)}" aria-pressed="${mine.has(emoji)}" title="${esc(emoji)}">${esc(emoji)}${s.counts[emoji] ? `<span class="collab-react-count">${s.counts[emoji]}</span>` : ''}</button>`).join('')}
         </div>` : '<div class="collab-menu-note">Sign in to collab on this.</div>'}
+        ${chatBlock}
         <div class="collab-menu-actions"></div>
         <form class="collab-menu-compose" hidden>
             <textarea rows="2" placeholder="Add a comment…" aria-label="Comment"></textarea>
@@ -162,6 +194,7 @@ function renderMenu() {
         });
     }
     if (adapter.openConversation) addAction('See conversation', () => { const sc = scope; closeMenu(); adapter.openConversation(id, sc); });
+    if (adapter.moreDetails) addAction('More details →', () => { closeMenu(); adapter.moreDetails(id); }, 'is-more');
     for (const action of (adapter.statusActions ? adapter.statusActions(id) : [])) {
         addAction(action.label, async () => { closeMenu(); await action.run(); refreshCollabSups(kind, id); }, 'is-status');
     }
@@ -224,6 +257,21 @@ function openMenu(anchor, pinned) {
     renderMenu();
 }
 
+/** The status actions a thing offers this person (same list the menu shows). */
+export function getCollabStatusActions(kind, id) {
+    const adapter = adapters.get(kind);
+    return adapter?.statusActions ? adapter.statusActions(id) : [];
+}
+
+/** Open the collab menu for the superscript inside (or equal to) `el`. */
+export function openCollabMenuFor(el) {
+    const sup = el?.classList?.contains('collab-sup') ? el : el?.querySelector?.('.collab-sup');
+    if (!sup) return false;
+    openMenu(sup, true);
+    openState?.el?.querySelector('.collab-react-btn, button')?.focus();
+    return true;
+}
+
 function scheduleClose() {
     clearTimeout(closeTimer);
     closeTimer = setTimeout(() => { if (!openState?.pinned) closeMenu(); }, HOVER_CLOSE_MS);
@@ -283,6 +331,7 @@ export function initCollabControl() {
     window.addEventListener('resize', () => openState && position(openState.el, openState.anchor));
     // Reactions arrive from collaborators, saves and the community load: keep sups current.
     document.addEventListener('planStateChanged', () => refreshCollabSups());
+    window.addEventListener('open-conversations-updated', () => refreshCollabSups());
     window.addEventListener('collab-updated', (e) => {
         if (e.detail?.kind) refreshCollabSups(e.detail.kind, e.detail.id);
         if (openState && openState.kind === e.detail?.kind && openState.id === e.detail?.id) renderMenu();
@@ -344,7 +393,30 @@ registerCollabKind('item', {
         const record = getRecordById(id);
         return record ? toggleCommunityReactionForRecord(record, emoji) : null;
     },
-    commentCount: (id) => communityCommentCountForRecord(getRecordById(id)),
+    commentCount: (id) => communityCommentCountForRecord(getRecordById(id)) + planMessagesForItem(id).length,
+    // Open comments: this plan's open chats/tasks on the item, plus community comments.
+    openCount: (id) => {
+        const plan = inPlan(id) ? (getOpenConversationCounts().byItem.get(id)?.total || 0) : 0;
+        return plan + communityCommentCountForRecord(getRecordById(id));
+    },
+    openSummary: (id) => {
+        const c = inPlan(id) ? getOpenConversationCounts().byItem.get(id) : null;
+        const parts = [];
+        if (c?.chats) parts.push(`${c.chats} open chat${c.chats === 1 ? '' : 's'}`);
+        if (c?.tasks) parts.push(`${c.tasks} open task${c.tasks === 1 ? '' : 's'}`);
+        const community = communityCommentCountForRecord(getRecordById(id));
+        if (community) parts.push(`${community} community comment${community === 1 ? '' : 's'}`);
+        return parts.join(' · ');
+    },
+    latestComments: (id) => {
+        const plan = planMessagesForItem(id).slice(0, 2).map(r => ({
+            author: r.fields.SenderName || 'Someone', text: taskMessageText(r.fields.Content || '').replace(/^\[IDEA\]\s*/, ''),
+            at: r.fields.Timestamp || r.createdTime, scope: 'plan'
+        }));
+        return [...plan, ...latestCommunityComments(getRecordById(id), 2)]
+            .sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')))
+            .slice(0, 2);
+    },
     comment: async (id, scope, text) => {
         if (scope === 'plan') {
             const user = me();
@@ -355,27 +427,32 @@ registerCollabKind('item', {
         const created = await addCommunityCommentForRecord(getRecordById(id), text);
         return !!created;
     },
-    openConversation: async (id, scope) => {
-        if (scope === 'plan') {
-            const { openUCPForItem } = await import('../unifiedChatPanel.js');
-            openUCPForItem(id);
-        } else {
-            const record = getRecordById(id);
-            const { showDetailModal } = await import('../modal.js');
-            if (record) showDetailModal(record);
-        }
+    // The one full view for every access point: the item detail, opened at its Collab section.
+    moreDetails: async (id) => {
+        const record = getRecordById(id);
+        if (!record) return;
+        const { showDetailModal } = await import('../modal.js');
+        await showDetailModal(record);
+        setTimeout(() => document.getElementById('modal-collab-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
     },
-    // Plan lifecycle, for people who can edit the open plan (in the plan view).
     statusActions: (id) => {
-        if (!document.body.classList.contains('presentation-active') || !planWritable(id)) return [];
-        const locked = state.cart.lockedItems.has(id);
-        const completed = state.session.completedItems?.has?.(id);
-        const run = (fn) => async () => { const m = await import('../presentation/itemActions.js'); await m[fn](id); };
+        const record = getRecordById(id);
         const list = [];
-        if (!locked) list.push({ label: '🔒 Lock in', run: run('lockItem') });
-        if (locked) list.push({ label: '💡 Move to Ideas', run: run('moveToIdeas') });
-        if (!completed) list.push({ label: '✓ Mark complete', run: run('completeItem') });
-        list.push({ label: '📦 Archive', run: run('archiveItem') });
+        // Plan status, for plan collaborators (in the plan view).
+        if (document.body.classList.contains('presentation-active') && planWritable(id)) {
+            const locked = state.cart.lockedItems.has(id);
+            const completed = state.session.completedItems?.has?.(id);
+            const run = (fn) => async () => { const m = await import('../presentation/itemActions.js'); await m[fn](id); };
+            if (!locked) list.push({ label: '🔒 Lock in', run: run('lockItem') });
+            if (locked) list.push({ label: '💡 Move to Ideas', run: run('moveToIdeas') });
+            if (!completed) list.push({ label: '✓ Mark complete', run: run('completeItem') });
+            list.push({ label: '📦 Archive', run: run('archiveItem') });
+            list.push({ label: '✕ Remove from plan', run: run('deleteItem') }); // asks to confirm
+        }
+        // Collab stage, for store admins.
+        if (record && isPublicIdeaRecord(record)) list.push(...collabIdeaStageActions(record));
+        // Anyone signed in can suggest a version.
+        if (record && me().signedIn) list.push({ label: '✏️ Suggest a version', run: () => adapters.get('item').moreDetails(id) });
         return list;
     }
 });
@@ -414,5 +491,10 @@ registerCollabKind('variant', {
     comment: async (id, scope, text) => {
         const { recordId, variationId } = splitVariant(id);
         return !!(await addCommunityCommentForRecord(getRecordById(recordId), text, variationId));
-    }
+    },
+    openCount: (id) => {
+        const { recordId, variationId } = splitVariant(id);
+        return communityCommentCountForRecord(getRecordById(recordId), variationId);
+    },
+    moreDetails: (id) => adapters.get('item').moreDetails(splitVariant(id).recordId)
 });

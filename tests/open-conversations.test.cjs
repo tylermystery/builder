@@ -135,3 +135,17 @@ test('chats converted to tasks whose saved link is missing are recognised, and t
     assert.equal(links.m2, 't2');
     assert.equal(run('globalThis.__saves'), 1);
 });
+
+test('plan messages for one item, newest first, skipping deleted and system messages', () => {
+    const { run, load } = harness();
+    load([
+        msg('a', { 'Item Link': ['recA'], Timestamp: '2026-11-20T10:00:00Z' }),
+        msg('b', { Content: '[PLAN_COMMENT:item:recA] custom link', Timestamp: '2026-11-20T11:00:00Z' }),
+        msg('c', { 'Item Link': ['recA'], IsDeleted: true }),
+        msg('d', { 'Item Link': ['recB'] }),
+        msg('e', { 'Item Link': ['recA'], SenderID: 'system' })
+    ]);
+    assert.deepEqual(run("planMessagesForItem('recA').map(r => r.id)"), ['b', 'a']);
+    assert.equal(run('planMessagesLoaded()'), true);
+    assert.equal(run("getPlanMessage('d').id"), 'd');
+});

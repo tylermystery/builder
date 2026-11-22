@@ -336,3 +336,21 @@ function scheduleSnapshotSave() {
         }).catch(() => {});
     }, SNAPSHOT_DELAY_MS);
 }
+
+/** This plan's messages about one item, newest first (non-deleted, not system). */
+export function planMessagesForItem(itemId) {
+    if (!itemId || recordsSessionId !== state.session?.id) return [];
+    return records
+        .filter(r => r?.fields && !r.fields.IsDeleted && r.fields.SenderID !== 'system' && itemIdForFields(r.fields) === itemId)
+        .sort((a, b) => String(b.fields.Timestamp || b.createdTime || '').localeCompare(String(a.fields.Timestamp || a.createdTime || '')));
+}
+
+/** Whether this plan's messages have been read (so planMessagesForItem is complete). */
+export function planMessagesLoaded() {
+    return !!state.session?.id && recordsSessionId === state.session.id;
+}
+
+/** One plan message record by id (from the last full read), or null. */
+export function getPlanMessage(id) {
+    return records.find(r => r?.id === id) || null;
+}

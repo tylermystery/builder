@@ -723,7 +723,7 @@ export async function renderCompactCard(item) {
         <div class="compact-card ${lifecycleClass} ${confidenceClass} ${noPhotoClass}" data-record-id="${recordId}" data-item-type="${type}" data-item-status="${itemStatus}" role="article" tabindex="0" aria-label="${escapeHtml(name)}${showStatus ? ', ' + taskConfig.label : ''}">
             <div class="compact-card-photo ${imageOrientationClass}" style="${photoStyle}">
                 ${statusOverlayHTML}
-                ${emojiOverlayHTML}
+                <!-- sentiment now shown as the title superscript -->
                 ${lifecycleBadgeHTML}
                 <span class="compact-card-valuation">${priceBadgeHTML}${compactVitalityHTML}</span>
             </div>
@@ -737,15 +737,10 @@ export async function renderCompactCard(item) {
                 ${pillsHTML}
                 <div class="compact-card-reaction-zone" data-record-id="${recordId}">
                     <div class="reaction-zone-hint">
-                        <div class="reaction-zone-summary" data-record-id="${recordId}">
-                            <span class="reaction-zone-summary-emoji">${reactionZoneSummaryEmoji}</span>
-                            <span class="reaction-zone-summary-text">${reactionZoneSummaryText}</span>
-                            ${reactionZoneScoreText ? `<span class="reaction-zone-summary-score">${reactionZoneScoreText}</span>` : ''}
-                        </div>
+                        <!-- Reactions and open comments live in the title superscript (collab menu). -->
                         <div class="reaction-zone-actions">
                             ${timeBadgeHTML}
                             ${taskBadgeHTML}
-                            ${commentsBtnHTML}
                         </div>
                     </div>
                 </div>

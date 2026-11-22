@@ -6,6 +6,7 @@
 
 import { log } from '../../utils/debug.js';
 import { openActionMenu } from '../actionMenu.js';
+import { openCollabMenuFor } from '../collab/collabControl.js';
 
 // Accordion state (all sections start expanded)
 const accordionState = {
@@ -154,11 +155,12 @@ export function handleItemAccordionClick(e) {
         e.stopPropagation();
         const recordId = emojiIndicator.dataset.recordId;
         if (recordId) {
-            const rect = emojiIndicator.getBoundingClientRect();
-            openActionMenu(recordId, {
-                x: rect.left + rect.width / 2,
-                y: rect.top + rect.height / 2
-            });
+            // The same collab menu as the title superscript.
+            const host = emojiIndicator.closest('.compact-card, .itinerary-item-section, .itinerary-item') || emojiIndicator.parentElement;
+            if (!openCollabMenuFor(host)) {
+                const rect = emojiIndicator.getBoundingClientRect();
+                openActionMenu(recordId, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+            }
         }
         return;
     }

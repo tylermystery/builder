@@ -1093,6 +1093,64 @@ export function communityCommentCountForRecord(record, variationId = null) {
 
 export { GUEST_ID as COLLAB_GUEST_ID };
 
+/** A display name for a community user id. */
+export function collabUserName(userId) {
+    return userLabel(userId);
+}
+
+/** Latest community comments on an item, newest first: [{ author, text, at }]. */
+export function latestCommunityComments(record, limit = 2) {
+    const row = record ? getCommunityRowForRecord(record) : null;
+    return [...(row?.comments || [])]
+        .filter(c => c && c.body)
+        .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+        .slice(0, limit)
+        .map(c => ({ author: c.authorName || userLabel(c.userId), text: c.body, at: c.createdAt, scope: 'community', id: c.id }));
+}
+
+/** All community comments on an item (oldest first), for the detail timeline. */
+export function communityCommentsForRecord(record) {
+    const row = record ? getCommunityRowForRecord(record) : null;
+    return [...(row?.comments || [])]
+        .filter(c => c && c.body)
+        .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
+        .map(c => ({ author: c.authorName || userLabel(c.userId), text: c.body, at: c.createdAt, scope: 'community', id: c.id, parentId: c.parentCommentId ?? null }));
+}
+
+/**
+ * Collab idea stage actions for store admins (the same decisions as the review bar):
+ * returns [{ label, run }] for the idea's current stage.
+ */
+export function collabIdeaStageActions(record) {
+    const row = record ? getCommunityRowForRecord(record) : null;
+    if (!row || row.id == null || row.catalogItemId || !api.userHasPublishPermission()) return [];
+    const decide = (decision, extra = {}) => async () => {
+        const item = await api.reviewPublicItem(row.id, decision, null, extra);
+        if (!item) { try { showToast('Could not update that idea.', 3000, 'error'); } catch (_) {} return; }
+        applyItemReviewResult(record, row, item);
+        invalidateRecordsIndex();
+        if (typeof window.applyFiltersAndSort === 'function') window.applyFiltersAndSort(window.imageCache);
+        window.dispatchEvent(new CustomEvent('collab-updated', { detail: { kind: 'item', id: record.id } }));
+    };
+    const status = row.catalogStatus;
+    const time = collabTimeOf(row);
+    const list = [];
+    if (status === 'pending') list.push({ label: '⭐ Recommend', run: decide('recommend') });
+    if (status === 'pending' || status === 'recommended') list.push({ label: '✅ Add to catalog', run: decide('catalog') });
+    if ((status === 'recommended' || status === 'published') && time !== 'delivered') {
+        list.push({ label: time === 'scheduled' ? '📅 Reschedule' : '📅 Schedule', run: async () => {
+            const current = row.scheduledFor ? new Date(row.scheduledFor).toISOString().slice(0, 10) : '';
+            const input = prompt('Delivery date (YYYY-MM-DD):', current);
+            if (input === null) return;
+            const date = new Date(`${input.trim()}T12:00:00`);
+            if (isNaN(date.getTime())) { try { showToast('Please enter a date like 2026-12-31.', 3000, 'error'); } catch (_) {} return; }
+            await decide('schedule', { scheduledFor: date.toISOString() })();
+        } });
+        list.push({ label: '🎉 Mark delivered', run: decide('deliver') });
+    }
+    return list;
+}
+
 function communityRowActivity(row) {
     const reactionTotal = Object.values(row?.reactions || {}).reduce((s, r) => s + (r.count || 0), 0);
     const commentCount = (row?.comments || []).length;

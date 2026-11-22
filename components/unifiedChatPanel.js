@@ -881,14 +881,7 @@ function createActionsRow(message, isOwn) {
     replyBtn.addEventListener('click', () => startReply(message));
     actions.appendChild(replyBtn);
 
-    const reactBtn = document.createElement('button');
-    reactBtn.className = 'ucp-action-btn';
-    reactBtn.innerHTML = '😊 React';
-    reactBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleEmojiPicker(message.id, actions);
-    });
-    actions.appendChild(reactBtn);
+    // Reacting happens in the collab menu (the superscript after the sender's name).
 
     // Everything else lives in a ⋯ menu.
     const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
@@ -1696,14 +1689,7 @@ function createReplyMessage(reply) {
         actions.className = 'ucp-actions ucp-reply-actions';
         actions.style.position = 'relative';
 
-        const reactBtn = document.createElement('button');
-        reactBtn.className = 'ucp-action-btn';
-        reactBtn.innerHTML = '😊';
-        reactBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleEmojiPicker(reply.id, actions);
-        });
-        actions.appendChild(reactBtn);
+        // Reacting happens in the collab menu (the superscript after the name).
 
         if (isOwn) {
             const editBtn = document.createElement('button');
@@ -2769,6 +2755,16 @@ registerCollabKind('message', {
         return add;
     },
     commentCount: (id) => findMessageById(id)?.replyCount || 0,
+    openCount: (id) => {
+        const m = findMessageById(id);
+        if (!m || m.parentMessageId) return 0;
+        return m.replyCount || 0;
+    },
+    latestComments: (id) => {
+        const m = findMessageById(id);
+        return (m?.replies || []).filter(r => !r.isDeleted).slice(-2).reverse()
+            .map(r => ({ author: r.senderName, text: r.content, at: r.timestamp, scope: 'plan' }));
+    },
     comment: async (id, scope, text) => {
         const me = getCurrentUser();
         const m = findMessageById(id);
