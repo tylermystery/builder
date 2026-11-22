@@ -7,7 +7,7 @@
 import { log } from '../../utils/debug.js';
 import { renderRichText } from '../../utils.js';
 import { applyCloudinaryFitTransform, getImageOrientationClass } from '../../utils/imageOptimizer.js';
-import { getActiveStorePillars } from '../../availability.js';
+import { renderCollabBoard, isCollabBoardToggled, initCollabBoardToggle } from './collabBoard.js';
 import { getOpenConversationCounts, getOpenCountsForItems, describeOpenCounts } from '../../utils/openConversations.js';
 
 // Track loaded images for each item
@@ -999,41 +999,16 @@ export async function renderAllItems() {
     const completedCount = completedItems.size;
     updateStatusToggles(archivedCount, completedCount);
 
-    if (combinedList.length === 0) {
-        // Surface the store's recommended pillars as browse suggestions when defined;
-        // otherwise fall back to the original default component set.
-        const storePillars = getActiveStorePillars();
-        const allCategories = storePillars.length > 0
-            ? storePillars
-            : ["Activities", "Food & Drink", "Venues", "Extras"];
-        const categoryIcons = { "Activities": "🎯", "Food & Drink": "🍽️", "Venues": "📍", "Extras": "✨" };
-        let emptyStateHTML = `
-            <section class="itinerary-section itinerary-empty-section" data-section="empty" role="status" aria-label="Empty plan board">
-                <div class="presentation-empty-state board-empty-state">
-                    <div class="board-empty-icon" aria-hidden="true">📋</div>
-                    <p class="itinerary-empty-title">Your Plan Board is Empty</p>
-                    <p class="itinerary-empty-subtitle">Start by browsing items from a category below, or use the search to find something specific.</p>
-                    <div class="presentation-suggestions" role="group" aria-label="Category suggestions">
-        `;
-        allCategories.forEach(cat => {
-            const filterTag = cat.toLowerCase().replace(/\s+/g, ' ');
-            const icon = categoryIcons[cat] || '📦';
-            emptyStateHTML += `
-                <button class="filter-btn presentation-suggestion-btn" data-category-filter="${filterTag}" aria-label="Browse ${cat}">
-                    <span class="suggestion-btn-icon" aria-hidden="true">${icon}</span>
-                    <span class="suggestion-btn-text">${cat}</span>
-                </button>
-            `;
-        });
-        emptyStateHTML += `
-                    </div>
-                    <p class="board-empty-hint">Tip: Swipe horizontally on any card to access quick actions</p>
-                </div>
-            </section>
-        `;
-        itineraryItemsListEl.innerHTML = emptyStateHTML;
+    // Collab board: the default when no plan is in progress, or when toggled on.
+    initCollabBoardToggle(() => renderAllItems());
+    const collabToggle = document.getElementById('presentation-collab-board-toggle');
+    if (collabToggle) collabToggle.style.display = combinedList.length === 0 ? 'none' : '';
+    if (combinedList.length === 0 || isCollabBoardToggled()) {
+        itineraryItemsListEl.removeAttribute('role');
+        renderCollabBoard(itineraryItemsListEl, { planIsEmpty: combinedList.length === 0, onRerender: () => renderAllItems() });
         return;
     }
+
 
     const showSingleItemNudge = combinedList.length === 1;
     itineraryItemsListEl.classList.add('board-view');
