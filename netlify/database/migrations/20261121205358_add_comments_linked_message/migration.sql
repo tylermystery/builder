@@ -1,0 +1,1 @@
+ALTER TABLE "comments" ADD COLUMN "linked_message_id" text;

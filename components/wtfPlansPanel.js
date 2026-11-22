@@ -9,6 +9,7 @@ import { getTempLikes, updateUrl } from '../utils.js';
 import { showDetailModal } from './modal.js';
 import { CONSTANTS } from '../config.js';
 import { registerSyncCallback, getPlanSummary } from '../utils/planStateSync.js';
+import { getOpenConversationSnapshot, readSavedOpenConversations, describeOpenCounts } from '../utils/openConversations.js';
 
 // Filter types for the WTF Plans panel
 export const WTF_PLAN_TYPES = {
@@ -193,6 +194,9 @@ function buildCurrentSessionItem() {
         itemCount: lockedItemsCount,
         totalCost: summary.subtotal || 0,
         icon: '📋',
+        // Live count once this plan's messages/tasks are loaded, otherwise the saved snapshot
+        openConversations: getOpenConversationSnapshot() ||
+            readSavedOpenConversations({ openConversations: state.session.openConversationsSnapshot }),
         isCurrentSession: true, // Flag to identify this as the live session
         data: {
             id: currentSessionId,
@@ -265,6 +269,17 @@ export function initializeWtfPlansPanel() {
 
     // Register for plan state sync to update the current session in the list in real-time
     registerSyncCallback('wtfPlansPanel', handlePlanStateSync);
+
+    // Keep the open plan's chat/task count current while the list is showing.
+    // Re-render only when that number actually changes.
+    let lastLiveOpenKey = null;
+    window.addEventListener('open-conversations-updated', () => {
+        const live = getOpenConversationSnapshot();
+        const key = live ? `${state.session.id}:${live.chats}:${live.tasks}` : null;
+        if (!key || key === lastLiveOpenKey) return;
+        lastLiveOpenKey = key;
+        if (isWtfPlansPanelOpen() && !isLoading) renderWtfPlansList();
+    });
 
     log('WtfPlansPanel', 'WTF Plans panel initialized.');
 }
@@ -657,12 +672,14 @@ export async function refreshWtfPlansData() {
 function parsePlanItemsData(plan) {
     let itemCount = 0;
     let totalCost = 0;
+    let openConversations = null;
 
     try {
         const itemsWithVariations = plan.fields?.['Items with Variations'];
         if (itemsWithVariations) {
             const parsed = JSON.parse(itemsWithVariations);
             const lockedInItems = parsed.lockedInItems || {};
+            openConversations = readSavedOpenConversations(parsed);
 
             // Count locked items
             itemCount = Object.keys(lockedInItems).length;
@@ -686,7 +703,7 @@ function parsePlanItemsData(plan) {
         console.warn('Could not parse Items with Variations for plan:', plan.id, e);
     }
 
-    return { itemCount, totalCost };
+    return { itemCount, totalCost, openConversations };
 }
 
 /**
@@ -739,8 +756,9 @@ function getCombinedItems() {
         list.forEach(plan => {
             // Skip the current session - the live version is added below
             if (currentSessionId && plan.id === currentSessionId) return;
-            const { itemCount, totalCost } = parsePlanItemsData(plan);
+            const { itemCount, totalCost, openConversations } = parsePlanItemsData(plan);
             items.push({
+                openConversations,
                 type,
                 id: plan.id,
                 name: plan.fields?.Name || meta.untitled,
@@ -994,19 +1012,53 @@ function createWtfPlanItem(item) {
     // Show "Editing" indicator for current session
     const currentBadge = item.isCurrentSession ? '<span class="wtf-plans-current-badge">Editing</span>' : '';
 
+    // Open chats/tasks (saved snapshot for other plans, live for the open one)
+    const openCounts = item.openConversations;
+    const openTitle = openCounts?.total > 0 ? describeOpenCounts({ ...openCounts, comments: 0 }) : '';
+    const openBadge = openCounts?.total > 0
+        ? `<button type="button" class="wtf-plans-open-badge" title="${escapeHtml(openTitle)} — open the plan chat" aria-label="${escapeHtml(openTitle)}. Open the plan chat"><span aria-hidden="true">💬</span><span class="wtf-plans-open-count">${openCounts.total}</span></button>`
+        : '';
+
     itemEl.innerHTML = `
         <div class="wtf-plans-item-icon">${item.icon}</div>
         <div class="wtf-plans-item-content">
             <div class="wtf-plans-item-name">${escapeHtml(item.name)}${currentBadge}</div>
             <div class="wtf-plans-item-preview">${escapeHtml(preview)}</div>
         </div>
+        ${openBadge}
         <div class="wtf-plans-item-time">${timeAgo}</div>
     `;
 
     // Click handler
     itemEl.addEventListener('click', () => handleWtfPlanItemClick(item));
+    itemEl.querySelector('.wtf-plans-open-badge')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openPlanChat(item);
+    });
 
     return itemEl;
+}
+
+/**
+ * Open a plan and surface its plan chat (from the open chat/task badge).
+ */
+function openPlanChat(item) {
+    if (item.isCurrentSession) {
+        document.dispatchEvent(new CustomEvent('workspace-show-plan'));
+        import('./unifiedChatPanel.js').then(m => m.openUCPConversations(null)).catch(() => {});
+        return;
+    }
+    const wtfPlansUrl = new URL(window.location.href);
+    wtfPlansUrl.searchParams.set('wtfPlans', 'open');
+    wtfPlansUrl.searchParams.set('wtfFilter', currentFilter);
+    window.history.replaceState({ wtfPlans: 'open', filter: currentFilter }, '', wtfPlansUrl.toString());
+
+    const sessionUrl = new URL(window.location.href);
+    sessionUrl.searchParams.set('session', item.id);
+    sessionUrl.searchParams.set('view', 'present');
+    sessionUrl.searchParams.set('openChat', 'plan');
+    sessionUrl.searchParams.delete('category');
+    window.location.href = sessionUrl.toString();
 }
 
 /**

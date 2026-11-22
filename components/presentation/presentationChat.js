@@ -5,6 +5,7 @@
  * Extracted from presentation.js — Phase 3 modularization.
  */
 
+import { EMOJI_REACTIONS } from '../../config.js';
 import { state, setState, getRecordById } from '../../state.js';
 import * as api from '../../api.js';
 import { getModalZIndex } from '../../config.js';
@@ -21,7 +22,8 @@ import * as reactionRankings from './reactionRankings.js';
 import * as liveStream from '../liveStream.js';
 
 // Quick emoji reactions available for messages and comments
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
+// The scored collab set, everywhere.
+const QUICK_REACTIONS = EMOJI_REACTIONS;
 
 // --- Module state ---
 let presentationPusher = null;
@@ -950,6 +952,10 @@ export async function initializePresentationChat() {
 
     const channelName = `presence-session-${sessionId}`;
     presentationChatChannel = presentationPusher.subscribe(channelName);
+    // A collaborator saved the plan: bring this device up to date (see components/planSync.js).
+    presentationChatChannel.bind('client-plan-updated', (data) => {
+        window.dispatchEvent(new CustomEvent('remote-plan-updated', { detail: data || {} }));
+    });
 
     // Bind presence events
     presentationChatChannel.bind('pusher:subscription_succeeded', (members) => {

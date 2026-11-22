@@ -74,7 +74,13 @@ export const publicItems = pgTable(
     //   'rejected'  — reviewed and declined; visible to its author only.
     // The 'none' default is what keeps every pre-existing row behaving exactly
     // as it did before this column was added.
-    catalogStatus: text("catalog_status").notNull().default("none"),
+    catalogStatus: text("catalog_status").notNull().default("pending"),
+    // Collab lifecycle after "In catalog": when the store plans to deliver it,
+    // and when it was delivered. Collab stays open throughout and afterwards.
+    scheduledFor: timestamp("scheduled_for"),
+    deliveredAt: timestamp("delivered_at"),
+    // Notifications sent for stage changes (so each stage notifies once).
+    notifiedStage: text("notified_stage"),
     // Which variation the catalog currently presents. Null means the base row's
     // own fields are current. Set null automatically if that variation is
     // deleted, so the pointer can never dangle.
@@ -234,6 +240,9 @@ export const comments = pgTable(
     userId: text("user_id").notNull(),
     authorName: text("author_name"),
     body: text("body").notNull(),
+    // Set when this comment is a plan chat message shared with the community: the
+    // plan message (Airtable record id) it mirrors. Edits and deletes stay in sync.
+    linkedMessageId: text("linked_message_id"),
     hidden: boolean("hidden").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow(),
   },
@@ -948,5 +957,49 @@ export const crowdfundContributions = pgTable(
   (t) => ({
     paymentIntentUnique: uniqueIndex("crowdfund_contributions_pi_unique").on(t.paymentIntentId),
     fundKeyIdx: index("crowdfund_contributions_fund_key_idx").on(t.fundKey),
+  }),
+);
+
+// Plan History: one row per saved change to a plan by a signed-in person, shown in
+// the conversation panel's History tab. `session_id` is the Airtable plan id;
+// `changes` is a list of { type, text, itemId? } describing what that save changed.
+// `merged` marks saves that were folded onto newer changes from another device.
+export const planHistory = pgTable(
+  "plan_history",
+  {
+    id: serial().primaryKey(),
+    sessionId: text("session_id").notNull(),
+    userId: text("user_id").notNull(),
+    userName: text("user_name"),
+    changes: jsonb("changes").notNull(),
+    merged: boolean("merged").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    sessionCreatedIdx: index("plan_history_session_created_idx").on(t.sessionId, t.createdAt),
+  }),
+);
+
+// Store collab membership. Everyone who signs in on a store becomes a
+// 'contributor' (can react, comment and suggest; their ideas wait for review).
+// A store admin (Airtable PublishPermission) promotes them to 'member', whose
+// ideas are recommended to the community straight away. Ids are Airtable record
+// ids stored as text, like the other tables here.
+export const storeMembers = pgTable(
+  "store_members",
+  {
+    id: serial().primaryKey(),
+    storeId: text("store_id").notNull(),
+    userId: text("user_id").notNull(),
+    userName: text("user_name"),
+    // 'contributor' | 'member'
+    status: text("status").notNull().default("contributor"),
+    joinedAt: timestamp("joined_at").defaultNow(),
+    approvedAt: timestamp("approved_at"),
+    approvedBy: text("approved_by"),
+  },
+  (t) => ({
+    storeUserUnique: uniqueIndex("store_members_store_user_unique").on(t.storeId, t.userId),
+    storeStatusIdx: index("store_members_store_status_idx").on(t.storeId, t.status),
   }),
 );

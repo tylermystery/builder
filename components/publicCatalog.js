@@ -25,6 +25,8 @@ import { state, getRecordById, invalidateRecordsIndex } from '../state.js';
 import * as api from '../api.js';
 import { EMOJI_REACTIONS, computeDemocraticAverage } from '../config.js';
 import { showUserModal } from '../auth.js';
+import { showToast } from '../ui.js';
+import { togglePendingReaction, queuePendingComment } from '../utils/pendingCollab.js';
 import { log } from '../utils/debug.js';
 
 export const PUBLIC_IDEA_STATUS = 'Public Idea';
@@ -39,6 +41,47 @@ const publicIdeaIndex = new Map();
 // A row may have a null `id` until the first interaction lazily creates it server
 // side; from then on `id` is the public_items id used for subsequent writes.
 const communityRowByCatalogId = new Map();
+
+// Collab lifecycle stage of an idea row or record.
+// Two parallel layers on every idea and catalog item:
+//   status — suggested / recommended / catalog / declined (idea vs catalog)
+//   time   — unscheduled / scheduled / delivered
+export function collabStatusOf(row) {
+    return ({ pending: 'suggested', rejected: 'declined', recommended: 'recommended', published: 'catalog' })[row?.catalogStatus] || 'none';
+}
+
+export function collabTimeOf(row) {
+    if (row?.deliveredAt) return 'delivered';
+    if (row?.scheduledFor) return 'scheduled';
+    return 'unscheduled';
+}
+
+// Combined stage (time when set, otherwise status) for places that show one label.
+export function collabStageOf(row) {
+    const status = collabStatusOf(row);
+    if (status !== 'recommended' && status !== 'catalog') return status;
+    const time = collabTimeOf(row);
+    return time === 'unscheduled' ? status : time;
+}
+
+export const COLLAB_STAGE_LABELS = {
+    suggested: 'Suggested', recommended: 'Recommended', catalog: 'In catalog',
+    scheduled: 'Scheduled', delivered: 'Delivered', declined: 'Declined'
+};
+
+/**
+ * Collab score: every reaction and comment counts, from everyone equally for now.
+ * Reactions are weighted by sentiment (a 😍 counts more than a 🤔); comments add
+ * engagement. Kept in one place so comment scoring can be refined later.
+ */
+export function getCollabScore(record) {
+    const row = record ? getCommunityRowForRecord(record) : null;
+    if (!row) return { score: 0, reactions: 0, comments: 0 };
+    const reactions = Object.values(row.reactions || {}).reduce((sum, r) => sum + (r?.count || 0), 0);
+    const comments = (row.comments || []).length;
+    const { democraticAverage } = computeDemocraticAverage(communityRowToUserMap(row));
+    return { score: reactions + comments * 2 + democraticAverage * Math.min(reactions, 10), reactions, comments };
+}
 
 // True for a catalog record that originated from the public layer.
 export function isPublicIdeaRecord(record) {
@@ -92,6 +135,9 @@ function transformPublicRowToRecord(row, storeId) {
     // whether it is offering "add to catalog" or "remove from catalog".
     record.catalogStatus = catalogStatus;
     record.publicAuthorId = row.authorId || null;
+    record.scheduledFor = row.scheduledFor || null;
+    record.deliveredAt = row.deliveredAt || null;
+    record.collabStage = collabStageOf(row);
 
     // If a publisher pointed the catalog at one of the item's variations, that is
     // the version everyone browsing sees. Plans keep whatever version they were
@@ -251,6 +297,14 @@ let publicIdeasLoad = Promise.resolve();
 
 export function whenPublicIdeasLoaded() {
     return publicIdeasLoad;
+}
+
+// After sign-in (held collab sent, and admins now see suggested ideas), reload.
+if (typeof window !== 'undefined') {
+    window.addEventListener('public-catalog-refresh', () => {
+        const storeId = state.ui?.activeShopId;
+        if (storeId) loadPublicIdeasForStore(storeId);
+    });
 }
 
 export function loadPublicIdeasForStore(storeId) {
@@ -485,6 +539,25 @@ function currentUser() {
 }
 
 // Promote the user to sign in for any public write. Returns true if already signed in.
+const GUEST_ID = 'pending-guest';
+
+// Signed out: hold the reaction on this device (sent on sign-in) and show it now.
+// Returns the same shape as api.togglePublicReaction.
+function holdGuestReaction(publicItemId, emoji, variationId = null, opts = {}) {
+    const reacted = togglePendingReaction(publicItemId, emoji, variationId, opts);
+    if (reacted) {
+        try { showToast('Reaction saved. Sign in to share it with the community.', 3500, 'info'); } catch (_) {}
+    }
+    return { reacted, publicItemId };
+}
+
+// Signed out: keep the comment and ask them to sign in; it posts once they do.
+function holdGuestComment(publicItemId, text, opts = {}) {
+    queuePendingComment(publicItemId, text, null, opts);
+    try { showToast('Sign in to post your comment. We’ll post it as soon as you do.', 4000, 'info'); } catch (_) {}
+    try { showUserModal(); } catch (_) {}
+}
+
 function requireSignIn() {
     if (state.session?.user?.isAuthenticated) return true;
     try { showUserModal(); } catch (_) {}
@@ -642,22 +715,24 @@ function buildReactionRow(section, record, row, opts = {}) {
     const me = currentUser();
     EMOJI_REACTIONS.forEach(emoji => {
         const data = (row.reactions || {})[emoji] || { count: 0, users: [] };
-        const mine = me.id && Array.isArray(data.users) && data.users.includes(me.id);
+        const mine = Array.isArray(data.users) && data.users.includes(me.id || GUEST_ID);
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'public-reaction-btn' + (mine ? ' reacted' : '');
         btn.innerHTML = `<span class="pr-emoji">${emoji}</span>${data.count ? `<span class="pr-count">${data.count}</span>` : ''}`;
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (!requireSignIn()) return;
+            const signedIn = !!state.session?.user?.isAuthenticated;
             btn.disabled = true;
             // No container yet -> send catalog identity so the server creates one.
-            const result = await api.togglePublicReaction(
-                row.id, emoji, null, row.id == null ? communityWriteOpts(record) : {});
+            const writeOpts = row.id == null ? communityWriteOpts(record) : {};
+            const result = signedIn
+                ? await api.togglePublicReaction(row.id, emoji, null, writeOpts)
+                : holdGuestReaction(row.id, emoji, null, writeOpts);
             btn.disabled = false;
             if (!result) return;
             if (row.id == null && result.publicItemId != null) row.id = result.publicItemId;
-            applyReactionToggle(row, emoji, me.id, result.reacted);
+            applyReactionToggle(row, emoji, me.id || GUEST_ID, result.reacted);
             rerenderOpen(section, record, opts);
         });
         wrap.appendChild(btn);
@@ -744,12 +819,16 @@ function buildComposer(section, record, row, me, opts, parentCommentId) {
     sendBtn.textContent = parentCommentId != null ? 'Reply' : 'Post';
     sendBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!requireSignIn()) return;
         const text = ta.value.trim();
         if (!text) { ta.focus(); return; }
-        sendBtn.disabled = true;
         const writeOpts = row.id == null ? communityWriteOpts(record) : {};
         if (parentCommentId != null) writeOpts.parentCommentId = parentCommentId;
+        if (!state.session?.user?.isAuthenticated) {
+            holdGuestComment(row.id, text, writeOpts);
+            ta.value = '';
+            return;
+        }
+        sendBtn.disabled = true;
         const created = await api.addPublicComment(row.id, text, me.name, null, writeOpts);
         sendBtn.disabled = false;
         if (!created) return;
@@ -805,7 +884,6 @@ function buildCommentEl(section, record, row, comment, me, opts = {}, isReply = 
         replyBtn.innerHTML = '↩ Reply';
         replyBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (!requireSignIn()) return;
             if (!replyComposer) {
                 replyComposer = buildComposer(section, record, row, me, opts, comment.id);
                 el.appendChild(replyComposer);
@@ -852,7 +930,7 @@ function buildCommentReactionChips(section, record, row, comment, me, opts) {
     const chipsRow = document.createElement('div');
     chipsRow.className = 'public-comment-reactions';
     entries.forEach(([emoji, data]) => {
-        const mine = me.id && Array.isArray(data.users) && data.users.includes(me.id);
+        const mine = Array.isArray(data.users) && data.users.includes(me.id || GUEST_ID);
         const chip = document.createElement('button');
         chip.type = 'button';
         chip.className = 'public-comment-reaction' + (mine ? ' reacted' : '');
@@ -887,9 +965,10 @@ function buildCommentEmojiPicker(section, record, row, comment, me, opts) {
 // Toggle the current user's `emoji` reaction on a single comment, optimistically
 // updating the cached summary and re-rendering the open panel.
 async function toggleCommentReaction(section, record, row, comment, emoji, me, opts, btn) {
-    if (!requireSignIn()) return;
     if (btn) btn.disabled = true;
-    const result = await api.togglePublicReaction(row.id, emoji, null, { commentId: comment.id });
+    const result = state.session?.user?.isAuthenticated
+        ? await api.togglePublicReaction(row.id, emoji, null, { commentId: comment.id })
+        : holdGuestReaction(row.id, emoji, null, { commentId: comment.id });
     if (btn) btn.disabled = false;
     if (!result) return;
     comment.reactions = comment.reactions || {};
@@ -960,19 +1039,159 @@ export function getCommunitySentimentScore(record) {
  * same path the inline community picker uses.
  * @returns {Promise<boolean>} true if applied, false if blocked (signed out) or errored.
  */
-export async function toggleCommunityReactionForRecord(record, emoji) {
-    if (!record) return false;
-    if (!requireSignIn()) return false;
+export async function toggleCommunityReactionForRecord(record, emoji, variationId = null) {
+    if (!record) return null;
     const row = getOrInitCommunityRow(record);
-    if (!row) return false;
+    if (!row) return null;
     const me = currentUser();
+    const signedIn = !!state.session?.user?.isAuthenticated;
     // No container yet -> send catalog identity so the server creates one.
-    const result = await api.togglePublicReaction(
-        row.id, emoji, null, row.id == null ? communityWriteOpts(record) : {});
-    if (!result) return false;
+    const writeOpts = row.id == null ? communityWriteOpts(record) : {};
+    const result = signedIn
+        ? await api.togglePublicReaction(row.id, emoji, variationId, writeOpts)
+        : holdGuestReaction(row.id, emoji, variationId, writeOpts);
+    if (!result) return null;
     if (row.id == null && result.publicItemId != null) row.id = result.publicItemId;
-    applyReactionToggle(row, emoji, me.id, result.reacted);
-    return true;
+    const target = variationId != null ? (row.variations || []).find(v => v.id === variationId) : row;
+    if (target) applyReactionToggle(target, emoji, me.id || GUEST_ID, result.reacted);
+    return !!result.reacted;
+}
+
+/** Add a community comment to an item (held until sign-in for signed-out visitors). */
+export async function addCommunityCommentForRecord(record, text, variationId = null) {
+    if (!record || !text) return null;
+    const row = getOrInitCommunityRow(record);
+    if (!row) return null;
+    const writeOpts = row.id == null ? communityWriteOpts(record) : {};
+    if (!state.session?.user?.isAuthenticated) {
+        holdGuestComment(row.id, text, writeOpts);
+        return { held: true };
+    }
+    const created = await api.addPublicComment(row.id, text, currentUser().name, variationId, writeOpts);
+    if (!created) return null;
+    if (row.id == null && created.publicItemId != null) row.id = created.publicItemId;
+    const target = variationId != null ? (row.variations || []).find(v => v.id === variationId) : row;
+    if (target) { target.comments = target.comments || []; target.comments.push(created); }
+    return created;
+}
+
+/** Community reaction summary as Map<userId, Set<emoji>> (item, or one variation). */
+export function communityUserMapForRecord(record, variationId = null) {
+    const row = record ? getCommunityRowForRecord(record) : null;
+    if (!row) return new Map();
+    const target = variationId != null ? (row.variations || []).find(v => v.id === variationId) : row;
+    return communityRowToUserMap(target || null);
+}
+
+export function communityCommentCountForRecord(record, variationId = null) {
+    const row = record ? getCommunityRowForRecord(record) : null;
+    if (!row) return 0;
+    const target = variationId != null ? (row.variations || []).find(v => v.id === variationId) : row;
+    return (target?.comments || []).length;
+}
+
+export { GUEST_ID as COLLAB_GUEST_ID };
+
+// ===== Plan messages shared with the community (one comment, two places) =====
+
+/** The community comment mirroring a plan message, or null. */
+export function findSharedComment(recordId, messageId) {
+    const row = getCommunityRowForRecord(getRecordById(recordId));
+    return (row?.comments || []).find(c => c.linkedMessageId === messageId) || null;
+}
+
+/** Share a plan message about an item with the community (linked, not copied by hand). */
+export async function sharePlanMessage(recordId, message) {
+    const record = getRecordById(recordId);
+    if (!record || !message?.id || findSharedComment(recordId, message.id)) return null;
+    const row = getOrInitCommunityRow(record);
+    if (!row) return null;
+    const opts = { ...(row.id == null ? communityWriteOpts(record) : {}), linkedMessageId: message.id };
+    const created = await api.addPublicComment(row.id, message.content, message.senderName || currentUser().name, null, opts);
+    if (!created) return null;
+    if (row.id == null && created.publicItemId != null) row.id = created.publicItemId;
+    row.comments = row.comments || [];
+    row.comments.push({ ...created, linkedMessageId: message.id });
+    return created;
+}
+
+/** Keep the community copy in step when the plan message is edited. */
+export async function syncSharedMessageEdit(recordId, messageId, text) {
+    const comment = findSharedComment(recordId, messageId);
+    if (!comment) return true;
+    const updated = await api.updatePublicComment(comment.id, text);
+    if (updated) comment.body = text;
+    return !!updated;
+}
+
+/** Stop sharing (or the plan message was deleted): remove the community copy. */
+export async function unsharePlanMessage(recordId, messageId) {
+    const comment = findSharedComment(recordId, messageId);
+    if (!comment) return true;
+    const ok = await api.removePublicComment(comment.id);
+    if (ok) {
+        const row = getCommunityRowForRecord(getRecordById(recordId));
+        if (row) row.comments = (row.comments || []).filter(c => c.id !== comment.id);
+    }
+    return ok;
+}
+
+/** A display name for a community user id. */
+export function collabUserName(userId) {
+    return userLabel(userId);
+}
+
+/** Latest community comments on an item, newest first: [{ author, text, at }]. */
+export function latestCommunityComments(record, limit = 2) {
+    const row = record ? getCommunityRowForRecord(record) : null;
+    return [...(row?.comments || [])]
+        .filter(c => c && c.body)
+        .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+        .slice(0, limit)
+        .map(c => ({ author: c.authorName || userLabel(c.userId), text: c.body, at: c.createdAt, scope: 'community', id: c.id }));
+}
+
+/** All community comments on an item (oldest first), for the detail timeline. */
+export function communityCommentsForRecord(record) {
+    const row = record ? getCommunityRowForRecord(record) : null;
+    return [...(row?.comments || [])]
+        .filter(c => c && c.body)
+        .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
+        .map(c => ({ author: c.authorName || userLabel(c.userId), text: c.body, at: c.createdAt, scope: 'community', id: c.id, parentId: c.parentCommentId ?? null, linkedMessageId: c.linkedMessageId || null, reactions: c.reactions || {} }));
+}
+
+/**
+ * Collab idea stage actions for store admins (the same decisions as the review bar):
+ * returns [{ label, run }] for the idea's current stage.
+ */
+export function collabIdeaStageActions(record) {
+    const row = record ? getCommunityRowForRecord(record) : null;
+    if (!row || row.id == null || row.catalogItemId || !api.userHasPublishPermission()) return [];
+    const decide = (decision, extra = {}) => async () => {
+        const item = await api.reviewPublicItem(row.id, decision, null, extra);
+        if (!item) { try { showToast('Could not update that idea.', 3000, 'error'); } catch (_) {} return; }
+        applyItemReviewResult(record, row, item);
+        invalidateRecordsIndex();
+        if (typeof window.applyFiltersAndSort === 'function') window.applyFiltersAndSort(window.imageCache);
+        window.dispatchEvent(new CustomEvent('collab-updated', { detail: { kind: 'item', id: record.id } }));
+    };
+    const status = row.catalogStatus;
+    const time = collabTimeOf(row);
+    const list = [];
+    if (status === 'pending') list.push({ label: '⭐ Recommend', run: decide('recommend') });
+    if (status === 'pending' || status === 'recommended') list.push({ label: '✅ Add to catalog', run: decide('catalog') });
+    if ((status === 'recommended' || status === 'published') && time !== 'delivered') {
+        list.push({ label: time === 'scheduled' ? '📅 Reschedule' : '📅 Schedule', run: async () => {
+            const current = row.scheduledFor ? new Date(row.scheduledFor).toISOString().slice(0, 10) : '';
+            const input = prompt('Delivery date (YYYY-MM-DD):', current);
+            if (input === null) return;
+            const date = new Date(`${input.trim()}T12:00:00`);
+            if (isNaN(date.getTime())) { try { showToast('Please enter a date like 2026-12-31.', 3000, 'error'); } catch (_) {} return; }
+            await decide('schedule', { scheduledFor: date.toISOString() })();
+        } });
+        list.push({ label: '🎉 Mark delivered', run: decide('deliver') });
+    }
+    return list;
 }
 
 function communityRowActivity(row) {
@@ -1275,7 +1494,9 @@ export function renderItemVariations(section, record, opts = {}) {
     // A suggested item (someone without publish permission asked for it to join
     // the catalog) is reviewed here too, so publishers never have to go looking
     // for a separate queue.
-    const needsItemReview = canReview && row?.catalogStatus === 'pending' && row?.id != null;
+    // Collab lifecycle review for admins: Suggested -> Recommended -> In catalog.
+    const needsItemReview = canReview && row?.id != null && !row?.catalogItemId &&
+        ['pending', 'recommended', 'published'].includes(row?.catalogStatus);
     if (variations.length === 0 && !canSuggest && !needsItemReview) {
         section.style.display = 'none';
         return;
@@ -1290,7 +1511,10 @@ export function renderItemVariations(section, record, opts = {}) {
 
     const summaryParts = [`${variations.length + 1} version${variations.length ? 's' : ''}`];
     if (pendingCount > 0) summaryParts.push(`${pendingCount} awaiting review`);
-    if (needsItemReview) summaryParts.push('suggested for the catalog');
+    if (needsItemReview) {
+        const stage = collabStageOf(row);
+        summaryParts.push(stage === 'suggested' ? 'suggested idea · needs review' : `${COLLAB_STAGE_LABELS[stage].toLowerCase()} idea`);
+    }
 
     const header = document.createElement('button');
     header.type = 'button';
@@ -1344,13 +1568,21 @@ function rerenderVariations(ctx) {
 // ordinary community idea and records the note.
 function buildItemReviewBar(ctx) {
     const { record, row } = ctx;
+    const status = row?.catalogStatus;
     const wrap = document.createElement('div');
     wrap.className = 'variation-item-review';
-    wrap.innerHTML = `
-        <div class="variation-item-review-text">
-            ${escapeHtml(userLabel(row?.authorId))} suggested this item for the store catalog.
-        </div>
-    `;
+    const who = escapeHtml(userLabel(row?.authorId));
+    const stage = collabStageOf(row);
+    const statusTag = collabStatusOf(row);
+    const when = row?.scheduledFor ? new Date(row.scheduledFor).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    const text = {
+        suggested: `<strong>Suggested</strong> by ${who} · only you and other store admins can see it. Step 1: recommend it to the community. Step 2: add it to the catalog.`,
+        recommended: `<strong>Recommended</strong> · open to everyone's collab. Add it to the catalog when it's ready to book.`,
+        catalog: `<strong>In catalog</strong> · bookable. Schedule it when you plan to deliver it.`,
+        scheduled: `<strong>Scheduled</strong> for ${escapeHtml(when)} · ${statusTag === 'catalog' ? 'in catalog' : 'recommended idea'} · collab stays open. Mark it delivered once it happens.`,
+        delivered: `<strong>Delivered</strong> · ${statusTag === 'catalog' ? 'in catalog' : 'recommended idea'} · collab stays open, so feedback can refine the next version.`
+    }[stage] || '';
+    wrap.innerHTML = `<div class="variation-item-review-text">${text}</div>`;
 
     const actions = document.createElement('div');
     actions.className = 'variation-actions';
@@ -1369,26 +1601,126 @@ function buildItemReviewBar(ctx) {
         actions.appendChild(btn);
     };
 
-    addButton('✅ Add to the catalog', 'variation-approve-btn', async () => {
-        const item = await api.reviewPublicItem(row.id, 'approve');
-        if (!item) return notify(ctx, 'Could not approve that item.', 'error');
+    const decide = async (decision, done, failed, note = null) => {
+        const item = await api.reviewPublicItem(row.id, decision, note);
+        if (!item) return notify(ctx, failed, 'error');
         applyItemReviewResult(record, row, item);
         refreshAfterVariationChange(ctx);
-        notify(ctx, 'Added to the store catalog.', 'success');
-    });
+        notify(ctx, done, 'success');
+    };
 
-    addButton('✖️ Decline', 'variation-deny-btn', async () => {
-        const note = prompt('Optional note back to the author:', '');
-        if (note === null) return;
-        const item = await api.reviewPublicItem(row.id, 'reject', note || null);
-        if (!item) return notify(ctx, 'Could not decline that item.', 'error');
+    const decideWith = async (decision, extra, done, failed) => {
+        const item = await api.reviewPublicItem(row.id, decision, null, extra);
+        if (!item) return notify(ctx, failed, 'error');
         applyItemReviewResult(record, row, item);
         refreshAfterVariationChange(ctx);
-        notify(ctx, 'Suggestion declined.', 'success');
-    });
+        notify(ctx, done, 'success');
+    };
+    if (status === 'pending') {
+        addButton('⭐ Recommend', 'variation-approve-btn', () =>
+            decide('recommend', 'Recommended: everyone can now collab on it.', 'Could not recommend that idea.'));
+    }
+    if (status !== 'published') {
+        addButton('✅ Add to the catalog', 'variation-approve-btn', () =>
+            decide('catalog', 'Added to the store catalog.', 'Could not add that item.'));
+    }
+    if ((status === 'published' || status === 'recommended') && stage !== 'delivered') {
+        addButton(stage === 'scheduled' ? '📅 Reschedule' : '📅 Schedule', 'variation-approve-btn', async () => {
+            const current = row.scheduledFor ? new Date(row.scheduledFor).toISOString().slice(0, 10) : '';
+            const input = prompt('Delivery date (YYYY-MM-DD):', current);
+            if (input === null) return;
+            const date = new Date(`${input.trim()}T12:00:00`);
+            if (isNaN(date.getTime())) return notify(ctx, 'Please enter a date like 2026-12-31.', 'error');
+            await decideWith('schedule', { scheduledFor: date.toISOString() }, `Scheduled for ${date.toLocaleDateString()}.`, 'Could not schedule it.');
+        });
+        addButton('🎉 Mark delivered', 'variation-approve-btn', () =>
+            decideWith('deliver', {}, 'Marked delivered. Collab stays open to refine it.', 'Could not mark it delivered.'));
+    }
+    if (stage === 'scheduled') {
+        addButton('Clear date', 'variation-deny-btn', () =>
+            decideWith('unschedule', {}, 'Schedule cleared.', 'Could not clear the date.'));
+    }
+    if (status === 'published') {
+        // nothing else: removing from the catalog stays in the item's catalog control
+    } else if (status === 'recommended') {
+        addButton('⚑ Back to suggested', 'variation-deny-btn', () =>
+            decide('flag', 'Moved back to suggested.', 'Could not move that idea.'));
+    } else {
+        addButton('✖️ Decline', 'variation-deny-btn', async () => {
+            const note = prompt('Optional note back to the author:', '');
+            if (note === null) return;
+            await decide('reject', 'Suggestion declined.', 'Could not decline that item.', note || null);
+        });
+    }
+
+    if (storeIdForRecord(record)) {
+        addButton('👥 Collab members', 'variation-action-btn', () => openCollabMembers(storeIdForRecord(record)));
+    }
+
+    // Approve the author as a store member so their next ideas skip review.
+    const storeId = row?.storeId || storeIdForRecord(record);
+    const authorId = row?.authorId;
+    if (status === 'pending' && authorId && storeId && authorId !== currentUser().id) {
+        addButton(`👤 Make ${userLabel(authorId)} a member`, 'variation-approve-btn', async () => {
+            const ok = await api.setCollabMemberStatus(storeId, authorId, 'member');
+            notify(ctx, ok ? 'Approved as a member. Their next ideas are recommended straight away.' : 'Could not approve that member.', ok ? 'success' : 'error');
+        });
+    }
 
     wrap.appendChild(actions);
     return wrap;
+}
+
+// Store admins: everyone who has joined this store's collab, with member approval.
+async function openCollabMembers(storeId) {
+    document.getElementById('collab-members-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'collab-members-overlay';
+    overlay.className = 'collab-members-overlay';
+    overlay.innerHTML = `
+        <div class="collab-members-dialog" role="dialog" aria-modal="true" aria-labelledby="collab-members-title">
+            <div class="collab-members-head">
+                <h3 id="collab-members-title">Collab members</h3>
+                <button type="button" class="collab-members-close" aria-label="Close">&times;</button>
+            </div>
+            <p class="collab-members-help">Contributors joined by signing in; their ideas wait for review. Members' ideas are recommended straight away.</p>
+            <div class="collab-members-list"><div class="collab-members-empty">Loading…</div></div>
+        </div>`;
+    const close = () => overlay.remove();
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.querySelector('.collab-members-close').addEventListener('click', close);
+    document.body.appendChild(overlay);
+
+    const list = overlay.querySelector('.collab-members-list');
+    const render = (members) => {
+        if (!members) { list.innerHTML = '<div class="collab-members-empty">Could not load members.</div>'; return; }
+        if (members.length === 0) { list.innerHTML = '<div class="collab-members-empty">Nobody has joined yet.</div>'; return; }
+        const sorted = [...members].sort((a, b) => (a.status === b.status ? 0 : a.status === 'contributor' ? -1 : 1));
+        list.innerHTML = '';
+        for (const m of sorted) {
+            const rowEl = document.createElement('div');
+            rowEl.className = 'collab-member-row';
+            const isMember = m.status === 'member';
+            rowEl.innerHTML = `
+                <div class="collab-member-info">
+                    <span class="collab-member-name">${escapeHtml(m.userName || userLabel(m.userId))}</span>
+                    <span class="collab-member-status ${isMember ? 'is-member' : ''}">${isMember ? 'Member' : 'Contributor'}</span>
+                </div>`;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'collab-member-toggle';
+            btn.textContent = isMember ? 'Make contributor' : 'Approve as member';
+            btn.addEventListener('click', async () => {
+                btn.disabled = true;
+                const ok = await api.setCollabMemberStatus(storeId, m.userId, isMember ? 'contributor' : 'member');
+                if (ok) { m.status = isMember ? 'contributor' : 'member'; render(members); }
+                else { btn.disabled = false; try { showToast('Could not update that member.', 3000, 'error'); } catch (_) {} }
+            });
+            rowEl.appendChild(btn);
+            list.appendChild(rowEl);
+        }
+    };
+    render(await api.listCollabMembers(storeId));
 }
 
 // Mirror an item review decision onto the cached row and the on-screen record so
@@ -1396,12 +1728,18 @@ function buildItemReviewBar(ctx) {
 // approved item carries the 'Available' status the rest of the app filters on;
 // a declined one goes back to being an ordinary community idea.
 function applyItemReviewResult(record, row, item) {
-    if (row) row.catalogStatus = item.catalogStatus;
-    const cachedRow = publicIdeaIndex.get(publicRecordId(row || item));
-    if (cachedRow) cachedRow.catalogStatus = item.catalogStatus;
+    for (const target of [row, publicIdeaIndex.get(publicRecordId(row || item))]) {
+        if (!target) continue;
+        target.catalogStatus = item.catalogStatus;
+        target.scheduledFor = item.scheduledFor || null;
+        target.deliveredAt = item.deliveredAt || null;
+    }
 
     if (!record) return;
     record.catalogStatus = item.catalogStatus;
+    record.scheduledFor = item.scheduledFor || null;
+    record.deliveredAt = item.deliveredAt || null;
+    record.collabStage = collabStageOf(item);
     if (record.fields) {
         record.fields.Status = item.catalogStatus === 'published'
             ? 'Available'
@@ -1472,26 +1810,24 @@ function buildVariationReactionRow(ctx, variation) {
 
     EMOJI_REACTIONS.forEach(emoji => {
         const data = summary[emoji] || { count: 0, users: [] };
-        const mine = me.id && Array.isArray(data.users) && data.users.includes(me.id);
+        const mine = Array.isArray(data.users) && data.users.includes(me.id || GUEST_ID);
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'public-reaction-btn variation-reaction-btn' + (mine ? ' reacted' : '');
         btn.innerHTML = `<span class="pr-emoji">${emoji}</span>${data.count ? `<span class="pr-count">${data.count}</span>` : ''}`;
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (!requireSignIn()) return;
             btn.disabled = true;
             const target = getOrInitCommunityRow(record);
-            const result = await api.togglePublicReaction(
-                target?.id ?? null,
-                emoji,
-                variation ? variation.id : null,
-                target?.id == null ? communityWriteOpts(record) : {}
-            );
+            const args = [target?.id ?? null, emoji, variation ? variation.id : null,
+                target?.id == null ? communityWriteOpts(record) : {}];
+            const result = state.session?.user?.isAuthenticated
+                ? await api.togglePublicReaction(...args)
+                : holdGuestReaction(...args);
             btn.disabled = false;
             if (!result) return;
             if (target && target.id == null && result.publicItemId != null) target.id = result.publicItemId;
-            applyReactionToggle(variation || target, emoji, me.id, result.reacted);
+            applyReactionToggle(variation || target, emoji, me.id || GUEST_ID, result.reacted);
             rerenderVariations(ctx);
         });
         wrap.appendChild(btn);
@@ -1623,7 +1959,14 @@ function buildVariationComments(ctx, variation) {
     const post = async () => {
         const text = input.value.trim();
         if (!text) return;
-        if (!requireSignIn()) return;
+        if (!state.session?.user?.isAuthenticated) {
+            const held = getOrInitCommunityRow(record);
+            queuePendingComment(held?.id ?? null, text, variationId, held?.id == null ? communityWriteOpts(record) : {});
+            try { showToast('Sign in to post your comment. We’ll post it as soon as you do.', 4000, 'info'); } catch (_) {}
+            try { showUserModal(); } catch (_) {}
+            input.value = '';
+            return;
+        }
         send.disabled = true;
         const target = getOrInitCommunityRow(record);
         const me = currentUser();

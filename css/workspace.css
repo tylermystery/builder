@@ -236,3 +236,187 @@ body.presentation-active #header-search-wrapper #filter-toggle-btn { display: no
     body.workspace-ready[data-workspace-surface="left"] #mobile-filter-backdrop,
     body.workspace-ready[data-workspace-surface="right"] #mobile-filter-backdrop { visibility: hidden !important; pointer-events: none !important; }
 }
+
+/* ===== Collab: superscript sentiment summary + shared collab menu ===== */
+.collab-sup {
+    display: inline-block;
+    margin-left: 3px;
+    padding: 0 2px;
+    font-size: 0.72em;
+    line-height: 1;
+    vertical-align: super;
+    cursor: pointer;
+    border-radius: 6px;
+    opacity: 0.45;
+    filter: grayscale(0.6);
+    transition: opacity 0.15s, filter 0.15s, transform 0.15s;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+.collab-sup.has-reactions { opacity: 1; filter: none; }
+.collab-sup:hover, .collab-sup:focus-visible, .collab-sup[aria-expanded="true"] {
+    opacity: 1; filter: none; transform: scale(1.2); outline: none;
+    background: rgba(139, 92, 246, 0.18);
+}
+.modal-collab-sup-host { display: inline-flex; align-items: flex-start; font-size: 1.4em; }
+.compact-card-title-row .collab-sup { flex-shrink: 0; font-size: 0.85em; }
+
+.collab-menu {
+    position: fixed;
+    z-index: 100000;
+    width: min(320px, calc(100vw - 16px));
+    padding: 12px;
+    border-radius: 14px;
+    background: #fff;
+    color: #222;
+    box-shadow: 0 12px 36px rgba(20, 10, 50, 0.28), 0 2px 6px rgba(0, 0, 0, 0.08);
+    font-size: 14px;
+    animation: collab-menu-in 0.12s ease-out;
+}
+@keyframes collab-menu-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.collab-menu-head { display: flex; gap: 10px; align-items: flex-start; }
+.collab-menu-emoji { font-size: 2em; line-height: 1; }
+.collab-menu-summary { min-width: 0; }
+.collab-menu-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.collab-menu-stage {
+    margin-left: 4px; padding: 1px 6px; border-radius: 8px; font-size: 0.72em; font-weight: 600;
+    background: rgba(139, 92, 246, 0.12); color: #6d28d9;
+}
+.collab-menu-meta { margin-top: 2px; font-size: 0.82em; color: #555; }
+.collab-menu-breakdown { margin-top: 2px; font-size: 0.76em; color: #888; }
+.collab-menu-scope { display: flex; gap: 6px; margin: 10px 0 0; }
+.collab-scope-btn {
+    flex: 1; padding: 4px 8px; border-radius: 12px; border: 1px solid #ddd; background: #fff;
+    font: inherit; font-size: 0.78em; color: #555; cursor: pointer;
+}
+.collab-scope-btn.active { background: #6d28d9; border-color: #6d28d9; color: #fff; }
+.collab-menu-reactions { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin: 10px 0 0; }
+.collab-react-btn {
+    position: relative; padding: 6px 0; border-radius: 10px; border: 1px solid transparent;
+    background: #f4f3f8; font-size: 1.15em; line-height: 1; cursor: pointer;
+    transition: transform 0.1s, background 0.1s;
+}
+.collab-react-btn:hover, .collab-react-btn:focus-visible { transform: scale(1.12); background: #ece8fb; outline: none; }
+.collab-react-btn.mine { background: #ede4ff; border-color: #8b5cf6; }
+.collab-react-count {
+    position: absolute; top: -5px; right: -3px; min-width: 15px; padding: 0 3px; border-radius: 8px;
+    background: #6d28d9; color: #fff; font-size: 0.55em; font-weight: 700; line-height: 15px; text-align: center;
+}
+.collab-menu-note { margin-top: 10px; font-size: 0.82em; color: #777; }
+.collab-menu-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.collab-menu-actions:empty { display: none; }
+.collab-menu-action {
+    padding: 5px 10px; border-radius: 12px; border: 1px solid #e2def3; background: #fff;
+    font: inherit; font-size: 0.8em; color: #4c1d95; cursor: pointer;
+}
+.collab-menu-action:hover, .collab-menu-action:focus-visible { background: #f5f2ff; outline: none; }
+.collab-menu-action.is-status { color: #333; }
+.collab-menu-compose { display: flex; gap: 6px; margin-top: 8px; }
+.collab-menu-compose[hidden] { display: none; }
+.collab-menu-compose textarea {
+    flex: 1; resize: none; padding: 6px 8px; border-radius: 10px; border: 1px solid #ddd; font: inherit; font-size: 0.85em;
+}
+.collab-menu-compose button {
+    padding: 0 12px; border: none; border-radius: 10px; background: #6d28d9; color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+}
+@media (prefers-reduced-motion: reduce) { .collab-menu { animation: none; } .collab-sup, .collab-react-btn { transition: none; } }
+
+/* Superscript: sentiment emoji + open comment count */
+.collab-sup { display: inline-flex; align-items: flex-start; gap: 1px; }
+.collab-sup-count {
+    font-size: 0.72em; font-weight: 700; line-height: 1;
+    padding: 1px 3px; border-radius: 6px; background: #6d28d9; color: #fff;
+    filter: none;
+}
+.collab-sup:not(.has-reactions).has-open { opacity: 0.85; filter: none; }
+
+/* Collab menu: chat summary + latest comments */
+.collab-menu-chats { margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: #f7f6fb; }
+.collab-menu-chats-summary { font-size: 0.8em; font-weight: 600; color: #4c1d95; margin-bottom: 4px; }
+.collab-menu-comment { font-size: 0.8em; color: #444; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.collab-menu-comment + .collab-menu-comment { margin-top: 3px; }
+.collab-menu-comment-scope { margin-right: 3px; }
+.collab-menu-action.is-more { margin-left: auto; font-weight: 600; }
+
+/* Item detail: Collab section (the full collab view) */
+.modal-collab-section {
+    margin: 14px 0; padding: 14px 16px; border-radius: 14px;
+    background: #faf9ff; border: 1px solid #ece8fb; color: #222;
+}
+.collab-detail-head { display: flex; gap: 12px; align-items: flex-start; }
+.collab-detail-emoji { font-size: 2.4em; line-height: 1; }
+.collab-detail-title { margin: 0; font-size: 1.05em; }
+.collab-detail-meta { font-size: 0.86em; color: #444; margin-top: 2px; }
+.collab-detail-breakdown, .collab-detail-status { font-size: 0.8em; color: #777; margin-top: 2px; }
+.collab-detail-status { color: #4c1d95; font-weight: 600; }
+.collab-detail-reactions { max-width: 420px; }
+.collab-detail-convo { margin-top: 14px; border-top: 1px solid #ece8fb; padding-top: 10px; }
+.collab-detail-convo-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+.collab-detail-convo-head h4 { margin: 0; font-size: 0.95em; display: flex; align-items: center; gap: 6px; }
+.collab-detail-count { font-size: 0.75em; padding: 0 7px; border-radius: 9px; background: #ece8fb; color: #4c1d95; }
+.collab-detail-filter { display: flex; gap: 10px; font-size: 0.8em; color: #555; }
+.collab-detail-filter label { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; }
+.collab-detail-timeline { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; max-height: 360px; overflow-y: auto; }
+.collab-detail-comment { padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid #eee; }
+.collab-detail-comment.is-reply { margin-left: 18px; }
+.collab-detail-comment-head { display: flex; align-items: center; gap: 4px; font-size: 0.82em; }
+.collab-detail-comment-time { margin-left: auto; color: #999; font-size: 0.9em; }
+.collab-detail-reply-to { font-size: 0.75em; color: #888; margin-top: 2px; }
+.collab-detail-comment-text { font-size: 0.88em; color: #333; margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.collab-detail-empty { font-size: 0.85em; color: #888; padding: 6px 0; }
+.collab-detail-compose { margin-top: 10px; }
+
+/* Conversations panel scoped to an item: collab header + combined timeline */
+.ucp-item-collab {
+    margin: 0 0 10px; padding: 10px 12px; border-radius: 12px;
+    background: #faf9ff; border: 1px solid #ece8fb; color: #222; font-size: 14px;
+}
+.ucp-item-collab .collab-menu-actions .collab-menu-action { font-size: 0.78em; }
+.ucp-source-filter { display: flex; gap: 12px; margin: 0 0 8px; font-size: 0.78em; color: #555; }
+.ucp-source-filter label { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; }
+.ucp-msg-community { border-left: 3px solid #0ea5e9; margin-left: 4px; padding-left: 10px; }
+.ucp-msg-scope { margin-right: 3px; }
+.ucp-msg-scope-mark { float: right; font-size: 0.8em; opacity: 0.7; }
+.ucp-community-reply { margin: 6px 0 0 14px; padding-left: 8px; border-left: 2px solid #e6f4fb; }
+/* One-click reactions opened from a message superscript */
+.collab-inline-react {
+    display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px;
+    margin: 6px 0 2px; max-width: 320px;
+}
+
+/* Conversations panel: one chat with view chips; shared messages */
+.ucp-view-chips { flex-wrap: wrap; }
+.ucp-view-chip .ucp-tab-count { margin-left: 3px; }
+.ucp-shared-badge {
+    display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 10px;
+    background: rgba(14, 165, 233, 0.12); color: #0369a1; font-size: 0.72em; font-weight: 600;
+}
+
+/* Conversations panel header: view dropdown (Open · Tasks · All · History) */
+.ucp-view-select-wrap { display: inline-flex; align-items: center; }
+.ucp-view-select-wrap .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ucp-view-select {
+    padding: 4px 26px 4px 10px; border-radius: 14px; border: 1px solid #ddd;
+    background: #fff; color: #333; font: inherit; font-size: 0.8em; font-weight: 600; cursor: pointer;
+}
+.ucp-view-select:focus-visible { outline: 2px solid #8b5cf6; outline-offset: 1px; }
+.ucp-view-chips:empty { display: none; }
+
+/* Plan view "Add to Plan" search: sit below the fixed site header (which stays on
+   top), so its title bar and × close button are never covered — on mobile the
+   window fills the screen from the top, and the header used to hide the ×. */
+body.workspace-ready .presentation-search-modal {
+    top: var(--workspace-header-height, 0px);
+}
+body.workspace-ready .presentation-search-content {
+    max-height: calc(100dvh - var(--workspace-header-height, 0px) - 5vh);
+}
+@media (max-width: 768px) {
+    body.workspace-ready .presentation-search-content {
+        max-height: calc(100dvh - var(--workspace-header-height, 0px));
+        height: calc(100dvh - var(--workspace-header-height, 0px));
+    }
+    body.workspace-ready .presentation-search-header { position: sticky; top: 0; z-index: 1; background: #fff; flex-shrink: 0; }
+    body.workspace-ready .presentation-search-results { min-height: 0; }
+    body.workspace-ready .presentation-search-close { width: 44px; height: 44px; flex-shrink: 0; }
+}

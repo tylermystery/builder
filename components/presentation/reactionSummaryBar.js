@@ -145,7 +145,9 @@ export function initializeReactionZones() {
             commentsBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const rid = commentsBtn.dataset.recordId;
-                if (_deps.openConversationForItem) _deps.openConversationForItem(rid);
+                // The badge shows open chats/tasks, so surface the plan chat scoped to this item.
+                if (_deps.openOpenConversations) _deps.openOpenConversations(rid);
+                else if (_deps.openConversationForItem) _deps.openConversationForItem(rid);
             });
         }
     });
@@ -772,11 +774,8 @@ async function submitRSBComment(recordId, container) {
         _deps.componentComments.getCache().set(cacheKey, freshComments);
         buildRSBCommentsContent(container, recordId);
 
-        const zone = document.querySelector(`.compact-card-reaction-zone[data-record-id="${recordId}"]`);
-        if (zone) {
-            const countEl = zone.querySelector('.reaction-zone-comments-btn span:last-child');
-            if (countEl) countEl.textContent = freshComments.length || '';
-        }
+        // The card's 💬 badge shows open chats/tasks; it refreshes from the
+        // plan-chat-activity signal the post emits, so it is not overwritten here.
 
         const panel = container.closest('.rsb-panel');
         if (panel) {

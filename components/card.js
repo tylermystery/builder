@@ -1,6 +1,7 @@
 // REPLACE THE ENTIRE CONTENTS of components/card.js
 console.log('[MODULE DEBUG] card.js module starting to load...', performance.now().toFixed(2) + 'ms');
 
+import { collabSupHTML } from './collab/collabControl.js';
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
@@ -343,15 +344,27 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const isPublicIdea = record.isPublicIdea === true ||
                          (typeof record.id === 'string' && record.id.startsWith('public-'));
     let publicIdeaBadge = '';
-    if (record.catalogStatus === 'published') {
-        // A publisher promoted this into the store catalog: it is a real catalog
-        // item now, so it reads as store content rather than a community idea.
+    const stage = record.collabStage || (record.catalogStatus === 'pending' ? 'suggested' : null);
+    if (isPublicIdea && stage) {
+        // Status and time are shown side by side, e.g. "💡 Recommended · 📅 Dec 4".
+        const statusLabels = { suggested: 'Suggested · awaiting review', recommended: '💡 Recommended', catalog: 'In catalog', declined: '' };
+        const status = { pending: 'suggested', recommended: 'recommended', published: 'catalog', rejected: 'declined' }[record.catalogStatus] || stage;
+        let label = statusLabels[status] || '';
+        if (record.deliveredAt) label += `${label ? ' · ' : ''}🎉 Delivered`;
+        else if (record.scheduledFor) {
+            let date = '';
+            try { date = new Date(record.scheduledFor).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); } catch (_) {}
+            label += `${label ? ' · ' : ''}📅 ${date}`;
+        }
+        const cls = status === 'suggested' ? 'pending-review-badge'
+            : record.deliveredAt ? 'public-idea-badge collab-stage-delivered'
+            : record.scheduledFor ? 'public-idea-badge collab-stage-scheduled'
+            : status === 'catalog' ? 'store-added-badge' : 'public-idea-badge collab-stage-recommended';
+        if (label) publicIdeaBadge = `<span class="${cls}">${label}</span>`;
+    } else if (record.catalogStatus === 'published') {
         publicIdeaBadge = '<span class="store-added-badge">Added by the store</span>';
-    } else if (record.catalogStatus === 'pending') {
-        // Visible only to its author and the store's publishers (the API decides).
-        publicIdeaBadge = '<span class="pending-review-badge">Pending review</span>';
     } else if (isPublicIdea) {
-        publicIdeaBadge = '<span class="public-idea-badge">Public Idea</span>';
+        publicIdeaBadge = '<span class="public-idea-badge">💡 Collab idea</span>';
     }
 
     // --- VVV SCORE LOGIC REMOVED VVV ---
@@ -496,7 +509,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                     ${eventTime ? `<span class="time">${eventTime}</span>` : ''}
                 </div>
                 <div class="event-details">
-                    <h3>${fields.Name || 'Untitled Event'}${sentimentChipHTML()}</h3>
+                    <h3>${fields.Name || 'Untitled Event'}${collabSupHTML('item', record.id, fields.Name || '')}</h3>
                     <div class="description rich-text-description">${renderRichText(fields.Description)}</div>
                 </div>
             </div>
@@ -650,7 +663,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         packageCard.innerHTML = `
             ${imageContainerHTML}
             <div class="event-card-content">
-                <h3>${fields.Name || 'Untitled Package'}</h3>
+                <h3>${fields.Name || 'Untitled Package'}${collabSupHTML('item', record.id, fields.Name || '')}</h3>
                 <div class="description rich-text-description">${renderRichText(fields.Description)}</div>
                 <div class="package-summary">
                     <span class="package-item-count">${includedCount} items included</span>
@@ -822,7 +835,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             ${promoBadge}
             </div>
         <div class="event-card-content">
-            <h3>${fields.Name || 'Untitled Event'}${sentimentChipHTML()}</h3>
+            <h3>${fields.Name || 'Untitled Event'}${collabSupHTML('item', record.id, fields.Name || '')}</h3>
             <div class="description rich-text-description">${renderRichText(fields.Description)}</div>
         </div>
         <div class="card-footer">

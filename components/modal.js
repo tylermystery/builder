@@ -2314,7 +2314,8 @@ function updateModalSentimentChips(recordId) {
         if (globalChip) globalChip.style.display = 'none';
         return;
     }
-    if (globalChip) renderSentimentChip(globalChip, recordId, 'global');
+    // Collab lives in the conversations panel; the detail view has no reaction control.
+    if (globalChip) globalChip.style.display = 'none';
 }
 
 // ── Anchored sentiment popup (chat-message style) ───────────────────────────
@@ -2448,8 +2449,8 @@ async function toggleScopeReaction(recordId, scope, emoji, anchorEl) {
     } else {
         const record = getRecordById(recordId);
         if (!record) return;
-        const ok = await toggleCommunityReactionForRecord(record, emoji);
-        if (!ok) return; // signed out (sign-in prompt shown) or errored
+        const result = await toggleCommunityReactionForRecord(record, emoji);
+        if (result === null) return; // errored
     }
     updateModalSentimentChips(recordId);
     // If the popup was opened from a catalog card's sentiment chip (beta "Sort by:
@@ -2530,16 +2531,12 @@ function renderInPlanSummary(record, itemState, isLocked) {
         <div class="in-plan-head">
             <span class="in-plan-check">✓</span>
             <span class="in-plan-title">In your plan</span>
-            <button type="button" class="in-plan-react-btn${planS.has ? ' has-reactions' : ''}" title="${escapeHtml(reactTitle)}">${reactLabel}</button>
         </div>
         <div class="in-plan-details">${details.join('<span class="in-plan-sep">·</span>')}</div>
         ${note ? `<div class="in-plan-note">${escapeHtml(note)}</div>` : ''}
     `;
-    const reactBtn = block.querySelector('.in-plan-react-btn');
-    if (reactBtn) reactBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openItemSentimentPopup(reactBtn, record.id, 'plan');
-    });
+    // Reactions are in the title superscript and the Collab section (one interface).
+    void reactLabel; void reactTitle;
 
     container.insertBefore(block, container.firstChild);
 }

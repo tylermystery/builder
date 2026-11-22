@@ -6,7 +6,7 @@ import * as ui from './ui.js';
 import * as api from './api.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions, getTempLikes } from './utils.js';
 import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore } from './availability.js';
-import { PUBLIC_IDEA_STATUS, isPublicIdeaRecord, getCommunitySentimentScore } from './components/publicCatalog.js';
+import { PUBLIC_IDEA_STATUS, isPublicIdeaRecord, getCommunitySentimentScore, getCollabScore } from './components/publicCatalog.js';
 
 // --- Performance: Cached record metadata to avoid re-parsing on every filter pass ---
 const _recordMetaCache = new WeakMap();
@@ -124,6 +124,10 @@ function filterByStatus(records, statusFilter) {
             const status = record.fields[CONSTANTS.FIELD_NAMES.STATUS];
             return status && (status === 'Available' || status === 'Featured');
         });
+    } else if (statusFilter === PUBLIC_IDEA_STATUS) {
+        // Collab Ideas board: community ideas at every stage (suggested for their
+        // author/admins, recommended, in catalog, scheduled, delivered).
+        return records.filter(record => isPublicIdeaRecord(record) && record.catalogStatus !== 'none' && record.catalogStatus !== 'rejected');
     } else {
         return records.filter(record => {
             if (!record || !record.fields) return false;
@@ -655,6 +659,12 @@ export async function applyFiltersAndSort(imageCache) {
     }
 
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy, goalBucket);
+    // Collab Ideas board: top community ideas first; delivered ones after the rest.
+    if (statusFilter === PUBLIC_IDEA_STATUS && !['plan', 'likes', 'my-sessions', 'rsvp-events'].includes(view)) {
+        const scored = recordsToDisplay.map(r => ({ r, s: getCollabScore(r).score, done: r.collabStage === 'delivered' }));
+        scored.sort((a, b) => (a.done - b.done) || (b.s - a.s));
+        recordsToDisplay = scored.map(x => x.r);
+    }
 
     // Hard guarantee for the "Public Ideas" filter, applied globally across every
     // view branch above (landing, categories, packages, …): only genuine public

@@ -70,13 +70,20 @@ exports.handler = async (event, context) => {
     }
 
     try {
-        const { email, user_metadata } = user;
-        const name = user_metadata?.full_name || email.split('@')[0]; // Use full name if available
+        const { user_metadata } = user;
+        // Normalise so a Google sign-in finds the account someone already made with
+        // email sign-in, whatever the letter case they typed.
+        const email = String(user.email || '').trim().toLowerCase();
+        if (!email) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'Your Google account did not share an email address.' }) };
+        }
+        const name = user_metadata?.full_name || user_metadata?.name || email.split('@')[0]; // Use full name if available
         console.log(`[auth-social] Processing social login for email: ${email}, name: ${name}`);
 
         // 2. Find or Create User in Airtable
         // Use double quotes and encodeURIComponent for proper escaping
-        const filterFormula = encodeURIComponent(`{${EMAIL_FIELD}}="${email}"`);
+        const safeEmail = email.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        const filterFormula = encodeURIComponent(`LOWER(TRIM({${EMAIL_FIELD}}))="${safeEmail}"`);
         const findUserUrl = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(USERS_TABLE)}?filterByFormula=${filterFormula}`;
         console.log('[auth-social] Finding user with email:', email);
 
@@ -97,7 +104,11 @@ exports.handler = async (event, context) => {
             userRecord = userData.records[0];
             console.log(`[auth-social] Found existing user: ${userRecord.id}`);
             // Optional: Update name if it changed in the social provider
-            if (userRecord.fields[NAME_FIELD] !== name) {
+            // Only fill in a name when the account has none, or still has the placeholder
+            // email-prefix name; never overwrite a name the person chose.
+            const currentName = userRecord.fields[NAME_FIELD];
+            const placeholder = String(userRecord.fields[EMAIL_FIELD] || '').split('@')[0];
+            if ((!currentName || currentName === placeholder) && currentName !== name) {
                 console.log(`[auth-social] Updating user name for ${userRecord.id}`);
                 await fetch(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(USERS_TABLE)}/${userRecord.id}`, {
                     method: 'PATCH',

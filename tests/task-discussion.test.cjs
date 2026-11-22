@@ -55,7 +55,7 @@ function harness(initial = [], user = { id: 'user-a', name: 'Collaborator' }) {
     let saved = structuredClone(initial);
     const calls = [];
     const state = { session: { id: 'recPlan' }, eventDetails: { combined: new Map() } };
-    const context = vm.createContext({ state, document: { createElement: tag => new Element(tag) }, api: {
+    const context = vm.createContext({ EMOJI_REACTIONS: ['🚀', '🔥', '👍'], state, document: { createElement: tag => new Element(tag) }, api: {
         async fetchChatMessages() { return structuredClone(saved); },
         async postChatMessage(session, id, name, content, item, options) {
             assert.equal(options.notify, false, 'placeholder roots must not send notifications');

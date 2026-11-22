@@ -6,6 +6,7 @@
  */
 
 // Dependencies injected via init()
+import { openCollabMenuFor } from '../collab/collabControl.js';
 let deps = {};
 
 // ─── State variables ────────────────────────────────────────────────────────
@@ -258,11 +259,9 @@ export async function initializeItemDragDrop() {
                 const centerX = itemRect.left + itemRect.width / 2;
                 const centerY = itemRect.top + itemRect.height / 2;
                 console.log('[Drag DEBUG] onStart: opening ActionMenu at centerX:', centerX, 'centerY:', centerY, 'for recordId:', currentDraggedRecordId);
-                deps.openActionMenu(currentDraggedRecordId, {
-                    x: centerX,
-                    y: centerY,
-                    onAction: handleActionMenuAction
-                });
+                // Dragging only reorders and merges; reactions, comments and status
+                // changes live in the collab menu (the title superscript).
+                void centerX; void centerY;
 
                 // Add document-level listeners to track drag position
                 document.addEventListener('mousemove', handleDragMove);
@@ -1142,12 +1141,9 @@ function handleItemPointerMove(event, itemElement) {
                 }
             }
 
-            if (swipedRecordId) {
-                deps.openActionMenu(swipedRecordId, {
-                    x: initialTouchPoint.x,
-                    y: initialTouchPoint.y,
-                    onAction: handleActionMenuAction
-                });
+            // A sideways swipe opens the same collab menu as the title superscript.
+            if (swipedRecordId && itemElement) {
+                openCollabMenuFor(itemElement);
             }
 
             cleanupRadialEventListeners();

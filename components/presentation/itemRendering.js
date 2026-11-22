@@ -7,7 +7,9 @@
 import { log } from '../../utils/debug.js';
 import { renderRichText } from '../../utils.js';
 import { applyCloudinaryFitTransform, getImageOrientationClass } from '../../utils/imageOptimizer.js';
-import { getActiveStorePillars } from '../../availability.js';
+import { renderCollabBoard, isCollabBoardToggled, initCollabBoardToggle } from './collabBoard.js';
+import { collabSupHTML } from '../collab/collabControl.js';
+import { getOpenConversationCounts, getOpenCountsForItems, describeOpenCounts } from '../../utils/openConversations.js';
 
 // Track loaded images for each item
 const itemImagesCache = new Map();
@@ -635,7 +637,12 @@ export async function renderCompactCard(item) {
     const commentCacheKey = `item:${recordId}`;
     const cachedComments = _deps.componentComments.getCache().get(commentCacheKey);
     const commentCount = cachedComments?.length || 0;
-    const commentsBtnHTML = `<button class="reaction-zone-comments-btn" data-record-id="${recordId}" data-component-id="${recordId}" title="${commentCount > 0 ? commentCount + ' comment' + (commentCount !== 1 ? 's' : '') : 'Add a comment'}"><span class="reaction-zone-comments-icon">💬</span><span>${commentCount || ''}</span></button>`;
+    // One combined badge: open chats + open tasks for this item. Selecting it opens
+    // the plan chat scoped to the item; the full message count lives in the tooltip.
+    const openCounts = getOpenConversationCounts().byItem.get(recordId) || { chats: 0, tasks: 0, comments: commentCount, total: 0 };
+    if (!openCounts.comments) openCounts.comments = commentCount;
+    const openTitle = openCounts.total > 0 || openCounts.comments > 0 ? describeOpenCounts(openCounts) : 'Add a comment';
+    const commentsBtnHTML = `<button class="reaction-zone-comments-btn${openCounts.total > 0 ? ' has-open' : ''}" data-record-id="${recordId}" data-component-id="${recordId}" title="${escapeHtml(openTitle)}" aria-label="${escapeHtml(openTitle)}"><span class="reaction-zone-comments-icon">💬</span><span class="reaction-zone-open-count">${openCounts.total || ''}</span></button>`;
 
     // Task status badge
     const taskStatusForBadge = _deps.getElementTaskStatus('item', recordId);
@@ -716,29 +723,24 @@ export async function renderCompactCard(item) {
         <div class="compact-card ${lifecycleClass} ${confidenceClass} ${noPhotoClass}" data-record-id="${recordId}" data-item-type="${type}" data-item-status="${itemStatus}" role="article" tabindex="0" aria-label="${escapeHtml(name)}${showStatus ? ', ' + taskConfig.label : ''}">
             <div class="compact-card-photo ${imageOrientationClass}" style="${photoStyle}">
                 ${statusOverlayHTML}
-                ${emojiOverlayHTML}
+                <!-- sentiment now shown as the title superscript -->
                 ${lifecycleBadgeHTML}
                 <span class="compact-card-valuation">${priceBadgeHTML}${compactVitalityHTML}</span>
             </div>
             <div class="compact-card-body">
                 <div class="compact-card-title-row">
                     ${goalBadgeHTML}
-                    <h4 class="compact-card-name" title="${escapeHtml(name)}">${escapeHtml(name)}</h4>
+                    <h4 class="compact-card-name" title="${escapeHtml(name)}">${escapeHtml(name)}</h4>${collabSupHTML('item', recordId, name)}
                     ${sourceTypeBadgeHTML}
                 </div>
                 ${provenanceHTML}
                 ${pillsHTML}
                 <div class="compact-card-reaction-zone" data-record-id="${recordId}">
                     <div class="reaction-zone-hint">
-                        <div class="reaction-zone-summary" data-record-id="${recordId}">
-                            <span class="reaction-zone-summary-emoji">${reactionZoneSummaryEmoji}</span>
-                            <span class="reaction-zone-summary-text">${reactionZoneSummaryText}</span>
-                            ${reactionZoneScoreText ? `<span class="reaction-zone-summary-score">${reactionZoneScoreText}</span>` : ''}
-                        </div>
+                        <!-- Reactions and open comments live in the title superscript (collab menu). -->
                         <div class="reaction-zone-actions">
                             ${timeBadgeHTML}
                             ${taskBadgeHTML}
-                            ${commentsBtnHTML}
                         </div>
                     </div>
                 </div>
@@ -824,9 +826,11 @@ export async function renderCompactGroupCard(group) {
         const memberComments = _deps.componentComments.getCache().get(`item:${gId}`);
         groupCommentCount += memberComments?.length || 0;
     }
-    const groupCommentBadgeHTML = groupCommentCount > 0
-        ? `<span class="compact-badge-pill compact-badge-comment" title="${groupCommentCount} comment${groupCommentCount !== 1 ? 's' : ''} across group"><span class="compact-badge-icon">💬</span><span class="compact-badge-count">${groupCommentCount}</span></span>`
-        : '';
+    const groupOpen = getOpenCountsForItems(groupItems);
+    if (!groupOpen.comments) groupOpen.comments = groupCommentCount;
+    // Always rendered (hidden while empty) so it can appear once counts finish loading.
+    const groupHasActivity = groupOpen.total > 0 || groupOpen.comments > 0;
+    const groupCommentBadgeHTML = `<span class="compact-badge-pill compact-badge-comment${groupOpen.total > 0 ? ' has-open' : ''}" data-open-group-items="${escapeHtml(groupItems.join(','))}" title="${escapeHtml(describeOpenCounts(groupOpen) + ' across group')}"${groupHasActivity ? '' : ' hidden'}><span class="compact-badge-icon">💬</span><span class="compact-badge-count">${groupOpen.total || ''}</span></span>`;
 
     // Aggregate task status
     const taskStatusCounts = {};
@@ -899,7 +903,7 @@ export async function renderCompactGroupCard(group) {
         groupReactionBarHTML = `<span class="compact-card-reactions" title="${groupTotalReactions} reaction${groupTotalReactions !== 1 ? 's' : ''} across group">${summaryPill}${top3Group}${moreGroupReactions}</span>`;
     }
 
-    const hasGroupMeta = groupReactionBarHTML || groupTaskBadgeHTML || groupCommentBadgeHTML;
+    const hasGroupMeta = groupReactionBarHTML || groupTaskBadgeHTML || groupHasActivity;
     const groupMetaHTML = hasGroupMeta ? `
                 <div class="compact-card-meta">
                     ${groupReactionBarHTML}
@@ -991,41 +995,16 @@ export async function renderAllItems() {
     const completedCount = completedItems.size;
     updateStatusToggles(archivedCount, completedCount);
 
-    if (combinedList.length === 0) {
-        // Surface the store's recommended pillars as browse suggestions when defined;
-        // otherwise fall back to the original default component set.
-        const storePillars = getActiveStorePillars();
-        const allCategories = storePillars.length > 0
-            ? storePillars
-            : ["Activities", "Food & Drink", "Venues", "Extras"];
-        const categoryIcons = { "Activities": "🎯", "Food & Drink": "🍽️", "Venues": "📍", "Extras": "✨" };
-        let emptyStateHTML = `
-            <section class="itinerary-section itinerary-empty-section" data-section="empty" role="status" aria-label="Empty plan board">
-                <div class="presentation-empty-state board-empty-state">
-                    <div class="board-empty-icon" aria-hidden="true">📋</div>
-                    <p class="itinerary-empty-title">Your Plan Board is Empty</p>
-                    <p class="itinerary-empty-subtitle">Start by browsing items from a category below, or use the search to find something specific.</p>
-                    <div class="presentation-suggestions" role="group" aria-label="Category suggestions">
-        `;
-        allCategories.forEach(cat => {
-            const filterTag = cat.toLowerCase().replace(/\s+/g, ' ');
-            const icon = categoryIcons[cat] || '📦';
-            emptyStateHTML += `
-                <button class="filter-btn presentation-suggestion-btn" data-category-filter="${filterTag}" aria-label="Browse ${cat}">
-                    <span class="suggestion-btn-icon" aria-hidden="true">${icon}</span>
-                    <span class="suggestion-btn-text">${cat}</span>
-                </button>
-            `;
-        });
-        emptyStateHTML += `
-                    </div>
-                    <p class="board-empty-hint">Tip: Swipe horizontally on any card to access quick actions</p>
-                </div>
-            </section>
-        `;
-        itineraryItemsListEl.innerHTML = emptyStateHTML;
+    // Collab board: the default when no plan is in progress, or when toggled on.
+    initCollabBoardToggle(() => renderAllItems());
+    const collabToggle = document.getElementById('presentation-collab-board-toggle');
+    if (collabToggle) collabToggle.style.display = combinedList.length === 0 ? 'none' : '';
+    if (combinedList.length === 0 || isCollabBoardToggled()) {
+        itineraryItemsListEl.removeAttribute('role');
+        renderCollabBoard(itineraryItemsListEl, { planIsEmpty: combinedList.length === 0, onRerender: () => renderAllItems() });
         return;
     }
+
 
     const showSingleItemNudge = combinedList.length === 1;
     itineraryItemsListEl.classList.add('board-view');

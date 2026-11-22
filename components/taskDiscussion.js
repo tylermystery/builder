@@ -1,8 +1,10 @@
+import { EMOJI_REACTIONS } from '../config.js';
 import { state } from '../state.js';
 import * as api from '../api.js';
 import { getTaskDiscussion, messageReactions, taskMessageText } from '../utils/taskDiscussion.js';
 
-const QUICK_REACTIONS = ['👍', '❤️', '🎉', '👀', '❓'];
+// The scored collab set, everywhere.
+const QUICK_REACTIONS = EMOJI_REACTIONS;
 
 // Mount independently of the task form so posting a reply never submits task edits.
 export function mountTaskDiscussion(container, task, sessionId, getUser, onChange) {

@@ -10,13 +10,21 @@ import { showToast } from '../ui.js';
 import { showTaskModal } from './taskManager.js';
 import { loadProjectTasks, getProjectTaskLoadState } from '../utils/projectTasks.js';
 import { taskMessageId, taskMessageText } from '../utils/taskDiscussion.js';
+import { collabSupHTML, registerCollabKind, buildItemCollabHeader, resolveItemScope } from './collab/collabControl.js';
+import { communityCommentsForRecord, addCommunityCommentForRecord, findSharedComment, sharePlanMessage, syncSharedMessageEdit, unsharePlanMessage } from './publicCatalog.js';
+import { COLLAB_REACTIONS, emojiUsersToMap } from '../utils/collabSummary.js';
+import { getOpenConversationCounts, isThreadResolved, getResolvedThreads, setThreadResolved } from '../utils/openConversations.js';
+import { isPlanReadOnly } from '../utils/planAccess.js';
 import { renderPublicReactions, renderAggregatedCommunityFeed } from './publicCatalog.js';
 
 // ===== MODULE STATE =====
 let getCurrentUserFn = null;
 let sendChatMessageFn = null; // Setter-injected from chat.js to avoid circular dep
 let panelOpen = false;
-let currentFilter = 'all'; // 'all' (the plan conversation) | 'global' | 'tasks'
+let currentFilter = 'all'; // 'all' (the plan chat) | 'tasks' | 'history'. ('global' is retired.)
+let chatView = 'open'; // Chat tab: 'open' threads only, or 'all' including resolved/done
+let itemCollabScope = null; // scoped to an item: where reactions/comments go ('plan' | 'community')
+let sourceFilter = 'all';   // scoped to an item: 'all' | 'plan' | 'community' comments
 let ucpMessages = [];
 let messagesSessionId = null;
 let ucpPlanEvents = [];
@@ -44,6 +52,7 @@ function planIncludesItem(id) {
 // Local browsing scope is deliberately independent of shared live-stream focus.
 export function setUCPItemScope(itemId) {
     scopeSessionId = state.session?.id || null;
+    if ((itemId || null) !== selectedItemId) { itemCollabScope = null; sourceFilter = 'all'; }
     selectedItemId = itemId || null;
     scopeWasPlanItem = !!planIncludesItem(itemId);
     cancelReply();
@@ -67,13 +76,15 @@ function messageMatchesScope(message) {
 }
 
 
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '🔥', '🎉', '😮', '👀', '💯'];
+// The scored collab set, everywhere (so every reaction feeds the sentiment summary).
+const QUICK_REACTIONS = COLLAB_REACTIONS;
 
 // Only transient view preferences travel across a full session navigation.
 export function getUCPWorkspacePreferences() {
     return {
         filter: currentFilter,
         hideCompleted,
+        chatView,
         scrollTop: document.getElementById('ucp-content')?.scrollTop || 0,
         sessionId: state.session?.id,
         selectedItemId,
@@ -84,8 +95,9 @@ export function getUCPWorkspacePreferences() {
 export async function restoreUCPWorkspacePreferences(preferences) {
     initializeUnifiedChatPanel();
     if (!preferences) return showUnifiedChatPanel();
-    currentFilter = ['all', 'global', 'tasks'].includes(preferences.filter) ? preferences.filter : 'all';
+    currentFilter = ['all', 'tasks', 'history'].includes(preferences.filter) ? preferences.filter : 'all';
     hideCompleted = !!preferences.hideCompleted;
+    chatView = preferences.chatView === 'all' ? 'all' : 'open';
     ucpFocusRecordId = preferences.sessionId === state.session?.id && getRecordById(preferences.communityItemId)
         ? preferences.communityItemId : null;
     const checkbox = document.getElementById('ucp-hide-completed-cb');
@@ -139,6 +151,18 @@ export function initializeUnifiedChatPanel() {
     setupHideCompletedToggle();
     setupFullscreenToggle();
     setupFocusBar();
+    window.addEventListener('plan-history-changed', () => {
+        historyCache.fetchedAt = 0;
+        if (panelOpen && currentFilter === 'history') loadPlanHistory(true);
+    });
+    document.getElementById('ucp-attach-clear')?.addEventListener('click', () => setUCPItemScope(null));
+    window.addEventListener('open-conversations-updated', updateTabCounts);
+    document.addEventListener('click', (event) => {
+        if (!event.target.closest?.('.ucp-more-menu, .ucp-more-btn')) closeMessageMenus();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closeMessageMenus();
+    });
     document.getElementById('ucp-attach-select')?.addEventListener('change', (event) => {
         setUCPItemScope(event.target.value);
     });
@@ -193,23 +217,6 @@ export async function showUnifiedChatPanel() {
     updateFocusBarUI();
     await Promise.all([loadPanelData(), loadTaskData(true)]);
     updateOnlineCount();
-
-    // Debug: log layout dimensions
-    requestAnimationFrame(() => {
-        const panel = document.getElementById('unified-chat-panel');
-        const content = document.getElementById('ucp-content');
-        const inputArea = document.getElementById('ucp-input-area');
-        console.log('[UCP LAYOUT DEBUG] Panel dimensions:', {
-            panelHeight: panel?.offsetHeight,
-            panelClientHeight: panel?.clientHeight,
-            contentHeight: content?.offsetHeight,
-            contentScrollHeight: content?.scrollHeight,
-            inputAreaHeight: inputArea?.offsetHeight,
-            inputAreaOffsetTop: inputArea?.offsetTop,
-            inputAreaVisible: inputArea ? (inputArea.offsetTop + inputArea.offsetHeight <= (panel?.offsetHeight || 0)) : 'N/A',
-            viewportHeight: window.innerHeight
-        });
-    });
 }
 
 export function hideUnifiedChatPanel() {
@@ -275,10 +282,26 @@ function setupFilters() {
     });
 }
 
+function autoSizeComposer(input = document.getElementById('ucp-message-input')) {
+    if (!input || input.tagName !== 'TEXTAREA') return;
+    input.style.height = 'auto';
+    input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
+}
+
 function setupMessageForm() {
     const form = document.getElementById('ucp-message-form');
     if (form) {
         form.addEventListener('submit', handleMessageSubmit);
+    }
+    // Multi-line composer: Enter sends, Shift+Enter adds a line.
+    const input = document.getElementById('ucp-message-input');
+    if (input) {
+        input.addEventListener('input', () => autoSizeComposer(input));
+        input.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+            event.preventDefault();
+            form?.requestSubmit ? form.requestSubmit() : form?.dispatchEvent(new Event('submit', { cancelable: true }));
+        });
     }
 
     const cancelReplyBtn = document.querySelector('.ucp-reply-cancel');
@@ -518,14 +541,67 @@ function buildThreads() {
  *     back to "Global" when no store is active.
  */
 function updateUCPTabLabels() {
+    // The plan's name lives in the header, so long names never squeeze the tabs.
     const planName = (state.eventDetails?.combined?.get?.('eventName') || '').trim();
-    const planBtn = document.querySelector('.ucp-filter-btn[data-filter="all"]');
-    if (planBtn) planBtn.textContent = planName || 'Current Plan';
+    const title = document.querySelector('#unified-chat-panel .ucp-title');
+    if (title) {
+        title.textContent = state.session?.id && planName ? planName : 'Conversations';
+        title.title = title.textContent;
+    }
+    updateTabCounts();
+}
 
-    const activeShop = state.stores?.all?.find?.(s => s.id === state.ui?.activeShopId);
-    const storeName = (activeShop?.fields?.Name || '').trim();
-    const globalBtn = document.querySelector('.ucp-filter-btn[data-filter="global"]');
-    if (globalBtn) globalBtn.textContent = storeName || 'Global';
+// Open chats / open tasks for the current scope (the whole plan, or the chosen item).
+function updateTabCounts() {
+    syncViewSelect();
+}
+
+// Item scope shown as a chip: "About: <item> ✕". The select stays the way to pick.
+function updateScopeChip() {
+    const bar = document.getElementById('ucp-attach-bar');
+    if (!bar) return;
+    bar.classList.toggle('is-scoped', !!selectedItemId);
+    const clear = document.getElementById('ucp-attach-clear');
+    if (clear) clear.hidden = !selectedItemId;
+}
+
+// A top-level chat is "done" when someone resolved it or the task made from it is complete.
+function isThreadDone(message) {
+    const links = state.eventDetails.combined.get('_commentTaskLinks') || {};
+    const taskId = links[message.id];
+    if (taskId) return state.tasks.all.get(taskId)?.fields?.Status === 'completed';
+    return isThreadResolved(message.id);
+}
+
+// One chat, one row of view chips: Open · All · Tasks · History.
+function currentViewChip() {
+    if (currentFilter === 'tasks') return 'tasks';
+    if (currentFilter === 'history') return 'history';
+    return chatView === 'all' ? 'all' : 'open';
+}
+
+function buildViewChips(hiddenCount = 0) {
+    syncViewSelect();
+    const row = document.createElement('div');
+    row.className = 'ucp-view-chips';
+    if (currentViewChip() === 'open' && hiddenCount > 0) {
+        const note = document.createElement('span');
+        note.className = 'ucp-view-note';
+        note.textContent = `${hiddenCount} resolved or done hidden · choose “All” to see them`;
+        row.appendChild(note);
+    }
+    return row;
+}
+
+// Item header (when scoped to an item) and the view chips, above every view.
+function prependPanelTop(container, hiddenCount = 0) {
+    const top = document.createDocumentFragment();
+    if (selectedItemId) {
+        itemCollabScope = resolveItemScope(selectedItemId, itemCollabScope);
+        top.appendChild(buildItemCollabHeader(selectedItemId, { scope: itemCollabScope, onChange: () => renderContent() }));
+    }
+    top.appendChild(buildViewChips(hiddenCount));
+    container.insertBefore(top, container.firstChild);
 }
 
 function renderContent() {
@@ -534,14 +610,29 @@ function renderContent() {
 
     validateItemScope();
     if (messagesSessionId !== state.session?.id) ucpMessages = [];
+    if (currentFilter === 'global') currentFilter = 'all'; // retired tab
     updateUCPTabLabels();
+    updateScopeChip();
     const scopeBar = document.getElementById('ucp-attach-bar');
-    if (scopeBar) scopeBar.hidden = currentFilter === 'global';
+    if (scopeBar) scopeBar.hidden = currentFilter === 'history' && !selectedItemId;
+    // "Hide done" applies to the task list; the chat uses Open / All instead.
+    const hideDoneToggle = document.getElementById('ucp-hide-completed-toggle');
+    if (hideDoneToggle) hideDoneToggle.hidden = currentFilter !== 'tasks';
+    const filtersRow = document.getElementById('ucp-filters-row');
+    if (filtersRow) filtersRow.hidden = currentFilter !== 'tasks';
     updateInputPlaceholder();
 
-    // Tasks tab has its own rendering path
+    // Tasks view has its own rendering path
     if (currentFilter === 'tasks') {
         renderTasksTab(container);
+        prependPanelTop(container);
+        return;
+    }
+
+    // Plan History view (read-only timeline of saved plan changes)
+    if (currentFilter === 'history') {
+        renderHistoryTab(container);
+        prependPanelTop(container);
         return;
     }
 
@@ -557,19 +648,26 @@ function renderContent() {
 
     container.innerHTML = '';
 
-    let items = [];
 
-    switch (currentFilter) {
-        case 'all':
-            items = ucpMessages;
-            break;
-        default:
-            items = ucpMessages;
-    }
+    let items = sourceFilter === 'community' && selectedItemId ? [] : ucpMessages;
 
     items = items.filter(messageMatchesScope);
+    const scopedCount = items.length;
+    if (chatView === 'open') items = items.filter(msg => !isThreadDone(msg));
+    // One combined timeline: this plan's chat plus the item's community comments
+    // (a plan message shared with the community appears once, as the plan message).
+    const community = selectedItemId && sourceFilter !== 'plan' ? communityEntries(selectedItemId) : [];
+    prependPanelTop(container, scopedCount - items.length);
+    if (selectedItemId && communityEntries(selectedItemId).length > 0) container.appendChild(buildSourceFilter());
+    items = [...items, ...community].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     if (items.length === 0) {
-        showEmptyState(selectedItemId ? 'No conversations for this item yet.' : getEmptyMessage());
+        const empty = document.createElement('div');
+        empty.className = 'ucp-empty';
+        const text = scopedCount > 0
+            ? 'No open chats. Everything here is resolved or done — choose “All” to see it.'
+            : (selectedItemId ? 'No conversations for this item yet.' : getEmptyMessage());
+        empty.innerHTML = `<span class="ucp-empty-icon">💬</span><div>${escapeHtml(text)}</div>`;
+        container.appendChild(empty);
         return;
     }
 
@@ -584,7 +682,7 @@ function renderContent() {
             container.appendChild(divider);
             lastDateLabel = dateLabel;
         }
-        container.appendChild(createTimelineMessage(msg));
+        container.appendChild(msg.isCommunity ? createCommunityEntry(msg) : createTimelineMessage(msg));
     });
 
     updateInputPlaceholder();
@@ -594,21 +692,6 @@ function renderContent() {
         container.scrollTop = container.scrollHeight;
         shouldScrollToBottom = false;
     }
-
-    // Debug: verify UCP content area is scrollable and input is visible
-    requestAnimationFrame(() => {
-        const panel = document.getElementById('unified-chat-panel');
-        const inputArea = document.getElementById('ucp-input-area');
-        console.log('[UCP RENDER DEBUG] After renderContent:', {
-            contentOffsetH: container.offsetHeight,
-            contentScrollH: container.scrollHeight,
-            contentCanScroll: container.scrollHeight > container.offsetHeight,
-            inputAreaDisplay: inputArea?.style.display,
-            inputAreaBottom: inputArea ? (inputArea.offsetTop + inputArea.offsetHeight) : 'N/A',
-            panelBottom: panel?.offsetHeight,
-            inputVisible: inputArea && panel ? (inputArea.offsetTop + inputArea.offsetHeight <= panel.offsetHeight + 1) : 'N/A'
-        });
-    });
 }
 
 function getDateLabel(timestamp) {
@@ -628,7 +711,7 @@ function updateInputPlaceholder() {
 
     if (selectedItemId && currentFilter === 'all') {
         const name = getRecordById(selectedItemId)?.fields?.Name || 'this item';
-        input.placeholder = `Message about ${name}...`;
+        input.placeholder = `Message the plan about ${name}...`;
         return;
     }
     // v3.8 Phase 3: Show focus item context in placeholder
@@ -650,6 +733,61 @@ function getEmptyMessage() {
         case 'tasks': return 'No tasks yet. Create one from any message or the Tasks panel.';
         default: return 'No conversations yet. Say hello!';
     }
+}
+
+// ===== Item scope: community comments in the combined timeline =====
+
+function buildSourceFilter() {
+    const row = document.createElement('div');
+    row.className = 'ucp-source-filter';
+    row.setAttribute('role', 'radiogroup');
+    row.setAttribute('aria-label', 'Show comments from');
+    for (const [value, label] of [['all', 'All'], ['plan', '👥 This plan'], ['community', '🌐 Community']]) {
+        const lab = document.createElement('label');
+        lab.innerHTML = `<input type="radio" name="ucp-source-filter" value="${value}"${sourceFilter === value ? ' checked' : ''}> ${label}`;
+        lab.querySelector('input').addEventListener('change', () => { sourceFilter = value; renderContent(); });
+        row.appendChild(lab);
+    }
+    return row;
+}
+
+function communityEntries(recordId) {
+    const record = getRecordById(recordId);
+    if (!record) return [];
+    const all = communityCommentsForRecord(record);
+    const tops = all.filter(c => c.parentId == null && !c.linkedMessageId);
+    return tops.map(c => ({
+        isCommunity: true, recordId, id: c.id, senderName: c.author, content: c.text,
+        timestamp: c.at || new Date(0).toISOString(),
+        replies: all.filter(r => r.parentId === c.id)
+    }));
+}
+
+function createCommunityEntry(entry) {
+    const el = document.createElement('div');
+    el.className = 'ucp-msg ucp-msg-community';
+    el.setAttribute('data-collab-inline-host', '');
+    const supFor = (c) => collabSupHTML('ccomment', `${entry.recordId}::${c.id}`, `${c.senderName || c.author}'s comment`);
+    el.innerHTML = `
+        <div class="ucp-msg-header">
+            <span class="ucp-msg-scope" title="Community">🌐</span>
+            <span class="ucp-msg-sender">${escapeHtml(entry.senderName)}</span>${supFor(entry)}
+            <span class="ucp-msg-time">${formatTime(entry.timestamp)}</span>
+        </div>
+        <div class="ucp-msg-body">${formatMessageContent(entry.content)}</div>`;
+    for (const reply of entry.replies) {
+        const r = document.createElement('div');
+        r.className = 'ucp-community-reply';
+        r.setAttribute('data-collab-inline-host', '');
+        r.innerHTML = `
+            <div class="ucp-msg-header">
+                <span class="ucp-msg-sender">${escapeHtml(reply.author)}</span>${collabSupHTML('ccomment', `${entry.recordId}::${reply.id}`, `${reply.author}'s reply`)}
+                <span class="ucp-msg-time">${formatTime(reply.at)}</span>
+            </div>
+            <div class="ucp-msg-body">${formatMessageContent(reply.text)}</div>`;
+        el.appendChild(r);
+    }
+    return el;
 }
 
 function showEmptyState(message) {
@@ -681,9 +819,18 @@ function createTimelineMessage(message) {
     if (message.componentId) classes += ' ucp-msg-comment';
     if (message.isIdea) classes += ' ucp-msg-idea';
     if (isTaskCompleted) classes += ' ucp-msg-task-completed';
-    if (isTaskCompleted && hideCompleted) classes += ' ucp-hide-done';
+    const isResolved = !linkedTaskId && !message.parentMessageId && isThreadResolved(message.id);
+    if (isResolved) classes += ' ucp-msg-resolved';
     el.className = classes;
     el.dataset.messageId = message.id;
+    el.setAttribute('data-collab-inline-host', '');
+    if (selectedItemId) {
+        const scopeMark = document.createElement('span');
+        scopeMark.className = 'ucp-msg-scope-mark';
+        scopeMark.title = 'This plan';
+        scopeMark.textContent = '👥';
+        el.appendChild(scopeMark);
+    }
 
     // Context badge for item comments (nested inline)
     if (message.componentId) {
@@ -706,7 +853,7 @@ function createTimelineMessage(message) {
     const header = document.createElement('div');
     header.className = 'ucp-msg-header';
     header.innerHTML = `
-        <span class="ucp-msg-sender">${escapeHtml(message.senderName)}</span>
+        <span class="ucp-msg-sender">${escapeHtml(message.senderName)}</span>${message.isDeleted ? '' : collabSupHTML('message', message.id, `${message.senderName}'s message`)}
         <span class="ucp-msg-time">${formatTime(message.timestamp)}</span>
     `;
     el.appendChild(header);
@@ -725,10 +872,35 @@ function createTimelineMessage(message) {
     }
     el.appendChild(body);
 
+    // Shared with the community: one linked comment, visible in both places.
+    const sharedComment = message.componentId && !message.parentMessageId ? findSharedComment(message.componentId, message.id) : null;
+    if (sharedComment) {
+        const badge = document.createElement('div');
+        badge.className = 'ucp-shared-badge';
+        badge.textContent = '🌐 Shared with community';
+        el.appendChild(badge);
+        const communityReplies = communityCommentsForRecord(getRecordById(message.componentId)).filter(c => c.parentId === sharedComment.id);
+        for (const reply of communityReplies) {
+            const r = document.createElement('div');
+            r.className = 'ucp-community-reply';
+            r.setAttribute('data-collab-inline-host', '');
+            r.innerHTML = `<div class="ucp-msg-header"><span class="ucp-msg-scope" title="Community">🌐</span><span class="ucp-msg-sender">${escapeHtml(reply.author)}</span>${collabSupHTML('ccomment', `${message.componentId}::${reply.id}`, `${reply.author}'s reply`)}<span class="ucp-msg-time">${formatTime(reply.at)}</span></div><div class="ucp-msg-body">${formatMessageContent(reply.text)}</div>`;
+            el.appendChild(r);
+        }
+    }
+
     // Task link badge - shows when this message has been turned into a task
     const linkedTaskBadge = createTaskLinkBadge(message);
     if (linkedTaskBadge) {
         el.appendChild(linkedTaskBadge);
+    }
+
+    if (isResolved) {
+        const info = getResolvedThreads()[message.id] || {};
+        const resolvedBadge = document.createElement('div');
+        resolvedBadge.className = 'ucp-resolved-badge';
+        resolvedBadge.textContent = `✓ Resolved${info.byName ? ` by ${info.byName}` : ''}`;
+        el.appendChild(resolvedBadge);
     }
 
     // Reactions row
@@ -776,61 +948,92 @@ function createActionsRow(message, isOwn) {
     actions.className = 'ucp-actions';
     actions.style.position = 'relative';
 
-    // Reply
+    // Always-visible quick actions: Reply and React.
     const replyBtn = document.createElement('button');
     replyBtn.className = 'ucp-action-btn';
     replyBtn.innerHTML = '↩ Reply';
     replyBtn.addEventListener('click', () => startReply(message));
     actions.appendChild(replyBtn);
 
-    // React
-    const reactBtn = document.createElement('button');
-    reactBtn.className = 'ucp-action-btn';
-    reactBtn.innerHTML = '😊 React';
-    reactBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleEmojiPicker(message.id, actions);
-    });
-    actions.appendChild(reactBtn);
+    // Reacting happens in the collab menu (the superscript after the sender's name).
 
-    // Edit (only own messages)
-    if (isOwn) {
-        const editBtn = document.createElement('button');
-        editBtn.className = 'ucp-action-btn';
-        editBtn.innerHTML = '✏️ Edit';
-        editBtn.addEventListener('click', () => startEditMessage(message));
-        actions.appendChild(editBtn);
-    }
-
-    // Task - opens the task GUI modal (shows different state if task already linked)
+    // Everything else lives in a ⋯ menu.
     const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
-    const hasLinkedTask = !!linksObj[message.id];
-    const taskBtn = document.createElement('button');
-    taskBtn.className = `ucp-action-btn ucp-task-btn${hasLinkedTask ? ' has-task' : ''}`;
-    if (hasLinkedTask) {
-        const linkedTaskId = linksObj[message.id];
-        const linkedTask = state.tasks.all.get(linkedTaskId);
-        const linkedStatus = linkedTask?.fields?.Status || 'pending';
-        taskBtn.innerHTML = `☑ View Task`;
-        taskBtn.classList.add(`task-btn-${linkedStatus}`);
-    } else {
-        taskBtn.innerHTML = '☑ Task';
-    }
-    taskBtn.addEventListener('click', () => openTaskModalFromMessage(message));
-    actions.appendChild(taskBtn);
-
-    // v3.8 Phase 3: Pin to item button (shown when stream is active)
-    if (state.stream?.isActive) {
-        const pinBtn = document.createElement('button');
-        const isPinned = !!message.componentId;
-        pinBtn.className = `ucp-action-btn ucp-pin-btn${isPinned ? ' pinned' : ''}`;
-        pinBtn.innerHTML = isPinned ? '📌 Pinned' : '📌 Pin';
-        pinBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            showPinPicker(message.id, actions);
+    const linkedTaskId = linksObj[message.id];
+    const hasLinkedTask = !!linkedTaskId;
+    const menuItems = [];
+    if (isOwn) menuItems.push({ label: '✏️ Edit', run: () => startEditMessage(message) });
+    menuItems.push({
+        label: hasLinkedTask ? '☑ View task' : '☑ Turn into task',
+        run: () => openTaskModalFromMessage(message)
+    });
+    // Top-level chat threads stay open until someone resolves them; threads turned
+    // into a task follow that task's status instead.
+    if (!hasLinkedTask && !message.parentMessageId) {
+        const resolved = isThreadResolved(message.id);
+        menuItems.push({
+            label: resolved ? '↺ Reopen chat' : '✓ Mark resolved',
+            run: () => { setThreadResolved(message.id, !resolved, getCurrentUser()); renderContent(); }
         });
-        actions.appendChild(pinBtn);
     }
+    // Chats live in the plan; a chat about an item can also be shared with the
+    // community. It stays one linked comment: edits and removal follow it.
+    if (!message.parentMessageId && message.componentId && isOwn) {
+        const shared = !!findSharedComment(message.componentId, message.id);
+        menuItems.push({
+            label: shared ? '🌐 Stop sharing with community' : '🌐 Share with community',
+            run: async () => {
+                const ok = shared
+                    ? await unsharePlanMessage(message.componentId, message.id)
+                    : !!(await sharePlanMessage(message.componentId, message));
+                showToast(ok ? (shared ? 'No longer shared with the community.' : 'Shared with the community. Edits stay in sync.') : 'Could not update sharing.', 2500, ok ? 'success' : 'error');
+                window.dispatchEvent(new CustomEvent('collab-updated', { detail: { kind: 'item', id: message.componentId } }));
+                renderContent();
+            }
+        });
+    }
+    if (state.stream?.isActive) {
+        menuItems.push({
+            label: message.componentId ? '📌 Change pinned item' : '📌 Pin to item',
+            run: () => showPinPicker(message.id, actions)
+        });
+    }
+
+    const moreBtn = document.createElement('button');
+    moreBtn.type = 'button';
+    moreBtn.className = 'ucp-action-btn ucp-more-btn';
+    moreBtn.innerHTML = '⋯';
+    moreBtn.title = 'More actions';
+    moreBtn.setAttribute('aria-label', 'More actions');
+    moreBtn.setAttribute('aria-haspopup', 'menu');
+    moreBtn.setAttribute('aria-expanded', 'false');
+    moreBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const existing = actions.querySelector('.ucp-more-menu');
+        closeMessageMenus();
+        if (existing) return;
+        const menu = document.createElement('div');
+        menu.className = 'ucp-more-menu';
+        menu.setAttribute('role', 'menu');
+        for (const item of menuItems) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'ucp-more-item';
+            btn.setAttribute('role', 'menuitem');
+            btn.textContent = item.label;
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                closeMessageMenus();
+                item.run();
+            });
+            menu.appendChild(btn);
+        }
+        actions.appendChild(menu);
+        actions.classList.add('menu-open');
+        moreBtn.setAttribute('aria-expanded', 'true');
+        menu.querySelector('button')?.focus();
+    });
+    actions.appendChild(moreBtn);
 
     // Keep actions row visible when a task is linked
     if (hasLinkedTask) {
@@ -838,6 +1041,15 @@ function createActionsRow(message, isOwn) {
     }
 
     return actions;
+}
+
+function closeMessageMenus() {
+    document.querySelectorAll('#unified-chat-panel .ucp-more-menu').forEach(menu => {
+        const row = menu.parentElement;
+        row?.classList.remove('menu-open');
+        row?.querySelector('.ucp-more-btn')?.setAttribute('aria-expanded', 'false');
+        menu.remove();
+    });
 }
 
 // ===== TASK LINK BADGE =====
@@ -1144,6 +1356,104 @@ function syncMessageContextFromTask(messageId, task) {
  * grouped by status with color-coded badges.
  * @param {HTMLElement} container - The UCP content container
  */
+// ===== PLAN HISTORY TAB =====
+
+const HISTORY_TTL_MS = 30 * 1000;
+let historyCache = { sessionId: null, entries: null, fetchedAt: 0, error: false };
+let historyRequest = null;
+
+function loadPlanHistory(force = false) {
+    const sessionId = state.session?.id;
+    if (!sessionId) return Promise.resolve();
+    const fresh = historyCache.sessionId === sessionId && Date.now() - historyCache.fetchedAt < HISTORY_TTL_MS;
+    if (!force && fresh) return Promise.resolve();
+    if (historyRequest) return historyRequest;
+    historyRequest = fetch(`/api/plan-history?sessionId=${encodeURIComponent(sessionId)}&limit=150`)
+        .then(res => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+        .then(data => {
+            historyCache = { sessionId, entries: Array.isArray(data.entries) ? data.entries : [], fetchedAt: Date.now(), error: false };
+        })
+        .catch(() => {
+            historyCache = { sessionId, entries: historyCache.sessionId === sessionId ? historyCache.entries : null, fetchedAt: Date.now(), error: true };
+        })
+        .finally(() => {
+            historyRequest = null;
+            if (panelOpen && currentFilter === 'history' && state.session?.id === sessionId) renderContent();
+        });
+    return historyRequest;
+}
+
+
+function renderHistoryTab(container) {
+    container.innerHTML = '';
+    const inputArea = document.getElementById('ucp-input-area');
+    if (inputArea) inputArea.style.display = 'none';
+
+    const sessionId = state.session?.id;
+    if (!sessionId) {
+        showEmptyState('No active plan');
+        return;
+    }
+    const cached = historyCache.sessionId === sessionId ? historyCache.entries : null;
+    loadPlanHistory();
+    if (!cached) {
+        container.innerHTML = historyCache.error && historyCache.sessionId === sessionId
+            ? '<div class="ucp-empty">Unable to load plan history.</div>'
+            : '<div class="ucp-loading">Loading plan history...</div>';
+        return;
+    }
+
+    const entries = cached
+        .map(entry => ({
+            ...entry,
+            changes: (Array.isArray(entry.changes) ? entry.changes : [])
+                .filter(change => !selectedItemId || change.itemId === selectedItemId)
+        }))
+        .filter(entry => entry.changes.length > 0);
+
+    const intro = document.createElement('div');
+    intro.className = 'ucp-history-intro';
+    intro.textContent = selectedItemId
+        ? 'Changes to this item by signed-in collaborators, newest first.'
+        : 'Changes to this plan by signed-in collaborators, newest first.';
+    container.appendChild(intro);
+
+    if (entries.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'ucp-empty';
+        empty.innerHTML = `<span class="ucp-empty-icon">🕘</span><div>${selectedItemId ? 'No recorded changes for this item yet.' : 'No recorded changes yet. Edits by signed-in collaborators show up here.'}</div>`;
+        container.appendChild(empty);
+        return;
+    }
+
+    let lastDateLabel = '';
+    for (const entry of entries) {
+        const dateLabel = getDateLabel(entry.createdAt);
+        if (dateLabel !== lastDateLabel) {
+            const divider = document.createElement('div');
+            divider.className = 'ucp-date-divider';
+            divider.innerHTML = `<span>${escapeHtml(dateLabel)}</span>`;
+            container.appendChild(divider);
+            lastDateLabel = dateLabel;
+        }
+        const el = document.createElement('div');
+        el.className = 'ucp-history-entry';
+        const isMe = entry.userId && entry.userId === state.session?.user?.id;
+        const who = isMe ? 'You' : (entry.userName || state.session?.userProfiles?.get?.(entry.userId) || 'A collaborator');
+        el.innerHTML = `
+            <div class="ucp-history-head">
+                <span class="ucp-history-who">${escapeHtml(who)}</span>
+                <span class="ucp-history-time">${formatTime(entry.createdAt)}</span>
+            </div>
+            <ul class="ucp-history-changes">
+                ${entry.changes.map(change => `<li class="ucp-history-change ucp-history-${escapeHtml(change.type || 'item')}">${escapeHtml(change.text)}</li>`).join('')}
+            </ul>
+            ${entry.merged ? '<div class="ucp-history-merged" title="Saved on top of newer changes from another device">Merged with other recent changes</div>' : ''}
+        `;
+        container.appendChild(el);
+    }
+}
+
 function renderTasksTab(container) {
     container.innerHTML = '';
 
@@ -1155,7 +1465,6 @@ function renderTasksTab(container) {
     const projectTasks = [...tasksById.values()]
         .filter(task => !selectedItemId || (task.fields?.LinkedItem || []).includes(selectedItemId));
 
-    console.log('[UCP-TASKS TAB DEBUG] Rendering tasks tab:', { projectId, taskCount: projectTasks.length });
 
     if (projectTasks.length === 0) {
         // Check if tasks might still be loading
@@ -1437,11 +1746,12 @@ function createReplyMessage(reply) {
     const el = document.createElement('div');
     el.className = 'ucp-reply';
     el.dataset.messageId = reply.id;
+    el.setAttribute('data-collab-inline-host', '');
 
     const header = document.createElement('div');
     header.className = 'ucp-reply-header';
     header.innerHTML = `
-        <span class="ucp-reply-sender">${escapeHtml(reply.senderName)}</span>
+        <span class="ucp-reply-sender">${escapeHtml(reply.senderName)}</span>${reply.isDeleted ? '' : collabSupHTML('message', reply.id, `${reply.senderName}'s reply`)}
         <span class="ucp-reply-time">${formatTime(reply.timestamp)}</span>
     `;
     el.appendChild(header);
@@ -1470,14 +1780,7 @@ function createReplyMessage(reply) {
         actions.className = 'ucp-actions ucp-reply-actions';
         actions.style.position = 'relative';
 
-        const reactBtn = document.createElement('button');
-        reactBtn.className = 'ucp-action-btn';
-        reactBtn.innerHTML = '😊';
-        reactBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleEmojiPicker(reply.id, actions);
-        });
-        actions.appendChild(reactBtn);
+        // Reacting happens in the collab menu (the superscript after the name).
 
         if (isOwn) {
             const editBtn = document.createElement('button');
@@ -1651,6 +1954,7 @@ function startEditMessage(message) {
         if (newContent && newContent !== originalContent) {
             const currentUser = getCurrentUser();
             const result = await api.updateChatMessage(message.id, newContent, currentUser?.id);
+            if (result && message.componentId) await syncSharedMessageEdit(message.componentId, message.id, newContent);
             if (result) {
                 showToast('Message updated', 1500);
                 editingMessage = null;
@@ -1686,6 +1990,7 @@ async function handleMessageSubmit(e) {
     const message = input?.value?.trim();
     if (!message) return;
 
+
     const currentUser = getCurrentUser();
     if (!currentUser) {
         showToast('Please sign in to send messages', 3000);
@@ -1696,6 +2001,7 @@ async function handleMessageSubmit(e) {
     if (!sessionId) return;
 
     input.value = '';
+    autoSizeComposer(input);
     shouldScrollToBottom = true;
 
     try {
@@ -1854,41 +2160,33 @@ export async function openUCPForItem(recordId) {
 }
 
 /**
+ * Open the plan chat tab scoped to one item, or to the whole plan when no item is
+ * given. Used by the open chat/task badges in the plan view.
+ * @param {string|null} recordId
+ */
+export async function openUCPConversations(recordId = null) {
+    if (recordId) {
+        currentFilter = 'all';
+        return openUCPForItem(recordId);
+    }
+    initializeUnifiedChatPanel();
+    currentFilter = 'all';
+    document.querySelectorAll('.ucp-filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === currentFilter);
+    });
+    setUCPItemScope(null);
+    await showUnifiedChatPanel();
+    renderContent();
+}
+
+/**
  * Open the UCP on the Global tab for a specific item's community thread.
  * Called from the detail modal's Community card "See conversation" button.
  * @param {string} recordId - The item record ID
  */
 export async function openUCPGlobalForItem(recordId) {
-    const panel = document.getElementById('unified-chat-panel');
-    if (!panel) return;
-
-    // Ensure the panel's controls (close button, filter tabs) are wired up — the
-    // lazy init may not have run when opened from the storefront/catalog modal.
-    // Idempotent.
-    initializeUnifiedChatPanel();
-
-    document.dispatchEvent(new CustomEvent('workspace-panel-opening', { detail: { surface: 'right', panel: 'chat' } }));
-    document.body.classList.add('ucp-panel-open');
-    document.body.classList.add('ucp-panel-active');
-    panelOpen = true;
-
-    ucpFocusRecordId = recordId;
-    currentFilter = 'global';
-    const filterBtns = document.querySelectorAll('.ucp-filter-btn');
-    filterBtns.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.filter === 'global');
-    });
-
-    // Render the community thread immediately — it does not need a plan session,
-    // so this works from the storefront as well as inside a plan.
-    renderContent();
-
-    // If a plan session exists, load its messages in the background so the other
-    // tabs (All / Comments) are ready when the user switches to them.
-    if (state.session?.id) {
-        shouldScrollToBottom = false;
-        loadPanelData();
-    }
+    // The store-wide Global tab is retired; show this plan's chat about the item instead.
+    return openUCPForItem(recordId);
 }
 
 // ===== v3.8: FULL-SCREEN MODE =====
@@ -2424,104 +2722,103 @@ function formatMessageContent(content) {
 
 // ===== CHAT MENU ACTIONS (Clear/Archive) =====
 
+// The header's view dropdown: Open (default) · Tasks · All · History.
 function setupChatMenuActions() {
-    const menuBtn = document.getElementById('ucp-menu-btn');
-    if (!menuBtn) return;
-
-    menuBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleChatMenu();
-    });
+    const select = document.getElementById('ucp-view-select');
+    if (!select) return;
+    select.addEventListener('change', () => setPanelView(select.value));
 }
 
-function toggleChatMenu() {
-    const existing = document.querySelector('.ucp-chat-menu');
-    if (existing) {
-        existing.remove();
-        return;
+function setPanelView(value) {
+    if (value === 'open' || value === 'all') { currentFilter = 'all'; chatView = value; }
+    else currentFilter = value === 'tasks' ? 'tasks' : 'history';
+    if (value === 'tasks') loadTaskData(true);
+    shouldScrollToBottom = true;
+    renderContent();
+}
+
+// Keep the dropdown's selection and open counts current.
+function syncViewSelect() {
+    const select = document.getElementById('ucp-view-select');
+    if (!select) return;
+    let counts = { chats: 0, tasks: 0 };
+    if (state.session?.id) {
+        const { plan, byItem } = getOpenConversationCounts();
+        counts = selectedItemId ? (byItem.get(selectedItemId) || counts) : plan;
     }
-
-    const menuBtn = document.getElementById('ucp-menu-btn');
-    if (!menuBtn) return;
-
-    const menu = document.createElement('div');
-    menu.className = 'ucp-chat-menu';
-
-    // Permission check
-    const currentRole = state.permissions?.currentRole;
-    const isLoadingPerms = state.permissions?.isLoading !== false;
-    const canEditByRole = api.canEdit ? api.canEdit(currentRole) : false;
-    const canEditByOwnership = state.session.isOwned === true;
-    const canUserEdit = (!isLoadingPerms && canEditByRole) || canEditByOwnership;
-
-    const messageCount = ucpMessages.length;
-
-    menu.innerHTML = `
-        <button class="ucp-chat-menu-item ${!canUserEdit || messageCount === 0 ? 'disabled' : ''}" data-action="clear">
-            <span class="ucp-chat-menu-icon">🗑</span>
-            <span>Clear Conversation</span>
-            ${messageCount > 0 ? `<span class="ucp-chat-menu-count">${messageCount}</span>` : ''}
-        </button>
-    `;
-
-    menuBtn.parentElement.appendChild(menu);
-
-    // Attach handlers
-    const clearBtn = menu.querySelector('[data-action="clear"]');
-    if (clearBtn && canUserEdit && messageCount > 0) {
-        clearBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            menu.remove();
-            handleClearConversation();
-        });
-    }
-
-    // Close on outside click
-    const closeHandler = (e) => {
-        if (!menu.contains(e.target) && e.target !== menuBtn) {
-            menu.remove();
-            document.removeEventListener('click', closeHandler);
-        }
+    const labels = {
+        open: `Open${counts.chats + counts.tasks ? ` (${counts.chats + counts.tasks})` : ''}`,
+        tasks: `Tasks${counts.tasks ? ` (${counts.tasks})` : ''}`,
+        all: 'All',
+        history: 'History'
     };
-    setTimeout(() => document.addEventListener('click', closeHandler), 10);
+    for (const opt of select.options) opt.textContent = labels[opt.value] || opt.textContent;
+    select.value = currentViewChip();
 }
 
-async function handleClearConversation() {
-    const messageCount = ucpMessages.length;
-    if (messageCount === 0) {
-        showToast('No messages to clear', 2000);
-        return;
-    }
 
-    // Show confirmation dialog
-    const confirmed = confirm(
-        `Clear all ${messageCount} message${messageCount !== 1 ? 's' : ''} in this conversation?\n\nThis cannot be undone.`
-    );
 
-    if (!confirmed) return;
-
-    const sessionId = state.session?.id;
-    if (!sessionId) return;
-
-    showToast('Clearing conversation...', 2000);
-
-    try {
-        const result = await api.clearChatMessages(sessionId);
-
-        if (result.success > 0) {
-            // Clear local state
-            ucpMessages = [];
-            ucpPlanEvents = [];
-            shouldScrollToBottom = true;
-            renderContent();
-            showToast(`Cleared ${result.success} message${result.success !== 1 ? 's' : ''}`, 3000);
-        } else if (result.failed > 0) {
-            showToast('Failed to clear some messages', 3000);
-        } else {
-            showToast('No messages to clear', 2000);
+// ===== Collab on chat messages (same interface as items) =====
+registerCollabKind('message', {
+    title: (id) => {
+        const m = findMessageById(id);
+        return m ? `${m.senderName}'s message` : 'this message';
+    },
+    sources: (id) => {
+        const m = findMessageById(id);
+        const out = [{ scope: 'plan', label: 'in this plan', icon: '👥', map: emojiUsersToMap(m?.reactions) }];
+        const shared = m?.componentId ? findSharedComment(m.componentId, m.id) : null;
+        if (shared) {
+            const map = new Map();
+            for (const [emoji, data] of Object.entries(shared.reactions || {})) {
+                for (const u of data?.users || []) { if (!map.has(u)) map.set(u, new Set()); map.get(u).add(emoji); }
+            }
+            out.push({ scope: 'community', label: 'community', icon: '🌐', map });
         }
-    } catch (error) {
-        log('UCP', 'Error clearing conversation:', error);
-        showToast('Failed to clear conversation', 3000);
+        return out;
+    },
+    scopes: (id) => (findMessageById(id) && getCurrentUser() && !isPlanReadOnly() ? ['plan'] : []),
+    mine: (id) => {
+        const me = getCurrentUser();
+        return emojiUsersToMap(findMessageById(id)?.reactions).get(me?.id) || new Set();
+    },
+    toggle: async (id, scope, emoji) => {
+        const me = getCurrentUser();
+        const m = findMessageById(id);
+        if (!m || !me) return null;
+        const add = !(m.reactions?.[emoji] || []).includes(me.id);
+        await toggleReaction(id, emoji, add);
+        return add;
+    },
+    commentCount: (id) => findMessageById(id)?.replyCount || 0,
+    openCount: (id) => {
+        const m = findMessageById(id);
+        if (!m || m.parentMessageId) return 0;
+        return m.replyCount || 0;
+    },
+    latestComments: (id) => {
+        const m = findMessageById(id);
+        return (m?.replies || []).filter(r => !r.isDeleted).slice(-2).reverse()
+            .map(r => ({ author: r.senderName, text: r.content, at: r.timestamp, scope: 'plan' }));
+    },
+    comment: async (id, scope, text) => {
+        const me = getCurrentUser();
+        const m = findMessageById(id);
+        if (!m || !me || !state.session?.id) return false;
+        const root = m.parentMessageId || m.id;
+        const result = await api.postReplyMessage(root, state.session.id, null, me.id, me.name, text);
+        if (result) await loadPanelData();
+        return !!result;
+    },
+    statusActions: (id) => {
+        const m = findMessageById(id);
+        if (!m || m.parentMessageId || isPlanReadOnly() || !getCurrentUser()) return [];
+        const links = state.eventDetails.combined.get('_commentTaskLinks') || {};
+        if (links[id]) return [{ label: '☑ View task', run: () => openTaskModalFromMessage(m) }];
+        const resolved = isThreadResolved(id);
+        return [
+            { label: '☑ Turn into task', run: () => openTaskModalFromMessage(m) },
+            { label: resolved ? '↺ Reopen chat' : '✓ Mark resolved', run: () => { setThreadResolved(id, !resolved, getCurrentUser()); renderContent(); } }
+        ];
     }
-}
+});

@@ -54,10 +54,83 @@ import {
   itemVariations,
   reactions,
   comments,
+  storeMembers,
 } from "../../db/schema.js";
 
-// Catalog statuses that are visible to everyone, signed in or not.
-const PUBLIC_CATALOG_STATUSES = ["none", "published"];
+// COLLAB LIFECYCLE (`public_items.catalog_status`)
+//   'pending'     Suggested   — visible to its author and the store's admins only
+//   'recommended' Recommended — approved by an admin; open to everyone's collab
+//   'published'   In catalog  — a bookable store item (still open to collab)
+//   'rejected'    Declined    — back with its author, with the admin's note
+//   'none'        a community container holding collab on a curated catalog item
+// Statuses that are visible to everyone, signed in or not.
+const PUBLIC_CATALOG_STATUSES = ["none", "recommended", "published"];
+
+// The stage people see: suggested, recommended, catalog, scheduled, delivered, declined.
+// Two parallel layers: STATUS (suggested / recommended / catalog / declined) and
+// TIME (unscheduled / scheduled / delivered). The stage people are notified about is
+// the time layer when set, otherwise the status.
+export function collabStatus(row: { catalogStatus: string }) {
+  return ({ pending: "suggested", rejected: "declined", recommended: "recommended", published: "catalog" } as Record<string, string>)[row.catalogStatus] || "none";
+}
+export function collabStage(row: { catalogStatus: string; scheduledFor?: Date | null; deliveredAt?: Date | null }) {
+  const status = collabStatus(row);
+  if (status === "recommended" || status === "catalog") {
+    if (row.deliveredAt) return "delivered";
+    if (row.scheduledFor) return "scheduled";
+  }
+  return status;
+}
+
+async function notifyAuthorOfStage(
+  row: { id: number; authorId: string | null; name: string; storeId: string; scheduledFor?: Date | null },
+  stage: string,
+) {
+  const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY } = process.env;
+  if (!row.authorId || !AIRTABLE_PAT || !BASE_ID || !SENDGRID_API_KEY) return;
+  const res = await fetch(`https://api.airtable.com/v0/${BASE_ID}/Users/${encodeURIComponent(row.authorId)}`, {
+    headers: { Authorization: `Bearer ${AIRTABLE_PAT}` },
+  });
+  if (!res.ok) return;
+  const user = (await res.json()) as { fields?: { Email?: string; Name?: string; NotificationFrequency?: string } };
+  if (user.fields?.NotificationFrequency !== "Real-Time" || !user.fields?.Email) return;
+  const when = row.scheduledFor ? new Date(row.scheduledFor).toLocaleDateString("en-US", { month: "long", day: "numeric" }) : "";
+  const lines: Record<string, string> = {
+    recommended: "was recommended to the community. Everyone can now react, comment and suggest versions.",
+    catalog: "was added to the store catalog. It's now bookable.",
+    scheduled: `is scheduled${when ? ` for ${when}` : ""}. Keep the feedback coming.`,
+    delivered: "was delivered! Share how it went to help refine it.",
+  };
+  const base = process.env.URL || "https://whatthefun.wtf";
+  const link = `${base}/?shopId=${encodeURIComponent(row.storeId)}&openItem=public-${row.id}`;
+  const safeName = String(row.name).replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c] as string);
+  const sg = (await import("@sendgrid/mail")).default;
+  sg.setApiKey(SENDGRID_API_KEY);
+  await sg.send({
+    to: user.fields.Email,
+    from: { name: "WhatTheFun", email: "info@tylersmysterytours.com" },
+    subject: `Your collab idea “${row.name}” ${stage === "delivered" ? "was delivered" : `is ${stage === "catalog" ? "in the catalog" : stage}`}`,
+    html: `<div style="font-family:-apple-system,Segoe UI,sans-serif;max-width:520px;margin:0 auto;padding:20px">
+      <p>Hi ${user.fields.Name ? String(user.fields.Name).replace(/[<>&]/g, "") : "there"},</p>
+      <p>Your idea <strong>${safeName}</strong> ${lines[stage]}</p>
+      <p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#667eea;color:#fff;border-radius:8px;text-decoration:none">Open the idea</a></p>
+      <p style="color:#999;font-size:12px">You get these because your notification preference is Real-Time. Change it in your account settings.</p></div>`,
+  });
+}
+
+// Approved store members' ideas are recommended straight away; everyone else's
+// (contributors) are suggestions an admin reviews. Fails closed to 'contributor'.
+async function isApprovedMember(storeId: string, userId: string): Promise<boolean> {
+  try {
+    const rows = await db
+      .select({ status: storeMembers.status })
+      .from(storeMembers)
+      .where(and(eq(storeMembers.storeId, storeId), eq(storeMembers.userId, userId)));
+    return rows[0]?.status === "member";
+  } catch {
+    return false;
+  }
+}
 
 
 const json = (status: number, payload: unknown) =>
@@ -296,6 +369,7 @@ async function resolvePublicItemId(
         storeId,
         source: "catalog",
         catalogItemId,
+        catalogStatus: "none",
         authorId: userId,
         name: body.name ? String(body.name) : "Catalog item",
         description: body.description ? String(body.description) : "",
@@ -346,10 +420,15 @@ export default async (req: Request) => {
       if (resource === "items") {
         if (!body.storeId || !body.name)
           return json(400, { error: "storeId and name are required" });
+        const ideaStoreId = String(body.storeId);
+        const recommendNow =
+          (await userHasPublishPermissionForStore(ideaStoreId, userId)) ||
+          (await isApprovedMember(ideaStoreId, userId));
         const [row] = await db
           .insert(publicItems)
           .values({
-            storeId: String(body.storeId),
+            catalogStatus: recommendNow ? "recommended" : "pending",
+            storeId: ideaStoreId,
             source: body.source || "custom",
             originSessionId: body.originSessionId ?? null,
             originItemId: body.originItemId ?? null,
@@ -495,7 +574,7 @@ export default async (req: Request) => {
                 publishedAt: new Date(),
                 publishedBy: userId,
               }
-            : { catalogStatus: "none" };
+            : { catalogStatus: "recommended" }; // unpublish: back to a recommended idea
 
         const [updated] = await db
           .update(publicItems)
@@ -511,9 +590,30 @@ export default async (req: Request) => {
       if (resource === "item-review") {
         if (body.publicItemId == null)
           return json(400, { error: "publicItemId is required" });
+        // recommend: Suggested -> Recommended (step 1)
+        // approve / catalog: -> In catalog (step 2)
+        // reject: -> Declined;  flag: pull a recommended idea back to Suggested
         const decision = String(body.decision || "");
-        if (decision !== "approve" && decision !== "reject")
-          return json(400, { error: "decision must be approve or reject" });
+        // schedule { scheduledFor }: In catalog + a delivery date; unschedule clears it
+        // deliver: marks it delivered (collab stays open to refine it afterwards)
+        const NEXT: Record<string, string> = {
+          recommend: "recommended",
+          approve: "published",
+          catalog: "published",
+          reject: "rejected",
+          flag: "pending",
+          // Time is its own layer, alongside status: scheduling never changes status.
+          schedule: "keep",
+          unschedule: "keep",
+          deliver: "keep",
+        };
+        if (!NEXT[decision])
+          return json(400, { error: "decision must be recommend, catalog, schedule, unschedule, deliver, reject or flag" });
+        let scheduledFor: Date | null = null;
+        if (decision === "schedule") {
+          scheduledFor = new Date(String(body.scheduledFor || ""));
+          if (isNaN(scheduledFor.getTime())) return json(400, { error: "scheduledFor must be a date" });
+        }
 
         const [row] = await db
           .select()
@@ -523,18 +623,35 @@ export default async (req: Request) => {
         if (!(await userHasPublishPermissionForStore(row.storeId, userId)))
           return json(403, { error: "Forbidden" });
 
-        const approved = decision === "approve";
+        if (row.catalogItemId)
+          return json(400, { error: "This item is already in the catalog" });
+        const isTimeDecision = ["schedule", "unschedule", "deliver"].includes(decision);
+        if (isTimeDecision && !["recommended", "published"].includes(row.catalogStatus))
+          return json(400, { error: "Recommend the idea before scheduling it" });
+        const nextStatus = isTimeDecision ? row.catalogStatus : NEXT[decision];
+        const approved = nextStatus === "published";
         const [updated] = await db
           .update(publicItems)
           .set({
-            catalogStatus: approved ? "published" : "rejected",
+            catalogStatus: nextStatus,
             reviewedAt: new Date(),
             reviewedBy: userId,
             reviewNote: body.reviewNote ? String(body.reviewNote) : null,
-            ...(approved ? { publishedAt: new Date(), publishedBy: userId } : {}),
+            ...(approved && row.catalogStatus !== "published" ? { publishedAt: new Date(), publishedBy: userId } : {}),
+            ...(decision === "schedule" ? { scheduledFor, deliveredAt: null } : {}),
+            ...(decision === "unschedule" ? { scheduledFor: null } : {}),
+            ...(decision === "deliver" ? { deliveredAt: new Date() } : {}),
+            ...(["flag", "reject"].includes(decision) ? { scheduledFor: null, deliveredAt: null } : {}),
           })
           .where(eq(publicItems.id, row.id))
           .returning();
+
+        // Tell the idea's author (if their preference is Real-Time) once per stage.
+        const stage = collabStage(updated);
+        if (stage !== updated.notifiedStage && ["recommended", "catalog", "scheduled", "delivered"].includes(stage)) {
+          await notifyAuthorOfStage(updated, stage).catch(() => {});
+          await db.update(publicItems).set({ notifiedStage: stage }).where(eq(publicItems.id, updated.id));
+        }
 
         return json(200, { item: updated });
       }
@@ -750,6 +867,11 @@ export default async (req: Request) => {
             ),
           );
 
+        // `ensure` (a reaction held while signed out, sent after sign-in) only ever
+        // adds — it never removes a reaction the person already made elsewhere.
+        if (existing.length > 0 && body.ensure === true) {
+          return json(200, { reacted: true, publicItemId: itemId, commentId });
+        }
         if (existing.length > 0) {
           await db.delete(reactions).where(eq(reactions.id, existing[0].id));
           return json(200, {
@@ -800,12 +922,24 @@ export default async (req: Request) => {
             userId,
             authorName: body.authorName ?? null,
             body: String(body.body),
+            linkedMessageId: body.linkedMessageId ? String(body.linkedMessageId).slice(0, 40) : null,
           })
           .returning();
         return json(201, { comment: { ...row, reactions: {} } });
       }
 
       return json(404, { error: "Unknown resource" });
+    }
+
+    // Authors edit their own comment (used to keep a shared plan message in sync).
+    if (req.method === "PATCH" && resource === "comments") {
+      const body = await req.json().catch(() => null);
+      if (!body || !body.id || !body.body) return json(400, { error: "id and body are required" });
+      const [row] = await db.select().from(comments).where(eq(comments.id, Number(body.id)));
+      if (!row) return json(404, { error: "Not found" });
+      if (row.userId !== userId) return json(403, { error: "Forbidden" });
+      const [updated] = await db.update(comments).set({ body: String(body.body) }).where(eq(comments.id, row.id)).returning();
+      return json(200, { comment: updated });
     }
 
     if (req.method === "DELETE") {
