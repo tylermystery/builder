@@ -922,12 +922,24 @@ export default async (req: Request) => {
             userId,
             authorName: body.authorName ?? null,
             body: String(body.body),
+            linkedMessageId: body.linkedMessageId ? String(body.linkedMessageId).slice(0, 40) : null,
           })
           .returning();
         return json(201, { comment: { ...row, reactions: {} } });
       }
 
       return json(404, { error: "Unknown resource" });
+    }
+
+    // Authors edit their own comment (used to keep a shared plan message in sync).
+    if (req.method === "PATCH" && resource === "comments") {
+      const body = await req.json().catch(() => null);
+      if (!body || !body.id || !body.body) return json(400, { error: "id and body are required" });
+      const [row] = await db.select().from(comments).where(eq(comments.id, Number(body.id)));
+      if (!row) return json(404, { error: "Not found" });
+      if (row.userId !== userId) return json(403, { error: "Forbidden" });
+      const [updated] = await db.update(comments).set({ body: String(body.body) }).where(eq(comments.id, row.id)).returning();
+      return json(200, { comment: updated });
     }
 
     if (req.method === "DELETE") {

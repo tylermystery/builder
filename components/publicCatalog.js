@@ -1092,6 +1092,50 @@ export function communityCommentCountForRecord(record, variationId = null) {
 
 export { GUEST_ID as COLLAB_GUEST_ID };
 
+// ===== Plan messages shared with the community (one comment, two places) =====
+
+/** The community comment mirroring a plan message, or null. */
+export function findSharedComment(recordId, messageId) {
+    const row = getCommunityRowForRecord(getRecordById(recordId));
+    return (row?.comments || []).find(c => c.linkedMessageId === messageId) || null;
+}
+
+/** Share a plan message about an item with the community (linked, not copied by hand). */
+export async function sharePlanMessage(recordId, message) {
+    const record = getRecordById(recordId);
+    if (!record || !message?.id || findSharedComment(recordId, message.id)) return null;
+    const row = getOrInitCommunityRow(record);
+    if (!row) return null;
+    const opts = { ...(row.id == null ? communityWriteOpts(record) : {}), linkedMessageId: message.id };
+    const created = await api.addPublicComment(row.id, message.content, message.senderName || currentUser().name, null, opts);
+    if (!created) return null;
+    if (row.id == null && created.publicItemId != null) row.id = created.publicItemId;
+    row.comments = row.comments || [];
+    row.comments.push({ ...created, linkedMessageId: message.id });
+    return created;
+}
+
+/** Keep the community copy in step when the plan message is edited. */
+export async function syncSharedMessageEdit(recordId, messageId, text) {
+    const comment = findSharedComment(recordId, messageId);
+    if (!comment) return true;
+    const updated = await api.updatePublicComment(comment.id, text);
+    if (updated) comment.body = text;
+    return !!updated;
+}
+
+/** Stop sharing (or the plan message was deleted): remove the community copy. */
+export async function unsharePlanMessage(recordId, messageId) {
+    const comment = findSharedComment(recordId, messageId);
+    if (!comment) return true;
+    const ok = await api.removePublicComment(comment.id);
+    if (ok) {
+        const row = getCommunityRowForRecord(getRecordById(recordId));
+        if (row) row.comments = (row.comments || []).filter(c => c.id !== comment.id);
+    }
+    return ok;
+}
+
 /** A display name for a community user id. */
 export function collabUserName(userId) {
     return userLabel(userId);
@@ -1113,7 +1157,7 @@ export function communityCommentsForRecord(record) {
     return [...(row?.comments || [])]
         .filter(c => c && c.body)
         .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
-        .map(c => ({ author: c.authorName || userLabel(c.userId), text: c.body, at: c.createdAt, scope: 'community', id: c.id, parentId: c.parentCommentId ?? null }));
+        .map(c => ({ author: c.authorName || userLabel(c.userId), text: c.body, at: c.createdAt, scope: 'community', id: c.id, parentId: c.parentCommentId ?? null, linkedMessageId: c.linkedMessageId || null, reactions: c.reactions || {} }));
 }
 
 /**

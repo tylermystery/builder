@@ -7470,6 +7470,25 @@ export async function setCollabMemberStatus(storeId, userId, status) {
     } catch { return false; }
 }
 
+/** Edit or delete your own community comment (keeps shared plan messages in sync). */
+export async function updatePublicComment(id, body) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers || id == null) return null;
+    try {
+        const res = await fetch(`${PUBLIC_CATALOG_BASE}/comments`, { method: 'PATCH', headers, body: JSON.stringify({ id, body }) });
+        return res.ok ? (await res.json()).comment || null : null;
+    } catch { return null; }
+}
+
+export async function removePublicComment(id) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers || id == null) return false;
+    try {
+        const res = await fetch(`${PUBLIC_CATALOG_BASE}/comments`, { method: 'DELETE', headers, body: JSON.stringify({ id }) });
+        return res.ok;
+    } catch { return false; }
+}
+
 export async function togglePublicReaction(publicItemId, emoji, variationId = null, opts = {}) {
     const headers = publicCatalogAuthHeaders();
     if (!headers) return null;
@@ -7501,6 +7520,7 @@ export async function addPublicComment(publicItemId, body, authorName = null, va
     try {
         const payload = { ...publicWriteTarget(publicItemId, opts), body, authorName, variationId };
         if (opts.parentCommentId != null) payload.parentCommentId = opts.parentCommentId;
+        if (opts.linkedMessageId) payload.linkedMessageId = opts.linkedMessageId;
         const response = await fetch(`${PUBLIC_CATALOG_BASE}/comments`, {
             method: 'POST',
             headers,

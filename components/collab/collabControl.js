@@ -211,21 +211,17 @@ export function buildItemCollabHeader(recordId, { scope = null, onScopeChange = 
         <div class="collab-menu-head">
             <span class="collab-menu-emoji" aria-hidden="true">${s.has ? esc(s.emoji) : '☺'}</span>
             <div class="collab-menu-summary">
-                <div class="collab-menu-title">${esc(adapter.title(recordId))}${stage ? ` <span class="collab-menu-stage">${esc(stage)}</span>` : ''}</div>
+                ${stage ? `<div class="collab-menu-title"><span class="collab-menu-stage">${esc(stage)}</span></div>` : ''}
                 <div class="collab-menu-meta">${s.has
                     ? `<strong>${esc(s.label)}</strong> (${s.score >= 0 ? '+' : ''}${s.score.toFixed(1)}) · ${s.total} reaction${s.total === 1 ? '' : 's'} from ${s.people} ${s.people === 1 ? 'person' : 'people'}`
                     : 'No reactions yet. Be the first to weigh in.'}</div>
                 <div class="collab-menu-breakdown">${sources.map(x => `${x.icon} ${summarizeReactions(x.map).people} ${esc(x.label)}`).join(' · ')}${open ? ` · 💬 ${esc(open)}` : ''}</div>
             </div>
         </div>
-        ${scopes.length > 1 ? `<div class="collab-menu-scope" role="radiogroup" aria-label="React and comment for">
-            ${scopes.map(sc => `<button type="button" role="radio" class="collab-scope-btn${sc === active ? ' active' : ''}" data-scope="${esc(sc)}" aria-checked="${sc === active}">${sc === 'plan' ? '👥 This plan' : '🌐 Community'}</button>`).join('')}
-        </div>` : ''}
         ${active ? `<div class="collab-menu-reactions" role="group" aria-label="React">
             ${COLLAB_REACTIONS.map(emoji => `<button type="button" class="collab-react-btn${mine.has(emoji) ? ' mine' : ''}" data-emoji="${esc(emoji)}" aria-pressed="${mine.has(emoji)}" title="${esc(emoji)}">${esc(emoji)}${s.counts[emoji] ? `<span class="collab-react-count">${s.counts[emoji]}</span>` : ''}</button>`).join('')}
         </div>` : '<div class="collab-menu-note">Sign in to collab on this.</div>'}
         <div class="collab-menu-actions"></div>`;
-    el.querySelectorAll('.collab-scope-btn').forEach(b => b.addEventListener('click', () => onScopeChange(b.dataset.scope)));
     el.querySelectorAll('.collab-react-btn').forEach(b => b.addEventListener('click', async () => {
         b.disabled = true;
         await adapter.toggle(recordId, active, b.dataset.emoji);
@@ -315,7 +311,7 @@ registerCollabKind('item', {
         const preferPlan = document.body.classList.contains('presentation-active');
         if (planWritable(id)) list.push('plan');
         if (getRecordById(id)) list.push('community');
-        return preferPlan ? list : list.reverse();
+        void preferPlan; return list; // chats live in the plan; reactions follow (community when not in the plan)
     },
     mine: (id, scope) => {
         const user = me();
@@ -392,8 +388,6 @@ registerCollabKind('item', {
         }
         // Collab stage, for store admins.
         if (record && isPublicIdeaRecord(record)) list.push(...collabIdeaStageActions(record));
-        // Anyone signed in can suggest a version.
-        if (record && me().signedIn) list.push({ label: '✏️ Suggest a version', run: () => adapters.get('item').moreDetails(id) });
         return list;
     }
 });

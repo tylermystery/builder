@@ -3454,6 +3454,7 @@ body.ucp-panel-open .unified-chat-panel {
 }
 
 /* Filter tabs */
+.ucp-filters[hidden] { display: none !important; }
 .ucp-filters {
     display: flex;
     gap: 4px;
@@ -6879,10 +6880,7 @@ body.plan-view-readonly #radial-menu-container {
             </div>
             <div id="ucp-video-tiles" class="ucp-video-tiles"></div>
         </div>
-        <div class="ucp-filters">
-            <button class="ucp-filter-btn active" data-filter="all">Chat <span class="ucp-tab-count" data-count-for="all" hidden></span></button>
-            <button class="ucp-filter-btn" data-filter="tasks">Tasks <span class="ucp-tab-count" data-count-for="tasks" hidden></span></button>
-            <button class="ucp-filter-btn" data-filter="history" title="What changed on this plan, and who changed it">History</button>
+        <div class="ucp-filters" id="ucp-filters-row" hidden>
             <label class="ucp-hide-completed-toggle" id="ucp-hide-completed-toggle" title="Hide completed tasks" hidden>
                 <input type="checkbox" id="ucp-hide-completed-cb">
                 <span class="ucp-hide-completed-label">Hide done</span>

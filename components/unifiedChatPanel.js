@@ -11,7 +11,7 @@ import { showTaskModal } from './taskManager.js';
 import { loadProjectTasks, getProjectTaskLoadState } from '../utils/projectTasks.js';
 import { taskMessageId, taskMessageText } from '../utils/taskDiscussion.js';
 import { collabSupHTML, registerCollabKind, buildItemCollabHeader, resolveItemScope } from './collab/collabControl.js';
-import { communityCommentsForRecord, addCommunityCommentForRecord } from './publicCatalog.js';
+import { communityCommentsForRecord, addCommunityCommentForRecord, findSharedComment, sharePlanMessage, syncSharedMessageEdit, unsharePlanMessage } from './publicCatalog.js';
 import { COLLAB_REACTIONS, emojiUsersToMap } from '../utils/collabSummary.js';
 import { getOpenConversationCounts, isThreadResolved, getResolvedThreads, setThreadResolved } from '../utils/openConversations.js';
 import { isPlanReadOnly } from '../utils/planAccess.js';
@@ -553,23 +553,10 @@ function updateUCPTabLabels() {
 
 // Open chats / open tasks for the current scope (the whole plan, or the chosen item).
 function updateTabCounts() {
-    const chatBadge = document.querySelector('.ucp-tab-count[data-count-for="all"]');
-    const taskBadge = document.querySelector('.ucp-tab-count[data-count-for="tasks"]');
-    if (!chatBadge && !taskBadge) return;
-    let counts = { chats: 0, tasks: 0 };
-    if (state.session?.id) {
-        const { plan, byItem } = getOpenConversationCounts();
-        counts = selectedItemId ? (byItem.get(selectedItemId) || counts) : plan;
-    }
-    const scope = selectedItemId ? 'this item' : 'this plan';
-    const apply = (badge, n, noun, extra = '') => {
-        if (!badge) return;
-        badge.textContent = n > 0 ? String(n) : '';
-        badge.hidden = !(n > 0);
-        badge.title = `${n} open ${noun}${n !== 1 ? 's' : ''} on ${scope}${extra}`;
-    };
-    apply(chatBadge, counts.chats, 'chat', ' (chats turned into tasks count under Tasks)');
-    apply(taskBadge, counts.tasks, 'task');
+    // Counts live on the view chips; refresh them in place.
+    const container = document.getElementById('ucp-content');
+    const old = container?.querySelector(':scope > .ucp-view-chips');
+    if (old) old.replaceWith(buildViewChips(Number(old.querySelector('.ucp-view-note')?.textContent?.match(/\d+/)?.[0]) || 0));
 }
 
 // Item scope shown as a chip: "About: <item> ✕". The select stays the way to pick.
@@ -589,31 +576,66 @@ function isThreadDone(message) {
     return isThreadResolved(message.id);
 }
 
-function renderChatViewChips(container, hiddenCount) {
+// One chat, one row of view chips: Open · All · Tasks · History.
+function currentViewChip() {
+    if (currentFilter === 'tasks') return 'tasks';
+    if (currentFilter === 'history') return 'history';
+    return chatView === 'all' ? 'all' : 'open';
+}
+
+function buildViewChips(hiddenCount = 0) {
     const row = document.createElement('div');
     row.className = 'ucp-view-chips';
-    row.setAttribute('role', 'group');
-    row.setAttribute('aria-label', 'Show chats');
-    for (const [value, label] of [['open', 'Open'], ['all', 'All']]) {
+    row.setAttribute('role', 'radiogroup');
+    row.setAttribute('aria-label', 'Show');
+    let counts = { chats: 0, tasks: 0 };
+    if (state.session?.id) {
+        const { plan, byItem } = getOpenConversationCounts();
+        counts = selectedItemId ? (byItem.get(selectedItemId) || counts) : plan;
+    }
+    const active = currentViewChip();
+    const defs = [
+        ['open', 'Open', counts.chats + counts.tasks, 'Open chats and tasks'],
+        ['all', 'All', 0, 'Everything, including resolved and done'],
+        ['tasks', 'Tasks', counts.tasks, 'Chats turned into tasks, by status'],
+        ['history', 'History', 0, 'What changed on this plan, and who changed it']
+    ];
+    for (const [value, label, n, title] of defs) {
         const chip = document.createElement('button');
         chip.type = 'button';
-        chip.className = `ucp-view-chip${chatView === value ? ' active' : ''}`;
-        chip.setAttribute('aria-pressed', String(chatView === value));
-        chip.textContent = label;
+        chip.setAttribute('role', 'radio');
+        chip.className = `ucp-view-chip${active === value ? ' active' : ''}`;
+        chip.setAttribute('aria-checked', String(active === value));
+        chip.title = title;
+        chip.innerHTML = `${label}${n > 0 ? ` <span class="ucp-tab-count">${n}</span>` : ''}`;
         chip.addEventListener('click', () => {
-            if (chatView === value) return;
-            chatView = value;
+            if (active === value) return;
+            if (value === 'open' || value === 'all') { currentFilter = 'all'; chatView = value; }
+            else currentFilter = value;
+            if (value === 'tasks') loadTaskData(true);
+            shouldScrollToBottom = true;
             renderContent();
         });
         row.appendChild(chip);
     }
-    if (chatView === 'open' && hiddenCount > 0) {
+    if (active === 'open' && hiddenCount > 0) {
         const note = document.createElement('span');
         note.className = 'ucp-view-note';
         note.textContent = `${hiddenCount} resolved or done hidden`;
         row.appendChild(note);
     }
-    container.appendChild(row);
+    return row;
+}
+
+// Item header (when scoped to an item) and the view chips, above every view.
+function prependPanelTop(container, hiddenCount = 0) {
+    const top = document.createDocumentFragment();
+    if (selectedItemId) {
+        itemCollabScope = resolveItemScope(selectedItemId, itemCollabScope);
+        top.appendChild(buildItemCollabHeader(selectedItemId, { scope: itemCollabScope, onChange: () => renderContent() }));
+    }
+    top.appendChild(buildViewChips(hiddenCount));
+    container.insertBefore(top, container.firstChild);
 }
 
 function renderContent() {
@@ -630,17 +652,21 @@ function renderContent() {
     // "Hide done" applies to the task list; the chat uses Open / All instead.
     const hideDoneToggle = document.getElementById('ucp-hide-completed-toggle');
     if (hideDoneToggle) hideDoneToggle.hidden = currentFilter !== 'tasks';
+    const filtersRow = document.getElementById('ucp-filters-row');
+    if (filtersRow) filtersRow.hidden = currentFilter !== 'tasks';
     updateInputPlaceholder();
 
-    // Tasks tab has its own rendering path
+    // Tasks view has its own rendering path
     if (currentFilter === 'tasks') {
         renderTasksTab(container);
+        prependPanelTop(container);
         return;
     }
 
-    // Plan History tab (read-only timeline of saved plan changes)
+    // Plan History view (read-only timeline of saved plan changes)
     if (currentFilter === 'history') {
         renderHistoryTab(container);
+        prependPanelTop(container);
         return;
     }
 
@@ -656,26 +682,17 @@ function renderContent() {
 
     container.innerHTML = '';
 
-    // Scoped to one item: its collab header (summary, reactions, status) on top.
-    if (selectedItemId) {
-        itemCollabScope = resolveItemScope(selectedItemId, itemCollabScope);
-        container.appendChild(buildItemCollabHeader(selectedItemId, {
-            scope: itemCollabScope,
-            onScopeChange: (sc) => { itemCollabScope = sc; renderContent(); },
-            onChange: () => renderContent()
-        }));
-        container.appendChild(buildSourceFilter());
-    }
 
     let items = sourceFilter === 'community' && selectedItemId ? [] : ucpMessages;
 
     items = items.filter(messageMatchesScope);
     const scopedCount = items.length;
     if (chatView === 'open') items = items.filter(msg => !isThreadDone(msg));
-    renderChatViewChips(container, scopedCount - items.length);
-
-    // One combined timeline: this plan's chat plus the item's community comments.
+    // One combined timeline: this plan's chat plus the item's community comments
+    // (a plan message shared with the community appears once, as the plan message).
     const community = selectedItemId && sourceFilter !== 'plan' ? communityEntries(selectedItemId) : [];
+    prependPanelTop(container, scopedCount - items.length);
+    if (selectedItemId && communityEntries(selectedItemId).length > 0) container.appendChild(buildSourceFilter());
     items = [...items, ...community].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     if (items.length === 0) {
         const empty = document.createElement('div');
@@ -728,9 +745,7 @@ function updateInputPlaceholder() {
 
     if (selectedItemId && currentFilter === 'all') {
         const name = getRecordById(selectedItemId)?.fields?.Name || 'this item';
-        input.placeholder = resolveItemScope(selectedItemId, itemCollabScope) === 'community'
-            ? `Comment to the community about ${name}...`
-            : `Message the plan about ${name}...`;
+        input.placeholder = `Message the plan about ${name}...`;
         return;
     }
     // v3.8 Phase 3: Show focus item context in placeholder
@@ -774,7 +789,7 @@ function communityEntries(recordId) {
     const record = getRecordById(recordId);
     if (!record) return [];
     const all = communityCommentsForRecord(record);
-    const tops = all.filter(c => c.parentId == null);
+    const tops = all.filter(c => c.parentId == null && !c.linkedMessageId);
     return tops.map(c => ({
         isCommunity: true, recordId, id: c.id, senderName: c.author, content: c.text,
         timestamp: c.at || new Date(0).toISOString(),
@@ -891,6 +906,23 @@ function createTimelineMessage(message) {
     }
     el.appendChild(body);
 
+    // Shared with the community: one linked comment, visible in both places.
+    const sharedComment = message.componentId && !message.parentMessageId ? findSharedComment(message.componentId, message.id) : null;
+    if (sharedComment) {
+        const badge = document.createElement('div');
+        badge.className = 'ucp-shared-badge';
+        badge.textContent = '🌐 Shared with community';
+        el.appendChild(badge);
+        const communityReplies = communityCommentsForRecord(getRecordById(message.componentId)).filter(c => c.parentId === sharedComment.id);
+        for (const reply of communityReplies) {
+            const r = document.createElement('div');
+            r.className = 'ucp-community-reply';
+            r.setAttribute('data-collab-inline-host', '');
+            r.innerHTML = `<div class="ucp-msg-header"><span class="ucp-msg-scope" title="Community">🌐</span><span class="ucp-msg-sender">${escapeHtml(reply.author)}</span>${collabSupHTML('ccomment', `${message.componentId}::${reply.id}`, `${reply.author}'s reply`)}<span class="ucp-msg-time">${formatTime(reply.at)}</span></div><div class="ucp-msg-body">${formatMessageContent(reply.text)}</div>`;
+            el.appendChild(r);
+        }
+    }
+
     // Task link badge - shows when this message has been turned into a task
     const linkedTaskBadge = createTaskLinkBadge(message);
     if (linkedTaskBadge) {
@@ -976,6 +1008,22 @@ function createActionsRow(message, isOwn) {
         menuItems.push({
             label: resolved ? '↺ Reopen chat' : '✓ Mark resolved',
             run: () => { setThreadResolved(message.id, !resolved, getCurrentUser()); renderContent(); }
+        });
+    }
+    // Chats live in the plan; a chat about an item can also be shared with the
+    // community. It stays one linked comment: edits and removal follow it.
+    if (!message.parentMessageId && message.componentId && isOwn) {
+        const shared = !!findSharedComment(message.componentId, message.id);
+        menuItems.push({
+            label: shared ? '🌐 Stop sharing with community' : '🌐 Share with community',
+            run: async () => {
+                const ok = shared
+                    ? await unsharePlanMessage(message.componentId, message.id)
+                    : !!(await sharePlanMessage(message.componentId, message));
+                showToast(ok ? (shared ? 'No longer shared with the community.' : 'Shared with the community. Edits stay in sync.') : 'Could not update sharing.', 2500, ok ? 'success' : 'error');
+                window.dispatchEvent(new CustomEvent('collab-updated', { detail: { kind: 'item', id: message.componentId } }));
+                renderContent();
+            }
         });
     }
     if (state.stream?.isActive) {
@@ -1940,6 +1988,7 @@ function startEditMessage(message) {
         if (newContent && newContent !== originalContent) {
             const currentUser = getCurrentUser();
             const result = await api.updateChatMessage(message.id, newContent, currentUser?.id);
+            if (result && message.componentId) await syncSharedMessageEdit(message.componentId, message.id, newContent);
             if (result) {
                 showToast('Message updated', 1500);
                 editingMessage = null;
@@ -1975,17 +2024,6 @@ async function handleMessageSubmit(e) {
     const message = input?.value?.trim();
     if (!message) return;
 
-    // Scoped to an item with "Community" chosen: post to the item's community thread.
-    if (selectedItemId && !replyingTo && resolveItemScope(selectedItemId, itemCollabScope) === 'community') {
-        const record = getRecordById(selectedItemId);
-        input.value = '';
-        autoSizeComposer(input);
-        const created = record ? await addCommunityCommentForRecord(record, message) : null;
-        if (!created) { input.value = message; showToast('Failed to post comment', 3000); return; }
-        shouldScrollToBottom = true;
-        renderContent();
-        return;
-    }
 
     const currentUser = getCurrentUser();
     if (!currentUser) {
@@ -2828,7 +2866,16 @@ registerCollabKind('message', {
     },
     sources: (id) => {
         const m = findMessageById(id);
-        return [{ scope: 'plan', label: 'in this plan', icon: '👥', map: emojiUsersToMap(m?.reactions) }];
+        const out = [{ scope: 'plan', label: 'in this plan', icon: '👥', map: emojiUsersToMap(m?.reactions) }];
+        const shared = m?.componentId ? findSharedComment(m.componentId, m.id) : null;
+        if (shared) {
+            const map = new Map();
+            for (const [emoji, data] of Object.entries(shared.reactions || {})) {
+                for (const u of data?.users || []) { if (!map.has(u)) map.set(u, new Set()); map.get(u).add(emoji); }
+            }
+            out.push({ scope: 'community', label: 'community', icon: '🌐', map });
+        }
+        return out;
     },
     scopes: (id) => (findMessageById(id) && getCurrentUser() && !isPlanReadOnly() ? ['plan'] : []),
     mine: (id) => {

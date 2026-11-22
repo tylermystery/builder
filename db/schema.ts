@@ -240,6 +240,9 @@ export const comments = pgTable(
     userId: text("user_id").notNull(),
     authorName: text("author_name"),
     body: text("body").notNull(),
+    // Set when this comment is a plan chat message shared with the community: the
+    // plan message (Airtable record id) it mirrors. Edits and deletes stay in sync.
+    linkedMessageId: text("linked_message_id"),
     hidden: boolean("hidden").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow(),
   },

@@ -383,3 +383,11 @@ body.presentation-active #header-search-wrapper #filter-toggle-btn { display: no
     display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px;
     margin: 6px 0 2px; max-width: 320px;
 }
+
+/* Conversations panel: one chat with view chips; shared messages */
+.ucp-view-chips { flex-wrap: wrap; }
+.ucp-view-chip .ucp-tab-count { margin-left: 3px; }
+.ucp-shared-badge {
+    display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 10px;
+    background: rgba(14, 165, 233, 0.12); color: #0369a1; font-size: 0.72em; font-weight: 600;
+}
