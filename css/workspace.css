@@ -401,3 +401,22 @@ body.presentation-active #header-search-wrapper #filter-toggle-btn { display: no
 }
 .ucp-view-select:focus-visible { outline: 2px solid #8b5cf6; outline-offset: 1px; }
 .ucp-view-chips:empty { display: none; }
+
+/* Plan view "Add to Plan" search: sit below the fixed site header (which stays on
+   top), so its title bar and × close button are never covered — on mobile the
+   window fills the screen from the top, and the header used to hide the ×. */
+body.workspace-ready .presentation-search-modal {
+    top: var(--workspace-header-height, 0px);
+}
+body.workspace-ready .presentation-search-content {
+    max-height: calc(100dvh - var(--workspace-header-height, 0px) - 5vh);
+}
+@media (max-width: 768px) {
+    body.workspace-ready .presentation-search-content {
+        max-height: calc(100dvh - var(--workspace-header-height, 0px));
+        height: calc(100dvh - var(--workspace-header-height, 0px));
+    }
+    body.workspace-ready .presentation-search-header { position: sticky; top: 0; z-index: 1; background: #fff; flex-shrink: 0; }
+    body.workspace-ready .presentation-search-results { min-height: 0; }
+    body.workspace-ready .presentation-search-close { width: 44px; height: 44px; flex-shrink: 0; }
+}
