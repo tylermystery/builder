@@ -343,15 +343,20 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const isPublicIdea = record.isPublicIdea === true ||
                          (typeof record.id === 'string' && record.id.startsWith('public-'));
     let publicIdeaBadge = '';
-    if (record.catalogStatus === 'published') {
-        // A publisher promoted this into the store catalog: it is a real catalog
-        // item now, so it reads as store content rather than a community idea.
+    const stage = record.collabStage || (record.catalogStatus === 'pending' ? 'suggested' : null);
+    if (isPublicIdea && stage) {
+        const labels = { suggested: 'Suggested · awaiting review', recommended: '💡 Recommended', catalog: 'In catalog',
+            scheduled: '📅 Scheduled', delivered: '🎉 Delivered' };
+        let label = labels[stage] || '';
+        if (stage === 'scheduled' && record.scheduledFor) {
+            try { label += ` ${new Date(record.scheduledFor).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`; } catch (_) {}
+        }
+        const cls = stage === 'suggested' ? 'pending-review-badge' : (stage === 'catalog' ? 'store-added-badge' : `public-idea-badge collab-stage-${stage}`);
+        if (label) publicIdeaBadge = `<span class="${cls}">${label}</span>`;
+    } else if (record.catalogStatus === 'published') {
         publicIdeaBadge = '<span class="store-added-badge">Added by the store</span>';
-    } else if (record.catalogStatus === 'pending') {
-        // Visible only to its author and the store's publishers (the API decides).
-        publicIdeaBadge = '<span class="pending-review-badge">Pending review</span>';
     } else if (isPublicIdea) {
-        publicIdeaBadge = '<span class="public-idea-badge">Public Idea</span>';
+        publicIdeaBadge = '<span class="public-idea-badge">💡 Collab idea</span>';
     }
 
     // --- VVV SCORE LOGIC REMOVED VVV ---

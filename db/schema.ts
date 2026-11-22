@@ -75,6 +75,12 @@ export const publicItems = pgTable(
     // The 'none' default is what keeps every pre-existing row behaving exactly
     // as it did before this column was added.
     catalogStatus: text("catalog_status").notNull().default("pending"),
+    // Collab lifecycle after "In catalog": when the store plans to deliver it,
+    // and when it was delivered. Collab stays open throughout and afterwards.
+    scheduledFor: timestamp("scheduled_for"),
+    deliveredAt: timestamp("delivered_at"),
+    // Notifications sent for stage changes (so each stage notifies once).
+    notifiedStage: text("notified_stage"),
     // Which variation the catalog currently presents. Null means the base row's
     // own fields are current. Set null automatically if that variation is
     // deleted, so the pointer can never dangle.

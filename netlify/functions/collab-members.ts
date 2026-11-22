@@ -13,9 +13,9 @@
 //   POST /api/collab/members  { storeId, userId, status }     admin: status 'member' | 'contributor'
 
 import jwt from "jsonwebtoken";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { storeMembers } from "../../db/schema.js";
+import { storeMembers, reactions, publicItems } from "../../db/schema.js";
 
 const json = (status: number, payload: unknown) =>
   new Response(JSON.stringify(payload), {
@@ -74,6 +74,26 @@ async function findRow(storeId: string, userId: string) {
 export default async (req: Request) => {
   const url = new URL(req.url);
   const resource = url.pathname.replace(/\/+$/, "").split("/").pop();
+  // One-tap feedback from collab emails: a signed link records a reaction (only
+  // ever adds) under the recipient's account, then opens the idea.
+  if (req.method === "GET" && resource === "quick-react") {
+    const base = process.env.URL || url.origin;
+    try {
+      const claim = jwt.verify(url.searchParams.get("t") || "", process.env.JWT_SECRET || "") as { u: string; p: number; e: string };
+      const [item] = await db.select().from(publicItems).where(eq(publicItems.id, Number(claim.p)));
+      if (!item) throw new Error("gone");
+      const existing = await db.select().from(reactions).where(and(
+        eq(reactions.publicItemId, item.id), eq(reactions.userId, claim.u), eq(reactions.emoji, claim.e),
+        isNull(reactions.commentId), isNull(reactions.variationId)));
+      if (existing.length === 0) {
+        await db.insert(reactions).values({ publicItemId: item.id, variationId: null, commentId: null, userId: claim.u, emoji: claim.e });
+      }
+      return Response.redirect(`${base}/?shopId=${encodeURIComponent(item.storeId)}&openItem=public-${item.id}&reacted=1`, 302);
+    } catch {
+      return Response.redirect(`${base}/`, 302);
+    }
+  }
+
   const user = getUser(req);
   if (!user) return json(401, { error: "Sign in to collab" });
 
@@ -141,5 +161,5 @@ export default async (req: Request) => {
 };
 
 export const config = {
-  path: ["/api/collab/join", "/api/collab/me", "/api/collab/members"],
+  path: ["/api/collab/join", "/api/collab/me", "/api/collab/members", "/api/collab/quick-react"],
 };

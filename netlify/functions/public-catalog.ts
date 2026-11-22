@@ -66,6 +66,55 @@ import {
 // Statuses that are visible to everyone, signed in or not.
 const PUBLIC_CATALOG_STATUSES = ["none", "recommended", "published"];
 
+// The stage people see: suggested, recommended, catalog, scheduled, delivered, declined.
+export function collabStage(row: { catalogStatus: string; scheduledFor?: Date | null; deliveredAt?: Date | null }) {
+  if (row.catalogStatus === "pending") return "suggested";
+  if (row.catalogStatus === "rejected") return "declined";
+  if (row.catalogStatus === "recommended") return "recommended";
+  if (row.catalogStatus === "published") {
+    if (row.deliveredAt) return "delivered";
+    if (row.scheduledFor) return "scheduled";
+    return "catalog";
+  }
+  return "none";
+}
+
+async function notifyAuthorOfStage(
+  row: { id: number; authorId: string | null; name: string; storeId: string; scheduledFor?: Date | null },
+  stage: string,
+) {
+  const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY } = process.env;
+  if (!row.authorId || !AIRTABLE_PAT || !BASE_ID || !SENDGRID_API_KEY) return;
+  const res = await fetch(`https://api.airtable.com/v0/${BASE_ID}/Users/${encodeURIComponent(row.authorId)}`, {
+    headers: { Authorization: `Bearer ${AIRTABLE_PAT}` },
+  });
+  if (!res.ok) return;
+  const user = (await res.json()) as { fields?: { Email?: string; Name?: string; NotificationFrequency?: string } };
+  if (user.fields?.NotificationFrequency !== "Real-Time" || !user.fields?.Email) return;
+  const when = row.scheduledFor ? new Date(row.scheduledFor).toLocaleDateString("en-US", { month: "long", day: "numeric" }) : "";
+  const lines: Record<string, string> = {
+    recommended: "was recommended to the community. Everyone can now react, comment and suggest versions.",
+    catalog: "was added to the store catalog. It's now bookable.",
+    scheduled: `is scheduled${when ? ` for ${when}` : ""}. Keep the feedback coming.`,
+    delivered: "was delivered! Share how it went to help refine it.",
+  };
+  const base = process.env.URL || "https://whatthefun.wtf";
+  const link = `${base}/?shopId=${encodeURIComponent(row.storeId)}&openItem=public-${row.id}`;
+  const safeName = String(row.name).replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c] as string);
+  const sg = (await import("@sendgrid/mail")).default;
+  sg.setApiKey(SENDGRID_API_KEY);
+  await sg.send({
+    to: user.fields.Email,
+    from: { name: "WhatTheFun", email: "info@tylersmysterytours.com" },
+    subject: `Your collab idea “${row.name}” ${stage === "delivered" ? "was delivered" : `is ${stage === "catalog" ? "in the catalog" : stage}`}`,
+    html: `<div style="font-family:-apple-system,Segoe UI,sans-serif;max-width:520px;margin:0 auto;padding:20px">
+      <p>Hi ${user.fields.Name ? String(user.fields.Name).replace(/[<>&]/g, "") : "there"},</p>
+      <p>Your idea <strong>${safeName}</strong> ${lines[stage]}</p>
+      <p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#667eea;color:#fff;border-radius:8px;text-decoration:none">Open the idea</a></p>
+      <p style="color:#999;font-size:12px">You get these because your notification preference is Real-Time. Change it in your account settings.</p></div>`,
+  });
+}
+
 // Approved store members' ideas are recommended straight away; everyone else's
 // (contributors) are suggestions an admin reviews. Fails closed to 'contributor'.
 async function isApprovedMember(storeId: string, userId: string): Promise<boolean> {
@@ -542,15 +591,25 @@ export default async (req: Request) => {
         // approve / catalog: -> In catalog (step 2)
         // reject: -> Declined;  flag: pull a recommended idea back to Suggested
         const decision = String(body.decision || "");
+        // schedule { scheduledFor }: In catalog + a delivery date; unschedule clears it
+        // deliver: marks it delivered (collab stays open to refine it afterwards)
         const NEXT: Record<string, string> = {
           recommend: "recommended",
           approve: "published",
           catalog: "published",
           reject: "rejected",
           flag: "pending",
+          schedule: "published",
+          unschedule: "published",
+          deliver: "published",
         };
         if (!NEXT[decision])
-          return json(400, { error: "decision must be recommend, catalog, reject or flag" });
+          return json(400, { error: "decision must be recommend, catalog, schedule, unschedule, deliver, reject or flag" });
+        let scheduledFor: Date | null = null;
+        if (decision === "schedule") {
+          scheduledFor = new Date(String(body.scheduledFor || ""));
+          if (isNaN(scheduledFor.getTime())) return json(400, { error: "scheduledFor must be a date" });
+        }
 
         const [row] = await db
           .select()
@@ -571,10 +630,21 @@ export default async (req: Request) => {
             reviewedAt: new Date(),
             reviewedBy: userId,
             reviewNote: body.reviewNote ? String(body.reviewNote) : null,
-            ...(approved ? { publishedAt: new Date(), publishedBy: userId } : {}),
+            ...(approved && row.catalogStatus !== "published" ? { publishedAt: new Date(), publishedBy: userId } : {}),
+            ...(decision === "schedule" ? { scheduledFor, deliveredAt: null } : {}),
+            ...(decision === "unschedule" ? { scheduledFor: null } : {}),
+            ...(decision === "deliver" ? { deliveredAt: new Date() } : {}),
+            ...(["flag", "reject", "recommend"].includes(decision) ? { scheduledFor: null, deliveredAt: null } : {}),
           })
           .where(eq(publicItems.id, row.id))
           .returning();
+
+        // Tell the idea's author (if their preference is Real-Time) once per stage.
+        const stage = collabStage(updated);
+        if (stage !== updated.notifiedStage && ["recommended", "catalog", "scheduled", "delivered"].includes(stage)) {
+          await notifyAuthorOfStage(updated, stage).catch(() => {});
+          await db.update(publicItems).set({ notifiedStage: stage }).where(eq(publicItems.id, updated.id));
+        }
 
         return json(200, { item: updated });
       }

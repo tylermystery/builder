@@ -7366,14 +7366,14 @@ export async function setCurrentVariation(publicItemId, variationId) {
 
 // Publisher decision on a suggested item: 'approve' puts it in the catalog,
 // 'reject' leaves it visible to its author alone. Returns the item row, or null.
-export async function reviewPublicItem(publicItemId, decision, reviewNote = null) {
+export async function reviewPublicItem(publicItemId, decision, reviewNote = null, extra = {}) {
     const headers = publicCatalogAuthHeaders();
     if (!headers || publicItemId == null) return null;
     try {
         const response = await fetch(`${PUBLIC_CATALOG_BASE}/item-review`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ publicItemId, decision, reviewNote })
+            body: JSON.stringify({ ...extra, publicItemId, decision, reviewNote })
         });
         if (!response.ok) {
             log('API', `reviewPublicItem non-OK status ${response.status}`);
@@ -7449,6 +7449,15 @@ export async function getMyCollabStatus(storeId) {
     try {
         const res = await fetch(`/api/collab/me?storeId=${encodeURIComponent(storeId)}`, { headers });
         return res.ok ? await res.json() : null;
+    } catch { return null; }
+}
+
+export async function listCollabMembers(storeId) {
+    const headers = publicCatalogAuthHeaders();
+    if (!headers || !storeId) return null;
+    try {
+        const res = await fetch(`/api/collab/members?storeId=${encodeURIComponent(storeId)}`, { headers });
+        return res.ok ? (await res.json()).members || [] : null;
     } catch { return null; }
 }
 

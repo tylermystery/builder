@@ -42,6 +42,35 @@ const publicIdeaIndex = new Map();
 // side; from then on `id` is the public_items id used for subsequent writes.
 const communityRowByCatalogId = new Map();
 
+// Collab lifecycle stage of an idea row or record.
+export function collabStageOf(row) {
+    const status = row?.catalogStatus || 'none';
+    if (status === 'pending') return 'suggested';
+    if (status === 'rejected') return 'declined';
+    if (status === 'recommended') return 'recommended';
+    if (status === 'published') return row.deliveredAt ? 'delivered' : (row.scheduledFor ? 'scheduled' : 'catalog');
+    return 'none';
+}
+
+export const COLLAB_STAGE_LABELS = {
+    suggested: 'Suggested', recommended: 'Recommended', catalog: 'In catalog',
+    scheduled: 'Scheduled', delivered: 'Delivered', declined: 'Declined'
+};
+
+/**
+ * Collab score: every reaction and comment counts, from everyone equally for now.
+ * Reactions are weighted by sentiment (a 😍 counts more than a 🤔); comments add
+ * engagement. Kept in one place so comment scoring can be refined later.
+ */
+export function getCollabScore(record) {
+    const row = record ? getCommunityRowForRecord(record) : null;
+    if (!row) return { score: 0, reactions: 0, comments: 0 };
+    const reactions = Object.values(row.reactions || {}).reduce((sum, r) => sum + (r?.count || 0), 0);
+    const comments = (row.comments || []).length;
+    const { democraticAverage } = computeDemocraticAverage(communityRowToUserMap(row));
+    return { score: reactions + comments * 2 + democraticAverage * Math.min(reactions, 10), reactions, comments };
+}
+
 // True for a catalog record that originated from the public layer.
 export function isPublicIdeaRecord(record) {
     return !!(record && (record.isPublicIdea || (typeof record.id === 'string' && record.id.startsWith('public-'))));
@@ -94,6 +123,9 @@ function transformPublicRowToRecord(row, storeId) {
     // whether it is offering "add to catalog" or "remove from catalog".
     record.catalogStatus = catalogStatus;
     record.publicAuthorId = row.authorId || null;
+    record.scheduledFor = row.scheduledFor || null;
+    record.deliveredAt = row.deliveredAt || null;
+    record.collabStage = collabStageOf(row);
 
     // If a publisher pointed the catalog at one of the item's variations, that is
     // the version everyone browsing sees. Plans keep whatever version they were
@@ -1312,7 +1344,7 @@ export function renderItemVariations(section, record, opts = {}) {
     // for a separate queue.
     // Collab lifecycle review for admins: Suggested -> Recommended -> In catalog.
     const needsItemReview = canReview && row?.id != null && !row?.catalogItemId &&
-        (row?.catalogStatus === 'pending' || row?.catalogStatus === 'recommended');
+        ['pending', 'recommended', 'published'].includes(row?.catalogStatus);
     if (variations.length === 0 && !canSuggest && !needsItemReview) {
         section.style.display = 'none';
         return;
@@ -1327,7 +1359,10 @@ export function renderItemVariations(section, record, opts = {}) {
 
     const summaryParts = [`${variations.length + 1} version${variations.length ? 's' : ''}`];
     if (pendingCount > 0) summaryParts.push(`${pendingCount} awaiting review`);
-    if (needsItemReview) summaryParts.push(row.catalogStatus === 'recommended' ? 'recommended idea' : 'suggested idea · needs review');
+    if (needsItemReview) {
+        const stage = collabStageOf(row);
+        summaryParts.push(stage === 'suggested' ? 'suggested idea · needs review' : `${COLLAB_STAGE_LABELS[stage].toLowerCase()} idea`);
+    }
 
     const header = document.createElement('button');
     header.type = 'button';
@@ -1385,13 +1420,16 @@ function buildItemReviewBar(ctx) {
     const wrap = document.createElement('div');
     wrap.className = 'variation-item-review';
     const who = escapeHtml(userLabel(row?.authorId));
-    wrap.innerHTML = `
-        <div class="variation-item-review-text">
-            ${status === 'recommended'
-                ? `<strong>Recommended</strong> · open to everyone's collab. Add it to the catalog when it's ready to book.`
-                : `<strong>Suggested</strong> by ${who} · only you and other store admins can see it. Step 1: recommend it to the community. Step 2: add it to the catalog.`}
-        </div>
-    `;
+    const stage = collabStageOf(row);
+    const when = row?.scheduledFor ? new Date(row.scheduledFor).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    const text = {
+        suggested: `<strong>Suggested</strong> by ${who} · only you and other store admins can see it. Step 1: recommend it to the community. Step 2: add it to the catalog.`,
+        recommended: `<strong>Recommended</strong> · open to everyone's collab. Add it to the catalog when it's ready to book.`,
+        catalog: `<strong>In catalog</strong> · bookable. Schedule it when you plan to deliver it.`,
+        scheduled: `<strong>Scheduled</strong> for ${escapeHtml(when)} · collab stays open. Mark it delivered once it happens.`,
+        delivered: `<strong>Delivered</strong> · collab stays open, so feedback can refine the next version.`
+    }[stage] || '';
+    wrap.innerHTML = `<div class="variation-item-review-text">${text}</div>`;
 
     const actions = document.createElement('div');
     actions.className = 'variation-actions';
@@ -1418,13 +1456,40 @@ function buildItemReviewBar(ctx) {
         notify(ctx, done, 'success');
     };
 
+    const decideWith = async (decision, extra, done, failed) => {
+        const item = await api.reviewPublicItem(row.id, decision, null, extra);
+        if (!item) return notify(ctx, failed, 'error');
+        applyItemReviewResult(record, row, item);
+        refreshAfterVariationChange(ctx);
+        notify(ctx, done, 'success');
+    };
     if (status === 'pending') {
         addButton('⭐ Recommend', 'variation-approve-btn', () =>
             decide('recommend', 'Recommended: everyone can now collab on it.', 'Could not recommend that idea.'));
     }
-    addButton('✅ Add to the catalog', 'variation-approve-btn', () =>
-        decide('catalog', 'Added to the store catalog.', 'Could not add that item.'));
-    if (status === 'recommended') {
+    if (status !== 'published') {
+        addButton('✅ Add to the catalog', 'variation-approve-btn', () =>
+            decide('catalog', 'Added to the store catalog.', 'Could not add that item.'));
+    }
+    if (status === 'published' && stage !== 'delivered') {
+        addButton(stage === 'scheduled' ? '📅 Reschedule' : '📅 Schedule', 'variation-approve-btn', async () => {
+            const current = row.scheduledFor ? new Date(row.scheduledFor).toISOString().slice(0, 10) : '';
+            const input = prompt('Delivery date (YYYY-MM-DD):', current);
+            if (input === null) return;
+            const date = new Date(`${input.trim()}T12:00:00`);
+            if (isNaN(date.getTime())) return notify(ctx, 'Please enter a date like 2026-12-31.', 'error');
+            await decideWith('schedule', { scheduledFor: date.toISOString() }, `Scheduled for ${date.toLocaleDateString()}.`, 'Could not schedule it.');
+        });
+        addButton('🎉 Mark delivered', 'variation-approve-btn', () =>
+            decideWith('deliver', {}, 'Marked delivered. Collab stays open to refine it.', 'Could not mark it delivered.'));
+    }
+    if (stage === 'scheduled') {
+        addButton('Clear date', 'variation-deny-btn', () =>
+            decideWith('unschedule', {}, 'Schedule cleared.', 'Could not clear the date.'));
+    }
+    if (status === 'published') {
+        // nothing else: removing from the catalog stays in the item's catalog control
+    } else if (status === 'recommended') {
         addButton('⚑ Back to suggested', 'variation-deny-btn', () =>
             decide('flag', 'Moved back to suggested.', 'Could not move that idea.'));
     } else {
@@ -1433,6 +1498,10 @@ function buildItemReviewBar(ctx) {
             if (note === null) return;
             await decide('reject', 'Suggestion declined.', 'Could not decline that item.', note || null);
         });
+    }
+
+    if (storeIdForRecord(record)) {
+        addButton('👥 Collab members', 'variation-action-btn', () => openCollabMembers(storeIdForRecord(record)));
     }
 
     // Approve the author as a store member so their next ideas skip review.
@@ -1449,17 +1518,75 @@ function buildItemReviewBar(ctx) {
     return wrap;
 }
 
+// Store admins: everyone who has joined this store's collab, with member approval.
+async function openCollabMembers(storeId) {
+    document.getElementById('collab-members-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'collab-members-overlay';
+    overlay.className = 'collab-members-overlay';
+    overlay.innerHTML = `
+        <div class="collab-members-dialog" role="dialog" aria-modal="true" aria-labelledby="collab-members-title">
+            <div class="collab-members-head">
+                <h3 id="collab-members-title">Collab members</h3>
+                <button type="button" class="collab-members-close" aria-label="Close">&times;</button>
+            </div>
+            <p class="collab-members-help">Contributors joined by signing in; their ideas wait for review. Members' ideas are recommended straight away.</p>
+            <div class="collab-members-list"><div class="collab-members-empty">Loading…</div></div>
+        </div>`;
+    const close = () => overlay.remove();
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.querySelector('.collab-members-close').addEventListener('click', close);
+    document.body.appendChild(overlay);
+
+    const list = overlay.querySelector('.collab-members-list');
+    const render = (members) => {
+        if (!members) { list.innerHTML = '<div class="collab-members-empty">Could not load members.</div>'; return; }
+        if (members.length === 0) { list.innerHTML = '<div class="collab-members-empty">Nobody has joined yet.</div>'; return; }
+        const sorted = [...members].sort((a, b) => (a.status === b.status ? 0 : a.status === 'contributor' ? -1 : 1));
+        list.innerHTML = '';
+        for (const m of sorted) {
+            const rowEl = document.createElement('div');
+            rowEl.className = 'collab-member-row';
+            const isMember = m.status === 'member';
+            rowEl.innerHTML = `
+                <div class="collab-member-info">
+                    <span class="collab-member-name">${escapeHtml(m.userName || userLabel(m.userId))}</span>
+                    <span class="collab-member-status ${isMember ? 'is-member' : ''}">${isMember ? 'Member' : 'Contributor'}</span>
+                </div>`;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'collab-member-toggle';
+            btn.textContent = isMember ? 'Make contributor' : 'Approve as member';
+            btn.addEventListener('click', async () => {
+                btn.disabled = true;
+                const ok = await api.setCollabMemberStatus(storeId, m.userId, isMember ? 'contributor' : 'member');
+                if (ok) { m.status = isMember ? 'contributor' : 'member'; render(members); }
+                else { btn.disabled = false; try { showToast('Could not update that member.', 3000, 'error'); } catch (_) {} }
+            });
+            rowEl.appendChild(btn);
+            list.appendChild(rowEl);
+        }
+    };
+    render(await api.listCollabMembers(storeId));
+}
+
 // Mirror an item review decision onto the cached row and the on-screen record so
 // the item moves between the catalog and Public Ideas without a reload. An
 // approved item carries the 'Available' status the rest of the app filters on;
 // a declined one goes back to being an ordinary community idea.
 function applyItemReviewResult(record, row, item) {
-    if (row) row.catalogStatus = item.catalogStatus;
-    const cachedRow = publicIdeaIndex.get(publicRecordId(row || item));
-    if (cachedRow) cachedRow.catalogStatus = item.catalogStatus;
+    for (const target of [row, publicIdeaIndex.get(publicRecordId(row || item))]) {
+        if (!target) continue;
+        target.catalogStatus = item.catalogStatus;
+        target.scheduledFor = item.scheduledFor || null;
+        target.deliveredAt = item.deliveredAt || null;
+    }
 
     if (!record) return;
     record.catalogStatus = item.catalogStatus;
+    record.scheduledFor = item.scheduledFor || null;
+    record.deliveredAt = item.deliveredAt || null;
+    record.collabStage = collabStageOf(item);
     if (record.fields) {
         record.fields.Status = item.catalogStatus === 'published'
             ? 'Available'
