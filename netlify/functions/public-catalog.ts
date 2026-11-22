@@ -67,16 +67,19 @@ import {
 const PUBLIC_CATALOG_STATUSES = ["none", "recommended", "published"];
 
 // The stage people see: suggested, recommended, catalog, scheduled, delivered, declined.
+// Two parallel layers: STATUS (suggested / recommended / catalog / declined) and
+// TIME (unscheduled / scheduled / delivered). The stage people are notified about is
+// the time layer when set, otherwise the status.
+export function collabStatus(row: { catalogStatus: string }) {
+  return ({ pending: "suggested", rejected: "declined", recommended: "recommended", published: "catalog" } as Record<string, string>)[row.catalogStatus] || "none";
+}
 export function collabStage(row: { catalogStatus: string; scheduledFor?: Date | null; deliveredAt?: Date | null }) {
-  if (row.catalogStatus === "pending") return "suggested";
-  if (row.catalogStatus === "rejected") return "declined";
-  if (row.catalogStatus === "recommended") return "recommended";
-  if (row.catalogStatus === "published") {
+  const status = collabStatus(row);
+  if (status === "recommended" || status === "catalog") {
     if (row.deliveredAt) return "delivered";
     if (row.scheduledFor) return "scheduled";
-    return "catalog";
   }
-  return "none";
+  return status;
 }
 
 async function notifyAuthorOfStage(
@@ -599,9 +602,10 @@ export default async (req: Request) => {
           catalog: "published",
           reject: "rejected",
           flag: "pending",
-          schedule: "published",
-          unschedule: "published",
-          deliver: "published",
+          // Time is its own layer, alongside status: scheduling never changes status.
+          schedule: "keep",
+          unschedule: "keep",
+          deliver: "keep",
         };
         if (!NEXT[decision])
           return json(400, { error: "decision must be recommend, catalog, schedule, unschedule, deliver, reject or flag" });
@@ -621,7 +625,10 @@ export default async (req: Request) => {
 
         if (row.catalogItemId)
           return json(400, { error: "This item is already in the catalog" });
-        const nextStatus = NEXT[decision];
+        const isTimeDecision = ["schedule", "unschedule", "deliver"].includes(decision);
+        if (isTimeDecision && !["recommended", "published"].includes(row.catalogStatus))
+          return json(400, { error: "Recommend the idea before scheduling it" });
+        const nextStatus = isTimeDecision ? row.catalogStatus : NEXT[decision];
         const approved = nextStatus === "published";
         const [updated] = await db
           .update(publicItems)
@@ -634,7 +641,7 @@ export default async (req: Request) => {
             ...(decision === "schedule" ? { scheduledFor, deliveredAt: null } : {}),
             ...(decision === "unschedule" ? { scheduledFor: null } : {}),
             ...(decision === "deliver" ? { deliveredAt: new Date() } : {}),
-            ...(["flag", "reject", "recommend"].includes(decision) ? { scheduledFor: null, deliveredAt: null } : {}),
+            ...(["flag", "reject"].includes(decision) ? { scheduledFor: null, deliveredAt: null } : {}),
           })
           .where(eq(publicItems.id, row.id))
           .returning();

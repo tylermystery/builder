@@ -10,13 +10,13 @@
 //   Delivered       — delivered, so feedback can refine what comes next
 import { state } from '../../state.js';
 import {
-    isPublicIdeaRecord, getCollabScore, collabStageOf, COLLAB_STAGE_LABELS, whenPublicIdeasLoaded
+    isPublicIdeaRecord, getCollabScore, collabStageOf, collabStatusOf, COLLAB_STAGE_LABELS, whenPublicIdeasLoaded
 } from '../publicCatalog.js';
 import { showDetailModal } from '../modal.js';
 import { optimizeImageUrl } from '../../utils/imageOptimizer.js';
 
 let showingBoard = false;      // board toggled on while the plan has items
-let waitingForIdeas = false;
+let awaitedLoad = null; // the ideas load we've already scheduled a redraw for
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -50,8 +50,10 @@ function imageFor(record) {
 function cardHTML(record) {
     const stage = record.collabStage || collabStageOf(record);
     const { reactions, comments } = getCollabScore(record);
-    let stageLabel = COLLAB_STAGE_LABELS[stage] || '';
-    if (stage === 'scheduled' && record.scheduledFor) {
+    // Status and time side by side: "Recommended · Dec 4", "In catalog · Delivered".
+    let stageLabel = COLLAB_STAGE_LABELS[collabStatusOf(record)] || '';
+    if (record.deliveredAt) stageLabel += ' · Delivered';
+    else if (record.scheduledFor) {
         try { stageLabel += ` · ${new Date(record.scheduledFor).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`; } catch { /* keep label */ }
     }
     const img = imageFor(record);
@@ -130,10 +132,12 @@ export function renderCollabBoard(container, { planIsEmpty = false, onRerender =
     });
 
     // Ideas load in the background on page start; redraw once they arrive.
-    if (!waitingForIdeas && onRerender) {
-        waitingForIdeas = true;
-        whenPublicIdeasLoaded().then(() => {
-            waitingForIdeas = false;
+    // Redraw once per load, never again for a load that already finished
+    // (re-waiting on a settled load would redraw endlessly and freeze the page).
+    const load = whenPublicIdeasLoaded();
+    if (onRerender && load !== awaitedLoad) {
+        awaitedLoad = load;
+        load.then(() => {
             if (container.querySelector('.collab-board')) onRerender();
         });
     }

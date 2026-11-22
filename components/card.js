@@ -345,13 +345,20 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     let publicIdeaBadge = '';
     const stage = record.collabStage || (record.catalogStatus === 'pending' ? 'suggested' : null);
     if (isPublicIdea && stage) {
-        const labels = { suggested: 'Suggested · awaiting review', recommended: '💡 Recommended', catalog: 'In catalog',
-            scheduled: '📅 Scheduled', delivered: '🎉 Delivered' };
-        let label = labels[stage] || '';
-        if (stage === 'scheduled' && record.scheduledFor) {
-            try { label += ` ${new Date(record.scheduledFor).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`; } catch (_) {}
+        // Status and time are shown side by side, e.g. "💡 Recommended · 📅 Dec 4".
+        const statusLabels = { suggested: 'Suggested · awaiting review', recommended: '💡 Recommended', catalog: 'In catalog', declined: '' };
+        const status = { pending: 'suggested', recommended: 'recommended', published: 'catalog', rejected: 'declined' }[record.catalogStatus] || stage;
+        let label = statusLabels[status] || '';
+        if (record.deliveredAt) label += `${label ? ' · ' : ''}🎉 Delivered`;
+        else if (record.scheduledFor) {
+            let date = '';
+            try { date = new Date(record.scheduledFor).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); } catch (_) {}
+            label += `${label ? ' · ' : ''}📅 ${date}`;
         }
-        const cls = stage === 'suggested' ? 'pending-review-badge' : (stage === 'catalog' ? 'store-added-badge' : `public-idea-badge collab-stage-${stage}`);
+        const cls = status === 'suggested' ? 'pending-review-badge'
+            : record.deliveredAt ? 'public-idea-badge collab-stage-delivered'
+            : record.scheduledFor ? 'public-idea-badge collab-stage-scheduled'
+            : status === 'catalog' ? 'store-added-badge' : 'public-idea-badge collab-stage-recommended';
         if (label) publicIdeaBadge = `<span class="${cls}">${label}</span>`;
     } else if (record.catalogStatus === 'published') {
         publicIdeaBadge = '<span class="store-added-badge">Added by the store</span>';

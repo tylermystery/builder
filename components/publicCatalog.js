@@ -43,13 +43,25 @@ const publicIdeaIndex = new Map();
 const communityRowByCatalogId = new Map();
 
 // Collab lifecycle stage of an idea row or record.
+// Two parallel layers on every idea and catalog item:
+//   status — suggested / recommended / catalog / declined (idea vs catalog)
+//   time   — unscheduled / scheduled / delivered
+export function collabStatusOf(row) {
+    return ({ pending: 'suggested', rejected: 'declined', recommended: 'recommended', published: 'catalog' })[row?.catalogStatus] || 'none';
+}
+
+export function collabTimeOf(row) {
+    if (row?.deliveredAt) return 'delivered';
+    if (row?.scheduledFor) return 'scheduled';
+    return 'unscheduled';
+}
+
+// Combined stage (time when set, otherwise status) for places that show one label.
 export function collabStageOf(row) {
-    const status = row?.catalogStatus || 'none';
-    if (status === 'pending') return 'suggested';
-    if (status === 'rejected') return 'declined';
-    if (status === 'recommended') return 'recommended';
-    if (status === 'published') return row.deliveredAt ? 'delivered' : (row.scheduledFor ? 'scheduled' : 'catalog');
-    return 'none';
+    const status = collabStatusOf(row);
+    if (status !== 'recommended' && status !== 'catalog') return status;
+    const time = collabTimeOf(row);
+    return time === 'unscheduled' ? status : time;
 }
 
 export const COLLAB_STAGE_LABELS = {
@@ -1421,13 +1433,14 @@ function buildItemReviewBar(ctx) {
     wrap.className = 'variation-item-review';
     const who = escapeHtml(userLabel(row?.authorId));
     const stage = collabStageOf(row);
+    const statusTag = collabStatusOf(row);
     const when = row?.scheduledFor ? new Date(row.scheduledFor).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
     const text = {
         suggested: `<strong>Suggested</strong> by ${who} · only you and other store admins can see it. Step 1: recommend it to the community. Step 2: add it to the catalog.`,
         recommended: `<strong>Recommended</strong> · open to everyone's collab. Add it to the catalog when it's ready to book.`,
         catalog: `<strong>In catalog</strong> · bookable. Schedule it when you plan to deliver it.`,
-        scheduled: `<strong>Scheduled</strong> for ${escapeHtml(when)} · collab stays open. Mark it delivered once it happens.`,
-        delivered: `<strong>Delivered</strong> · collab stays open, so feedback can refine the next version.`
+        scheduled: `<strong>Scheduled</strong> for ${escapeHtml(when)} · ${statusTag === 'catalog' ? 'in catalog' : 'recommended idea'} · collab stays open. Mark it delivered once it happens.`,
+        delivered: `<strong>Delivered</strong> · ${statusTag === 'catalog' ? 'in catalog' : 'recommended idea'} · collab stays open, so feedback can refine the next version.`
     }[stage] || '';
     wrap.innerHTML = `<div class="variation-item-review-text">${text}</div>`;
 
@@ -1471,7 +1484,7 @@ function buildItemReviewBar(ctx) {
         addButton('✅ Add to the catalog', 'variation-approve-btn', () =>
             decide('catalog', 'Added to the store catalog.', 'Could not add that item.'));
     }
-    if (status === 'published' && stage !== 'delivered') {
+    if ((status === 'published' || status === 'recommended') && stage !== 'delivered') {
         addButton(stage === 'scheduled' ? '📅 Reschedule' : '📅 Schedule', 'variation-approve-btn', async () => {
             const current = row.scheduledFor ? new Date(row.scheduledFor).toISOString().slice(0, 10) : '';
             const input = prompt('Delivery date (YYYY-MM-DD):', current);
