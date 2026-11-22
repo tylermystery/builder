@@ -22,6 +22,7 @@ import { updateFooter } from './components/footer.js';
 import { initializeProjectsDashboard, updateProjectsData, showProjectsLoading } from './components/projectsDashboard.js';
 import { initializePlanSync } from './components/planSync.js';
 import { initializeCollab } from './components/collab.js';
+import { initCollabControl } from './components/collab/collabControl.js';
 import { initializeWtfPlansPanel, showWtfPlansPanel, hideWtfPlansPanel, syncWtfPlansPanelWithUrl, refreshWtfPlansData, isWtfPlansPanelOpen, trackRecentPlan } from './components/wtfPlansPanel.js';
 import { initializeWorkspace } from './utils/workspace.js';
 import { hideUnifiedChatPanel, exitFullscreen, getUCPWorkspacePreferences, restoreUCPWorkspacePreferences } from './components/unifiedChatPanel.js';
@@ -1419,6 +1420,7 @@ async function initialize() {
         initializeWtfPlansPanel(); // Initialize WTF Plans panel
         initializePlanSync(); // Keep this device on the latest plan; Plan History; view-only for signed-out visitors
         initializeCollab(); // Store contributor on sign-in; send collab held while signed out
+        initCollabControl(); // One collab interface: superscript summary + hover/tap collab menu
         initializeForumPanel(); // Initialize Forum Panel
         initializeWorkspace({
             openLeft: showWtfPlansPanel,

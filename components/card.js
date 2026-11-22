@@ -1,6 +1,7 @@
 // REPLACE THE ENTIRE CONTENTS of components/card.js
 console.log('[MODULE DEBUG] card.js module starting to load...', performance.now().toFixed(2) + 'ms');
 
+import { collabSupHTML } from './collab/collabControl.js';
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
@@ -508,7 +509,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                     ${eventTime ? `<span class="time">${eventTime}</span>` : ''}
                 </div>
                 <div class="event-details">
-                    <h3>${fields.Name || 'Untitled Event'}${sentimentChipHTML()}</h3>
+                    <h3>${fields.Name || 'Untitled Event'}${collabSupHTML('item', record.id, fields.Name || '')}</h3>
                     <div class="description rich-text-description">${renderRichText(fields.Description)}</div>
                 </div>
             </div>
@@ -662,7 +663,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         packageCard.innerHTML = `
             ${imageContainerHTML}
             <div class="event-card-content">
-                <h3>${fields.Name || 'Untitled Package'}</h3>
+                <h3>${fields.Name || 'Untitled Package'}${collabSupHTML('item', record.id, fields.Name || '')}</h3>
                 <div class="description rich-text-description">${renderRichText(fields.Description)}</div>
                 <div class="package-summary">
                     <span class="package-item-count">${includedCount} items included</span>
@@ -834,7 +835,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             ${promoBadge}
             </div>
         <div class="event-card-content">
-            <h3>${fields.Name || 'Untitled Event'}${sentimentChipHTML()}</h3>
+            <h3>${fields.Name || 'Untitled Event'}${collabSupHTML('item', record.id, fields.Name || '')}</h3>
             <div class="description rich-text-description">${renderRichText(fields.Description)}</div>
         </div>
         <div class="card-footer">

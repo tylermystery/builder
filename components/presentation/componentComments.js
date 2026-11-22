@@ -5,6 +5,7 @@
  * Extracted from presentation.js — Phase 2 modularization.
  */
 
+import { EMOJI_REACTIONS } from '../../config.js';
 import { state } from '../../state.js';
 import * as api from '../../api.js';
 import { log } from '../../utils/debug.js';
@@ -14,7 +15,8 @@ import { applyCloudinaryTransform } from '../../utils/imageOptimizer.js';
 import { resizeImageForUpload } from '../../utils/imageResizer.js';
 
 // Quick reaction emojis for comment reaction picker
-const QUICK_REACTIONS = ['\u{1F44D}', '\u{2764}\u{FE0F}', '\u{1F602}', '\u{1F62E}', '\u{1F622}', '\u{1F389}'];
+// The scored collab set, everywhere.
+const QUICK_REACTIONS = EMOJI_REACTIONS;
 
 // Task status options for plan elements
 const ELEMENT_TASK_STATUS = {

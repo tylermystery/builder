@@ -10,7 +10,10 @@ import { showToast } from '../ui.js';
 import { showTaskModal } from './taskManager.js';
 import { loadProjectTasks, getProjectTaskLoadState } from '../utils/projectTasks.js';
 import { taskMessageId, taskMessageText } from '../utils/taskDiscussion.js';
+import { collabSupHTML, registerCollabKind } from './collab/collabControl.js';
+import { COLLAB_REACTIONS, emojiUsersToMap } from '../utils/collabSummary.js';
 import { getOpenConversationCounts, isThreadResolved, getResolvedThreads, setThreadResolved } from '../utils/openConversations.js';
+import { isPlanReadOnly } from '../utils/planAccess.js';
 import { renderPublicReactions, renderAggregatedCommunityFeed } from './publicCatalog.js';
 
 // ===== MODULE STATE =====
@@ -69,7 +72,8 @@ function messageMatchesScope(message) {
 }
 
 
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '🔥', '🎉', '😮', '👀', '💯'];
+// The scored collab set, everywhere (so every reaction feeds the sentiment summary).
+const QUICK_REACTIONS = COLLAB_REACTIONS;
 
 // Only transient view preferences travel across a full session navigation.
 export function getUCPWorkspacePreferences() {
@@ -792,7 +796,7 @@ function createTimelineMessage(message) {
     const header = document.createElement('div');
     header.className = 'ucp-msg-header';
     header.innerHTML = `
-        <span class="ucp-msg-sender">${escapeHtml(message.senderName)}</span>
+        <span class="ucp-msg-sender">${escapeHtml(message.senderName)}</span>${message.isDeleted ? '' : collabSupHTML('message', message.id, `${message.senderName}'s message`)}
         <span class="ucp-msg-time">${formatTime(message.timestamp)}</span>
     `;
     el.appendChild(header);
@@ -1663,7 +1667,7 @@ function createReplyMessage(reply) {
     const header = document.createElement('div');
     header.className = 'ucp-reply-header';
     header.innerHTML = `
-        <span class="ucp-reply-sender">${escapeHtml(reply.senderName)}</span>
+        <span class="ucp-reply-sender">${escapeHtml(reply.senderName)}</span>${reply.isDeleted ? '' : collabSupHTML('message', reply.id, `${reply.senderName}'s reply`)}
         <span class="ucp-reply-time">${formatTime(reply.timestamp)}</span>
     `;
     el.appendChild(header);
@@ -2740,3 +2744,49 @@ async function handleClearConversation() {
         showToast('Failed to clear conversation', 3000);
     }
 }
+
+// ===== Collab on chat messages (same interface as items) =====
+registerCollabKind('message', {
+    title: (id) => {
+        const m = findMessageById(id);
+        return m ? `${m.senderName}'s message` : 'this message';
+    },
+    sources: (id) => {
+        const m = findMessageById(id);
+        return [{ scope: 'plan', label: 'in this plan', icon: '👥', map: emojiUsersToMap(m?.reactions) }];
+    },
+    scopes: (id) => (findMessageById(id) && getCurrentUser() && !isPlanReadOnly() ? ['plan'] : []),
+    mine: (id) => {
+        const me = getCurrentUser();
+        return emojiUsersToMap(findMessageById(id)?.reactions).get(me?.id) || new Set();
+    },
+    toggle: async (id, scope, emoji) => {
+        const me = getCurrentUser();
+        const m = findMessageById(id);
+        if (!m || !me) return null;
+        const add = !(m.reactions?.[emoji] || []).includes(me.id);
+        await toggleReaction(id, emoji, add);
+        return add;
+    },
+    commentCount: (id) => findMessageById(id)?.replyCount || 0,
+    comment: async (id, scope, text) => {
+        const me = getCurrentUser();
+        const m = findMessageById(id);
+        if (!m || !me || !state.session?.id) return false;
+        const root = m.parentMessageId || m.id;
+        const result = await api.postReplyMessage(root, state.session.id, null, me.id, me.name, text);
+        if (result) await loadPanelData();
+        return !!result;
+    },
+    statusActions: (id) => {
+        const m = findMessageById(id);
+        if (!m || m.parentMessageId || isPlanReadOnly() || !getCurrentUser()) return [];
+        const links = state.eventDetails.combined.get('_commentTaskLinks') || {};
+        if (links[id]) return [{ label: '☑ View task', run: () => openTaskModalFromMessage(m) }];
+        const resolved = isThreadResolved(id);
+        return [
+            { label: '☑ Turn into task', run: () => openTaskModalFromMessage(m) },
+            { label: resolved ? '↺ Reopen chat' : '✓ Mark resolved', run: () => { setThreadResolved(id, !resolved, getCurrentUser()); renderContent(); } }
+        ];
+    }
+});

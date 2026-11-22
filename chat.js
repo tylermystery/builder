@@ -1,5 +1,6 @@
 // REPLACE THE ENTIRE CONTENTS OF: chat.js
 
+import { EMOJI_REACTIONS } from './config.js';
 import { state, setState } from './state.js';
 import { taskMessageText } from './utils/taskDiscussion.js';
 import { CONSTANTS } from './config.js';
@@ -1209,7 +1210,8 @@ function addEventToUI(messagesList, record) {
 }
 
 // Quick emoji reactions available for messages
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
+// The scored collab set, everywhere.
+const QUICK_REACTIONS = EMOJI_REACTIONS;
 
 // Track message being replied to
 let replyingToMessage = null;

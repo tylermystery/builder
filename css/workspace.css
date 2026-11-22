@@ -236,3 +236,87 @@ body.presentation-active #header-search-wrapper #filter-toggle-btn { display: no
     body.workspace-ready[data-workspace-surface="left"] #mobile-filter-backdrop,
     body.workspace-ready[data-workspace-surface="right"] #mobile-filter-backdrop { visibility: hidden !important; pointer-events: none !important; }
 }
+
+/* ===== Collab: superscript sentiment summary + shared collab menu ===== */
+.collab-sup {
+    display: inline-block;
+    margin-left: 3px;
+    padding: 0 2px;
+    font-size: 0.72em;
+    line-height: 1;
+    vertical-align: super;
+    cursor: pointer;
+    border-radius: 6px;
+    opacity: 0.45;
+    filter: grayscale(0.6);
+    transition: opacity 0.15s, filter 0.15s, transform 0.15s;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+.collab-sup.has-reactions { opacity: 1; filter: none; }
+.collab-sup:hover, .collab-sup:focus-visible, .collab-sup[aria-expanded="true"] {
+    opacity: 1; filter: none; transform: scale(1.2); outline: none;
+    background: rgba(139, 92, 246, 0.18);
+}
+.modal-collab-sup-host { display: inline-flex; align-items: flex-start; font-size: 1.4em; }
+.compact-card-title-row .collab-sup { flex-shrink: 0; font-size: 0.85em; }
+
+.collab-menu {
+    position: fixed;
+    z-index: 100000;
+    width: min(320px, calc(100vw - 16px));
+    padding: 12px;
+    border-radius: 14px;
+    background: #fff;
+    color: #222;
+    box-shadow: 0 12px 36px rgba(20, 10, 50, 0.28), 0 2px 6px rgba(0, 0, 0, 0.08);
+    font-size: 14px;
+    animation: collab-menu-in 0.12s ease-out;
+}
+@keyframes collab-menu-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.collab-menu-head { display: flex; gap: 10px; align-items: flex-start; }
+.collab-menu-emoji { font-size: 2em; line-height: 1; }
+.collab-menu-summary { min-width: 0; }
+.collab-menu-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.collab-menu-stage {
+    margin-left: 4px; padding: 1px 6px; border-radius: 8px; font-size: 0.72em; font-weight: 600;
+    background: rgba(139, 92, 246, 0.12); color: #6d28d9;
+}
+.collab-menu-meta { margin-top: 2px; font-size: 0.82em; color: #555; }
+.collab-menu-breakdown { margin-top: 2px; font-size: 0.76em; color: #888; }
+.collab-menu-scope { display: flex; gap: 6px; margin: 10px 0 0; }
+.collab-scope-btn {
+    flex: 1; padding: 4px 8px; border-radius: 12px; border: 1px solid #ddd; background: #fff;
+    font: inherit; font-size: 0.78em; color: #555; cursor: pointer;
+}
+.collab-scope-btn.active { background: #6d28d9; border-color: #6d28d9; color: #fff; }
+.collab-menu-reactions { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin: 10px 0 0; }
+.collab-react-btn {
+    position: relative; padding: 6px 0; border-radius: 10px; border: 1px solid transparent;
+    background: #f4f3f8; font-size: 1.15em; line-height: 1; cursor: pointer;
+    transition: transform 0.1s, background 0.1s;
+}
+.collab-react-btn:hover, .collab-react-btn:focus-visible { transform: scale(1.12); background: #ece8fb; outline: none; }
+.collab-react-btn.mine { background: #ede4ff; border-color: #8b5cf6; }
+.collab-react-count {
+    position: absolute; top: -5px; right: -3px; min-width: 15px; padding: 0 3px; border-radius: 8px;
+    background: #6d28d9; color: #fff; font-size: 0.55em; font-weight: 700; line-height: 15px; text-align: center;
+}
+.collab-menu-note { margin-top: 10px; font-size: 0.82em; color: #777; }
+.collab-menu-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.collab-menu-actions:empty { display: none; }
+.collab-menu-action {
+    padding: 5px 10px; border-radius: 12px; border: 1px solid #e2def3; background: #fff;
+    font: inherit; font-size: 0.8em; color: #4c1d95; cursor: pointer;
+}
+.collab-menu-action:hover, .collab-menu-action:focus-visible { background: #f5f2ff; outline: none; }
+.collab-menu-action.is-status { color: #333; }
+.collab-menu-compose { display: flex; gap: 6px; margin-top: 8px; }
+.collab-menu-compose[hidden] { display: none; }
+.collab-menu-compose textarea {
+    flex: 1; resize: none; padding: 6px 8px; border-radius: 10px; border: 1px solid #ddd; font: inherit; font-size: 0.85em;
+}
+.collab-menu-compose button {
+    padding: 0 12px; border: none; border-radius: 10px; background: #6d28d9; color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+}
+@media (prefers-reduced-motion: reduce) { .collab-menu { animation: none; } .collab-sup, .collab-react-btn { transition: none; } }

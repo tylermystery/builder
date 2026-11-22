@@ -7,7 +7,8 @@ function loadModule(path, globals) {
     const source = fs.readFileSync(path, 'utf8')
         .replace(/^import .*;\n/gm, '')
         .replace(/^export /gm, '');
-    const context = vm.createContext({ console: { log() {}, warn() {} }, ...globals });
+    const context = vm.createContext({ console: { log() {}, warn() {} },
+        COLLAB_REACTIONS: ['🚀', '🔥'], EMOJI_REACTIONS: ['🚀', '🔥'], registerCollabKind() {}, collabSupHTML: () => '', emojiUsersToMap: () => new Map(), ...globals });
     vm.runInContext(source, context);
     return code => vm.runInContext(code, context);
 }

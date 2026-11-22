@@ -324,8 +324,18 @@ export function handleReactionClick(e) {
         return;
     }
 
-    const emoji = button.dataset.emoji;
+    togglePlanReaction(recordId, button.dataset.emoji);
+}
+
+/**
+ * Toggle the current user's plan reaction on an item (plan scope: saved with the
+ * plan, visible to its collaborators). Shared by the item reaction buttons and the
+ * collab control. Returns whether the emoji is now set, or null when not allowed.
+ */
+export function togglePlanReaction(recordId, emoji) {
+    if (!recordId || !emoji) return null;
     const currentUser = getCurrentUser();
+    if (!currentUser?.id) return null;
 
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, new Map());
@@ -379,4 +389,5 @@ export function handleReactionClick(e) {
     broadcastReactionUpdate(recordId, itemReactions, currentUser.id);
 
     triggerSave();
+    return itemReactions.get(currentUser.id)?.has?.(emoji) || false;
 }

@@ -17,6 +17,7 @@ import { createCalendarExportButtons, initializeCalendarExportListeners, resolve
 import { initializeDetailModalLayout } from '../utils/detailModalLayout.js';
 import { activateWorkspaceSurface } from '../utils/workspace.js';
 import { setUCPItemScope, openUCPForItem, openUCPGlobalForItem } from './unifiedChatPanel.js';
+import { collabSupHTML } from './collab/collabControl.js';
 import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
 import { openActionMenu } from './actionMenu.js';
@@ -2314,9 +2315,19 @@ function updateModalSentimentChips(recordId) {
         if (globalChip) globalChip.style.display = 'none';
         return;
     }
-    // Store-wide ("global item") reactions are retired from the detail view; the plan's
-    // own reactions, comments and tasks cover this. The chip stays hidden.
-    if (globalChip) globalChip.style.display = 'none';
+    // The collab superscript: one combined sentiment summary (this plan + community),
+    // opening the shared collab menu on hover or tap.
+    if (globalChip) {
+        const record = getRecordById(recordId);
+        globalChip.className = 'modal-collab-sup-host';
+        globalChip.removeAttribute('role');
+        globalChip.removeAttribute('tabindex');
+        globalChip.removeAttribute('aria-label');
+        globalChip.onclick = null;
+        globalChip.onkeydown = null;
+        globalChip.innerHTML = collabSupHTML('item', recordId, record?.fields?.Name || '');
+        globalChip.style.display = 'inline-flex';
+    }
 }
 
 // ── Anchored sentiment popup (chat-message style) ───────────────────────────
@@ -2450,8 +2461,8 @@ async function toggleScopeReaction(recordId, scope, emoji, anchorEl) {
     } else {
         const record = getRecordById(recordId);
         if (!record) return;
-        const ok = await toggleCommunityReactionForRecord(record, emoji);
-        if (!ok) return; // signed out (sign-in prompt shown) or errored
+        const result = await toggleCommunityReactionForRecord(record, emoji);
+        if (result === null) return; // errored
     }
     updateModalSentimentChips(recordId);
     // If the popup was opened from a catalog card's sentiment chip (beta "Sort by:

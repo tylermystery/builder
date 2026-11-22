@@ -8,6 +8,7 @@ import { log } from '../../utils/debug.js';
 import { renderRichText } from '../../utils.js';
 import { applyCloudinaryFitTransform, getImageOrientationClass } from '../../utils/imageOptimizer.js';
 import { renderCollabBoard, isCollabBoardToggled, initCollabBoardToggle } from './collabBoard.js';
+import { collabSupHTML } from '../collab/collabControl.js';
 import { getOpenConversationCounts, getOpenCountsForItems, describeOpenCounts } from '../../utils/openConversations.js';
 
 // Track loaded images for each item
@@ -729,7 +730,7 @@ export async function renderCompactCard(item) {
             <div class="compact-card-body">
                 <div class="compact-card-title-row">
                     ${goalBadgeHTML}
-                    <h4 class="compact-card-name" title="${escapeHtml(name)}">${escapeHtml(name)}</h4>
+                    <h4 class="compact-card-name" title="${escapeHtml(name)}">${escapeHtml(name)}</h4>${collabSupHTML('item', recordId, name)}
                     ${sourceTypeBadgeHTML}
                 </div>
                 ${provenanceHTML}

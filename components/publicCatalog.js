@@ -27,6 +27,7 @@ import { EMOJI_REACTIONS, computeDemocraticAverage } from '../config.js';
 import { showUserModal } from '../auth.js';
 import { showToast } from '../ui.js';
 import { togglePendingReaction, queuePendingComment } from '../utils/pendingCollab.js';
+import { collabSupHTML } from './collab/collabControl.js';
 import { log } from '../utils/debug.js';
 
 export const PUBLIC_IDEA_STATUS = 'Public Idea';
@@ -1039,20 +1040,58 @@ export function getCommunitySentimentScore(record) {
  * same path the inline community picker uses.
  * @returns {Promise<boolean>} true if applied, false if blocked (signed out) or errored.
  */
-export async function toggleCommunityReactionForRecord(record, emoji) {
-    if (!record) return false;
-    if (!requireSignIn()) return false; // (only used by the retired global popup)
+export async function toggleCommunityReactionForRecord(record, emoji, variationId = null) {
+    if (!record) return null;
     const row = getOrInitCommunityRow(record);
-    if (!row) return false;
+    if (!row) return null;
     const me = currentUser();
+    const signedIn = !!state.session?.user?.isAuthenticated;
     // No container yet -> send catalog identity so the server creates one.
-    const result = await api.togglePublicReaction(
-        row.id, emoji, null, row.id == null ? communityWriteOpts(record) : {});
-    if (!result) return false;
+    const writeOpts = row.id == null ? communityWriteOpts(record) : {};
+    const result = signedIn
+        ? await api.togglePublicReaction(row.id, emoji, variationId, writeOpts)
+        : holdGuestReaction(row.id, emoji, variationId, writeOpts);
+    if (!result) return null;
     if (row.id == null && result.publicItemId != null) row.id = result.publicItemId;
-    applyReactionToggle(row, emoji, me.id, result.reacted);
-    return true;
+    const target = variationId != null ? (row.variations || []).find(v => v.id === variationId) : row;
+    if (target) applyReactionToggle(target, emoji, me.id || GUEST_ID, result.reacted);
+    return !!result.reacted;
 }
+
+/** Add a community comment to an item (held until sign-in for signed-out visitors). */
+export async function addCommunityCommentForRecord(record, text, variationId = null) {
+    if (!record || !text) return null;
+    const row = getOrInitCommunityRow(record);
+    if (!row) return null;
+    const writeOpts = row.id == null ? communityWriteOpts(record) : {};
+    if (!state.session?.user?.isAuthenticated) {
+        holdGuestComment(row.id, text, writeOpts);
+        return { held: true };
+    }
+    const created = await api.addPublicComment(row.id, text, currentUser().name, variationId, writeOpts);
+    if (!created) return null;
+    if (row.id == null && created.publicItemId != null) row.id = created.publicItemId;
+    const target = variationId != null ? (row.variations || []).find(v => v.id === variationId) : row;
+    if (target) { target.comments = target.comments || []; target.comments.push(created); }
+    return created;
+}
+
+/** Community reaction summary as Map<userId, Set<emoji>> (item, or one variation). */
+export function communityUserMapForRecord(record, variationId = null) {
+    const row = record ? getCommunityRowForRecord(record) : null;
+    if (!row) return new Map();
+    const target = variationId != null ? (row.variations || []).find(v => v.id === variationId) : row;
+    return communityRowToUserMap(target || null);
+}
+
+export function communityCommentCountForRecord(record, variationId = null) {
+    const row = record ? getCommunityRowForRecord(record) : null;
+    if (!row) return 0;
+    const target = variationId != null ? (row.variations || []).find(v => v.id === variationId) : row;
+    return (target?.comments || []).length;
+}
+
+export { GUEST_ID as COLLAB_GUEST_ID };
 
 function communityRowActivity(row) {
     const reactionTotal = Object.values(row?.reactions || {}).reduce((s, r) => s + (r.count || 0), 0);
@@ -1642,7 +1681,9 @@ function buildVariationCard(ctx, variation, index) {
     card.innerHTML = `
         <div class="variation-card-head">
             <span class="variation-source">${sourceBadge}</span>
-            <span class="variation-title">${escapeHtml(title)}</span>
+            <span class="variation-title">${escapeHtml(title)}</span>${variation
+                ? collabSupHTML('variant', `${record.id}::${variation.id}`, title)
+                : collabSupHTML('item', record.id, fields.Name || title)}
             <span class="variation-author">by ${escapeHtml(author)}</span>
             ${priceText}
             <span class="variation-chips">${chips.join('')}</span>
