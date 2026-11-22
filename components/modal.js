@@ -17,8 +17,6 @@ import { createCalendarExportButtons, initializeCalendarExportListeners, resolve
 import { initializeDetailModalLayout } from '../utils/detailModalLayout.js';
 import { activateWorkspaceSurface } from '../utils/workspace.js';
 import { setUCPItemScope, openUCPForItem, openUCPGlobalForItem } from './unifiedChatPanel.js';
-import { collabSupHTML } from './collab/collabControl.js';
-import { renderCollabDetail, initCollabDetail } from './collab/collabDetail.js';
 import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
 import { openActionMenu } from './actionMenu.js';
@@ -2316,19 +2314,8 @@ function updateModalSentimentChips(recordId) {
         if (globalChip) globalChip.style.display = 'none';
         return;
     }
-    // The collab superscript: one combined sentiment summary (this plan + community),
-    // opening the shared collab menu on hover or tap.
-    if (globalChip) {
-        const record = getRecordById(recordId);
-        globalChip.className = 'modal-collab-sup-host';
-        globalChip.removeAttribute('role');
-        globalChip.removeAttribute('tabindex');
-        globalChip.removeAttribute('aria-label');
-        globalChip.onclick = null;
-        globalChip.onkeydown = null;
-        globalChip.innerHTML = collabSupHTML('item', recordId, record?.fields?.Name || '');
-        globalChip.style.display = 'inline-flex';
-    }
+    // Collab lives in the conversations panel; the detail view has no reaction control.
+    if (globalChip) globalChip.style.display = 'none';
 }
 
 // ── Anchored sentiment popup (chat-message style) ───────────────────────────
@@ -6429,7 +6416,6 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     modalItemDescription.innerHTML = renderRichText(displayDescription);
     void renderSimilarOfferings(record);
     renderItemVariations(document.getElementById('modal-item-variations'), record);
-    renderCollabDetail(document.getElementById('modal-collab-section'), record);
 
     // Show "Combined from" indicator for hybrid merged items
     const existingMergeInfo = document.querySelector('.modal-merge-info');

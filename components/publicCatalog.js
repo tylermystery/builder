@@ -27,7 +27,6 @@ import { EMOJI_REACTIONS, computeDemocraticAverage } from '../config.js';
 import { showUserModal } from '../auth.js';
 import { showToast } from '../ui.js';
 import { togglePendingReaction, queuePendingComment } from '../utils/pendingCollab.js';
-import { collabSupHTML } from './collab/collabControl.js';
 import { log } from '../utils/debug.js';
 
 export const PUBLIC_IDEA_STATUS = 'Public Idea';
@@ -1739,9 +1738,7 @@ function buildVariationCard(ctx, variation, index) {
     card.innerHTML = `
         <div class="variation-card-head">
             <span class="variation-source">${sourceBadge}</span>
-            <span class="variation-title">${escapeHtml(title)}</span>${variation
-                ? collabSupHTML('variant', `${record.id}::${variation.id}`, title)
-                : collabSupHTML('item', record.id, fields.Name || title)}
+            <span class="variation-title">${escapeHtml(title)}</span>
             <span class="variation-author">by ${escapeHtml(author)}</span>
             ${priceText}
             <span class="variation-chips">${chips.join('')}</span>

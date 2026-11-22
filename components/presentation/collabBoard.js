@@ -13,6 +13,7 @@ import {
     isPublicIdeaRecord, getCollabScore, collabStageOf, collabStatusOf, COLLAB_STAGE_LABELS, whenPublicIdeasLoaded
 } from '../publicCatalog.js';
 import { showDetailModal } from '../modal.js';
+import { collabSupHTML } from '../collab/collabControl.js';
 import { optimizeImageUrl } from '../../utils/imageOptimizer.js';
 
 let showingBoard = false;      // board toggled on while the plan has items
@@ -62,7 +63,7 @@ function cardHTML(record) {
             <span class="collab-board-photo"${img ? ` style="background-image:url('${esc(img)}')"` : ''}>${img ? '' : '💡'}</span>
             <span class="collab-board-body">
                 <span class="collab-board-stage">${esc(stageLabel)}</span>
-                <span class="collab-board-name">${esc(record.fields?.Name || 'Untitled idea')}</span>
+                <span class="collab-board-name">${esc(record.fields?.Name || 'Untitled idea')}${collabSupHTML('item', record.id, record.fields?.Name || '')}</span>
                 <span class="collab-board-feedback">${reactions} reaction${reactions === 1 ? '' : 's'} · ${comments} comment${comments === 1 ? '' : 's'}</span>
             </span>
         </button>`;

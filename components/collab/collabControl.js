@@ -26,8 +26,6 @@ import { taskMessageText } from '../../utils/taskDiscussion.js';
 
 const adapters = new Map();
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const HOVER_OPEN_MS = 250;
-const HOVER_CLOSE_MS = 350;
 
 /**
  * Adapter shape (all functions receive the thing's id):
@@ -97,245 +95,187 @@ export function refreshCollabSups(kind = null, id = null) {
     });
 }
 
-// ===== The collab menu =====
+// ===== Selecting a superscript =====
+//
+// Everything collab happens in the conversations panel:
+//   • an item's (or version's) superscript opens the panel scoped to that item —
+//     its reactions, status and combined conversation;
+//   • a message or comment superscript inside the panel opens a one-click reaction
+//     row right under that message.
 
-let openState = null; // { anchor, kind, id, scope, pinned, el }
-let openTimer = null;
-let closeTimer = null;
+const ITEM_KINDS = new Set(['item', 'variant']);
 
-function closeMenu() {
-    clearTimeout(openTimer);
-    clearTimeout(closeTimer);
-    openState?.el?.remove();
-    openState?.anchor?.setAttribute('aria-expanded', 'false');
-    openState = null;
+function recordIdFor(kind, id) {
+    if (kind === 'variant') return String(id).slice(0, String(id).lastIndexOf('::'));
+    return id;
 }
 
-function position(menu, anchor) {
-    const r = anchor.getBoundingClientRect();
-    const w = menu.offsetWidth;
-    const h = menu.offsetHeight;
-    let left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), window.innerWidth - w - 8);
-    let top = r.bottom + 6;
-    if (top + h > window.innerHeight - 8 && r.top - h - 6 > 8) top = r.top - h - 6;
-    menu.style.left = `${Math.max(8, left)}px`;
-    menu.style.top = `${Math.max(8, top)}px`;
+async function openPanelForItem(recordId) {
+    const { openUCPConversations } = await import('../unifiedChatPanel.js');
+    openUCPConversations(recordId);
 }
 
-function renderMenu() {
-    if (!openState) return;
-    const { kind, id, anchor } = openState;
+function closeInlineRows(except = null) {
+    document.querySelectorAll('.collab-inline-react').forEach(row => {
+        if (row === except) return;
+        row.previousSupEl?.setAttribute?.('aria-expanded', 'false');
+        row.remove();
+    });
+}
+
+function renderInlineRow(sup) {
+    const kind = sup.dataset.collabKind;
+    const id = sup.dataset.collabId;
     const adapter = adapters.get(kind);
-    if (!adapter) return closeMenu();
-    const scopes = adapter.scopes(id) || [];
-    if (!openState.scope || !scopes.includes(openState.scope)) openState.scope = scopes[0] || null;
-    const scope = openState.scope;
-    const sources = adapter.sources(id) || [];
-    const s = summarizeReactions(mergeReactionMaps(...sources.map(x => x.map)));
+    if (!adapter) return;
+    const host = sup.closest('[data-collab-inline-host]') || sup.parentElement;
+    const existing = host.querySelector(':scope > .collab-inline-react');
+    const scope = (adapter.scopes(id) || [])[0] || null;
+    const s = summaryFor(kind, id);
     const mine = scope ? (adapter.mine(id, scope) || new Set()) : new Set();
-    const comments = adapter.commentCount ? adapter.commentCount(id) : 0;
-    const stage = adapter.stage ? adapter.stage(id) : '';
-    const openSummary = adapter.openSummary ? adapter.openSummary(id) : '';
-    const latest = adapter.latestComments ? adapter.latestComments(id) : [];
-    const chatBlock = (openSummary || latest.length) ? `<div class="collab-menu-chats">
-            ${openSummary ? `<div class="collab-menu-chats-summary">💬 ${esc(openSummary)}</div>` : ''}
-            ${latest.map(c => `<div class="collab-menu-comment"><span class="collab-menu-comment-scope">${c.scope === 'plan' ? '👥' : '🌐'}</span><strong>${esc(c.author)}:</strong> ${esc(String(c.text).slice(0, 90))}${String(c.text).length > 90 ? '…' : ''}</div>`).join('')}
-        </div>` : '';
-    const breakdown = sources.length > 1
-        ? sources.map(x => `${x.icon} ${summarizeReactions(x.map).people} ${esc(x.label)}`).join(' · ')
-        : '';
-
-    const el = openState.el || document.createElement('div');
-    el.className = 'collab-menu';
-    el.setAttribute('role', 'dialog');
-    el.setAttribute('aria-label', `Collab on ${adapter.title(id)}`);
-    el.innerHTML = `
-        <div class="collab-menu-head">
-            <span class="collab-menu-emoji" aria-hidden="true">${s.has ? esc(s.emoji) : '☺'}</span>
-            <div class="collab-menu-summary">
-                <div class="collab-menu-title">${esc(adapter.title(id))}${stage ? ` <span class="collab-menu-stage">${esc(stage)}</span>` : ''}</div>
-                <div class="collab-menu-meta">${s.has
-                    ? `<strong>${esc(s.label)}</strong> (${s.score >= 0 ? '+' : ''}${s.score.toFixed(1)}) · ${s.total} reaction${s.total === 1 ? '' : 's'} from ${s.people} ${s.people === 1 ? 'person' : 'people'}`
-                    : 'No reactions yet. Be the first to weigh in.'}${comments ? ` · 💬 ${comments}` : ''}</div>
-                ${breakdown ? `<div class="collab-menu-breakdown">${breakdown}</div>` : ''}
-            </div>
-        </div>
-        ${scopes.length > 1 ? `<div class="collab-menu-scope" role="group" aria-label="React for">
-            ${scopes.map(sc => {
-                const src = sources.find(x => x.scope === sc) || { label: sc, icon: '' };
-                return `<button type="button" class="collab-scope-btn${sc === scope ? ' active' : ''}" data-scope="${esc(sc)}" aria-pressed="${sc === scope}">${src.icon} ${esc(src.label)}</button>`;
-            }).join('')}</div>` : ''}
-        ${scope ? `<div class="collab-menu-reactions" role="group" aria-label="React">
-            ${COLLAB_REACTIONS.map(emoji => `<button type="button" class="collab-react-btn${mine.has(emoji) ? ' mine' : ''}" data-emoji="${esc(emoji)}" aria-pressed="${mine.has(emoji)}" title="${esc(emoji)}">${esc(emoji)}${s.counts[emoji] ? `<span class="collab-react-count">${s.counts[emoji]}</span>` : ''}</button>`).join('')}
-        </div>` : '<div class="collab-menu-note">Sign in to collab on this.</div>'}
-        ${chatBlock}
-        <div class="collab-menu-actions"></div>
-        <form class="collab-menu-compose" hidden>
-            <textarea rows="2" placeholder="Add a comment…" aria-label="Comment"></textarea>
-            <button type="submit">Post</button>
-        </form>`;
-
-    const actions = el.querySelector('.collab-menu-actions');
-    const addAction = (label, run, cls = '') => {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = `collab-menu-action ${cls}`;
-        b.textContent = label;
-        b.addEventListener('click', (e) => { e.stopPropagation(); run(b); });
-        actions.appendChild(b);
-    };
-    if (adapter.comment && scope) {
-        addAction('💬 Comment', () => {
-            const form = el.querySelector('.collab-menu-compose');
-            form.hidden = !form.hidden;
-            openState.pinned = true;
-            if (!form.hidden) form.querySelector('textarea').focus();
-            position(el, anchor);
-        });
-    }
-    if (adapter.openConversation) addAction('See conversation', () => { const sc = scope; closeMenu(); adapter.openConversation(id, sc); });
-    if (adapter.moreDetails) addAction('More details →', () => { closeMenu(); adapter.moreDetails(id); }, 'is-more');
-    for (const action of (adapter.statusActions ? adapter.statusActions(id) : [])) {
-        addAction(action.label, async () => { closeMenu(); await action.run(); refreshCollabSups(kind, id); }, 'is-status');
-    }
-
-    el.querySelectorAll('.collab-scope-btn').forEach(b => b.addEventListener('click', (e) => {
+    const row = existing || document.createElement('div');
+    row.className = 'collab-inline-react';
+    row.setAttribute('role', 'group');
+    row.setAttribute('aria-label', `React to ${adapter.title(id)}`);
+    row.innerHTML = scope
+        ? COLLAB_REACTIONS.map(emoji => `<button type="button" class="collab-react-btn${mine.has(emoji) ? ' mine' : ''}" data-emoji="${esc(emoji)}" aria-pressed="${mine.has(emoji)}">${esc(emoji)}${s.counts[emoji] ? `<span class="collab-react-count">${s.counts[emoji]}</span>` : ''}</button>`).join('')
+        : '<span class="collab-menu-note">Sign in to react.</span>';
+    row.querySelectorAll('.collab-react-btn').forEach(b => b.addEventListener('click', async (e) => {
         e.stopPropagation();
-        openState.scope = b.dataset.scope;
-        openState.pinned = true;
-        renderMenu();
-    }));
-    el.querySelectorAll('.collab-react-btn').forEach(b => b.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        openState.pinned = true;
         b.disabled = true;
-        const result = await adapter.toggle(id, scope, b.dataset.emoji);
-        if (result === null) b.disabled = false;
+        await adapter.toggle(id, scope, b.dataset.emoji);
         refreshCollabSups(kind, id);
-        window.dispatchEvent(new CustomEvent('collab-updated', { detail: { kind, id } }));
-        if (openState && openState.kind === kind && openState.id === id) renderMenu();
+        const freshSup = document.querySelector(`.collab-sup[data-collab-kind="${CSS.escape(kind)}"][data-collab-id="${CSS.escape(String(id))}"]`);
+        if (freshSup) renderInlineRow(freshSup); else row.remove();
     }));
-    el.querySelector('.collab-menu-compose')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const ta = e.currentTarget.querySelector('textarea');
-        const text = ta.value.trim();
-        if (!text) return ta.focus();
-        const ok = await adapter.comment(id, scope, text);
-        if (ok) {
-            ta.value = '';
-            refreshCollabSups(kind, id);
-            renderMenu();
-        } else {
-            showToast('Could not post that comment.', 3000, 'error');
-        }
-    });
-    el.querySelector('.collab-menu-compose textarea')?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); e.currentTarget.form.requestSubmit(); }
-    });
-
-    if (!openState.el) {
-        openState.el = el;
-        el.addEventListener('pointerenter', () => clearTimeout(closeTimer));
-        el.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' && !openState?.pinned) scheduleClose(); });
-        document.body.appendChild(el);
-    }
-    position(el, anchor);
+    row.previousSupEl = sup;
+    if (!existing) host.appendChild(row);
+    sup.setAttribute('aria-expanded', 'true');
+    closeInlineRows(row);
 }
 
-function openMenu(anchor, pinned) {
-    const kind = anchor.dataset.collabKind;
-    const id = anchor.dataset.collabId;
-    if (!adapters.has(kind)) return;
-    if (openState && openState.anchor === anchor) {
-        if (pinned) openState.pinned = true;
+function activateSup(sup) {
+    const kind = sup.dataset.collabKind;
+    if (ITEM_KINDS.has(kind)) {
+        closeInlineRows();
+        openPanelForItem(recordIdFor(kind, sup.dataset.collabId));
         return;
     }
-    closeMenu();
-    openState = { anchor, kind, id, scope: null, pinned, el: null };
-    anchor.setAttribute('aria-expanded', 'true');
-    renderMenu();
+    const host = sup.closest('[data-collab-inline-host]') || sup.parentElement;
+    const open = host?.querySelector(':scope > .collab-inline-react');
+    if (open) { open.remove(); sup.setAttribute('aria-expanded', 'false'); }
+    else renderInlineRow(sup);
 }
 
-/** The status actions a thing offers this person (same list the menu shows). */
+/** Where an item's reactions and comments go right now ('plan' | 'community' | null). */
+export function resolveItemScope(recordId, preferred = null) {
+    const scopes = adapters.get('item')?.scopes(recordId) || [];
+    return scopes.includes(preferred) ? preferred : (scopes[0] || null);
+}
+
+/** The status actions a thing offers this person. */
 export function getCollabStatusActions(kind, id) {
     const adapter = adapters.get(kind);
     return adapter?.statusActions ? adapter.statusActions(id) : [];
 }
 
-/** Open the collab menu for the superscript inside (or equal to) `el`. */
+/** Act as if the superscript inside (or equal to) `el` was selected. */
 export function openCollabMenuFor(el) {
     const sup = el?.classList?.contains('collab-sup') ? el : el?.querySelector?.('.collab-sup');
     if (!sup) return false;
-    openMenu(sup, true);
-    openState?.el?.querySelector('.collab-react-btn, button')?.focus();
+    activateSup(sup);
     return true;
 }
 
-function scheduleClose() {
-    clearTimeout(closeTimer);
-    closeTimer = setTimeout(() => { if (!openState?.pinned) closeMenu(); }, HOVER_CLOSE_MS);
+/**
+ * The item header shown at the top of the conversations panel when it is scoped
+ * to one item: combined summary, 👥/🌐 breakdown, one-click reactions with the
+ * This plan / Community choice (which also decides where comments go), and the
+ * status actions this person may take.
+ * @param {string} recordId
+ * @param {{ scope: string|null, onScopeChange: Function, onChange: Function }} opts
+ */
+export function buildItemCollabHeader(recordId, { scope = null, onScopeChange = () => {}, onChange = () => {} } = {}) {
+    const adapter = adapters.get('item');
+    const el = document.createElement('div');
+    el.className = 'ucp-item-collab';
+    if (!adapter || !getRecordById(recordId)) return el;
+    const scopes = adapter.scopes(recordId) || [];
+    const active = scopes.includes(scope) ? scope : scopes[0] || null;
+    const sources = adapter.sources(recordId) || [];
+    const s = summarizeReactions(mergeReactionMaps(...sources.map(x => x.map)));
+    const mine = active ? (adapter.mine(recordId, active) || new Set()) : new Set();
+    const stage = adapter.stage ? adapter.stage(recordId) : '';
+    const open = adapter.openSummary ? adapter.openSummary(recordId) : '';
+    el.innerHTML = `
+        <div class="collab-menu-head">
+            <span class="collab-menu-emoji" aria-hidden="true">${s.has ? esc(s.emoji) : '☺'}</span>
+            <div class="collab-menu-summary">
+                <div class="collab-menu-title">${esc(adapter.title(recordId))}${stage ? ` <span class="collab-menu-stage">${esc(stage)}</span>` : ''}</div>
+                <div class="collab-menu-meta">${s.has
+                    ? `<strong>${esc(s.label)}</strong> (${s.score >= 0 ? '+' : ''}${s.score.toFixed(1)}) · ${s.total} reaction${s.total === 1 ? '' : 's'} from ${s.people} ${s.people === 1 ? 'person' : 'people'}`
+                    : 'No reactions yet. Be the first to weigh in.'}</div>
+                <div class="collab-menu-breakdown">${sources.map(x => `${x.icon} ${summarizeReactions(x.map).people} ${esc(x.label)}`).join(' · ')}${open ? ` · 💬 ${esc(open)}` : ''}</div>
+            </div>
+        </div>
+        ${scopes.length > 1 ? `<div class="collab-menu-scope" role="radiogroup" aria-label="React and comment for">
+            ${scopes.map(sc => `<button type="button" role="radio" class="collab-scope-btn${sc === active ? ' active' : ''}" data-scope="${esc(sc)}" aria-checked="${sc === active}">${sc === 'plan' ? '👥 This plan' : '🌐 Community'}</button>`).join('')}
+        </div>` : ''}
+        ${active ? `<div class="collab-menu-reactions" role="group" aria-label="React">
+            ${COLLAB_REACTIONS.map(emoji => `<button type="button" class="collab-react-btn${mine.has(emoji) ? ' mine' : ''}" data-emoji="${esc(emoji)}" aria-pressed="${mine.has(emoji)}" title="${esc(emoji)}">${esc(emoji)}${s.counts[emoji] ? `<span class="collab-react-count">${s.counts[emoji]}</span>` : ''}</button>`).join('')}
+        </div>` : '<div class="collab-menu-note">Sign in to collab on this.</div>'}
+        <div class="collab-menu-actions"></div>`;
+    el.querySelectorAll('.collab-scope-btn').forEach(b => b.addEventListener('click', () => onScopeChange(b.dataset.scope)));
+    el.querySelectorAll('.collab-react-btn').forEach(b => b.addEventListener('click', async () => {
+        b.disabled = true;
+        await adapter.toggle(recordId, active, b.dataset.emoji);
+        refreshCollabSups('item', recordId);
+        window.dispatchEvent(new CustomEvent('collab-updated', { detail: { kind: 'item', id: recordId } }));
+        onChange();
+    }));
+    const actions = el.querySelector('.collab-menu-actions');
+    for (const action of getCollabStatusActions('item', recordId)) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'collab-menu-action is-status';
+        b.textContent = action.label;
+        b.addEventListener('click', async () => { await action.run(); refreshCollabSups('item', recordId); onChange(); });
+        actions.appendChild(b);
+    }
+    return el;
 }
 
 let wired = false;
 export function initCollabControl() {
     if (wired) return;
     wired = true;
-    // Capture phase, so tapping the superscript never also opens/drags the card under it.
+    // Capture phase, so selecting a superscript never also opens/drags the card under it.
     document.addEventListener('click', (e) => {
         const sup = e.target.closest?.('.collab-sup');
         if (sup) {
             e.preventDefault();
             e.stopPropagation();
-            if (openState?.anchor === sup && openState.pinned) closeMenu();
-            else openMenu(sup, true);
+            activateSup(sup);
             return;
         }
-        if (openState && !e.target.closest?.('.collab-menu')) closeMenu();
+        if (!e.target.closest?.('.collab-inline-react')) closeInlineRows();
     }, true);
     document.addEventListener('pointerdown', (e) => {
         if (e.target.closest?.('.collab-sup')) e.stopPropagation();
     }, true);
-    document.addEventListener('pointerover', (e) => {
-        if (e.pointerType !== 'mouse') return;
-        const sup = e.target.closest?.('.collab-sup');
-        if (!sup) return;
-        clearTimeout(closeTimer);
-        if (openState?.anchor === sup) return;
-        clearTimeout(openTimer);
-        openTimer = setTimeout(() => openMenu(sup, false), HOVER_OPEN_MS);
-    });
-    document.addEventListener('pointerout', (e) => {
-        if (e.pointerType !== 'mouse') return;
-        const sup = e.target.closest?.('.collab-sup');
-        if (!sup) return;
-        clearTimeout(openTimer);
-        if (openState?.anchor === sup && !openState.pinned && !e.relatedTarget?.closest?.('.collab-menu')) scheduleClose();
-    });
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && openState) {
-            const anchor = openState.anchor;
-            closeMenu();
-            anchor?.focus?.();
-            return;
-        }
+        if (e.key === 'Escape') { closeInlineRows(); return; }
         const sup = e.target.closest?.('.collab-sup');
         if (sup && (e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault();
             e.stopPropagation();
-            openMenu(sup, true);
-            openState?.el?.querySelector('button')?.focus();
+            activateSup(sup);
         }
     }, true);
-    window.addEventListener('scroll', () => { if (openState && !openState.pinned) closeMenu(); else if (openState) position(openState.el, openState.anchor); }, true);
-    window.addEventListener('resize', () => openState && position(openState.el, openState.anchor));
     // Reactions arrive from collaborators, saves and the community load: keep sups current.
     document.addEventListener('planStateChanged', () => refreshCollabSups());
     window.addEventListener('open-conversations-updated', () => refreshCollabSups());
-    window.addEventListener('collab-updated', (e) => {
-        if (e.detail?.kind) refreshCollabSups(e.detail.kind, e.detail.id);
-        if (openState && openState.kind === e.detail?.kind && openState.id === e.detail?.id) renderMenu();
-    });
+    window.addEventListener('collab-updated', (e) => refreshCollabSups(e.detail?.kind || null, e.detail?.id ?? null));
 }
 
 // ===== Adapters: items and their variants =====
@@ -428,12 +368,13 @@ registerCollabKind('item', {
         return !!created;
     },
     // The one full view for every access point: the item detail, opened at its Collab section.
+    // "Suggest a version" opens the item detail at its Versions list.
     moreDetails: async (id) => {
         const record = getRecordById(id);
         if (!record) return;
         const { showDetailModal } = await import('../modal.js');
         await showDetailModal(record);
-        setTimeout(() => document.getElementById('modal-collab-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+        setTimeout(() => document.getElementById('modal-item-variations')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
     },
     statusActions: (id) => {
         const record = getRecordById(id);

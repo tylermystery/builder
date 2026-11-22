@@ -10,7 +10,8 @@ import { showToast } from '../ui.js';
 import { showTaskModal } from './taskManager.js';
 import { loadProjectTasks, getProjectTaskLoadState } from '../utils/projectTasks.js';
 import { taskMessageId, taskMessageText } from '../utils/taskDiscussion.js';
-import { collabSupHTML, registerCollabKind } from './collab/collabControl.js';
+import { collabSupHTML, registerCollabKind, buildItemCollabHeader, resolveItemScope } from './collab/collabControl.js';
+import { communityCommentsForRecord, addCommunityCommentForRecord } from './publicCatalog.js';
 import { COLLAB_REACTIONS, emojiUsersToMap } from '../utils/collabSummary.js';
 import { getOpenConversationCounts, isThreadResolved, getResolvedThreads, setThreadResolved } from '../utils/openConversations.js';
 import { isPlanReadOnly } from '../utils/planAccess.js';
@@ -22,6 +23,8 @@ let sendChatMessageFn = null; // Setter-injected from chat.js to avoid circular 
 let panelOpen = false;
 let currentFilter = 'all'; // 'all' (the plan chat) | 'tasks' | 'history'. ('global' is retired.)
 let chatView = 'open'; // Chat tab: 'open' threads only, or 'all' including resolved/done
+let itemCollabScope = null; // scoped to an item: where reactions/comments go ('plan' | 'community')
+let sourceFilter = 'all';   // scoped to an item: 'all' | 'plan' | 'community' comments
 let ucpMessages = [];
 let messagesSessionId = null;
 let ucpPlanEvents = [];
@@ -49,6 +52,7 @@ function planIncludesItem(id) {
 // Local browsing scope is deliberately independent of shared live-stream focus.
 export function setUCPItemScope(itemId) {
     scopeSessionId = state.session?.id || null;
+    if ((itemId || null) !== selectedItemId) { itemCollabScope = null; sourceFilter = 'all'; }
     selectedItemId = itemId || null;
     scopeWasPlanItem = !!planIncludesItem(itemId);
     cancelReply();
@@ -652,20 +656,27 @@ function renderContent() {
 
     container.innerHTML = '';
 
-    let items = [];
-
-    switch (currentFilter) {
-        case 'all':
-            items = ucpMessages;
-            break;
-        default:
-            items = ucpMessages;
+    // Scoped to one item: its collab header (summary, reactions, status) on top.
+    if (selectedItemId) {
+        itemCollabScope = resolveItemScope(selectedItemId, itemCollabScope);
+        container.appendChild(buildItemCollabHeader(selectedItemId, {
+            scope: itemCollabScope,
+            onScopeChange: (sc) => { itemCollabScope = sc; renderContent(); },
+            onChange: () => renderContent()
+        }));
+        container.appendChild(buildSourceFilter());
     }
+
+    let items = sourceFilter === 'community' && selectedItemId ? [] : ucpMessages;
 
     items = items.filter(messageMatchesScope);
     const scopedCount = items.length;
     if (chatView === 'open') items = items.filter(msg => !isThreadDone(msg));
     renderChatViewChips(container, scopedCount - items.length);
+
+    // One combined timeline: this plan's chat plus the item's community comments.
+    const community = selectedItemId && sourceFilter !== 'plan' ? communityEntries(selectedItemId) : [];
+    items = [...items, ...community].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     if (items.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'ucp-empty';
@@ -688,7 +699,7 @@ function renderContent() {
             container.appendChild(divider);
             lastDateLabel = dateLabel;
         }
-        container.appendChild(createTimelineMessage(msg));
+        container.appendChild(msg.isCommunity ? createCommunityEntry(msg) : createTimelineMessage(msg));
     });
 
     updateInputPlaceholder();
@@ -717,7 +728,9 @@ function updateInputPlaceholder() {
 
     if (selectedItemId && currentFilter === 'all') {
         const name = getRecordById(selectedItemId)?.fields?.Name || 'this item';
-        input.placeholder = `Message about ${name}...`;
+        input.placeholder = resolveItemScope(selectedItemId, itemCollabScope) === 'community'
+            ? `Comment to the community about ${name}...`
+            : `Message the plan about ${name}...`;
         return;
     }
     // v3.8 Phase 3: Show focus item context in placeholder
@@ -739,6 +752,61 @@ function getEmptyMessage() {
         case 'tasks': return 'No tasks yet. Create one from any message or the Tasks panel.';
         default: return 'No conversations yet. Say hello!';
     }
+}
+
+// ===== Item scope: community comments in the combined timeline =====
+
+function buildSourceFilter() {
+    const row = document.createElement('div');
+    row.className = 'ucp-source-filter';
+    row.setAttribute('role', 'radiogroup');
+    row.setAttribute('aria-label', 'Show comments from');
+    for (const [value, label] of [['all', 'All'], ['plan', '👥 This plan'], ['community', '🌐 Community']]) {
+        const lab = document.createElement('label');
+        lab.innerHTML = `<input type="radio" name="ucp-source-filter" value="${value}"${sourceFilter === value ? ' checked' : ''}> ${label}`;
+        lab.querySelector('input').addEventListener('change', () => { sourceFilter = value; renderContent(); });
+        row.appendChild(lab);
+    }
+    return row;
+}
+
+function communityEntries(recordId) {
+    const record = getRecordById(recordId);
+    if (!record) return [];
+    const all = communityCommentsForRecord(record);
+    const tops = all.filter(c => c.parentId == null);
+    return tops.map(c => ({
+        isCommunity: true, recordId, id: c.id, senderName: c.author, content: c.text,
+        timestamp: c.at || new Date(0).toISOString(),
+        replies: all.filter(r => r.parentId === c.id)
+    }));
+}
+
+function createCommunityEntry(entry) {
+    const el = document.createElement('div');
+    el.className = 'ucp-msg ucp-msg-community';
+    el.setAttribute('data-collab-inline-host', '');
+    const supFor = (c) => collabSupHTML('ccomment', `${entry.recordId}::${c.id}`, `${c.senderName || c.author}'s comment`);
+    el.innerHTML = `
+        <div class="ucp-msg-header">
+            <span class="ucp-msg-scope" title="Community">🌐</span>
+            <span class="ucp-msg-sender">${escapeHtml(entry.senderName)}</span>${supFor(entry)}
+            <span class="ucp-msg-time">${formatTime(entry.timestamp)}</span>
+        </div>
+        <div class="ucp-msg-body">${formatMessageContent(entry.content)}</div>`;
+    for (const reply of entry.replies) {
+        const r = document.createElement('div');
+        r.className = 'ucp-community-reply';
+        r.setAttribute('data-collab-inline-host', '');
+        r.innerHTML = `
+            <div class="ucp-msg-header">
+                <span class="ucp-msg-sender">${escapeHtml(reply.author)}</span>${collabSupHTML('ccomment', `${entry.recordId}::${reply.id}`, `${reply.author}'s reply`)}
+                <span class="ucp-msg-time">${formatTime(reply.at)}</span>
+            </div>
+            <div class="ucp-msg-body">${formatMessageContent(reply.text)}</div>`;
+        el.appendChild(r);
+    }
+    return el;
 }
 
 function showEmptyState(message) {
@@ -774,6 +842,14 @@ function createTimelineMessage(message) {
     if (isResolved) classes += ' ucp-msg-resolved';
     el.className = classes;
     el.dataset.messageId = message.id;
+    el.setAttribute('data-collab-inline-host', '');
+    if (selectedItemId) {
+        const scopeMark = document.createElement('span');
+        scopeMark.className = 'ucp-msg-scope-mark';
+        scopeMark.title = 'This plan';
+        scopeMark.textContent = '👥';
+        el.appendChild(scopeMark);
+    }
 
     // Context badge for item comments (nested inline)
     if (message.componentId) {
@@ -1656,6 +1732,7 @@ function createReplyMessage(reply) {
     const el = document.createElement('div');
     el.className = 'ucp-reply';
     el.dataset.messageId = reply.id;
+    el.setAttribute('data-collab-inline-host', '');
 
     const header = document.createElement('div');
     header.className = 'ucp-reply-header';
@@ -1897,6 +1974,18 @@ async function handleMessageSubmit(e) {
     const input = document.getElementById('ucp-message-input');
     const message = input?.value?.trim();
     if (!message) return;
+
+    // Scoped to an item with "Community" chosen: post to the item's community thread.
+    if (selectedItemId && !replyingTo && resolveItemScope(selectedItemId, itemCollabScope) === 'community') {
+        const record = getRecordById(selectedItemId);
+        input.value = '';
+        autoSizeComposer(input);
+        const created = record ? await addCommunityCommentForRecord(record, message) : null;
+        if (!created) { input.value = message; showToast('Failed to post comment', 3000); return; }
+        shouldScrollToBottom = true;
+        renderContent();
+        return;
+    }
 
     const currentUser = getCurrentUser();
     if (!currentUser) {
