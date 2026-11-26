@@ -641,6 +641,79 @@ function syncUiWithUrl() {
 }
 
 
+// ===== Catalog setup deferred when the app opens straight into the plan view =====
+let pendingCatalogSetup = null;
+let catalogBackgroundStarted = false;
+
+function applyShopMarquee(activeShop) {
+    const marqueeContainer = document.getElementById('marquee-banner-container');
+    const marqueeTextElement = document.getElementById('marquee-text');
+
+    if (marqueeContainer && marqueeTextElement) {
+        const marqueeContent = activeShop.fields['Marquee Text'] || activeShop.fields.Description || '';
+
+        if (marqueeContent.trim()) {
+            marqueeTextElement.textContent = marqueeContent;
+
+            const textLength = marqueeContent.length;
+            const duration = Math.min(60, Math.max(10, textLength / 15));
+            marqueeTextElement.style.animationDuration = `${duration}s`;
+
+            marqueeContainer.style.display = 'block';
+            log('Main', `Marquee activated with text (duration: ${duration}s).`);
+        } else {
+            marqueeContainer.style.display = 'none';
+            log('Main', 'Marquee has no content, keeping it hidden.');
+        }
+    } else {
+        console.warn('Marquee container or text element not found.');
+    }
+}
+
+function startCatalogBackground() {
+    if (catalogBackgroundStarted) return;
+    catalogBackgroundStarted = true;
+    backgroundEngine.initBackgroundEngine();
+    backgroundEngine.loadEffect(fluidEffect, null);
+}
+
+/** Plan-driven catalog UI: header, plan sidebar, totals and the mobile "View Plan" bar. */
+function refreshCatalogPlanUI() {
+    ui.updateHeader();
+    ui.updateEventPlanSection();
+    ui.updateIdeasCarousel();
+    ui.updateTotalCost();
+    ui.updateEventPlanDateDisplay(); // Ensure date display is updated after session loads
+
+    const recordIds = Array.from(document.querySelectorAll('.event-card[data-record-id]')).map(card => card.dataset.recordId);
+    if (recordIds.length > 0) ui.batchUpdateCardIcons(recordIds);
+
+    // Verify no duplicate items after a short delay to ensure DOM updates complete
+    setTimeout(() => {
+        ui.verifyNoDuplicateItems();
+    }, 100);
+}
+
+// Leaving the plan view: finish any deferred catalog setup, and refresh catalog UI
+// that went stale while it was hidden.
+document.addEventListener('presentationViewHidden', () => {
+    setTimeout(() => {
+        // Switching plans hides and immediately re-shows the plan view; nothing to do then.
+        if (document.body.classList.contains('presentation-active')) return;
+        if (pendingCatalogSetup) {
+            const setup = pendingCatalogSetup;
+            pendingCatalogSetup = null;
+            try { setup(); } catch (e) { console.error('[Main] Deferred catalog setup failed:', e); }
+            return;
+        }
+        if (state.session.id) {
+            try { refreshCatalogPlanUI(); } catch (e) { console.error('[Main] Catalog refresh failed:', e); }
+        }
+        // The catalog background parks its render loop once settled; redraw after being hidden.
+        if (catalogBackgroundStarted) backgroundEngine.requestRender();
+    }, 0);
+});
+
 async function initialize() {
     console.log('[INIT DEBUG] ========== APP INITIALIZATION STARTED ==========');
     console.log('[INIT DEBUG] URL:', window.location.href);
@@ -774,19 +847,7 @@ async function initialize() {
         // Only update catalog-related UI components when NOT in presentation view
         if (!isInPresentationView) {
             console.log('[SESSION-READY] Updating UI components...');
-            ui.updateHeader();
-            ui.updateEventPlanSection();
-            ui.updateIdeasCarousel();
-            ui.updateTotalCost();
-            ui.updateEventPlanDateDisplay(); // Ensure date display is updated after session loads
-
-            const recordIds = Array.from(document.querySelectorAll('.event-card[data-record-id]')).map(card => card.dataset.recordId);
-            if (recordIds.length > 0) ui.batchUpdateCardIcons(recordIds);
-
-            // Verify no duplicate items after a short delay to ensure DOM updates complete
-            setTimeout(() => {
-                ui.verifyNoDuplicateItems();
-            }, 100);
+            refreshCatalogPlanUI();
         } else {
             console.log('[SESSION-READY] In presentation view - skipping catalog UI updates');
         }
@@ -1271,28 +1332,7 @@ async function initialize() {
 
         // Skip catalog-specific UI setup in presentation mode
         if (!isInPresentationMode) {
-            const marqueeContainer = document.getElementById('marquee-banner-container');
-            const marqueeTextElement = document.getElementById('marquee-text');
-
-            if (marqueeContainer && marqueeTextElement) {
-                const marqueeContent = activeShop.fields['Marquee Text'] || activeShop.fields.Description || '';
-
-                if (marqueeContent.trim()) {
-                    marqueeTextElement.textContent = marqueeContent;
-
-                    const textLength = marqueeContent.length;
-                    const duration = Math.min(60, Math.max(10, textLength / 15));
-                    marqueeTextElement.style.animationDuration = `${duration}s`;
-
-                    marqueeContainer.style.display = 'block';
-                    log('Main', `Marquee activated with text (duration: ${duration}s).`);
-                } else {
-                    marqueeContainer.style.display = 'none';
-                    log('Main', 'Marquee has no content, keeping it hidden.');
-                }
-            } else {
-                console.warn('Marquee container or text element not found.');
-            }
+            applyShopMarquee(activeShop);
         }
         ui.applyCartLabels(shopSettings.cartLabels);
         console.log('[INIT DEBUG] Calling initializeEventListeners...');
@@ -1480,12 +1520,26 @@ async function initialize() {
         if (!isInPresentationMode) {
             // Initialize background animation immediately so it loads first
             console.log('[INIT DEBUG] Initializing background engine...');
-            backgroundEngine.initBackgroundEngine();
-            console.log('[INIT DEBUG] Background engine initialized, loading fluid effect...');
-            backgroundEngine.loadEffect(fluidEffect, null);
-            console.log('[INIT DEBUG] Fluid effect loaded.');
+            startCatalogBackground();
         } else {
             console.log('[INIT DEBUG] Skipping background engine (presentation mode).');
+            // Opened straight into the plan view: the catalog pieces skipped above for a
+            // faster load are set up the first time the person leaves the plan view.
+            pendingCatalogSetup = () => {
+                applyShopMarquee(activeShop);
+                updateFooter(activeShop);
+                setupCalendarEventListeners();
+                initializeProjectsDashboard();
+                startCatalogBackground();
+                if (state.session.user.isAuthenticated && state.session.user.id) {
+                    api.fetchProjectHierarchy(state.session.user.id).then(projects => {
+                        updateProjectsData(projects);
+                    }).catch(err => {
+                        console.error('Failed to fetch project hierarchy:', err);
+                    });
+                }
+                if (state.session.id) refreshCatalogPlanUI();
+            };
         }
 
         console.log('[INIT DEBUG] ========== APP INITIALIZATION COMPLETE ==========');

@@ -3284,6 +3284,40 @@ body.presentation-active #chat-widget {
     border: 2px solid white;
 }
 
+/* Unread chat count on the floating conversations button (hidden when 0) */
+.chat-unread-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 6px;
+    box-sizing: border-box;
+    background-color: #e03131;
+    color: white;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid white;
+    pointer-events: none;
+}
+.chat-unread-badge[hidden] {
+    display: none;
+}
+.chat-unread-badge .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+
 #chat-window {
     width: 350px;
     height: 500px;

@@ -16,6 +16,7 @@ import { COLLAB_REACTIONS, emojiUsersToMap } from '../utils/collabSummary.js';
 import { getOpenConversationCounts, isThreadResolved, getResolvedThreads, setThreadResolved } from '../utils/openConversations.js';
 import { isPlanReadOnly } from '../utils/planAccess.js';
 import { renderPublicReactions, renderAggregatedCommunityFeed } from './publicCatalog.js';
+import { getChatLastRead, setChatPanelOpen } from './chatUnread.js';
 
 // ===== MODULE STATE =====
 let getCurrentUserFn = null;
@@ -37,6 +38,8 @@ let initialized = false;
 let shouldScrollToBottom = true;
 let hideCompleted = false; // Toggle to hide/show completed tasks and their linked comments
 let isFullscreen = false; // v3.8: Full-screen mode state
+let newSinceTime = null; // Messages from others after this moment are highlighted as new (set on open)
+let scrollToNewOnOpen = false; // First chat render after opening jumps to the "New" divider
 // Item context for the Global tab. When set (panel opened for a specific item),
 // the Global tab shows that item's community thread; otherwise it shows the
 // read-only aggregated community feed across the plan's items.
@@ -210,6 +213,11 @@ export async function showUnifiedChatPanel() {
     document.body.classList.add('ucp-panel-active');
     panelOpen = true;
     shouldScrollToBottom = true;
+    // Remember where this device last read up to, then mark everything read.
+    const lastRead = getChatLastRead(state.session?.id);
+    newSinceTime = lastRead ? new Date(lastRead).getTime() : null;
+    scrollToNewOnOpen = true;
+    setChatPanelOpen(true);
     // Keep the current tab and item context when reopening this workspace rail.
 
     populateAttachSelect();
@@ -232,6 +240,7 @@ export function hideUnifiedChatPanel() {
     document.body.classList.remove('ucp-panel-open');
     document.body.classList.remove('ucp-panel-active');
     panelOpen = false;
+    setChatPanelOpen(false);
 }
 
 export async function toggleUnifiedChatPanel() {
@@ -673,6 +682,7 @@ function renderContent() {
 
     // Group messages by date for the timeline
     let lastDateLabel = '';
+    let newDivider = null;
     items.forEach(msg => {
         const dateLabel = getDateLabel(msg.timestamp);
         if (dateLabel !== lastDateLabel) {
@@ -682,16 +692,32 @@ function renderContent() {
             container.appendChild(divider);
             lastDateLabel = dateLabel;
         }
+        if (!newDivider && !msg.isCommunity && isNewMessage(msg)) {
+            newDivider = document.createElement('div');
+            newDivider.className = 'ucp-new-divider';
+            newDivider.innerHTML = '<span>New</span>';
+            container.appendChild(newDivider);
+        }
         container.appendChild(msg.isCommunity ? createCommunityEntry(msg) : createTimelineMessage(msg));
     });
 
     updateInputPlaceholder();
 
-    // Scroll to bottom for chat-like experience
+    // Scroll to the first new message if there is one, otherwise to the bottom
     if (shouldScrollToBottom) {
-        container.scrollTop = container.scrollHeight;
+        container.scrollTop = newDivider && scrollToNewOnOpen
+            ? Math.max(0, container.scrollTop + newDivider.getBoundingClientRect().top - container.getBoundingClientRect().top - 8)
+            : container.scrollHeight;
         shouldScrollToBottom = false;
+        scrollToNewOnOpen = false;
     }
+}
+
+/** A message from someone else that arrived after this device last read the chat. */
+function isNewMessage(message) {
+    if (newSinceTime === null || !message || message.isDeleted) return false;
+    if (message.senderId === getCurrentUser()?.id) return false;
+    return new Date(message.timestamp).getTime() > newSinceTime;
 }
 
 function getDateLabel(timestamp) {
@@ -819,6 +845,8 @@ function createTimelineMessage(message) {
     if (message.componentId) classes += ' ucp-msg-comment';
     if (message.isIdea) classes += ' ucp-msg-idea';
     if (isTaskCompleted) classes += ' ucp-msg-task-completed';
+    if (isNewMessage(message)) classes += ' ucp-msg-new';
+    else if ((message.replies || []).some(isNewMessage)) classes += ' ucp-msg-new-reply';
     const isResolved = !linkedTaskId && !message.parentMessageId && isThreadResolved(message.id);
     if (isResolved) classes += ' ucp-msg-resolved';
     el.className = classes;
@@ -1744,7 +1772,7 @@ function createReplyMessage(reply) {
     const currentUser = getCurrentUser();
     const isOwn = reply.senderId === currentUser?.id;
     const el = document.createElement('div');
-    el.className = 'ucp-reply';
+    el.className = isNewMessage(reply) ? 'ucp-reply ucp-reply-new' : 'ucp-reply';
     el.dataset.messageId = reply.id;
     el.setAttribute('data-collab-inline-host', '');
 
@@ -2097,20 +2125,19 @@ function updateOnlineCount() {
     const countEl = document.getElementById('ucp-online-count');
     if (!countEl) return;
 
-    const presenceCounter = document.getElementById('presence-counter');
-    const count = presenceCounter ? parseInt(presenceCounter.textContent || '0', 10) : 0;
-    countEl.textContent = count || 0;
-
     const whosHereCount = document.getElementById('whos-here-count');
-    if (whosHereCount) {
-        const whCount = parseInt(whosHereCount.textContent || '0', 10);
-        if (whCount > count) countEl.textContent = whCount;
-    }
+    const count = whosHereCount ? parseInt(whosHereCount.textContent || '0', 10) : 0;
+    renderOnlineCount(countEl, count || 0);
+}
+
+function renderOnlineCount(countEl, count) {
+    countEl.textContent = `${count} online`;
+    countEl.title = count === 1 ? 'Only you are here right now' : `${count} people here right now`;
 }
 
 export function updateUCPOnlineCount(count) {
     const countEl = document.getElementById('ucp-online-count');
-    if (countEl) countEl.textContent = count;
+    if (countEl) renderOnlineCount(countEl, count);
 }
 
 /**

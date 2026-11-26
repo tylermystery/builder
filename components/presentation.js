@@ -639,6 +639,7 @@ export async function showPresentationView(listType, startRecordId = null) {
 export function hidePresentationView() {
     const modal = presState.getModal();
     if (!modal) return;
+    const wasActive = modal.classList.contains('active') || document.body.classList.contains('presentation-active');
 
     // Unregister sync callback
     unregisterSyncCallback('presentation');
@@ -689,6 +690,9 @@ export function hidePresentationView() {
         }, 50);
         presState.setCatalogNeedsRender(false);
     }
+
+    // Lets the catalog finish setup it skipped when the app opened straight into this view.
+    if (wasActive) document.dispatchEvent(new CustomEvent('presentationViewHidden'));
 }
 
 

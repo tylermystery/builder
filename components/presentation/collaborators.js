@@ -9,6 +9,7 @@ import { saveSessionToAirtable } from '../../api.js';
 import { getCurrentUser } from '../../chat.js';
 import { triggerSave } from '../../events.js';
 import { log } from '../../utils/debug.js';
+import { applyOnlineDots } from '../../utils/onlinePresence.js';
 
 // DOM element caches (set via init or lazy lookup)
 let collaboratorsListEl = null;
@@ -72,7 +73,7 @@ export function renderCollaborators() {
     let html = '';
     collaboratorsArray.forEach((collab) => {
         html += `
-            <button class="collaborator-name-btn" data-collaborator-id="${collab.odId}" title="${collab.name}">
+            <button class="collaborator-name-btn" data-collaborator-id="${collab.odId}" data-collaborator-name="${collab.name}" title="${collab.name}">
                 ${collab.name}
             </button>
         `;
@@ -80,6 +81,7 @@ export function renderCollaborators() {
 
     if (collaboratorsListEl) {
         collaboratorsListEl.innerHTML = html;
+        applyOnlineDots(collaboratorsListEl);
     }
 }
 
