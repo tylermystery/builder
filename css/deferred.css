@@ -17690,7 +17690,6 @@ hr.total-divider {
     margin-top: 6px;
     padding-top: 6px;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
-    cursor: default;
 }
 
 /* ── Summary hint bar (always visible) ── */
@@ -18809,93 +18808,6 @@ hr.total-divider {
         padding: 3px 8px;
         font-size: 0.72em;
     }
-}
-
-/* ========================================
-   RSB: Layout Toggle Floating Button
-   ======================================== */
-.rsb-layout-toggle-fab {
-    position: fixed;
-    bottom: 80px;
-    right: 16px;
-    z-index: 9999;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: rgba(99, 102, 241, 0.9);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    color: #fff;
-    font-size: 0.85em;
-    cursor: pointer;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3);
-    transition: all 0.2s ease;
-    padding: 0;
-}
-
-body.presentation-active .rsb-layout-toggle-fab {
-    display: flex;
-}
-
-.rsb-layout-toggle-fab:hover {
-    transform: scale(1.1);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
-
-/* Layout toggle popup */
-.rsb-layout-popup {
-    position: fixed;
-    bottom: 122px;
-    right: 16px;
-    z-index: 10000;
-    background: rgba(20, 20, 35, 0.97);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 12px;
-    padding: 8px;
-    display: none;
-    flex-direction: column;
-    gap: 2px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    min-width: 160px;
-}
-
-.rsb-layout-popup.visible {
-    display: flex;
-}
-
-.rsb-layout-popup-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
-    border-radius: 8px;
-    border: none;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 0.78em;
-    cursor: pointer;
-    transition: all 0.12s ease;
-    text-align: left;
-    width: 100%;
-}
-
-.rsb-layout-popup-item:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.9);
-}
-
-.rsb-layout-popup-item.active {
-    background: rgba(99, 102, 241, 0.15);
-    color: rgba(147, 197, 253, 1);
-}
-
-.rsb-layout-popup-icon {
-    font-size: 1.2em;
-    width: 22px;
-    text-align: center;
 }
 
 /* ========================================
