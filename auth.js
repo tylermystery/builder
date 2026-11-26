@@ -845,8 +845,16 @@ function setupGoogleSignIn() {
     const btn = document.getElementById('google-sso-btn');
     const divider = btn?.previousElementSibling?.classList.contains('sso-divider') ? btn.previousElementSibling : null;
 
+    // Google sign-in is paused until the site has its own Google app (the popup
+    // currently names Netlify instead of whatthefun.wtf). Flip to true to show it again.
+    const GOOGLE_SIGN_IN_ENABLED = false;
+    if (!GOOGLE_SIGN_IN_ENABLED) {
+        if (btn) btn.style.display = 'none';
+        if (divider) divider.style.display = 'none';
+    }
+
     // Show the button only when Google is switched on in Identity for this site.
-    fetch('/.netlify/identity/settings', { cache: 'no-store' })
+    if (GOOGLE_SIGN_IN_ENABLED) fetch('/.netlify/identity/settings', { cache: 'no-store' })
         .then(res => (res.ok ? res.json() : null))
         .then(settings => {
             const enabled = !!settings?.external?.google;
