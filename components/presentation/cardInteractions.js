@@ -46,7 +46,7 @@ export function initializeCompactCardClicks() {
     itemCards.forEach(card => {
         card.addEventListener('click', (e) => {
             // Don't trigger on status badge, emoji indicator, vitality badge, or split button clicks
-            const isExcluded = e.target.closest('.compact-card-status') || e.target.closest('.compact-card-emoji') || e.target.closest('.compact-card-split-btn') || e.target.closest('.compact-card-vitality') || e.target.closest('.valuation-vitality-emoji') || e.target.closest('.vitality-score-badge') || e.target.closest('.compact-card-reaction-zone');
+            const isExcluded = e.target.closest('.compact-card-status') || e.target.closest('.compact-card-emoji') || e.target.closest('.compact-card-split-btn') || e.target.closest('.compact-card-vitality') || e.target.closest('.valuation-vitality-emoji') || e.target.closest('.vitality-score-badge');
             if (isExcluded) {
                 return;
             }
