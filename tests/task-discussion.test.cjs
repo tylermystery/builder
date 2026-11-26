@@ -212,7 +212,7 @@ test('task thread placeholders skip notifications while normal chat keeps existi
     const calls = [];
     const context = vm.createContext({
         BASE_ID: 'test-base', ITEM_MESSAGES_TABLE_NAME: 'Messages', PERSONAL_ACCESS_TOKEN: '',
-        console: { log() {}, error() {} }, log() {}, registerChatThread() {},
+        console: { log() {}, error() {} }, log() {}, registerChatThread() {}, notePlanParticipation() {},
         async fetch(url) {
             calls.push(url);
             return { ok: true, json: async () => ({ records: [{ id: 'recRoot' }] }) };

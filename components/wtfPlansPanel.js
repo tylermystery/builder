@@ -79,6 +79,17 @@ export function trackRecentPlan(sessionId) {
 // ---- Plan activity helpers (creator / editors / last edited) ----
 const planActivityCache = new WeakMap();
 
+// Plans the signed-in user took part in by chatting: sessionId -> ISO time of their latest
+// message. Loaded from their messages with the list, and updated live when they send one.
+let chatParticipation = new Map();
+let chatParticipationUserId = null;
+const MAX_PARTICIPATION_FETCH = 40;
+
+function hasChatParticipation(planId) {
+    const userId = state.session.user.isAuthenticated ? state.session.user.id : null;
+    return !!(userId && chatParticipationUserId === userId && chatParticipation.has(planId));
+}
+
 /**
  * Read the `planActivity` block stored in a plan's session JSON.
  * @param {Object} plan - Session record
@@ -109,6 +120,8 @@ function getPlanActivity(plan) {
  */
 function isPersonalPlan(plan, userId) {
     if (!userId) return true;
+    // Chatting in a plan is taking part in it, so it belongs in the user's own list.
+    if (hasChatParticipation(plan.id)) return true;
     const activity = getPlanActivity(plan);
     if (activity) {
         if (activity.createdBy === userId) return true;
@@ -129,7 +142,11 @@ function isOwnedStorePlan(plan) {
 
 /** Timestamp used for sorting/"time ago": last edit, falling back to creation. */
 function getPlanActivityTime(plan) {
-    return getPlanActivity(plan)?.lastEditedAt || plan.createdTime;
+    const edited = getPlanActivity(plan)?.lastEditedAt || plan.createdTime;
+    const chatted = hasChatParticipation(plan.id) ? chatParticipation.get(plan.id) : null;
+    if (!chatted) return edited;
+    if (!edited) return chatted;
+    return Date.parse(chatted) > Date.parse(edited) ? chatted : edited;
 }
 
 /**
@@ -269,6 +286,29 @@ export function initializeWtfPlansPanel() {
 
     // Register for plan state sync to update the current session in the list in real-time
     registerSyncCallback('wtfPlansPanel', handlePlanStateSync);
+
+    // The user sent a message in a plan: it is theirs now, even before the list re-fetches.
+    window.addEventListener('plan-participation', (event) => {
+        const { sessionId, userId, at } = event.detail || {};
+        if (!sessionId || !userId) return;
+        if (chatParticipationUserId !== userId) {
+            chatParticipation = new Map();
+            chatParticipationUserId = userId;
+        }
+        const isNew = !chatParticipation.has(sessionId);
+        chatParticipation.set(sessionId, at || new Date().toISOString());
+        trackRecentPlan(sessionId);
+        if (isNew && isWtfPlansPanelOpen() && !isLoading) {
+            // Move it out of "Shared with me" without waiting for a re-fetch.
+            for (const key of ['shared', 'store']) {
+                const idx = wtfPlansData[key].findIndex(p => p.id === sessionId);
+                if (idx === -1) continue;
+                const [plan] = wtfPlansData[key].splice(idx, 1);
+                (isPlanShared(plan, userId) ? wtfPlansData.plans : wtfPlansData.drafts).push(plan);
+            }
+            renderWtfPlansList();
+        }
+    });
 
     // Keep the open plan's chat/task count current while the list is showing.
     // Re-render only when that number actually changes.
@@ -495,6 +535,18 @@ async function loadWtfPlansData() {
                     })
             );
 
+            // Plans the user chatted in (their messages are the record of taking part)
+            dataPromises.push(
+                api.fetchChatParticipation(userId)
+                    .then(map => {
+                        chatParticipation = map instanceof Map ? map : new Map();
+                        chatParticipationUserId = userId;
+                    })
+                    .catch(err => {
+                        console.error('[WTF-PLANS] Error fetching chat participation:', err);
+                    })
+            );
+
             // Projects (using project hierarchy)
             dataPromises.push(
                 api.fetchProjectHierarchy(userId)
@@ -535,6 +587,27 @@ async function loadWtfPlansData() {
         if (mergedFromStorage.length > 0) {
             console.log(`[WTF-PLANS] Adding ${mergedFromStorage.length} recently-tracked plan(s) not in user's fetched plans`);
             allUserPlans = [...allUserPlans, ...mergedFromStorage];
+        }
+
+        // Plans the user chatted in but that are missing from their collaborator plans
+        // (e.g. joining the plan failed when they opened it): fetch them too.
+        if (isAuthenticated && userId && chatParticipationUserId === userId && chatParticipation.size > 0) {
+            const haveIds = new Set(allUserPlans.map(p => p.id));
+            const missingIds = [...chatParticipation.entries()]
+                .filter(([id]) => !haveIds.has(id) && id !== state.session.id)
+                .sort((a, b) => String(b[1] || '').localeCompare(String(a[1] || '')))
+                .slice(0, MAX_PARTICIPATION_FETCH)
+                .map(([id]) => id);
+            if (missingIds.length > 0) {
+                const batches = [];
+                for (let i = 0; i < missingIds.length; i += 20) batches.push(missingIds.slice(i, i + 20));
+                const results = await Promise.all(batches.map(ids => api.fetchSessionsByIds(ids).catch(() => [])));
+                const extra = results.flat().filter(p => p && !haveIds.has(p.id));
+                if (extra.length > 0) {
+                    console.log(`[WTF-PLANS] Adding ${extra.length} plan(s) the user chatted in`);
+                    allUserPlans = [...allUserPlans, ...extra];
+                }
+            }
         }
 
         // Separate plans into shared (promoted) vs drafts based on collaborator count and RSVPs
@@ -726,8 +799,9 @@ function getCombinedItems() {
         const fetched = findIn(wtfPlansData.plans) || findIn(wtfPlansData.drafts) ||
             findIn(wtfPlansData.shared) || findIn(wtfPlansData.store);
         const live = state.session.planActivity;
-        const liveIsMine = !!(currentUserId && live && (live.createdBy === currentUserId ||
-            (Array.isArray(live.editors) && live.editors.includes(currentUserId))));
+        const liveIsMine = !!(currentUserId && ((live && (live.createdBy === currentUserId ||
+            (Array.isArray(live.editors) && live.editors.includes(currentUserId)))) ||
+            hasChatParticipation(currentSessionId)));
 
         if (findIn(wtfPlansData.plans)) currentSessionCategory = 'plan';
         else if (findIn(wtfPlansData.drafts)) currentSessionCategory = 'draft';
