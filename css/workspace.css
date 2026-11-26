@@ -420,3 +420,18 @@ body.workspace-ready .presentation-search-content {
     body.workspace-ready .presentation-search-results { min-height: 0; }
     body.workspace-ready .presentation-search-close { width: 44px; height: 44px; flex-shrink: 0; }
 }
+
+/* Conversations panel header: never push the controls (expand · view · close) off-screen.
+   The title side shrinks and the plan name truncates with "…"; the controls keep their size. */
+.ucp-header { gap: 8px; min-width: 0; }
+.ucp-header-left { flex: 1 1 auto; min-width: 0; }
+.ucp-header-left .ucp-title { flex: 0 1 auto; min-width: 0; }
+.ucp-header-left .ucp-online-badge,
+.ucp-header-left .ucp-live-badge { flex-shrink: 0; }
+.ucp-header-right { flex: 0 0 auto; }
+@media (max-width: 480px) {
+    .ucp-header { padding: 12px 10px 12px 14px; }
+    .ucp-header-left { gap: 6px; }
+    .ucp-header-left .ucp-title { max-width: none; }
+    .ucp-close-btn { min-width: 36px; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; }
+}
