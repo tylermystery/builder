@@ -17,6 +17,7 @@ import { applyCloudinaryTransform } from '../../utils/imageOptimizer.js';
 import { refreshForumData, onNewItemReceived } from '../forumPanel.js';
 import { handlePusherEvent as handleToastPusherEvent } from '../toastNotifications.js';
 import { registerChatThread, registerRealtimeChatThread } from '../planAtmosphere.js';
+import { setOnlineMembers } from '../../utils/onlinePresence.js';
 import { updateUCPVideoArea, updateUCPLiveBadge, populateFocusSelect, updateFocusBarUI, applyRemoteFocusItem, applyRemotePin } from '../unifiedChatPanel.js';
 import * as reactionRankings from './reactionRankings.js';
 import * as liveStream from '../liveStream.js';
@@ -760,27 +761,8 @@ function updatePresentationPresenceUI(members) {
     // Update presentation header presence avatar bar
     updatePresentationPresenceAvatarBar(members);
 
-    // Update collaborator name buttons with online presence indicators
-    const collabBtns = document.querySelectorAll('.collaborator-name-btn[data-collaborator-id]');
-    collabBtns.forEach(btn => {
-        const collabId = btn.dataset.collaboratorId;
-        if (onlineMemberIds.has(collabId)) {
-            btn.classList.add('online');
-        } else {
-            btn.classList.remove('online');
-        }
-    });
-
-    // Update Team count badge to show online/total
-    const teamCountNumber = document.getElementById('team-count-number');
-    if (teamCountNumber) {
-        const totalTeam = state.session.userProfiles?.size || 1;
-        if (count > 1) {
-            teamCountNumber.textContent = `${count}/${totalTeam}`;
-        } else {
-            teamCountNumber.textContent = totalTeam;
-        }
-    }
+    // Member chips in the plan header show a green dot for whoever is online
+    setOnlineMembers(onlineMemberIds);
 }
 
 /**

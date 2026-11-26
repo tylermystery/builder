@@ -3357,14 +3357,74 @@ body.ucp-panel-open .unified-chat-panel {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 22px;
+    gap: 5px;
     height: 22px;
-    padding: 0 6px;
+    padding: 0 8px;
     font-size: 0.75em;
     font-weight: 600;
-    color: white;
-    background: #28a745;
+    color: #1e7e34;
+    background: rgba(40, 167, 69, 0.12);
     border-radius: 11px;
+    white-space: nowrap;
+}
+
+.ucp-online-badge::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #28a745;
+    flex-shrink: 0;
+}
+
+/* Unread: "New" divider and highlighted messages since this device last read the chat */
+.ucp-new-divider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0 6px;
+    color: #e03131;
+    font-size: 0.72em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ucp-new-divider::before,
+.ucp-new-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(224, 49, 49, 0.45);
+}
+
+.ucp-msg.ucp-msg-new,
+.ucp-reply.ucp-reply-new {
+    background: rgba(255, 236, 153, 0.35);
+    box-shadow: inset 3px 0 0 #f59f00;
+}
+
+.ucp-msg.ucp-msg-new-reply {
+    box-shadow: inset 3px 0 0 #f59f00;
+}
+
+/* Unread count on the mobile conversations toggle */
+.ucp-mobile-toggle[data-unread]:not([data-unread=""])::after {
+    content: attr(data-unread);
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    box-sizing: border-box;
+    border-radius: 10px;
+    background: #e03131;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 16px;
+    border: 2px solid #fff;
 }
 
 /* Chat menu button (kebab / three dots) */
@@ -6290,10 +6350,9 @@ body.plan-view-readonly #radial-menu-container {
 </div>    
     
     <div id="chat-widget-container">
-        <div id="presence-avatar-bar" class="presence-avatar-bar" style="display: none;"></div>
-        <button id="chat-toggle-button">
+        <button id="chat-toggle-button" title="Open conversations">
             💬
-            <span id="presence-counter">0</span>
+            <span id="chat-unread-badge" class="chat-unread-badge" hidden>0</span>
         </button>
         <div id="chat-window" class="stream-view-compact">
             <div id="chat-header">
@@ -6524,8 +6583,6 @@ body.plan-view-readonly #radial-menu-container {
                                 </div>
                             </div>
 
-                            <!-- Presence Avatar Bar -->
-                            <div id="presentation-presence-avatar-bar" class="presence-avatar-bar" style="display: none;"></div>
                             <button id="presentation-header-total" class="presentation-header-total" title="View checkout" aria-label="View checkout summary"></button>
                         </div>
                         <!-- Hidden elements for logo/shop-title (kept for JS compatibility) -->
@@ -6536,10 +6593,6 @@ body.plan-view-readonly #radial-menu-container {
                             <!-- People List: Team count badge, current user, team members, share button -->
                             <div id="itinerary-collaborators" class="itinerary-collaborators">
                                 <div class="collaborators-inline-list">
-                                    <span id="team-count-badge" class="team-count-badge" title="Team members">
-                                        <span class="team-count-icon">&#128101;</span>
-                                        <span id="team-count-number" class="team-count-number">1</span>
-                                    </span>
                                     <button type="button" id="plan-open-convo-badge" class="plan-open-convo-badge" title="Open chats and tasks on this plan" aria-label="Open chats and tasks on this plan">
                                         <span class="plan-open-convo-icon" aria-hidden="true">&#128172;</span>
                                         <span class="plan-open-convo-count">0</span>
@@ -6852,7 +6905,7 @@ body.plan-view-readonly #radial-menu-container {
         <div class="ucp-header">
             <div class="ucp-header-left">
                 <h3 class="ucp-title">Conversations</h3>
-                <span id="ucp-online-count" class="ucp-online-badge" title="People online">0</span>
+                <span id="ucp-online-count" class="ucp-online-badge" title="People here right now">0 online</span>
                 <span id="ucp-live-badge" class="ucp-live-badge" style="display: none;">
                     <span class="live-dot"></span>
                     <span>LIVE</span>

@@ -14,6 +14,8 @@ import * as unifiedStream from './components/unifiedStream.js';
 import { initializeToastNotifications, handlePusherEvent as handleToastPusherEvent } from './components/toastNotifications.js';
 import { refreshUnifiedChatPanel, onUCPNewItem, updateUCPOnlineCount } from './components/unifiedChatPanel.js';
 import { registerChatThread, registerRealtimeChatThread } from './components/planAtmosphere.js';
+import { seedChatUnread, noteIncomingChat } from './components/chatUnread.js';
+import { setOnlineMembers } from './utils/onlinePresence.js';
 
 let currentUser = null;
 let pusher = null;
@@ -1019,8 +1021,10 @@ function updatePresenceUI(members) {
     // Update unified chat panel online count
     updateUCPOnlineCount(count);
 
-    // Update presence avatar bar (near chat toggle)
-    updatePresenceAvatarBar(members);
+    // Member chips in the plan header show a green dot for whoever is online
+    const onlineIds = [];
+    members.each((member) => onlineIds.push(member.id));
+    setOnlineMembers(onlineIds);
 
     if (whosHereList) {
         whosHereList.innerHTML = '';
@@ -1860,6 +1864,8 @@ export async function initializeSessionChat() {
         messagesList.innerHTML = '';
 
         const records = await api.fetchChatMessages(sessionId);
+        // Unread badge on the 💬 button: messages since this device last read the chat
+        seedChatUnread(sessionId, records, currentUser.id);
 
         // Count replies per message for thread indicators
         const replyCountMap = {};
@@ -1989,6 +1995,7 @@ export async function initializeSessionChat() {
             // A collaborator opening a new conversation is an open component of the plan, so
             // the background should move now rather than on the next load.
             registerRealtimeChatThread(state.session.id, data.content, data.componentInfo?.id || null);
+            noteIncomingChat({ id: data.messageId, senderId: data.senderId, timestamp: data.timestamp });
             requestNotificationPermissionIfNeeded();
             // Add to session history items
             const timestamp = data.timestamp || new Date().toISOString();
@@ -2112,6 +2119,7 @@ export async function initializeSessionChat() {
     // Handle real-time replies from other users
     sessionChatChannel.bind('client-new-reply', (data) => {
         if (data.senderId !== currentUser.id) {
+            noteIncomingChat({ id: data.messageId, senderId: data.senderId, timestamp: data.timestamp });
             const parentWrapper = document.querySelector(`[data-message-id="${data.parentMessageId}"]`);
             if (parentWrapper) {
                 const existingIndicator = parentWrapper.querySelector('.thread-indicator');
@@ -2142,6 +2150,7 @@ export async function initializeSessionChat() {
     sessionChatChannel.bind('client-component-comment', (data) => {
         if (data.senderId !== currentUser.id && data.comment) {
             registerChatThread(state.session.id, data.comment.fields);
+            noteIncomingChat({ id: data.comment.id, senderId: data.senderId });
             const componentId = data.componentId;
             const componentRecord = state.records.all.find(r => r.id === componentId);
             const componentInfo = {
