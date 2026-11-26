@@ -64,6 +64,8 @@ export let state = {
         planActivity: null,          // { createdBy, editors: [], lastEditedAt, lastEditedBy }
         contentFingerprint: null,    // Hash of plan content as last loaded/saved (edit detection)
         loadedCollaborators: [],     // Collaborators on the record when loaded (preserved on save)
+        leftCollaborators: [],       // People who left this plan (never re-added by saves)
+        archived: false,             // Plan is archived (hidden from plan lists until restored)
         flaggedUsers: new Set(),
         bannedUsers: new Set(),
 

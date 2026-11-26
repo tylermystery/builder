@@ -20,7 +20,8 @@ export const WTF_PLAN_TYPES = {
     FAVORITES: 'favorites', // Liked items
     PROJECTS: 'projects',   // Projects/sessions owned
     SHARED: 'shared',       // Plans the user opened via a link but never created/edited
-    STORE: 'store'          // Plans made for the user's store (store owners only)
+    STORE: 'store',         // Plans made for the user's store (store owners only)
+    ARCHIVED: 'archived'    // Archived plans (hidden everywhere else until restored)
 };
 
 // Local state for the panel
@@ -31,7 +32,8 @@ let wtfPlansData = {
     favorites: [],
     projects: [],
     shared: [],     // Plans shared with the user that they haven't created or edited
-    store: []       // Store plans (store owners) that aren't the owner's personal plans
+    store: [],      // Store plans (store owners) that aren't the owner's personal plans
+    archived: []    // Archived plans (restorable from the Archived filter)
 };
 let currentFilter = WTF_PLAN_TYPES.ALL;
 let isLoading = false;
@@ -60,6 +62,29 @@ function getRecentPlanIds() {
  * Moves the ID to the front if already present.
  * @param {string} sessionId - The session ID to track
  */
+export function untrackRecentPlan(sessionId) {
+    if (!sessionId) return;
+    try {
+        const ids = getRecentPlanIds().filter(id => id !== sessionId);
+        localStorage.setItem(RECENT_PLANS_KEY, JSON.stringify(ids));
+    } catch (e) {
+        console.warn('[WTF-PLANS] Could not update recent plans in localStorage:', e);
+    }
+}
+
+/** True when the user chose "Leave Plan" on this plan. */
+function hasLeftPlan(plan, userId) {
+    if (!userId) return false;
+    try {
+        const raw = plan?.fields?.['Items with Variations'];
+        if (!raw || !raw.includes('leftCollaborators')) return false;
+        const left = JSON.parse(raw).leftCollaborators;
+        return Array.isArray(left) && left.includes(userId);
+    } catch {
+        return false;
+    }
+}
+
 export function trackRecentPlan(sessionId) {
     if (!sessionId) return;
     try {
@@ -620,8 +645,18 @@ async function loadWtfPlansData() {
         wtfPlansData.drafts = [];
         wtfPlansData.shared = [];
         wtfPlansData.store = [];
+        wtfPlansData.archived = [];
 
         const signedInUserId = isAuthenticated ? userId : null;
+        // Plans the user left are gone from their lists; archived plans only show under Archived.
+        allUserPlans = allUserPlans.filter(plan => {
+            if (plan.id !== state.session.id && hasLeftPlan(plan, signedInUserId)) return false;
+            if (plan.fields?.Archived) {
+                wtfPlansData.archived.push(plan);
+                return false;
+            }
+            return true;
+        });
         allUserPlans.forEach(plan => {
             if (!isPersonalPlan(plan, signedInUserId)) {
                 if (isOwnedStorePlan(plan)) {
@@ -812,13 +847,15 @@ function getCombinedItems() {
         if (liveIsMine && (currentSessionCategory === 'shared' || currentSessionCategory === 'store')) {
             currentSessionCategory = (fetched && isPlanShared(fetched, currentUserId)) ? 'plan' : 'draft';
         }
+        if (state.session.archived) currentSessionCategory = 'archived';
     }
 
     const CATEGORY_META = {
         plan: { filter: WTF_PLAN_TYPES.PLANS, icon: '📋', untitled: 'Untitled Plan' },
         draft: { filter: WTF_PLAN_TYPES.DRAFTS, icon: '📝', untitled: 'Untitled Draft' },
         shared: { filter: WTF_PLAN_TYPES.SHARED, icon: '👥', untitled: 'Untitled Plan' },
-        store: { filter: WTF_PLAN_TYPES.STORE, icon: '🏪', untitled: 'Untitled Plan' }
+        store: { filter: WTF_PLAN_TYPES.STORE, icon: '🏪', untitled: 'Untitled Plan' },
+        archived: { filter: WTF_PLAN_TYPES.ARCHIVED, icon: '🗄️', untitled: 'Untitled Plan' }
     };
 
     const addSessionList = (list, type) => {
@@ -851,6 +888,7 @@ function getCombinedItems() {
     addSessionList(wtfPlansData.drafts, 'draft');
     addSessionList(wtfPlansData.shared, 'shared');
     addSessionList(wtfPlansData.store, 'store');
+    addSessionList(wtfPlansData.archived, 'archived');
 
     // The open plan always appears in "All" (it's what the user is looking at) and in its own section
     if (currentSessionItem) {
@@ -953,7 +991,8 @@ function getKnownSessionIds() {
         ...wtfPlansData.plans,
         ...wtfPlansData.drafts,
         ...wtfPlansData.shared,
-        ...wtfPlansData.store
+        ...wtfPlansData.store,
+        ...wtfPlansData.archived
     ].map(p => p.id));
 }
 
@@ -1007,6 +1046,7 @@ function getEmptyMessage() {
             case WTF_PLAN_TYPES.PROJECTS:
             case WTF_PLAN_TYPES.SHARED:
             case WTF_PLAN_TYPES.STORE:
+            case WTF_PLAN_TYPES.ARCHIVED:
                 return 'Sign in to see your plans and projects.';
             default:
                 return 'Sign in to see your plans, RSVPs, and favorites.';
@@ -1028,6 +1068,8 @@ function getEmptyMessage() {
             return 'No plans shared with you yet. Plans you open from a link show up here until you edit them.';
         case WTF_PLAN_TYPES.STORE:
             return 'No store plans yet. Plans customers make for your store show up here.';
+        case WTF_PLAN_TYPES.ARCHIVED:
+            return 'No archived plans. Plans you archive from the plan menu show up here, ready to restore.';
         default:
             return 'Nothing here yet. Start planning something fun!';
     }
@@ -1078,6 +1120,10 @@ function createWtfPlanItem(item) {
             const otherDateStr = item.date ? new Date(item.date + 'T00:00:00').toLocaleDateString() : 'No date';
             preview = `${item.type === 'shared' ? 'Shared with you' : 'Store plan'} • ${item.itemCount} items • ${otherDateStr}`;
             break;
+        case 'archived':
+            const archivedDateStr = item.date ? new Date(item.date + 'T00:00:00').toLocaleDateString() : 'No date';
+            preview = `Archived • ${item.itemCount} items • ${archivedDateStr}`;
+            break;
     }
 
     // Format time ago (last edit when known) - show "Now" for current session
@@ -1100,6 +1146,7 @@ function createWtfPlanItem(item) {
             <div class="wtf-plans-item-preview">${escapeHtml(preview)}</div>
         </div>
         ${openBadge}
+        ${item.type === 'archived' ? '<button type="button" class="wtf-plans-restore-btn" title="Restore this plan to your lists">Restore</button>' : ''}
         <div class="wtf-plans-item-time">${timeAgo}</div>
     `;
 
@@ -1109,8 +1156,41 @@ function createWtfPlanItem(item) {
         e.stopPropagation();
         openPlanChat(item);
     });
+    itemEl.querySelector('.wtf-plans-restore-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        restoreArchivedPlan(item, e.currentTarget);
+    });
 
     return itemEl;
+}
+
+/**
+ * Restore an archived plan (un-check "Archived") and move it back into the user's lists.
+ */
+async function restoreArchivedPlan(item, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = 'Restoring…'; }
+    const ok = await api.setSessionArchived(item.id, false);
+    if (!ok) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Restore'; }
+        alert('Could not restore this plan. Please try again.');
+        return;
+    }
+    const idx = wtfPlansData.archived.findIndex(p => p.id === item.id);
+    const plan = idx >= 0 ? wtfPlansData.archived.splice(idx, 1)[0] : item.data;
+    if (plan) {
+        if (plan.fields) delete plan.fields.Archived;
+        const userId = state.session.user.isAuthenticated ? state.session.user.id : null;
+        if (!isPersonalPlan(plan, userId)) {
+            (isOwnedStorePlan(plan) ? wtfPlansData.store : wtfPlansData.shared).push(plan);
+        } else {
+            (isPlanShared(plan, userId) ? wtfPlansData.plans : wtfPlansData.drafts).push(plan);
+        }
+    }
+    if (item.id === state.session.id) {
+        state.session.archived = false;
+        window.dispatchEvent(new CustomEvent('plan-archived-changed', { detail: { sessionId: item.id, archived: false } }));
+    }
+    renderWtfPlansList();
 }
 
 /**
@@ -1155,6 +1235,7 @@ function handleWtfPlanItemClick(item) {
         case 'project':
         case 'shared':
         case 'store':
+        case 'archived':
             // Navigate to session using pushState for proper browser history
             // First, ensure the wtfPlans state is in history so back button returns to it
             const wtfPlansUrl = new URL(window.location.href);
@@ -1216,11 +1297,13 @@ function updateFilterCounts() {
     const projectsBtn = document.querySelector('.wtf-plans-filter-btn[data-filter="projects"]');
     const sharedBtn = document.querySelector('.wtf-plans-filter-btn[data-filter="shared"]');
     const storeBtn = document.querySelector('.wtf-plans-filter-btn[data-filter="store"]');
+    const archivedBtn = document.querySelector('.wtf-plans-filter-btn[data-filter="archived"]');
 
     // Shared/Store filters only make sense for signed-in users (Store: store owners only)
     const user = state.session.user;
     if (sharedBtn) sharedBtn.style.display = user.isAuthenticated ? '' : 'none';
     if (storeBtn) storeBtn.style.display = (user.isAuthenticated && user.isOwner && user.ownedStoreId) ? '' : 'none';
+    if (archivedBtn) archivedBtn.style.display = user.isAuthenticated ? '' : 'none';
 
     const planCount = wtfPlansData.plans.length;
     const draftCount = wtfPlansData.drafts.length;
@@ -1241,6 +1324,7 @@ function updateFilterCounts() {
     if (projectsBtn) updateButtonCount(projectsBtn, projectCount);
     if (sharedBtn) updateButtonCount(sharedBtn, wtfPlansData.shared.length);
     if (storeBtn) updateButtonCount(storeBtn, wtfPlansData.store.length);
+    if (archivedBtn) updateButtonCount(archivedBtn, wtfPlansData.archived.length);
 }
 
 /**

@@ -469,7 +469,8 @@ export async function applyFiltersAndSort(imageCache) {
         console.log('[DEBUG MY-SESSIONS VIEW] state.session.user.id:', state.session.user.id);
         if (state.session.user.isAuthenticated && state.session.user.id) {
             console.log('[DEBUG MY-SESSIONS VIEW] User is authenticated, fetching plans...');
-            const userSessions = await api.fetchPlansForUser(state.session.user.id, true);
+            // Archived plans stay out of this list (they're under My Plans → Archived)
+            const userSessions = (await api.fetchPlansForUser(state.session.user.id, true)).filter(s => !s.fields?.Archived);
             console.log('[DEBUG MY-SESSIONS VIEW] api.fetchPlansForUser returned:', userSessions?.length, 'sessions');
             console.log('[DEBUG MY-SESSIONS VIEW] Raw userSessions:', userSessions);
 

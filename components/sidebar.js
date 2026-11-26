@@ -634,6 +634,7 @@ export function initializeShareMenu() {
         if (isVisible) {
             shareMenuDropdown.style.display = 'none';
         } else {
+            updatePlanManageMenu();
             shareMenuDropdown.style.display = 'block';
             // Ensure dropdown doesn't overflow the viewport
             positionDropdownWithinViewport(shareMenuDropdown, shareMenuBtn);
@@ -730,23 +731,31 @@ export function initializeShareMenu() {
         });
     }
 
-    // Delete & New handler
-    const planDeleteNewBtn = document.getElementById('plan-delete-new-btn');
-    if (planDeleteNewBtn) {
-        planDeleteNewBtn.addEventListener('click', async () => {
-            shareMenuDropdown.style.display = 'none';
-            await handleDeleteAndNew();
-        });
-    }
-
-    // See Sessions handler
+    // My Plans handler - opens the WTF Plans panel (same list as the main menu)
     const planSeeSessionsBtn = document.getElementById('plan-see-sessions-btn');
     if (planSeeSessionsBtn) {
         planSeeSessionsBtn.addEventListener('click', async () => {
             shareMenuDropdown.style.display = 'none';
-            await showSessionsModal();
+            try {
+                const { showWtfPlansPanel } = await import('./wtfPlansPanel.js');
+                await showWtfPlansPanel();
+            } catch (error) {
+                console.error('Could not open My Plans:', error);
+            }
         });
     }
+
+    // Leave Plan handler (collaborators who didn't create the plan)
+    const planLeaveBtn = document.getElementById('plan-leave-btn');
+    if (planLeaveBtn) {
+        planLeaveBtn.addEventListener('click', async () => {
+            shareMenuDropdown.style.display = 'none';
+            await handleLeavePlan();
+        });
+    }
+
+    // Keep Archive/Restore in step when the plan is restored from the plans panel
+    window.addEventListener('plan-archived-changed', updatePlanManageMenu);
 
     // Archive Plan handler
     const planArchiveBtn = document.getElementById('plan-archive-btn');
@@ -1469,128 +1478,139 @@ async function handleSaveAndNew() {
     }
 }
 
-/**
- * Handles Delete & New action - deletes current session and creates a new one
- */
-async function handleDeleteAndNew() {
-    log('Sidebar', 'Delete & New clicked');
+/** URL of the current store's catalog with no plan open. */
+function storeRootUrl() {
+    return `${window.location.pathname}${state.ui.activeShopId ? `?${getShopUrlParam(state.ui.activeShopId, state.stores.all)}` : ''}`;
+}
 
-    if (!state.session.user.isAuthenticated) {
-        alert('Please sign in to manage sessions.');
-        return;
-    }
-
-    if (!state.session.id) {
-        // No current session, just create a new one
-        await handleSaveAndNew();
-        return;
-    }
-
-    // Show confirmation dialog
-    const confirmed = await showConfirmDialog(
-        'Delete & Start New?',
-        'This will permanently delete the current plan and start a new one. This action cannot be undone.',
-        'Delete & Start New',
-        true
-    );
-
-    if (!confirmed) return;
-
-    try {
-        const currentSessionId = state.session.id;
-
-        // Delete the current session
-        const deleted = await api.deleteSession(currentSessionId);
-
-        if (!deleted) {
-            throw new Error('Failed to delete session');
-        }
-
-        log('Sidebar', `Session ${currentSessionId} deleted`);
-
-        // Create a new session
-        const newSessionId = await api.createNewSession(
-            state.ui.activeShopId,
-            state.session.user.id,
-            'New Plan'
-        );
-
-        if (newSessionId) {
-            // Navigate to the new session
-            const newUrl = `${window.location.pathname}?session=${newSessionId}${state.ui.activeShopId ? `&${getShopUrlParam(state.ui.activeShopId, state.stores.all)}` : ''}`;
-            window.location.href = newUrl;
-        } else {
-            // If creating new session fails, go to store root
-            const newUrl = `${window.location.pathname}${state.ui.activeShopId ? `?${getShopUrlParam(state.ui.activeShopId, state.stores.all)}` : ''}`;
-            window.location.href = newUrl;
-        }
-    } catch (error) {
-        console.error('Error in Delete & New:', error);
-        alert('Failed to delete session. Please try again.');
-    }
+/** URL that opens the given plan in the current store. */
+function sessionUrl(sessionId) {
+    return `${window.location.pathname}?session=${sessionId}${state.ui.activeShopId ? `&${getShopUrlParam(state.ui.activeShopId, state.stores.all)}` : ''}`;
 }
 
 /**
- * Handles Archive Plan action
+ * Whether the signed-in user created the open plan. Older plans without activity data
+ * treat the first collaborator as the creator (same rule the save code uses).
+ */
+function isCurrentUserPlanCreator() {
+    const user = state.session.user;
+    if (!user.isAuthenticated || !user.id) return false;
+    const createdBy = state.session.planActivity?.createdBy || (state.session.loadedCollaborators || [])[0] || null;
+    // No creator recorded anywhere (e.g. a plan only just saved): whoever has it open and owns it.
+    if (!createdBy) return !!state.session.isOwned;
+    return createdBy === user.id;
+}
+
+/**
+ * Shows the right Manage options for the signed-in user:
+ * creators can archive and delete; other collaborators can archive or leave.
+ */
+function updatePlanManageMenu() {
+    const dropdown = document.getElementById('share-menu-dropdown');
+    if (!dropdown) return;
+    const archiveBtn = document.getElementById('plan-archive-btn');
+    const deleteBtn = document.getElementById('plan-delete-btn');
+    const leaveBtn = document.getElementById('plan-leave-btn');
+    const archiveDivider = dropdown.querySelector('.archive-divider');
+    const manageLabel = archiveDivider?.nextElementSibling?.classList.contains('plan-menu-section-label')
+        ? archiveDivider.nextElementSibling : null;
+
+    const user = state.session.user;
+    const signedIn = !!(user.isAuthenticated && user.id && state.session.id);
+    const isCreator = signedIn && isCurrentUserPlanCreator();
+    const isMember = signedIn && (isCreator || !!state.session.isOwned ||
+        (state.session.loadedCollaborators || []).includes(user.id));
+
+    if (archiveBtn) {
+        archiveBtn.style.display = isMember ? '' : 'none';
+        const label = archiveBtn.querySelector('.plan-menu-label');
+        const icon = archiveBtn.querySelector('.menu-item-icon');
+        if (label) label.textContent = state.session.archived ? 'Restore Plan' : 'Archive Plan';
+        if (icon) icon.innerHTML = state.session.archived ? '&#9851;' : '&#128451;';
+        archiveBtn.title = state.session.archived
+            ? 'Bring this plan back into everyone\'s plan lists'
+            : 'Hide this plan from everyone\'s plan lists (you can restore it later)';
+    }
+    if (deleteBtn) deleteBtn.style.display = isCreator ? '' : 'none';
+    if (leaveBtn) leaveBtn.style.display = (isMember && !isCreator) ? '' : 'none';
+
+    const anyManage = isMember;
+    if (archiveDivider) archiveDivider.style.display = anyManage ? '' : 'none';
+    if (manageLabel) manageLabel.style.display = anyManage ? '' : 'none';
+}
+
+/**
+ * Handles Archive / Restore Plan. Archiving is plan-wide: the plan disappears from
+ * everyone's plan lists and shows up under My Plans → Archived until it's restored.
  */
 async function handleArchivePlan() {
     log('Sidebar', 'Archive Plan clicked');
 
     if (!state.session.user.isAuthenticated) {
-        alert('Please sign in to archive sessions.');
+        alert('Please sign in to archive plans.');
         return;
     }
 
     if (!state.session.id) {
-        alert('No active session to archive.');
+        alert('Save this plan first to archive it.');
         return;
     }
 
-    const confirmed = await showConfirmDialog(
-        'Archive Plan?',
-        'This plan will be archived and hidden from your sessions list. You can still recover it later.',
-        'Archive',
-        false
-    );
+    const restoring = !!state.session.archived;
 
-    if (!confirmed) return;
+    if (!restoring) {
+        const confirmed = await showConfirmDialog(
+            'Archive Plan?',
+            'This plan will be hidden from everyone\'s plan lists. The link keeps working, and you can restore it anytime from My Plans → Archived.',
+            'Archive',
+            false
+        );
+        if (!confirmed) return;
+    }
 
     try {
-        const archived = await api.archiveSession(state.session.id);
+        const ok = await api.setSessionArchived(state.session.id, !restoring);
+        if (!ok) throw new Error('Failed to update archive state');
 
-        if (archived) {
-            alert('Plan archived successfully.');
-            // Navigate to a new session or store root
-            const newUrl = `${window.location.pathname}${state.ui.activeShopId ? `?${getShopUrlParam(state.ui.activeShopId, state.stores.all)}` : ''}`;
-            window.location.href = newUrl;
-        } else {
-            throw new Error('Failed to archive session');
-        }
+        state.session.archived = !restoring;
+        updatePlanManageMenu();
+        window.dispatchEvent(new CustomEvent('plan-archived-changed', {
+            detail: { sessionId: state.session.id, archived: state.session.archived }
+        }));
+        ui.showToast(restoring
+            ? 'Plan restored. It\'s back in your plan lists.'
+            : 'Plan archived. Find it under My Plans → Archived.', 4000, 'success');
     } catch (error) {
         console.error('Error archiving plan:', error);
-        alert('Failed to archive plan. Please try again.');
+        alert(restoring ? 'Failed to restore plan. Please try again.' : 'Failed to archive plan. Please try again.');
     }
 }
 
 /**
- * Handles Delete Plan action
+ * Handles Delete Plan (creator only): permanently deletes the plan and starts a fresh one.
  */
 async function handleDeletePlan() {
     log('Sidebar', 'Delete Plan clicked');
 
     if (!state.session.user.isAuthenticated) {
-        alert('Please sign in to delete sessions.');
+        alert('Please sign in to delete plans.');
         return;
     }
 
     if (!state.session.id) {
-        alert('No active session to delete.');
+        alert('No saved plan to delete.');
         return;
     }
 
+    if (!isCurrentUserPlanCreator()) {
+        alert('Only the person who created this plan can delete it. You can leave it instead.');
+        return;
+    }
+
+    const hasOthers = (state.session.loadedCollaborators || []).some(id => id && id !== state.session.user.id);
     const confirmed = await showConfirmDialog(
         'Permanently Delete Plan?',
-        'This will permanently delete this plan and all its contents. This action cannot be undone.',
+        `This permanently deletes this plan and everything in it${hasOthers ? ' for every collaborator' : ''}, then starts a fresh plan. This can't be undone. To just hide it, archive it instead.`,
         'Delete Permanently',
         true
     );
@@ -1598,19 +1618,65 @@ async function handleDeletePlan() {
     if (!confirmed) return;
 
     try {
-        const deleted = await api.deleteSession(state.session.id);
+        const deletedId = state.session.id;
+        const deleted = await api.deleteSession(deletedId);
+        if (!deleted) throw new Error('Failed to delete session');
+        log('Sidebar', `Session ${deletedId} deleted`);
 
-        if (deleted) {
-            alert('Plan deleted successfully.');
-            // Navigate to store root
-            const newUrl = `${window.location.pathname}${state.ui.activeShopId ? `?${getShopUrlParam(state.ui.activeShopId, state.stores.all)}` : ''}`;
-            window.location.href = newUrl;
-        } else {
-            throw new Error('Failed to delete session');
-        }
+        try {
+            const { untrackRecentPlan } = await import('./wtfPlansPanel.js');
+            untrackRecentPlan(deletedId);
+        } catch (e) { /* non-critical */ }
+
+        // Start a fresh plan (previously the separate "Delete & New" option)
+        const newSessionId = await api.createNewSession(
+            state.ui.activeShopId,
+            state.session.user.id,
+            'New Plan'
+        );
+        window.location.href = newSessionId ? sessionUrl(newSessionId) : storeRootUrl();
     } catch (error) {
         console.error('Error deleting plan:', error);
         alert('Failed to delete plan. Please try again.');
+    }
+}
+
+/**
+ * Handles Leave Plan (collaborators who didn't create the plan): removes the user from
+ * the plan so it no longer shows in their lists. Opening the link again re-joins.
+ */
+async function handleLeavePlan() {
+    log('Sidebar', 'Leave Plan clicked');
+
+    const user = state.session.user;
+    if (!user.isAuthenticated || !user.id) {
+        alert('Please sign in to manage your plans.');
+        return;
+    }
+    if (!state.session.id) return;
+
+    const confirmed = await showConfirmDialog(
+        'Leave this plan?',
+        'The plan will be removed from your plan lists and you\'ll stop being a collaborator. It isn\'t deleted for anyone else, and you can rejoin anytime by opening its link.',
+        'Leave Plan',
+        true
+    );
+    if (!confirmed) return;
+
+    try {
+        const leftId = state.session.id;
+        const ok = await api.leaveSession(leftId, user.id);
+        if (!ok) throw new Error('Failed to leave plan');
+
+        try {
+            const { untrackRecentPlan } = await import('./wtfPlansPanel.js');
+            untrackRecentPlan(leftId);
+        } catch (e) { /* non-critical */ }
+
+        window.location.href = storeRootUrl();
+    } catch (error) {
+        console.error('Error leaving plan:', error);
+        alert('Failed to leave plan. Please try again.');
     }
 }
 
@@ -1674,276 +1740,6 @@ function showConfirmDialog(title, message, confirmText, isDanger = false) {
         };
         document.addEventListener('keydown', handleEscape);
     });
-}
-
-/**
- * Shows the sessions modal with list of user's sessions
- */
-async function showSessionsModal() {
-    log('Sidebar', 'See Sessions clicked');
-
-    if (!state.session.user.isAuthenticated) {
-        alert('Please sign in to view your sessions.');
-        return;
-    }
-
-    // Create modal overlay
-    const overlay = document.createElement('div');
-    overlay.className = 'sessions-modal-overlay';
-    overlay.innerHTML = `
-        <div class="sessions-modal">
-            <div class="sessions-modal-header">
-                <h3>My Sessions</h3>
-                <button class="sessions-modal-close">&times;</button>
-            </div>
-            <div class="sessions-modal-body">
-                <div class="bulk-actions-bar" style="display: none;">
-                    <label class="bulk-select-all">
-                        <input type="checkbox" id="sessions-select-all">
-                        <span>Select All</span>
-                    </label>
-                    <div class="bulk-actions-buttons">
-                        <button class="session-action-btn" id="bulk-archive-btn">Archive Selected</button>
-                        <button class="session-action-btn btn-danger" id="bulk-delete-btn">Delete Selected</button>
-                    </div>
-                </div>
-                <div class="sessions-list" id="sessions-list">
-                    <p style="text-align: center; color: #6c757d;">Loading sessions...</p>
-                </div>
-            </div>
-        </div>
-    `;
-
-    document.body.appendChild(overlay);
-
-    // Close handlers
-    const closeModal = () => {
-        overlay.remove();
-    };
-
-    const closeBtn = overlay.querySelector('.sessions-modal-close');
-    closeBtn.addEventListener('click', closeModal);
-
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) closeModal();
-    });
-
-    document.addEventListener('keydown', function handleEscape(e) {
-        if (e.key === 'Escape') {
-            document.removeEventListener('keydown', handleEscape);
-            closeModal();
-        }
-    });
-
-    // Load sessions
-    try {
-        const sessions = await api.fetchUserSessions(state.session.user.id, state.ui.activeShopId);
-        const sessionsList = overlay.querySelector('#sessions-list');
-        const bulkActionsBar = overlay.querySelector('.bulk-actions-bar');
-        const selectAllCheckbox = overlay.querySelector('#sessions-select-all');
-        const bulkArchiveBtn = overlay.querySelector('#bulk-archive-btn');
-        const bulkDeleteBtn = overlay.querySelector('#bulk-delete-btn');
-
-        if (sessions.length === 0) {
-            sessionsList.innerHTML = `
-                <div class="sessions-empty-state">
-                    <p>No sessions found. Start planning to create your first session!</p>
-                </div>
-            `;
-            return;
-        }
-
-        // Show bulk actions bar
-        bulkActionsBar.style.display = 'flex';
-
-        // Render sessions
-        sessionsList.innerHTML = sessions.map(session => {
-            const isCurrentSession = session.id === state.session.id;
-            const sessionData = session.fields['Items with Variations'];
-            let itemCount = 0;
-
-            if (sessionData) {
-                try {
-                    const parsed = JSON.parse(sessionData);
-                    itemCount = Object.keys(parsed.lockedInItems || {}).length +
-                                Object.keys(parsed.ideasItems || {}).length;
-                } catch (e) {
-                    // Ignore parse errors
-                }
-            }
-
-            const dateStr = session.fields.Date
-                ? new Date(session.fields.Date).toLocaleDateString()
-                : 'No date';
-
-            return `
-                <div class="session-list-item ${isCurrentSession ? 'current-session' : ''}" data-session-id="${session.id}">
-                    <input type="checkbox" class="session-list-checkbox" ${isCurrentSession ? 'disabled' : ''}>
-                    <div class="session-list-info">
-                        <div class="session-list-name">${session.fields.Name || 'Untitled Session'}${isCurrentSession ? ' (Current)' : ''}</div>
-                        <div class="session-list-meta">
-                            <span>📅 ${dateStr}</span>
-                            <span>📦 ${itemCount} items</span>
-                        </div>
-                    </div>
-                    <div class="session-list-actions">
-                        ${!isCurrentSession ? `
-                            <button class="session-action-btn btn-primary session-open-btn" data-session-id="${session.id}">Open</button>
-                            <button class="session-action-btn btn-danger session-delete-btn" data-session-id="${session.id}">Delete</button>
-                        ` : ''}
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        // Handle individual session actions
-        sessionsList.addEventListener('click', async (e) => {
-            const openBtn = e.target.closest('.session-open-btn');
-            const deleteBtn = e.target.closest('.session-delete-btn');
-
-            if (openBtn) {
-                const sessionId = openBtn.dataset.sessionId;
-                const newUrl = `${window.location.pathname}?session=${sessionId}${state.ui.activeShopId ? `&${getShopUrlParam(state.ui.activeShopId, state.stores.all)}` : ''}`;
-                window.location.href = newUrl;
-            }
-
-            if (deleteBtn) {
-                const sessionId = deleteBtn.dataset.sessionId;
-                const confirmed = await showConfirmDialog(
-                    'Delete Session?',
-                    'This will permanently delete this session. This action cannot be undone.',
-                    'Delete',
-                    true
-                );
-
-                if (confirmed) {
-                    const deleted = await api.deleteSession(sessionId);
-                    if (deleted) {
-                        // Remove from list
-                        const item = sessionsList.querySelector(`[data-session-id="${sessionId}"]`);
-                        if (item) item.remove();
-
-                        // Check if list is now empty
-                        if (sessionsList.querySelectorAll('.session-list-item').length === 0) {
-                            sessionsList.innerHTML = `
-                                <div class="sessions-empty-state">
-                                    <p>No sessions found. Start planning to create your first session!</p>
-                                </div>
-                            `;
-                            bulkActionsBar.style.display = 'none';
-                        }
-                    }
-                }
-            }
-        });
-
-        // Handle select all
-        selectAllCheckbox.addEventListener('change', () => {
-            const checkboxes = sessionsList.querySelectorAll('.session-list-checkbox:not(:disabled)');
-            checkboxes.forEach(cb => {
-                cb.checked = selectAllCheckbox.checked;
-                cb.closest('.session-list-item').classList.toggle('selected', selectAllCheckbox.checked);
-            });
-        });
-
-        // Handle individual checkbox changes
-        sessionsList.addEventListener('change', (e) => {
-            if (e.target.classList.contains('session-list-checkbox')) {
-                e.target.closest('.session-list-item').classList.toggle('selected', e.target.checked);
-
-                // Update select all state
-                const checkboxes = sessionsList.querySelectorAll('.session-list-checkbox:not(:disabled)');
-                const checkedCount = sessionsList.querySelectorAll('.session-list-checkbox:checked').length;
-                selectAllCheckbox.checked = checkedCount === checkboxes.length && checkboxes.length > 0;
-                selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
-            }
-        });
-
-        // Bulk archive
-        bulkArchiveBtn.addEventListener('click', async () => {
-            const selectedIds = Array.from(sessionsList.querySelectorAll('.session-list-checkbox:checked'))
-                .map(cb => cb.closest('.session-list-item').dataset.sessionId);
-
-            if (selectedIds.length === 0) {
-                alert('No sessions selected.');
-                return;
-            }
-
-            const confirmed = await showConfirmDialog(
-                `Archive ${selectedIds.length} Session(s)?`,
-                'Selected sessions will be archived and hidden from your sessions list.',
-                'Archive',
-                false
-            );
-
-            if (confirmed) {
-                const result = await api.archiveSessionsBulk(selectedIds);
-                alert(`Archived ${result.success} session(s).${result.failed > 0 ? ` ${result.failed} failed.` : ''}`);
-
-                // Refresh the list
-                selectedIds.forEach(id => {
-                    const item = sessionsList.querySelector(`[data-session-id="${id}"]`);
-                    if (item) item.remove();
-                });
-
-                if (sessionsList.querySelectorAll('.session-list-item').length === 0) {
-                    sessionsList.innerHTML = `
-                        <div class="sessions-empty-state">
-                            <p>No sessions found. Start planning to create your first session!</p>
-                        </div>
-                    `;
-                    bulkActionsBar.style.display = 'none';
-                }
-            }
-        });
-
-        // Bulk delete
-        bulkDeleteBtn.addEventListener('click', async () => {
-            const selectedIds = Array.from(sessionsList.querySelectorAll('.session-list-checkbox:checked'))
-                .map(cb => cb.closest('.session-list-item').dataset.sessionId);
-
-            if (selectedIds.length === 0) {
-                alert('No sessions selected.');
-                return;
-            }
-
-            const confirmed = await showConfirmDialog(
-                `Permanently Delete ${selectedIds.length} Session(s)?`,
-                'This will permanently delete the selected sessions. This action cannot be undone.',
-                'Delete All',
-                true
-            );
-
-            if (confirmed) {
-                const result = await api.deleteSessionsBulk(selectedIds);
-                alert(`Deleted ${result.success} session(s).${result.failed > 0 ? ` ${result.failed} failed.` : ''}`);
-
-                // Refresh the list
-                selectedIds.forEach(id => {
-                    const item = sessionsList.querySelector(`[data-session-id="${id}"]`);
-                    if (item) item.remove();
-                });
-
-                if (sessionsList.querySelectorAll('.session-list-item').length === 0) {
-                    sessionsList.innerHTML = `
-                        <div class="sessions-empty-state">
-                            <p>No sessions found. Start planning to create your first session!</p>
-                        </div>
-                    `;
-                    bulkActionsBar.style.display = 'none';
-                }
-            }
-        });
-
-    } catch (error) {
-        console.error('Error loading sessions:', error);
-        const sessionsList = overlay.querySelector('#sessions-list');
-        sessionsList.innerHTML = `
-            <div class="sessions-empty-state">
-                <p>Failed to load sessions. Please try again.</p>
-            </div>
-        `;
-    }
 }
 
 export async function updateEventPlanSection() {
