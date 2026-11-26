@@ -558,6 +558,10 @@ async function hydrateSessionState(savedState) {
     state.session.planActivity = (savedState.planActivity && typeof savedState.planActivity === 'object')
         ? savedState.planActivity
         : null;
+    // People who chose "Leave Plan" (kept so other collaborators' saves don't add them back).
+    state.session.leftCollaborators = Array.isArray(savedState.leftCollaborators)
+        ? savedState.leftCollaborators.filter(id => typeof id === 'string')
+        : [];
     console.log(`[SESSION-LOAD] Parsed session data - eventDetails keys: ${Object.keys(savedState.eventDetails || {}).join(', ')}`);
 
     state.cart.items = new Map(Object.entries(savedState.ideasItems || savedState.favoritedItems || {}));
@@ -877,6 +881,8 @@ export async function loadSessionFromAirtable(sessionId) {
         state.session.syncBase = null;
         state.session.syncBaseRaw = null;
         state.session.loadedCollaborators = Array.isArray(record.fields.Collaborators) ? [...record.fields.Collaborators] : [];
+        state.session.leftCollaborators = [];
+        state.session.archived = !!record.fields.Archived;
         state.session.user.amountReceived = 0;
         state.session.user.paymentHistory = [];
 
@@ -1291,6 +1297,11 @@ function buildSessionData() {
         // Session-level active variation indices (which variation is selected per item in this session)
         activeVariationIndices: getActiveVariationIndices()
     };
+    // Only written when someone has left, so plans without it keep their exact shape.
+    // Saving the plan yourself means you're back, so you drop off the list.
+    const selfId = state.session.user.isAuthenticated ? state.session.user.id : null;
+    const leftCollaborators = (state.session.leftCollaborators || []).filter(id => id && id !== selfId);
+    if (leftCollaborators.length > 0) sessionData.leftCollaborators = leftCollaborators;
     return sessionData;
 }
 
@@ -1512,6 +1523,14 @@ export async function saveSessionToAirtable() {
         const existing = (state.session.loadedCollaborators || []).filter(id => id && typeof id === 'string' && id.startsWith('rec'));
         for (let i = existing.length - 1; i >= 0; i--) {
             if (!validCollaboratorIds.includes(existing[i])) validCollaboratorIds.unshift(existing[i]);
+        }
+    }
+    // ...except people who left the plan on purpose.
+    const leftIds = Array.isArray(payloadData.leftCollaborators) ? payloadData.leftCollaborators : [];
+    if (leftIds.length > 0) {
+        const selfId = state.session.user.isAuthenticated ? state.session.user.id : null;
+        for (let i = validCollaboratorIds.length - 1; i >= 0; i--) {
+            if (validCollaboratorIds[i] !== selfId && leftIds.includes(validCollaboratorIds[i])) validCollaboratorIds.splice(i, 1);
         }
     }
 
@@ -6299,6 +6318,82 @@ export async function archiveSession(sessionId) {
         return true;
     } catch (error) {
         console.error('Error archiving session:', error);
+        return false;
+    }
+}
+
+/**
+ * Archives or restores a plan for everyone (Airtable "Archived" checkbox).
+ * @param {string} sessionId
+ * @param {boolean} archived - true to archive, false to restore
+ * @returns {Promise<boolean>} True if successful
+ */
+export async function setSessionArchived(sessionId, archived) {
+    if (!sessionId) return false;
+    if (archived) return archiveSession(sessionId);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    try {
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: { Archived: false } })
+        });
+        if (!response.ok) {
+            console.error('Airtable Error restoring session:', await response.text());
+            return false;
+        }
+        log('API', `Restored archived session ${sessionId}`);
+        return true;
+    } catch (error) {
+        console.error('Error restoring session:', error);
+        return false;
+    }
+}
+
+/**
+ * Removes a person from a plan's collaborators ("Leave Plan"). They are also recorded in
+ * the plan's leftCollaborators list so other collaborators' saves don't add them back.
+ * @param {string} sessionId
+ * @param {string} userId
+ * @returns {Promise<boolean>} True if successful
+ */
+export async function leaveSession(sessionId, userId) {
+    if (!sessionId || !userId) return false;
+    try {
+        const latest = await fetchLatestSessionRecord(sessionId);
+        if (!latest) return false;
+        let data = {};
+        try { data = JSON.parse(latest.fields?.['Items with Variations'] || '{}') || {}; } catch (e) { data = {}; }
+        const left = Array.isArray(data.leftCollaborators) ? data.leftCollaborators : [];
+        if (!left.includes(userId)) left.push(userId);
+        data.leftCollaborators = left;
+
+        const collaborators = (latest.fields?.Collaborators || []).filter(id => id !== userId);
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fields: {
+                    Collaborators: collaborators,
+                    'Items with Variations': JSON.stringify(data, null, 2)
+                }
+            })
+        });
+        if (!response.ok) {
+            console.error('Airtable Error leaving session:', await response.text());
+            return false;
+        }
+        log('API', `User ${userId} left session ${sessionId}`);
+        return true;
+    } catch (error) {
+        console.error('Error leaving session:', error);
         return false;
     }
 }

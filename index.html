@@ -1530,6 +1530,22 @@ body.modal-open {
     flex-shrink: 0;
 }
 
+/* Restore button on archived plan rows */
+.wtf-plans-restore-btn {
+    flex-shrink: 0;
+    margin-left: 8px;
+    padding: 5px 12px;
+    border: 1px solid #007bff;
+    border-radius: 999px;
+    background: #fff;
+    color: #007bff;
+    font-size: 0.8em;
+    font-weight: 600;
+    cursor: pointer;
+}
+.wtf-plans-restore-btn:hover:not(:disabled) { background: #007bff; color: #fff; }
+.wtf-plans-restore-btn:disabled { opacity: 0.6; cursor: default; }
+
 /* Open chats/tasks on a plan row (selecting it opens the plan chat) */
 .wtf-plans-open-badge {
     display: inline-flex;
@@ -5463,6 +5479,7 @@ body.plan-view-readonly #radial-menu-container {
             <button class="wtf-plans-filter-btn" data-filter="store" title="Plans made for your store" style="display: none;">Store plans</button>
             <button class="wtf-plans-filter-btn" data-filter="rsvps">RSVPs</button>
             <button class="wtf-plans-filter-btn" data-filter="favorites">Favorites</button>
+            <button class="wtf-plans-filter-btn" data-filter="archived" title="Archived plans you can restore" style="display: none;">Archived</button>
         </div>
         <div id="wtf-plans-list-container">
             <div class="wtf-plans-loading">Loading your plans...</div>
@@ -5638,16 +5655,13 @@ body.plan-view-readonly #radial-menu-container {
                             <span class="hamburger-icon">&#9776;</span>
                         </button>
                         <div id="share-menu-dropdown" class="hamburger-dropdown plan-menu-dropdown" style="display: none;">
-                            <!-- Session Management Section -->
-                            <div class="plan-menu-section-label">Session</div>
-                            <button id="plan-save-new-btn" class="hamburger-dropdown-item">
-                                <span class="menu-item-icon">&#10133;</span> Save & New
-                            </button>
-                            <button id="plan-delete-new-btn" class="hamburger-dropdown-item plan-menu-danger">
-                                <span class="menu-item-icon">&#128465;</span> Delete & New
+                            <!-- Plans Section -->
+                            <div class="plan-menu-section-label">Plans</div>
+                            <button id="plan-save-new-btn" class="hamburger-dropdown-item" title="Saves this plan and starts a fresh one">
+                                <span class="menu-item-icon">&#10133;</span> New Plan
                             </button>
                             <button id="plan-see-sessions-btn" class="hamburger-dropdown-item">
-                                <span class="menu-item-icon">&#128203;</span> See Sessions
+                                <span class="menu-item-icon">&#128203;</span> My Plans
                             </button>
                             <hr class="hamburger-dropdown-divider">
                             <!-- Share & Collaborate Section -->
@@ -5677,9 +5691,12 @@ body.plan-view-readonly #radial-menu-container {
                             <!-- Archive Section -->
                             <div class="plan-menu-section-label">Manage</div>
                             <button id="plan-archive-btn" class="hamburger-dropdown-item">
-                                <span class="menu-item-icon">&#128451;</span> Archive Plan
+                                <span class="menu-item-icon">&#128451;</span> <span class="plan-menu-label">Archive Plan</span>
                             </button>
-                            <button id="plan-delete-btn" class="hamburger-dropdown-item plan-menu-danger">
+                            <button id="plan-leave-btn" class="hamburger-dropdown-item plan-menu-danger" style="display: none;">
+                                <span class="menu-item-icon">&#128682;</span> Leave Plan
+                            </button>
+                            <button id="plan-delete-btn" class="hamburger-dropdown-item plan-menu-danger" style="display: none;">
                                 <span class="menu-item-icon">&#128465;</span> Delete Plan
                             </button>
                         </div>
