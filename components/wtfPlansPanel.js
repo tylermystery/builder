@@ -5,7 +5,7 @@
 import { state, setState } from '../state.js';
 import { log } from '../utils/debug.js';
 import * as api from '../api.js';
-import { getTempLikes, updateUrl } from '../utils.js';
+import { getTempLikes, updateUrl, getShopUrlParam } from '../utils.js';
 import { showDetailModal } from './modal.js';
 import { CONSTANTS } from '../config.js';
 import { registerSyncCallback, getPlanSummary } from '../utils/planStateSync.js';
@@ -37,6 +37,17 @@ let wtfPlansData = {
 };
 let currentFilter = WTF_PLAN_TYPES.ALL;
 let isLoading = false;
+
+// Multi-select state (long-press a plan or use "Select" to archive/delete several)
+const SELECTABLE_PLAN_TYPES = new Set(['plan', 'draft', 'shared', 'store', 'archived']);
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_MOVE_TOLERANCE = 10;
+
+let selectMode = false;
+let bulkActionInProgress = false;
+let suppressNextClick = false;
+const selectedPlans = new Map(); // id -> list item
+
 
 // ---- localStorage-backed recent plans tracking ----
 const RECENT_PLANS_KEY = 'wtf_recent_plan_ids';
@@ -346,6 +357,8 @@ export function initializeWtfPlansPanel() {
         if (isWtfPlansPanelOpen() && !isLoading) renderWtfPlansList();
     });
 
+    initPlanSelection();
+
     log('WtfPlansPanel', 'WTF Plans panel initialized.');
 }
 
@@ -465,6 +478,7 @@ export async function showWtfPlansPanel(options = {}) {
  * @param {boolean} options.skipPushState - If true, don't push to browser history (used when navigating to a plan)
  */
 export function hideWtfPlansPanel(options = {}) {
+    exitSelectMode();
     const { skipPushState = false } = options;
     const panel = document.getElementById('wtf-plans-panel');
     const overlay = document.getElementById('wtf-plans-panel-overlay');
@@ -1013,6 +1027,14 @@ function renderWtfPlansList() {
     // Update counts (and Shared/Store filter visibility) even when this filter is empty
     updateFilterCounts();
 
+    // Selection only keeps plans that are still showing (e.g. after switching filters).
+    const visible = new Map(items.filter(isSelectablePlanItem).map(i => [i.id, i]));
+    for (const id of [...selectedPlans.keys()]) {
+        if (visible.has(id)) selectedPlans.set(id, visible.get(id));
+        else selectedPlans.delete(id);
+    }
+    updateSelectionUi();
+
     if (items.length === 0) {
         const emptyMessage = getEmptyMessage();
         container.innerHTML = `<div class="wtf-plans-empty">${emptyMessage}</div>`;
@@ -1140,6 +1162,7 @@ function createWtfPlanItem(item) {
         : '';
 
     itemEl.innerHTML = `
+        <span class="wtf-plans-item-check" aria-hidden="true">✓</span>
         <div class="wtf-plans-item-icon">${item.icon}</div>
         <div class="wtf-plans-item-content">
             <div class="wtf-plans-item-name">${escapeHtml(item.name)}${currentBadge}</div>
@@ -1150,14 +1173,41 @@ function createWtfPlanItem(item) {
         <div class="wtf-plans-item-time">${timeAgo}</div>
     `;
 
-    // Click handler
-    itemEl.addEventListener('click', () => handleWtfPlanItemClick(item));
+    const selectable = isSelectablePlanItem(item);
+    if (selectable) {
+        itemEl.classList.add('selectable');
+        attachLongPress(itemEl, item);
+    }
+    applyItemSelectionState(itemEl, item);
+
+    // Click handler (in selection mode a click ticks/unticks the plan instead of opening it)
+    itemEl.addEventListener('click', (e) => {
+        if (suppressNextClick) {
+            suppressNextClick = false;
+            e.preventDefault();
+            return;
+        }
+        if (selectMode) {
+            if (selectable) togglePlanSelection(item, itemEl);
+            return;
+        }
+        handleWtfPlanItemClick(item);
+    });
+    itemEl.addEventListener('keydown', (e) => {
+        if (!selectMode || !selectable) return;
+        if (e.key === ' ' || e.key === 'Enter') {
+            e.preventDefault();
+            togglePlanSelection(item, itemEl);
+        }
+    });
     itemEl.querySelector('.wtf-plans-open-badge')?.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (selectMode) return;
         openPlanChat(item);
     });
     itemEl.querySelector('.wtf-plans-restore-btn')?.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (selectMode) return;
         restoreArchivedPlan(item, e.currentTarget);
     });
 
@@ -1415,4 +1465,401 @@ export function syncWtfPlansPanelWithUrl(params) {
         });
         renderWtfPlansList();
     }
+}
+
+
+// ---- Multi-select: long-press a plan (or use "Select") to archive or delete several ----
+
+function isSelectablePlanItem(item) {
+    return !!(item && item.id && SELECTABLE_PLAN_TYPES.has(item.type) && state.session.user.isAuthenticated);
+}
+
+function initPlanSelection() {
+    document.getElementById('wtf-plans-select-toggle')?.addEventListener('click', () => {
+        if (selectMode) exitSelectMode();
+        else enterSelectMode();
+    });
+    document.getElementById('wtf-plans-select-cancel')?.addEventListener('click', exitSelectMode);
+    document.getElementById('wtf-plans-bulk-archive')?.addEventListener('click', handleBulkArchive);
+    document.getElementById('wtf-plans-bulk-delete')?.addEventListener('click', handleBulkDelete);
+
+    // Escape leaves selection mode first (before anything else closes the panel).
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || !selectMode || bulkActionInProgress) return;
+        if (document.querySelector('.confirm-dialog-overlay')) return;
+        e.stopImmediatePropagation();
+        exitSelectMode();
+    }, true);
+}
+
+function enterSelectMode(initialItem = null) {
+    if (!state.session.user.isAuthenticated) {
+        alert('Please sign in to manage your plans.');
+        return;
+    }
+    selectMode = true;
+    if (initialItem && isSelectablePlanItem(initialItem)) selectedPlans.set(initialItem.id, initialItem);
+    refreshAllItemSelectionStates();
+    updateSelectionUi();
+}
+
+function exitSelectMode() {
+    if (!selectMode && selectedPlans.size === 0) return;
+    selectMode = false;
+    selectedPlans.clear();
+    refreshAllItemSelectionStates();
+    updateSelectionUi();
+}
+
+function togglePlanSelection(item, itemEl) {
+    if (bulkActionInProgress) return;
+    if (selectedPlans.has(item.id)) selectedPlans.delete(item.id);
+    else selectedPlans.set(item.id, item);
+    applyItemSelectionState(itemEl, item);
+    updateSelectionUi();
+}
+
+function applyItemSelectionState(itemEl, item) {
+    const selectable = isSelectablePlanItem(item);
+    const selected = selectMode && selectable && selectedPlans.has(item.id);
+    itemEl.classList.toggle('selected', selected);
+    if (selectMode && selectable) {
+        itemEl.setAttribute('role', 'checkbox');
+        itemEl.setAttribute('aria-checked', selected ? 'true' : 'false');
+        itemEl.tabIndex = 0;
+    } else {
+        itemEl.removeAttribute('role');
+        itemEl.removeAttribute('aria-checked');
+        itemEl.removeAttribute('tabindex');
+    }
+}
+
+function refreshAllItemSelectionStates() {
+    const container = document.getElementById('wtf-plans-list-container');
+    if (!container) return;
+    container.querySelectorAll('.wtf-plans-item').forEach(el => {
+        const id = el.dataset.itemId;
+        const type = el.dataset.itemType;
+        applyItemSelectionState(el, selectedPlans.get(id) || { id, type });
+    });
+}
+
+function updateSelectionUi() {
+    const panel = document.getElementById('wtf-plans-panel');
+    const toggle = document.getElementById('wtf-plans-select-toggle');
+    const bar = document.getElementById('wtf-plans-select-bar');
+    const countEl = document.getElementById('wtf-plans-select-count');
+    const archiveBtn = document.getElementById('wtf-plans-bulk-archive');
+    const deleteBtn = document.getElementById('wtf-plans-bulk-delete');
+
+    if (toggle) {
+        toggle.style.display = state.session.user.isAuthenticated ? '' : 'none';
+        toggle.textContent = selectMode ? 'Done' : 'Select';
+        toggle.classList.toggle('active', selectMode);
+        toggle.setAttribute('aria-pressed', selectMode ? 'true' : 'false');
+    }
+    panel?.classList.toggle('wtf-plans-selecting', selectMode);
+    if (bar) bar.hidden = !selectMode;
+
+    const items = [...selectedPlans.values()];
+    const count = items.length;
+    if (countEl) countEl.textContent = count === 0 ? 'Tap plans to select' : `${count} selected`;
+
+    const allArchived = count > 0 && items.every(i => i.type === 'archived');
+    if (archiveBtn) {
+        archiveBtn.textContent = allArchived ? 'Restore' : 'Archive';
+        archiveBtn.disabled = count === 0 || bulkActionInProgress;
+    }
+    if (deleteBtn) deleteBtn.disabled = count === 0 || bulkActionInProgress;
+}
+
+/** Long-press (touch or mouse) a plan row to start selecting, with that plan ticked. */
+function attachLongPress(itemEl, item) {
+    let timer = null;
+    let startX = 0;
+    let startY = 0;
+
+    const cancel = () => {
+        if (timer) clearTimeout(timer);
+        timer = null;
+        itemEl.classList.remove('long-pressing');
+    };
+
+    itemEl.addEventListener('pointerdown', (e) => {
+        if (e.button !== undefined && e.button !== 0) return;
+        if (e.target.closest('button')) return;
+        if (selectMode || bulkActionInProgress) return;
+        startX = e.clientX;
+        startY = e.clientY;
+        cancel();
+        itemEl.classList.add('long-pressing');
+        timer = setTimeout(() => {
+            timer = null;
+            itemEl.classList.remove('long-pressing');
+            suppressNextClick = true;
+            // Clear the flag if no click follows (e.g. touch ended off the row).
+            setTimeout(() => { suppressNextClick = false; }, 800);
+            try { navigator.vibrate?.(15); } catch (err) { /* not supported */ }
+            enterSelectMode(item);
+        }, LONG_PRESS_MS);
+    });
+    itemEl.addEventListener('pointermove', (e) => {
+        if (!timer) return;
+        if (Math.abs(e.clientX - startX) > LONG_PRESS_MOVE_TOLERANCE ||
+            Math.abs(e.clientY - startY) > LONG_PRESS_MOVE_TOLERANCE) cancel();
+    });
+    itemEl.addEventListener('pointerup', cancel);
+    itemEl.addEventListener('pointerleave', cancel);
+    itemEl.addEventListener('pointercancel', cancel);
+    // Stop the browser's own long-press menu on touch devices while we handle the press.
+    itemEl.addEventListener('contextmenu', (e) => {
+        if (timer || suppressNextClick || selectMode) e.preventDefault();
+    });
+}
+
+/** Whether the signed-in user created this plan (same rules as the plan menu). */
+function isSelectedPlanCreatedByMe(item) {
+    const userId = state.session.user.isAuthenticated ? state.session.user.id : null;
+    if (!userId) return false;
+    if (item.isCurrentSession || item.id === state.session.id) {
+        const createdBy = state.session.planActivity?.createdBy || (state.session.loadedCollaborators || [])[0] || null;
+        if (!createdBy) return !!state.session.isOwned;
+        return createdBy === userId;
+    }
+    const plan = item.data;
+    const createdBy = getPlanActivity(plan)?.createdBy || (plan?.fields?.Collaborators || [])[0] || null;
+    return !!createdBy && createdBy === userId;
+}
+
+function pluralPlans(n) {
+    return `${n} plan${n === 1 ? '' : 's'}`;
+}
+
+function showBulkConfirm(title, message, confirmText, isDanger) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'confirm-dialog-overlay';
+        const dialog = document.createElement('div');
+        dialog.className = 'confirm-dialog';
+        dialog.setAttribute('role', 'alertdialog');
+        dialog.innerHTML = `
+            <h4>${escapeHtml(title)}</h4>
+            <p>${escapeHtml(message)}</p>
+            <div class="confirm-dialog-actions">
+                <button type="button" class="btn-cancel">Cancel</button>
+                <button type="button" class="btn-confirm ${isDanger ? '' : 'btn-primary'}">${escapeHtml(confirmText)}</button>
+            </div>
+        `;
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+        const done = (result) => {
+            document.removeEventListener('keydown', onKey, true);
+            overlay.remove();
+            resolve(result);
+        };
+        const onKey = (e) => {
+            if (e.key === 'Escape') { e.stopImmediatePropagation(); done(false); }
+        };
+        document.addEventListener('keydown', onKey, true);
+        dialog.querySelector('.btn-cancel').addEventListener('click', () => done(false));
+        dialog.querySelector('.btn-confirm').addEventListener('click', () => done(true));
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) done(false); });
+        dialog.querySelector('.btn-cancel').focus();
+    });
+}
+
+function showBulkToast(message, variant = 'success') {
+    import('../ui.js').then(m => m.showToast(message, 4000, variant)).catch(() => alert(message));
+}
+
+function setBulkBusy(busy, label) {
+    bulkActionInProgress = busy;
+    const countEl = document.getElementById('wtf-plans-select-count');
+    updateSelectionUi();
+    if (busy && countEl && label) countEl.textContent = label;
+}
+
+/** Remove a plan from every cached list; returns the plan record if it was found. */
+function takePlanFromLists(id) {
+    let found = null;
+    for (const key of ['plans', 'drafts', 'shared', 'store', 'archived', 'projects']) {
+        const idx = wtfPlansData[key].findIndex(p => p.id === id);
+        if (idx !== -1) {
+            const [plan] = wtfPlansData[key].splice(idx, 1);
+            found = found || plan;
+        }
+    }
+    return found;
+}
+
+/** Put a restored plan back into the right list (same rules as the Restore button). */
+function placeRestoredPlan(plan) {
+    if (!plan) return;
+    if (plan.fields) delete plan.fields.Archived;
+    const userId = state.session.user.isAuthenticated ? state.session.user.id : null;
+    if (!isPersonalPlan(plan, userId)) {
+        (isOwnedStorePlan(plan) ? wtfPlansData.store : wtfPlansData.shared).push(plan);
+    } else {
+        (isPlanShared(plan, userId) ? wtfPlansData.plans : wtfPlansData.drafts).push(plan);
+    }
+}
+
+function currentStoreQuery() {
+    return state.ui.activeShopId ? getShopUrlParam(state.ui.activeShopId, state.stores.all) : '';
+}
+
+async function handleBulkArchive() {
+    if (bulkActionInProgress || selectedPlans.size === 0) return;
+    const items = [...selectedPlans.values()];
+    const restoring = items.every(i => i.type === 'archived');
+    const targets = restoring ? items : items.filter(i => i.type !== 'archived');
+    if (targets.length === 0) return;
+
+    if (!restoring) {
+        const skipped = items.length - targets.length;
+        const confirmed = await showBulkConfirm(
+            `Archive ${pluralPlans(targets.length)}?`,
+            `${targets.length === 1 ? 'This plan' : 'These plans'} will be hidden from everyone's plan lists. Links keep working, and you can restore them anytime from Archived.` +
+                (skipped ? ` ${pluralPlans(skipped)} already archived will be left as is.` : ''),
+            'Archive',
+            false
+        );
+        if (!confirmed) return;
+    }
+
+    setBulkBusy(true, restoring ? 'Restoring…' : 'Archiving…');
+    const succeeded = [];
+    let failed = 0;
+    try {
+        if (restoring) {
+            for (const item of targets) {
+                if (await api.setSessionArchived(item.id, false)) succeeded.push(item);
+                else failed++;
+            }
+        } else {
+            // Airtable accepts up to 10 records per request; batch so we know which ones landed.
+            for (let i = 0; i < targets.length; i += 10) {
+                const batch = targets.slice(i, i + 10);
+                const result = await api.archiveSessionsBulk(batch.map(t => t.id));
+                if (result.success === batch.length) succeeded.push(...batch);
+                else failed += batch.length;
+            }
+        }
+    } finally {
+        setBulkBusy(false);
+    }
+
+    for (const item of succeeded) {
+        const plan = takePlanFromLists(item.id) || item.data;
+        if (restoring) {
+            placeRestoredPlan(plan);
+        } else if (plan) {
+            plan.fields = plan.fields || {};
+            plan.fields.Archived = true;
+            wtfPlansData.archived.push(plan);
+        }
+        if (item.id === state.session.id) {
+            state.session.archived = !restoring;
+            window.dispatchEvent(new CustomEvent('plan-archived-changed', {
+                detail: { sessionId: item.id, archived: state.session.archived }
+            }));
+        }
+    }
+
+    exitSelectMode();
+    renderWtfPlansList();
+
+    const verb = restoring ? 'restored' : 'archived';
+    if (failed === 0) {
+        showBulkToast(restoring
+            ? `${pluralPlans(succeeded.length)} restored.`
+            : `${pluralPlans(succeeded.length)} archived. Find ${succeeded.length === 1 ? 'it' : 'them'} under Archived.`);
+    } else {
+        showBulkToast(`${pluralPlans(succeeded.length)} ${verb}; ${pluralPlans(failed)} couldn't be ${verb}. Please try again.`, 'error');
+    }
+}
+
+async function handleBulkDelete() {
+    if (bulkActionInProgress || selectedPlans.size === 0) return;
+    const user = state.session.user;
+    if (!user.isAuthenticated || !user.id) {
+        alert('Please sign in to manage your plans.');
+        return;
+    }
+    const items = [...selectedPlans.values()];
+    const toDelete = items.filter(isSelectedPlanCreatedByMe);
+    const toLeave = items.filter(i => !isSelectedPlanCreatedByMe(i));
+    const includesCurrent = items.some(i => i.id === state.session.id);
+
+    const parts = [];
+    if (toDelete.length) {
+        parts.push(`${pluralPlans(toDelete.length)} you created will be permanently deleted, along with everything in ${toDelete.length === 1 ? 'it' : 'them'}, for every collaborator. This can't be undone.`);
+    }
+    if (toLeave.length) {
+        parts.push(`${pluralPlans(toLeave.length)} shared with you will be left instead: ${toLeave.length === 1 ? 'it' : 'they'}'ll be removed from your lists but not deleted for anyone else, and you can rejoin by opening the link.`);
+    }
+    if (includesCurrent) parts.push('This includes the plan you have open, so you\'ll be moved off it.');
+    if (toDelete.length) parts.push('To just hide plans, archive them instead.');
+
+    const title = toDelete.length && toLeave.length
+        ? `Delete ${pluralPlans(toDelete.length)} and leave ${pluralPlans(toLeave.length)}?`
+        : toDelete.length
+            ? `Permanently delete ${pluralPlans(toDelete.length)}?`
+            : `Leave ${pluralPlans(toLeave.length)}?`;
+    const confirmText = toDelete.length ? 'Delete Permanently' : 'Leave';
+
+    const confirmed = await showBulkConfirm(title, parts.join(' '), confirmText, true);
+    if (!confirmed) return;
+
+    setBulkBusy(true, toDelete.length ? 'Deleting…' : 'Leaving…');
+    const deleted = [];
+    const left = [];
+    let failed = 0;
+    try {
+        for (let i = 0; i < toDelete.length; i += 10) {
+            const batch = toDelete.slice(i, i + 10);
+            const result = await api.deleteSessionsBulk(batch.map(t => t.id));
+            if (result.success === batch.length) deleted.push(...batch);
+            else failed += batch.length;
+        }
+        for (const item of toLeave) {
+            if (await api.leaveSession(item.id, user.id)) left.push(item);
+            else failed++;
+        }
+    } finally {
+        setBulkBusy(false);
+    }
+
+    for (const item of [...deleted, ...left]) {
+        takePlanFromLists(item.id);
+        untrackRecentPlan(item.id);
+    }
+
+    const removedCurrent = [...deleted, ...left].some(i => i.id === state.session.id);
+    const summary = [
+        deleted.length ? `${pluralPlans(deleted.length)} deleted` : '',
+        left.length ? `${pluralPlans(left.length)} left` : ''
+    ].filter(Boolean).join(', ');
+
+    if (removedCurrent) {
+        if (failed > 0) alert(`${summary || 'Nothing changed'}; ${pluralPlans(failed)} couldn't be removed. Please try again.`);
+        const query = currentStoreQuery();
+        const currentWasDeleted = deleted.some(i => i.id === state.session.id);
+        if (currentWasDeleted) {
+            // Same as deleting the open plan from its menu: start a fresh plan.
+            const newSessionId = await api.createNewSession(state.ui.activeShopId, user.id, 'New Plan');
+            if (newSessionId) {
+                window.location.href = `${window.location.pathname}?session=${newSessionId}${query ? `&${query}` : ''}`;
+                return;
+            }
+        }
+        window.location.href = `${window.location.pathname}${query ? `?${query}` : ''}`;
+        return;
+    }
+
+    exitSelectMode();
+    renderWtfPlansList();
+
+    if (failed === 0) showBulkToast(`${summary}.`);
+    else showBulkToast(`${summary ? summary + '; ' : ''}${pluralPlans(failed)} couldn't be removed. Please try again.`, 'error');
 }

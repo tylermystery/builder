@@ -1530,6 +1530,74 @@ body.modal-open {
     flex-shrink: 0;
 }
 
+/* Multi-select (long-press a plan or use "Select") */
+.wtf-plans-select-toggle {
+    margin-left: auto;
+    margin-right: 8px;
+    padding: 5px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 999px;
+    background: #fff;
+    color: #495057;
+    font-size: 0.8em;
+    font-weight: 600;
+    cursor: pointer;
+}
+.wtf-plans-select-toggle:hover { background: #f0f0f0; }
+.wtf-plans-select-toggle.active { background: #007bff; border-color: #007bff; color: #fff; }
+.wtf-plans-select-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid #dee2e6;
+    background: #eef5ff;
+}
+.wtf-plans-select-bar[hidden] { display: none; }
+.wtf-plans-select-count { flex: 1; font-size: 0.85em; font-weight: 600; color: #333; }
+.wtf-plans-bulk-btn {
+    padding: 6px 12px;
+    border: 1px solid #007bff;
+    border-radius: 999px;
+    background: #fff;
+    color: #007bff;
+    font-size: 0.8em;
+    font-weight: 600;
+    cursor: pointer;
+}
+.wtf-plans-bulk-btn:hover:not(:disabled) { background: #007bff; color: #fff; }
+.wtf-plans-bulk-btn.danger { border-color: #dc3545; color: #dc3545; }
+.wtf-plans-bulk-btn.danger:hover:not(:disabled) { background: #dc3545; color: #fff; }
+.wtf-plans-bulk-btn.subtle { border-color: #dee2e6; color: #495057; }
+.wtf-plans-bulk-btn.subtle:hover:not(:disabled) { background: #f0f0f0; color: #333; }
+.wtf-plans-bulk-btn:disabled { opacity: 0.5; cursor: default; }
+.wtf-plans-item {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+.wtf-plans-item-check {
+    display: none;
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #adb5bd;
+    border-radius: 50%;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 12px;
+    line-height: 1;
+}
+.wtf-plans-selecting .wtf-plans-item.selectable .wtf-plans-item-check { display: flex; }
+.wtf-plans-selecting .wtf-plans-item.selected { background-color: #e7f1ff; }
+.wtf-plans-selecting .wtf-plans-item.selected .wtf-plans-item-check { background: #007bff; border-color: #007bff; }
+.wtf-plans-selecting .wtf-plans-item:not(.selectable) { opacity: 0.45; cursor: default; }
+.wtf-plans-selecting .wtf-plans-item:not(.selectable):hover { background-color: transparent; }
+.wtf-plans-selecting .wtf-plans-open-badge,
+.wtf-plans-selecting .wtf-plans-restore-btn { display: none; }
+.wtf-plans-item.long-pressing { background-color: #e7f1ff; transition: background-color 0.4s; }
+
 /* Restore button on archived plan rows */
 .wtf-plans-restore-btn {
     flex-shrink: 0;
@@ -5463,6 +5531,7 @@ body.plan-view-readonly #radial-menu-container {
     <div id="wtf-plans-panel" role="region" aria-label="Plans navigation" class="wtf-plans-panel" style="display: none;">
         <div class="wtf-plans-panel-header">
             <h3>🎯 WTF Plans</h3>
+            <button id="wtf-plans-select-toggle" type="button" class="wtf-plans-select-toggle" title="Select several plans to archive or delete (or long-press a plan)" style="display: none;">Select</button>
             <button id="wtf-plans-panel-close" class="wtf-plans-panel-close-btn" aria-label="Close plans panel">&times;</button>
         </div>
         <div class="wtf-plans-browse-catalog-bar">
@@ -5480,6 +5549,12 @@ body.plan-view-readonly #radial-menu-container {
             <button class="wtf-plans-filter-btn" data-filter="rsvps">RSVPs</button>
             <button class="wtf-plans-filter-btn" data-filter="favorites">Favorites</button>
             <button class="wtf-plans-filter-btn" data-filter="archived" title="Archived plans you can restore" style="display: none;">Archived</button>
+        </div>
+        <div id="wtf-plans-select-bar" class="wtf-plans-select-bar" role="toolbar" aria-label="Selected plans" hidden>
+            <span id="wtf-plans-select-count" class="wtf-plans-select-count" aria-live="polite">0 selected</span>
+            <button type="button" id="wtf-plans-bulk-archive" class="wtf-plans-bulk-btn" disabled>Archive</button>
+            <button type="button" id="wtf-plans-bulk-delete" class="wtf-plans-bulk-btn danger" disabled>Delete</button>
+            <button type="button" id="wtf-plans-select-cancel" class="wtf-plans-bulk-btn subtle">Cancel</button>
         </div>
         <div id="wtf-plans-list-container">
             <div class="wtf-plans-loading">Loading your plans...</div>
