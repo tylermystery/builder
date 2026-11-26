@@ -242,6 +242,67 @@ export async function fetchSessionsByIds(sessionIds) {
 }
 
 /**
+ * Plans the user has taken part in by chatting (messages, replies, comments), with the time
+ * of their latest message in each. Used by the hamburger plan list so a plan someone only
+ * chatted in still counts as theirs, on every device. Messages are the source of truth, so
+ * this also covers chats sent before this was tracked.
+ * @param {string} userId
+ * @returns {Promise<Map<string, string>>} sessionId -> ISO time of the user's latest message
+ */
+export async function fetchChatParticipation(userId) {
+    const result = new Map();
+    if (!userId || typeof userId !== 'string' || !/^rec[A-Za-z0-9]+$/.test(userId)) return result;
+    const formula = encodeURIComponent(`{SenderID}='${userId}'`);
+    const base = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${formula}&fields%5B%5D=SessionID&pageSize=100`;
+    try {
+        let offset = null;
+        let pages = 0;
+        do {
+            const pageUrl = offset ? `${base}&offset=${encodeURIComponent(offset)}` : base;
+            const response = await fetch(pageUrl, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+            if (!response.ok) {
+                console.warn('[PLANS-FETCH] Could not read chat participation:', await response.text());
+                break;
+            }
+            const page = await response.json();
+            for (const record of page.records || []) {
+                const time = record.createdTime || null;
+                for (const sessionId of record.fields?.SessionID || []) {
+                    if (typeof sessionId !== 'string' || !sessionId.startsWith('rec')) continue;
+                    const prev = result.get(sessionId);
+                    if (!prev || (time && time > prev)) result.set(sessionId, time);
+                }
+            }
+            offset = page.offset || null;
+            pages++;
+        } while (offset && pages < 10);
+    } catch (error) {
+        console.warn('[PLANS-FETCH] Chat participation lookup failed:', error.message);
+    }
+    return result;
+}
+
+/**
+ * The signed-in user just sent a message in a plan. Make sure they are on the plan's
+ * Collaborators (in case joining on open failed) and tell the plan list right away.
+ */
+function notePlanParticipation(sessionId, senderId) {
+    const user = state.session?.user;
+    if (!user?.isAuthenticated || !user.id || senderId !== user.id) return;
+    if (!sessionId || typeof sessionId !== 'string' || !sessionId.startsWith('rec')) return;
+    try {
+        globalThis.dispatchEvent?.(new CustomEvent('plan-participation', { detail: { sessionId, userId: user.id, at: new Date().toISOString() } }));
+    } catch { /* non-browser */ }
+    if (sessionId !== state.session.id) return;
+    const known = state.session.loadedCollaborators || [];
+    if (known.includes(user.id)) return;
+    associateSessionWithUser(sessionId, user.id).then(ok => {
+        if (ok && !known.includes(user.id)) known.push(user.id);
+        state.session.loadedCollaborators = known;
+    }).catch(() => { /* best-effort; the message itself is saved */ });
+}
+
+/**
  * Fetch project hierarchy for authenticated user
  * Returns all sessions/projects the user has access to with hierarchical data
  * @param {string} userId - The authenticated user's ID
@@ -404,7 +465,7 @@ export async function associateSessionWithUser(sessionId, userId) {
     console.log(`[PLAN-ASSOC] sessionId: ${sessionId}, userId: ${userId}`);
     if (!sessionId || !userId) {
         console.warn(`[PLAN-ASSOC] Missing sessionId or userId, aborting association`);
-        return;
+        return false;
     }
     log('API', `Associating session ${sessionId} with user ${userId}`);
 
@@ -476,12 +537,14 @@ export async function associateSessionWithUser(sessionId, userId) {
             log('API', `Session ${sessionId} already associated with user ${userId}.`);
         }
         console.log(`[PLAN-ASSOC] ========== associateSessionWithUser END (SUCCESS) ==========`);
+        return true;
 
     } catch (error) {
         // Don't block login flow for this, just log the error
         console.error("[PLAN-ASSOC] Failed to associate session with user:", error);
         log('API', `Failed to associate session: ${error.message}`);
         console.log(`[PLAN-ASSOC] ========== associateSessionWithUser END (ERROR) ==========`);
+        return false;
     }
 }
 
@@ -848,7 +911,10 @@ export async function loadSessionFromAirtable(sessionId) {
                 console.log(`[SESSION-LOAD] User ${state.session.user.id} not yet collaborator on session ${sessionId}, adding...`);
                 // Await the association to ensure plan appears in wtfplans list immediately
                 try {
-                    await associateSessionWithUser(sessionId, state.session.user.id);
+                    const joined = await associateSessionWithUser(sessionId, state.session.user.id);
+                    if (joined && !state.session.loadedCollaborators.includes(state.session.user.id)) {
+                        state.session.loadedCollaborators.push(state.session.user.id);
+                    }
                     console.log('[SESSION-LOAD] Successfully associated user with session');
                 } catch (err) {
                     console.error('[SESSION-LOAD] Failed to auto-associate user with session:', err.message);
@@ -2885,6 +2951,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content, 
         // A message in a conversation that did not exist before adds an open component to the
         // plan; one in an existing thread changes nothing.
         registerChatThread(sessionId, fields);
+        notePlanParticipation(sessionId, senderId);
 
         // Return the new message record ID so caller can update UI
         globalThis.dispatchEvent?.(new CustomEvent('plan-chat-activity')); // refresh open chat/task counts
@@ -3411,6 +3478,7 @@ export async function postReplyMessage(parentMessageId, sessionId, itemId, sende
 
         const result = await response.json();
         log('API', `Reply posted successfully with ID: ${result.records[0].id}`);
+        notePlanParticipation(sessionId, senderId);
         globalThis.dispatchEvent?.(new CustomEvent('plan-chat-activity')); // refresh open chat/task counts
         return result.records[0];
     } catch (error) {
@@ -3578,6 +3646,7 @@ export async function postComponentComment(sessionId, componentType, componentId
         // A comment on an item or on the plan header opens a conversation just like a chat
         // message does, so it becomes an open component of the plan.
         registerChatThread(sessionId, fields);
+        notePlanParticipation(sessionId, senderId);
 
         // Trigger notifications for component comments
         if (newRecord.id) {
