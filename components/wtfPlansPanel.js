@@ -1931,6 +1931,28 @@ function closeMoreMenu() {
     btn?.setAttribute('aria-expanded', 'false');
 }
 
+/**
+ * Keep the ••• menu on screen. It right-aligns to the button by default, but on narrow
+ * screens the button wraps to the left edge and the menu would open off screen.
+ */
+function positionMoreMenu(btn, menu) {
+    menu.style.left = '';
+    menu.style.right = '';
+    const margin = 8;
+    const btnRect = btn.getBoundingClientRect();
+    const menuWidth = menu.getBoundingClientRect().width;
+    const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+    // Right-aligned to the button (default) would start here:
+    if (btnRect.right - menuWidth >= margin) return;
+    // Otherwise left-align to the button, nudged back inside the viewport if needed.
+    let left = 0;
+    const overflowRight = btnRect.left + menuWidth - (viewportWidth - margin);
+    if (overflowRight > 0) left -= overflowRight;
+    if (btnRect.left + left < margin) left = margin - btnRect.left;
+    menu.style.left = `${left}px`;
+    menu.style.right = 'auto';
+}
+
 function initMoreMenu() {
     const btn = document.getElementById('wtf-plans-more-btn');
     const menu = document.getElementById('wtf-plans-more-menu');
@@ -1942,6 +1964,7 @@ function initMoreMenu() {
         menu.hidden = !opening;
         btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
         if (opening) {
+            positionMoreMenu(btn, menu);
             const first = [...menu.querySelectorAll('.wtf-plans-more-item')].find(el => el.style.display !== 'none');
             first?.focus();
         }

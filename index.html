@@ -1519,9 +1519,14 @@ body.modal-open {
 .wtf-plans-item-preview {
     font-size: 0.8em;
     color: #666;
-    white-space: nowrap;
+    /* Long details wrap onto a second line (only for plans that need it), then truncate. */
+    white-space: normal;
     overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
 }
 
 .wtf-plans-item-time {
