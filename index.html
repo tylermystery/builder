@@ -1531,20 +1531,56 @@ body.modal-open {
 }
 
 /* Multi-select (long-press a plan or use "Select") */
-.wtf-plans-select-toggle {
-    margin-left: auto;
-    margin-right: 8px;
-    padding: 5px 12px;
+/* "•••" menu in the filter row: All, Drafts, Store plans, Archived, Select */
+.wtf-plans-more { position: relative; display: flex; }
+.wtf-plans-more-btn {
+    padding: 5px 10px;
     border: 1px solid #dee2e6;
-    border-radius: 999px;
-    background: #fff;
-    color: #495057;
+    border-radius: 16px;
+    background-color: #fff;
+    cursor: pointer;
     font-size: 0.8em;
-    font-weight: 600;
+    color: #495057;
+    letter-spacing: 1px;
+    line-height: 1;
+}
+.wtf-plans-more-btn:hover,
+.wtf-plans-more-btn[aria-expanded="true"] { background-color: #e9ecef; border-color: #adb5bd; }
+.wtf-plans-more-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 180px;
+    padding: 6px;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.wtf-plans-more-menu[hidden] { display: none; }
+.wtf-plans-more-menu .wtf-plans-more-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #333;
+    font-size: 0.9em;
+    text-align: left;
     cursor: pointer;
 }
-.wtf-plans-select-toggle:hover { background: #f0f0f0; }
-.wtf-plans-select-toggle.active { background: #007bff; border-color: #007bff; color: #fff; }
+.wtf-plans-more-menu .wtf-plans-more-item:hover { background-color: #f0f4f8; }
+.wtf-plans-more-menu .wtf-plans-more-item.active { background-color: #e7f1ff; color: #0056b3; font-weight: 600; }
+.wtf-plans-more-menu .wtf-plans-more-item.active .wtf-plans-count { background-color: rgba(0, 0, 0, 0.1); }
+.wtf-plans-more-divider { height: 1px; margin: 4px 6px; background: #e9ecef; }
 .wtf-plans-select-bar {
     display: flex;
     align-items: center;
@@ -5531,7 +5567,6 @@ body.plan-view-readonly #radial-menu-container {
     <div id="wtf-plans-panel" role="region" aria-label="Plans navigation" class="wtf-plans-panel" style="display: none;">
         <div class="wtf-plans-panel-header">
             <h3>🎯 WTF Plans</h3>
-            <button id="wtf-plans-select-toggle" type="button" class="wtf-plans-select-toggle" title="Select several plans to archive or delete (or long-press a plan)" style="display: none;">Select</button>
             <button id="wtf-plans-panel-close" class="wtf-plans-panel-close-btn" aria-label="Close plans panel">&times;</button>
         </div>
         <div class="wtf-plans-browse-catalog-bar">
@@ -5541,14 +5576,21 @@ body.plan-view-readonly #radial-menu-container {
             </button>
         </div>
         <div class="wtf-plans-panel-filters">
-            <button class="wtf-plans-filter-btn active" data-filter="all">All</button>
-            <button class="wtf-plans-filter-btn" data-filter="plans">Plans</button>
-            <button class="wtf-plans-filter-btn" data-filter="drafts">Drafts</button>
+            <button class="wtf-plans-filter-btn active" data-filter="plans" title="Plans you've shared with others">Plans</button>
             <button class="wtf-plans-filter-btn" data-filter="shared" title="Plans you opened from a link but haven't edited" style="display: none;">Shared with me</button>
-            <button class="wtf-plans-filter-btn" data-filter="store" title="Plans made for your store" style="display: none;">Store plans</button>
             <button class="wtf-plans-filter-btn" data-filter="rsvps">RSVPs</button>
             <button class="wtf-plans-filter-btn" data-filter="favorites">Favorites</button>
-            <button class="wtf-plans-filter-btn" data-filter="archived" title="Archived plans you can restore" style="display: none;">Archived</button>
+            <div class="wtf-plans-more">
+                <button type="button" id="wtf-plans-more-btn" class="wtf-plans-more-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="wtf-plans-more-menu" aria-label="More views and actions" title="More">•••</button>
+                <div id="wtf-plans-more-menu" class="wtf-plans-more-menu" role="menu" hidden>
+                    <button type="button" class="wtf-plans-filter-btn wtf-plans-more-item" role="menuitem" data-filter="all" title="Plans, drafts, RSVPs and favorites together">All</button>
+                    <button type="button" class="wtf-plans-filter-btn wtf-plans-more-item" role="menuitem" data-filter="drafts" title="Your plans no one else has joined yet">Drafts</button>
+                    <button type="button" class="wtf-plans-filter-btn wtf-plans-more-item" role="menuitem" data-filter="store" title="Plans made for your store" style="display: none;">Store plans</button>
+                    <button type="button" class="wtf-plans-filter-btn wtf-plans-more-item" role="menuitem" data-filter="archived" title="Archived plans you can restore" style="display: none;">Archived</button>
+                    <div class="wtf-plans-more-divider" role="separator" id="wtf-plans-select-divider" style="display: none;"></div>
+                    <button type="button" id="wtf-plans-select-toggle" class="wtf-plans-more-item" role="menuitem" title="Select several plans to archive or delete (or long-press a plan)" style="display: none;">Select plans</button>
+                </div>
+            </div>
         </div>
         <div id="wtf-plans-select-bar" class="wtf-plans-select-bar" role="toolbar" aria-label="Selected plans" hidden>
             <span id="wtf-plans-select-count" class="wtf-plans-select-count" aria-live="polite">0 selected</span>

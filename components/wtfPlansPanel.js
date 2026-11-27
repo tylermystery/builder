@@ -35,7 +35,7 @@ let wtfPlansData = {
     store: [],      // Store plans (store owners) that aren't the owner's personal plans
     archived: []    // Archived plans (restorable from the Archived filter)
 };
-let currentFilter = WTF_PLAN_TYPES.ALL;
+let currentFilter = WTF_PLAN_TYPES.PLANS;
 let isLoading = false;
 
 // Multi-select state (long-press a plan or use "Select" to archive/delete several)
@@ -310,8 +310,11 @@ export function initializeWtfPlansPanel() {
             // Update active state
             filterBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
+            closeMoreMenu();
         });
     });
+
+    initMoreMenu();
 
     // Close on escape key
     document.addEventListener('keydown', (e) => {
@@ -479,6 +482,7 @@ export async function showWtfPlansPanel(options = {}) {
  */
 export function hideWtfPlansPanel(options = {}) {
     exitSelectMode();
+    closeMoreMenu();
     const { skipPushState = false } = options;
     const panel = document.getElementById('wtf-plans-panel');
     const overlay = document.getElementById('wtf-plans-panel-overlay');
@@ -1077,7 +1081,7 @@ function getEmptyMessage() {
 
     switch (currentFilter) {
         case WTF_PLAN_TYPES.PLANS:
-            return 'No shared plans yet. Share a plan with someone to see it here!';
+            return 'No shared plans yet. Share a plan with someone to see it here! Plans only you are on are under ••• → Drafts.';
         case WTF_PLAN_TYPES.DRAFTS:
             return 'No drafts. Create a new plan to get started!';
         case WTF_PLAN_TYPES.RSVPS:
@@ -1444,7 +1448,7 @@ export function isWtfPlansPanelOpen() {
  */
 export function syncWtfPlansPanelWithUrl(params) {
     const shouldBeOpen = params.get('wtfPlans') === 'open';
-    const filter = params.get('wtfFilter') || WTF_PLAN_TYPES.ALL;
+    const filter = params.get('wtfFilter') || WTF_PLAN_TYPES.PLANS;
     const isOpen = isWtfPlansPanelOpen();
 
     if (shouldBeOpen && !isOpen) {
@@ -1476,6 +1480,7 @@ function isSelectablePlanItem(item) {
 
 function initPlanSelection() {
     document.getElementById('wtf-plans-select-toggle')?.addEventListener('click', () => {
+        closeMoreMenu();
         if (selectMode) exitSelectMode();
         else enterSelectMode();
     });
@@ -1553,10 +1558,12 @@ function updateSelectionUi() {
     const deleteBtn = document.getElementById('wtf-plans-bulk-delete');
 
     if (toggle) {
-        toggle.style.display = state.session.user.isAuthenticated ? '' : 'none';
-        toggle.textContent = selectMode ? 'Done' : 'Select';
+        const signedIn = state.session.user.isAuthenticated;
+        toggle.style.display = signedIn ? '' : 'none';
+        const divider = document.getElementById('wtf-plans-select-divider');
+        if (divider) divider.style.display = signedIn ? '' : 'none';
+        toggle.textContent = selectMode ? 'Done selecting' : 'Select plans';
         toggle.classList.toggle('active', selectMode);
-        toggle.setAttribute('aria-pressed', selectMode ? 'true' : 'false');
     }
     panel?.classList.toggle('wtf-plans-selecting', selectMode);
     if (bar) bar.hidden = !selectMode;
@@ -1862,4 +1869,42 @@ async function handleBulkDelete() {
 
     if (failed === 0) showBulkToast(`${summary}.`);
     else showBulkToast(`${summary ? summary + '; ' : ''}${pluralPlans(failed)} couldn't be removed. Please try again.`, 'error');
+}
+
+// ---- "•••" menu in the filter row ----
+
+function closeMoreMenu() {
+    const menu = document.getElementById('wtf-plans-more-menu');
+    const btn = document.getElementById('wtf-plans-more-btn');
+    if (!menu || menu.hidden) return;
+    menu.hidden = true;
+    btn?.setAttribute('aria-expanded', 'false');
+}
+
+function initMoreMenu() {
+    const btn = document.getElementById('wtf-plans-more-btn');
+    const menu = document.getElementById('wtf-plans-more-menu');
+    if (!btn || !menu) return;
+
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const opening = menu.hidden;
+        menu.hidden = !opening;
+        btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+        if (opening) {
+            const first = [...menu.querySelectorAll('.wtf-plans-more-item')].find(el => el.style.display !== 'none');
+            first?.focus();
+        }
+    });
+
+    // Close on outside click or Escape (Escape here wins over closing the panel).
+    document.addEventListener('click', (e) => {
+        if (!menu.hidden && !e.target.closest('.wtf-plans-more')) closeMoreMenu();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || menu.hidden) return;
+        e.stopImmediatePropagation();
+        closeMoreMenu();
+        btn.focus();
+    }, true);
 }
