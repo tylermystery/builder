@@ -40,13 +40,13 @@ test('expired invitations remain rejected', quiet(async () => {
   assert.equal(records.get('expired').consumed, false);
 }));
 
-test('invite functions use the current format with a strongly consistent token store', () => {
+test('invite functions use the current format (as .js, so npm modules get packaged) with a strongly consistent token store', () => {
   for (const name of ['send-invite', 'validate-invite-token', 'generate-invite-token']) {
-    const source = fs.readFileSync(`netlify/functions/${name}.mjs`, 'utf8');
+    const source = fs.readFileSync(`netlify/functions/${name}.js`, 'utf8');
     assert.match(source, /export default async/);
     assert.match(source, /getStore\(\{ name: 'invite-tokens', consistency: 'strong' \}\)/);
     assert.doesNotMatch(source, /connectLambda|exports\.handler/);
-    assert.ok(!fs.existsSync(`netlify/functions/${name}.js`), `stale Lambda-format ${name}.js must not shadow the new function`);
+    assert.ok(!fs.existsSync(`netlify/functions/${name}.mjs`), `${name}.mjs would skip packaging the npm modules its helpers require`);
   }
   const toml = fs.readFileSync('netlify.toml', 'utf8');
   assert.match(toml, /from = "\/api\/validate-invite-token"\s+to = "\/\.netlify\/functions\/validate-invite-token"/);

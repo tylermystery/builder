@@ -1,5 +1,6 @@
-// FILE: netlify/functions/validate-invite-token.mjs
-// Current-format function so the invite-token store supports strong consistency
+// FILE: netlify/functions/validate-invite-token.js
+// Current-format function (ESM syntax in a .js file so the bundler also packages the
+// npm modules the shared CommonJS helpers require) so the invite-token store supports strong consistency
 // (tokens are readable the moment an invite is sent).
 import { getStore } from '@netlify/blobs';
 import inviteModule from './utils/invite-tokens.js';
