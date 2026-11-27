@@ -22,6 +22,13 @@
 [functions."send-invite"]
   node_bundler = "esbuild"
 
+# Invite-token functions share a CommonJS helper with send-invite.
+[functions."validate-invite-token"]
+  node_bundler = "esbuild"
+
+[functions."generate-invite-token"]
+  node_bundler = "esbuild"
+
 # Scheduled function: Daily Digest emails at 9 AM UTC
 [functions."send-daily-digest"]
   schedule = "0 9 * * *"
@@ -142,6 +149,11 @@
 [[redirects]]
   from = "/api/send-invite"
   to = "/.netlify/functions/send-invite"
+  status = 200
+
+[[redirects]]
+  from = "/api/validate-invite-token"
+  to = "/.netlify/functions/validate-invite-token"
   status = 200
 
 [[redirects]]

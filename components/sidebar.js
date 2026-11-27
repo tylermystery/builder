@@ -795,9 +795,10 @@ function openInvitePopup() {
     popup.style.display = 'block';
 
     // Clear any previous inputs and status
-    const emailInput = document.getElementById('collab-email');
-    const statusEl = document.getElementById('invite-status');
-    const btn = document.getElementById('invite-btn');
+    // Scope to the popup: the presentation invite modal also has an #invite-status element.
+    const emailInput = popup.querySelector('#collab-email') || document.getElementById('collab-email');
+    const statusEl = popup.querySelector('#invite-status');
+    const btn = popup.querySelector('#invite-btn') || document.getElementById('invite-btn');
 
     if (emailInput) emailInput.value = '';
     if (statusEl) statusEl.textContent = '';
@@ -1868,8 +1869,10 @@ export async function updateEventPlanSection() {
 async function handleInvite() {
     const emailInput = document.getElementById('collab-email');
     const roleSelect = document.getElementById('collab-role');
-    const statusEl = document.getElementById('invite-status');
     const btn = document.getElementById('invite-btn');
+    // The status line sits next to this button. Looking it up by ID alone found the hidden
+    // presentation-modal status first, so plan panel errors never showed.
+    const statusEl = btn?.parentElement?.querySelector('#invite-status') || document.getElementById('invite-status');
 
     const email = emailInput.value.trim();
     const role = roleSelect ? roleSelect.value : 'editor';
@@ -1923,8 +1926,8 @@ async function handleInvite() {
                  btn.disabled = false;
             }, 1500);
         } else {
-            const err = await response.json();
-            throw new Error(err.error || 'Failed to send');
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error || 'Failed to send invitation. Please try again.');
         }
     } catch (e) {
         console.error(e);

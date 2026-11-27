@@ -1,75 +1,20 @@
 // FILE: netlify/functions/validate-invite-token.js
-// Validates an invite token from Netlify Blobs, checks expiry, and marks as consumed
+// Current-format function (ESM syntax in a .js file so the bundler also packages the
+// npm modules the shared CommonJS helpers require) so the invite-token store supports strong consistency
+// (tokens are readable the moment an invite is sent).
+import { getStore } from '@netlify/blobs';
+import inviteModule from './utils/invite-tokens.js';
 
-exports.handler = async (event) => {
-    if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+const json = (statusCode, body) => new Response(JSON.stringify(body), {
+    status: statusCode,
+    headers: { 'Content-Type': 'application/json' }
+});
+
+export default async (req) => {
+    if (req.method !== 'POST') {
+        return json(405, { error: 'Method Not Allowed' });
     }
-
-    try {
-        const { token } = JSON.parse(event.body);
-
-        if (!token) {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({ error: 'Token is required.' })
-            };
-        }
-
-        const { getStore, connectLambda } = require('@netlify/blobs');
-        // Lambda-compatible handlers must initialize Blobs from this invocation.
-        connectLambda(event);
-        const store = getStore({ name: 'invite-tokens', consistency: 'strong' });
-
-        const tokenData = await store.get(token, { type: 'json' });
-
-        if (!tokenData) {
-            return {
-                statusCode: 404,
-                body: JSON.stringify({ error: 'Invalid or unknown invite link.' })
-            };
-        }
-
-        // Check if already consumed
-        if (tokenData.consumed) {
-            return {
-                statusCode: 410,
-                body: JSON.stringify({ error: 'This invite link has already been used.' })
-            };
-        }
-
-        // Check expiry
-        if (new Date(tokenData.expiresAt) < new Date()) {
-            return {
-                statusCode: 410,
-                body: JSON.stringify({ error: 'This invite link has expired.' })
-            };
-        }
-
-        // Mark as consumed
-        tokenData.consumed = true;
-        tokenData.consumedAt = new Date().toISOString();
-        await store.setJSON(token, tokenData);
-
-        console.log(`[validate-invite-token] Token consumed for ${tokenData.email} on session ${tokenData.sessionId}`);
-
-        return {
-            statusCode: 200,
-            body: JSON.stringify({
-                valid: true,
-                sessionId: tokenData.sessionId,
-                email: tokenData.email,
-                role: tokenData.role,
-                inviterName: tokenData.inviterName,
-                sessionName: tokenData.sessionName
-            })
-        };
-
-    } catch (error) {
-        console.error('[validate-invite-token] Error:', error);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ error: error.message })
-        };
-    }
+    const store = getStore({ name: 'invite-tokens', consistency: 'strong' });
+    const { statusCode, body } = await inviteModule.validateInviteToken(store, await req.text());
+    return json(statusCode, body);
 };

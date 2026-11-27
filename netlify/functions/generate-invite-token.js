@@ -1,61 +1,20 @@
 // FILE: netlify/functions/generate-invite-token.js
-// Generates a cryptographically random invite token and stores it in Netlify Blobs
+// Current-format function (ESM syntax in a .js file so the bundler also packages the
+// npm modules the shared CommonJS helpers require) so the invite-token store supports strong consistency
+// (tokens are readable the moment an invite is sent).
+import { getStore } from '@netlify/blobs';
+import inviteModule from './utils/invite-tokens.js';
 
-const crypto = require('crypto');
+const json = (statusCode, body) => new Response(JSON.stringify(body), {
+    status: statusCode,
+    headers: { 'Content-Type': 'application/json' }
+});
 
-exports.handler = async (event) => {
-    if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+export default async (req) => {
+    if (req.method !== 'POST') {
+        return json(405, { error: 'Method Not Allowed' });
     }
-
-    try {
-        const { sessionId, email, role, invitedBy, inviterName, sessionName } = JSON.parse(event.body);
-
-        if (!sessionId || !email) {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({ error: 'sessionId and email are required.' })
-            };
-        }
-
-        // Generate a secure random token
-        const token = crypto.randomBytes(32).toString('hex');
-
-        // 7-day expiry
-        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-        const tokenData = {
-            token,
-            sessionId,
-            email,
-            role: role || 'editor',
-            invitedBy: invitedBy || '',
-            inviterName: inviterName || '',
-            sessionName: sessionName || '',
-            createdAt: new Date().toISOString(),
-            expiresAt,
-            consumed: false
-        };
-
-        // Store in Netlify Blobs
-        const { getStore, connectLambda } = require('@netlify/blobs');
-        // Lambda-compatible handlers must initialize Blobs from this invocation.
-        connectLambda(event);
-        const store = getStore({ name: 'invite-tokens', consistency: 'strong' });
-        await store.setJSON(token, tokenData);
-
-        console.log(`[generate-invite-token] Token created for ${email} on session ${sessionId}, expires ${expiresAt}`);
-
-        return {
-            statusCode: 200,
-            body: JSON.stringify({ token })
-        };
-
-    } catch (error) {
-        console.error('[generate-invite-token] Error:', error);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ error: error.message })
-        };
-    }
+    const store = getStore({ name: 'invite-tokens', consistency: 'strong' });
+    const { statusCode, body } = await inviteModule.generateInviteToken(store, await req.text());
+    return json(statusCode, body);
 };

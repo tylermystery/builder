@@ -1519,9 +1519,14 @@ body.modal-open {
 .wtf-plans-item-preview {
     font-size: 0.8em;
     color: #666;
-    white-space: nowrap;
+    /* Long details wrap onto a second line (only for plans that need it), then truncate. */
+    white-space: normal;
     overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
 }
 
 .wtf-plans-item-time {
@@ -5576,7 +5581,7 @@ body.plan-view-readonly #radial-menu-container {
             </button>
         </div>
         <div class="wtf-plans-panel-filters">
-            <button class="wtf-plans-filter-btn active" data-filter="plans" title="Plans you've shared with others">Plans</button>
+            <button class="wtf-plans-filter-btn active" data-filter="plans" title="Plans you share with others, including ones shared with you"><span aria-hidden="true">🤝</span> Plans</button>
             <button class="wtf-plans-filter-btn" data-filter="shared" title="Plans you opened from a link but haven't edited" style="display: none;">Shared with me</button>
             <button class="wtf-plans-filter-btn" data-filter="rsvps">RSVPs</button>
             <button class="wtf-plans-filter-btn" data-filter="favorites">Favorites</button>

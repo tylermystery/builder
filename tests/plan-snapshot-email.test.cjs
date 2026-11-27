@@ -115,36 +115,34 @@ test('long task descriptions are not truncated; a complete attachment protects a
 });
 
 function handler(filename, f, sent, overrides = {}) {
-  const source = fs.readFileSync(`netlify/functions/${filename}.js`, 'utf8');
-  let blobsConnected = false;
+  // send-invite's logic lives in a shared helper; the function only supplies the Blobs store.
+  const isInvite = filename === 'send-invite';
+  const path = isInvite ? 'netlify/functions/utils/send-invite-core.js' : `netlify/functions/${filename}.js`;
+  const source = fs.readFileSync(path, 'utf8');
+  const local = mod => isInvite ? `./${mod}` : `./utils/${mod}`;
   const context = vm.createContext({
-    exports: {}, process: { env: { SITE_URL: 'https://example.test', SENDGRID_API_KEY: true } }, console: { log() {}, warn() {}, error() {} }, Buffer, URL, URLSearchParams,
+    exports: {}, module: {}, process: { env: { SITE_URL: 'https://example.test', SENDGRID_API_KEY: true } }, console: { log() {}, warn() {}, error() {} }, Buffer, URL, URLSearchParams,
     require: name => {
       if (name === 'node-fetch') return f.fetcher;
       if (name === '@sendgrid/mail') return { setApiKey() {}, send: async message => { sent.push(message); } };
-      if (name === './utils/email-config') return { buildFrom: () => ({ name: 'Store', email: 'store@example.test' }), fetchStoreName: async () => 'Store' };
-      if (name === './utils/plan-snapshot-email') return { loadPlanSnapshot: input => loadPlanSnapshot(input, options(f)), buildSnapshotEmailParts, ...overrides };
-      if (name === './utils/checkout-emails') return { ...require('../netlify/functions/utils/checkout-emails'), loadCheckoutEmailDetails: async () => ({ sessionData: f.data, itemRecords: [f.record] }) };
+      if (name === local('email-config')) return { buildFrom: () => ({ name: 'Store', email: 'store@example.test' }), fetchStoreName: async () => 'Store' };
+      if (name === local('plan-snapshot-email')) return { loadPlanSnapshot: input => loadPlanSnapshot(input, options(f)), buildSnapshotEmailParts, ...overrides };
+      if (name === local('checkout-emails')) return { ...require('../netlify/functions/utils/checkout-emails'), loadCheckoutEmailDetails: async () => ({ sessionData: f.data, itemRecords: [f.record] }) };
+      if (isInvite && name === './invite-tokens') return require('../netlify/functions/utils/invite-tokens');
       if (name === 'crypto') return require('node:crypto');
-      if (name === '@netlify/blobs') return {
-        connectLambda: event => {
-          assert.equal(event.httpMethod, 'POST');
-          assert.ok(event.blobs, 'the original invocation context reaches Blobs');
-          blobsConnected = true;
-        },
-        getStore: () => {
-          assert.ok(blobsConnected, 'Blobs must connect before accessing the invite store');
-          return { setJSON: async () => {} };
-        }
-      };
       throw new Error(`Unexpected test dependency: ${name}`);
     }
   });
+  context.module.exports = context.exports;
   vm.runInContext(source, context);
-  return body => {
-    blobsConnected = false;
-    return context.exports.handler({ httpMethod: 'POST', body: JSON.stringify(body), blobs: 'test-invocation-context' });
-  };
+  if (isInvite) {
+    const store = { setJSON: async () => {} };
+    return async body => {
+      const { statusCode, body: payload } = await context.module.exports.sendInvite(store, JSON.stringify(body));
+      return { statusCode, body: JSON.stringify(payload) };
+    };
+  }
+  return body => context.exports.handler({ httpMethod: 'POST', body: JSON.stringify(body) });
 }
 
 test('update notifications include the snapshot while preserving preferences and sender exclusion', async () => {
@@ -165,6 +163,7 @@ test('invitations preserve their join link and role while including the saved sn
   assert.equal(result.statusCode, 200);
   assert.equal(sent.length, 1);
   assert.ok(sent[0].html.includes('invite_token='));
+  assert.ok(sent[0].html.includes('?session=recPlan&invite_token='), 'link opens the invited plan so the page reads the token');
   assert.ok(sent[0].html.includes('Viewer'));
   assert.ok(sent[0].html.includes('Book equipment'));
   assert.ok(sent[0].text.includes('Plan-wide tasks'));

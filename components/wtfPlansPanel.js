@@ -38,6 +38,40 @@ let wtfPlansData = {
 let currentFilter = WTF_PLAN_TYPES.PLANS;
 let isLoading = false;
 
+// "Shared with me" is part of Plans now. Old links/history that ask for it open Plans.
+function normalizeFilter(filter) {
+    return filter === WTF_PLAN_TYPES.SHARED ? WTF_PLAN_TYPES.PLANS : filter;
+}
+
+// Collaborative plans show a handshake; ones someone else created also say "from <name>".
+const SHARED_PLAN_ICON = '🤝';
+const creatorNames = new Map(); // userId -> display name (cached across renders)
+
+/** Who created a plan (live data for the open plan, saved activity otherwise). */
+function getPlanCreatorId(plan, isCurrentSession) {
+    if (isCurrentSession) {
+        return state.session.planActivity?.createdBy || (state.session.loadedCollaborators || [])[0] || null;
+    }
+    return getPlanActivity(plan)?.createdBy || (plan?.fields?.Collaborators || [])[0] || null;
+}
+
+/** Look up names for creators of other people's plans, then re-render once they arrive. */
+async function loadCreatorNames() {
+    const me = state.session.user.isAuthenticated ? state.session.user.id : null;
+    if (!me) return;
+    const ids = new Set();
+    for (const plan of [...wtfPlansData.plans, ...wtfPlansData.shared]) {
+        const id = getPlanCreatorId(plan, plan.id === state.session.id);
+        if (id && id !== me && typeof id === 'string' && id.startsWith('rec') && !creatorNames.has(id)) ids.add(id);
+    }
+    if (ids.size === 0) return;
+    try {
+        const names = await api.fetchUserNamesByIds([...ids]);
+        names.forEach((name, id) => creatorNames.set(id, name));
+        if (names.size > 0 && isWtfPlansPanelOpen() && !isLoading) renderWtfPlansList();
+    } catch { /* names are a nicety; the list still works without them */ }
+}
+
 // Multi-select state (long-press a plan or use "Select" to archive/delete several)
 const SELECTABLE_PLAN_TYPES = new Set(['plan', 'draft', 'shared', 'store', 'archived']);
 const LONG_PRESS_MS = 500;
@@ -392,7 +426,8 @@ function handlePlanStateSync(changeType, summary, changeData) {
  * @param {string} options.filter - Optional filter to set (used when restoring from URL)
  */
 export async function showWtfPlansPanel(options = {}) {
-    const { skipPushState = false, filter = null } = options;
+    const { skipPushState = false } = options;
+    const filter = options.filter ? normalizeFilter(options.filter) : null;
     const panel = document.getElementById('wtf-plans-panel');
     const overlay = document.getElementById('wtf-plans-panel-overlay');
     const isPresentationActive = document.body.classList.contains('presentation-active');
@@ -538,7 +573,7 @@ export function toggleWtfPlansPanel() {
  * @param {string} filter - One of WTF_PLAN_TYPES values
  */
 export function setWtfPlansFilter(filter) {
-    currentFilter = filter;
+    currentFilter = normalizeFilter(filter);
     renderWtfPlansList();
     log('WtfPlansPanel', `Filter set to: ${filter}`);
 }
@@ -731,6 +766,7 @@ async function loadWtfPlansData() {
         wtfPlansData.favorites = state.records.all.filter(record => likedIds.has(record.id));
 
         isLoading = false;
+        loadCreatorNames();
         console.log(`[WTF-PLANS] ========== loadWtfPlansData END (rendering ${wtfPlansData.plans.length + wtfPlansData.drafts.length} plans/drafts, ${wtfPlansData.rsvps.length} rsvps, ${wtfPlansData.favorites.length} favorites) ==========`);
         renderWtfPlansList();
 
@@ -869,17 +905,18 @@ function getCombinedItems() {
     }
 
     const CATEGORY_META = {
-        plan: { filter: WTF_PLAN_TYPES.PLANS, icon: '📋', untitled: 'Untitled Plan' },
+        plan: { filter: WTF_PLAN_TYPES.PLANS, icon: SHARED_PLAN_ICON, untitled: 'Untitled Plan' },
         draft: { filter: WTF_PLAN_TYPES.DRAFTS, icon: '📝', untitled: 'Untitled Draft' },
-        shared: { filter: WTF_PLAN_TYPES.SHARED, icon: '👥', untitled: 'Untitled Plan' },
+        // Shared-with-me plans are merged into Plans
+        shared: { filter: WTF_PLAN_TYPES.PLANS, icon: SHARED_PLAN_ICON, untitled: 'Untitled Plan' },
         store: { filter: WTF_PLAN_TYPES.STORE, icon: '🏪', untitled: 'Untitled Plan' },
         archived: { filter: WTF_PLAN_TYPES.ARCHIVED, icon: '🗄️', untitled: 'Untitled Plan' }
     };
 
     const addSessionList = (list, type) => {
         const meta = CATEGORY_META[type];
-        // "All" only shows the user's own plans; shared/store plans live in their own filters.
-        const inAll = type === 'plan' || type === 'draft';
+        // "All" shows Plans (including shared with me) and drafts; store plans keep their own filter.
+        const inAll = type === 'plan' || type === 'draft' || type === 'shared';
         if (!(currentFilter === meta.filter || (showAll && inAll))) return;
 
         list.forEach(plan => {
@@ -897,6 +934,7 @@ function getCombinedItems() {
                 itemCount,
                 totalCost,
                 icon: meta.icon,
+                creatorId: getPlanCreatorId(plan, false),
                 data: plan
             });
         });
@@ -912,7 +950,7 @@ function getCombinedItems() {
     if (currentSessionItem) {
         const meta = CATEGORY_META[currentSessionCategory];
         if (showAll || currentFilter === meta.filter) {
-            items.push({ ...currentSessionItem, type: currentSessionCategory, icon: meta.icon });
+            items.push({ ...currentSessionItem, type: currentSessionCategory, icon: meta.icon, creatorId: getPlanCreatorId(null, true) });
         }
     }
 
@@ -1081,7 +1119,7 @@ function getEmptyMessage() {
 
     switch (currentFilter) {
         case WTF_PLAN_TYPES.PLANS:
-            return 'No shared plans yet. Share a plan with someone to see it here! Plans only you are on are under ••• → Drafts.';
+            return 'No shared plans yet. Invite someone to a plan, or open one shared with you, to see it here! Plans only you are on are under ••• → Drafts.';
         case WTF_PLAN_TYPES.DRAFTS:
             return 'No drafts. Create a new plan to get started!';
         case WTF_PLAN_TYPES.RSVPS:
@@ -1099,6 +1137,15 @@ function getEmptyMessage() {
         default:
             return 'Nothing here yet. Start planning something fun!';
     }
+}
+
+/** "from <name>" when someone else created the plan; empty for the user's own plans. */
+function getFromLabel(item) {
+    const me = state.session.user.isAuthenticated ? state.session.user.id : null;
+    const creatorId = item.creatorId;
+    if (!me || !creatorId || creatorId === me) return '';
+    const name = creatorNames.get(creatorId);
+    return name ? `from ${name}` : '';
 }
 
 /**
@@ -1122,9 +1169,14 @@ function createWtfPlanItem(item) {
     let preview = '';
     switch (item.type) {
         case 'plan':
+        case 'shared': {
             const dateStr = item.date ? new Date(item.date + 'T00:00:00').toLocaleDateString() : 'No date';
-            preview = `${item.itemCount} items • ${dateStr} • $${(item.totalCost || 0).toFixed(2)}`;
+            const from = getFromLabel(item);
+            preview = item.type === 'plan'
+                ? `${from ? from + ' • ' : ''}${item.itemCount} items • ${dateStr} • $${(item.totalCost || 0).toFixed(2)}`
+                : `${from || 'Shared with you'} • ${item.itemCount} items • ${dateStr}`;
             break;
+        }
         case 'draft':
             const draftDateStr = item.date ? new Date(item.date + 'T00:00:00').toLocaleDateString() : 'No date';
             preview = `Draft • ${item.itemCount} items • ${draftDateStr}`;
@@ -1141,10 +1193,9 @@ function createWtfPlanItem(item) {
             const projDate = item.date ? new Date(item.date + 'T00:00:00').toLocaleDateString() : '';
             preview = projDate || 'Project';
             break;
-        case 'shared':
         case 'store':
             const otherDateStr = item.date ? new Date(item.date + 'T00:00:00').toLocaleDateString() : 'No date';
-            preview = `${item.type === 'shared' ? 'Shared with you' : 'Store plan'} • ${item.itemCount} items • ${otherDateStr}`;
+            preview = `Store plan • ${item.itemCount} items • ${otherDateStr}`;
             break;
         case 'archived':
             const archivedDateStr = item.date ? new Date(item.date + 'T00:00:00').toLocaleDateString() : 'No date';
@@ -1355,11 +1406,11 @@ function updateFilterCounts() {
 
     // Shared/Store filters only make sense for signed-in users (Store: store owners only)
     const user = state.session.user;
-    if (sharedBtn) sharedBtn.style.display = user.isAuthenticated ? '' : 'none';
+    if (sharedBtn) sharedBtn.style.display = 'none'; // merged into Plans
     if (storeBtn) storeBtn.style.display = (user.isAuthenticated && user.isOwner && user.ownedStoreId) ? '' : 'none';
     if (archivedBtn) archivedBtn.style.display = user.isAuthenticated ? '' : 'none';
 
-    const planCount = wtfPlansData.plans.length;
+    const planCount = wtfPlansData.plans.length + wtfPlansData.shared.length;
     const draftCount = wtfPlansData.drafts.length;
     const rsvpCount = wtfPlansData.rsvps.length;
     const favoriteCount = wtfPlansData.favorites.length;
@@ -1376,7 +1427,6 @@ function updateFilterCounts() {
     if (rsvpsBtn) updateButtonCount(rsvpsBtn, rsvpCount);
     if (favoritesBtn) updateButtonCount(favoritesBtn, favoriteCount);
     if (projectsBtn) updateButtonCount(projectsBtn, projectCount);
-    if (sharedBtn) updateButtonCount(sharedBtn, wtfPlansData.shared.length);
     if (storeBtn) updateButtonCount(storeBtn, wtfPlansData.store.length);
     if (archivedBtn) updateButtonCount(archivedBtn, wtfPlansData.archived.length);
 }
@@ -1448,7 +1498,7 @@ export function isWtfPlansPanelOpen() {
  */
 export function syncWtfPlansPanelWithUrl(params) {
     const shouldBeOpen = params.get('wtfPlans') === 'open';
-    const filter = params.get('wtfFilter') || WTF_PLAN_TYPES.PLANS;
+    const filter = normalizeFilter(params.get('wtfFilter') || WTF_PLAN_TYPES.PLANS);
     const isOpen = isWtfPlansPanelOpen();
 
     if (shouldBeOpen && !isOpen) {
@@ -1881,6 +1931,28 @@ function closeMoreMenu() {
     btn?.setAttribute('aria-expanded', 'false');
 }
 
+/**
+ * Keep the ••• menu on screen. It right-aligns to the button by default, but on narrow
+ * screens the button wraps to the left edge and the menu would open off screen.
+ */
+function positionMoreMenu(btn, menu) {
+    menu.style.left = '';
+    menu.style.right = '';
+    const margin = 8;
+    const btnRect = btn.getBoundingClientRect();
+    const menuWidth = menu.getBoundingClientRect().width;
+    const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+    // Right-aligned to the button (default) would start here:
+    if (btnRect.right - menuWidth >= margin) return;
+    // Otherwise left-align to the button, nudged back inside the viewport if needed.
+    let left = 0;
+    const overflowRight = btnRect.left + menuWidth - (viewportWidth - margin);
+    if (overflowRight > 0) left -= overflowRight;
+    if (btnRect.left + left < margin) left = margin - btnRect.left;
+    menu.style.left = `${left}px`;
+    menu.style.right = 'auto';
+}
+
 function initMoreMenu() {
     const btn = document.getElementById('wtf-plans-more-btn');
     const menu = document.getElementById('wtf-plans-more-menu');
@@ -1892,6 +1964,7 @@ function initMoreMenu() {
         menu.hidden = !opening;
         btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
         if (opening) {
+            positionMoreMenu(btn, menu);
             const first = [...menu.querySelectorAll('.wtf-plans-more-item')].find(el => el.style.display !== 'none');
             first?.focus();
         }

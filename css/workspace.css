@@ -259,6 +259,8 @@ body.presentation-active #header-search-wrapper #filter-toggle-btn { display: no
     background: rgba(139, 92, 246, 0.18);
 }
 .modal-collab-sup-host { display: inline-flex; align-items: flex-start; font-size: 1.4em; }
+/* Detail modal: sit right after the title like a superscript (the row spaces items 8px apart). */
+.modal-item-name-row > .modal-collab-sup-host { align-self: flex-start; margin-left: -6px; }
 .compact-card-title-row .collab-sup { flex-shrink: 0; font-size: 0.85em; }
 
 .collab-menu {

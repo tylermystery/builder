@@ -20,6 +20,7 @@ import { setUCPItemScope, openUCPForItem, openUCPGlobalForItem } from './unified
 import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
 import { openActionMenu } from './actionMenu.js';
+import { collabSupHTML } from './collab/collabControl.js';
 import { syncPlanState as syncPlanStateAcrossViews } from '../utils/planStateSync.js';
 import { getCommunityRowForRecord, toggleCommunityReactionForRecord, isPublicIdeaRecord,
          canOfferCatalogPublish, isRecordInStoreCatalog, setRecordCatalogMembership,
@@ -2304,6 +2305,25 @@ export function renderSentimentChip(chip, recordId, scope) {
  * here now — the plan-item sentiment is surfaced by the button inside the "In your
  * plan" block instead, so the item name carries just the one glanceable marker.
  */
+/**
+ * The same emoji summary + open chat count the catalog and plan tiles show after an
+ * item's title. It summarizes the whole item (not the selected version), stays current
+ * through refreshCollabSups(), and tapping it opens the conversations panel for the item.
+ */
+function renderModalCollabSup(recordId, name = '') {
+    const nameEl = document.getElementById('modal-item-name');
+    const row = nameEl?.parentElement;
+    if (!row) return;
+    let host = row.querySelector(':scope > .modal-collab-sup-host');
+    if (!recordId) { host?.remove(); return; }
+    if (!host) {
+        host = document.createElement('span');
+        host.className = 'modal-collab-sup-host';
+        nameEl.insertAdjacentElement('afterend', host);
+    }
+    host.innerHTML = collabSupHTML('item', recordId, name);
+}
+
 function updateModalSentimentChips(recordId) {
     const globalChip = document.getElementById('modal-item-sentiment-chip');
     const planChip = document.getElementById('modal-plan-sentiment-chip');
@@ -6413,6 +6433,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, fromGroup = n
     }
 
     modalItemName.textContent = displayName;
+    renderModalCollabSup(record.id, displayName);
     modalItemDescription.innerHTML = renderRichText(displayDescription);
     void renderSimilarOfferings(record);
     renderItemVariations(document.getElementById('modal-item-variations'), record);
@@ -10438,6 +10459,7 @@ export async function showGroupDetailModal(group, allRecords) {
 
     // Set the group name and description
     modalItemName.textContent = group.name || 'Options';
+    renderModalCollabSup(null); // a group of options isn't a single item to collab on
     modalItemDescription.textContent = group.description || 'Choose from the available options below.';
 
     // Clear sections not needed for group view
