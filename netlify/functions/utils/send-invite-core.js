@@ -1,38 +1,28 @@
-// FILE: netlify/functions/send-invite.js
-// Sends email invitations to collaborate on a plan using tokenized invite links
+// FILE: netlify/functions/utils/send-invite-core.js
+// Sends email invitations to collaborate on a plan using tokenized invite links.
+// The caller passes in the invite-token Blobs store.
 
-const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
-const crypto = require('crypto');
-const { buildFrom, fetchStoreName } = require('./utils/email-config');
-const { loadPlanSnapshot, buildSnapshotEmailParts } = require('./utils/plan-snapshot-email');
-const { escapeHtml } = require('./utils/checkout-emails');
+const { buildFrom, fetchStoreName } = require('./email-config');
+const { loadPlanSnapshot, buildSnapshotEmailParts } = require('./plan-snapshot-email');
+const { escapeHtml } = require('./checkout-emails');
+const { createInviteToken } = require('./invite-tokens');
 
-const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL: NETLIFY_URL } = process.env;
-sgMail.setApiKey(SENDGRID_API_KEY);
-
-exports.handler = async (event) => {
-    if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-    }
+async function sendInvite(store, rawBody) {
+    const { SENDGRID_API_KEY, SITE_URL, URL: NETLIFY_URL } = process.env;
+    sgMail.setApiKey(SENDGRID_API_KEY);
 
     try {
-        const { email, sessionId, invitedBy, inviterName, role, sessionName, storeId } = JSON.parse(event.body);
+        const { email, sessionId, invitedBy, inviterName, role, sessionName, storeId } = JSON.parse(rawBody);
 
         if (!email || !sessionId) {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({ error: 'Email and sessionId are required.' })
-            };
+            return { statusCode: 400, body: { error: 'Email and sessionId are required.' } };
         }
 
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({ error: 'Invalid email address.' })
-            };
+            return { statusCode: 400, body: { error: 'Invalid email address.' } };
         }
 
         // Cap role to editor max (prevent URL tampering to owner)
@@ -42,30 +32,14 @@ exports.handler = async (event) => {
         const snapshotData = await loadPlanSnapshot(sessionId);
         const snapshot = buildSnapshotEmailParts(snapshotData);
 
-        // Generate a secure invite token and store in Netlify Blobs
-        const token = crypto.randomBytes(32).toString('hex');
-        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-        const { getStore, connectLambda } = require('@netlify/blobs');
-        // Lambda-compatible handlers must initialize Blobs from this invocation.
-        connectLambda(event);
-        const store = getStore({ name: 'invite-tokens', consistency: 'strong' });
-        await store.setJSON(token, {
-            token,
-            sessionId,
-            email,
-            role: assignedRole.toLowerCase(),
-            invitedBy: invitedBy || '',
-            inviterName: inviterName || '',
-            sessionName: sessionName || '',
-            createdAt: new Date().toISOString(),
-            expiresAt,
-            consumed: false
+        const { token } = await createInviteToken(store, {
+            sessionId, email, role: assignedRole.toLowerCase(), invitedBy, inviterName, sessionName
         });
 
         const baseUrl = SITE_URL || NETLIFY_URL;
-        // Use tokenized invite link — no sensitive data in URL
-        const inviteLink = `${baseUrl}/?invite_token=${token}`;
+        // Tokenized invite link — email and role stay server-side. The plan ID (already
+        // public in share links) is included so the page opens the plan and reads the token.
+        const inviteLink = `${baseUrl}/?session=${encodeURIComponent(sessionId)}&invite_token=${token}`;
         const planName = snapshotData.plan.name || sessionName || 'an event plan';
         const senderName = inviterName || 'Someone';
 
@@ -110,19 +84,11 @@ exports.handler = async (event) => {
 
         console.log(`[send-invite] Invitation sent to ${email} for session ${sessionId} as ${assignedRole} by ${invitedBy || senderName}`);
 
-        return {
-            statusCode: 200,
-            body: JSON.stringify({
-                success: true,
-                message: `Invitation sent to ${email}`
-            })
-        };
-
+        return { statusCode: 200, body: { success: true, message: `Invitation sent to ${email}` } };
     } catch (error) {
         console.error('[send-invite] Error:', error);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ error: error.message })
-        };
+        return { statusCode: 500, body: { error: error.message } };
     }
-};
+}
+
+module.exports = { sendInvite };

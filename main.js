@@ -68,6 +68,20 @@ async function handlePendingInvite() {
         await api.createPermissionRecord(inviteSessionId, state.session.user.id, role);
         log('Main', `Permission record created: ${role} for user ${state.session.user.id} on session ${inviteSessionId}`);
 
+        // Add the invitee to the plan's Collaborators so they show in the team list and plans panel.
+        // Covers sign-in after landing, when the plan loaded before the user was authenticated.
+        try {
+            const joined = await api.associateSessionWithUser(inviteSessionId, state.session.user.id);
+            if (joined && inviteSessionId === state.session.id) {
+                const known = state.session.loadedCollaborators || [];
+                if (!known.includes(state.session.user.id)) known.push(state.session.user.id);
+                state.session.loadedCollaborators = known;
+                state.session.isOwned = true;
+            }
+        } catch (err) {
+            console.error('[Main] Could not add invitee to plan collaborators:', err.message);
+        }
+
         // Show welcome toast
         const planName = state.eventDetails?.combined?.get?.('eventName') || state.eventDetails?.combined?.get?.('Event Name') || 'the plan';
         const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
