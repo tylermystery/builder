@@ -21,6 +21,7 @@ import { requestVitalityRecalc } from '../vitality/vitalityEngine.js';
 import { showGoodnessReport, updateModalVitalityBadge, isVitalityUIDormant } from '../vitality/vitalityUI.js';
 import { openActionMenu } from './actionMenu.js';
 import { collabSupHTML } from './collab/collabControl.js';
+import { updateCompletionStatus } from './presentation/completionStatus.js';
 import { syncPlanState as syncPlanStateAcrossViews } from '../utils/planStateSync.js';
 import { getCommunityRowForRecord, toggleCommunityReactionForRecord, isPublicIdeaRecord,
          canOfferCatalogPublish, isRecordInStoreCatalog, setRecordCatalogMembership,
@@ -10549,6 +10550,7 @@ export async function showGroupDetailModal(group, allRecords) {
                     </div>
                     <div class="group-option-card-info">
                         <div class="group-option-card-name">${name}</div>
+                        <span class="item-completion-badge" data-completion-item-id="${escapeHtml(record.id)}" hidden></span>
                         ${truncDesc ? `<div class="group-option-card-desc">${truncDesc}</div>` : ''}
                         ${price ? `<div class="group-option-card-price">${price}</div>` : ''}
                     </div>
@@ -10565,6 +10567,8 @@ export async function showGroupDetailModal(group, allRecords) {
                 <button class="group-dissolve-modal-btn" data-group-id="${group.id}">✂ Split All ${group.items.length} Items Apart</button>
             </div>
         `;
+
+        updateCompletionStatus();
 
         // Add click handlers for option cards
         const optionCards = modalOptionsContainer.querySelectorAll('.group-option-card');

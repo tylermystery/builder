@@ -718,6 +718,11 @@ export function setupPresentationEventListeners() {
     // Listen for user login/logout events
     document.addEventListener('userLoggedIn', () => headerSummary.handlePresentationUserLogin());
     document.addEventListener('userLoggedOut', () => headerSummary.updatePresentationAccountButton());
+    document.addEventListener('sessionReady', () => {
+        if (!modal.classList.contains('active')) return;
+        loadProjectTasks(state.session.id, api.fetchTasks).catch(() => {});
+        openConversationBadges.refresh();
+    });
 
     // Listen for navigateToCatalog event
     document.addEventListener('navigateToCatalog', () => {
