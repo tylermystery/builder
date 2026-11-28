@@ -72,6 +72,40 @@ test('resolving a thread removes it from the counts, persists, and can be reopen
     assert.equal(run('getOpenConversationCounts().plan.chats'), 2);
 });
 
+test('completion uses saved task and thread statuses, counting converted threads only as tasks', () => {
+    const { state, run, load } = harness();
+    const task = { id: 't1', fields: { Status: 'pending', SourceCommentId: 'reply' } };
+    state.tasks.byProject.set('plan-a', [task]);
+    state.eventDetails.combined.set('_resolvedChatThreads', { standalone: true });
+    load([
+        msg('item-thread', { Content: '[PLAN_COMMENT:item:custom-venue] Check the sound' }),
+        msg('reply', { ParentMessageID: 'item-thread' }),
+        msg('standalone'),
+        msg('deleted', { IsDeleted: true }),
+        msg('automatic', { SenderID: 'system' })
+    ]);
+    assert.equal(run('getPlanConversationStatuses().ready'), false);
+    state.__tasksLoaded = true;
+
+    const initial = run('getPlanConversationStatuses()');
+    assert.equal(initial.ready, true);
+    assert.equal(initial.entries.length, 2);
+    assert.equal(initial.entries[0].type, 'tasks');
+    assert.equal(initial.entries[0].done, false);
+    assert.deepEqual([...initial.entries[0].itemIds], ['custom-venue']);
+    assert.equal(initial.entries[1].type, 'chats');
+    assert.equal(initial.entries[1].done, true);
+
+    state.tasks.all.set('t1', { ...task, fields: { ...task.fields, Status: 'completed', LinkedItem: ['new-venue'] } });
+    run("setThreadResolved('standalone', false)");
+    const updated = run('getPlanConversationStatuses()').entries;
+    assert.equal(updated[0].done, true);
+    assert.deepEqual([...updated[0].itemIds], ['new-venue']);
+    assert.equal(updated[1].done, false);
+    state.session.id = 'plan-b';
+    assert.equal(run('getPlanConversationStatuses().ready'), false);
+});
+
 test('ignores messages loaded for another plan', () => {
     const { run, context } = harness();
     run("window.dispatchEvent(new CustomEvent('plan-messages-loaded', { detail: { sessionId: 'plan-b', records: [{ id: 'x', fields: { SenderID: 'u', Content: 'hi' } }] } }))");

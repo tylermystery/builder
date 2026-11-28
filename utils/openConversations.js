@@ -22,6 +22,7 @@ let deps = { fetchChatMessages: null, triggerSave: null, saveSnapshot: null };
 let snapshotTimer = null;
 let records = [];
 let recordsSessionId = null;
+let failedSessionId = null;
 let refreshTimer = null;
 let listening = false;
 
@@ -53,6 +54,7 @@ export function initOpenConversations({ fetchChatMessages, triggerSave, saveSnap
         refreshTimer = null;
         records = loaded;
         recordsSessionId = sessionId;
+        failedSessionId = null;
         notify();
         scheduleLinkRepair();
     });
@@ -74,7 +76,11 @@ export function scheduleOpenConversationsRefresh(delay = REFRESH_DELAY_MS) {
         const sessionId = state.session?.id;
         if (!sessionId || !deps.fetchChatMessages) return;
         // The fetch announces its result via 'plan-messages-loaded'.
-        Promise.resolve(deps.fetchChatMessages(sessionId)).catch(() => {});
+        Promise.resolve(deps.fetchChatMessages(sessionId, { throwOnError: true })).catch(() => {
+            if (state.session?.id !== sessionId || recordsSessionId === sessionId) return;
+            failedSessionId = sessionId;
+            notify();
+        });
     }, delay);
 }
 
@@ -111,6 +117,32 @@ function projectTasks() {
     const projectId = state.session?.id;
     if (!projectId) return [];
     return (state.tasks.byProject.get(projectId) || []).map(task => state.tasks.all.get(task.id) || task);
+}
+
+export function getPlanConversationStatuses() {
+    const sessionId = state.session?.id;
+    if (!sessionId) return { entries: [], ready: true, error: false };
+
+    const taskLoad = getProjectTaskLoadState(sessionId);
+    const ready = recordsSessionId === sessionId && taskLoad.loaded;
+    const error = !ready && (failedSessionId === sessionId || (!taskLoad.loaded && !!taskLoad.error));
+    if (!ready) return { entries: [], ready, error };
+
+    const tasks = projectTasks();
+    const { roots, itemIdsByTask } = getTaskThreadRoots(tasks);
+    const entries = tasks.map(task => ({
+        type: 'tasks',
+        done: task.fields?.Status === 'completed',
+        itemIds: task.fields?.LinkedItem?.length ? task.fields.LinkedItem : itemIdsByTask.get(task.id) || []
+    }));
+    const resolved = getResolvedThreads();
+    for (const record of records) {
+        const fields = record?.fields;
+        if (!fields || fields.SenderID === 'system' || fields.IsDeleted || fields.ParentMessageID || roots.has(record.id)) continue;
+        const itemId = itemIdForFields(fields);
+        entries.push({ type: 'chats', done: !!resolved[record.id], itemIds: itemId ? [itemId] : [] });
+    }
+    return { entries, ready, error };
 }
 
 function bucket(map, key) {
@@ -184,8 +216,7 @@ function taskMatchesMessage(task, text) {
 
 /**
  * Which chat threads are represented by a task.
- * @returns {{ roots: Set<string>, inferred: Map<string, string> }} thread root ids, and
- *          links recognised from content only (message id -> task id)
+ * Also returns inferred links and item context from the linked threads.
  */
 export function getTaskThreadRoots(tasks = projectTasks()) {
     const links = state.eventDetails?.combined?.get('_commentTaskLinks') || {};
@@ -203,10 +234,16 @@ export function getTaskThreadRoots(tasks = projectTasks()) {
 
     const linkedTasks = new Set();
     const roots = new Set();
+    const itemIdsByTask = new Map();
     const mark = (messageId, taskId) => {
         if (!messageId || !taskIds.has(taskId)) return;
+        const rootId = rootOf(messageId);
         linkedTasks.add(taskId);
-        roots.add(rootOf(messageId)); // a reply turned into a task covers its whole thread
+        roots.add(rootId); // a reply turned into a task covers its whole thread
+        const itemId = itemIdForFields(byId.get(rootId)?.fields || {}) || itemIdForFields(byId.get(messageId)?.fields || {});
+        if (!itemId) return;
+        if (!itemIdsByTask.has(taskId)) itemIdsByTask.set(taskId, new Set());
+        itemIdsByTask.get(taskId).add(itemId);
     };
     for (const [messageId, taskId] of Object.entries(links)) mark(messageId, taskId);
     for (const task of tasks) if (task.fields?.SourceCommentId) mark(task.fields.SourceCommentId, task.id);
@@ -230,10 +267,10 @@ export function getTaskThreadRoots(tasks = projectTasks()) {
         }
         if (best) {
             inferred.set(best.id, task.id);
-            roots.add(rootOf(best.id));
+            mark(best.id, task.id);
         }
     }
-    return { roots, inferred };
+    return { roots, inferred, itemIdsByTask };
 }
 
 let repairTimer = null;

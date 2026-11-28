@@ -11,6 +11,7 @@ import {
     scheduleOpenConversationsRefresh,
 } from '../../utils/openConversations.js';
 import { openUCPConversations } from '../unifiedChatPanel.js';
+import { updateCompletionStatus } from './completionStatus.js';
 
 let initialized = false;
 let frame = null;
@@ -66,6 +67,7 @@ function applyCount(el, countEl, counts, emptyTitle) {
 }
 
 export function updateBadges() {
+    updateCompletionStatus();
     const { plan, byItem } = getOpenConversationCounts();
 
     const planBadge = document.getElementById('plan-open-convo-badge');

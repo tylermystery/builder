@@ -5266,6 +5266,77 @@ body.plan-view-readonly #radial-menu-container {
     opacity: 0.8;
 }
 
+.plan-completion-summary {
+    display: grid;
+    gap: 0.4rem;
+    padding: 0.8rem 1rem;
+    border: 1px solid rgba(222, 235, 241, 0.25);
+    border-radius: 12px;
+    background: rgba(21, 29, 34, 0.88);
+    color: #f1f5f7;
+}
+.plan-completion-heading {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.25rem 0.75rem;
+    font-size: 0.9rem;
+}
+.plan-completion-detail {
+    margin: 0;
+    color: #d0dade;
+    font-size: 0.8rem;
+}
+.plan-completion-summary progress {
+    width: 100%;
+    height: 0.55rem;
+    accent-color: #94d4bf;
+}
+.plan-completion-summary[data-status="complete"] .plan-completion-status {
+    color: #a8e8d3;
+}
+.item-completion-badge {
+    display: inline-block;
+    align-self: start;
+    justify-self: start;
+    width: fit-content;
+    padding: 0.18rem 0.5rem;
+    border-radius: 0.4rem;
+    color: #23383e;
+    background: #e8eff1;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+.item-completion-badge[data-status="in-progress"] {
+    color: #604915;
+    background: #fff0ca;
+}
+.item-completion-badge[data-status="complete"] {
+    color: #174c3d;
+    background: #d7f1e6;
+}
+.item-completion-badge[hidden], .item-completion-inline[hidden] {
+    display: none;
+}
+.compact-card-pill.item-completion-option {
+    display: inline-flex;
+    min-width: 0;
+    max-width: 100%;
+}
+.item-completion-option-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.item-completion-inline {
+    flex: none;
+}
+.item-completion-inline::before {
+    content: ' · ';
+    white-space: pre;
+}
+
 @media (max-width: 600px) {
     .team-count-badge {
         padding: 3px 8px;
@@ -6774,6 +6845,17 @@ body.plan-view-readonly #radial-menu-container {
                             </div>
                         </div>
                     </div>
+                </section>
+
+                <section id="plan-completion-summary" class="plan-completion-summary" aria-label="Plan status">
+                    <div role="status">
+                        <div class="plan-completion-heading">
+                            <strong>Plan status</strong>
+                            <span class="plan-completion-status">Checking status…</span>
+                        </div>
+                        <p class="plan-completion-detail">Loading chats and tasks…</p>
+                    </div>
+                    <progress aria-label="Plan completion" hidden></progress>
                 </section>
 
                 <!-- Shown to signed-out visitors on plans that signed-in people work on -->

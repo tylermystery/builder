@@ -10,6 +10,7 @@ import { applyCloudinaryFitTransform, getImageOrientationClass } from '../../uti
 import { renderCollabBoard, isCollabBoardToggled, initCollabBoardToggle } from './collabBoard.js';
 import { collabSupHTML } from '../collab/collabControl.js';
 import { getOpenConversationCounts, getOpenCountsForItems, describeOpenCounts } from '../../utils/openConversations.js';
+import { updateCompletionStatus } from './completionStatus.js';
 
 // Track loaded images for each item
 const itemImagesCache = new Map();
@@ -734,6 +735,7 @@ export async function renderCompactCard(item) {
                     ${sourceTypeBadgeHTML}
                 </div>
                 ${provenanceHTML}
+                <span class="item-completion-badge" data-completion-item-id="${escapeHtml(recordId)}" hidden></span>
                 ${pillsHTML}
                 <div class="compact-card-reaction-zone" data-record-id="${recordId}">
                     <div class="reaction-zone-hint">
@@ -791,7 +793,7 @@ export async function renderCompactGroupCard(group) {
         else if (isCompleted) { pillStateClass = 'pill-completed'; pillIcon = '✓ '; }
         else if (isLocked) { pillStateClass = 'pill-locked'; pillIcon = '🔒 '; }
         else if (isGoal) { pillStateClass = 'pill-goal'; pillIcon = '⭐ '; }
-        return `<span class="compact-card-pill ${pillStateClass}">${pillIcon}${memberName}</span>`;
+        return `<span class="compact-card-pill item-completion-option ${pillStateClass}"><span class="item-completion-option-name">${pillIcon}${memberName}</span><span class="item-completion-inline" data-completion-item-id="${escapeHtml(gId)}" hidden></span></span>`;
     }).join('');
     const moreCount = groupItems.length - maxPills;
     const morePill = moreCount > 0 ? `<span class="compact-card-pill compact-card-pill-more">+${moreCount} more</span>` : '';
@@ -1002,6 +1004,7 @@ export async function renderAllItems() {
     if (combinedList.length === 0 || isCollabBoardToggled()) {
         itineraryItemsListEl.removeAttribute('role');
         renderCollabBoard(itineraryItemsListEl, { planIsEmpty: combinedList.length === 0, onRerender: () => renderAllItems() });
+        updateCompletionStatus();
         return;
     }
 
